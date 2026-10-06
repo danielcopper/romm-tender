@@ -42,9 +42,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from domain.emulator_sources import SourcesReading
     from domain.rom_install import RomInstall
     from domain.shortcut_data import EmulatorInvocation
-    from services.protocols import ActiveCoreReader, DiscResolver, UnitOfWorkFactory
+    from services.protocols import ActiveCoreReader, DiscResolver, EmulatorSourcesReader, UnitOfWorkFactory
 
 
 @dataclass(frozen=True)
@@ -56,12 +57,14 @@ class ShortcutLaunchResolverConfig:
     folds the per-game ``emulator_override`` and the per-platform
     ``settings.json`` core over the standalone-aware es_systems default, and
     ``disc_resolver`` resolves a multi-disc ROM's persisted ``selected_disc``
-    pin against its install directory.
+    pin against its install directory. ``emulator_sources`` gives the one
+    reading of the emulator sources a run resolves every ROM through.
     """
 
     uow_factory: UnitOfWorkFactory
     active_core: ActiveCoreReader
     disc_resolver: DiscResolver
+    emulator_sources: EmulatorSourcesReader
 
 
 class ShortcutLaunchResolver:
@@ -71,8 +74,20 @@ class ShortcutLaunchResolver:
         self._uow_factory = config.uow_factory
         self._active_core = config.active_core
         self._disc_resolver = config.disc_resolver
+        self._emulator_sources = config.emulator_sources
 
-    def do_build_core_overrides(self, roms: list[dict[str, Any]]) -> dict[int, EmulatorInvocation]:
+    def do_read_sources(self) -> SourcesReading:
+        """Take the one reading of the emulator sources a run resolves its ROMs through.
+
+        Detects the sources, so it is I/O and runs off the loop. The caller keeps
+        the reading for the whole run and hands it to every
+        :meth:`do_build_core_overrides` of that run.
+        """
+        return self._emulator_sources.read()
+
+    def do_build_core_overrides(
+        self, roms: list[dict[str, Any]], reading: SourcesReading
+    ) -> dict[int, EmulatorInvocation]:
         """Resolve each ROM's FULL active emulator for the bake.
 
         Runs every ROM in *roms* through the shared per-ROM ``active_core``
@@ -84,10 +99,14 @@ class ShortcutLaunchResolver:
         resolves to nothing (a genuinely unresolvable platform) is absent and
         falls back to the plain launch. The resolver already warns + degrades on
         a stale label, so no bogus invocation ever reaches the bake.
+
+        *reading* is the run's one reading of the emulator sources, so every ROM
+        of a system is resolved from one catalogue answer and a change to the
+        sources during the run takes effect from the next run.
         """
         resolved: dict[int, EmulatorInvocation] = {}
         for rom in roms:
-            emulator = self._active_core.active_emulator_for_rom(rom["id"])
+            emulator = self._active_core.active_emulator_for_rom(rom["id"], reading=reading)
             if emulator is not None:
                 resolved[rom["id"]] = emulator
         return resolved

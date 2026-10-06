@@ -15,6 +15,7 @@ import pytest
 from _factories import _make_conflict_rules, _make_prune_conflicts
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
+from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
@@ -59,6 +60,7 @@ class LibraryHarness:
     renderer_gc: FakeRendererGc
     prune_conflicts: PruneConflicts
     settings: dict[str, Any]
+    emulator_sources: FakeEmulatorSources
 
 
 @pytest.fixture
@@ -127,6 +129,7 @@ def library(tmp_path, emit, logger, home) -> LibraryHarness:
     # to drive a pause.
     renderer_rss = FakeRendererRss()
     renderer_gc = FakeRendererGc()
+    emulator_sources = FakeEmulatorSources()
 
     sync_service = LibraryService(
         config=LibraryServiceConfig(
@@ -146,6 +149,7 @@ def library(tmp_path, emit, logger, home) -> LibraryHarness:
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
             active_core=active_core,
             disc_resolver=FakeDiscResolver(),
+            emulator_sources=emulator_sources,
             renderer_rss=renderer_rss,
             renderer_gc=renderer_gc,
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
@@ -178,6 +182,7 @@ def library(tmp_path, emit, logger, home) -> LibraryHarness:
         renderer_gc=renderer_gc,
         prune_conflicts=prune_conflicts,
         settings=settings,
+        emulator_sources=emulator_sources,
     )
 
 

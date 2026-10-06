@@ -46,6 +46,7 @@ check = _load_check_module()
 _OWNERS = {
     "active_core": frozenset({"shortcut_launch_resolver.py"}),
     "disc_resolver": frozenset({"shortcut_launch_resolver.py"}),
+    "emulator_sources": frozenset({"shortcut_launch_resolver.py"}),
     "renderer_rss": frozenset({"session_budget.py"}),
     "renderer_gc": frozenset({"session_budget.py"}),
     "artwork": frozenset({"cover_preparer.py", "reporter.py"}),
@@ -76,6 +77,17 @@ def patched_check(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 
 
 class TestFindViolations:
+    def test_the_restated_table_is_the_real_one(self):
+        assert dict(check.SEAM_OWNERS) == _OWNERS
+
+    def test_flags_the_sources_seam_held_outside_the_launch_resolver(self, patched_check):
+        holder = "class H:\n    def __init__(self, config):\n        self._s = config.emulator_sources\n"
+        owner = "class R:\n    def __init__(self, config):\n        self._s = config.emulator_sources\n"
+        findings = patched_check({"sync_orchestrator.py": holder, "shortcut_launch_resolver.py": owner})
+        assert len(findings) == 1
+        assert "sync_orchestrator.py" in findings[0]
+        assert "emulator_sources" in findings[0]
+
     def test_flags_seam_read_in_a_foreign_module(self, patched_check):
         holder = "class H:\n    def __init__(self, config):\n        self._a = config.active_core\n"
         findings = patched_check({"shortcut_launch_resolver.py": holder, "sync_orchestrator.py": holder})

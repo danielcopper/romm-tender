@@ -437,7 +437,9 @@ class FirmwareStatusReader:
         where the pick could not be made or the resolver could not identify it,
         and the rows then fall back to every declaring emulator. The
         ``emulators`` list is the full classified picker payload and
-        ``emulator_data_available`` flags whether ``es_systems.xml`` was readable.
+        ``emulator_data_available`` flags whether the answering emulator source
+        gave an emulator list, with ``emulator_data_reason`` and
+        ``emulator_source`` saying why not and which source answered.
 
         **The demand is read per platform**, because a standalone emulator's
         declarations belong to a platform only by way of the emulators ES-DE
@@ -457,6 +459,8 @@ class FirmwareStatusReader:
         plat["active_core_label"] = emulator.label if emulator is not None else None
         plat["emulators"] = options_to_payload(options["options"])
         plat["emulator_data_available"] = options["available"]
+        plat["emulator_data_reason"] = options["reason"]
+        plat["emulator_source"] = options["source"]
         catalogue, rows = await self._loop.run_in_executor(
             None, self._platform_demand, system, plat["files"], in_library
         )

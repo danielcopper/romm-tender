@@ -13,6 +13,7 @@ from _factories import (
 )
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
+from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_settings_persister import FakeSettingsPersister
@@ -99,6 +100,7 @@ def steamgrid(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow, emi
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
             active_core=FakeActiveCoreResolver(default=(None, None)),
             disc_resolver=FakeDiscResolver(),
+            emulator_sources=FakeEmulatorSources(),
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
@@ -1065,6 +1067,7 @@ class TestDebugLoggerProtocolSeam:
                 uow_factory=FakeUnitOfWorkFactory(),
                 active_core=FakeActiveCoreResolver(default=(None, None)),
                 disc_resolver=FakeDiscResolver(),
+                emulator_sources=FakeEmulatorSources(),
                 renderer_rss=FakeRendererRss(),
                 renderer_gc=FakeRendererGc(),
                 conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),

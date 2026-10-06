@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
+    from domain.emulator_sources import SourceReport, SourcesReading
     from domain.firmware_wants import FirmwareCatalogue
     from domain.save_answer import SaveAnswer
     from domain.savestate_location import NoSavestates, SavestateLocation
@@ -110,9 +111,12 @@ class CoreInfoProvider(Protocol):
     this system, and what else could it launch with?" without depending on the
     concrete adapter. Resolution is system-layer only; Tender's own
     per-platform and per-game selections are layered on top by
-    ``active_emulator_for_rom``, not here. Implementations own the underlying
-    reads and may cache answers; ``reset_cache`` lets writers invalidate the
-    cache after a per-platform core write.
+    ``active_emulator_for_rom``, not here.
+
+    Every answer is asked live, through the answering emulator source
+    (:class:`EmulatorSourcesReader`). *reading* is a run's one reading, handed
+    down so a run that asks the same question for many games asks it once;
+    without one, the call takes a fresh reading of its own.
 
     ``get_active_core`` stays libretro-only — the first libretro command a
     system declares, bakeable or not. It is carried and currently read by nothing
@@ -129,13 +133,29 @@ class CoreInfoProvider(Protocol):
     given call.
     """
 
-    def get_active_core(self, system_name: str) -> tuple[str | None, str | None]: ...
+    def get_active_core(
+        self, system_name: str, *, reading: SourcesReading | None = None
+    ) -> tuple[str | None, str | None]: ...
 
-    def get_default_emulator(self, system_name: str) -> EmulatorInvocation | None: ...
+    def get_default_emulator(
+        self, system_name: str, *, reading: SourcesReading | None = None
+    ) -> EmulatorInvocation | None: ...
 
-    def get_emulator_options(self, system_name: str) -> dict[str, Any]: ...
+    def get_emulator_options(self, system_name: str, *, reading: SourcesReading | None = None) -> dict[str, Any]: ...
 
-    def reset_cache(self) -> None: ...
+
+class EmulatorSourcesReader(Protocol):
+    """The emulator sources the resolver detects, arranged by the user's order and switches.
+
+    ``read`` detects afresh and answers one :class:`domain.emulator_sources.SourcesReading`;
+    a run that asks the same questions for many games takes one and hands it
+    down. ``describe`` is what the settings list shows of every detected source,
+    from a fresh reading.
+    """
+
+    def read(self) -> SourcesReading: ...
+
+    def describe(self) -> tuple[SourceReport, ...]: ...
 
 
 class SaveLocationReader(Protocol):

@@ -41,10 +41,14 @@ from _vendor.atlas.esde import CatalogueKind, EmulatorSpec
 from _vendor.atlas.installations import CatalogueAnswer, EmulatorEntry, RomPlacement, SystemsAnswer
 from _vendor.atlas.placement import Caveat
 
-from adapters.atlas_catalogue import AtlasCatalogueAdapter, first_detected_installation
+from adapters.atlas_catalogue import AtlasCatalogueAdapter
+from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.shortcut_data import EmulatorInvocation
 
 _RETROARCH = "%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/{core}.so %ROM%"
+
+# The answering source a catalogue answer names where RetroDECK answers.
+_RETRODECK = {"kind": "retrodeck", "starts_games": True}
 
 _HEALTH = Caveat(code=HEALTH_ISSUE_ROOT_MISSING, message="a health finding, on every answer this machine gives")
 
@@ -118,15 +122,15 @@ def _refusal(code: str) -> Caveat:
 class _Installation:
     """Stand-in for a detected installation handle — answers what it was prepared with."""
 
-    kind = "retrodeck"
-
     def __init__(
         self,
         *,
         catalogue: CatalogueAnswer | Exception | None = None,
         placement: RomPlacement | Exception | None = None,
         systems: SystemsAnswer | Exception | None = None,
+        kind: str = "retrodeck",
     ) -> None:
+        self.kind = kind
         self._catalogue = catalogue
         self._placement = placement
         self._systems = systems
@@ -158,14 +162,28 @@ def traces() -> list[str]:
     return []
 
 
+def _sources(
+    installations: list[_Installation], traces: list[str], settings: dict[str, Any] | None = None
+) -> EmulatorSourcesAdapter:
+    """The real sources holder over installations a test names, detected afresh on every reading."""
+    return EmulatorSourcesAdapter(
+        user_home="/home/deck",
+        settings=settings if settings is not None else {},
+        log_debug=traces.append,
+        detect_installations=lambda home, machine: list(installations),
+        machine=object(),
+    )
+
+
 def _adapter(
     installation: _Installation | None,
     traces: list[str],
     *,
     installed: bool = True,
+    sources: EmulatorSourcesAdapter | None = None,
 ) -> AtlasCatalogueAdapter:
     return AtlasCatalogueAdapter(
-        choose_installation=lambda: installation,
+        sources=sources if sources is not None else _sources([] if installation is None else [installation], traces),
         emulator_installed=lambda command: installed,
         log_debug=traces.append,
     )
@@ -295,7 +313,13 @@ class TestCatalogueRefusals:
     )
     def test_a_refusal_answers_unavailable(self, traces, code):
         installation = _Installation(catalogue=_answer(caveats=(_refusal(code),)))
-        assert _adapter(installation, traces).get_emulator_options("ps3") == {"available": False, "options": []}
+        reason = {CAVEAT_EMULATOR_CATALOGUE_SEALED: "sealed", HEALTH_ISSUE_CATALOGUE_INVALID: "catalogue_invalid"}
+        assert _adapter(installation, traces).get_emulator_options("ps3") == {
+            "available": False,
+            "options": [],
+            "reason": reason.get(code, "unavailable"),
+            "source": _RETRODECK,
+        }
 
     def test_a_refusal_suppresses_the_entries_it_arrived_with(self, traces):
         # `sealed` is the one refusal that may accompany real entries: what the
@@ -310,19 +334,34 @@ class TestCatalogueRefusals:
         )
         adapter = _adapter(installation, traces)
 
-        assert adapter.get_emulator_options("ps3") == {"available": False, "options": []}
+        assert adapter.get_emulator_options("ps3") == {
+            "available": False,
+            "options": [],
+            "reason": "sealed",
+            "source": _RETRODECK,
+        }
         assert adapter.get_default_emulator("ps3") is None
         assert adapter.get_active_core("ps3") == (None, None)
 
     def test_an_empty_answer_without_a_refusal_is_a_real_none(self, traces):
         installation = _Installation(catalogue=_answer())
-        assert _adapter(installation, traces).get_emulator_options("ps3") == {"available": True, "options": []}
+        assert _adapter(installation, traces).get_emulator_options("ps3") == {
+            "available": True,
+            "options": [],
+            "reason": None,
+            "source": _RETRODECK,
+        }
 
     def test_a_health_finding_is_not_a_refusal(self, traces):
         # The test is the codes, never an empty caveat list: a broken
         # installation states its findings on every answer it gives.
         installation = _Installation(catalogue=_answer(caveats=(_HEALTH,)))
-        assert _adapter(installation, traces).get_emulator_options("ps3") == {"available": True, "options": []}
+        assert _adapter(installation, traces).get_emulator_options("ps3") == {
+            "available": True,
+            "options": [],
+            "reason": None,
+            "source": _RETRODECK,
+        }
 
     def test_an_exclusive_overlay_is_not_a_refusal(self, traces):
         # A custom es_systems.xml declaring itself the whole catalogue: the
@@ -367,32 +406,46 @@ class TestNothingToAsk:
     def test_no_installation_answers_unavailable(self, traces):
         adapter = _adapter(None, traces)
 
-        assert adapter.get_emulator_options("ps3") == {"available": False, "options": []}
+        assert adapter.get_emulator_options("ps3") == {
+            "available": False,
+            "options": [],
+            "reason": "no_source",
+            "source": None,
+        }
         assert adapter.get_default_emulator("ps3") is None
         assert adapter.get_active_core("ps3") == (None, None)
         assert adapter.is_known_system("ps3") is None
         assert adapter.get_supported_extensions("ps3") == frozenset()
         assert adapter.system_supports_m3u("ps3") is False
-        assert any("no emulator installation detected" in line for line in traces)
+        assert any("no emulator source answers (no_source)" in line for line in traces)
 
     def test_a_raising_resolver_answers_unavailable(self, traces):
         installation = _Installation(catalogue=ValueError("an invariant of its own"))
         adapter = _adapter(installation, traces)
 
-        assert adapter.get_emulator_options("ps3") == {"available": False, "options": []}
+        assert adapter.get_emulator_options("ps3") == {
+            "available": False,
+            "options": [],
+            "reason": "unavailable",
+            "source": _RETRODECK,
+        }
         assert adapter.get_active_core("ps3") == (None, None)
         assert any("resolver failed" in line for line in traces)
 
     def test_a_raising_detection_answers_unavailable(self, traces):
-        def explode() -> Any:
+        def explode(home: str, machine: Any) -> list[Any]:
             raise RuntimeError("detection blew up")
 
-        adapter = AtlasCatalogueAdapter(
-            choose_installation=explode,
-            emulator_installed=lambda command: True,
-            log_debug=traces.append,
+        sources = EmulatorSourcesAdapter(
+            user_home="/home/deck", settings={}, log_debug=traces.append, detect_installations=explode, machine=object()
         )
-        assert adapter.get_emulator_options("ps3") == {"available": False, "options": []}
+        adapter = _adapter(None, traces, sources=sources)
+        assert adapter.get_emulator_options("ps3") == {
+            "available": False,
+            "options": [],
+            "reason": "no_source",
+            "source": None,
+        }
 
     def test_a_raising_systems_read_answers_neither_yes_nor_no(self, traces):
         installation = _Installation(systems=ValueError("an invariant of its own"))
@@ -480,14 +533,14 @@ class TestInstalledProbe:
         assert adapter.get_emulator_options("gba")["options"][0].status == "bakeable"
 
     def test_the_probe_is_re_run_on_every_call(self, traces):
-        # The answer is cached; the on-disk verdict is not, so an emulator the
-        # user installs mid-session is seen without a cache reset.
+        # The on-disk verdict is asked on every call, so an emulator the user
+        # installs mid-session is seen on the next one.
         installation = _Installation(
             catalogue=_answer(_entry(label="Ryubing", command="%EMULATOR_RYUBING% %ROM%", declared_index=0))
         )
         installed = {"value": False}
         adapter = AtlasCatalogueAdapter(
-            choose_installation=lambda: installation,
+            sources=_sources([installation], traces),
             emulator_installed=lambda command: installed["value"],
             log_debug=traces.append,
         )
@@ -528,8 +581,8 @@ class TestKnownSystem:
         assert _adapter(installation, traces).is_known_system("ps2") is None
 
 
-class TestCaching:
-    def test_one_answer_per_system_is_read_once(self, traces):
+class TestHowLongAnAnswerIsKept:
+    def test_every_panel_call_asks_again(self, traces):
         installation = _Installation(
             catalogue=_answer(_entry(label="RPCS3", command="%EMULATOR_RPCS3% %ROM%", declared_index=0)),
             placement=RomPlacement(dir="/roms/ps3", extensions=(".ps3",)),
@@ -538,11 +591,10 @@ class TestCaching:
 
         for _ in range(3):
             adapter.get_emulator_options("ps3")
-            adapter.get_active_core("ps3")
             adapter.get_supported_extensions("ps3")
 
-        assert installation.catalogue_calls == ["ps3"]
-        assert installation.placement_calls == ["ps3"]
+        assert installation.catalogue_calls == ["ps3", "ps3", "ps3"]
+        assert installation.placement_calls == ["ps3", "ps3", "ps3"]
 
     def test_each_system_is_asked_for_itself(self, traces):
         installation = _Installation()
@@ -553,9 +605,10 @@ class TestCaching:
 
         assert installation.catalogue_calls == ["ps3", "psx"]
 
-    def test_the_systems_listing_is_read_once(self, traces):
-        # The listing enumerates every system the catalogue has, and a candidate
-        # search asks it once per platform it visits.
+    def test_a_panel_call_asks_the_listing_afresh(self, traces):
+        # Nothing outlives the call that asked it (#2188 D4): each call takes a
+        # reading of its own, so a catalogue edited between two calls is read
+        # again rather than answered from the first.
         installation = _Installation(systems=SystemsAnswer(systems=("psx", "ps2")))
         adapter = _adapter(installation, traces)
 
@@ -563,62 +616,105 @@ class TestCaching:
         adapter.is_known_system("ps2")
         adapter.is_known_system("n64")
 
-        assert installation.systems_calls == 1
+        assert installation.systems_calls == 3
 
-    def test_reset_cache_re_asks(self, traces):
+    def test_a_run_reading_asks_each_question_once(self, traces):
         installation = _Installation(
-            catalogue=_answer(_entry(label="RPCS3", command="%EMULATOR_RPCS3% %ROM%", declared_index=0)),
-            placement=RomPlacement(dir="/roms/ps3", extensions=(".ps3",)),
-            systems=SystemsAnswer(systems=("ps3",)),
+            catalogue=_answer(_entry(label="RPCS3", command="%EMULATOR_RPCS3% %ROM%", declared_index=0))
         )
-        adapter = _adapter(installation, traces)
-        adapter.get_emulator_options("ps3")
-        adapter.get_supported_extensions("ps3")
-        adapter.is_known_system("ps3")
+        sources = _sources([installation], traces)
+        adapter = _adapter(installation, traces, sources=sources)
 
-        adapter.reset_cache()
-        adapter.get_emulator_options("ps3")
-        adapter.get_supported_extensions("ps3")
-        adapter.is_known_system("ps3")
+        reading = sources.read()
+        adapter.get_emulator_options("ps3", reading=reading)
+        adapter.get_default_emulator("ps3", reading=reading)
+        adapter.get_active_core("ps3", reading=reading)
+        adapter.get_emulator_options("psx", reading=reading)
+
+        assert installation.catalogue_calls == ["ps3", "psx"]
+
+    def test_two_runs_ask_twice(self, traces):
+        installation = _Installation(
+            catalogue=_answer(_entry(label="RPCS3", command="%EMULATOR_RPCS3% %ROM%", declared_index=0))
+        )
+        sources = _sources([installation], traces)
+        adapter = _adapter(installation, traces, sources=sources)
+
+        for _run in range(2):
+            reading = sources.read()
+            adapter.get_emulator_options("ps3", reading=reading)
+            adapter.get_default_emulator("ps3", reading=reading)
 
         assert installation.catalogue_calls == ["ps3", "ps3"]
-        assert installation.placement_calls == ["ps3", "ps3"]
-        assert installation.systems_calls == 2
 
-    def test_a_detection_that_found_nothing_is_re_run(self, traces):
-        # The one state where memoising would cost something real: RetroDECK
-        # installed mid-session must be picked up without a backend restart.
-        found: list[_Installation | None] = [None]
-        adapter = AtlasCatalogueAdapter(
-            choose_installation=lambda: found[0],
-            emulator_installed=lambda command: True,
-            log_debug=traces.append,
-        )
+    def test_a_source_installed_later_is_detected_on_the_next_call(self, traces):
+        detected: list[_Installation] = []
+        adapter = _adapter(None, traces, sources=_sources(detected, traces))
 
         assert adapter.get_emulator_options("ps3")["available"] is False
-        found[0] = _Installation(
-            catalogue=_answer(_entry(label="RPCS3", command="%EMULATOR_RPCS3% %ROM%", declared_index=0))
+        detected.append(
+            _Installation(catalogue=_answer(_entry(label="RPCS3", command="%EMULATOR_RPCS3% %ROM%", declared_index=0)))
         )
         assert _labels(adapter) == ["RPCS3"]
 
-    def test_a_chosen_installation_is_asked_for_once(self, traces):
-        installation = _Installation()
-        chooses: list[int] = []
 
-        def choose() -> _Installation:
-            chooses.append(1)
-            return installation
+class TestWhichSourceAnswers:
+    """A game's emulator list comes from the source it starts through (#2188 D16)."""
 
-        adapter = AtlasCatalogueAdapter(
-            choose_installation=choose,
-            emulator_installed=lambda command: True,
-            log_debug=traces.append,
+    @staticmethod
+    def _two(traces: list[str], settings: dict[str, Any]) -> tuple[AtlasCatalogueAdapter, _Installation]:
+        retrodeck = _Installation(
+            catalogue=_answer(_libretro(label="mGBA", core="mgba_libretro", declared_index=0)), kind="retrodeck"
         )
-        adapter.get_emulator_options("ps3")
-        adapter.get_emulator_options("psx")
-        adapter.is_known_system("ps3")
+        emudeck = _Installation(
+            catalogue=_answer(
+                _entry(label="Overlay", command="%EMULATOR_X% %ROM%", declared_index=0),
+                caveats=(_refusal(CAVEAT_EMULATOR_CATALOGUE_SEALED),),
+            ),
+            kind="emudeck",
+        )
+        return _adapter(None, traces, sources=_sources([retrodeck, emudeck], traces, settings)), emudeck
 
-        assert len(chooses) == 1
+    def test_retrodeck_answers_with_emudeck_first_in_the_order(self, traces):
+        adapter, emudeck = self._two(traces, {"emulator_source_order": ["emudeck", "retrodeck"]})
+
+        answer = adapter.get_emulator_options("gba")
+
+        assert [option.label for option in answer["options"]] == ["mGBA"]
+        assert answer["source"] == _RETRODECK
+        assert emudeck.catalogue_calls == []
+
+    def test_switching_retrodeck_off_hands_the_answer_to_emudeck(self, traces):
+        adapter, _emudeck = self._two(traces, {"emulator_sources_off": ["retrodeck"]})
+
+        assert adapter.get_emulator_options("gba") == {
+            "available": False,
+            "options": [],
+            "reason": "sealed",
+            "source": {"kind": "emudeck", "starts_games": False},
+        }
+
+    def test_switching_the_only_source_off_and_on_again(self, traces):
+        settings: dict[str, Any] = {"emulator_sources_off": ["retrodeck"]}
+        installation = _Installation(catalogue=_answer(_libretro(label="mGBA", core="mgba_libretro", declared_index=0)))
+        adapter = _adapter(None, traces, sources=_sources([installation], traces, settings))
+
+        assert adapter.get_emulator_options("gba") == {
+            "available": False,
+            "options": [],
+            "reason": "switched_off",
+            "source": None,
+        }
+        settings["emulator_sources_off"] = []
+        assert _labels(adapter, "gba") == ["mGBA"]
+
+    def test_with_only_emudeck_its_answer_says_tender_cannot_start_games_through_it(self, traces):
+        emudeck = _Installation(
+            catalogue=_answer(caveats=(_refusal(CAVEAT_EMULATOR_CATALOGUE_SEALED),)), kind="emudeck"
+        )
+        adapter = _adapter(None, traces, sources=_sources([emudeck], traces))
+
+        assert adapter.get_emulator_options("psx")["source"] == {"kind": "emudeck", "starts_games": False}
 
 
 # --- The real resolver, over a fabricated RetroDECK deploy -------------------
@@ -679,7 +775,7 @@ class TestTheRealResolverOverARealTree:
 
     def _adapter(self, home: str, traces: list[str]) -> AtlasCatalogueAdapter:
         return AtlasCatalogueAdapter(
-            choose_installation=lambda: first_detected_installation(home),
+            sources=EmulatorSourcesAdapter(user_home=home, settings={}, log_debug=traces.append),
             emulator_installed=lambda command: True,
             log_debug=traces.append,
         )
@@ -698,7 +794,12 @@ class TestTheRealResolverOverARealTree:
         home = _seed_retrodeck(tmp_path, catalogue="<systemList><system><name>gba</name>")
         adapter = self._adapter(home, traces)
 
-        assert adapter.get_emulator_options("gba") == {"available": False, "options": []}
+        assert adapter.get_emulator_options("gba") == {
+            "available": False,
+            "options": [],
+            "reason": "catalogue_invalid",
+            "source": _RETRODECK,
+        }
         assert adapter.get_default_emulator("gba") is None
         assert adapter.get_active_core("gba") == (None, None)
         assert adapter.is_known_system("gba") is None
@@ -707,7 +808,12 @@ class TestTheRealResolverOverARealTree:
         home = _seed_retrodeck(tmp_path, catalogue='<?xml version="1.0"?>\n<notSystemList/>\n')
         adapter = self._adapter(home, traces)
 
-        assert adapter.get_emulator_options("gba") == {"available": False, "options": []}
+        assert adapter.get_emulator_options("gba") == {
+            "available": False,
+            "options": [],
+            "reason": "catalogue_invalid",
+            "source": _RETRODECK,
+        }
         assert adapter.is_known_system("gba") is None
 
     def test_an_empty_but_valid_catalogue_is_a_real_knows_none(self, tmp_path, traces):
@@ -716,11 +822,40 @@ class TestTheRealResolverOverARealTree:
         home = _seed_retrodeck(tmp_path, catalogue='<?xml version="1.0"?>\n<systemList/>\n')
         adapter = self._adapter(home, traces)
 
-        assert adapter.get_emulator_options("gba") == {"available": True, "options": []}
+        assert adapter.get_emulator_options("gba") == {
+            "available": True,
+            "options": [],
+            "reason": None,
+            "source": _RETRODECK,
+        }
         assert adapter.is_known_system("gba") is False
 
     def test_nothing_detected_answers_unavailable(self, tmp_path, traces):
         adapter = self._adapter(str(tmp_path / "empty-home"), traces)
 
-        assert adapter.get_emulator_options("gba") == {"available": False, "options": []}
+        assert adapter.get_emulator_options("gba") == {
+            "available": False,
+            "options": [],
+            "reason": "no_source",
+            "source": None,
+        }
         assert adapter.is_known_system("gba") is None
+
+    def test_a_catalogue_edit_is_seen_by_the_next_call(self, tmp_path, traces):
+        home = _seed_retrodeck(tmp_path, catalogue=_VALID_ES_SYSTEMS_XML)
+        adapter = self._adapter(home, traces)
+        assert _labels(adapter, "gba") == ["mGBA"]
+
+        bundled = os.path.join(
+            home, ".local", "share", "flatpak", "app", "net.retrodeck.retrodeck", "current", "active", "files"
+        )
+        with open(os.path.join(bundled, _LINUX_SYSTEMS_SUFFIX), "w", encoding="utf-8") as handle:
+            handle.write(
+                _VALID_ES_SYSTEMS_XML.replace(
+                    "</system>",
+                    '  <command label="VBA-M">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/vbam_libretro.so %ROM%'
+                    "</command>\n  </system>",
+                )
+            )
+
+        assert _labels(adapter, "gba") == ["mGBA", "VBA-M"]

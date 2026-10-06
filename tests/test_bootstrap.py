@@ -26,6 +26,7 @@ from bootstrap import (
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
 from fakes.fake_cover_art_file_store import FakeCoverArtFileStore
 from fakes.fake_download_file_store import FakeDownloadFileStore
+from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_firmware_file_store import FakeFirmwareFileStore
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_game_process_control import FakeGameProcessControlAdapter
@@ -640,6 +641,7 @@ class TestWireServices:
                 resolve_path=deps["resolve_path"],
                 core_info_provider=deps["core_info_provider"],
                 save_locations=FakeSaveLocationReader(),
+                emulator_sources=FakeEmulatorSources(),
                 renderer_rss=deps["renderer_rss"],
                 renderer_gc=deps["renderer_gc"],
                 game_process=deps["game_process"],

@@ -81,7 +81,6 @@ from _vendor.atlas import (
     CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE,
     CAVEAT_FIRMWARE_SCAN_INCOMPLETE,
     CAVEAT_FIRMWARE_SEARCH_UNVERIFIED,
-    detect,
 )
 
 # Neither name is in emu-atlas's ``__all__``; whether they are public API is
@@ -104,6 +103,8 @@ from domain.firmware_wants import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from adapters.emulator_sources import EmulatorSourcesAdapter
 
 # The declaration state in which an emulator stated what it wants off its own
 # installation — a libretro ``.info`` read from the machine.
@@ -148,8 +149,8 @@ _ABSENT_REGION_CODES = frozenset({CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE})
 class AtlasFirmwareAdapter:
     """Reads what every installed libretro core wants, live, for the callers with no platform."""
 
-    def __init__(self, *, user_home: str, log_debug: Callable[[str], None]) -> None:
-        self._user_home = user_home
+    def __init__(self, *, sources: EmulatorSourcesAdapter, log_debug: Callable[[str], None]) -> None:
+        self._sources = sources
         self._log_debug = log_debug
 
     def __call__(self) -> FirmwareCatalogue:
@@ -165,7 +166,7 @@ class AtlasFirmwareAdapter:
             return _unresolved()
 
     def _read_catalogue(self) -> FirmwareCatalogue:
-        installation = _installation(self._user_home, self._log_debug)
+        installation = _installation(self._sources, self._log_debug)
         if installation is None:
             return _unresolved()
         answer = installation.firmware_inventory()
@@ -176,8 +177,8 @@ class AtlasFirmwareAdapter:
 class AtlasPlatformFirmwareAdapter:
     """Reads what one system's emulators want, verified, live off the machine."""
 
-    def __init__(self, *, user_home: str, log_debug: Callable[[str], None]) -> None:
-        self._user_home = user_home
+    def __init__(self, *, sources: EmulatorSourcesAdapter, log_debug: Callable[[str], None]) -> None:
+        self._sources = sources
         self._log_debug = log_debug
 
     def __call__(self, system: str) -> FirmwareCatalogue:
@@ -189,7 +190,7 @@ class AtlasPlatformFirmwareAdapter:
             return _unresolved()
 
     def _read_catalogue(self, system: str) -> FirmwareCatalogue:
-        installation = _installation(self._user_home, self._log_debug)
+        installation = _installation(self._sources, self._log_debug)
         if installation is None:
             return _unresolved()
         answer = installation.firmware_for_system(system, verify=True)
@@ -197,18 +198,13 @@ class AtlasPlatformFirmwareAdapter:
         return _catalogue(answer)
 
 
-def _installation(user_home: str, log_debug: Callable[[str], None]) -> Any | None:
-    """The installation every question here is put to, or ``None`` where there is none.
-
-    Detection returns the arrangements it found highest-priority first and never
-    picks a winner itself; Tender launches every game through RetroDECK, and
-    RetroDECK leads that order where it is present.
-    """
-    installations = detect(user_home)
-    if not installations:
-        log_debug("[firmware] no emulator installation detected")
-        return None
-    return installations[0]
+def _installation(sources: EmulatorSourcesAdapter, log_debug: Callable[[str], None]) -> Any | None:
+    """The answering source's installation from a fresh reading, or ``None`` where no source answers."""
+    reading = sources.read()
+    installation = reading.answering_installation()
+    if installation is None:
+        log_debug(f"[firmware] no emulator source answers ({reading.no_answer_reason()})")
+    return installation
 
 
 def _unresolved() -> FirmwareCatalogue:

@@ -49,6 +49,8 @@ _ENTRY_KEYS = {
     "active_core_label",
     "emulators",
     "emulator_data_available",
+    "emulator_data_reason",
+    "emulator_source",
     "deletable_count",
     "server_count",
     "local_count",

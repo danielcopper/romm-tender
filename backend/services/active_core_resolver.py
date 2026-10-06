@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     import logging
 
     from domain.emulator_commands import EmulatorOption
+    from domain.emulator_sources import SourcesReading
     from domain.rom import Rom
     from domain.rom_install import RomInstall
     from services.protocols import (
@@ -73,7 +74,9 @@ class ActiveCoreResolver:
         self._resolve_system = config.resolve_system
         self._logger = config.logger
 
-    def active_emulator_for_rom(self, rom_id: int) -> EmulatorInvocation | None:
+    def active_emulator_for_rom(
+        self, rom_id: int, *, reading: SourcesReading | None = None
+    ) -> EmulatorInvocation | None:
         """Return the :class:`EmulatorInvocation` the ROM ``rom_id`` will launch with.
 
         The launch-bake seam. Reads the ROM's ``platform_slug`` +
@@ -105,6 +108,10 @@ class ActiveCoreResolver:
         baked path are always decided from one layout fact. A libretro emulator,
         a non-folder install, or an unresolvable sandbox launcher all leave the
         invocation unchanged.
+
+        *reading* is a run's one reading of the emulator sources, handed down so
+        a run resolving many ROMs asks each catalogue question once; a call
+        without one asks fresh.
         """
         rom, install = self._read_rom_and_install(rom_id)
         if rom is None:
@@ -112,12 +119,12 @@ class ActiveCoreResolver:
             return None
 
         system = self._resolve_system(rom.platform_slug)
-        options = self._core_info.get_emulator_options(system)["options"]
-        emulator = self._resolve_by_precedence(rom, rom_id, system, options)
+        options = self._core_info.get_emulator_options(system, reading=reading)["options"]
+        emulator = self._resolve_by_precedence(rom, rom_id, system, options, reading)
         return self._maybe_folder_boot_direct(emulator, install, rom_id)
 
     def _resolve_by_precedence(
-        self, rom: Rom, rom_id: int, system: str, options: list[EmulatorOption]
+        self, rom: Rom, rom_id: int, system: str, options: list[EmulatorOption], reading: SourcesReading | None
     ) -> EmulatorInvocation | None:
         """Apply the per-game → per-platform → system-default precedence chain.
 
@@ -151,7 +158,7 @@ class ActiveCoreResolver:
                 rom_id,
             )
 
-        return self._core_info.get_default_emulator(system)
+        return self._core_info.get_default_emulator(system, reading=reading)
 
     def _maybe_folder_boot_direct(
         self, emulator: EmulatorInvocation | None, install: RomInstall | None, rom_id: int

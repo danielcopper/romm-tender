@@ -113,6 +113,7 @@ from services.protocols.infra import (
 from services.protocols.paths import (
     CoreInfoProvider,
     CoreResolverFn,
+    EmulatorSourcesReader,
     FirmwarePlatformResolver,
     FirmwareResolver,
     PlatformCoreReader,
@@ -188,6 +189,7 @@ __all__ = [
     "DownloadQueueCleanup",
     "DownloadQueueFn",
     "DownloadTargetGateFn",
+    "EmulatorSourcesReader",
     "EventEmitter",
     "FailedInstallerStartFn",
     "FailureToastAcknowledgeFn",

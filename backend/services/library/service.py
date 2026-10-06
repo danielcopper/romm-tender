@@ -48,6 +48,7 @@ if TYPE_CHECKING:
         ConflictRules,
         DebugLogger,
         DiscResolver,
+        EmulatorSourcesReader,
         EventEmitter,
         RendererGcFn,
         RendererRssFn,
@@ -73,10 +74,11 @@ class LibraryServiceConfig:
     shared per-ROM ``active_core`` resolver (used to bake each ROM's full
     active core into ``launch_options`` at sync) and the shared ``disc_resolver``
     (used to bake each multi-disc ROM's selected disc into ``launch_options`` at
-    sync). The ``renderer_rss`` / ``renderer_gc`` seams feed the session-budget
-    gate: the RSS reader measures the Steam renderer's heap and the GC trigger
-    settles it before a reading, so the apply can pause before Steam's per-session
-    budget is exhausted. ``conflict_rules`` are what a library use case checks at
+    sync), and the ``emulator_sources`` a run takes its one reading of. The
+    ``renderer_rss`` / ``renderer_gc`` seams feed the session-budget gate: the
+    RSS reader measures the Steam renderer's heap and the GC trigger settles it
+    before a reading, so the apply can pause before Steam's per-session budget is
+    exhausted. ``conflict_rules`` are what a library use case checks at
     its entry, under its endpoint's name, and what the ``sync_stale`` /
     ``sync_complete`` events take their leases through.
     """
@@ -97,6 +99,7 @@ class LibraryServiceConfig:
     uow_factory: UnitOfWorkFactory
     active_core: ActiveCoreReader
     disc_resolver: DiscResolver
+    emulator_sources: EmulatorSourcesReader
     renderer_rss: RendererRssFn
     renderer_gc: RendererGcFn
     conflict_rules: ConflictRules
@@ -166,6 +169,7 @@ class LibraryService:
                 uow_factory=config.uow_factory,
                 active_core=config.active_core,
                 disc_resolver=config.disc_resolver,
+                emulator_sources=config.emulator_sources,
             )
         )
 

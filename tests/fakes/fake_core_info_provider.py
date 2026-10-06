@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from domain.emulator_commands import EmulatorOption
 from domain.shortcut_data import EmulatorInvocation
+
+if TYPE_CHECKING:
+    from domain.emulator_sources import SourcesReading
+
+# The answering source every fake answer names unless a test says otherwise.
+RETRODECK_SOURCE: dict[str, Any] = {"kind": "retrodeck", "starts_games": True}
 
 
 def libretro_option(core_so: str, label: str, *, emulator: str | None = None) -> EmulatorOption:
@@ -66,10 +72,12 @@ class FakeCoreInfoProvider:
     :class:`EmulatorOption` values or synthesized from the ``available_cores``
     convenience — a list of ``{"core_so", "label", "is_default"}`` dicts turned
     into bakeable libretro options (the shape most core-selection tests use).
-    ``available`` mirrors the adapter's "was the catalogue readable?" flag.
+    ``available`` mirrors the adapter's "was the catalogue readable?" flag, and
+    ``reason`` / ``source`` the two fields the adapter answers beside it.
 
-    ``reset_cache`` increments ``reset_cache_count`` so writers can assert the
-    cache was invalidated after a write. ``active_core_calls`` and
+    ``readings`` and ``default_readings`` record the reading each
+    ``get_emulator_options`` and ``get_default_emulator`` call was handed
+    (``None`` for a call that asks fresh). ``active_core_calls`` and
     ``emulator_options_calls`` record the ``system_name`` each seam was invoked
     with so callers can assert a normalized system (not the raw platform slug)
     reached the read seam.
@@ -93,6 +101,8 @@ class FakeCoreInfoProvider:
         options: list[EmulatorOption] | None = None,
         available: bool = True,
         standalone: dict[str, EmulatorInvocation] | None = None,
+        reason: str = "unavailable",
+        source: dict[str, Any] | None = RETRODECK_SOURCE,
     ) -> None:
         self.active_core = active_core
         self._available_cores: list[dict[str, Any]] = []
@@ -104,9 +114,12 @@ class FakeCoreInfoProvider:
             self.available_cores = available_cores or []
         self.available = available
         self.standalone: dict[str, EmulatorInvocation] = standalone if standalone is not None else {}
-        self.reset_cache_count = 0
+        self.reason = reason
+        self.source = source
         self.active_core_calls: list[str] = []
         self.emulator_options_calls: list[str] = []
+        self.readings: list[SourcesReading | None] = []
+        self.default_readings: list[SourcesReading | None] = []
 
     @property
     def available_cores(self) -> list[dict[str, Any]]:
@@ -118,11 +131,16 @@ class FakeCoreInfoProvider:
         self._available_cores = value
         self.options = [libretro_option(c["core_so"], c["label"]) for c in value if "core_so" in c]
 
-    def get_active_core(self, system_name: str) -> tuple[str | None, str | None]:
+    def get_active_core(
+        self, system_name: str, *, reading: SourcesReading | None = None
+    ) -> tuple[str | None, str | None]:
         self.active_core_calls.append(system_name)
         return self.active_core
 
-    def get_default_emulator(self, system_name: str) -> EmulatorInvocation | None:
+    def get_default_emulator(
+        self, system_name: str, *, reading: SourcesReading | None = None
+    ) -> EmulatorInvocation | None:
+        self.default_readings.append(reading)
         pref = self.standalone.get(system_name)
         if pref is not None:
             return pref
@@ -131,12 +149,15 @@ class FakeCoreInfoProvider:
             return EmulatorInvocation.libretro(core_so, label)
         return None
 
-    def get_emulator_options(self, system_name: str) -> dict[str, Any]:
+    def get_emulator_options(self, system_name: str, *, reading: SourcesReading | None = None) -> dict[str, Any]:
         self.emulator_options_calls.append(system_name)
-        return {"available": self.available, "options": self.options}
-
-    def reset_cache(self) -> None:
-        self.reset_cache_count += 1
+        self.readings.append(reading)
+        return {
+            "available": self.available,
+            "options": self.options,
+            "reason": None if self.available else self.reason,
+            "source": self.source,
+        }
 
 
 class FakeSandboxLauncher:

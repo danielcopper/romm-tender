@@ -12,10 +12,11 @@ have to meet at an adapter.
 Three properties of the resolver decide this module's shape.
 
 **It answers per installation, and picking one is not its job.** ``detect``
-returns every arrangement it found and never a winner, so the choice arrives
-here as an injected callable. Nothing in ``services/`` learns which arrangement
-answered; offering more than one is #918's, and until then the wiring hands over
-"the first detected", which is atlas's own order with RetroDECK at its head.
+returns every arrangement it found and never a winner, so every question goes
+to the source a reading of :mod:`adapters.emulator_sources` names as the
+answering one. A panel call takes a fresh reading per question; a run that asks
+the same questions for many games hands its one reading in, and every answer
+is then asked once for the whole run.
 
 **Its entry order is the EFFECTIVE one, and Tender wants the declared one.**
 A gamelist ``<altemulator>`` or a system-level ``<alternativeEmulator>`` promotes
@@ -53,7 +54,6 @@ from _vendor.atlas import (
     CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
     HEALTH_ISSUE_CATALOGUE_INVALID,
     KIND_LIBRETRO,
-    detect,
 )
 
 from adapters.atlas_identity import emulator_identity
@@ -64,10 +64,13 @@ from domain.emulator_commands import (
     option_to_invocation,
     select_default_option,
 )
+from domain.emulator_sources import CATALOGUE_INVALID, CATALOGUE_SEALED, CATALOGUE_UNAVAILABLE
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from adapters.emulator_sources import EmulatorSourcesAdapter
+    from domain.emulator_sources import SourcesReading
     from domain.shortcut_data import EmulatorInvocation
 
 # The codes on which Tender declines to answer from a catalogue. The first
@@ -107,26 +110,31 @@ _CATALOGUE_REFUSALS = frozenset(
 _CORE_SO_SUFFIX = ".so"
 
 
-def _unavailable() -> dict[str, Any]:
+def _unavailable(reason: str, source: dict[str, Any] | None) -> dict[str, Any]:
     """The picker's "emulator list unavailable" answer, built fresh each call.
 
     A module-level constant would hand every caller the same ``options`` list,
     which a caller is free to mutate.
     """
-    return {"available": False, "options": []}
+    return {"available": False, "options": [], "reason": reason, "source": source}
 
 
-def first_detected_installation(user_home: str) -> Any:
-    """The highest-priority arrangement detected under *user_home*, or ``None``.
+def _source_payload(reading: SourcesReading) -> dict[str, Any] | None:
+    """The answering source as the picker answer names it: its kind, and whether Tender starts games through it."""
+    answering = reading.answering
+    if answering is None:
+        return None
+    return {"kind": answering.kind, "starts_games": answering.starts_games}
 
-    Detection returns what it found in probe order — RetroDECK, EmuDeck, an
-    unclaimed bare RetroArch flatpak, a bare native RetroArch — and never picks a
-    winner. Tender launches every game through RetroDECK, and RetroDECK leads
-    that order where it is present, so "the first" is the RetroDECK answer
-    wherever there is one. Offering the others is #918.
-    """
-    installations = detect(user_home)
-    return installations[0] if installations else None
+
+def _refusal_reason(answer: Any) -> str:
+    """Which refusal a refused catalogue answer is, as the page words it."""
+    codes = set(_caveat_codes(answer))
+    if HEALTH_ISSUE_CATALOGUE_INVALID in codes:
+        return CATALOGUE_INVALID
+    if CAVEAT_EMULATOR_CATALOGUE_SEALED in codes:
+        return CATALOGUE_SEALED
+    return CATALOGUE_UNAVAILABLE
 
 
 def _own_core_so(core_so: str) -> str:
@@ -188,44 +196,27 @@ class AtlasCatalogueAdapter:
     :class:`services.active_core_resolver.ActiveCoreResolver`, not here — and
     ES-DE's own selections are ignored, which is what ``_declared_order`` is for.
 
-    Caches the chosen installation and every answer read through it as instance
-    attributes. There is no mtime guard to fall back on any more: what the
-    resolver read to answer is its own business, so a change to ES-DE's catalogue
-    lands on a :meth:`reset_cache` (which a per-platform core write already
-    performs) or on the next backend restart.
+    Keeps no answer of its own. Every answer is asked through a reading of the
+    emulator sources and kept by that reading alone: the one a caller hands in,
+    or a fresh one taken for the call.
     """
 
     def __init__(
         self,
         *,
-        choose_installation: Callable[[], Any],
+        sources: EmulatorSourcesAdapter,
         emulator_installed: Callable[[str], bool],
         log_debug: Callable[[str], None],
     ) -> None:
-        self._choose_installation = choose_installation
+        self._sources = sources
         self._emulator_installed = emulator_installed
         self._log_debug = log_debug
-        self._installation: Any = None
-        self._catalogues: dict[str, Any] = {}
-        self._locations: dict[str, Any] = {}
-        self._systems: Any = None
-
-    def reset_cache(self) -> None:
-        """Drop the chosen installation and every answer read through it.
-
-        Call after a per-platform core write so the next resolution re-reads from
-        disk instead of returning a stale answer. Dropping the installation with
-        the answers is what makes the cache one generation rather than two: an
-        answer only ever describes the arrangement it was read from.
-        """
-        self._installation = None
-        self._catalogues = {}
-        self._locations = {}
-        self._systems = None
 
     # -- public API ----------------------------------------------------------
 
-    def get_active_core(self, system_name: str) -> tuple[str | None, str | None]:
+    def get_active_core(
+        self, system_name: str, *, reading: SourcesReading | None = None
+    ) -> tuple[str | None, str | None]:
         """Resolve the system-layer libretro active core for a system.
 
         The first libretro entry in declared order, as ``(core_so, label)``.
@@ -233,7 +224,7 @@ class AtlasCatalogueAdapter:
         BIOS filter, which keys on a RetroArch core, not the launch-layer default
         (which may be a standalone emulator). ``(None, None)`` when the system
         offers no libretro entry, when the catalogue could not be read, or when
-        no installation was detected.
+        no source answers.
 
         Reads the resolver's own ``kind``, not the bake classifier's: whether a
         command loads a core is a fact about the command, where bakeability is a
@@ -249,7 +240,7 @@ class AtlasCatalogueAdapter:
         emulator, and that is a different question from "which emulator is this
         platform about".
         """
-        answer = self._catalogue_answer(system_name)
+        answer = self._catalogue_answer(system_name, self._reading(reading))
         if answer is None or catalogue_refused(answer):
             return (None, None)
         for entry in _declared_order(answer.entries):
@@ -257,7 +248,9 @@ class AtlasCatalogueAdapter:
                 return (_own_core_so(entry.core_so), entry.label)
         return (None, None)
 
-    def get_default_emulator(self, system_name: str) -> EmulatorInvocation | None:
+    def get_default_emulator(
+        self, system_name: str, *, reading: SourcesReading | None = None
+    ) -> EmulatorInvocation | None:
         """Resolve the system-layer default **emulator** (libretro OR standalone).
 
         The first *safely-bakeable* entry in declared order
@@ -271,35 +264,46 @@ class AtlasCatalogueAdapter:
         Keeps the read-path/launch-path invariant: the resolved emulator is both
         what the ROM launches with and what derived values key on.
         """
-        result = self.get_emulator_options(system_name)
+        result = self.get_emulator_options(system_name, reading=reading)
         if not result["available"]:
             return None
         return option_to_invocation(select_default_option(result["options"]))
 
-    def get_emulator_options(self, system_name: str) -> dict[str, Any]:
+    def get_emulator_options(self, system_name: str, *, reading: SourcesReading | None = None) -> dict[str, Any]:
         """Return every catalogue entry for a system, classified for bakeability.
 
-        Returns ``{"available": bool, "options": [EmulatorOption, ...]}``.
-        ``available`` is ``False`` when the answer carries one of the five
-        catalogue refusals, or when no installation was detected at all, or when
-        the resolver could not be asked at all — the
-        caller surfaces that as "emulator list unavailable" rather than seeing an
-        empty list it cannot distinguish from a system the frontend knows no
-        emulator for. ``options`` is in DECLARED order, so the first bakeable
-        entry is the system default. A bakeable **standalone** option whose
-        emulator is not installed in RetroDECK is downgraded to ``needs_setup``
-        (reason ``not_installed``) via the injected find-rules probe, so it
-        neither becomes the default nor bakes into a shortcut. A system the
-        catalogue does not declare yields ``available: True`` with an empty list.
+        Returns ``{"available", "options", "reason", "source"}``. ``available``
+        is ``False`` when no source answers, when the answer carries one of the
+        five catalogue refusals, or when the resolver could not be asked at all —
+        the caller surfaces that as "emulator list unavailable" rather than
+        seeing an empty list it cannot distinguish from a system the frontend
+        knows no emulator for. ``reason`` says which, and is ``None`` where the
+        list is available: ``no_source`` / ``switched_off`` where no source
+        answers, ``catalogue_invalid`` / ``sealed`` / ``unavailable`` for a
+        refusal. ``source`` is the answering source's ``{"kind",
+        "starts_games"}``, ``None`` where none answers.
+
+        ``options`` is in DECLARED order, so the first bakeable entry is the
+        system default. A bakeable **standalone** option whose emulator is not
+        installed in RetroDECK is downgraded to ``needs_setup`` (reason
+        ``not_installed``) via the injected find-rules probe, so it neither
+        becomes the default nor bakes into a shortcut. A system the catalogue
+        does not declare yields ``available: True`` with an empty list.
         """
-        answer = self._catalogue_answer(system_name)
-        if answer is None or catalogue_refused(answer):
-            return _unavailable()
+        reading = self._reading(reading)
+        source = _source_payload(reading)
+        if source is None:
+            return _unavailable(reading.no_answer_reason(), None)
+        answer = self._catalogue_answer(system_name, reading)
+        if answer is None:
+            return _unavailable(CATALOGUE_UNAVAILABLE, source)
+        if catalogue_refused(answer):
+            return _unavailable(_refusal_reason(answer), source)
         options = [
             self._probe_installed(classify_command(entry.label, entry.command, emulator=emulator_identity(entry)))
             for entry in _declared_order(answer.entries)
         ]
-        return {"available": True, "options": options}
+        return {"available": True, "options": options, "reason": None, "source": source}
 
     def system_supports_m3u(self, system_name: str) -> bool:
         """True iff the catalogue lists ``.m3u`` as a supported extension for *system_name*.
@@ -321,7 +325,7 @@ class AtlasCatalogueAdapter:
         empty set. ``False`` is therefore a positive statement: this catalogue was
         read, and it does not name this system.
         """
-        answer = self._systems_answer()
+        answer = self._systems_answer(self._sources.read())
         if answer is None or catalogue_refused(answer):
             return None
         return system_name in answer.systems
@@ -337,12 +341,16 @@ class AtlasCatalogueAdapter:
         the catalogue could not be read (default-safe: the caller falls back to
         the full disc set).
         """
-        placement = self._rom_location(system_name)
+        placement = self._rom_location(system_name, self._sources.read())
         if placement is None:
             return frozenset()
         return frozenset(token.lower() for token in placement.extensions)
 
     # -- helpers -------------------------------------------------------------
+
+    def _reading(self, reading: SourcesReading | None) -> SourcesReading:
+        """The reading handed in, or a fresh one for this call."""
+        return reading if reading is not None else self._sources.read()
 
     def _probe_installed(self, option: EmulatorOption) -> EmulatorOption:
         """Downgrade a bakeable standalone whose emulator is not installed.
@@ -394,67 +402,57 @@ class AtlasCatalogueAdapter:
             self._log_debug(f"[catalogue] resolver failed on {subject}: {exc!r}")
             return None
 
-    def _installation_handle(self) -> Any:
-        """The chosen installation, memoised, or ``None`` when nothing was detected.
+    def _installation(self, reading: SourcesReading) -> Any:
+        """The answering source's installation, or ``None`` where no source answers."""
+        installation = reading.answering_installation()
+        if installation is None:
+            self._log_debug(f"[catalogue] no emulator source answers ({reading.no_answer_reason()})")
+        return installation
 
-        A detection that found nothing is deliberately NOT memoised: a RetroDECK
-        installed while the backend runs is then picked up on the next call,
-        which is what the parser's every-call flatpak probe gave for free. The
-        cost is one detection per call in the one state where nothing resolves
-        anyway.
-        """
-        if self._installation is None:
-            self._installation = self._ask(self._choose_installation, "detection")
-            if self._installation is None:
-                self._log_debug("[catalogue] no emulator installation detected")
-        return self._installation
-
-    def _catalogue_answer(self, system_name: str) -> Any:
-        """The catalogue's answer for *system_name*, cached, or ``None`` with nothing to ask.
+    def _catalogue_answer(self, system_name: str, reading: SourcesReading) -> Any:
+        """The catalogue's answer for *system_name* through *reading*, or ``None`` with nothing to ask.
 
         Asked without a content path: a per-game ``<altemulator>`` would promote
         an entry Tender ignores anyway (ADR-0012), and the answer is the
         system's rather than one game's.
         """
-        installation = self._installation_handle()
+        installation = self._installation(reading)
         if installation is None:
             return None
-        if system_name not in self._catalogues:
+
+        def ask() -> Any:
             answer = self._ask(lambda: installation.emulators_for(system_name), f"emulators_for({system_name!r})")
-            if answer is None:
-                return None
-            self._trace(system_name, f"entries={len(answer.entries)}", answer)
-            self._trace_undeclared(system_name, answer.entries)
-            self._catalogues[system_name] = answer
-        return self._catalogues[system_name]
+            if answer is not None:
+                self._trace(system_name, f"entries={len(answer.entries)}", answer)
+                self._trace_undeclared(system_name, answer.entries)
+            return answer
 
-    def _systems_answer(self) -> Any:
-        """Every system the catalogue declares, cached, or ``None`` with nothing to ask.
+        return reading.remember(("emulators_for", system_name), ask)
 
-        Cached like the per-system answers rather than asked per call: this one
-        is per installation, it enumerates every system the catalogue has, and
-        the caller asks it once per platform a candidate search visits.
-        """
-        installation = self._installation_handle()
+    def _systems_answer(self, reading: SourcesReading) -> Any:
+        """Every system the catalogue declares through *reading*, or ``None`` with nothing to ask."""
+        installation = self._installation(reading)
         if installation is None:
             return None
-        if self._systems is None:
-            answer = self._ask(lambda: installation.systems(), "systems")
-            if answer is None:
-                return None
-            self._trace("systems", f"declared={len(answer.systems)}", answer)
-            self._systems = answer
-        return self._systems
 
-    def _rom_location(self, system_name: str) -> Any:
-        """Where *system_name*'s content lives and what it accepts, cached, or ``None``."""
-        installation = self._installation_handle()
+        def ask() -> Any:
+            answer = self._ask(installation.systems, "systems")
+            if answer is not None:
+                self._trace("systems", f"declared={len(answer.systems)}", answer)
+            return answer
+
+        return reading.remember(("systems",), ask)
+
+    def _rom_location(self, system_name: str, reading: SourcesReading) -> Any:
+        """Where *system_name*'s content lives and what it accepts, through *reading*, or ``None``."""
+        installation = self._installation(reading)
         if installation is None:
             return None
-        if system_name not in self._locations:
+
+        def ask() -> Any:
             placement = self._ask(lambda: installation.rom_location(system_name), f"rom_location({system_name!r})")
-            if placement is None:
-                return None
-            self._trace(system_name, f"extensions={len(placement.extensions)}", placement)
-            self._locations[system_name] = placement
-        return self._locations[system_name]
+            if placement is not None:
+                self._trace(system_name, f"extensions={len(placement.extensions)}", placement)
+            return placement
+
+        return reading.remember(("rom_location", system_name), ask)

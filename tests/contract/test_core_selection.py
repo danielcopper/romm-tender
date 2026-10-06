@@ -164,6 +164,8 @@ async def test_get_platform_core_info_payload_shape(harness):
     assert set(result) == {
         "emulators",
         "emulator_data_available",
+        "emulator_data_reason",
+        "emulator_source",
         "active_core",
         "active_core_label",
         "platform_core_label",
@@ -199,7 +201,13 @@ async def test_get_system_core_info_payload_shape(harness):
 
     # No `success`: the endpoint has no in-band failure branch, so a key that
     # could only ever read True would be an offer of an answer it never gives.
-    assert set(result) == {"emulators", "emulator_data_available", "active_core_label"}
+    assert set(result) == {
+        "emulators",
+        "emulator_data_available",
+        "emulator_data_reason",
+        "emulator_source",
+        "active_core_label",
+    }
     assert result["emulator_data_available"] is True
     assert result["emulators"] == [_MGBA_ENTRY, _VBA_NEXT_ENTRY]
     assert result["active_core_label"] == "mGBA"

@@ -8,7 +8,12 @@ recorded so a consumer test can assert the seam was queried by ``rom_id``.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from domain.shortcut_data import EmulatorInvocation
+
+if TYPE_CHECKING:
+    from domain.emulator_sources import SourcesReading
 
 
 class FakeActiveCoreResolver:
@@ -16,7 +21,8 @@ class FakeActiveCoreResolver:
 
     ``per_rom`` takes precedence; any ``rom_id`` absent from it resolves to
     ``default``. ``calls`` records each queried ``rom_id`` so consumer tests can
-    assert the seam was reached with the right ROM.
+    assert the seam was reached with the right ROM, and ``emulator_readings``
+    the reading each :meth:`active_emulator_for_rom` call was handed.
 
     :meth:`active_emulator_for_rom` is the launch-bake seam. By default it
     projects the same ``(core_so, label)`` tuple config into a libretro
@@ -43,13 +49,17 @@ class FakeActiveCoreResolver:
         )
         self.calls: list[int] = []
         self.emulator_calls: list[int] = []
+        self.emulator_readings: list[SourcesReading | None] = []
 
     def active_core_for_rom(self, rom_id: int) -> tuple[str | None, str | None]:
         self.calls.append(rom_id)
         return self.per_rom.get(rom_id, self.default)
 
-    def active_emulator_for_rom(self, rom_id: int) -> EmulatorInvocation | None:
+    def active_emulator_for_rom(
+        self, rom_id: int, *, reading: SourcesReading | None = None
+    ) -> EmulatorInvocation | None:
         self.emulator_calls.append(rom_id)
+        self.emulator_readings.append(reading)
         if rom_id in self.per_rom_emulator:
             return self.per_rom_emulator[rom_id]
         if self.default_emulator is not None:

@@ -86,6 +86,7 @@ LIBRARY_DIR = REPO_ROOT / "backend" / "services" / "library"
 SEAM_OWNERS: dict[str, frozenset[str]] = {
     "active_core": frozenset({"shortcut_launch_resolver.py"}),
     "disc_resolver": frozenset({"shortcut_launch_resolver.py"}),
+    "emulator_sources": frozenset({"shortcut_launch_resolver.py"}),
     "renderer_rss": frozenset({"session_budget.py"}),
     "renderer_gc": frozenset({"session_budget.py"}),
     "artwork": frozenset({"cover_preparer.py", "reporter.py"}),
@@ -96,6 +97,7 @@ SEAM_OWNERS: dict[str, frozenset[str]] = {
 SEAM_PROTOCOLS: dict[str, str] = {
     "ActiveCoreReader": "active_core",
     "DiscResolver": "disc_resolver",
+    "EmulatorSourcesReader": "emulator_sources",
     "RendererRssFn": "renderer_rss",
     "RendererGcFn": "renderer_gc",
     "ArtworkManager": "artwork",

@@ -2744,7 +2744,7 @@ class _DeclaredDefaultCoreInfo(FakeCoreInfoProvider):
     (``AtlasCatalogueAdapter.get_default_emulator``), identity and all.
     """
 
-    def get_default_emulator(self, system_name: str) -> EmulatorInvocation | None:
+    def get_default_emulator(self, system_name: str, *, reading: Any = None) -> EmulatorInvocation | None:
         self.emulator_options_calls.append(system_name)
         return option_to_invocation(select_default_option(self.options))
 

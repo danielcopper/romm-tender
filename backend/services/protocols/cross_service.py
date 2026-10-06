@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
     from domain.disc_selection import Disc
     from domain.emulator_commands import LaunchingEmulator
+    from domain.emulator_sources import SourcesReading
     from domain.rom_install import RomInstall
     from domain.save_answer import SaveAnswer
     from domain.shortcut_data import EmulatorInvocation
@@ -244,12 +245,16 @@ class ActiveCoreReader(Protocol):
     libretro core (core-change detection and the upload's emulator tag):
     ``(None, None)`` / ``(None, label)`` means no libretro core (unconfigured, or a
     standalone emulator) and they degrade. Both draw from the same resolution, so
-    no read diverges from the launch.
+    no read diverges from the launch. ``reading`` is a run's one reading of the
+    emulator sources, handed down by a run that resolves many ROMs; a caller
+    without one leaves it out and the call asks fresh.
     """
 
     def active_core_for_rom(self, rom_id: int) -> tuple[str | None, str | None]: ...
 
-    def active_emulator_for_rom(self, rom_id: int) -> EmulatorInvocation | None: ...
+    def active_emulator_for_rom(
+        self, rom_id: int, *, reading: SourcesReading | None = None
+    ) -> EmulatorInvocation | None: ...
 
 
 class DiscResolver(Protocol):

@@ -16,7 +16,7 @@ too — a fixture that could not come off a real machine fails to construct.
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from _vendor.atlas import (
@@ -56,6 +56,7 @@ from _vendor.atlas.machine import KIND_DIRECTORY, KIND_FILE, KIND_INACCESSIBLE, 
 from _vendor.atlas.placement import Caveat
 
 from adapters.atlas_firmware import AtlasFirmwareAdapter, AtlasPlatformFirmwareAdapter
+from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.firmware_wants import (
     CAVEAT_PATH_OBSTRUCTED,
     DECLARED_DIRECTORY,
@@ -182,9 +183,8 @@ def _answer(
 class _Installation:
     """Stand-in for a detected installation handle — answers one prepared reading."""
 
-    kind = "retrodeck"
-
-    def __init__(self, answer: FirmwareAnswer | Exception) -> None:
+    def __init__(self, answer: FirmwareAnswer | Exception, *, kind: str = "retrodeck") -> None:
+        self.kind = kind
         self._answer = answer
         self.asked_for: tuple[str, bool] | None = None
 
@@ -205,16 +205,44 @@ def traces() -> list[str]:
     return []
 
 
-@pytest.fixture
-def adapter(traces):
-    return AtlasFirmwareAdapter(user_home="/home/deck", log_debug=traces.append)
-
-
 def _detecting(*installations):
     def detect(home, machine=None):
         return list(installations)
 
     return detect
+
+
+class _Detection:
+    """The detection every adapter in this module's fixtures is handed; a test points it with :func:`_detect`."""
+
+    def __init__(self) -> None:
+        self.detect = _detecting()
+
+    def __call__(self, home: str, machine: Any) -> list[Any]:
+        return self.detect(home, machine)
+
+
+_DETECTION = _Detection()
+
+
+def _detect(monkeypatch, detect) -> None:
+    """Make every reading this test takes detect what *detect* answers; undone at teardown."""
+    monkeypatch.setattr(_DETECTION, "detect", detect)
+
+
+def _sources(traces: list[str], settings: dict[str, Any] | None = None) -> EmulatorSourcesAdapter:
+    return EmulatorSourcesAdapter(
+        user_home="/home/deck",
+        settings=settings if settings is not None else {},
+        log_debug=traces.append,
+        detect_installations=_DETECTION,
+        machine=object(),
+    )
+
+
+@pytest.fixture
+def adapter(traces):
+    return AtlasFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
 
 
 def catalogue_emulators(catalogue) -> set[str | None]:
@@ -230,7 +258,7 @@ class TestPlacements:
                 requirements=(_requirement(file_name="scph5501.bin", need="optional"),),
             ),
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         catalogue = adapter()
 
@@ -250,7 +278,7 @@ class TestPlacements:
         one field that carries both kinds, so it travels verbatim.
         """
         answer = _answer(_core(core_so="mgba_libretro.so", requirements=(_requirement(),)))
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert catalogue_emulators(adapter()) == {"mgba_libretro.so"}
 
@@ -265,7 +293,7 @@ class TestPlacements:
                 requirements=(_requirement(core_so=None, file_name="scph5501.bin"),),
             )
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         catalogue = adapter()
 
@@ -293,7 +321,7 @@ class TestPlacements:
                 requirements=(_requirement(core_so="pcsx2_libretro.so", file_name="GameIndex.yaml"),),
             ),
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         placement = adapter().placements[0]
 
@@ -331,7 +359,7 @@ class TestPlacements:
                 ),
             ),
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         placement = adapter().placements[0]
 
@@ -368,7 +396,7 @@ class TestPlacements:
                 ),
             ),
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().placements[0].checked == "unrecognised"
 
@@ -379,7 +407,7 @@ class TestPlacements:
         so by answering nothing. That is not a value to invent a word for.
         """
         answer = _answer(_core(requirements=(_requirement(),)))
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().placements[0].checked is None
 
@@ -402,7 +430,7 @@ class TestPlacements:
                 )
             )
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         placement = adapter().placements[0]
         assert placement.relative_path is None
@@ -418,7 +446,7 @@ class TestPlacements:
         answer = _answer(
             _core(core_so=None, emulator=None, declaration="packaged", requirements=(_requirement(core_so=None),))
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         catalogue = adapter()
 
@@ -439,7 +467,7 @@ class TestPlacements:
                 ),
             )
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().placements[0].relative_path == "dolphin-emu/Sys/codehandler.bin"
 
@@ -450,7 +478,7 @@ class TestPlacements:
                 requirements=(_requirement(file_name="bios7.bin", path="/home/deck/.local/share/melonDS/bios7.bin"),),
             )
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().placements[0].relative_path is None
 
@@ -467,7 +495,7 @@ class TestPlacements:
                 requirements=(_requirement(file_name="bios", declared="pcsx2/bios", path=_ROOT),),
             )
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().placements[0].relative_path == "pcsx2/bios"
 
@@ -481,7 +509,7 @@ class TestPlacements:
                 ),
             )
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().placements[0].relative_path is None
 
@@ -499,7 +527,7 @@ class TestPlacements:
                 requirements=(_requirement(file_name="bios", declared="pcsx2/../..", path=_ROOT),),
             )
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().placements[0].relative_path is None
 
@@ -525,7 +553,7 @@ class TestPlacements:
                 ),
             )
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         placement = adapter().placements[0]
         assert placement.relative_path == "pcsx2/bios/scph10000.bin"
@@ -558,7 +586,7 @@ class TestPlacements:
                 ),
             )
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().placements[0].relative_path == "scph5501.bin"
 
@@ -568,7 +596,7 @@ class TestDestinationReadings:
 
     def _placement(self, adapter, monkeypatch, requirement):
         answer = _answer(_core(core_so="mgba_libretro.so", requirements=(requirement,)))
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
         return adapter().placements[0]
 
     def test_a_file_at_the_destination_is_present(self, adapter, monkeypatch):
@@ -660,7 +688,7 @@ class TestDestinationReadings:
             )
         )
         answer = _answer(_core(core_so="duckstation_libretro.so", requirements=(group,)))
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert [p.file_name for p in adapter().placements] == ["scph5501.bin", "scph5502.bin"]
 
@@ -671,7 +699,7 @@ class TestDestinationReadings:
             _core(core_so="gearsystem_libretro.so"),
             _core(core_so="geargrafx_libretro.so"),
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         catalogue = adapter()
         assert catalogue.placements == ()
@@ -701,7 +729,7 @@ class TestOneOfGroups:
     """
 
     def _catalogue(self, adapter, monkeypatch, *cores):
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(_answer(*cores))))
+        _detect(monkeypatch, _detecting(_Installation(_answer(*cores))))
         return adapter()
 
     def _beetle(self, *, caveats: tuple[Caveat, ...] = (), present: tuple[str, ...] = ()) -> CoreFirmware:
@@ -854,7 +882,7 @@ class TestUnreadEmulators:
             _core(core_so="mgba_libretro.so", requirements=(_requirement(),)),
             _core(core_so="fbalpha_libretro.so", declaration="unreadable"),
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().unread_emulators == frozenset({"fbalpha_libretro.so"})
 
@@ -866,7 +894,7 @@ class TestUnreadEmulators:
                 refused=(RefusedDeclaration(declared="../escape.bin", need="required", reason="leaves-root"),),
             )
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().unread_emulators == frozenset({"odd_libretro.so"})
 
@@ -874,7 +902,7 @@ class TestUnreadEmulators:
         answer = _answer(
             _core(core_so=None, emulator="DOLPHIN", label="Dolphin (Standalone)", declaration="unsupported")
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().unread_emulators == frozenset({"DOLPHIN"})
 
@@ -889,7 +917,7 @@ class TestUnreadEmulators:
         answer = _answer(
             _core(core_so=None, emulator="PCSX2", label="PCSX2 (Standalone)", declaration="packaged"),
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().unread_emulators == frozenset({"PCSX2"})
 
@@ -903,14 +931,14 @@ class TestUnreadEmulators:
                 requirements=(_requirement(core_so=None, file_name="bios7.bin"),),
             )
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().unread_emulators == frozenset()
 
     def test_a_read_core_that_declares_nothing_is_never_named(self, adapter, monkeypatch):
         """``read`` and empty is the one pairing that means "this emulator needs none"."""
         answer = _answer(_core(core_so="gearboy_libretro.so"))
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().unread_emulators == frozenset()
 
@@ -929,7 +957,7 @@ class TestUnreadEmulators:
                 requirements=(_requirement(core_so="pcsx2_libretro.so", file_name="GameIndex.yaml"),),
             ),
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         catalogue = adapter()
 
@@ -941,14 +969,14 @@ class TestUnreadEmulators:
             _core(core_so="pcsx2_libretro.so", label="LRPS2", declaration="unreadable"),
             _core(core_so="pcsx2_libretro.so", label="PCSX2", declaration="unreadable"),
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().unread_emulators == frozenset({"pcsx2_libretro.so"})
 
     def test_an_entry_with_no_identity_names_nobody(self, adapter, monkeypatch):
         """There is no name to put in the set, and no caller could ask about one."""
         answer = _answer(_core(core_so=None, emulator=None, declaration="unsupported"))
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().unread_emulators == frozenset()
 
@@ -972,9 +1000,9 @@ class TestUnreadEmulators:
             ),
         )
         read = _core(core_so="mgba_libretro.so", requirements=(_requirement(),))
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(_answer(read))))
+        _detect(monkeypatch, _detecting(_Installation(_answer(read))))
         alone = adapter()
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(_answer(read, foreign))))
+        _detect(monkeypatch, _detecting(_Installation(_answer(read, foreign))))
 
         catalogue = adapter()
         assert catalogue.placements == alone.placements
@@ -984,7 +1012,7 @@ class TestUnreadEmulators:
 
     def test_a_read_core_is_never_named(self, adapter, monkeypatch):
         answer = _answer(_core(core_so="mgba_libretro.so", requirements=(_requirement(),)))
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().unread_emulators == frozenset()
 
@@ -992,8 +1020,8 @@ class TestUnreadEmulators:
 class TestDegradation:
     def test_a_raising_resolver_answers_unresolved_not_empty(self, adapter, monkeypatch, traces):
         """The one failure mode that must never read as 'this platform needs none'."""
-        monkeypatch.setattr(
-            "adapters.atlas_firmware.detect",
+        _detect(
+            monkeypatch,
             _detecting(_Installation(ValueError("FirmwareRequirement: need must be one of ..."))),
         )
 
@@ -1008,34 +1036,50 @@ class TestDegradation:
         def detect(home, machine=None):
             raise OSError("no such home")
 
-        monkeypatch.setattr("adapters.atlas_firmware.detect", detect)
+        _detect(monkeypatch, detect)
 
         assert adapter().resolved is False
 
     def test_no_installation_answers_unresolved(self, adapter, monkeypatch, traces):
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting())
+        _detect(monkeypatch, _detecting())
 
         catalogue = adapter()
 
         assert catalogue.resolved is False
-        assert any("no emulator installation" in trace for trace in traces)
+        assert any("no emulator source answers (no_source)" in trace for trace in traces)
 
     def test_an_answer_without_a_root_is_unresolved(self, adapter, monkeypatch):
         """No firmware root means no destination to resolve anything against."""
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(_answer(root=None))))
+        _detect(monkeypatch, _detecting(_Installation(_answer(root=None))))
 
         catalogue = adapter()
 
         assert catalogue.resolved is False
         assert catalogue.caveats == ("firmware-root-unstated",)
 
-    def test_the_first_detected_installation_answers(self, adapter, monkeypatch):
-        """Detection orders its finds; Tender takes the leader, never a merge."""
-        first = _Installation(_answer(_core(requirements=(_requirement(file_name="first.bin"),))))
-        second = _Installation(_answer(_core(requirements=(_requirement(file_name="second.bin"),))))
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(first, second))
+    def test_retrodeck_answers_with_emudeck_first_in_the_order(self, monkeypatch, traces):
+        """The source a game starts through answers, never a merge (#2188 D16)."""
+        retrodeck = _Installation(_answer(_core(requirements=(_requirement(file_name="retrodeck.bin"),))))
+        emudeck = _Installation(_answer(_core(requirements=(_requirement(file_name="emudeck.bin"),))), kind="emudeck")
+        _detect(monkeypatch, _detecting(retrodeck, emudeck))
+        settings = {"emulator_source_order": ["emudeck", "retrodeck"]}
+        adapter = AtlasFirmwareAdapter(sources=_sources(traces, settings), log_debug=traces.append)
+        platform = AtlasPlatformFirmwareAdapter(sources=_sources(traces, settings), log_debug=traces.append)
 
-        assert [p.file_name for p in adapter().placements] == ["first.bin"]
+        assert [p.file_name for p in adapter().placements] == ["retrodeck.bin"]
+        assert [p.file_name for p in platform("psx").placements] == ["retrodeck.bin"]
+        assert emudeck.asked_for is None
+
+    def test_without_retrodeck_the_first_enabled_source_answers(self, monkeypatch, traces):
+        native = _Installation(
+            _answer(_core(requirements=(_requirement(file_name="native.bin"),))), kind="bare_retroarch_native"
+        )
+        emudeck = _Installation(_answer(_core(requirements=(_requirement(file_name="emudeck.bin"),))), kind="emudeck")
+        _detect(monkeypatch, _detecting(emudeck, native))
+        settings = {"emulator_source_order": ["bare_retroarch_native", "emudeck"]}
+        adapter = AtlasFirmwareAdapter(sources=_sources(traces, settings), log_debug=traces.append)
+
+        assert [p.file_name for p in adapter().placements] == ["native.bin"]
 
 
 class TestCaveats:
@@ -1048,13 +1092,13 @@ class TestCaveats:
             ),
             caveats=(Caveat(code="firmware-path-obstructed", message="a directory is in the way"),),
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert set(adapter().caveats) == {"firmware-path-obstructed", "core-info-unreadable"}
 
     def test_the_trace_names_the_codes_and_the_arrangement(self, adapter, monkeypatch, traces):
         answer = _answer(_core(requirements=(_requirement(),)))
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         adapter()
 
@@ -1102,7 +1146,7 @@ class TestEmulatorVerdicts:
                 system_firmware=SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
             ),
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         catalogue = adapter()
 
@@ -1115,7 +1159,7 @@ class TestEmulatorVerdicts:
     )
     def test_no_other_recorded_state_demands_an_image(self, adapter, monkeypatch, state):
         answer = _answer(_core(requirements=(_requirement(),), system_firmware=state))
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         verdict = adapter().verdict_for("mgba_libretro.so")
 
@@ -1125,7 +1169,7 @@ class TestEmulatorVerdicts:
     def test_a_core_the_table_records_nothing_about_carries_the_absence(self, adapter, monkeypatch):
         """``None`` is an unasked question, and it must arrive as one."""
         answer = _answer(_core(requirements=(_requirement(),)))
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         verdict = adapter().verdict_for("mgba_libretro.so")
 
@@ -1147,7 +1191,7 @@ class TestEmulatorVerdicts:
                 system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
             )
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().verdict_for("swanstation_libretro.so").requirements_met is False
 
@@ -1162,7 +1206,7 @@ class TestEmulatorVerdicts:
                 system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
             )
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().verdict_for("DUCKSTATION").system_needs_an_image is True
 
@@ -1176,18 +1220,18 @@ class TestEmulatorVerdicts:
                 system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
             )
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().emulator_verdicts == {}
 
     def test_a_caller_with_no_emulator_to_name_is_answered_for_nobody(self, adapter, monkeypatch):
         answer = _answer(_core(requirements=(_requirement(),), system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT))
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().verdict_for(None) is None
 
     def test_a_reading_that_did_not_happen_records_nothing(self, adapter, monkeypatch):
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(ValueError("nope"))))
+        _detect(monkeypatch, _detecting(_Installation(ValueError("nope"))))
 
         assert adapter().emulator_verdicts == {}
 
@@ -1200,7 +1244,7 @@ class TestEmulatorVerdicts:
             ),
             _core(core_so="mgba_libretro.so", requirements=(_requirement(),)),
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         adapter()
 
@@ -1219,7 +1263,7 @@ class TestFolderVerdicts:
 
     def _placement(self, adapter, monkeypatch, requirement, *caveats):
         answer = _answer(_core(core_so="pcsx2_libretro.so", requirements=(requirement,)), caveats=caveats)
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
         return adapter().placements[0]
 
     def _folder(self, **kwargs):
@@ -1387,7 +1431,7 @@ class TestFolderVerdicts:
                 ),
             ),
         )
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
 
         placement = adapter().placements[0]
         assert placement.missing_configured_image == MissingConfiguredImage("LRPS2", "scph10000.bin")
@@ -1433,7 +1477,7 @@ class TestDestinationCaveats:
 
     def _placement(self, adapter, monkeypatch, requirement, *caveats):
         answer = _answer(_core(core_so="mgba_libretro.so", requirements=(requirement,)), caveats=caveats)
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+        _detect(monkeypatch, _detecting(_Installation(answer)))
         return adapter().placements[0]
 
     def test_a_caveat_naming_the_rows_destination_travels_with_the_row(self, adapter, monkeypatch):
@@ -1512,7 +1556,7 @@ def _folder_requirement(*, contents_satisfied: bool | None, found: PathKind = KI
 
 @pytest.fixture
 def platform_adapter(traces):
-    return AtlasPlatformFirmwareAdapter(user_home="/home/deck", log_debug=traces.append)
+    return AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
 
 
 class TestPlatformAdapter:
@@ -1520,7 +1564,7 @@ class TestPlatformAdapter:
 
     def _catalogue(self, platform_adapter, monkeypatch, answer, system="ps2"):
         installation = _Installation(answer)
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(installation))
+        _detect(monkeypatch, _detecting(installation))
         return platform_adapter(system), installation
 
     def test_the_question_is_asked_of_the_system_with_verification_on(self, platform_adapter, monkeypatch):
@@ -1665,8 +1709,8 @@ class TestPlatformAdapter:
     def test_a_raising_resolver_answers_unresolved_rather_than_an_empty_catalogue(
         self, platform_adapter, monkeypatch, traces
     ):
-        monkeypatch.setattr(
-            "adapters.atlas_firmware.detect",
+        _detect(
+            monkeypatch,
             _detecting(_Installation(ValueError("FirmwareRequirement: need must be one of ..."))),
         )
 
@@ -1677,12 +1721,12 @@ class TestPlatformAdapter:
         assert any("resolver failed for ps2" in trace for trace in traces)
 
     def test_no_installation_answers_unresolved(self, platform_adapter, monkeypatch):
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting())
+        _detect(monkeypatch, _detecting())
 
         assert platform_adapter("ps2").resolved is False
 
     def test_an_answer_without_a_root_answers_unresolved(self, platform_adapter, monkeypatch):
-        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(_answer(root=None))))
+        _detect(monkeypatch, _detecting(_Installation(_answer(root=None))))
 
         catalogue = platform_adapter("ps2")
 

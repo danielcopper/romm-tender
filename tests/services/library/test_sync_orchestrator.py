@@ -3861,6 +3861,7 @@ class TestSyncOneUnitCollectionAndCancel:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         applied = await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -3894,6 +3895,7 @@ class TestSyncOneUnitCollectionAndCancel:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         applied = await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -3934,6 +3936,7 @@ class TestSyncOneUnitCollectionAndCancel:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
         processed = await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -3970,6 +3973,7 @@ class TestSyncOneUnitCollectionAndCancel:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         processed = await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4011,6 +4015,7 @@ class TestSyncOneUnitCollectionAndCancel:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         applied = await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4058,6 +4063,7 @@ class TestSyncOneUnitCollectionAndCancel:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         applied = await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4120,6 +4126,7 @@ class TestPerUnitMetadataStamping:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4167,6 +4174,7 @@ class TestPerUnitMetadataStamping:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4218,6 +4226,7 @@ class TestPerUnitMetadataStamping:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
         await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4268,6 +4277,7 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
         await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4312,6 +4322,7 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
         await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4360,6 +4371,7 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
         await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4395,6 +4407,7 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
         await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4438,6 +4451,7 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="collection", id="7", name="Favs", slug="favs", rom_count=2, collection_kind="standard")
         await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4485,6 +4499,7 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
         await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4534,6 +4549,7 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="collection", id="7", name="Favs", slug="favs", rom_count=2, collection_kind="standard")
         await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4585,6 +4601,7 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
         await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4622,6 +4639,7 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
         await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4659,6 +4677,7 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
         await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4690,6 +4709,7 @@ class TestPlatformCompletionStamp:
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
         applied = await library.sync._orchestrator._sync_one_unit(
             unit,
+            sources=library.emulator_sources.read(),
             unit_index=0,
             total_units=1,
             synced_rom_ids=set(),
@@ -4724,6 +4744,7 @@ class TestPlatformCompletionStamp:
         with pytest.raises(RuntimeError, match="fetch exploded"):
             await library.sync._orchestrator._sync_one_unit(
                 unit,
+                sources=library.emulator_sources.read(),
                 unit_index=0,
                 total_units=1,
                 synced_rom_ids=set(),
@@ -6318,3 +6339,77 @@ class TestProcessedGamesNumerator:
         assert progress["total"] == 4
         # The frame's numerator and the paused banner's done counter agree.
         assert library.sync._box.run_done_items == 3
+
+
+class TestOneReadingOfTheSourcesPerRun:
+    """A run resolves every ROM's emulator through ONE reading of the sources (#2188 D4).
+
+    The reading keeps the run's answers until it ends, so a system asked about
+    for many ROMs is asked once, and a switch or a move written during the run
+    takes effect from the next one.
+    """
+
+    @staticmethod
+    def _two_platforms(library, fake_romm_api) -> None:
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}, {"id": 2, "name": "Game B", "fs_name": "b.z64"}],
+        )
+        _seed_platform(
+            fake_romm_api,
+            platform_id=2,
+            name="SNES",
+            slug="snes",
+            roms=[{"id": 3, "name": "Game C", "fs_name": "c.sfc"}],
+        )
+        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        # A ROM the database knows is one the active-core resolver asks the
+        # catalogue about; an unknown one resolves to nothing before that.
+        _seed_rom_row(library, 1, app_id=1001, platform_slug="n64", name="Game A", fs_name="a.z64")
+        _seed_rom_row(library, 2, app_id=1002, platform_slug="n64", name="Game B", fs_name="b.z64")
+        _seed_rom_row(library, 3, app_id=1003, platform_slug="snes", name="Game C", fs_name="c.sfc")
+
+    @pytest.mark.asyncio
+    async def test_a_preview_resolves_every_rom_through_one_reading(self, library, fake_romm_api):
+        self._two_platforms(library, fake_romm_api)
+
+        assert (await library.sync.sync_preview())["success"] is True
+
+        assert library.emulator_sources.reads == 1
+        (reading,) = library.emulator_sources.taken
+        assert len(library.core_info.readings) == 3
+        assert all(handed is reading for handed in library.core_info.readings)
+        assert len(library.core_info.default_readings) == 3
+        assert all(handed is reading for handed in library.core_info.default_readings)
+
+    @pytest.mark.asyncio
+    async def test_two_previews_take_two_readings(self, library, fake_romm_api):
+        self._two_platforms(library, fake_romm_api)
+
+        await library.sync.sync_preview()
+        await library.sync.sync_preview()
+
+        first, second = library.emulator_sources.taken
+        assert first is not second
+        assert all(handed is first for handed in library.core_info.readings[:3])
+        assert all(handed is second for handed in library.core_info.readings[3:])
+
+    @pytest.mark.asyncio
+    async def test_an_apply_hands_every_unit_the_same_reading(self, library, fake_romm_api):
+        self._two_platforms(library, fake_romm_api)
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        assert library.sync._box.try_begin_run("run-apply", kind=SyncRunKind.APPLY) is True
+
+        await library.sync._orchestrator._do_sync_per_unit()
+
+        assert library.emulator_sources.reads == 1
+        (reading,) = library.emulator_sources.taken
+        assert len(library.core_info.readings) == 3
+        assert all(handed is reading for handed in library.core_info.readings)
+        assert len(library.core_info.default_readings) == 3
+        assert all(handed is reading for handed in library.core_info.default_readings)

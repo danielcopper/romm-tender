@@ -53,6 +53,7 @@ from _vendor.atlas import (
     SavestateAbsence,
     SavestatePlacement,
     Unresolved,
+    detect,
 )
 from _vendor.atlas.placement import (
     FILE_SET_DECLARED,
@@ -65,8 +66,8 @@ from _vendor.atlas.placement import (
     SavefilePlacement,
 )
 
-from adapters.atlas_catalogue import first_detected_installation
 from adapters.atlas_saves import AtlasSaveLocationAdapter, describe_core_probe_interpreter
+from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.save_answer import (
     CONFIGURATION_ROLES,
     SAVE_STATE_HOLE,
@@ -172,8 +173,14 @@ class _Installation:
     """An installation that hands back one catalogue, recording how it was asked."""
 
     def __init__(
-        self, entries: tuple[_Entry, ...], *, raises: Exception | None = None, caveats: tuple[str, ...] = ()
+        self,
+        entries: tuple[_Entry, ...],
+        *,
+        raises: Exception | None = None,
+        caveats: tuple[str, ...] = (),
+        kind: str = "retrodeck",
     ) -> None:
+        self.kind = kind
         self._entries = entries
         self._raises = raises
         self._caveats = caveats
@@ -191,8 +198,22 @@ def traces() -> list[str]:
     return []
 
 
+def _sources(
+    detect: Any, traces: list[str], *, settings: dict[str, Any] | None = None, machine: Any = None
+) -> EmulatorSourcesAdapter:
+    """The real sources holder over a detection a test supplies."""
+    return EmulatorSourcesAdapter(
+        user_home="/home/deck",
+        settings=settings if settings is not None else {},
+        log_debug=traces.append,
+        detect_installations=detect,
+        machine=machine if machine is not None else object(),
+    )
+
+
 def _adapter(installation: Any, traces: list[str]) -> AtlasSaveLocationAdapter:
-    return AtlasSaveLocationAdapter(choose_installation=lambda: installation, log_debug=traces.append)
+    detected = [] if installation is None else [installation]
+    return AtlasSaveLocationAdapter(sources=_sources(lambda home, machine: detected, traces), log_debug=traces.append)
 
 
 def _ask(answer: Any, traces: list[str], *, label: str = "mGBA", emulator: str | None = "mGBA"):
@@ -415,7 +436,7 @@ class TestEveryWayTheQuestionCannotBePut:
             ),
             UNESTABLISHED_NOT_ASKED,
         )
-        assert any("no emulator installation detected" in line for line in traces)
+        assert any("no emulator source answers (no_source)" in line for line in traces)
 
     def test_detection_is_reported_both_ways(self, traces):
         assert _adapter(None, traces).installation_detected() is False
@@ -476,10 +497,10 @@ class TestEveryWayTheQuestionCannotBePut:
         assert entry.asked == [_CONTENT]
 
     def test_detection_itself_raises(self, traces):
-        def boom() -> Any:
+        def boom(home: str, machine: Any) -> list[Any]:
             raise RuntimeError("probe failed")
 
-        adapter = AtlasSaveLocationAdapter(choose_installation=boom, log_debug=traces.append)
+        adapter = AtlasSaveLocationAdapter(sources=_sources(boom, traces), log_debug=traces.append)
 
         self._assert_refused(
             adapter.resolve_save_answer(
@@ -528,38 +549,74 @@ class TestHowTheQuestionIsPut:
         assert entry.asked == [_CONTENT, _CONTENT, _CONTENT]
 
     def test_a_detection_that_found_nothing_is_retried(self, traces):
-        chooses: list[int] = []
+        detections: list[int] = []
 
-        def choose() -> Any:
-            chooses.append(1)
-            return None
+        def detect(home: str, machine: Any) -> list[Any]:
+            detections.append(1)
+            return []
 
-        adapter = AtlasSaveLocationAdapter(choose_installation=choose, log_debug=traces.append)
+        adapter = AtlasSaveLocationAdapter(sources=_sources(detect, traces), log_debug=traces.append)
         for _ in range(2):
             adapter.resolve_save_answer(
                 system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
             )
 
-        assert len(chooses) == 2
+        assert len(detections) == 2
 
-    def test_the_installation_handle_is_memoised(self, traces):
-        # Worth 170 ms against 490 ms per reading on the reference machine, and
-        # nothing Tender writes can invalidate it.
-        chooses: list[int] = []
+    def test_every_call_detects_afresh_through_one_machine(self, traces):
+        # No handle outlives a call (#2188 D4); what keeps a repeat reading
+        # cheap is the one resolver machine every detection is handed.
+        machines: list[Any] = []
         entry = _Entry("mGBA", _placement())
         installation = _Installation((entry,))
 
-        def choose() -> Any:
-            chooses.append(1)
-            return installation
+        def detect(home: str, machine: Any) -> list[Any]:
+            machines.append(machine)
+            return [installation]
 
-        adapter = AtlasSaveLocationAdapter(choose_installation=choose, log_debug=traces.append)
+        held = object()
+        adapter = AtlasSaveLocationAdapter(sources=_sources(detect, traces, machine=held), log_debug=traces.append)
         for _ in range(3):
             adapter.resolve_save_answer(
                 system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
             )
 
-        assert len(chooses) == 1
+        assert machines == [held, held, held]
+
+
+class TestWhichSourceAnswers:
+    """A game's save answer comes from the source it starts through (#2188 D16)."""
+
+    def test_retrodeck_answers_with_emudeck_first_in_the_order(self, traces):
+        retrodeck_entry = _Entry("mGBA", _placement(files=("Game Title.srm",)))
+        emudeck_entry = _Entry("mGBA", _placement(files=("wrong.srm",)))
+        detected = [_Installation((retrodeck_entry,)), _Installation((emudeck_entry,), kind="emudeck")]
+        sources = _sources(
+            lambda home, machine: detected, traces, settings={"emulator_source_order": ["emudeck", "retrodeck"]}
+        )
+        adapter = AtlasSaveLocationAdapter(sources=sources, log_debug=traces.append)
+
+        answer = adapter.resolve_save_answer(
+            system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
+        )
+
+        assert answer.synced_names == ("Game Title.srm",)
+        assert emudeck_entry.asked == []
+
+    def test_every_source_switched_off_leaves_nothing_to_ask(self, traces):
+        entry = _Entry("mGBA", _placement())
+        sources = _sources(
+            lambda home, machine: [_Installation((entry,))], traces, settings={"emulator_sources_off": ["retrodeck"]}
+        )
+        adapter = AtlasSaveLocationAdapter(sources=sources, log_debug=traces.append)
+
+        answer = adapter.resolve_save_answer(
+            system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
+        )
+
+        assert answer.unestablished == UNESTABLISHED_NOT_ASKED
+        assert adapter.installation_detected() is False
+        assert entry.asked == []
 
 
 class TestTheAnswerSaysWhetherItsSubjectIsOnDisk:
@@ -848,10 +905,10 @@ _UNDECLARED_SYSTEMS = frozenset({"atarijaguarcd", "xbox360"})
 @pytest.fixture(scope="module")
 def machine() -> Any:
     # The suite's one named reader of the real home — see tests/conftest.py.
-    installation = first_detected_installation(pwd.getpwuid(os.getuid()).pw_dir)
-    if installation is None:
+    installations = detect(pwd.getpwuid(os.getuid()).pw_dir)
+    if not installations:
         pytest.skip("no emulator installation on this machine — the real-resolver tier cannot run")
-    return installation
+    return installations[0]
 
 
 class TestTheRealMachineAnswers:
@@ -870,7 +927,9 @@ class TestTheRealMachineAnswers:
         content_path = f"/tmp/Games/{system}/Game Title{extension}"
         entries = _declared_order(machine.emulators_for(system, content_path=content_path).entries)
         default = select_default_option([classify_command(entry.label, entry.command) for entry in entries])
-        adapter = AtlasSaveLocationAdapter(choose_installation=lambda: machine, log_debug=traces.append)
+        adapter = AtlasSaveLocationAdapter(
+            sources=_sources(lambda home, held: [machine], traces), log_debug=traces.append
+        )
         return adapter.resolve_save_answer(
             system=system,
             content_path=content_path,

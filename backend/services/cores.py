@@ -118,9 +118,11 @@ class CoreService:
         whether a per-game pin is set — the menu can't infer this from the active
         emulator alone (pinning the same emulator as the per-platform override is
         indistinguishable), so the flag drives the "follow the system" reset
-        item's checkmark. ``emulator_data_available`` is ``False`` when
-        ``es_systems.xml`` cannot be read (RetroDECK not detected), so the menu
-        can say so instead of showing an empty list. When ``rom_id`` is unknown
+        item's checkmark. ``emulator_data_available`` is ``False`` where the
+        answering emulator source gives no emulator list, so the menu can say so
+        instead of showing an empty list; ``emulator_data_reason`` says why and
+        ``emulator_source`` names the answering source
+        (:meth:`services.protocols.CoreInfoProvider.get_emulator_options`). When ``rom_id`` is unknown
         the emulator list is empty and the active emulator is ``(None, None)``.
         """
         return await self._loop.run_in_executor(None, self._platform_core_info_io, rom_id)
@@ -131,6 +133,8 @@ class CoreService:
             return {
                 "emulators": [],
                 "emulator_data_available": True,
+                "emulator_data_reason": None,
+                "emulator_source": None,
                 "active_core": None,
                 "active_core_label": None,
                 "platform_core_label": None,
@@ -142,6 +146,8 @@ class CoreService:
         return {
             "emulators": options_to_payload(options["options"]),
             "emulator_data_available": options["available"],
+            "emulator_data_reason": options["reason"],
+            "emulator_source": options["source"],
             "active_core": emulator.emulator if emulator is not None else None,
             "active_core_label": emulator.label if emulator is not None else None,
             "platform_core_label": self._settings.get("platform_cores", {}).get(rom.platform_slug),
@@ -154,8 +160,10 @@ class CoreService:
         The read half of :meth:`set_system_core`, keyed by platform rather than
         by ROM: the Library page's Platforms detail asks it once per selected
         platform. ``emulators`` is the full classified picker payload for the
-        platform's ES-DE system, ``emulator_data_available`` is ``False`` when
-        ``es_systems.xml`` cannot be read (RetroDECK not detected), and
+        platform's ES-DE system, ``emulator_data_available`` is ``False`` where
+        the answering emulator source gives no emulator list (with
+        ``emulator_data_reason`` and ``emulator_source`` as in
+        :meth:`get_platform_core_info`), and
         ``active_core_label`` is the platform-layer resolution — the per-platform
         override when it still resolves, else the es_systems default — so the
         label and a launch from this platform agree.
@@ -173,6 +181,8 @@ class CoreService:
         return {
             "emulators": options_to_payload(options["options"]),
             "emulator_data_available": options["available"],
+            "emulator_data_reason": options["reason"],
+            "emulator_source": options["source"],
             "active_core_label": resolve_platform_label(
                 options["options"], self._settings.get("platform_cores", {}).get(platform_slug)
             ),
@@ -203,7 +213,6 @@ class CoreService:
         else:
             self._settings["platform_cores"].pop(platform_slug, None)
         self._settings_persister.save_settings()
-        self._core_info.reset_cache()
 
         # Snapshot the installed+bound, non-overridden (rom, install) pairs in one
         # short read UoW, then close it before resolving each ROM's active core:

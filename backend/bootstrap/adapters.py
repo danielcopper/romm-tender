@@ -22,13 +22,14 @@ from models.shortcut_launcher import ShortcutLauncher
 
 from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.asyncio_sleeper import AsyncioSleeper
-from adapters.atlas_catalogue import AtlasCatalogueAdapter, first_detected_installation
+from adapters.atlas_catalogue import AtlasCatalogueAdapter
 from adapters.atlas_firmware import AtlasFirmwareAdapter, AtlasPlatformFirmwareAdapter
 from adapters.atlas_saves import AtlasSaveLocationAdapter, describe_core_probe_interpreter
 from adapters.cover_art_file_store import CoverArtFileStoreAdapter
 from adapters.database_rename import DatabaseRenameAdapter
 from adapters.debug_logger import SettingsAwareDebugLogger
 from adapters.download_file import DownloadFileAdapter
+from adapters.emulator_sources import EmulatorSourcesAdapter
 from adapters.es_find_rules import EsFindRulesAdapter
 from adapters.firmware_file import FirmwareFileAdapter
 from adapters.game_process import GameProcessAdapter
@@ -87,6 +88,7 @@ if TYPE_CHECKING:
         DebugLogger,
         DirectoryFileListerFn,
         DownloadFileStore,
+        EmulatorSourcesReader,
         EventEmitter,
         FirmwareFileStore,
         FirmwarePlatformResolver,
@@ -168,6 +170,7 @@ class AdapterBundle:
     resolve_path: ResolvedPathFn
     core_info_provider: CoreInfoProvider
     save_locations: SaveLocationReader
+    emulator_sources: EmulatorSourcesReader
     renderer_rss: RendererRssFn
     renderer_gc: RendererGcFn
     game_process: GameProcessControl
@@ -459,24 +462,17 @@ def bootstrap(
     # Built after the debug logger because the resolver never logs on its own:
     # its caveats are the whole degradation channel and reach the log through
     # this seam or not at all. That holds for both firmware questions and for
-    # the emulator catalogue.
-    firmware_resolver = AtlasFirmwareAdapter(user_home=user_home, log_debug=debug_logger)
-    platform_firmware_resolver = AtlasPlatformFirmwareAdapter(user_home=user_home, log_debug=debug_logger)
-    # Detection never picks a winner, so the choice is made here rather than in
-    # the adapter: the highest-priority arrangement, which is RetroDECK wherever
-    # one is installed. Offering the others is #918; nothing in services/ learns
-    # which one answered.
+    # the emulator catalogue. Every one of them asks the one holder of the
+    # emulator sources, which picks the source that answers.
+    emulator_sources = EmulatorSourcesAdapter(user_home=user_home, settings=settings, log_debug=debug_logger)
+    firmware_resolver = AtlasFirmwareAdapter(sources=emulator_sources, log_debug=debug_logger)
+    platform_firmware_resolver = AtlasPlatformFirmwareAdapter(sources=emulator_sources, log_debug=debug_logger)
     emulator_catalogue = AtlasCatalogueAdapter(
-        choose_installation=functools.partial(first_detected_installation, user_home),
+        sources=emulator_sources,
         emulator_installed=es_find_rules.command_emulator_installed,
         log_debug=debug_logger,
     )
-    # Same chooser, its own handle: this one caches no answer at all, because a
-    # save answer has to be live on every sync path.
-    save_locations = AtlasSaveLocationAdapter(
-        choose_installation=functools.partial(first_detected_installation, user_home),
-        log_debug=debug_logger,
-    )
+    save_locations = AtlasSaveLocationAdapter(sources=emulator_sources, log_debug=debug_logger)
 
     adapters = AdapterBundle(
         http_adapter=http_adapter,
@@ -497,6 +493,7 @@ def bootstrap(
         resolve_path=resolve_path,
         core_info_provider=emulator_catalogue,
         save_locations=save_locations,
+        emulator_sources=emulator_sources,
         renderer_rss=renderer_rss,
         renderer_gc=renderer_gc,
         game_process=game_process,

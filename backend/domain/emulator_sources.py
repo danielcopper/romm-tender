@@ -12,12 +12,14 @@ Pure compute — no I/O, no state mutation.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 from domain.refusal import DomainRefused
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Callable, Hashable, Iterable, Sequence
+
+_T = TypeVar("_T")
 
 RETRODECK = "retrodeck"
 
@@ -38,6 +40,34 @@ class ArrangedSource:
     kind: str
     enabled: bool
     starts_games: bool
+
+
+class SourcesReading(Protocol):
+    """One reading of the emulator sources, and the answers asked through it.
+
+    Taken by the adapter that detects the sources; a run that asks the same
+    questions for many games takes one and hands it down, and every answer asked
+    through it is kept for as long as the reading is. A service holds one
+    without looking inside; the installation it names is the resolver's own
+    handle and only an adapter puts questions to it.
+    """
+
+    @property
+    def answering(self) -> ArrangedSource | None:
+        """The source a game's questions go to, or ``None`` where none answers."""
+        ...
+
+    def no_answer_reason(self) -> str:
+        """Why no source answers: :data:`NO_SOURCE_DETECTED` or :data:`ALL_SOURCES_SWITCHED_OFF`."""
+        ...
+
+    def answering_installation(self) -> Any:
+        """The resolver's handle for :attr:`answering`, or ``None``."""
+        ...
+
+    def remember(self, question: Hashable, ask: Callable[[], _T]) -> _T:
+        """The answer to *question* through this reading, asked on its first use only."""
+        ...
 
 
 def arrange_sources(
@@ -77,13 +107,50 @@ def answering_source(sources: Sequence[ArrangedSource]) -> ArrangedSource | None
     return enabled[0] if enabled else None
 
 
+# Why an emulator list could not be given: no source answers at all (the first
+# two), or the answering source's catalogue was refused — sealed (EmuDeck's,
+# which the resolver cannot read yet), a systems file ES-DE refuses to load, or
+# any other reason nobody could read one.
 NO_SOURCE_DETECTED = "no_source"
 ALL_SOURCES_SWITCHED_OFF = "switched_off"
+CATALOGUE_SEALED = "sealed"
+CATALOGUE_INVALID = "catalogue_invalid"
+CATALOGUE_UNAVAILABLE = "unavailable"
+
+# What a source's catalogue is, as the settings row reports it: read, or one
+# of the two refusals above.
+CATALOGUE_READ = "read"
 
 
 def no_answering_source_reason(sources: Sequence[ArrangedSource]) -> str:
     """Why :func:`answering_source` found none: nothing detected, or everything switched off."""
     return ALL_SOURCES_SWITCHED_OFF if sources else NO_SOURCE_DETECTED
+
+
+@dataclass(frozen=True, slots=True)
+class SourceFinding:
+    """One health finding of a source: the resolver's stable code and the facts it established."""
+
+    code: str
+    data: dict[str, str]
+
+
+@dataclass(frozen=True, slots=True)
+class SourceReport:
+    """What the settings list shows for one detected source.
+
+    ``root`` is the folder the resolver gives as the source's root, for display
+    only, and ``None`` where that root is a default rather than where the source
+    lies. ``catalogue`` is :data:`CATALOGUE_READ`, :data:`CATALOGUE_SEALED` or
+    :data:`CATALOGUE_UNAVAILABLE`.
+    """
+
+    kind: str
+    enabled: bool
+    starts_games: bool
+    root: str | None
+    findings: tuple[SourceFinding, ...]
+    catalogue: str
 
 
 def move_source(*, kind: str, offset: int, detected: Sequence[str], stored_order: Sequence[str]) -> tuple[str, ...]:
