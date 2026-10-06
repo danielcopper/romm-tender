@@ -1818,7 +1818,11 @@ async def test_shutdown_during_final_removed_progress_preserves_committed_ids(ha
 
 @pytest.mark.asyncio
 async def test_a_large_run_s_results_are_split_across_completion_chunks(harness):
-    rows = [_rom(rom_id, fetch="old", name=f"Game {rom_id} " + "x" * 3000) for rom_id in range(1, 27)]
+    # 26 results of a sixteenth of the budget each: together over it, each well under it.
+    rows = [
+        _rom(rom_id, fetch="old", name=f"Game {rom_id} " + "x" * (_COMPLETION_BUDGET_BYTES // 16))
+        for rom_id in range(1, 27)
+    ]
     _seed(harness.uow, *rows, stamp_count=26)
     for row in rows:
         harness.romm.outcomes[row.rom_id] = [RommNotFoundError("gone")] * 3
