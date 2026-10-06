@@ -472,6 +472,12 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   a finding** — check — `scripts/check_seam_owner.py` (an aliased seam, a `getattr`, or a seam passed positionally into
   a helper slips past it); unchecked: `shortcut_launch_resolver`'s install-path read UoW is never held across the
   `active_core` seam's calls (`check_uow_seam_nesting.py` catches only the inline form)
+- **The resolver's installations are detected in one place, `adapters/emulator_sources.py`, through the one
+  `RealMachine` the process keeps; every other adapter asks it, and a game's questions go to the source
+  `domain/emulator_sources.py::answering_source` names** — test + prompt-only —
+  `tests/adapters/test_emulator_sources.py::TestOnlyTheHolderDetects` (no other backend module imports `detect`). Unseen
+  by it: a detection reached through `getattr`, and an installation class built by hand. Prompt-only: no adapter keeps a
+  handle or an answer past the reading it came through
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (the file's own calls only: a write behind a helper, a write passed as a
   bound method (`run_in_executor(None, uow.roms.save, …)`), an aliased handle, a `getattr`-reached repository, and a

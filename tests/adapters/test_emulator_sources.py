@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import os
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -264,7 +266,7 @@ class TestDescribe:
 
 
 class TestTheCoreProbeRunsOncePerCoreFile:
-    """One machine for the process: an unchanged core is probed once, a changed one again (#2188 D4)."""
+    """One machine for the process: an unchanged core is probed once, a changed one again."""
 
     @pytest.fixture
     def probes(self, monkeypatch) -> list[str]:
@@ -373,3 +375,36 @@ class TestTheRealResolver:
         assert report.kind == "retrodeck"
         assert HEALTH_ISSUE_MARKER_INVALID in {finding.code for finding in report.findings}
         assert report.root is None
+
+
+_BACKEND = Path(__file__).resolve().parents[2] / "backend"
+
+
+def _modules_importing_detect(root: Path) -> list[str]:
+    """Every module under *root* (outside ``_vendor``) that imports the resolver's ``detect``."""
+    found: list[str] = []
+    for path in sorted(root.rglob("*.py")):
+        if "_vendor" in path.relative_to(root).parts:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom) or not (node.module or "").startswith("_vendor.atlas"):
+                continue
+            if node.module == "_vendor.atlas.detect" or any(alias.name == "detect" for alias in node.names):
+                found.append(path.relative_to(root).as_posix())
+    return found
+
+
+class TestOnlyTheHolderDetects:
+    """The sources are detected in one place; every other adapter asks the holder."""
+
+    def test_no_module_but_the_holder_imports_detect(self):
+        assert _modules_importing_detect(_BACKEND) == ["adapters/emulator_sources.py"]
+
+    def test_the_scan_sees_an_import_elsewhere(self, tmp_path):
+        (tmp_path / "adapters").mkdir()
+        (tmp_path / "adapters" / "rogue.py").write_text("from _vendor.atlas import detect\n", encoding="utf-8")
+        (tmp_path / "adapters" / "deep.py").write_text("from _vendor.atlas.detect import detect\n", encoding="utf-8")
+        (tmp_path / "adapters" / "fine.py").write_text("from _vendor.atlas import KIND_LIBRETRO\n", encoding="utf-8")
+
+        assert _modules_importing_detect(tmp_path) == ["adapters/deep.py", "adapters/rogue.py"]
