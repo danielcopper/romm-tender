@@ -188,9 +188,9 @@ class SaveLocationReader(Protocol):
     apart from :class:`domain.savestate_location.NoSavestates`, which is the
     resolver stating that the emulator has none.
 
-    ``installation_detected`` says whether an emulator source answers at all,
-    so a caller can tell "every answer refused" apart from "there was nothing
-    to ask yet".
+    ``installation_detected`` says whether an emulator source answers that has
+    been set up, so a caller can tell "every answer refused" apart from "there
+    was nothing to ask yet".
 
     The named methods are load-bearing: `scripts/check_uow_seam_nesting.py`
     matches this seam by them, where a call-shaped seam is matchable only by

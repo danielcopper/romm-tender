@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
+from adapters.atlas_saves import AtlasSaveLocationAdapter
+from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.answered_save_directory import AnsweredSaveDirectory
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import SaveAnswer, SaveComponent, unestablished_answer
@@ -943,3 +945,47 @@ class TestRecordingAgainAfterAHomeMigration:
         assert _recorded(svc) == str(old)
         # Asked once for the pass, not once per ROM.
         assert asked == [1]
+
+
+@pytest.fixture
+def not_set_up(tmp_path, monkeypatch) -> AtlasSaveLocationAdapter:
+    """The real save-location adapter over a RetroDECK that is deployed and was never set up.
+
+    The deploy alone, with no ``retrodeck.json``: the real resolver detects it,
+    it answers, and it refuses every question with its ``not-set-up`` finding.
+    """
+    monkeypatch.setattr(
+        "_vendor.atlas.installations._FLATPAK_DEPLOY_SYSTEM", str(tmp_path / "no_system_flatpak" / "app")
+    )
+    home = tmp_path / "home"
+    (home / ".local" / "share" / "flatpak" / "app" / "net.retrodeck.retrodeck" / "current" / "active").mkdir(
+        parents=True
+    )
+    sources = EmulatorSourcesAdapter(user_home=str(home), settings={}, log_debug=lambda _msg: None)
+    return AtlasSaveLocationAdapter(sources=sources, log_debug=lambda _msg: None)
+
+
+class TestARetroDeckThatIsNotSetUp:
+    """Neither save-directory pass takes a RetroDECK that is not set up for one it can ask."""
+
+    @pytest.mark.asyncio
+    async def test_the_backfill_records_nothing_and_runs_again(self, tmp_path, not_set_up):
+        svc, _ = make_service(tmp_path, save_locations=not_set_up)
+        _install_rom(svc, tmp_path)
+
+        await svc.record_save_directories_once()
+
+        assert _recorded(svc) is None
+        with _uow(svc) as uow:
+            assert uow.kv_config.get("save_directories_recorded") is None
+
+    @pytest.mark.asyncio
+    async def test_recording_again_deletes_no_record(self, tmp_path, dirs, not_set_up):
+        old, _new = dirs
+        svc, _ = make_service(tmp_path, save_locations=not_set_up)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+
+        await svc.rerecord_save_directories()
+
+        assert _recorded(svc) == str(old)

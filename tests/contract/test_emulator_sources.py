@@ -6,7 +6,7 @@ listed, switched and answered here is what the real holder detects under it.
 
 from __future__ import annotations
 
-from ._seed import _retrodeck_marker_path, seed_es_systems
+from ._seed import _retrodeck_marker_path, seed_es_systems, seed_retrodeck_not_set_up
 
 
 async def test_the_listing_names_a_detected_retrodeck(harness):
@@ -69,3 +69,21 @@ async def test_a_malformed_retrodeck_json_is_listed_with_its_finding(harness):
     assert source["kind"] == "retrodeck"
     assert "marker-invalid" in {finding["code"] for finding in source["findings"]}
     assert source["root"] is None
+
+
+async def test_a_retrodeck_that_is_not_set_up_is_listed_and_answers_why_it_has_no_emulator_list(harness):
+    seed_retrodeck_not_set_up(harness)
+
+    listing = await harness.endpoints.get_emulator_sources()
+    info = await harness.endpoints.get_system_core_info("gba")
+
+    assert listing["answering"] == "retrodeck"
+    (source,) = listing["sources"]
+    assert [finding["code"] for finding in source["findings"]] == ["not-set-up"]
+    assert (source["enabled"], source["root"], source["catalogue"]) == (True, None, "unavailable")
+    assert (info["emulator_data_available"], info["emulators"], info["emulator_data_reason"]) == (
+        False,
+        [],
+        "not_set_up",
+    )
+    assert info["emulator_source"] == {"kind": "retrodeck", "starts_games": True}

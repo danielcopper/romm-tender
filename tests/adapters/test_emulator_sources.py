@@ -14,6 +14,7 @@ from _vendor.atlas import (
     CAVEAT_EMULATOR_CATALOGUE_UNAVAILABLE,
     HEALTH_ISSUE_CATALOGUE_INVALID,
     HEALTH_ISSUE_MARKER_INVALID,
+    HEALTH_ISSUE_NOT_SET_UP,
     HEALTH_ISSUE_ROOT_MISSING,
 )
 from _vendor.atlas import machine as atlas_machine
@@ -300,14 +301,19 @@ class TestTheCoreProbeRunsOncePerCoreFile:
         assert probes == [str(core), str(core)]
 
 
-def _seed_retrodeck(tmp_path, *, custom: str | None) -> str:
-    """A RetroDECK marker, a valid bundled catalogue, and optionally a custom systems overlay."""
+def _seed_retrodeck(tmp_path, *, custom: str | None, set_up: bool = True) -> str:
+    """A RetroDECK deploy with a valid bundled catalogue, and optionally a custom systems overlay.
+
+    Set up, it has its marker and its saves folder; not set up, it is the
+    deploy alone, as before RetroDECK's first run.
+    """
     home = tmp_path / "home"
     rd_home = home / "retrodeck"
-    marker = home / ".var" / "app" / "net.retrodeck.retrodeck" / "config" / "retrodeck" / "retrodeck.json"
-    marker.parent.mkdir(parents=True, exist_ok=True)
-    marker.write_text(json.dumps({"paths": {"rd_home_path": str(rd_home)}}), encoding="utf-8")
-    (rd_home / "saves").mkdir(parents=True)
+    if set_up:
+        marker = home / ".var" / "app" / "net.retrodeck.retrodeck" / "config" / "retrodeck" / "retrodeck.json"
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(json.dumps({"paths": {"rd_home_path": str(rd_home)}}), encoding="utf-8")
+        (rd_home / "saves").mkdir(parents=True)
     bundled = (
         home
         / ".local"
@@ -340,6 +346,13 @@ def _seed_retrodeck(tmp_path, *, custom: str | None) -> str:
         overlay.parent.mkdir(parents=True)
         overlay.write_text(custom, encoding="utf-8")
     return str(home)
+
+
+def _seed_emudeck(home: str) -> None:
+    """EmuDeck's settings file, which is what the resolver detects it by."""
+    settings = Path(home) / ".config" / "EmuDeck" / "settings.sh"
+    settings.parent.mkdir(parents=True)
+    settings.write_text('emulationPath="/run/media/deck/Emulation/Emulation"\n', encoding="utf-8")
 
 
 @pytest.fixture
@@ -375,6 +388,34 @@ class TestTheRealResolver:
         assert report.kind == "retrodeck"
         assert HEALTH_ISSUE_MARKER_INVALID in {finding.code for finding in report.findings}
         assert report.root is None
+
+    def test_a_retrodeck_that_is_not_set_up_is_listed_with_its_finding_and_no_root(self, tmp_path, traces):
+        home = _seed_retrodeck(tmp_path, custom=None, set_up=False)
+        holder = EmulatorSourcesAdapter(user_home=home, settings={}, log_debug=traces.append)
+
+        (report,) = holder.describe()
+
+        assert (report.kind, report.enabled) == ("retrodeck", True)
+        assert [finding.code for finding in report.findings] == [HEALTH_ISSUE_NOT_SET_UP]
+        assert report.root is None
+        assert report.catalogue == CATALOGUE_UNAVAILABLE
+
+    def test_a_retrodeck_that_is_not_set_up_still_answers_with_emudeck_switched_on(self, tmp_path, traces):
+        # Which source answers is decided by kind and switch alone: a RetroDECK
+        # that is installed is the one every game starts through, set up or not.
+        home = _seed_retrodeck(tmp_path, custom=None, set_up=False)
+        _seed_emudeck(home)
+        holder = EmulatorSourcesAdapter(
+            user_home=home, settings={"emulator_source_order": ["emudeck", "retrodeck"]}, log_debug=traces.append
+        )
+
+        reading = holder.read()
+
+        assert [(source.kind, source.enabled) for source in reading.sources] == [
+            ("emudeck", True),
+            ("retrodeck", True),
+        ]
+        assert reading.answering_kind == "retrodeck"
 
 
 _BACKEND = Path(__file__).resolve().parents[2] / "backend"

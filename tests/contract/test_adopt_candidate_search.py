@@ -25,7 +25,7 @@ import stat
 from pathlib import Path
 from typing import Any
 
-from ._seed import seed_rom
+from ._seed import seed_retrodeck_not_set_up, seed_rom
 
 _ROM_ID = 41
 _CANDIDATE = "rom-41 (U).gba"
@@ -233,6 +233,19 @@ async def test_the_page_reports_a_candidate_without_the_user_pressing_download(h
     assert detail["installed"] is False
     assert detail["adoption_candidate_present"] is True
     assert detail["target_path_occupied"] is False
+
+
+async def test_a_retrodeck_that_is_not_set_up_does_not_hide_the_candidate(harness):
+    # Its catalogue answers nothing yet, which says nothing about whether the
+    # platform folder is a place this game can live.
+    seed_retrodeck_not_set_up(harness)
+    seed_rom(harness, _ROM_ID, platform_slug="gba")
+    _stage(harness)
+    _place_candidate(harness)
+
+    detail = await harness.endpoints.get_cached_game_detail(_ROM_ID)
+
+    assert detail["adoption_candidate_present"] is True
 
 
 async def test_an_empty_platform_folder_leaves_the_page_offering_a_download(harness):

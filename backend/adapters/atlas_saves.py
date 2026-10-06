@@ -45,7 +45,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from _vendor.atlas import SavestateAbsence, SavestatePlacement, Unresolved, core_probe_interpreter
+from _vendor.atlas import (
+    HEALTH_ISSUE_NOT_SET_UP,
+    SavestateAbsence,
+    SavestatePlacement,
+    Unresolved,
+    core_probe_interpreter,
+)
 
 from adapters.atlas_catalogue import catalogue_refused
 from domain.save_answer import (
@@ -182,8 +188,18 @@ class AtlasSaveLocationAdapter:
         return entry
 
     def installation_detected(self) -> bool:
-        """Whether an emulator source answers, so there is an installation to put questions to."""
-        return self._sources.read().answering_installation() is not None
+        """Whether an emulator source answers that has been set up, so there is an installation to put questions to.
+
+        A RetroDECK that is installed but not set up answers, and refuses every
+        question with its ``not-set-up`` finding; that is nothing to ask yet,
+        not an answer about where saves are. Where its health could not be
+        read, it is not taken as set up either.
+        """
+        installation = self._sources.read().answering_installation()
+        if installation is None:
+            return False
+        health = self._ask(installation.health, "health")
+        return health is not None and all(issue.code != HEALTH_ISSUE_NOT_SET_UP for issue in health.issues)
 
     def _ask(self, question: Callable[[], Any], subject: str) -> Any:
         """Put one question to the resolver, or answer ``None`` where it could not be asked.
