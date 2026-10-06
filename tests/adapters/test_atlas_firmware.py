@@ -22,6 +22,7 @@ import pytest
 from _vendor.atlas import (
     CAVEAT_CORE_FILE_FOREIGN,
     CAVEAT_CORE_MODE_UNESTABLISHED,
+    CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
     CAVEAT_FIRMWARE_DIRECTORY_HOLDS_NO_CANDIDATE,
     CAVEAT_FIRMWARE_IDENTITY_NOT_COMPARABLE,
@@ -1056,6 +1057,30 @@ class TestDegradation:
 
         assert catalogue.resolved is False
         assert catalogue.caveats == ("firmware-root-unstated",)
+
+    def test_an_answer_beside_a_sealed_catalogue_is_not_established(self, monkeypatch, traces):
+        """EmuDeck's overlay entries are an incomplete list; its firmware answer built on them says so (D21)."""
+        sealed = Caveat(code=CAVEAT_EMULATOR_CATALOGUE_SEALED, message="the catalogue is sealed")
+        answer = _answer(_core(requirements=(_requirement(file_name="overlay.bin"),)), caveats=(sealed,))
+        _detect(monkeypatch, _detecting(_Installation(answer, kind="emudeck")))
+        adapter = AtlasFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
+        platform = AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
+
+        for catalogue in (adapter(), platform("psx")):
+            assert catalogue.resolved is False
+            assert catalogue.placements == ()
+            assert CAVEAT_EMULATOR_CATALOGUE_SEALED in catalogue.caveats
+
+    def test_an_answer_without_the_sealed_caveat_is_read(self, monkeypatch, traces):
+        other = Caveat(code="firmware-path-obstructed", message="a directory is in the way")
+        answer = _answer(_core(requirements=(_requirement(file_name="read.bin"),)), caveats=(other,))
+        _detect(monkeypatch, _detecting(_Installation(answer, kind="emudeck")))
+        platform = AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
+
+        catalogue = platform("psx")
+
+        assert catalogue.resolved is True
+        assert [placement.file_name for placement in catalogue.placements] == ["read.bin"]
 
     def test_retrodeck_answers_with_emudeck_first_in_the_order(self, monkeypatch, traces):
         """The source a game starts through answers, never a merge (#2188 D16)."""

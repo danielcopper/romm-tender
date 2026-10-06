@@ -75,6 +75,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from _vendor.atlas import (
+    CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
     CAVEAT_FIRMWARE_IMAGE_IDENTIFIED,
     CAVEAT_FIRMWARE_IMAGE_UNLISTED,
@@ -213,8 +214,14 @@ def _unresolved() -> FirmwareCatalogue:
 
 
 def _catalogue(answer: Any) -> FirmwareCatalogue:
-    """One resolver answer in Tender's own vocabulary."""
-    if answer.root is None:
+    """One resolver answer in Tender's own vocabulary.
+
+    An answer beside a sealed emulator catalogue (EmuDeck's) is built from the
+    overlay entries the resolver could read, an incomplete list that would look
+    complete, so it reads as nothing established — the way the catalogue and
+    save adapters decline on the same code.
+    """
+    if answer.root is None or any(caveat.code == CAVEAT_EMULATOR_CATALOGUE_SEALED for caveat in answer.caveats):
         return FirmwareCatalogue(
             placements=(),
             unread_emulators=frozenset(),
