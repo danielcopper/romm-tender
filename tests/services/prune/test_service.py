@@ -1834,7 +1834,7 @@ async def test_completion_results_are_emitted_in_bounded_chunks(harness):
     )
 
 
-def test_one_large_group_result_is_explicitly_bounded(harness):
+def test_one_large_group_result_carries_at_most_50_ids_beside_the_full_counts(harness):
     rows = [_rom(rom_id, fetch="old", group="g") for rom_id in range(1, 61)]
     result = harness.service._executor._results.group_result(
         rows,

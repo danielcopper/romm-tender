@@ -1021,7 +1021,7 @@ describe("RemovedGamesCleanup", () => {
       ...overrides,
     });
 
-    it("joins the run's message and each group's, and counts no omitted warnings when none were left out", () => {
+    it("joins the run's message and each failed or warned group's, and counts no omitted warnings when none were left out", () => {
       const section = render(createElement(RemovedGamesCleanupSection));
       act(() => {
         beginPrunePreview("preview-1");

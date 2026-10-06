@@ -74,7 +74,7 @@ def _keys(value: object) -> list[str]:
     return []
 
 
-async def test_no_frame_shortens_its_text_or_sends_a_truncation_flag():
+async def test_no_progress_or_completion_frame_shortens_its_text_or_sends_a_truncation_flag():
     long = 10_000
     reporter, frames = _recording_reporter()
     row = Rom.synced(
