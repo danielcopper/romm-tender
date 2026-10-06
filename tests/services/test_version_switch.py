@@ -366,7 +366,7 @@ class TestGetVersionList:
         assert cross.reason == "not_in_group"
         # ...and the switchable in-group target is NOT rejected as not_in_group.
         in_group = _run(event_loop, service.switch_version(_APP_ID, 2, True))
-        assert in_group.get("reason") != "not_in_group"
+        assert in_group["success"] is True
 
     def test_switchable_flag_agrees_with_switch_version_server_only(self, event_loop, service, uow, romm):
         # Single-authority property for NEVER-SYNCED siblings (#1360): the picker's
@@ -1179,7 +1179,7 @@ class TestSwitchVersion:
         _refusal(event_loop, service.switch_version(_APP_ID, 3, False), UnsyncedSaves)
         assert not any(name == "get_rom" for name, _args, _kwargs in romm.call_log)
 
-    def test_server_unreachable_on_target_fetch(self, event_loop, service, uow, romm):
+    def test_a_connection_error_on_the_target_fetch_reaches_the_caller(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
         romm.get_rom_side_effect = RommConnectionError("down")
 
@@ -1265,7 +1265,7 @@ class TestTheVersionSwitchLease:
 
         assert seen == [["switch_version"]]
 
-    def test_a_switch_that_failed_carries_none(self, event_loop, service, prune_conflicts):
+    def test_a_refused_switch_takes_no_lease(self, event_loop, service, prune_conflicts):
         refused = _refusal(event_loop, service.switch_version(999, 2, False))
 
         assert refused.reason == "not_found"
@@ -1322,7 +1322,7 @@ class TestSwitchVersionUnchecked:
 
 
 class TestTheNamedRefusals:
-    """The two reasons the panel branches on have a class of their own, and each answers with it."""
+    """The two reasons the panel branches on each have a class of their own, which carries the reason."""
 
     @pytest.mark.parametrize(
         ("named", "reason"),

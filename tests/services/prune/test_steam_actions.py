@@ -12,7 +12,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from domain.rom import Rom
 from domain.version_metadata import VersionMetadata
 from lib.errors import Refused, RommConnectionError
-from services.prune._models import cancellation_state
+from services.prune._models import RecoveryHandle, cancellation_state
 from services.prune.planning import GroupPlan
 from services.prune.registry import PruneRegistry, PruneRegistryConfig
 from services.prune.results import MutationLedger, PruneResultReporter, PruneResultReporterConfig
@@ -197,12 +197,29 @@ class TestRepoint:
         assert ledger.action_ambiguous is False
         assert requested == []
 
+    async def test_a_refused_switch_keeps_the_recovery_bundle_on_the_failed_group(self):
+        rows = [_rom(1, app_id=APP_ID), _rom(2)]
+        runner, _, _ = _runner(rows, switch_raises=Refused("boom", "no"))
+        handle = RecoveryHandle("/b", {}, {}, None, {}, "digest")
+
+        _, _, result = await runner.repoint("run-1", _plan(rows=rows, target_id=2), MutationLedger(rows), handle, 1, 1)
+
+        assert result is not None
+        assert (result["status"], result["bundle_path"]) == ("failed", "/b")
+
     @pytest.mark.parametrize(
-        ("raised", "reason"),
-        [(Refused("boom", "no"), "boom"), (RommConnectionError("down"), "server_unreachable")],
+        ("raised", "reason", "message"),
+        [
+            (Refused("boom", "no"), "boom", "no"),
+            (
+                RommConnectionError("down"),
+                "server_unreachable",
+                "Server unreachable — check your URL and ensure RomM is running",
+            ),
+        ],
         ids=["refusal", "romm-error"],
     )
-    async def test_a_switch_that_refuses_while_the_repoint_is_cancelled_fails_the_group(self, raised, reason):
+    async def test_a_switch_that_raises_while_the_repoint_is_cancelled_fails_the_group(self, raised, reason, message):
         """The fault is answered here, so the run does not report it as a change that may have happened."""
         rows = [_rom(1, app_id=APP_ID), _rom(2)]
         runner, _, requested = _runner(rows)
@@ -228,7 +245,11 @@ class TestRepoint:
         state = cancellation_state(caught.value)
         assert state.child_fault is None
         assert state.group_result is not None
-        assert (state.group_result["status"], state.group_result["reason"]) == ("failed", reason)
+        assert (state.group_result["status"], state.group_result["reason"], state.group_result["message"]) == (
+            "failed",
+            reason,
+            message,
+        )
         assert ledger.committed_action is None
         assert ledger.action_ambiguous is False
         assert requested == []
