@@ -12,14 +12,12 @@ Pure compute — no I/O, no state mutation.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, Protocol
 
 from domain.refusal import DomainRefused
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, Sequence
-
-_T = TypeVar("_T")
 
 RETRODECK = "retrodeck"
 
@@ -80,7 +78,7 @@ class SourcesReading(Protocol):
         """The resolver's handle for :attr:`answering`, or ``None``."""
         ...
 
-    def remember(self, question: Hashable, ask: Callable[[], _T]) -> _T:
+    def remember[T](self, question: Hashable, ask: Callable[[], T]) -> T:
         """The answer to *question* through this reading, asked on its first use only."""
         ...
 

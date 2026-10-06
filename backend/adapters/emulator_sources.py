@@ -23,7 +23,7 @@ of an unchanged core runs once.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
 from _vendor.atlas import (
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
@@ -54,8 +54,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Mapping
 
     from domain.emulator_sources import SourcesReading
-
-_T = TypeVar("_T")
 
 # While a source's settings file is missing, unreadable or damaged, the root
 # the resolver gives is its default (``~/retrodeck`` for RetroDECK), not where
@@ -113,7 +111,7 @@ class DetectedSourcesReading:
         """The resolver's handle for the detected source of *kind*, or ``None``."""
         return self._installations.get(kind)
 
-    def remember(self, question: Hashable, ask: Callable[[], _T]) -> _T:
+    def remember[T](self, question: Hashable, ask: Callable[[], T]) -> T:
         """The answer to *question* through this reading, asked on its first use only."""
         if question not in self._answers:
             self._answers[question] = ask()

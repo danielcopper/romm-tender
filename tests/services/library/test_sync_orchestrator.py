@@ -4741,15 +4741,18 @@ class TestPlatformCompletionStamp:
         library.sync._box.sync_state = SyncState.RUNNING
 
         unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
+        sources = library.emulator_sources.read()
+        synced_rom_ids: set[int] = set()
+        platform_rom_ids: set[int] = set()
         with pytest.raises(RuntimeError, match="fetch exploded"):
             await library.sync._orchestrator._sync_one_unit(
                 unit,
-                sources=library.emulator_sources.read(),
+                sources=sources,
                 unit_index=0,
                 total_units=1,
-                synced_rom_ids=set(),
+                synced_rom_ids=synced_rom_ids,
                 collection_memberships={},
-                platform_rom_ids=set(),
+                platform_rom_ids=platform_rom_ids,
             )
 
         with library.uow as uow:

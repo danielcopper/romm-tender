@@ -178,9 +178,15 @@ const SourceCard: FC<SourceCardProps> = ({ source, index, last, busy, cardRef, o
   );
 };
 
+function noticeLine(listing: EmulatorSourcesListing | null | undefined): string {
+  if (listing === undefined) return SOURCES_READING;
+  if (listing === null) return SOURCES_UNREAD;
+  return NO_SOURCE_BANNER;
+}
+
 export const EmulatorSourcesSection: FC<EmulatorSourcesSectionProps> = ({ listing, busy, onSwitch, onMove }) => {
   if (listing === undefined || listing === null || listing.sources.length === 0) {
-    const line = listing === undefined ? SOURCES_READING : listing === null ? SOURCES_UNREAD : NO_SOURCE_BANNER;
+    const line = noticeLine(listing);
     return (
       <PanelSection title="Emulator sources">
         <PanelSectionRow>
