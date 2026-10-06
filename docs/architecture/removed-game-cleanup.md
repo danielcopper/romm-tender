@@ -216,12 +216,10 @@ Every action, progress and completion frame carries the preview ID it originated
 adopt only a matching run — including the case where the run started but its success response was lost — and foreign,
 stale, duplicate or post-terminal frames trigger no state change and no side effects. Completion finalizes only from a
 contiguous chunk set, and an accepted terminal result seals the run against every later frame. Payloads are tokenized,
-and each is bounded by its own limits: a preview page by its row limit and the character caps on every server-supplied
-string (a value longer is broken output, not information), a completion chunk by its byte budget, since events pass no
-host size cap, and a Steam snapshot by a byte cap the panel and the backend both measure as compact, ASCII-escaped JSON.
-Every shortened field the panel shows is flagged and marked there, and a flag nothing shows is not sent. Warnings
-distinguish entries that were omitted from text that was merely shortened, and stay visible even on an otherwise
-successful run.
+and each is bounded by its own limits: a preview page by its row limit alone, a completion chunk by its byte budget, and
+a Steam snapshot by a byte cap the panel and the backend both measure as compact, ASCII-escaped JSON. No text is
+shortened. A group's result carries at most five warnings, with the count of those left out, and at most 50 ROM ids
+beside the full counts. Warnings stay visible even on an otherwise successful run.
 
 If a completion chunk set never completes, the frontend does not stay wedged: a staleness timeout clears the stalled
 progress, surfaces a "result was lost" warning, and re-enables the entry point so the user can re-scan.

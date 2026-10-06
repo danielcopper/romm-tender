@@ -123,9 +123,9 @@ RomM · one of 4**. They are listed so nothing can be removed without having bee
 **Remove fully vanished games** is on — with that option off they cannot be removed at all, so the list drops them. A
 warning about a version — including that its downloaded ROM file will be deleted without a backup if that version is
 removed — is a line under its row. The headline count always counts the versions that are gone, never these. The modal
-loads the rest of the list by itself, a page after another, and **Confirm Cleanup** refuses until every entry is shown,
-saying how many have arrived. If a page fails to load, the modal says why and offers **Retry loading**, which carries on
-from the entries already shown. The confirmation run checks every exact RomM id again. Only a confirmed 404 can be
+loads the rest of the list by itself, one page after another, and **Confirm Cleanup** refuses until every entry has
+arrived, saying how many have. If a page fails to load, the modal says why and offers **Retry loading**, which carries
+on from the entries already loaded. The confirmation run checks every exact RomM id again. Only a confirmed 404 can be
 removed. Offline, timeout, authentication, server, malformed-response, active-download, and ambiguous multi-shortcut
 cases are skipped and reported without deleting data.
 
@@ -193,14 +193,12 @@ remains bound to the new Default. If Steam removal succeeded but every completio
 ambiguous and source data stays retained; the same applies when Steam removal was attempted but its absence could not be
 confirmed. Retrying confirms an already-absent shortcut instead of removing it twice. Save ownership warnings are shown
 in a focusable terminal-detail region even when the group was removed successfully, and a run-level cancellation or
-failure message remains visible after earlier groups committed. A name, path, message or warning too long to be real
-server output is shortened, and wherever it is shown — in the list, under the progress bar, in the result — a line says
-the text was too long and was shortened. Warnings past the limit for one game are left out, and the detail counts them
-separately from shortened text and never reports zero additional warnings. Progress is tied to the preview that you
-confirmed, so a matching run is still shown if only the successful start response is delayed or lost; a matching
-terminal event makes the modal closable immediately. Once that terminal result is assembled, delayed frames for the same
-run cannot replace it. Frames from an older preview are ignored. These outcomes are intentional and retryable rather
-than being reported as unchanged.
+failure message remains visible after earlier groups committed. Warnings past the limit for one game are left out, and
+the detail says how many and never reports zero additional warnings. Progress is tied to the preview that you confirmed,
+so a matching run is still shown if only the successful start response is delayed or lost; a matching terminal event
+makes the modal closable immediately. Once that terminal result is assembled, delayed frames for the same run cannot
+replace it. Frames from an older preview are ignored. These outcomes are intentional and retryable rather than being
+reported as unchanged.
 
 ### Region and Languages
 

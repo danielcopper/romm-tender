@@ -230,8 +230,8 @@ recovery has sealed.
 For a fully vanished bound game, whole-game cleanup is its own confirmation option, default-on and paired with the
 default-on recovery bundle that keeps the shortcut rebuildable. With recovery enabled, the root frontend handler
 captures complete shortcut details, available Steam playtime fields, and every collection id/name or fails closed if
-that JSON cannot fit the wire bound. The backend resolves the active account from Steam's login identity once, stores
-that identity in the recovery handle, and adds only that user's grid artwork, both per-app Steam Input roots, and
+that JSON is over the snapshot's byte cap. The backend resolves the active account from Steam's login identity once,
+stores that identity in the recovery handle, and adds only that user's grid artwork, both per-app Steam Input roots, and
 relevant controller setting. Cleanup must use those exact captured roots even if the active account changes later.
 
 Every action event is deduplicated and serialized. Before any Steam mutation, the frontend claims its token from the
