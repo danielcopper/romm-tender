@@ -45,6 +45,7 @@ from _vendor.atlas import (
     HEALTH_ISSUE_NOT_SET_UP,
     HEALTH_ISSUE_SAVES_ROOT_MISSING,
     ROLE_BATTERY,
+    ROLE_HIGH_SCORE,
     ROLE_NOTES,
     ROLE_SETTINGS,
     ROLE_UNKNOWN,
@@ -355,6 +356,27 @@ class TestTheTwoShapesAnAnswerReaches:
 
     def test_the_two_shapes_are_not_the_same_value(self):
         assert UNESTABLISHED_NOTHING != UNESTABLISHED_DIRECTORY_KNOWN
+
+
+class TestAnArcadeSaveIsSyncedWhole:
+    """FinalBurn Neo's shape: the battery file, the EEPROM and the high-score table, each named after the game."""
+
+    def test_the_eeprom_and_the_high_scores_are_synced_beside_the_battery_file(self, traces):
+        answer = _ask(
+            _placement(
+                files=("sf2.fs", "sf2.nv", "sf2.hi"),
+                groups=(
+                    FileGroup(dir=_SAVES, files=("sf2.fs",), granularity="per-game-file", role=ROLE_BATTERY),
+                    FileGroup(dir=_SAVES, files=("sf2.nv",), granularity="per-game-file", role=ROLE_BATTERY),
+                    FileGroup(dir=_SAVES, files=("sf2.hi",), granularity="per-game-file", role=ROLE_HIGH_SCORE),
+                ),
+            ),
+            traces,
+            label="FinalBurn Neo",
+            emulator="FinalBurn Neo",
+        )
+
+        assert answer.synced_names == ("sf2.fs", "sf2.nv", "sf2.hi")
 
 
 class TestAConfigurationFileIsOfferedAndNeverSynced:
