@@ -289,7 +289,8 @@ keep saves: **RetroDECK**, **EmuDeck**, or a **RetroArch** installed on its own 
   says why;
 - **EmuDeck's emulator list cannot be read yet.** for EmuDeck, whose list Tender cannot read yet;
 - **Tender cannot start games through _source_ yet.** for every source but RetroDECK — every game still starts through
-  RetroDECK. A RetroArch without a frontend has no emulator list at all, so this is the only line it shows;
+  RetroDECK. A RetroArch without a frontend has no emulator list at all, so for it this line stands in place of the "not
+  established" one;
 - **Use this source**: a source switched off offers no emulators and is never asked about a game. It stays listed, so
   you can switch it on again;
 - **Move up** / **Move down**, which set the order the sources are used in.

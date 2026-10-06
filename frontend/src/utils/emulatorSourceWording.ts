@@ -26,9 +26,8 @@ const SOURCE_NAMES: ReadonlyMap<string, string> = new Map([
   ["bare_retroarch_native", "RetroArch (native)"],
 ]);
 
-// A RetroArch without a frontend has no emulator catalogue at all (emu-atlas
-// answers none for it), so its "cannot start games" line already says why its
-// list is not established.
+// A RetroArch without a frontend has no emulator list, and its "cannot start
+// games" line stands in place of the "not established" one (#2188 D33).
 const NO_CATALOGUE_KINDS: ReadonlySet<string> = new Set(["bare_retroarch_flatpak", "bare_retroarch_native"]);
 
 const RETRODECK_REPAIR = " Repair it with RetroDECK's 'Repair RetroDECK Paths'.";

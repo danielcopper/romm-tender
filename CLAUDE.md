@@ -476,13 +476,14 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `RealMachine` the process keeps; every other adapter asks it, and a game's questions go to the source
   `domain/emulator_sources.py::answering_source` names** — test + prompt-only —
   `tests/adapters/test_emulator_sources.py::TestOnlyTheHolderDetects` (no other backend module imports `detect`,
-  `RealMachine` or an installation class from the resolver, imports the resolver's package as a module, or reads one of
-  those names off it) and, for the last clause,
+  `every_installation`, `RealMachine` or an installation class from the resolver, star-imports it, imports the
+  resolver's package as a module, or reads one of those names off it) and, for the last clause,
   `tests/domain/test_emulator_sources.py::TestAnsweringSource::test_retrodeck_answers_even_when_another_source_is_first_in_the_order`
-  and
-  `tests/adapters/test_atlas_saves.py::TestWhichSourceAnswers::test_retrodeck_answers_with_emudeck_first_in_the_order`.
-  Unseen by the scan: a name reached through `getattr` or `importlib`. Prompt-only: no adapter keeps a handle or an
-  answer past the reading it came through
+  and `test_retrodeck_answers_with_emudeck_first_in_the_order` in each of the three adapters' tests —
+  `tests/adapters/test_atlas_catalogue.py::TestWhichSourceAnswers`,
+  `tests/adapters/test_atlas_firmware.py::TestDegradation` and
+  `tests/adapters/test_atlas_saves.py::TestWhichSourceAnswers`. Unseen by the scan: a name reached through `getattr` or
+  `importlib`. Prompt-only: no adapter keeps a handle or an answer past the reading it came through
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (the file's own calls only: a write behind a helper, a write passed as a
   bound method (`run_in_executor(None, uow.roms.save, …)`), an aliased handle, a `getattr`-reached repository, and a

@@ -380,10 +380,19 @@ class TestTheRealResolver:
 _BACKEND = Path(__file__).resolve().parents[2] / "backend"
 
 
-# What reaches the resolver's detection: ``detect`` itself, the machine a
+# What reaches the resolver's detection: ``detect`` itself, ``every_installation``
+# (which detects with a fresh machine when it is handed none), the machine a
 # detection reads through, and the installation classes ``detect`` builds.
 _DETECTION_NAMES = frozenset(
-    {"detect", "RealMachine", "RetroDeck", "EmuDeck", "BareRetroArchFlatpak", "BareRetroArchNative"}
+    {
+        "detect",
+        "every_installation",
+        "RealMachine",
+        "RetroDeck",
+        "EmuDeck",
+        "BareRetroArchFlatpak",
+        "BareRetroArchNative",
+    }
 )
 
 
@@ -393,7 +402,9 @@ def _reaches_detection(node: ast.AST) -> bool:
         if module == "_vendor" and any(alias.name == "atlas" for alias in node.names):
             return True
         if module.startswith("_vendor.atlas"):
-            return module == "_vendor.atlas.detect" or any(alias.name in _DETECTION_NAMES for alias in node.names)
+            return module == "_vendor.atlas.detect" or any(
+                alias.name in _DETECTION_NAMES or alias.name == "*" for alias in node.names
+            )
         return False
     if isinstance(node, ast.Import):
         return any(alias.name.startswith("_vendor.atlas") for alias in node.names)
@@ -410,11 +421,11 @@ def _names_atlas(node: ast.AST) -> bool:
 def _modules_reaching_detection(root: Path) -> list[str]:
     """Every module under *root* (outside ``_vendor``) that can detect installations or build a machine.
 
-    It sees an import of ``detect``, ``RealMachine`` or an installation class
-    from the resolver, an import of the resolver's package as a module
-    (``import _vendor.atlas``, ``from _vendor import atlas``), and an attribute
-    read of one of those names off it. It does not see a name reached through
-    ``getattr`` or ``importlib``.
+    It sees an import of ``detect``, ``every_installation``, ``RealMachine`` or
+    an installation class from the resolver, a star import from it, an import
+    of the resolver's package as a module (``import _vendor.atlas``,
+    ``from _vendor import atlas``), and an attribute read of one of those names
+    off it. It does not see a name reached through ``getattr`` or ``importlib``.
     """
     found: list[str] = []
     for path in sorted(root.rglob("*.py")):
@@ -441,6 +452,9 @@ class TestOnlyTheHolderDetects:
             "from _vendor import atlas\nx = atlas.detect('/home')\n",
             "from _vendor.atlas.machine import RealMachine\n",
             "from _vendor.atlas import RetroDeck\n",
+            "from _vendor.atlas import every_installation\n",
+            "from _vendor import atlas\nx = atlas.every_installation('/home')\n",
+            "from _vendor.atlas import *\n",
         ],
     )
     def test_the_scan_sees_each_way_in(self, tmp_path, source):

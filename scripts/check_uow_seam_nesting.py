@@ -199,8 +199,8 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # ES-DE's catalogue for the entry, the emulator's own configuration for
         # the granularity, and the save root for the directory, on EVERY call:
         # this seam caches no answer at all, because a remembered granularity
-        # would have Tender carry a shared card as one game's save: a full read
-        # of the machine per call, and the first ask about a core also runs that
+        # would have Tender carry a shared card as one game's save. Each call is a
+        # full read of the machine, and the first ask about a core also runs that
         # core's probe. It is a method on an object-shaped Protocol, so the
         # method name is what a consumer writes and there is no attribute to
         # list beside it.
