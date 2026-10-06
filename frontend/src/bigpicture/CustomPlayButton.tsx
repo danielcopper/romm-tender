@@ -14,7 +14,7 @@
  * with action: Uninstall.
  */
 
-import { useState, useEffect, useRef, FC, ReactElement } from "react";
+import { useState, useEffect, useRef, useCallback, FC, ReactElement } from "react";
 import { addEventListener, removeEventListener } from "../api/host";
 import { showToast } from "../utils/toast";
 import { Focusable, DialogButton, Menu, MenuItem, MenuSeparator, Navigation, showContextMenu } from "@decky/ui";
@@ -230,33 +230,36 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
    * caller drops the cached entry first. `trigger` names the change in the log
    * line a detail that does not resolve leaves behind.
    */
-  const rederiveFromDetail = async (trigger: string): Promise<void> => {
-    const cached = await getCachedGameDetail(appId);
-    if (!cached.found || cached.rom_id == null) {
-      // Surfaced at warn level: debugLog is dropped at the default level.
-      logError(`CustomPlayButton: ${trigger} for appId ${appId} but cached detail not found — button may be stale`);
-      return;
-    }
-    const rid = cached.rom_id;
-    setRomId(rid);
-    romIdRef.current = rid;
-    if (cached.rom_name) setRomName(cached.rom_name);
-    setMissingPath(cached.installed && cached.file_missing_at ? cached.file_missing_at : null);
-    if (cached.installed && cached.file_missing_at) {
-      setDlProgress(null);
-      setActionPending(false);
-      enterDownloadState();
-    } else if (cached.installed) {
-      setState(hasAnySaveConflict(cached.save_status) ? "conflict" : "play");
-    } else {
-      // Not installed — clear any download progress and drop to the Download
-      // button. The occupancy answer comes from the ROM the detail is about; a
-      // previous ROM's answer says nothing about this one's location.
-      setDlProgress(null);
-      setActionPending(false);
-      enterDownloadState(cached.target_path_occupied === true, cached.adoption_candidate_present === true);
-    }
-  };
+  const rederiveFromDetail = useCallback(
+    async (trigger: string): Promise<void> => {
+      const cached = await getCachedGameDetail(appId);
+      if (!cached.found || cached.rom_id == null) {
+        // Surfaced at warn level: debugLog is dropped at the default level.
+        logError(`CustomPlayButton: ${trigger} for appId ${appId} but cached detail not found — button may be stale`);
+        return;
+      }
+      const rid = cached.rom_id;
+      setRomId(rid);
+      romIdRef.current = rid;
+      if (cached.rom_name) setRomName(cached.rom_name);
+      setMissingPath(cached.installed && cached.file_missing_at ? cached.file_missing_at : null);
+      if (cached.installed && cached.file_missing_at) {
+        setDlProgress(null);
+        setActionPending(false);
+        enterDownloadState();
+      } else if (cached.installed) {
+        setState(hasAnySaveConflict(cached.save_status) ? "conflict" : "play");
+      } else {
+        // Not installed — clear any download progress and drop to the Download
+        // button. The occupancy answer comes from the ROM the detail is about; a
+        // previous ROM's answer says nothing about this one's location.
+        setDlProgress(null);
+        setActionPending(false);
+        enterDownloadState(cached.target_path_occupied === true, cached.adoption_candidate_present === true);
+      }
+    },
+    [appId],
+  );
 
   useEffect(() => {
     mountPruneLeaseOwner(leaseOwner);
@@ -558,7 +561,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       unsubscribeVanished();
       globalThis.removeEventListener("romm_session_changed", onSessionChanged);
     };
-  }, [appId]);
+  }, [appId, rederiveFromDetail]);
 
   // Programmatically focus our Play/Download button after mount.
   // This beats HLTB and other plugins that also compete for initial focus.
