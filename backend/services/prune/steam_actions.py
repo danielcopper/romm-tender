@@ -102,7 +102,7 @@ class SteamActionRunner:
             self._record_switch_cancellation(exc, rows, ledger, target_id, app_id, handle)
             raise
         except (Refused, RommApiError) as exc:
-            return None, None, self._switch_refused(exc, rows, ledger, handle)
+            return None, None, self._switch_failed(exc, rows, ledger, handle)
         launch_options, result = self._switch_outcome(switch, ledger, target_id, app_id)
         if result is not None:
             return None, None, result
@@ -141,10 +141,10 @@ class SteamActionRunner:
         app_id: int,
         handle: RecoveryHandle | None,
     ) -> None:
-        """Keep a version switch that finished, or refused, as the cancelled run's outcome."""
+        """Keep a version switch that finished, refused, or failed on a RomM error as the cancelled run's outcome."""
         state = cancellation_state(exc)
         if isinstance(state.child_fault, (Refused, RommApiError)):
-            state.group_result = self._switch_refused(state.child_fault, rows, ledger, handle)
+            state.group_result = self._switch_failed(state.child_fault, rows, ledger, handle)
             state.child_fault = None
         elif state.child_completed and isinstance(state.child_result, dict):
             _, state.group_result = self._switch_outcome(state.child_result, ledger, target_id, app_id)
@@ -264,14 +264,16 @@ class SteamActionRunner:
             removed_app_id=app_id if reconciled else None,
         )
 
-    def _switch_refused(
+    def _switch_failed(
         self,
         exc: Refused | RommApiError,
         rows: list[Rom],
         ledger: MutationLedger,
         handle: RecoveryHandle | None,
     ) -> dict[str, Any]:
-        """A switch that refused changed no binding, so the provisional commit is taken back."""
+        """A switch that refused or failed on a RomM error changed no binding, so the provisional commit
+        is taken back.
+        """
         reason, message = (exc.reason, exc.message) if isinstance(exc, Refused) else classify_error(exc)
         ledger.committed_action = None
         ledger.action_ambiguous = False

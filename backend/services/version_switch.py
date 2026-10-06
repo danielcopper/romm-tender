@@ -61,7 +61,7 @@ _VERSION_VANISHED_MESSAGE = "This version is no longer available on RomM."
 
 
 class VersionVanished(NamedRefused):
-    """The switch target is gone from RomM: the server answered a 404 for it."""
+    """The switch target is gone from RomM: the server answered a proven 404 for it."""
 
     reason = "version_vanished"
 
@@ -604,7 +604,7 @@ class VersionSwitchService:
         target whose detail the aggregate rejects → ``invalid_target``; a
         definitive 404 for either target shape → :class:`VersionVanished`. Any other
         failed mandatory server-only target fetch raises its ``RommApiError``. The
-        optional local probe instead fails open on every non-404 outcome (#1570).
+        optional local probe instead fails open on every non-404 outcome.
         """
         app_id = int(app_id)
         target_rom_id = int(target_rom_id)
@@ -829,10 +829,9 @@ class VersionSwitchService:
         a download or rebind could have landed since. This re-checks the same
         facts against the fresh rows inside the write transaction — group
         membership and bound-elsewhere — so the committed decision is consistent.
-        Raises ``not_in_group`` or ``bound_elsewhere``, which rolls the
-        transaction back, or returns whether the target is downloaded; the caller
-        resolves the launch command outside this UoW (the relaunch resolver opens
-        its own).
+        Raises a ``not_in_group`` or ``bound_elsewhere`` refusal before it writes
+        anything, or returns whether the target is downloaded; the caller resolves
+        the launch command outside this UoW (the relaunch resolver opens its own).
         """
         with self._uow_factory() as uow:
             target = uow.roms.get(target_rom_id)
