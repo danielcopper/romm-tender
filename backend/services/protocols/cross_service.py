@@ -384,7 +384,10 @@ class InstalledRomFilesRemoverFn(Protocol):
 
 
 class VersionSwitcherFn(Protocol):
-    """Version-switch authority consumed by explicit prune repointing."""
+    """Version-switch authority consumed by explicit prune repointing.
+
+    Returns the switch's success answer; raises its refusal, or the `RommApiError` from fetching a server-only target.
+    """
 
     async def __call__(self, app_id: int, target_rom_id: int, allow_stranded: bool) -> dict[str, Any]: ...
 

@@ -11,6 +11,8 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.rom import Rom
 from domain.version_metadata import VersionMetadata
+from lib.errors import Refused, RommConnectionError
+from services.prune._models import RecoveryHandle, cancellation_state
 from services.prune.planning import GroupPlan
 from services.prune.registry import PruneRegistry, PruneRegistryConfig
 from services.prune.results import MutationLedger, PruneResultReporter, PruneResultReporterConfig
@@ -55,6 +57,7 @@ def _runner(
     *,
     action_result: dict[str, Any] | None = None,
     switch_result: dict[str, Any] | None = None,
+    switch_raises: Exception | None = None,
 ) -> tuple[SteamActionRunner, FakeUnitOfWork, list[str]]:
     uow = FakeUnitOfWork()
     with uow:
@@ -68,6 +71,8 @@ def _runner(
 
     async def switch_version(app_id: int, target_rom_id: int, allow_stranded: bool) -> dict[str, Any]:
         del allow_stranded
+        if switch_raises is not None:
+            raise switch_raises
         return dict(
             switch_result
             or {
@@ -164,16 +169,90 @@ class TestRepoint:
     async def test_a_failed_switch_clears_the_provisional_commit(self):
         """Nothing changed, so the ledger must not claim an ambiguous mutation."""
         rows = [_rom(1, app_id=APP_ID), _rom(2)]
-        runner, _, requested = _runner(rows, switch_result={"success": False, "reason": "boom", "message": "no"})
+        runner, _, requested = _runner(rows, switch_raises=Refused("boom", "no"))
         ledger = MutationLedger(rows)
 
         _, _, result = await runner.repoint("run-1", _plan(rows=rows, target_id=2), ledger, None, 1, 1)
 
         assert result is not None
-        assert result["status"] == "failed"
+        assert (result["status"], result["reason"], result["message"]) == ("failed", "boom", "no")
         assert ledger.committed_action is None
         assert ledger.action_ambiguous is False
         assert requested == [], "Steam is never asked once the switch itself failed"
+
+    async def test_a_romm_error_from_the_switch_fails_the_group_with_its_classified_reason(self):
+        rows = [_rom(1, app_id=APP_ID), _rom(2)]
+        runner, _, requested = _runner(rows, switch_raises=RommConnectionError("down"))
+        ledger = MutationLedger(rows)
+
+        _, _, result = await runner.repoint("run-1", _plan(rows=rows, target_id=2), ledger, None, 1, 1)
+
+        assert result is not None
+        assert (result["status"], result["reason"], result["message"]) == (
+            "failed",
+            "server_unreachable",
+            "Server unreachable — check your URL and ensure RomM is running",
+        )
+        assert ledger.committed_action is None
+        assert ledger.action_ambiguous is False
+        assert requested == []
+
+    async def test_a_refused_switch_keeps_the_recovery_bundle_on_the_failed_group(self):
+        rows = [_rom(1, app_id=APP_ID), _rom(2)]
+        runner, _, _ = _runner(rows, switch_raises=Refused("boom", "no"))
+        handle = RecoveryHandle("/b", {}, {}, None, {}, "digest")
+
+        _, _, result = await runner.repoint("run-1", _plan(rows=rows, target_id=2), MutationLedger(rows), handle, 1, 1)
+
+        assert result is not None
+        assert (result["status"], result["bundle_path"]) == ("failed", "/b")
+
+    @pytest.mark.parametrize(
+        ("raised", "reason", "message"),
+        [
+            (Refused("boom", "no"), "boom", "no"),
+            (
+                RommConnectionError("down"),
+                "server_unreachable",
+                "Server unreachable — check your URL and ensure RomM is running",
+            ),
+        ],
+        ids=["refusal", "romm-error"],
+    )
+    async def test_a_switch_that_raises_while_the_repoint_is_cancelled_fails_the_group(self, raised, reason, message):
+        """The fault is answered here, so the run does not report it as a change that may have happened."""
+        rows = [_rom(1, app_id=APP_ID), _rom(2)]
+        runner, _, requested = _runner(rows)
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        async def refusing_switch(app_id: int, target_rom_id: int, allow_stranded: bool) -> dict[str, Any]:
+            del app_id, target_rom_id, allow_stranded
+            entered.set()
+            await release.wait()
+            raise raised
+
+        runner._switch_version = refusing_switch
+        ledger = MutationLedger(rows)
+        task = asyncio.create_task(runner.repoint("run-1", _plan(rows=rows, target_id=2), ledger, None, 1, 1))
+        await entered.wait()
+        task.cancel()
+        release.set()
+
+        with pytest.raises(asyncio.CancelledError) as caught:
+            await task
+
+        state = cancellation_state(caught.value)
+        assert state.child_fault is None
+        assert state.group_result is not None
+        assert (state.group_result["status"], state.group_result["reason"], state.group_result["message"]) == (
+            "failed",
+            reason,
+            message,
+        )
+        assert ledger.committed_action is None
+        assert ledger.action_ambiguous is False
+        assert requested == []
 
     async def test_an_inconsistent_switch_result_is_partial_not_success(self):
         rows = [_rom(1, app_id=APP_ID), _rom(2)]

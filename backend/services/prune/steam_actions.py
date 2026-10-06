@@ -14,6 +14,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+from lib.errors import Refused, RommApiError, classify_error
 from services.prune._models import cancellation_state, shielded
 from services.prune.results import GroupOutcome
 
@@ -100,7 +101,9 @@ class SteamActionRunner:
         except asyncio.CancelledError as exc:
             self._record_switch_cancellation(exc, rows, ledger, target_id, app_id, handle)
             raise
-        launch_options, result = self._switch_outcome(switch, rows, ledger, target_id, app_id, handle)
+        except (Refused, RommApiError) as exc:
+            return None, None, self._switch_failed(exc, rows, ledger, handle)
+        launch_options, result = self._switch_outcome(switch, ledger, target_id, app_id)
         if result is not None:
             return None, None, result
         if launch_options is None:
@@ -138,10 +141,13 @@ class SteamActionRunner:
         app_id: int,
         handle: RecoveryHandle | None,
     ) -> None:
-        """Keep a version switch that finished as the cancelled run's outcome."""
+        """Keep a version switch that finished, refused, or failed on a RomM error as the cancelled run's outcome."""
         state = cancellation_state(exc)
-        if state.child_completed and isinstance(state.child_result, dict):
-            _, state.group_result = self._switch_outcome(state.child_result, rows, ledger, target_id, app_id, handle)
+        if isinstance(state.child_fault, (Refused, RommApiError)):
+            state.group_result = self._switch_failed(state.child_fault, rows, ledger, handle)
+            state.child_fault = None
+        elif state.child_completed and isinstance(state.child_result, dict):
+            _, state.group_result = self._switch_outcome(state.child_result, ledger, target_id, app_id)
             if state.group_result is None:
                 state.group_result = self._results.ledger_result(
                     ledger,
@@ -258,25 +264,34 @@ class SteamActionRunner:
             removed_app_id=app_id if reconciled else None,
         )
 
+    def _switch_failed(
+        self,
+        exc: Refused | RommApiError,
+        rows: list[Rom],
+        ledger: MutationLedger,
+        handle: RecoveryHandle | None,
+    ) -> dict[str, Any]:
+        """A switch that refused or failed on a RomM error changed no binding, so the provisional commit
+        is taken back.
+        """
+        reason, message = (exc.reason, exc.message) if isinstance(exc, Refused) else classify_error(exc)
+        ledger.committed_action = None
+        ledger.action_ambiguous = False
+        return self._results.group_result(
+            rows,
+            "failed",
+            reason,
+            message,
+            GroupOutcome(bundle_path=handle.bundle_path if handle else None),
+        )
+
     def _switch_outcome(
         self,
         switch: dict[str, Any],
-        rows: list[Rom],
         ledger: MutationLedger,
         target_id: int,
         app_id: int,
-        handle: RecoveryHandle | None,
     ) -> tuple[str | None, dict[str, Any] | None]:
-        if not switch.get("success"):
-            ledger.committed_action = None
-            ledger.action_ambiguous = False
-            return None, self._results.group_result(
-                rows,
-                "failed",
-                switch.get("reason", "repoint_failed"),
-                switch.get("message", "Repoint failed."),
-                GroupOutcome(bundle_path=handle.bundle_path if handle else None),
-            )
         launch_options = switch.get("launch_options")
         if switch.get("rom_id") != target_id or switch.get("app_id") != app_id or not isinstance(launch_options, str):
             return None, self._results.ledger_result(
