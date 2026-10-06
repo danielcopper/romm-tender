@@ -196,7 +196,7 @@ The list verdict is advisory UI state, not authority for a later write. Immediat
 binding onto an already-local target, it checks that exact target id again through the same three-second, single-attempt
 `get_rom_once` path. The request runs on the worker executor outside the write UoW and after the save-stranding guard
 permits the attempt. Consequently an initial unsynced-save warning makes no target request, while both `Sync now` and
-`Switch anyway` retries are protected; `allow_stranded` never bypasses liveness. A typed target 404 returns
+`Switch anyway` retries are protected; `allow_stranded` never bypasses liveness. A typed target 404 refuses with
 `version_vanished` without changing the binding or any recorded launch state. Every other optional-probe outcome fails
 open, so a local switch remains fast when RomM is uncertain or offline. The active-target no-op does not probe because
 it moves no binding.
