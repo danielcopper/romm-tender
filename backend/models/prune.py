@@ -89,7 +89,8 @@ class SaveQuarantine:
     ``moved`` holds the save paths that left their place before the quarantine
     finished or stopped. ``failure`` is ``None`` for a quarantine that finished
     and says why it stopped otherwise. ``ambiguous`` means ``moved`` cannot be
-    trusted: more saves may have moved than it names.
+    trusted: a save it does not name may have moved, or one it names may not
+    have moved for good.
     """
 
     moved: list[str]

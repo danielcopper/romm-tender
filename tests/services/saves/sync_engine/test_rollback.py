@@ -153,12 +153,10 @@ class TestResolveSyncConflict:
 
     @pytest.mark.asyncio
     async def test_resolve_keep_local_refuses_without_device_id(self, tmp_path):
-        """#1478: keep_local with no registered device surfaces the device-not-registered slug.
+        """keep_local with no registered device refuses with ``device_not_registered``.
 
-        keep_local would POST the local content, but the do_upload_save
-        device-registration guard refuses it — the refusal carries the
-        ``device_not_registered`` reason + message, not the generic UNKNOWN, and
-        ``upload_save`` is never called.
+        The refusal carries that reason and its message, and ``upload_save`` is
+        never called.
         """
         svc, fake = make_service(tmp_path)
         # No device registered — get_device_id() returns None.

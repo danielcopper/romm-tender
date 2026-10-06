@@ -641,9 +641,10 @@ class SaveService:
         return deleted, errors
 
     async def delete_local_saves(self, rom_id: int) -> dict[str, Any] | SaveDeletionIncomplete:
-        """Delete local save files (.srm, .rtc) for a ROM.
+        """Delete this ROM's local save files.
 
-        A deletion that removed only part answers how many files it did.
+        A deletion that could not remove every file it found answers
+        :class:`SaveDeletionIncomplete`.
         """
         async with self._rules.hold("delete_local_saves", update=True, migration=True, prune=True):
             deleted, errors = await self._delete_saves_for_roms([int(rom_id)])
@@ -707,9 +708,10 @@ class SaveService:
         return {"count": count}
 
     async def delete_platform_saves(self, platform_slug: str) -> dict[str, Any] | SaveDeletionIncomplete:
-        """Delete local save files for all installed ROMs on a platform.
+        """Delete the local save files of every installed ROM on this platform.
 
-        A deletion that removed only part answers how many files it did.
+        A deletion that could not remove every file it found answers
+        :class:`SaveDeletionIncomplete`.
         """
         async with self._rules.hold("delete_platform_saves", update=True, migration=True, prune=True):
             rom_ids = await self._loop.run_in_executor(None, self._installed_rom_ids_on_platform, platform_slug)

@@ -231,13 +231,7 @@ class RollbackOrchestrator:
             raise Refused("resolve_failed", str(e)) from e
 
     def _validate_filename(self, rom_id: int, action: str, filename: str) -> None:
-        """Refuse a filename that is not a clean basename.
-
-        The frontend-supplied filename flows into
-        ``os.path.join(saves_dir, …)`` via the keep_local path. Reject
-        anything that isn't already a clean basename — legitimate callers
-        always pass one.
-        """
+        """Refuse a filename that is not a clean basename, before any I/O."""
         try:
             sanitized = sanitize_save_filename(filename)
         except ValueError as e:

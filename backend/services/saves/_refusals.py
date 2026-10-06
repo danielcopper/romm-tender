@@ -1,4 +1,4 @@
-"""Refusals the saves package raises from more than one of its modules.
+"""Refusals that more than one module of the saves package answers with.
 
 A benign skip is a refusal (``domain.save_answer.BENIGN_SYNC_SKIP_REASONS``
 names the reasons): it subclasses ``lib.errors.Refused`` rather than

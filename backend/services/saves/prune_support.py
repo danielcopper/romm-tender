@@ -218,11 +218,7 @@ class PruneSaveSupport:
     def quarantine_prune_saves(
         self, files: list[dict[str, str]], claims: dict[str, SourceClaim] | None = None
     ) -> SaveQuarantine:
-        """Move exclusive current saves through the sanctioned backup funnel.
-
-        Answers what moved and never raises a refusal: a quarantine that raised
-        is ambiguous, because it may have moved a save before it stopped.
-        """
+        """Move exclusive current saves through the sanctioned backup funnel."""
         moved: list[str] = []
         saves_root = self._retrodeck_paths.saves_path()
         try:

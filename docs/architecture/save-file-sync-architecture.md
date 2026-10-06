@@ -1071,8 +1071,8 @@ The modal only accepts `keep_local` or `use_server`; `cancel` never reaches the 
 refused before the server is asked anything.
 
 A RomM error from fetching the list or from the transfer answers `classify_error`'s reason and message. An `OSError` on
-the local side — a local save missing at the canonical path among them — refuses with `resolve_failed`, and anything
-else is a transport error.
+the local side — a local save missing at the canonical path among them — refuses with `resolve_failed`. A `keep_local`
+upload on a device that is not registered refuses with `device_not_registered`. Anything else is a transport error.
 
 ### Why no defer state
 

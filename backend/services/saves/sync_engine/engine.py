@@ -1198,8 +1198,8 @@ class SyncEngine:
         ``server_save_id`` is the id of the server save that was surfaced to
         the user in the conflict modal. The backend round-trips it: if a
         third device has uploaded a newer save into the slot since the modal
-        opened, the picked server head won't match and we return
-        ``reason="stale_conflict"`` instead of silently overwriting the
+        opened, the picked server head won't match and the resolution
+        refuses with ``stale_conflict`` instead of silently overwriting the
         third device's work.
 
         ``action`` is one of:
