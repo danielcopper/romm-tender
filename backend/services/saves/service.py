@@ -13,12 +13,13 @@ logic does not.
 from __future__ import annotations
 
 import functools
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.identity import VERSION
 from domain.iso_time import epoch_to_iso
 from domain.rom_save_sync_state import RomSaveSyncState
-from lib.list_result import ErrorCode
+from lib.partial_failure import PartialFailure
 from services.saves._config import SaveServiceConfig
 from services.saves._settings import (
     ALLOWED_SETTINGS_KEYS,
@@ -43,6 +44,13 @@ if TYPE_CHECKING:
 
     from domain.save_answer import SaveAnswer
     from services.protocols import UnitOfWorkFactory
+
+
+@dataclass(frozen=True)
+class SaveDeletionIncomplete(PartialFailure):
+    """A save deletion that removed only part of the files it found."""
+
+    deleted_count: int
 
 
 class SaveService:
@@ -632,8 +640,12 @@ class SaveService:
             uow.rom_save_sync_states.save(rom_id, save_state)
         return deleted, errors
 
-    async def delete_local_saves(self, rom_id: int) -> dict[str, Any]:
-        """Delete local save files (.srm, .rtc) for a ROM."""
+    async def delete_local_saves(self, rom_id: int) -> dict[str, Any] | SaveDeletionIncomplete:
+        """Delete this ROM's local save files.
+
+        A deletion that could not remove every file it found answers
+        :class:`SaveDeletionIncomplete`.
+        """
         async with self._rules.hold("delete_local_saves", update=True, migration=True, prune=True):
             deleted, errors = await self._delete_saves_for_roms([int(rom_id)])
 
@@ -641,12 +653,11 @@ class SaveService:
             return {"success": True, "deleted_count": 0, "message": "No local save files found"}
 
         if errors:
-            return {
-                "success": False,
-                "reason": ErrorCode.UNKNOWN.value,
-                "deleted_count": deleted,
-                "message": f"Deleted {deleted} file(s), {len(errors)} error(s)",
-            }
+            return SaveDeletionIncomplete(
+                reason="delete_incomplete",
+                message=f"Deleted {deleted} file(s), {len(errors)} error(s)",
+                deleted_count=deleted,
+            )
         return {
             "success": True,
             "deleted_count": deleted,
@@ -696,8 +707,12 @@ class SaveService:
             count += len(files)
         return {"count": count}
 
-    async def delete_platform_saves(self, platform_slug: str) -> dict[str, Any]:
-        """Delete local save files for all installed ROMs on a platform."""
+    async def delete_platform_saves(self, platform_slug: str) -> dict[str, Any] | SaveDeletionIncomplete:
+        """Delete the local save files of every installed ROM on this platform.
+
+        A deletion that could not remove every file it found answers
+        :class:`SaveDeletionIncomplete`.
+        """
         async with self._rules.hold("delete_platform_saves", update=True, migration=True, prune=True):
             rom_ids = await self._loop.run_in_executor(None, self._installed_rom_ids_on_platform, platform_slug)
             total_deleted, total_errors = await self._delete_saves_for_roms(rom_ids)
@@ -705,12 +720,11 @@ class SaveService:
         rom_count = len(rom_ids)
 
         if total_errors:
-            return {
-                "success": False,
-                "reason": ErrorCode.UNKNOWN.value,
-                "deleted_count": total_deleted,
-                "message": (f"Deleted {total_deleted} file(s) from {rom_count} ROM(s), {len(total_errors)} error(s)"),
-            }
+            return SaveDeletionIncomplete(
+                reason="delete_incomplete",
+                message=f"Deleted {total_deleted} file(s) from {rom_count} ROM(s), {len(total_errors)} error(s)",
+                deleted_count=total_deleted,
+            )
         return {
             "success": True,
             "deleted_count": total_deleted,
@@ -718,4 +732,4 @@ class SaveService:
         }
 
 
-__all__ = ["SaveService", "SaveServiceConfig"]
+__all__ = ["SaveDeletionIncomplete", "SaveService", "SaveServiceConfig"]

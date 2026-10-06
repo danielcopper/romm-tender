@@ -24,13 +24,13 @@ from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import parse_iso_to_epoch
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, save_shape_message
+from domain.save_answer import save_shape_message
 from domain.save_path import sanitize_save_filename
 from domain.save_slot import filter_saves_to_slot
-from lib.errors import DeviceNotRegisteredError, classify_error
-from lib.list_result import ErrorCode
+from lib.errors import DeviceNotRegisteredError, NamedRefused, NotInstalled, Refused
 from services.saves._helpers import local_save_target
-from services.saves._messages import DEVICE_NOT_REGISTERED, DEVICE_NOT_REGISTERED_REASON
+from services.saves._messages import DEVICE_NOT_REGISTERED
+from services.saves._refusals import SaveShapeUnsupported
 from services.saves._save_state import write_save_state
 from services.saves._settings import resolve_default_slot
 
@@ -51,6 +51,12 @@ if TYPE_CHECKING:
     from services.saves.rom_info import RomInfoService
     from services.saves.sync_engine.devices import DeviceRegistry
     from services.saves.sync_engine.matrix import MatrixExecutor
+
+
+class StaleConflict(NamedRefused):
+    """The server's newest save in the slot is not the one the conflict was shown with."""
+
+    reason = "stale_conflict"
 
 
 class RollbackOrchestrator:
@@ -118,53 +124,43 @@ class RollbackOrchestrator:
         be held by the caller — every save-sync entry point serialises
         through ``SyncEngine.rom_lock(rom_id)``. *save_answer* is the reading
         the caller's entry gate took, used here instead of a second one.
+
+        Raises its refusals; a RomM error from listing the server's saves or
+        from the transfer propagates, and an ``OSError`` from the local side
+        refuses with ``resolve_failed``.
         """
         rom_id = int(rom_id)
 
         if action not in ("keep_local", "use_server"):
-            return {"success": False, "reason": "invalid_action", "message": f"Invalid action: {action}"}
+            raise Refused("invalid_action", f"Invalid action: {action}")
 
-        validation_error = self._validate_filename(rom_id, action, filename)
-        if validation_error:
-            return validation_error
+        self._validate_filename(rom_id, action, filename)
 
         info = await loop.run_in_executor(
             None, functools.partial(self._rom_info.get_rom_save_info, rom_id, save_answer=save_answer)
         )
         if not info:
-            return {"success": False, "reason": "not_installed", "message": "ROM not installed"}
+            raise NotInstalled("ROM not installed")
         system = info["system"]
         saves_dir = info["save_answer"].sync_directory
         # An answer a sync would not carry has nowhere to write either side of
         # the resolution — the refusal the sync entry points give for it.
         if saves_dir is None:
-            return {
-                "success": False,
-                "reason": SAVE_SHAPE_UNSUPPORTED_REASON,
-                "message": save_shape_message(info["save_answer"]),
-            }
+            raise SaveShapeUnsupported(save_shape_message(info["save_answer"]))
 
         save_state, device_id = await loop.run_in_executor(None, self._read_inputs, rom_id)
 
-        try:
-            server_saves = await loop.run_in_executor(
-                None,
-                lambda: self._retry.with_retry(
-                    lambda: self._romm_api.list_saves(rom_id, device_id=device_id),
-                ),
-            )
-        except Exception as e:
-            reason, message = classify_error(e)
-            return {
-                "success": False,
-                "reason": reason,
-                "message": f"Failed to fetch saves: {message}",
-            }
+        server_saves = await loop.run_in_executor(
+            None,
+            lambda: self._retry.with_retry(
+                lambda: self._romm_api.list_saves(rom_id, device_id=device_id),
+            ),
+        )
 
         active_slot = save_state.active_slot
         server_in_slot = filter_saves_to_slot(server_saves, active_slot)
         if not server_in_slot:
-            return {"success": False, "reason": "no_server_save", "message": "No server save in active slot"}
+            raise Refused("no_server_save", "No server save in active slot")
         server = max(server_in_slot, key=lambda s: parse_iso_to_epoch(s.get("updated_at")) or 0.0)
 
         actual_server_id = server.get("id")
@@ -176,11 +172,7 @@ class RollbackOrchestrator:
                 server_save_id,
                 actual_server_id,
             )
-            return {
-                "success": False,
-                "reason": ErrorCode.STALE_CONFLICT.value,
-                "message": "Server save changed since conflict was shown; please retry sync.",
-            }
+            raise StaleConflict("Server save changed since conflict was shown; please retry sync.")
 
         core_so = await loop.run_in_executor(None, self._resolve_core, rom_id)
         save_names = info["save_answer"].synced_names
@@ -225,28 +217,21 @@ class RollbackOrchestrator:
                 action,
             )
             return {"success": True, "action": action}
-        except DeviceNotRegisteredError:
-            # keep_local's POST hit the do_upload_save device-registration guard
-            # (#1478): carry the device-not-registered reason slug + message the
-            # automatic pre-flight uses, not the generic UNKNOWN.
+        except DeviceNotRegisteredError as e:
+            # keep_local's POST hit the do_upload_save device-registration guard:
+            # refuse with the reason and message the automatic pre-flight uses.
             self._logger.warning(
                 "resolve_sync_conflict(rom_id=%d, action=%s): no registered device — refusing keep_local upload",
                 rom_id,
                 action,
             )
-            return {"success": False, "reason": DEVICE_NOT_REGISTERED_REASON, "message": DEVICE_NOT_REGISTERED}
-        except Exception as e:
+            raise Refused("device_not_registered", DEVICE_NOT_REGISTERED) from e
+        except OSError as e:
             self._logger.error(f"resolve_sync_conflict({rom_id}, {filename}, {action}) failed: {e}")
-            return {"success": False, "reason": ErrorCode.UNKNOWN.value, "message": str(e)}
+            raise Refused("resolve_failed", str(e)) from e
 
-    def _validate_filename(self, rom_id: int, action: str, filename: str) -> dict[str, Any] | None:
-        """Reject non-basename filenames; ``None`` if the filename is safe.
-
-        The frontend-supplied filename flows into
-        ``os.path.join(saves_dir, …)`` via the keep_local path. Reject
-        anything that isn't already a clean basename — legitimate callers
-        always pass one.
-        """
+    def _validate_filename(self, rom_id: int, action: str, filename: str) -> None:
+        """Refuse a filename that is not a clean basename, before any I/O."""
         try:
             sanitized = sanitize_save_filename(filename)
         except ValueError as e:
@@ -256,15 +241,14 @@ class RollbackOrchestrator:
                 action,
                 e,
             )
-            return {"success": False, "reason": "invalid_filename", "message": "Invalid filename"}
+            raise Refused("invalid_filename", "Invalid filename") from e
         if sanitized != filename:
             self._logger.warning(
                 "resolve_sync_conflict(rom_id=%d, action=%s) rejected non-basename filename",
                 rom_id,
                 action,
             )
-            return {"success": False, "reason": "invalid_filename", "message": "Invalid filename"}
-        return None
+            raise Refused("invalid_filename", "Invalid filename")
 
     def _resolve_conflict_use_server(
         self,
@@ -356,7 +340,7 @@ class RollbackOrchestrator:
         # the user explicitly chose to keep local, so our content must win RomM's
         # write-time currency (409) gate rather than 409-backstop into a conflict
         # loop (ADR-0017). The freshness of the server head was already validated
-        # by the STALE_CONFLICT check in ``resolve`` before we got here.
+        # by the stale-conflict check in ``resolve`` before we got here.
         default_slot = resolve_default_slot(self._settings)
         self._matrix.do_upload_save(
             rom_id, local_path, target, save_state, device_id, system, core_so, None, default_slot, overwrite=True

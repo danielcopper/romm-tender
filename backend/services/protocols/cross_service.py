@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from contextlib import AbstractAsyncContextManager
 
-    from models.prune import InstalledContentRemoval, SourceClaim
+    from models.prune import InstalledContentRemoval, SaveQuarantine, SourceClaim
     from models.state import ShortcutRegistryEntry
     from models.sync import ClientSaveState
 
@@ -447,13 +447,18 @@ class ActiveDownloadRomIdsFn(Protocol):
 
 
 class PruneSaveCoordinator(Protocol):
-    """Exact-path save inventory, locking, and quarantine consumed by prune."""
+    """Exact-path save inventory, locking, and quarantine consumed by prune.
+
+    ``quarantine_prune_saves`` answers what the quarantine came to and never
+    raises a refusal: one that raised is ambiguous, because it may have moved a
+    save before it stopped.
+    """
 
     def lock_prune_roms(self, rom_ids: list[int]) -> AbstractAsyncContextManager[None]: ...
     def inventory_prune_saves(self, purge_rom_ids: list[int]) -> dict[str, Any]: ...
     def quarantine_prune_saves(
         self, files: list[dict[str, str]], claims: dict[str, SourceClaim] | None = None
-    ) -> dict[str, Any]: ...
+    ) -> SaveQuarantine: ...
     def validate_prune_absences(self, claims: dict[str, SourceClaim]) -> bool: ...
 
 
@@ -533,10 +538,9 @@ class SessionPlaytimeRecorder(Protocol):
     """Playtime end-of-session record consumed by SessionLifecycleService.
 
     The composition root satisfies this with ``PlaytimeService``'s
-    ``record_session_end``. The lifecycle service forwards the
-    ``total_seconds`` field to the frontend so the playtime display can
-    be updated; a falsy ``success`` value yields ``total_seconds=None``
-    on the returned DTO so the frontend leaves the display untouched.
+    ``record_session_end``, which returns the success answer and raises
+    its refusal. The lifecycle service forwards the ``total_seconds``
+    field to the frontend so the playtime display can be updated.
     Device-suspend time is excluded by the recorder itself via the
     monotonic clock (#1148); the caller passes no suspend duration.
     """

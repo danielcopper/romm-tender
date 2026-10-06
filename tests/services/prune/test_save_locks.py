@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from services.prune.save_locks import SaveLockCoordinator, SaveLockCoordinatorConfig
+
+if TYPE_CHECKING:
+    from models.prune import SaveQuarantine
 
 
 class _FakeSaveCoordinator:
@@ -36,7 +39,7 @@ class _FakeSaveCoordinator:
             self.released.append(list(rom_ids))
             self.held = None
 
-    def quarantine_prune_saves(self, files, claims=None) -> dict[str, Any]:  # pragma: no cover - unused here
+    def quarantine_prune_saves(self, files, claims=None) -> SaveQuarantine:  # pragma: no cover - unused here
         raise NotImplementedError
 
     def validate_prune_absences(self, claims) -> bool:  # pragma: no cover - unused here

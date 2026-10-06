@@ -82,6 +82,22 @@ class InstalledContentRemoval:
     failure: str | None = None
 
 
+@dataclass(frozen=True)
+class SaveQuarantine:
+    """What moving a purge set's exclusive saves into ``.romm-backup`` came to.
+
+    ``moved`` holds the save paths that left their place before the quarantine
+    finished or stopped. ``failure`` is ``None`` for a quarantine that finished
+    and says why it stopped otherwise. ``ambiguous`` means ``moved`` cannot be
+    trusted: a save it does not name may have moved, or one it names may not
+    have moved for good.
+    """
+
+    moved: list[str]
+    ambiguous: bool
+    failure: str | None = None
+
+
 class SteamRecoverySnapshot(TypedDict):
     """Backend-owned Steam Input state and files for one shortcut."""
 

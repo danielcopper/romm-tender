@@ -5,8 +5,8 @@ so the transport half is the one the panel meets: a refusal arrives as a reply
 carrying ``{success: False, reason, message}``, a bug as the host's
 ``backend_exception`` error. The services are stand-ins that raise or answer
 what a case hands them, which puts the exception exactly where a use case would
-raise it; Stop Game's refusals, the connection's and a partial bulk uninstall run
-through the real services.
+raise it; Stop Game's refusals, the connection's, a partial bulk uninstall, the
+conflict resolution's and a partial save deletion run through the real services.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
-from _factories import _make_application, _make_conflict_rules, _make_services_bundle
+from _factories import _make_application, _make_conflict_rules, _make_retry, _make_services_bundle
 from bootstrap import ServicesBundle
 from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcessControlAdapter
@@ -61,7 +61,15 @@ from lib.partial_failure import PartialFailure
 from main import Endpoints
 from services.connection import ConnectionService, ConnectionServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
+from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
+from tests.services.saves._helpers import (
+    _create_save,
+    _enable_sync_with_device,
+    _install_rom,
+    _server_save_with_syncs,
+    make_service,
+)
 
 _MAIN_PY = Path(__file__).resolve().parents[1] / "backend" / "main.py"
 
@@ -676,3 +684,161 @@ class TestTheBulkUninstallOnTheWire:
             "app_ids": [1001, 1003],
             "prune_lease_token": "bulk_uninstall:1",
         }
+
+
+def _playtime_service_over(uow: FakeUnitOfWork) -> PlaytimeService:
+    """The real playtime service over a fake unit of work, with no device registered and no RomM to reach."""
+    return PlaytimeService(
+        config=PlaytimeServiceConfig(
+            romm_api=MagicMock(),
+            retry=_make_retry(),
+            device_id_provider=MagicMock(get_device_id=MagicMock(return_value=None)),
+            loop=asyncio.get_running_loop(),
+            logger=LOGGER,
+            clock=FakeClock(),
+            log_debug=MagicMock(),
+            uow_factory=FakeUnitOfWorkFactory(uow),
+            conflict_rules=_make_conflict_rules(),
+        )
+    )
+
+
+class TestTheSessionStartRefusalOnTheWire:
+    """A session start for a ROM with no ``roms`` row, refused by the real service, answers ``unknown_rom``."""
+
+    async def test_an_unknown_rom(self):
+        service = _playtime_service_over(FakeUnitOfWork())
+        endpoints = Endpoints(_make_application(_make_services_bundle(playtime_service=service)), HostStatus())
+
+        message = json.loads(await CallDispatcher(endpoints, LOGGER).dispatch(1, "record_session_start", [42]))
+        await asyncio.gather(*service._flush_tasks)
+
+        assert message["result"] == {"success": False, "reason": "unknown_rom", "message": "Unknown ROM"}
+
+
+def _dispatcher_over_saves(service: Any) -> CallDispatcher:
+    """The real dispatcher over ``Endpoints`` whose save use cases are the real ``SaveService``."""
+    endpoints = Endpoints(_make_application(_make_services_bundle(save_sync_service=service)), HostStatus())
+    return CallDispatcher(endpoints, LOGGER)
+
+
+def _a_shown_conflict(tmp_path: Path) -> tuple[Any, Any]:
+    """A real ``SaveService`` with an installed ROM, a local save and server save 100 in its slot."""
+    svc, fake = make_service(tmp_path)
+    _enable_sync_with_device(svc)
+    _install_rom(svc, tmp_path)
+    _create_save(tmp_path, content=b"local")
+    fake.saves[100] = _server_save_with_syncs(device_syncs=[{"device_id": "device-1", "is_current": False}])
+    return svc, fake
+
+
+class TestTheConflictResolutionOnTheWire:
+    """The conflict resolution's refusals and RomM errors, raised through the real service, reach the wire."""
+
+    async def test_a_romm_error_listing_the_servers_saves_answers_classify_errors_verdict(self, tmp_path):
+        svc, fake = _a_shown_conflict(tmp_path)
+        failure = RommServerError("bad gateway", status_code=502)
+        fake.fail_on_next(failure)
+
+        message = json.loads(
+            await _dispatcher_over_saves(svc).dispatch(
+                1, "resolve_sync_conflict", [42, "pokemon.srm", 100, "keep_local"]
+            )
+        )
+
+        reason, text = classify_error(failure)
+        assert message["result"] == {"success": False, "reason": reason, "message": text}
+
+    async def test_a_romm_error_from_the_transfer_answers_classify_errors_verdict(self, tmp_path, monkeypatch):
+        svc, fake = _a_shown_conflict(tmp_path)
+        failure = RommAuthError("unauthorized")
+
+        def failing_download(*_args, **_kwargs):
+            raise failure
+
+        monkeypatch.setattr(fake, "download_save_content", failing_download)
+
+        message = json.loads(
+            await _dispatcher_over_saves(svc).dispatch(
+                1, "resolve_sync_conflict", [42, "pokemon.srm", 100, "use_server"]
+            )
+        )
+
+        reason, text = classify_error(failure)
+        assert message["result"] == {"success": False, "reason": reason, "message": text}
+
+    async def test_an_os_error_on_the_local_side_answers_resolve_failed(self, tmp_path, monkeypatch):
+        svc, fake = _a_shown_conflict(tmp_path)
+
+        def failing_download(*_args, **_kwargs):
+            raise PermissionError("save directory is read-only")
+
+        monkeypatch.setattr(fake, "download_save_content", failing_download)
+
+        message = json.loads(
+            await _dispatcher_over_saves(svc).dispatch(
+                1, "resolve_sync_conflict", [42, "pokemon.srm", 100, "use_server"]
+            )
+        )
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "resolve_failed",
+            "message": "save directory is read-only",
+        }
+
+    async def test_a_conflict_the_server_has_moved_past_answers_stale_conflict(self, tmp_path):
+        svc, fake = _a_shown_conflict(tmp_path)
+        fake.saves[200] = _server_save_with_syncs(
+            save_id=200,
+            updated_at="2026-03-01T00:00:00Z",
+            device_syncs=[{"device_id": "device-2", "is_current": True}],
+        )
+
+        message = json.loads(
+            await _dispatcher_over_saves(svc).dispatch(
+                1, "resolve_sync_conflict", [42, "pokemon.srm", 100, "keep_local"]
+            )
+        )
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "stale_conflict",
+            "message": "Server save changed since conflict was shown; please retry sync.",
+        }
+
+
+class TestThePartialSaveDeletionOnTheWire:
+    """A save deletion that removed only part answers ``delete_incomplete`` with how many files it removed."""
+
+    @pytest.mark.parametrize(
+        ("route_name", "args", "text"),
+        [
+            ("delete_local_saves", [42], "Deleted 1 file(s), 1 error(s)"),
+            ("delete_platform_saves", ["gba"], "Deleted 1 file(s) from 1 ROM(s), 1 error(s)"),
+        ],
+    )
+    async def test_a_partial_deletion_answers_its_count(self, tmp_path, monkeypatch, route_name, args, text):
+        svc, _fake = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path, content=b"kept", ext=".srm")
+        stuck = _create_save(tmp_path, content=b"stuck", ext=".rtc")
+        store = svc._save_file_store
+        remove_file = store.remove_file
+
+        def remove_all_but_the_stuck_one(path: str) -> None:
+            if path == str(stuck):
+                raise PermissionError(f"cannot remove {path}")
+            remove_file(path)
+
+        monkeypatch.setattr(store, "remove_file", remove_all_but_the_stuck_one)
+
+        message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, route_name, args))
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "delete_incomplete",
+            "message": text,
+            "deleted_count": 1,
+        }
+        assert stuck.exists()

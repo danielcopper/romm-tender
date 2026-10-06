@@ -184,9 +184,9 @@ class TestFinalizePlaytime:
         assert result.total_seconds == 7200
         assert playtime.calls == [99]
 
-    def test_no_session_returns_none(self, event_loop, logger):
-        """Playtime record returns ``success=False`` → ``total_seconds=None``."""
-        playtime = FakePlaytimeRecorder(payload={"success": False, "message": "No active session"})
+    def test_no_session_returns_none_without_a_warning(self, event_loop, logger, caplog):
+        """Playtime record refuses → ``total_seconds=None``, and nothing is logged at WARNING."""
+        playtime = FakePlaytimeRecorder(side_effect=Refused("no_active_session", "No active session"))
         service = _make_service(
             playtime_recorder=playtime,
             post_exit_sync=FakePostExitSync(),
@@ -195,10 +195,35 @@ class TestFinalizePlaytime:
             logger=logger,
         )
 
-        result = event_loop.run_until_complete(service.finalize(99))
-        event_loop.run_until_complete(_drain_background_tasks(service))
+        with caplog.at_level(logging.WARNING, logger=logger.name):
+            result = event_loop.run_until_complete(service.finalize(99))
+            event_loop.run_until_complete(_drain_background_tasks(service))
 
         assert result.total_seconds is None
+        assert [r for r in caplog.records if r.levelno >= logging.WARNING] == []
+
+    def test_an_unreadable_start_returns_none_with_a_warning(self, event_loop, logger, caplog):
+        """Playtime record raises a non-refusal → ``total_seconds=None``, logged at WARNING."""
+        playtime = FakePlaytimeRecorder(side_effect=ValueError("unparseable session timestamps"))
+        service = _make_service(
+            playtime_recorder=playtime,
+            post_exit_sync=FakePostExitSync(),
+            achievement_sync=FakeAchievementSync(),
+            migration_reader=FakeMigrationReader(),
+            logger=logger,
+        )
+
+        with caplog.at_level(logging.WARNING, logger=logger.name):
+            result = event_loop.run_until_complete(service.finalize(99))
+            event_loop.run_until_complete(_drain_background_tasks(service))
+
+        assert result.total_seconds is None
+        assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
+            (
+                logging.WARNING,
+                "SessionLifecycle playtime record failed for rom_id=99: unparseable session timestamps",
+            )
+        ]
 
     def test_exception_returns_none(self, event_loop, logger):
         """Playtime recorder raises → ``total_seconds=None``, downstream still runs."""

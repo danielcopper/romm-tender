@@ -13,6 +13,8 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from models.prune import SaveQuarantine
+
 from domain.save_backup import BACKUP_DIR_NAME, backup_name, is_backup_for
 
 if TYPE_CHECKING:
@@ -215,7 +217,7 @@ class PruneSaveSupport:
 
     def quarantine_prune_saves(
         self, files: list[dict[str, str]], claims: dict[str, SourceClaim] | None = None
-    ) -> dict[str, Any]:
+    ) -> SaveQuarantine:
         """Move exclusive current saves through the sanctioned backup funnel."""
         moved: list[str] = []
         saves_root = self._retrodeck_paths.saves_path()
@@ -237,22 +239,10 @@ class PruneSaveSupport:
                 if outcome["changed"]:
                     moved += [item["path"]]
                 if not outcome["success"]:
-                    return {
-                        "success": False,
-                        "reason": "save_quarantine_failed",
-                        "message": outcome["message"],
-                        "moved": moved,
-                        "ambiguous": outcome["ambiguous"],
-                    }
+                    return SaveQuarantine(moved=moved, ambiguous=outcome["ambiguous"], failure=outcome["message"])
         except Exception as exc:
-            return {
-                "success": False,
-                "reason": "save_quarantine_failed",
-                "message": str(exc),
-                "moved": moved,
-                "ambiguous": False,
-            }
-        return {"success": True, "moved": moved, "ambiguous": False}
+            return SaveQuarantine(moved=moved, ambiguous=True, failure=str(exc))
+        return SaveQuarantine(moved=moved, ambiguous=False)
 
     def validate_prune_absences(self, claims: dict[str, SourceClaim]) -> bool:
         """Require every quarantined purge-owned path to remain absent before cascade."""

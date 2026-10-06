@@ -27,8 +27,7 @@ from domain.playtime import (
     latest_end_time,
     rejected_session_indices,
 )
-from lib.errors import RommForbiddenError, RommNotFoundError, RommUnprocessableEntityError
-from lib.list_result import ErrorCode
+from lib.errors import Refused, RommForbiddenError, RommNotFoundError, RommUnprocessableEntityError
 
 if TYPE_CHECKING:
     import logging
@@ -162,23 +161,27 @@ class PlaytimeService:
         Checks the endpoint's conflict rules, records the start, then begins an
         outbox flush so an offline backlog reaches RomM's native ingest on the
         next launch. The flush is detached — the launch is never held up on the
-        round trip — and holds an operation until it ends.
+        round trip — and holds an operation until it ends. A start that fails
+        still begins the flush, since the backlog it drains is made of earlier
+        sessions.
         """
         async with self._rules.hold("record_session_start", prune=True):
-            result = self._record_session_start(rom_id)
-            flush = self._loop.create_task(self.flush_pending_sessions())
-            self._flush_tasks.add(flush)
-            flush.add_done_callback(self._flush_tasks.discard)
-            await self._rules.retain(flush, "record_session_start")
-            return result
+            try:
+                self._record_session_start(rom_id)
+            finally:
+                flush = self._loop.create_task(self.flush_pending_sessions())
+                self._flush_tasks.add(flush)
+                flush.add_done_callback(self._flush_tasks.discard)
+                await self._rules.retain(flush, "record_session_start")
+            return {"success": True}
 
-    def _record_session_start(self, rom_id: int) -> dict[str, Any]:
+    def _record_session_start(self, rom_id: int) -> None:
         """Record the start of a play session for playtime tracking.
 
         Opens (or re-opens) the session marker on the ROM's ``Playtime``
         aggregate in a short write UoW. A ``rom_id`` with no matching ``roms``
-        row violates the FK at commit; that is reported as a failure rather
-        than auto-creating an identity anchor (ADR-0007).
+        row violates the FK at commit; that is refused as ``unknown_rom``
+        rather than auto-creating an identity anchor (ADR-0007).
         """
         rid = int(rom_id)
         try:
@@ -188,8 +191,7 @@ class PlaytimeService:
                 uow.playtime.save(rid, pt)
         except sqlite3.IntegrityError as e:
             self._log_debug(f"Failed to record session start for rom {rid}: {e}")
-            return {"success": False, "reason": "unknown_rom", "message": "Unknown ROM"}
-        return {"success": True}
+            raise Refused("unknown_rom", "Unknown ROM") from e
 
     async def record_session_end(self, rom_id: int) -> dict[str, Any]:
         """Record end of play session, accumulate playtime delta.
@@ -212,10 +214,11 @@ class PlaytimeService:
         the monotonic delta) into the aggregate and, when this device is
         registered, enqueue the session into the outbox, both in one short write
         UoW. Phase B — flush the outbox to RomM's native ingest outside the
-        transaction (best-effort). Returns the same dict shape the frontend
-        consumes: ``success`` plus ``duration_sec`` / ``total_seconds`` /
-        ``session_count`` on the happy path, or ``success: False`` with a
-        ``message`` otherwise.
+        transaction (best-effort). Returns ``success`` plus ``duration_sec`` /
+        ``total_seconds`` / ``session_count``. Refuses with
+        ``no_active_session`` when no session is open and with ``unknown_rom``
+        when the ROM has no ``roms`` row; a start ``Playtime.record_session``
+        cannot use raises its ``ValueError``.
         """
         ended_at = self._clock.now().isoformat()
         # Capture the monotonic reading at the same session-end instant as
@@ -230,20 +233,13 @@ class PlaytimeService:
             with self._uow_factory() as uow:
                 entry = uow.playtime.get(rom_id)
                 if entry is None or not entry.last_session_start:
-                    return {"success": False, "reason": "no_active_session", "message": "No active session"}
+                    raise Refused("no_active_session", "No active session")
                 # Capture the start markers BEFORE record_session clears them —
                 # started_at keys the outbox row and RomM's dedup; the monotonic
                 # start feeds the verification log line.
                 started_at = entry.last_session_start
                 monotonic_start = entry.last_session_start_monotonic
-                try:
-                    entry.record_session(ended_at, monotonic_end=monotonic_end)
-                except ValueError:
-                    return {
-                        "success": False,
-                        "reason": ErrorCode.UNKNOWN.value,
-                        "message": "Failed to calculate session duration",
-                    }
+                entry.record_session(ended_at, monotonic_end=monotonic_end)
                 duration = entry.last_session_duration_sec or 0
                 self._log_debug(
                     _session_debug_line(rom_id, started_at, ended_at, monotonic_start, monotonic_end, duration)
@@ -274,7 +270,7 @@ class PlaytimeService:
                 session_count = entry.session_count
         except sqlite3.IntegrityError as e:
             self._log_debug(f"Failed to record session end for rom {rom_id}: {e}")
-            return {"success": False, "reason": "unknown_rom", "message": "Unknown ROM"}
+            raise Refused("unknown_rom", "Unknown ROM") from e
 
         # Best-effort native-ingest flush (outside the UoW). _flush_pending_sessions_io
         # is itself never-raising, but the outer catch stays as defence-in-depth so a
