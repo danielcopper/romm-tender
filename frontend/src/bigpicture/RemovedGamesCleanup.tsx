@@ -1088,7 +1088,7 @@ export const RemovedGamesCleanupSection: FC<{ onScanRead?: (read: PageRead<numbe
       }
     } catch (e) {
       logError(`Removed-game cleanup scan failed: ${e}`);
-      showToast(`Could not scan removed RomM games: ${e}`);
+      showToast("Could not scan removed RomM games.", { subtext: `${e}` });
     } finally {
       setScanning(false);
     }

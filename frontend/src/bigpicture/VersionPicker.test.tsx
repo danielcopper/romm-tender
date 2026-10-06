@@ -516,7 +516,11 @@ describe("VersionPicker — vanished retained rows (#1570)", () => {
     });
 
     expect(log).toHaveBeenCalledWith(expect.stringContaining("offline"));
-    expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body: "Could not prepare local cleanup." });
+    expect(toaster.toast).toHaveBeenCalledWith({
+      title: "Tender",
+      body: "Could not prepare local cleanup.",
+      subtext: "Error: offline",
+    });
   });
 });
 

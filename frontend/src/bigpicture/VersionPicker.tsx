@@ -448,7 +448,7 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
         })
         .catch((error) => {
           logError(`VersionPicker: cleanup preview failed for rom ${romId}: ${error}`);
-          showToast("Could not prepare local cleanup.");
+          showToast("Could not prepare local cleanup.", { subtext: `${error}` });
         }),
     );
   };

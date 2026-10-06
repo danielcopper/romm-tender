@@ -355,7 +355,8 @@ describe("RemovedGamesCleanup", () => {
     await waitFor(() =>
       expect(toaster.toast).toHaveBeenCalledWith({
         title: "Tender",
-        body: "Could not scan removed RomM games: Error: offline",
+        body: "Could not scan removed RomM games.",
+        subtext: "Error: offline",
       }),
     );
 
@@ -371,7 +372,8 @@ describe("RemovedGamesCleanup", () => {
     await waitFor(() =>
       expect(toaster.toast).toHaveBeenCalledWith({
         title: "Tender",
-        body: "Could not scan removed RomM games: HostTransportError: answer is 13000000 bytes, over the 12582912-byte limit",
+        body: "Could not scan removed RomM games.",
+        subtext: "HostTransportError: answer is 13000000 bytes, over the 12582912-byte limit",
       }),
     );
   });
