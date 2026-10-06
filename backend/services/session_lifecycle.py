@@ -272,19 +272,19 @@ class SessionLifecycleService:
     async def _record_playtime(self, rom_id: int) -> int | None:
         """Record session end and return the updated ``total_seconds``.
 
-        Returns ``None`` on any non-success outcome (no active session,
-        malformed timestamp, downstream exception) so the frontend
-        knows to leave Steam's playtime display alone. Suspend time is
-        excluded by the recorder via the monotonic clock (#1148).
+        Returns ``None`` when there is no total to show, so the frontend
+        knows to leave Steam's playtime display alone: quietly for a
+        refusal the recorder raises, with a warning for any other
+        exception.
         """
         try:
             result = await self._playtime_recorder.record_session_end(rom_id)
+        except Refused:
+            return None
         except Exception as e:
             self._logger.warning(f"SessionLifecycle playtime record failed for rom_id={rom_id}: {e}")
             return None
 
-        if not result.get("success"):
-            return None
         total = result.get("total_seconds")
         if not isinstance(total, int):
             return None

@@ -533,10 +533,9 @@ class SessionPlaytimeRecorder(Protocol):
     """Playtime end-of-session record consumed by SessionLifecycleService.
 
     The composition root satisfies this with ``PlaytimeService``'s
-    ``record_session_end``. The lifecycle service forwards the
-    ``total_seconds`` field to the frontend so the playtime display can
-    be updated; a falsy ``success`` value yields ``total_seconds=None``
-    on the returned DTO so the frontend leaves the display untouched.
+    ``record_session_end``, which returns the success answer and raises
+    its refusal. The lifecycle service forwards the ``total_seconds``
+    field to the frontend so the playtime display can be updated.
     Device-suspend time is excluded by the recorder itself via the
     monotonic clock (#1148); the caller passes no suspend duration.
     """

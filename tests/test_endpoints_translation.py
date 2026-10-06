@@ -23,7 +23,7 @@ from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
-from _factories import _make_application, _make_conflict_rules, _make_services_bundle
+from _factories import _make_application, _make_conflict_rules, _make_retry, _make_services_bundle
 from bootstrap import ServicesBundle
 from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcessControlAdapter
@@ -61,6 +61,7 @@ from lib.partial_failure import PartialFailure
 from main import Endpoints
 from services.connection import ConnectionService, ConnectionServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
+from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
 
 _MAIN_PY = Path(__file__).resolve().parents[1] / "backend" / "main.py"
@@ -676,3 +677,33 @@ class TestTheBulkUninstallOnTheWire:
             "app_ids": [1001, 1003],
             "prune_lease_token": "bulk_uninstall:1",
         }
+
+
+def _playtime_service_over(uow: FakeUnitOfWork) -> PlaytimeService:
+    """The real playtime service over a fake unit of work, with no device registered and no RomM to reach."""
+    return PlaytimeService(
+        config=PlaytimeServiceConfig(
+            romm_api=MagicMock(),
+            retry=_make_retry(),
+            device_id_provider=MagicMock(get_device_id=MagicMock(return_value=None)),
+            loop=asyncio.get_running_loop(),
+            logger=LOGGER,
+            clock=FakeClock(),
+            log_debug=MagicMock(),
+            uow_factory=FakeUnitOfWorkFactory(uow),
+            conflict_rules=_make_conflict_rules(),
+        )
+    )
+
+
+class TestTheSessionStartRefusalOnTheWire:
+    """A session start for a ROM with no ``roms`` row, refused by the real service, answers ``unknown_rom``."""
+
+    async def test_an_unknown_rom(self):
+        service = _playtime_service_over(FakeUnitOfWork())
+        endpoints = Endpoints(_make_application(_make_services_bundle(playtime_service=service)), HostStatus())
+
+        message = json.loads(await CallDispatcher(endpoints, LOGGER).dispatch(1, "record_session_start", [42]))
+        await asyncio.gather(*service._flush_tasks)
+
+        assert message["result"] == {"success": False, "reason": "unknown_rom", "message": "Unknown ROM"}

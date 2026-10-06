@@ -16,6 +16,7 @@ from fakes.system_time import FakeClock
 from domain.playtime import PendingPlaySession, Playtime
 from domain.rom import Rom
 from lib.errors import (
+    Refused,
     RommApiError,
     RommConnectionError,
     RommForbiddenError,
@@ -163,6 +164,31 @@ class TestTheSessionStartFlush:
 
         assert task.cancelled()
 
+    async def test_a_start_refused_for_an_unknown_rom_still_begins_a_flush(self, monkeypatch):
+        prune_conflicts = _make_prune_conflicts()
+        svc, _, _ = make_service(conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts))
+        release = asyncio.Event()
+        flushed: list[bool] = []
+
+        async def flush() -> None:
+            await release.wait()
+            flushed.append(True)
+
+        monkeypatch.setattr(svc, "flush_pending_sessions", flush)
+
+        coro = svc.record_session_start(7)
+        with pytest.raises(Refused) as refused:
+            await coro
+
+        assert (refused.value.reason, refused.value.message) == ("unknown_rom", "Unknown ROM")
+        assert len(svc._flush_tasks) == 1
+        assert sorted(holder.label for holder in prune_conflicts._operations.values()) == ["record_session_start"]
+        release.set()
+        await asyncio.gather(*svc._flush_tasks)
+        await asyncio.gather(*prune_conflicts._release_tasks)
+        assert flushed == [True]
+        assert prune_conflicts.conflicting_operations == 0
+
     async def test_shutdown_with_no_flush_is_a_no_op(self):
         svc = self._service_over(_make_prune_conflicts())
 
@@ -218,14 +244,15 @@ class TestRecordSession:
         await asyncio.gather(*svc._flush_tasks)
 
     @pytest.mark.asyncio
-    async def test_start_on_orphan_rom_id_fails(self):
-        """No ``roms`` row → FK violation at commit → failure dict, not committed."""
+    async def test_start_on_orphan_rom_id_refuses(self):
+        """No ``roms`` row → FK violation at commit → ``unknown_rom`` refusal, not committed."""
         svc, _, uow = make_service()  # no _seed_rom
 
-        result = await svc.record_session_start(42)
+        coro = svc.record_session_start(42)
+        with pytest.raises(Refused) as refused:
+            await coro
 
-        assert result["success"] is False
-        assert "Unknown ROM" in result["message"]
+        assert (refused.value.reason, refused.value.message) == ("unknown_rom", "Unknown ROM")
         assert uow.committed is False
         await asyncio.gather(*svc._flush_tasks)
 
@@ -252,10 +279,11 @@ class TestRecordSession:
         svc, _, uow = make_service()
         _seed_playtime(uow, 42, Playtime())  # no open session
 
-        result = await svc.record_session_end(42)
+        coro = svc.record_session_end(42)
+        with pytest.raises(Refused) as refused:
+            await coro
 
-        assert result["success"] is False
-        assert "No active session" in result["message"]
+        assert (refused.value.reason, refused.value.message) == ("no_active_session", "No active session")
 
     @pytest.mark.asyncio
     async def test_end_with_no_aggregate(self):
@@ -263,21 +291,35 @@ class TestRecordSession:
         svc, _, uow = make_service()
         _seed_rom(uow, 42)  # roms row exists, no playtime row
 
-        result = await svc.record_session_end(42)
+        coro = svc.record_session_end(42)
+        with pytest.raises(Refused) as refused:
+            await coro
 
-        assert result["success"] is False
-        assert "No active session" in result["message"]
+        assert (refused.value.reason, refused.value.message) == ("no_active_session", "No active session")
+
+    @pytest.mark.asyncio
+    async def test_end_on_orphan_rom_id_refuses(self):
+        """An open session whose ROM has no ``roms`` row → FK violation at commit → ``unknown_rom``."""
+        clk = FakeClock(now=datetime(2026, 1, 1, 0, 1, tzinfo=UTC))
+        svc, _, uow = make_service(clock=clk)
+        start = (clk.now() - timedelta(seconds=60)).isoformat()
+        uow.playtime.save(42, Playtime(last_session_start=start))  # no roms row, written past the FK check
+
+        coro = svc.record_session_end(42)
+        with pytest.raises(Refused) as refused:
+            await coro
+
+        assert (refused.value.reason, refused.value.message) == ("unknown_rom", "Unknown ROM")
 
     @pytest.mark.asyncio
     async def test_end_with_unparseable_start(self):
-        """Malformed last_session_start -> record_session raises -> failure."""
+        """Malformed last_session_start -> record_session's ValueError propagates."""
         svc, _, uow = make_service()
         _seed_playtime(uow, 42, Playtime(last_session_start="not-a-date"))
 
-        result = await svc.record_session_end(42)
-
-        assert result["success"] is False
-        assert "Failed to calculate session duration" in result["message"]
+        coro = svc.record_session_end(42)
+        with pytest.raises(ValueError, match="unparseable session timestamps"):
+            await coro
 
     @pytest.mark.asyncio
     async def test_multiple_sessions_accumulate(self):
@@ -713,10 +755,12 @@ class TestPlaytimeTracking:
 
     @pytest.mark.asyncio
     async def test_end_without_start(self, playtime):
-        """record_session_end without active session returns failure."""
-        result = await playtime.service.record_session_end(42)
+        """record_session_end without active session refuses."""
+        coro = playtime.service.record_session_end(42)
+        with pytest.raises(Refused) as refused:
+            await coro
 
-        assert result["success"] is False
+        assert refused.value.reason == "no_active_session"
 
     @pytest.mark.asyncio
     async def test_session_start_clears_on_end(self, playtime):

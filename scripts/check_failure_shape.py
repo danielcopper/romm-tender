@@ -113,6 +113,7 @@ CONVERTED_MODULES: tuple[str, ...] = (
     "backend/services/firmware/service.py",
     "backend/services/game_process.py",
     "backend/services/library/service.py",
+    "backend/services/playtime.py",
     "backend/services/relaunch_options_resolver.py",
     "backend/services/rom_removal.py",
     "backend/services/session_lifecycle.py",
