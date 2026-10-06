@@ -203,10 +203,10 @@ it moves no binding.
 
 A server-only target already requires its full RomM detail for membership validation and row construction. That fetch
 keeps its normal retry policy, doubles as the liveness verdict, and receives no second probe. Its typed 404 produces the
-same `version_vanished` refusal; other failures retain their ordinary classified reason. Network I/O remains outside the
-short write UoW, whose fresh membership and bound-elsewhere checks still decide SQLite races. This leaves an unavoidable
-cross-system interval after a successful response: the liveness check reduces stale-list risk but is not a transaction
-with RomM.
+same `version_vanished` refusal; other RomM errors keep their ordinary classified reason. Network I/O remains outside
+the short write UoW, whose fresh membership and bound-elsewhere checks still decide SQLite races. This leaves an
+unavoidable cross-system interval after a successful response: the liveness check reduces stale-list risk but is not a
+transaction with RomM.
 
 ## Explicit cleanup of vanished versions
 
