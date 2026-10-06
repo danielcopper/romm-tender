@@ -2,8 +2,9 @@
  * Custom Play button that replaces the native Steam Play button on RomM game
  * detail pages. Primary states (the full set is `PlayButtonState`):
  * - Download: ROM not installed, click to download. The same state, while
- *   the recorded file of an installed ROM is gone, says so and offers
- *   Download again and Forget this download instead, and no Play
+ *   the recorded file of an installed ROM is gone, is a split button the size
+ *   of Play — Download again, with Forget this download in its dropdown — over
+ *   a one-line "File missing" note, and no Play
  * - Play: ROM installed, launches the game (with pre-launch save sync)
  * - Checking: the launch check is running, before any sync
  * - Syncing: Save sync in progress before launch
@@ -51,11 +52,11 @@ import { runDownloadWithAdoption } from "../utils/adoptFlow";
 import { RESUME_TARGET_OCCUPIED_TOAST } from "../utils/adoptWording";
 import {
   DOWNLOAD_AGAIN_LABEL,
+  FILE_MISSING_NOTE,
   FORGET_DOWNLOAD_LABEL,
   FORGETTING_LABEL,
   FORGET_FAILED_TOAST,
   downloadForgottenToast,
-  fileMissingNote,
   forgetRefusedToast,
 } from "../utils/missingDownloadWording";
 import { showAdoptExistingModal } from "./AdoptExistingModal";
@@ -68,6 +69,7 @@ import { handleConflicts } from "../shared/SyncConflictModal";
 import { showOfflineDriftModal } from "../shared/OfflineDriftModal";
 import { showFallbackLaunchModal } from "../shared/FallbackLaunchModal";
 import { showStopGameModal } from "./StopGameModal";
+import { showForgetDownloadModal } from "./ForgetDownloadModal";
 import { getMigrationState } from "../utils/migrationStore";
 import { runLaunchGate, markLaunchSkipped, LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "../utils/launchGate";
 import { NO_LAUNCH_TARGET_TOAST_BODY, romHasLaunchTarget } from "../utils/launchTarget";
@@ -1225,11 +1227,18 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   };
 
   const handleForget = async () => {
-    if (!romId || forgetPendingRef.current) return;
+    if (!romId || missingPath === null || forgetPendingRef.current) return;
+    const rid = romId;
+    // The play row's note names no path, so the question does: what is
+    // forgotten is the record of a file at that place.
+    if (!(await showForgetDownloadModal(romName, missingPath))) return;
+    // Claimed only once confirmed, so an abandoned confirmation leaves nothing
+    // pending; checked again because a second confirmation can land meanwhile.
+    if (forgetPendingRef.current) return;
     forgetPendingRef.current = true;
     setForgetPending(true);
     try {
-      const result = await removeInstallRecord(romId, () => forgetDownload(romId), "Forget download");
+      const result = await removeInstallRecord(rid, () => forgetDownload(rid), "Forget download");
       showToast(result.success ? downloadForgottenToast(romName) : forgetRefusedToast(result));
     } catch {
       showToast(FORGET_FAILED_TOAST);
@@ -1250,6 +1259,26 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
           }}
         >
           Uninstall
+        </MenuItem>
+      </Menu>,
+      getEventTarget(e),
+    );
+  };
+
+  // The missing-file split button's menu: the one action besides Download
+  // again. The item opens a confirmation rather than forgetting at once.
+  const showMissingDownloadMenu = (e: MouseEvent) => {
+    showContextMenu(
+      <Menu label="RomM Actions">
+        <MenuItem
+          key="forget"
+          tone="destructive"
+          disabled={forgetPending}
+          onClick={() => {
+            detach(handleForget());
+          }}
+        >
+          {FORGET_DOWNLOAD_LABEL}
         </MenuItem>
       </Menu>,
       getEventTarget(e),
@@ -1563,39 +1592,65 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     );
 
     if (missingPath !== null && !downloading && !actionPending) {
+      // The Play button's shape — a 200px split of main action and chevron — so
+      // the play row keeps its height and its stats their width. The note sits
+      // out of the flow, under the button, so it adds no height either.
+      const dropdownBg = isOffline
+        ? "linear-gradient(to right, #5a6a7a, #4d5d6d)"
+        : "linear-gradient(to right, #1580cc, #0062ad)";
       return (
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          <Focusable
-            ref={containerRef}
-            className={appActionButtonClasses?.PlayButtonContainer}
-            flow-children="horizontal"
-            style={{ display: "flex", flexDirection: "row", gap: "8px", height: "48px" }}
-          >
+        <div style={{ position: "relative" }}>
+          <Focusable ref={containerRef} className={appActionButtonClasses?.PlayButtonContainer} style={btnContainerStyle}>
             <DialogButton
               className={[appActionButtonClasses?.PlayButton, "romm-btn-download", "romm-btn-download-idle"]
                 .filter(Boolean)
                 .join(" ")}
-              style={{ ...mainBtnStyle, borderRadius: "2px", background: baseBg }}
+              style={{ ...mainBtnStyle, borderRadius: "2px 0 0 2px", background: baseBg }}
               onClick={() => {
                 detach(handleDownload());
               }}
+              onFocus={scrollToTop}
               disabled={forgetPending || isOffline || downloadBlockedByVanished}
             >
-              <span className="romm-dl-label">{DOWNLOAD_AGAIN_LABEL}</span>
+              <span className="romm-dl-label">{forgetPending ? FORGETTING_LABEL : DOWNLOAD_AGAIN_LABEL}</span>
             </DialogButton>
             <DialogButton
-              className="romm-btn-cancel romm-btn-forget"
-              style={{ ...mainBtnStyle, borderRadius: "2px", background: "rgba(255, 255, 255, 0.15)" }}
-              onClick={() => {
-                detach(handleForget());
-              }}
+              className="romm-btn-dropdown"
+              aria-label={FORGET_DOWNLOAD_LABEL}
+              title={FORGET_DOWNLOAD_LABEL}
+              style={{ ...dropdownArrowStyle, background: dropdownBg, color: "#fff" }}
+              onClick={showMissingDownloadMenu}
+              onFocus={scrollToTop}
               disabled={forgetPending}
             >
-              {forgetPending ? FORGETTING_LABEL : FORGET_DOWNLOAD_LABEL}
+              <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M1 1.5L6 6.5L11 1.5"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </DialogButton>
           </Focusable>
-          <div className="romm-file-missing-note" style={{ fontSize: "13px", color: "#d4a72c", wordBreak: "break-all" }}>
-            {fileMissingNote(missingPath)}
+          <div
+            className="romm-file-missing-note"
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: 0,
+              width: "100%",
+              marginTop: "2px",
+              fontSize: "12px",
+              lineHeight: "14px",
+              color: "#d4a72c",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {FILE_MISSING_NOTE}
           </div>
         </div>
       );

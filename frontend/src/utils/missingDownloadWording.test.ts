@@ -4,16 +4,32 @@ import {
   FORGET_DOWNLOAD_LABEL,
   FORGETTING_LABEL,
   FORGET_FAILED_TOAST,
+  FILE_MISSING_NOTE,
+  FORGET_CONFIRM_BUTTON,
   downloadForgottenToast,
-  fileMissingNote,
+  forgetConfirmDescription,
   forgetRefusedToast,
 } from "./missingDownloadWording";
 
 describe("missingDownloadWording", () => {
-  it("names the recorded path in the note", () => {
-    expect(fileMissingNote("/run/media/deck/SD/roms/snes/Game.sfc")).toBe(
-      "File missing at /run/media/deck/SD/roms/snes/Game.sfc",
+  it("says the file is missing in the note, without a path", () => {
+    expect(FILE_MISSING_NOTE).toBe("File missing");
+  });
+
+  it("names the game and the recorded path in the forget confirmation", () => {
+    expect(forgetConfirmDescription("Chrono Trigger", "/run/media/deck/SD/roms/snes/Game.sfc")).toBe(
+      "Forget the download of Chrono Trigger? Its file is missing at /run/media/deck/SD/roms/snes/Game.sfc.",
     );
+  });
+
+  it("asks about this game when the name is not known yet", () => {
+    expect(forgetConfirmDescription("", "/sd/g.z64")).toBe(
+      "Forget the download of this game? Its file is missing at /sd/g.z64.",
+    );
+  });
+
+  it("labels the confirmation's forget button", () => {
+    expect(FORGET_CONFIRM_BUTTON).toBe("Forget");
   });
 
   it("labels the two actions", () => {

@@ -19,7 +19,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { cleanup, render, waitFor, act, within } from "@testing-library/react";
 import { toaster } from "../api/host";
-import { showContextMenu, Navigation } from "@decky/ui";
+import { showContextMenu, showModal, Navigation } from "@decky/ui";
 import * as deckyUi from "@decky/ui";
 import type { ReactElement } from "react";
 import { CustomPlayButton } from "./CustomPlayButton";
@@ -5171,6 +5171,15 @@ describe("CustomPlayButton — the disabled state buttons' markup", () => {
 describe("CustomPlayButton — a download whose file is missing (#2188 D23)", () => {
   const MISSING = "/run/media/deck/SD/retrodeck/roms/n64/game.z64";
 
+  interface ForgetConfirmProps {
+    strTitle?: string;
+    strDescription?: string;
+    strOKButtonText?: string;
+    strCancelButtonText?: string;
+    onOK?: () => void;
+    onCancel?: () => void;
+  }
+
   beforeEach(() => {
     vi.mocked(getCachedGameDetail).mockReset();
     vi.mocked(backend.startDownload).mockReset();
@@ -5181,6 +5190,8 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     vi.mocked(setLaunchOptionsConfirmed).mockReset();
     vi.mocked(setLaunchOptionsConfirmed).mockResolvedValue(true);
     vi.mocked(toaster.toast).mockReset();
+    vi.mocked(showModal).mockClear();
+    vi.mocked(showContextMenu).mockClear();
   });
 
   const cancelledFrame = (): DownloadProgressEvent => ({
@@ -5194,15 +5205,89 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     total_bytes: 1000,
   });
 
-  it("names the missing path and offers both actions, and no Play", async () => {
-    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
-    const { findByText, getByText, queryByText } = render(<CustomPlayButton appId={100} />);
+  /** Open the split button's dropdown and return the menu it shows, rendered. */
+  const openMissingMenu = (container: HTMLElement) => {
+    const chevron = container.querySelector(".romm-btn-dropdown") as HTMLElement | null;
+    if (!chevron) throw new Error("dropdown chevron not rendered");
+    act(() => {
+      chevron.click();
+    });
+    const calls = vi.mocked(showContextMenu).mock.calls;
+    return within(render(calls[calls.length - 1]![0] as ReactElement).container);
+  };
 
-    expect(await findByText(`File missing at ${MISSING}`)).toBeInTheDocument();
+  /**
+   * Choose "Forget this download" from the dropdown and return the
+   * confirmation it asks, as the props `showModal` was handed.
+   */
+  const chooseForget = async (container: HTMLElement): Promise<ForgetConfirmProps> => {
+    const menu = openMissingMenu(container);
+    const item = await menu.findByText("Forget this download");
+    const before = vi.mocked(showModal).mock.calls.length;
+    act(() => {
+      item.click();
+    });
+    const calls = vi.mocked(showModal).mock.calls;
+    expect(calls.length).toBe(before + 1);
+    return (calls[calls.length - 1]![0] as ReactElement<ForgetConfirmProps>).props;
+  };
+
+  const confirm = (props: ForgetConfirmProps) =>
+    act(async () => {
+      props.onOK?.();
+      for (let index = 0; index < 8; index++) await Promise.resolve();
+    });
+
+  it("shows a split Download again button, a one-line note without the path, and no Play", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
+    const { container, findByText, getByText, queryByText } = render(<CustomPlayButton appId={100} />);
+
+    const note = await findByText("File missing");
+    expect(note.style.whiteSpace).toBe("nowrap");
+    expect(container.textContent).not.toContain(MISSING);
     expect(getByText("Download again").closest("button")).not.toBeNull();
-    expect(getByText("Forget this download").closest("button")).not.toBeNull();
+    expect(queryByText("Forget this download")).toBeNull();
     expect(queryByText("Play")).toBeNull();
     expect(queryByText("Download")).toBeNull();
+  });
+
+  it("offers Forget this download in the split button's dropdown", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Download again");
+
+    const menu = openMissingMenu(container);
+
+    expect(await menu.findByText("Forget this download")).toBeInTheDocument();
+    expect(menu.queryByText("Uninstall")).toBeNull();
+  });
+
+  it("is the size of the Play button", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: null });
+    const play = render(<CustomPlayButton appId={100} />);
+    const playContainer = (await play.findByText("Play")).closest("button")!.parentElement!;
+    const playSize = [playContainer.style.width, playContainer.style.height];
+    expect(playContainer.querySelectorAll("button")).toHaveLength(2);
+    play.unmount();
+
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
+    const missing = render(<CustomPlayButton appId={100} />);
+    const missingContainer = (await missing.findByText("Download again")).closest("button")!.parentElement!;
+
+    expect([missingContainer.style.width, missingContainer.style.height]).toEqual(playSize);
+    expect(playSize).toEqual(["200px", "48px"]);
+    expect(missingContainer.querySelectorAll("button")).toHaveLength(2);
+    expect(missingContainer.querySelector(".romm-btn-dropdown")).not.toBeNull();
+  });
+
+  it("keeps the note out of the play row's height", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
+    const { findByText } = render(<CustomPlayButton appId={100} />);
+
+    const note = await findByText("File missing");
+
+    expect(note.style.position).toBe("absolute");
+    expect(note.style.top).toBe("100%");
   });
 
   it("offers Play when the recorded file is there", async () => {
@@ -5216,7 +5301,7 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
   it("keeps saying the file is missing over a save-sync broadcast", async () => {
     mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
     const { findByText, queryByText } = render(<CustomPlayButton appId={100} />);
-    await findByText(`File missing at ${MISSING}`);
+    await findByText("File missing");
 
     act(() => {
       globalThis.dispatchEvent(
@@ -5225,7 +5310,7 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     });
 
     expect(queryByText("Play")).toBeNull();
-    expect(queryByText(`File missing at ${MISSING}`)).toBeInTheDocument();
+    expect(queryByText("File missing")).toBeInTheDocument();
   });
 
   it("starts an ordinary download on Download again", async () => {
@@ -5250,11 +5335,11 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
       again.click();
       await Promise.resolve();
     });
-    expect(queryByText(`File missing at ${MISSING}`)).toBeNull();
+    expect(queryByText("File missing")).toBeNull();
 
     act(() => emitHostEvent<DownloadProgressEvent>("download_progress", cancelledFrame()));
 
-    expect(await findByText(`File missing at ${MISSING}`)).toBeInTheDocument();
+    expect(await findByText("File missing")).toBeInTheDocument();
     expect(queryByText("Play")).toBeNull();
   });
 
@@ -5278,15 +5363,43 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     expect(queryByText(/File missing/)).toBeNull();
   });
 
-  it("forgets the download, clears the shortcut's launch command and offers Download", async () => {
+  it("asks before forgetting, naming the game and the missing path", async () => {
     mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
-    const { findByText, queryByText } = render(<CustomPlayButton appId={100} />);
-    const forget = (await findByText("Forget this download")).closest("button")!;
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Download again");
 
+    const props = await chooseForget(container);
+
+    expect(props.strTitle).toBe("Forget this download");
+    expect(props.strDescription).toBe(`Forget the download of Test ROM? Its file is missing at ${MISSING}.`);
+    expect(props.strOKButtonText).toBe("Forget");
+    expect(props.strCancelButtonText).toBe("Cancel");
+    expect(vi.mocked(backend.forgetDownload)).not.toHaveBeenCalled();
+  });
+
+  it("forgets nothing when the confirmation is cancelled", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Download again");
+
+    const props = await chooseForget(container);
     await act(async () => {
-      forget.click();
-      for (let index = 0; index < 5; index++) await Promise.resolve();
+      props.onCancel?.();
+      for (let index = 0; index < 8; index++) await Promise.resolve();
     });
+
+    expect(vi.mocked(backend.forgetDownload)).not.toHaveBeenCalled();
+    expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
+    expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
+    expect(await findByText("File missing")).toBeInTheDocument();
+  });
+
+  it("forgets the download once confirmed, clears the shortcut's launch command and offers Download", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
+    const { container, findByText, queryByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Download again");
+
+    await confirm(await chooseForget(container));
 
     expect(vi.mocked(backend.forgetDownload)).toHaveBeenCalledWith(42);
     expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, "");
@@ -5305,16 +5418,13 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
       path: MISSING,
     });
     mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
-    const { findByText } = render(<CustomPlayButton appId={100} />);
-    const forget = (await findByText("Forget this download")).closest("button")!;
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Download again");
 
-    await act(async () => {
-      forget.click();
-      for (let index = 0; index < 5; index++) await Promise.resolve();
-    });
+    await confirm(await chooseForget(container));
 
     expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
-    expect(await findByText(`File missing at ${MISSING}`)).toBeInTheDocument();
+    expect(await findByText("File missing")).toBeInTheDocument();
     expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
       expect.objectContaining({ body: `The file is back at ${MISSING}. Reopen the game page to play.` }),
     );
@@ -5336,14 +5446,14 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     mockCachedDetail({ rom_id: 7, installed: true, file_missing_at: MISSING });
     await switchVersion(7);
 
-    expect(await findByText(`File missing at ${MISSING}`)).toBeInTheDocument();
+    expect(await findByText("File missing")).toBeInTheDocument();
     expect(queryByText("Play")).toBeNull();
   });
 
   it("offers Play after a switch away to a version whose file is there", async () => {
     mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
     const { findByText, queryByText } = render(<CustomPlayButton appId={100} />);
-    await findByText(`File missing at ${MISSING}`);
+    await findByText("File missing");
 
     mockCachedDetail({ rom_id: 7, installed: true, file_missing_at: null });
     await switchVersion(7);
@@ -5352,7 +5462,7 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     expect(queryByText(/File missing/)).toBeNull();
   });
 
-  it("sends one forget for a double press", async () => {
+  it("sends one forget for two confirmations", async () => {
     let release: (value: { success: boolean; message: string }) => void = () => {};
     vi.mocked(backend.forgetDownload).mockReturnValue(
       new Promise((resolve) => {
@@ -5360,19 +5470,30 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
       }),
     );
     mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
-    const { findByText } = render(<CustomPlayButton appId={100} />);
-    const forget = (await findByText("Forget this download")).closest("button")!;
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Download again");
+    const first = await chooseForget(container);
+    const second = await chooseForget(container);
 
-    act(() => {
-      forget.click();
-      forget.click();
-    });
+    await confirm(first);
+    await confirm(second);
     await act(async () => {
       release({ success: true, message: "Download forgotten" });
       for (let index = 0; index < 5; index++) await Promise.resolve();
     });
 
     expect(vi.mocked(backend.forgetDownload)).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads Forgetting... on the split button while the forget runs", async () => {
+    vi.mocked(backend.forgetDownload).mockReturnValue(new Promise(() => {}));
+    mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Download again");
+
+    await confirm(await chooseForget(container));
+
+    expect((await findByText("Forgetting...")).closest("button")).toBeDisabled();
   });
 
   it("does not bring the note back once the download completed", async () => {
@@ -5410,17 +5531,15 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
   it("says why when the forget cannot be reached", async () => {
     vi.mocked(backend.forgetDownload).mockRejectedValue(new Error("socket closed"));
     mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING });
-    const { findByText } = render(<CustomPlayButton appId={100} />);
-    const forget = (await findByText("Forget this download")).closest("button")!;
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Download again");
 
-    await act(async () => {
-      forget.click();
-      for (let index = 0; index < 5; index++) await Promise.resolve();
-    });
+    await confirm(await chooseForget(container));
 
     expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
       expect.objectContaining({ body: "Couldn't forget the download" }),
     );
-    expect(await findByText("Forget this download")).toBeInTheDocument();
+    expect(await findByText("File missing")).toBeInTheDocument();
+    expect((await findByText("Download again")).closest("button")).not.toBeDisabled();
   });
 });

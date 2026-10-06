@@ -1,10 +1,13 @@
 /**
- * The words of a download whose file is missing: the game page's note naming
- * where the file was, its two actions, and how a "Forget this download" press
+ * The words of a download whose file is missing: the game page's note, its two
+ * actions, the confirmation a "Forget this download" asks, and how the forget
  * ended. One home, so the button and its tests state the case the same way.
- * The note names the path the install record holds and says nothing about why
- * the file is gone, which Tender cannot know.
+ * The note stays one short line beside the play row's stats; the path the
+ * install record holds is named by the confirmation, and nothing says why the
+ * file is gone, which Tender cannot know.
  */
+
+export const FILE_MISSING_NOTE = "File missing";
 
 export const DOWNLOAD_AGAIN_LABEL = "Download again";
 
@@ -15,8 +18,10 @@ export const FORGETTING_LABEL = "Forgetting...";
 
 export const FORGET_FAILED_TOAST = "Couldn't forget the download";
 
-export function fileMissingNote(path: string): string {
-  return `File missing at ${path}`;
+export const FORGET_CONFIRM_BUTTON = "Forget";
+
+export function forgetConfirmDescription(romName: string, path: string): string {
+  return `Forget the download of ${romName || "this game"}? Its file is missing at ${path}.`;
 }
 
 /**
