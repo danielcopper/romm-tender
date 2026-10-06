@@ -452,7 +452,7 @@ class FirmwareStatusReader:
         """
         slug = plat["platform_slug"]
         system = self._resolve_system(slug)
-        options = self._core_info.get_emulator_options(system)
+        options = await self._loop.run_in_executor(None, self._core_info.get_emulator_options, system)
         emulator = self._platform_emulator(slug, options)
         identity = emulator.emulator if emulator is not None else None
         plat["active_core"] = identity
@@ -675,7 +675,7 @@ class FirmwareStatusReader:
         """
         system = self._resolve_system(platform_slug)
         fw_slugs = firmware_paths.resolve_firmware_slugs(platform_slug)
-        options = self._core_info.get_emulator_options(system)
+        options = await self._loop.run_in_executor(None, self._core_info.get_emulator_options, system)
         pick = self._resolve_launching_emulator(platform_slug, options, launching_emulator)
         identity = pick.emulator if pick is not None else None
 

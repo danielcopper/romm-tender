@@ -349,7 +349,7 @@ class FirmwareDownloader:
             return failure
 
         system = self._resolve_system(platform_slug)
-        identity = self._platform_emulator_identity(system, platform_slug)
+        identity = await self._loop.run_in_executor(None, self._platform_emulator_identity, system, platform_slug)
         catalogue = await self._platform_catalogue(system)
         placements = catalogue.by_file_name()
         groups = catalogue.groups_for(identity)

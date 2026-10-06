@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import logging
 import os
+import threading
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -5860,3 +5861,40 @@ class TestAPendingMigrationRefusesEveryDownloadAndDelete:
             await getattr(service, method)(*args)
 
         reached.assert_not_awaited()
+
+
+class TestTheEmulatorListIsReadOffTheLoop:
+    """The catalogue read is a live read of the resolver, so no BIOS answer asks it on the event loop."""
+
+    class _ThreadRecordingCoreInfo(FakeCoreInfoProvider):
+        def __init__(self) -> None:
+            super().__init__(options=[libretro_option(_TEST_CORE, "Test Core")])
+            self.threads: list[int] = []
+
+        def get_emulator_options(self, system_name: str, *, reading: Any = None) -> dict[str, Any]:
+            self.threads.append(threading.get_ident())
+            return super().get_emulator_options(system_name, reading=reading)
+
+    async def _asked_threads(self, call) -> list[int]:
+        core_info = self._ThreadRecordingCoreInfo()
+        service = _make_firmware_service(core_info=core_info, uow_factory=FakeUnitOfWorkFactory(FakeUnitOfWork()))
+        _set_loop(service, asyncio.get_running_loop())
+        with patch.object(service._listing, "get_firmware_list", return_value=[]):
+            await call(service)
+        return core_info.threads
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "call",
+        [
+            lambda service: service.get_platform_firmware_status("dc"),
+            lambda service: service.check_platform_bios("dc"),
+            lambda service: service.download_required_firmware("dc"),
+        ],
+        ids=["platform status", "per-game check", "required download"],
+    )
+    async def test_each_bios_answer_reads_the_list_on_a_worker_thread(self, call):
+        threads = await self._asked_threads(call)
+
+        assert threads, "the answer asked the emulator list"
+        assert threading.get_ident() not in threads
