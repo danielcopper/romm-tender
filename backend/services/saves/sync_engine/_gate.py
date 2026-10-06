@@ -44,7 +44,7 @@ class SaveSyncTimeoutError(Exception):
     """Raised when a save-sync run cannot acquire the device gate in time.
 
     Signals that another run is in flight and the bounded wait elapsed — the
-    caller turns this into its trigger-specific busy fallthrough. It is a
+    caller raises ``SyncBusy`` from it. It is a
     LOCAL scheduling outcome: no caller may report it as a server verdict.
     """
 

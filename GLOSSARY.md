@@ -887,7 +887,7 @@ their uninstalled game already has save files.
 ### Save state: per-game files / shared / inside the content / hole / not established
 
 The five values a save answer classifies a ROM into, **exactly one of which holds**. Only the first is a save Tender can
-carry; the other four **refuse** — the sync probes no path, writes no sync state, and returns the benign-skip shape
+carry; the other four **refuse** — the sync probes no path, writes no sync state, and refuses with the benign skip
 rather than a failure. A refusing answer can still have its directory recorded as the
 [answered save directory](#answered-save-directory), which is not sync state.
 

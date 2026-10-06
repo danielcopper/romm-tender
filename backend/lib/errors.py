@@ -295,13 +295,21 @@ class NotInstalled(NamedRefused):
 
 
 class SyncBusy(NamedRefused):
-    """Another save sync still held the device when this one's wait ran out; nothing was asked of the server."""
+    """Another save sync still held the device when this one's wait ran out.
+
+    A local scheduling outcome: the skipped run may never have contacted the
+    server, so it is never collapsed onto ``server_unreachable``.
+    """
 
     reason = "sync_busy"
 
 
 class DeviceSyncDisabled(NamedRefused):
-    """The RomM server has save sync turned off for this device."""
+    """The RomM server has save sync turned off for this device.
+
+    RomM's per-device switch, enforced at ``negotiate``; distinct from the local
+    ``sync_disabled`` toggle.
+    """
 
     reason = "device_sync_disabled"
 

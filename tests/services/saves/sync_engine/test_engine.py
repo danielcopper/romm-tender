@@ -218,7 +218,7 @@ class TestSyncAllSaves:
         assert uploaded_roms == {1, 2}
 
     @pytest.mark.asyncio
-    async def test_disabled_returns_early(self, tmp_path):
+    async def test_disabled_refuses_early(self, tmp_path):
         svc, _ = make_service(tmp_path)
         sync = svc.sync_all_saves()
 
@@ -511,7 +511,7 @@ class TestDeviceSyncDisabled:
             await svc._sync_engine._open_negotiate_session(42, "test-device")
 
     @pytest.mark.asyncio
-    async def test_sync_rom_saves_returns_policy_failure(self, tmp_path):
+    async def test_sync_rom_saves_refuses_with_the_policy_stop(self, tmp_path):
         svc, fake = make_service(tmp_path)
         self._seed_confirmed_rom(svc, tmp_path)
         fake.negotiate_sync_disabled = True
@@ -526,7 +526,7 @@ class TestDeviceSyncDisabled:
         assert not any(c[0] == "upload_save" for c in fake.call_log)
 
     @pytest.mark.asyncio
-    async def test_post_exit_sync_returns_policy_failure(self, tmp_path):
+    async def test_post_exit_sync_refuses_with_the_policy_stop(self, tmp_path):
         svc, fake = make_service(tmp_path)
         self._seed_confirmed_rom(svc, tmp_path)
         fake.negotiate_sync_disabled = True
@@ -557,7 +557,7 @@ class TestDeviceSyncDisabled:
         assert not any(c[0] == "upload_save" for c in fake.call_log)
 
     @pytest.mark.asyncio
-    async def test_sync_all_saves_bulk_abort_returns_policy_failure(self, tmp_path):
+    async def test_sync_all_saves_bulk_abort_refuses_with_the_policy_stop(self, tmp_path):
         """The whole-device bulk pre-negotiate hits the switch → abort before the sweep."""
         svc, fake = make_service(tmp_path)
         self._seed_confirmed_rom(svc, tmp_path, rom_id=1, rom_name="game1", file_name="game1.gba", content=b"s1")
@@ -989,7 +989,7 @@ class TestSyncRomSavesDisabledGuard:
     """Public sync_rom_saves refuses when save sync is disabled."""
 
     @pytest.mark.asyncio
-    async def test_sync_rom_saves_disabled_returns_failure(self, tmp_path):
+    async def test_sync_rom_saves_disabled_refuses(self, tmp_path):
         svc, fake = make_service(tmp_path)
         # save_sync_enabled stays False by default.
         sync = svc.sync_rom_saves(42)
@@ -2211,7 +2211,7 @@ class TestSyncPathsHealDeadDevice:
         assert svc._sync_engine.get_device_id() == "live-device"
 
     @pytest.mark.asyncio
-    async def test_helper_reregister_failure_returns_device_not_registered(self, tmp_path):
+    async def test_helper_reregister_failure_refuses_with_device_not_registered(self, tmp_path):
         svc, fake = make_service(tmp_path)
         _enable_sync_with_device(svc, "dead-uuid")
         fake.set_version("4.9.0")

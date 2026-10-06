@@ -7,9 +7,9 @@ them identically: take one live reading of the machine, follow a moved save
 directory with it, and where either holds, raise the benign skip instead of
 syncing.
 
-It lives beside the engine rather than inside it because the engine is already at
-its decomposition ceiling, and because these are the whole refusal: one reading
-and the skips it raises, with no engine state between them.
+It lives beside the engine rather than inside it because nothing is added to the
+engine's own module, and because these are the whole refusal: one reading and the
+skips it raises, with no engine state between them.
 
 **The reading happens before the heartbeat, deliberately.** A PS2 game needs no
 server to establish that its saves live on a shared card, and a device that is

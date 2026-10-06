@@ -1317,7 +1317,7 @@ alongside it. An `asyncio.Lock` is the serializer/queue; the gate owns only the 
 run-lifecycle state, no run ids, no cancellation — those are out of scope here).
 
 The wait is **bounded** so a stuck run never traps the launch path. Each of the four trigger methods on `SyncEngine`
-wraps its run body in `bounded_run(timeout=…)` with a per-trigger budget — `pre_launch_sync` (30 s), `post_exit_sync`
+wraps its run body in `bounded_run(max_wait=…)` with a per-trigger budget — `pre_launch_sync` (30 s), `post_exit_sync`
 (60 s), `sync_rom_saves` (15 s), `sync_all_saves` (60 s). If the gate can't be acquired within the budget the call
 refuses instead of blocking, and all four raise the **same** busy refusal, `SyncBusy`: `reason: "sync_busy"`, no
 `offline` detail. A busy gate is a local wait — nothing on that path observed the server — so it never borrows a

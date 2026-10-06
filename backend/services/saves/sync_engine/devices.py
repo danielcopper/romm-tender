@@ -220,7 +220,7 @@ class DeviceRegistry:
 
         Refuses with ``sync_disabled`` while save sync is off, and with
         ``server_unreachable`` when the server answers the registration without
-        an id; a RomM error from the registration propagates.
+        an id; anything the registration raises propagates.
         """
         if not save_sync_enabled(self._settings):
             raise Refused("sync_disabled", SAVE_SYNC_DISABLED)

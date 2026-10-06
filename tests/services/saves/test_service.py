@@ -92,7 +92,7 @@ class TestDeviceRegistration:
         assert result["server_device_id"] == "existing"
 
     @pytest.mark.asyncio
-    async def test_disabled_returns_failure(self, tmp_path):
+    async def test_disabled_refuses(self, tmp_path):
         svc, _ = make_service(tmp_path)
         # save_sync_enabled defaults to False
         ensure = svc.ensure_device_registered()
@@ -136,7 +136,7 @@ class TestDeviceRegistrationServer:
         assert reg_calls[0][1][2] == "Tender"  # client
 
     @pytest.mark.asyncio
-    async def test_returns_failure_on_server_error(self, tmp_path):
+    async def test_a_server_error_propagates(self, tmp_path):
         """If register_device fails with a reachability error, that error propagates."""
         fake = FakeSaveApi()
         fake.set_version("4.8.1")  # skip the pre-register heartbeat probe
@@ -600,7 +600,7 @@ class TestConflictRulesAtTheUseCase:
 
 class TestPostExitSyncConnectivity:
     @pytest.mark.asyncio
-    async def test_returns_offline_when_heartbeat_fails(self, tmp_path):
+    async def test_refuses_as_offline_when_heartbeat_fails(self, tmp_path):
         """post_exit_sync refuses with offline=True when the server is genuinely unreachable."""
         fake = FakeSaveApi()
         fake.heartbeat_raises = RommConnectionError("unreachable")

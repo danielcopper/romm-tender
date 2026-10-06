@@ -18,7 +18,7 @@ export interface SaveSyncSettings {
  *  a save Tender could otherwise sync is written beside the game file —
  *  RetroArch's "Write Saves to Content Directory" is the usual cause (#239).
  *  A BENIGN SKIP — the game still launches and no error is surfaced. Mirrors the backend
- *  `SAVE_SYNC_IN_CONTENT_DIR_REASON`. */
+ *  `SAVE_SYNC_CONTENT_DIR_REASON` (`domain/save_answer.py`). */
 export const SAVEFILES_IN_CONTENT_DIR_REASON = "savefiles_in_content_dir";
 
 /** The `reason` slug the sync endpoints return when the game's emulator does not
@@ -26,7 +26,7 @@ export const SAVEFILES_IN_CONTENT_DIR_REASON = "savefiles_in_content_dir";
  *  written inside the game file, a name with a hole in it, or a shape nobody has
  *  established (#1858). A BENIGN SKIP for the same reason as the slug above:
  *  nothing went wrong, there is simply nothing to carry, and the game still
- *  launches. Mirrors the backend `SAVE_SHAPE_UNSUPPORTED`. */
+ *  launches. Mirrors the backend `SAVE_SHAPE_UNSUPPORTED_REASON` (`domain/save_answer.py`). */
 export const SAVE_SHAPE_UNSUPPORTED_REASON = "save_shape_unsupported";
 
 /** Every `reason` slug that means "sync did not run, and that is fine". A slug

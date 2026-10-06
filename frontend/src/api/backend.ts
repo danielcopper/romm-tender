@@ -1015,7 +1015,6 @@ export const ensureDeviceRegistered = endpoint<
   { success: true; device_id: string; device_name: string } | EndpointFailure
 >("ensure_device_registered");
 
-/** `disabled` rides on the refusal while save sync is off, and the panel hides the device list for it. */
 export type ListDevicesResponse =
   { success: true; devices: RegisteredDevice[] } | (EndpointFailure & { disabled?: boolean });
 export const listDevices = endpoint<[], ListDevicesResponse>("list_devices");

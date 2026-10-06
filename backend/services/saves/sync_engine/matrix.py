@@ -765,8 +765,8 @@ class MatrixExecutor:
             # Precondition refusal, not a transfer error: surface the same
             # device-not-registered message the automatic pre-flight uses so the
             # per-file error reads consistently (#1478). No slug field exists on a
-            # per-file sync error (the list is message-only); the reason slug is
-            # carried where a failure dict has one — the keep_local resolve path.
+            # per-file sync error (the list is message-only); the keep_local
+            # resolve path refuses with the ``device_not_registered`` reason.
             self._logger.warning(f"_dispatch_sync_action({ctx.rom_id}): {filename}: {DEVICE_NOT_REGISTERED}")
             sink.errors.append(f"{filename}: {DEVICE_NOT_REGISTERED}")
         except RommApiError as e:

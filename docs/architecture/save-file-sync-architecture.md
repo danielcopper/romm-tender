@@ -1547,9 +1547,9 @@ failure here is **classified by type**, not collapsed onto a blanket "Server off
 ([#971](https://github.com/danielcopper/romm-tender/issues/971)):
 
 - A genuine reachability failure (`RommConnectionError` / `RommTimeoutError`) refuses with `ServerUnreachable`
-  (`reason: "server_unreachable"`, `message: "Server offline"`) **plus** the `offline: true` detail the launch path
-  routes on (offline-drift check instead of a doomed round-trip). Only this branch is caught; the raw exception is
-  logged at debug there, so the probe is no silent swallow.
+  (`reason: "server_unreachable"`, `message: "Server offline"`) **plus** the `offline: true` detail, which the
+  session-end toast reads; before a launch the answer is a failed sync like any other. Only this branch is caught; the
+  raw exception is logged at debug there, so the probe is no silent swallow.
 - Any other `RommApiError` is not caught: it propagates, and both of its readers answer it through `lib/errors.py`
   `classify_error`, so it carries its **own** `reason` + `message` — the endpoint translator for `pre_launch_sync`, the
   session lifecycle for `post_exit_sync`. A revoked token (401) surfaces `auth_failed` + "Authentication failed — check
@@ -1560,11 +1560,11 @@ failure here is **classified by type**, not collapsed onto a blanket "Server off
   either: the endpoint answers it as a transport error, the session lifecycle with its generic failure toast.
 
 The same holds for device registration in `services/saves/sync_engine/devices.py`: `ensure_device_registered` and
-`list_devices` catch no RomM error, so the endpoints answer an auth/SSL failure with its own classified `reason` +
-`message` rather than a generic slug, and the device list shows `classify_error`'s message beneath its "Could not load
-devices" heading. A registration the server answers without an id refuses with `server_unreachable` / "Could not
-register device". Inside a sync, a registration that refuses or meets a RomM error refuses the sync with
-`device_not_registered`.
+`list_devices` catch no RomM error from the registration call or the device listing, so the endpoints answer an auth/SSL
+failure with its own classified `reason` + `message` rather than a generic slug, and the device list shows
+`classify_error`'s message beneath its "Could not load devices" heading. A registration the server answers without an id
+refuses with `server_unreachable` / "Could not register device". Inside a sync, a registration that refuses or meets a
+RomM error refuses the sync with `device_not_registered`.
 
 ### `DeviceRegistry` owns device identity
 

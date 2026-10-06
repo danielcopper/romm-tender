@@ -575,11 +575,10 @@ class SyncEngine:
         """The refusal a heartbeat that could not reach the server raises, logged.
 
         Only a genuine reachability failure (``RommConnectionError`` /
-        ``RommTimeoutError``) is "Server offline", with the ``offline`` flag the
-        launch path routes on. Every other RomM error from the heartbeat — a
-        revoked token, an SSL misconfiguration, a 5xx — is not caught, so it
-        answers with its own reason and message and the UI never claims a
-        plainly reachable server is unreachable (#971).
+        ``RommTimeoutError``) is "Server offline", with the ``offline`` detail
+        the session-end toast reads. Every other RomM error from the heartbeat —
+        a revoked token, an SSL misconfiguration, a 5xx — is not caught, so it
+        answers with its own reason and message, never as an unreachable server.
         """
         self._log_debug(f"{where}: heartbeat failed ({type(exc).__name__}: {exc})")
         self._logger.info("%s skipped: server offline", where)
@@ -776,11 +775,6 @@ class SyncEngine:
                     return {"success": True, "message": "Pre-launch sync disabled", "synced": 0}
 
                 # Pre-probe reachability before any sync work — mirror post_exit_sync.
-                # A genuine reachability failure refuses as unreachable (plus the
-                # ``offline`` flag) so the launch path can warn on local drift
-                # instead of stalling on a doomed round-trip; an auth/SSL/server
-                # error answers its OWN classified reason, so the UI stops lying
-                # about reachability (#971).
                 try:
                     await self._loop.run_in_executor(None, self._romm_api.heartbeat)
                 except (RommConnectionError, RommTimeoutError) as e:

@@ -562,11 +562,9 @@ class SessionPostExitSync(Protocol):
 
     The composition root satisfies this with ``SaveService``'s
     ``post_exit_sync``. Returned shape carries ``success`` / ``synced`` /
-    ``uploaded`` / ``downloaded`` / ``conflicts`` / ``message``, which the
-    lifecycle service maps into toast strings. A raised ``Refused`` is
-    mapped from its reason, message and ``offline`` detail, a raised
-    ``RommApiError`` from ``classify_error``'s message, and any other
-    raised exception is collapsed to the "failed" toast.
+    ``uploaded`` / ``downloaded`` / ``conflicts`` / ``message``. A refusal is
+    raised as ``Refused``, with an ``offline`` detail when the server could
+    not be reached, and a RomM error propagates.
     """
 
     async def post_exit_sync(self, rom_id: int) -> dict[str, Any]: ...

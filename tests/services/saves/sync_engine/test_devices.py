@@ -187,7 +187,7 @@ class TestEnsureDeviceRegisteredFailurePaths:
         assert (refused.value.reason, refused.value.message) == ("device_not_registered", "Device not registered")
 
     @pytest.mark.asyncio
-    async def test_pre_launch_sync_returns_device_not_registered_on_failure(self, tmp_path):
+    async def test_pre_launch_sync_refuses_with_device_not_registered_on_failure(self, tmp_path):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         # No device_id set — triggers ensure_device_registered.
@@ -201,7 +201,7 @@ class TestEnsureDeviceRegisteredFailurePaths:
         assert not any(c[0] == "list_saves" for c in fake.call_log)
 
     @pytest.mark.asyncio
-    async def test_post_exit_sync_returns_device_not_registered_on_failure(self, tmp_path):
+    async def test_post_exit_sync_refuses_with_device_not_registered_on_failure(self, tmp_path):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         # No device_id set.
@@ -215,7 +215,7 @@ class TestEnsureDeviceRegisteredFailurePaths:
         assert not any(c[0] == "upload_save" for c in fake.call_log)
 
     @pytest.mark.asyncio
-    async def test_sync_rom_saves_returns_device_not_registered_on_failure(self, tmp_path):
+    async def test_sync_rom_saves_refuses_with_device_not_registered_on_failure(self, tmp_path):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         # No device_id set.
@@ -227,7 +227,7 @@ class TestEnsureDeviceRegisteredFailurePaths:
         assert not any(c[0] == "list_saves" for c in fake.call_log)
 
     @pytest.mark.asyncio
-    async def test_sync_all_saves_returns_device_not_registered_on_failure(self, tmp_path):
+    async def test_sync_all_saves_refuses_with_device_not_registered_on_failure(self, tmp_path):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         # No device_id set.
@@ -240,14 +240,14 @@ class TestEnsureDeviceRegisteredFailurePaths:
         assert not any(c[0] == "list_saves" for c in fake.call_log)
 
 
-class TestEnsureDeviceRegisteredErrorClassification:
+class TestEnsureDeviceRegisteredLetsRommErrorsThrough:
     """When register_device raises a RomM error, it propagates as itself, so the
     caller answers its OWN classified reason + message (auth/SSL get their own
     slug) instead of every failure collapsing onto a generic
-    SERVER_UNREACHABLE "Could not register device" (#971)."""
+    SERVER_UNREACHABLE "Could not register device"."""
 
     @pytest.mark.asyncio
-    async def test_auth_failure_classifies_to_auth_failed(self, tmp_path):
+    async def test_an_auth_failure_propagates(self, tmp_path):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         # Stamp a version so the pre-register heartbeat probe is skipped — the
@@ -265,7 +265,7 @@ class TestEnsureDeviceRegisteredErrorClassification:
         assert _register_call(fake) is not None
 
     @pytest.mark.asyncio
-    async def test_ssl_failure_classifies_with_ssl_message(self, tmp_path):
+    async def test_an_ssl_failure_propagates(self, tmp_path):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         fake.set_version("4.8.1")
@@ -279,7 +279,7 @@ class TestEnsureDeviceRegisteredErrorClassification:
         assert raised.value is failure
 
     @pytest.mark.asyncio
-    async def test_connection_failure_classifies_to_unreachable(self, tmp_path):
+    async def test_a_connection_failure_propagates(self, tmp_path):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         fake.set_version("4.8.1")
