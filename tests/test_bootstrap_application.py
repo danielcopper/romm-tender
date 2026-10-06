@@ -1,4 +1,4 @@
-"""The built backend: its start-up repairs, its network step, its shutdown, and how it is built."""
+"""The built backend: its start-up repairs, its shutdown, and how it is built."""
 
 from __future__ import annotations
 
@@ -121,7 +121,6 @@ class _Recorded:
             download_service=MagicMock(shutdown=self._async_step("download_service.shutdown")),
             session_lifecycle_service=MagicMock(shutdown=self._async_step("session_lifecycle_service.shutdown")),
             playtime_service=MagicMock(shutdown=self._async_step("playtime_service.shutdown")),
-            connection_service=MagicMock(migrate_legacy_credentials=self._async_step("migrate_legacy_credentials")),
         )
 
 
@@ -213,16 +212,6 @@ class TestTheStartUpRepairs:
 
         assert "due checks cancelled" not in recorded.calls
         await asyncio.wait_for(app.shutdown(), 5)
-
-
-class TestTheNetworkStep:
-    async def test_it_migrates_legacy_credentials(self):
-        recorded = _Recorded()
-        app = _application(recorded)
-
-        await app.open_network()
-
-        assert recorded.calls == ["migrate_legacy_credentials"]
 
 
 class TestShutdown:

@@ -1,9 +1,7 @@
 """Running the start-up routines so one failing step cannot take the backend down.
 
 Contract: the wrapper the start-up steps that are not prerequisites are called
-through, and nothing else. Every step goes through it but
-``migrate_legacy_credentials``, which runs after the port is announced
-(``host/runtime.py``) and swallows its own failures. It belongs to the
+through, and nothing else. Every step goes through it. It belongs to the
 composition root rather than to the services, so the distinction it draws — this
 step is not a prerequisite — is visible at the call site rather than buried in
 each service.

@@ -1128,7 +1128,6 @@ async def build_backend(
     return BackendBuild(
         dispatcher=CallDispatcher(Endpoints(app, status), logger),
         server_identity=app.user_agent,
-        open_network=app.open_network,
         shutdown=app.shutdown,
     )
 

@@ -63,16 +63,14 @@ class BackendBuild:
     free to drift from the one every request to a server off this machine
     already carries.
 
-    *open_network* is the network-touching start-up step, run once the port has
-    been announced. *shutdown* is awaited before the process ends — an
-    interrupted shutdown would leave the very state the start-up routines exist
-    to repair. Both come with the build because both act on what it built: a
-    build that never finished has nothing to open and nothing to shut down.
+    *shutdown* is awaited before the process ends — an interrupted shutdown
+    would leave the very state the start-up routines exist to repair. It comes
+    with the build because it acts on what the build made: a build that never
+    finished has nothing to shut down.
     """
 
     dispatcher: CallDispatcher
     server_identity: str
-    open_network: Callable[[], Awaitable[None]]
     shutdown: Callable[[], Awaitable[None]]
 
 
@@ -102,8 +100,8 @@ async def run_backend(
 
     *build* performs the schema migration, the wiring and the start-up routines
     and answers with the dispatcher for the object calls reach, the identity
-    this server answers under, and the network step and shutdown of what it
-    built (:class:`BackendBuild`). *token* is this process's admission token,
+    this server answers under, and the shutdown of what it built
+    (:class:`BackendBuild`). *token* is this process's admission token,
     created by the caller because the logging formatter that keeps it out of the
     log file has to exist before the first line is written. *injection* is what
     the panel is loaded into Steam with, or ``None`` to serve the panel and load
@@ -118,10 +116,9 @@ async def run_backend(
         raise AlreadyRunningError(_where_the_running_one_is(port_file))
 
     # Before the first start-up step, not after the last: a termination signal
-    # arriving during the schema migration or the credential fetch would
-    # otherwise take the default action and kill the process outright, leaving
-    # behind exactly the half-finished state the start-up routines exist to
-    # repair.
+    # arriving during the schema migration would otherwise take the default
+    # action and kill the process outright, leaving behind exactly the
+    # half-finished state the start-up routines exist to repair.
     stop = _listen_for_termination()
     built: BackendBuild | None = None
     server: HostServer | None = None
@@ -152,10 +149,7 @@ async def run_backend(
             logger.warning(f"host: {len(status.failed_startup_steps)} start-up step(s) failed; the panel will say so")
 
         # After the address is announced, because the injector asks the server
-        # for it — and before the network-touching start-up step, which may wait
-        # on a server that is not there. Loading the panel does not depend on
-        # RomM being reachable, and holding it behind a timing-out credential
-        # fetch would leave Steam without a panel for the length of it.
+        # for it.
         if injection is not None:
             if injection.override != INJECT_OFF:
                 # Before the injector rather than inside it: without this file
@@ -178,7 +172,6 @@ async def run_backend(
             )
             injector = asyncio.create_task(panel_injector.run())
 
-        await built.open_network()
         await stop.wait()
         logger.info("host: termination signal received")
     finally:

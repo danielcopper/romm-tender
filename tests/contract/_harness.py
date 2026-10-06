@@ -165,7 +165,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
 
     Composes what ``build_application`` composes, with the edges swapped in
     between ``bootstrap()`` and ``wire_services()``, and runs none of the
-    start-up repairs, the network step or the shutdown.
+    start-up repairs or the shutdown.
     """
     from main import Endpoints
 

@@ -39,9 +39,6 @@ class _StubApplication:
         self.calls.append("run_startup_repairs")
         report_failure("prune_orphaned_cover_cache")
 
-    async def open_network(self) -> None:
-        self.calls.append("open_network")
-
     async def shutdown(self) -> None:
         self.calls.append("shutdown")
 
@@ -110,14 +107,13 @@ class TestBuildBackend:
         assert app.calls == ["run_startup_repairs"]
         assert status.failed_startup_steps == ["prune_orphaned_cover_cache"]
 
-    async def test_the_host_opens_and_shuts_down_the_application(self, tmp_path, monkeypatch: pytest.MonkeyPatch):
+    async def test_the_host_shuts_down_the_application(self, tmp_path, monkeypatch: pytest.MonkeyPatch):
         built, app, _status, _events, _asked = await self._build(tmp_path, monkeypatch)
         app.calls.clear()
 
-        await built.open_network()
         await built.shutdown()
 
-        assert app.calls == ["open_network", "shutdown"]
+        assert app.calls == ["shutdown"]
 
     async def test_it_answers_under_the_application_s_identity(self, tmp_path, monkeypatch: pytest.MonkeyPatch):
         built, app, _status, _events, _asked = await self._build(tmp_path, monkeypatch)

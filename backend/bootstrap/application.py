@@ -3,8 +3,7 @@
 Contract: :func:`build_application` composes :func:`bootstrap` and
 :func:`wire_services` into an :class:`Application`, and runs nothing. What runs,
 and when, is the entry point's to decide: the start-up repairs before the port
-is bound, :meth:`Application.open_network` after it, :meth:`Application.shutdown`
-at the end. The endpoints are not here — they are ``main.py``'s, and reach the
+is bound, :meth:`Application.shutdown` at the end. The endpoints are not here — they are ``main.py``'s, and reach the
 services through :attr:`Application.services`.
 
 The failure recorder is handed to :meth:`Application.run_startup_repairs` as a
@@ -35,7 +34,7 @@ if TYPE_CHECKING:
 
 
 class Application:
-    """Every wired service, the start-up repairs, and the process's network step and shutdown."""
+    """Every wired service, the start-up repairs, and the process's shutdown."""
 
     def __init__(
         self,
@@ -58,8 +57,7 @@ class Application:
         """Run the start-up repairs, each one reporting a failure rather than raising it.
 
         Everything here must be through before the port is bound, which is what
-        makes the port file mean "ready". The one start-up step that talks to the
-        network is deliberately not here — see :meth:`open_network`.
+        makes the port file mean "ready".
         """
         steps = StartupSteps(self._logger, report_failure)
         services = self.services
@@ -80,17 +78,6 @@ class Application:
         steps.run("note_update_attempt", services.update_install_service.note_start)
         steps.run("record_save_directories", self._start_save_directory_backfill)
         steps.run("run_due_update_checks", self._start_due_update_checks)
-
-    async def open_network(self) -> None:
-        """The one start-up step that makes a network request.
-
-        Runs after the port is announced, so an unreachable or slow RomM costs
-        the panel nothing: readiness is not held hostage to a server this backend
-        does not control. Upgrades a stored-password install to a Client API
-        Token; the method swallows every failure, so a mint failure never blocks
-        anything.
-        """
-        await self.services.connection_service.migrate_legacy_credentials()
 
     async def shutdown(self) -> None:
         """Stop the background tasks that are still running, then shut the services down."""

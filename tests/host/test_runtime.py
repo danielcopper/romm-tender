@@ -9,6 +9,7 @@ every order would produce alike.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import signal
@@ -37,7 +38,7 @@ class Recorder:
         self.port_file = port_file
         self.lock_path = lock_path
         self.steps: list[str] = []
-        self.port_at_open_network: int | None = None
+        self.port_once_running: int | None = None
         self.lock_held_at_build: bool | None = None
         self.shutdown_ran = asyncio.Event()
 
@@ -49,13 +50,15 @@ class Recorder:
         return BackendBuild(
             dispatcher=CallDispatcher(FakeEndpoints(), LOGGER),
             server_identity="romm-tender/0.0.0-test",
-            open_network=self.open_network,
             shutdown=self.shutdown,
         )
 
-    async def open_network(self) -> None:
-        self.steps.append("open_network")
-        self.port_at_open_network = self.port_file.read()
+    async def while_running(self) -> None:
+        """Beside the run: once the port file names a port, note it and ask the run to end."""
+        async with asyncio.timeout(10):
+            while (port := self.port_file.read()) is None:
+                await asyncio.sleep(0.01)
+        self.port_once_running = port
         os.kill(os.getpid(), signal.SIGTERM)
 
     async def shutdown(self) -> None:
@@ -76,18 +79,24 @@ async def _run(tmp_path, recorder: Recorder, status: HostStatus, port: int, inje
     """Drive ``run_backend`` on *port* so no test ever binds the real default."""
     static_root = tmp_path / "dist"
     static_root.mkdir(exist_ok=True)
-    await run_backend(
-        injection=injection,
-        build=recorder.build,
-        events=EventSink(LOGGER),
-        status=status,
-        static_root=str(static_root),
-        lock_path=recorder.lock_path,
-        port_file_path=recorder.port_file.path,
-        logger=LOGGER,
-        token="the-admission-token",
-        preferred_port=port,
-    )
+    watcher = asyncio.ensure_future(recorder.while_running())
+    try:
+        await run_backend(
+            injection=injection,
+            build=recorder.build,
+            events=EventSink(LOGGER),
+            status=status,
+            static_root=str(static_root),
+            lock_path=recorder.lock_path,
+            port_file_path=recorder.port_file.path,
+            logger=LOGGER,
+            token="the-admission-token",
+            preferred_port=port,
+        )
+    finally:
+        watcher.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await watcher
 
 
 @pytest.fixture
@@ -99,7 +108,7 @@ class TestTheStartUpOrder:
     async def test_every_step_runs_once_and_in_order(self, tmp_path, recorder, default_sigterm):
         await _run(tmp_path, recorder, HostStatus(), free_port())
 
-        assert recorder.steps == ["build", "open_network", "shutdown"]
+        assert recorder.steps == ["build", "shutdown"]
 
     async def test_the_lock_is_held_before_anything_is_built(self, tmp_path, recorder, default_sigterm):
         """Two backends would both migrate the schema and both run the repairs."""
@@ -107,21 +116,13 @@ class TestTheStartUpOrder:
 
         assert recorder.lock_held_at_build is True
 
-    async def test_the_port_file_names_the_bound_port_by_the_last_step(self, tmp_path, recorder, default_sigterm):
+    async def test_the_port_file_names_the_bound_port_while_it_runs(self, tmp_path, recorder, default_sigterm):
         """'The port file is there' means 'the backend is ready' — nothing else has to."""
         status = HostStatus()
 
         await _run(tmp_path, recorder, status, free_port())
 
-        assert recorder.port_at_open_network == status.port
-
-    async def test_the_network_touching_step_runs_after_the_port_is_announced(
-        self, tmp_path, recorder, default_sigterm
-    ):
-        """An unreachable RomM must not hold readiness hostage."""
-        await _run(tmp_path, recorder, HostStatus(), free_port())
-
-        assert recorder.port_at_open_network is not None
+        assert recorder.port_once_running == status.port
 
     async def test_the_server_answers_while_it_runs(self, tmp_path, recorder, default_sigterm):
         status = HostStatus()
@@ -176,7 +177,7 @@ class TestShutdown:
 
 
 class TestABuildThatFails:
-    """Nothing was built, so there is nothing to open and nothing to shut down."""
+    """Nothing was built, so there is nothing to shut down."""
 
     @staticmethod
     def _break(recorder: Recorder) -> None:
@@ -292,14 +293,13 @@ class TestLoadingThePanelIntoSteam:
         for name in (GLOBALS_BUNDLE, STANDALONE_PANEL, COEXISTENCE_PANEL):
             (static_root / name).write_text(f"// {name}\n", encoding="utf-8")
 
-        async def open_network() -> None:
-            recorder.steps.append("open_network")
+        async def while_running() -> None:
             async with asyncio.timeout(10):
                 while not page.bootstraps:
                     await asyncio.sleep(0.01)
             os.kill(os.getpid(), signal.SIGTERM)
 
-        recorder.open_network = open_network  # type: ignore[method-assign]
+        recorder.while_running = while_running  # type: ignore[method-assign]
         try:
             await asyncio.wait_for(
                 _run(
@@ -348,8 +348,7 @@ class TestLoadingThePanelIntoSteam:
             read_during_the_build.append(await status.steam.running_apps())
             return await build()
 
-        async def open_network() -> None:
-            recorder.steps.append("open_network")
+        async def while_running() -> None:
             async with asyncio.timeout(10):
                 while not page.bootstraps:
                     await asyncio.sleep(0.01)
@@ -357,7 +356,7 @@ class TestLoadingThePanelIntoSteam:
             os.kill(os.getpid(), signal.SIGTERM)
 
         recorder.build = reading_build  # type: ignore[method-assign]
-        recorder.open_network = open_network  # type: ignore[method-assign]
+        recorder.while_running = while_running  # type: ignore[method-assign]
         try:
             await asyncio.wait_for(
                 _run(
@@ -411,7 +410,7 @@ class TestLoadingThePanelIntoSteam:
                 20,
             )
             assert page.evaluated == []
-            assert recorder.steps == ["build", "open_network", "shutdown"]
+            assert recorder.steps == ["build", "shutdown"]
         finally:
             await debugger.stop()
 

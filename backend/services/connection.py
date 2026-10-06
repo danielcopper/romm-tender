@@ -5,12 +5,10 @@ lifecycle: ``establish_token`` mints a scoped token from a one-time
 username/password and discards the credentials, ``establish_user_token``
 validates and stores a token the user pasted (the OIDC path, which has no
 password to mint from), ``establish_paired_token`` exchanges a short-lived RomM
-pairing code for a token (the same OIDC path without pasting), and
-``migrate_legacy_credentials`` upgrades a
-stored-password install to a token on startup. Pure I/O happens through the ``RommConnectionApi``
-Protocol and disk writes through the ``SettingsPersister`` Protocol; this
-service composes that I/O into the results the frontend reads and the
-refusals it raises. The minimum version is injected — ``MIN_ROMM_VERSION`` in
+pairing code for a token (the same OIDC path without pasting). Pure I/O happens
+through the ``RommConnectionApi`` Protocol and disk writes through the
+``SettingsPersister`` Protocol; this service composes that I/O into the results
+the frontend reads and the refusals it raises. The minimum version is injected — ``MIN_ROMM_VERSION`` in
 ``domain/identity.py``, passed in by bootstrap — so this service remains a
 pure orchestration layer.
 """
@@ -640,46 +638,6 @@ class ConnectionService:
         self._settings["romm_user_id"] = user_id
         self._settings_persister.save_settings()
 
-    async def migrate_legacy_credentials(self) -> None:
-        """Upgrade a stored-password install to a Client API Token on startup.
-
-        When the settings carry a legacy ``romm_user`` / ``romm_pass``
-        pair and no token yet, mint a token from those credentials, then
-        wipe the credentials. Any failure leaves the credentials intact
-        and Tender inert — there is no Basic-auth fallback. Never
-        raises; never logs the token or password.
-        """
-        if self._settings.get("romm_api_token"):
-            return
-        username = self._settings.get("romm_user")
-        password = self._settings.get("romm_pass")
-        if not username or not password:
-            return
-
-        try:
-            minted = await self._loop.run_in_executor(None, self._mint, username, password)
-        except Exception as e:
-            self._logger.warning(f"Legacy credential migration failed: {e}")
-            return
-
-        raw_token = minted.get("raw_token")
-        token_id = minted.get("id")
-        if not raw_token or token_id is None:
-            self._logger.warning("Legacy credential migration failed: RomM did not return a usable token")
-            return
-
-        try:
-            self._persist_token(
-                raw_token,
-                token_id,
-                origin=normalize_origin(self._settings.get("romm_url") or ""),
-                source="minted",
-            )
-        except Exception as e:
-            self._logger.warning(f"Legacy credential migration failed: {e}")
-            return
-        self._logger.info("Migrated legacy credentials to a Client API Token")
-
     async def sign_out(self) -> dict[str, Any]:
         """Forget the stored Client API Token on this device — local only.
 
@@ -755,9 +713,9 @@ class ConnectionService:
 
         Stores the token + its id (``None`` for a user-supplied token, which
         carries no server id) + its *origin* + its *source* provenance
-        (``"minted"`` or ``"user"``), drops any stored ``romm_user`` /
-        ``romm_pass`` (a token fully supersedes them — nothing reads the stored
-        credentials at runtime once a token exists), and saves.
+        (``"minted"`` or ``"user"``), drops any ``romm_user`` / ``romm_pass``
+        an install that stored a password left behind (nothing reads them),
+        and saves.
         """
         self._settings["romm_api_token"] = raw_token
         self._settings["romm_api_token_id"] = token_id
