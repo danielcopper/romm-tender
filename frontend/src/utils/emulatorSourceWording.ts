@@ -71,6 +71,8 @@ function wordedFinding(kind: string, { code, data }: SourceHealthFinding): strin
   if (path === null) return null;
   const repair = kind === "retrodeck" ? RETRODECK_REPAIR : "";
   switch (code) {
+    case "not-set-up":
+      return `${name} is installed but has not been set up yet. Start ${name} once and finish its first-run setup.`;
     case "marker-missing":
       return `${name}: its settings file ${path} is missing.`;
     case "marker-unreadable":
@@ -139,6 +141,9 @@ export function emulatorDataReasonSentence(reason: EmulatorDataReason | null, so
   }
   if (reason === "catalogue_invalid") {
     return `${sourceName(source.kind)}: ES-DE's systems file is broken, so its emulators are not established.`;
+  }
+  if (reason === "not_set_up") {
+    return `${sourceName(source.kind)} has not been set up yet, so its emulators are not established.`;
   }
   if (reason === "sealed") return sealedCatalogueSentence(source.kind);
   return `${sourceName(source.kind)}'s emulator list is not established.`;

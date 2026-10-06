@@ -1250,6 +1250,25 @@ describe("Library › Platforms", () => {
       expect(clauses).toEqual([]);
     });
 
+    it("says a RetroDECK that is not set up has no emulators established instead of an empty picker", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [],
+          emulator_data_available: false,
+          emulator_data_reason: "not_set_up",
+          emulator_source: { kind: "retrodeck", starts_games: true },
+          active_core_label: null,
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "RetroDECK has not been set up yet, so its emulators are not established.",
+      );
+      expect(container.textContent).not.toContain("lists no emulator");
+    });
+
     it("says the shortcut count failed instead of stating two things that are not true", async () => {
       // Read as zero, a failed count prints "0 in Steam" in the header and
       // disables the removal — neither of which was established.

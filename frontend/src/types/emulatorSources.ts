@@ -41,7 +41,8 @@ export type EmulatorSourceDirection = "up" | "down";
 
 /** Why an emulator list could not be given: no source answers (`no_source`,
  *  `switched_off`), or the answering source's catalogue was refused. */
-export type EmulatorDataReason = "no_source" | "switched_off" | "sealed" | "catalogue_invalid" | "unavailable";
+export type EmulatorDataReason =
+  "no_source" | "switched_off" | "sealed" | "catalogue_invalid" | "not_set_up" | "unavailable";
 
 /** The source an emulator answer came from, and whether Tender starts games through it. */
 export interface AnsweringSource {

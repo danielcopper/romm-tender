@@ -76,6 +76,20 @@ describe("buildEmulatorMenu", () => {
     expect(its[0]!.text).toBe("EmuDeck's emulator list cannot be read yet.");
   });
 
+  it("says RetroDECK has not been set up yet when that is why there is no list", () => {
+    const menu = buildEmulatorMenu(
+      baseConfig({
+        emulators: [],
+        emulatorDataAvailable: false,
+        emulatorDataReason: "not_set_up",
+        emulatorSource: { kind: "retrodeck", starts_games: true },
+      }),
+    );
+    const its = items(menu);
+    expect(its).toHaveLength(1);
+    expect(its[0]!.text).toBe("RetroDECK has not been set up yet, so its emulators are not established.");
+  });
+
   it("says every source is switched off when that is why there is no list", () => {
     const menu = buildEmulatorMenu(
       baseConfig({ emulators: [], emulatorDataAvailable: false, emulatorDataReason: "switched_off" }),

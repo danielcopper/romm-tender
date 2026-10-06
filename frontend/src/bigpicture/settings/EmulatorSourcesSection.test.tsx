@@ -131,6 +131,23 @@ describe("EmulatorSourcesSection", () => {
     );
   });
 
+  it("says a RetroDECK that is not set up is installed, with no root and no other line", () => {
+    const notSetUp = {
+      ...RETRODECK,
+      root: null,
+      catalogue: "unavailable" as const,
+      findings: [{ code: "not-set-up", data: { path: "/rd.json", app_id: "net.retrodeck.retrodeck" } }],
+    };
+    const { queryByTestId, getByTestId } = renderSection({ sources: [notSetUp], answering: "retrodeck" });
+
+    expect(getByTestId("source-name-retrodeck")).toHaveTextContent("RetroDECK");
+    expect(queryByTestId("source-root-retrodeck")).toBeNull();
+    expect(getByTestId("source-lines-retrodeck")).toHaveTextContent(
+      "RetroDECK is installed but has not been set up yet. Start RetroDECK once and finish its first-run setup.",
+    );
+    expect(getByTestId("source-lines-retrodeck")).not.toHaveTextContent("not established");
+  });
+
   it("shows a switched-off source with its switch off, still listed", () => {
     const { getAllByTestId } = renderSection({
       sources: [RETRODECK, { ...EMUDECK, enabled: false }],

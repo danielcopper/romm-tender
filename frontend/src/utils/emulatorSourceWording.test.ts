@@ -59,6 +59,13 @@ describe("findingSentence", () => {
     expect(findingSentence("emudeck", { code, data: { path: "/h/settings.sh", status: "denied" } })).toBe(sentence);
   });
 
+  it("says a RetroDECK that is not set up is installed and how to set it up", () => {
+    const finding = { code: "not-set-up", data: { path: "/h/retrodeck.json", app_id: "net.retrodeck.retrodeck" } };
+    expect(findingSentence("retrodeck", finding)).toBe(
+      "RetroDECK is installed but has not been set up yet. Start RetroDECK once and finish its first-run setup.",
+    );
+  });
+
   it("adds RetroDECK's repair to a damaged settings file of RetroDECK's", () => {
     expect(findingSentence("retrodeck", { code: "marker-invalid", data: { path: "/r.json", key: "paths" } })).toBe(
       `RetroDECK: its settings file /r.json is damaged, so Tender cannot tell where its folders are.${REPAIR}`,
@@ -159,6 +166,7 @@ describe("emulatorDataReasonSentence", () => {
       RETRODECK,
       "RetroDECK: ES-DE's systems file is broken, so its emulators are not established.",
     ],
+    ["not_set_up", RETRODECK, "RetroDECK has not been set up yet, so its emulators are not established."],
     ["unavailable", RETRODECK, "RetroDECK's emulator list is not established."],
     ["sealed", EMUDECK, "EmuDeck's emulator list cannot be read yet."],
   ] as const)("words %s", (reason, source, sentence) => {
@@ -166,7 +174,14 @@ describe("emulatorDataReasonSentence", () => {
   });
 
   it("never says there is no emulator", () => {
-    for (const reason of ["no_source", "switched_off", "catalogue_invalid", "unavailable", "sealed"] as const) {
+    for (const reason of [
+      "no_source",
+      "switched_off",
+      "catalogue_invalid",
+      "not_set_up",
+      "unavailable",
+      "sealed",
+    ] as const) {
       expect(emulatorDataReasonSentence(reason, RETRODECK)).not.toMatch(/no emulator\b(?! source)/i);
     }
   });

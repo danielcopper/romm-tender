@@ -3182,6 +3182,27 @@ describe("MainPage", () => {
       ).toBeInTheDocument();
     });
 
+    it("says a RetroDECK that is not set up has to be set up", async () => {
+      vi.mocked(backend.getEmulatorSources).mockResolvedValue({
+        sources: [
+          {
+            ...HEALTHY_RETRODECK,
+            root: null,
+            catalogue: "unavailable",
+            findings: [{ code: "not-set-up", data: { path: "/rd.json", app_id: "net.retrodeck.retrodeck" } }],
+          },
+        ],
+        answering: "retrodeck",
+      });
+      const { findByText } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(
+        await findByText(
+          "RetroDECK is installed but has not been set up yet. Start RetroDECK once and finish its first-run setup.",
+        ),
+      ).toBeInTheDocument();
+    });
+
     it("says Tender cannot start games yet where only EmuDeck is installed", async () => {
       vi.mocked(backend.getEmulatorSources).mockResolvedValue({
         sources: [{ ...HEALTHY_RETRODECK, kind: "emudeck", starts_games: false, catalogue: "sealed" }],
