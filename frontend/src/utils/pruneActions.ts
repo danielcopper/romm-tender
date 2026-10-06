@@ -34,18 +34,29 @@ type PruneAction =
 
 export type PruneActionRequired = PruneAction & { preview_id: string };
 
-const SNAPSHOT_BUDGET_BYTES = 56 * 1024;
+/** The backend's `_MAX_STEAM_SNAPSHOT_BYTES` (`services/prune/requests.py`), which states why it exists. */
+const SNAPSHOT_BUDGET_BYTES = 64 * 1024;
 const REPORT_ATTEMPTS = 3;
 const REPORT_TIMEOUT_MS = 5000;
 const handledTokens = new Set<string>();
 let actionQueue: Promise<void> = Promise.resolve();
 let actionGeneration = 0;
 
-function asciiJsonSize(value: unknown): number {
+/**
+ * The size the backend judges a snapshot by (`snapshot_bytes` in
+ * `services/prune/requests.py`): Python's compact `json.dumps` with
+ * `ensure_ascii`, which writes DEL and every non-ASCII character as a `\uXXXX`
+ * escape — two of them for a character outside the BMP. `JSON.stringify` already
+ * escapes what both escape alike (quotes, backslashes, control characters, lone
+ * surrogates) into ASCII, so only what it leaves raw is counted up here.
+ *
+ * Exported so a test can hold it to the backend's count of the same snapshot.
+ */
+export function snapshotBytes(value: unknown): number {
   let bytes = 0;
   for (const char of JSON.stringify(value)) {
     const codePoint = char.codePointAt(0) ?? 0;
-    if (codePoint <= 0x7f) bytes += 1;
+    if (codePoint < 0x7f) bytes += 1;
     else if (codePoint <= 0xffff) bytes += 6;
     else bytes += 12;
   }
@@ -107,7 +118,7 @@ async function captureShortcutSnapshot(appId: number): Promise<PruneSteamSnapsho
     last_played: overview.rt_last_time_played ?? null,
     collections,
   };
-  if (asciiJsonSize(snapshot) > SNAPSHOT_BUDGET_BYTES) {
+  if (snapshotBytes(snapshot) > SNAPSHOT_BUDGET_BYTES) {
     throw new Error("Complete Steam shortcut state is too large for a safe recovery snapshot");
   }
   return snapshot;

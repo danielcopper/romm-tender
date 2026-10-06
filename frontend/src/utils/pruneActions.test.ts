@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as backend from "../api/backend";
-import { cancelPruneActions, handlePruneAction } from "./pruneActions";
+import { cancelPruneActions, handlePruneAction, snapshotBytes } from "./pruneActions";
 import {
   getAppDetails,
   isRomMShortcutDetails,
@@ -121,6 +121,46 @@ describe("handlePruneAction", () => {
       phase: "complete",
       success: false,
       reason: "steam_action_failed",
+      message: expect.stringContaining("too large"),
+    });
+  });
+
+  it("sends a snapshot of exactly the backend's 64 KiB and refuses one byte more", async () => {
+    // ASCII only, so the compact JSON's length is its byte count with nothing to escape.
+    const base = {
+      app_id: 9001,
+      name: "Removed Game",
+      exe: "/tender/bin/tender-rom-launcher",
+      start_dir: "/tender",
+      launch_options: "",
+      minutes_playtime_forever: null,
+      minutes_playtime_last_two_weeks: null,
+      last_played: null,
+      collections: [],
+    };
+    const atCap = "x".repeat(64 * 1024 - JSON.stringify(base).length);
+    const capture = async (launchOptions: string, token: string) => {
+      vi.mocked(getAppDetails).mockResolvedValue({
+        strDisplayName: "Removed Game",
+        strShortcutExe: "/tender/bin/tender-rom-launcher",
+        strShortcutStartDir: "/tender",
+        strLaunchOptions: launchOptions,
+      });
+      await handlePruneAction({
+        run_id: "run-1",
+        action_token: token,
+        action: "capture_shortcut_snapshot",
+        app_id: 9001,
+      });
+      return vi
+        .mocked(backend.reportPruneAction)
+        .mock.calls.map(([request]) => request)
+        .find((request) => request.phase === "complete" && request.action_token === token);
+    };
+
+    expect(await capture(atCap, "token-at-cap")).toMatchObject({ success: true });
+    expect(await capture(`${atCap}x`, "token-over-cap")).toMatchObject({
+      success: false,
       message: expect.stringContaining("too large"),
     });
   });
@@ -474,5 +514,24 @@ describe("handlePruneAction", () => {
     expect(backend.reportPruneAction).not.toHaveBeenCalled();
     expect(removeShortcutConfirmedOutcome).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledWith("Ignored an invalid prune action event.");
+  });
+});
+
+describe("snapshotBytes", () => {
+  it("measures a snapshot the way the backend does", () => {
+    // The same snapshot and the same count stand in `tests/services/prune/test_requests.py`.
+    const vector = {
+      app_id: 9001,
+      name: "Pok\u00e9mon \u904a\u622f \u{1f3ae}",
+      exe: "/tender/bin/tender-rom-launcher",
+      start_dir: "/tender",
+      launch_options: 'a\tb\nc\u0001d\u007fe"f\\g',
+      minutes_playtime_forever: 120,
+      minutes_playtime_last_two_weeks: null,
+      last_played: 1234,
+      collections: [{ id: "favorites", name: "Favoris \u2605 \u{1f579}\ufe0f" }],
+    };
+
+    expect(snapshotBytes(vector)).toBe(339);
   });
 });

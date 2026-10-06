@@ -7,9 +7,15 @@ from typing import Any, Literal
 
 from services.prune._models import PruneOptions
 
+# The two page limits bound the work one call does, not the total: the panel
+# fetches every preview page and stages every selection page in turn.
 _MAX_PREVIEW_PAGE = 100
-_MAX_STEAM_SNAPSHOT_BYTES = 64 * 1024
 _MAX_SELECTION_PAGE = 100
+# A snapshot is echoed back in the `prune_action_required` event as
+# `expected_snapshot` and written into the recovery bundle; events pass no host
+# size cap, so this is what bounds both. The panel checks the same number,
+# measured the same way, before it sends (`frontend/src/utils/pruneActions.ts`).
+_MAX_STEAM_SNAPSHOT_BYTES = 64 * 1024
 
 
 def parse_preview_request(
@@ -110,12 +116,17 @@ def valid_snapshot(snapshot: object, expected_app_id: int | None) -> bool:
     ):
         return False
     try:
-        encoded = json.dumps(snapshot, ensure_ascii=True)
+        size = snapshot_bytes(snapshot)
     except (TypeError, ValueError):
         return False
-    if len(encoded.encode("utf-8")) > _MAX_STEAM_SNAPSHOT_BYTES:
+    if size > _MAX_STEAM_SNAPSHOT_BYTES:
         return False
     return not _contains_base64(snapshot)
+
+
+def snapshot_bytes(snapshot: object) -> int:
+    """The size a snapshot is judged by: its compact, ASCII-escaped JSON encoding."""
+    return len(json.dumps(snapshot, ensure_ascii=True, separators=(",", ":")).encode("utf-8"))
 
 
 def _contains_base64(value: object) -> bool:

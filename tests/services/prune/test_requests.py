@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 from services.prune._models import PruneOptions
-from services.prune.requests import parse_options, parse_preview_request, parse_selection_page, valid_snapshot
+from services.prune.requests import (
+    _MAX_STEAM_SNAPSHOT_BYTES,
+    parse_options,
+    parse_preview_request,
+    parse_selection_page,
+    snapshot_bytes,
+    valid_snapshot,
+)
 
 
 def _snapshot(app_id: int = 9001) -> dict[str, object]:
@@ -82,4 +89,34 @@ def test_snapshot_requires_exact_app_complete_shape_and_no_base64() -> None:
 def test_snapshot_rejects_oversized_payload() -> None:
     snapshot = _snapshot()
     snapshot["collections"] = [{"id": str(index), "name": "x" * 4096} for index in range(100)]
+    assert valid_snapshot(snapshot, 9001) is False
+
+
+# The same snapshot and the same count stand in `frontend/src/utils/pruneActions.test.ts`:
+# the panel refuses to send what this side would refuse to accept, and no more.
+_SHARED_SNAPSHOT_VECTOR: dict[str, object] = {
+    "app_id": 9001,
+    "name": "Pok\u00e9mon \u904a\u622f \U0001f3ae",
+    "exe": "/tender/bin/tender-rom-launcher",
+    "start_dir": "/tender",
+    "launch_options": 'a\tb\nc\u0001d\u007fe"f\\g',
+    "minutes_playtime_forever": 120,
+    "minutes_playtime_last_two_weeks": None,
+    "last_played": 1234,
+    "collections": [{"id": "favorites", "name": "Favoris \u2605 \U0001f579\ufe0f"}],
+}
+
+
+def test_a_snapshot_measures_the_same_bytes_as_in_the_panel() -> None:
+    assert snapshot_bytes(_SHARED_SNAPSHOT_VECTOR) == 339
+
+
+def test_snapshot_cap_is_judged_on_compact_json() -> None:
+    snapshot = _snapshot()
+    snapshot["launch_options"] = ""
+    snapshot["launch_options"] = "x" * (_MAX_STEAM_SNAPSHOT_BYTES - snapshot_bytes(snapshot))
+
+    assert snapshot_bytes(snapshot) == _MAX_STEAM_SNAPSHOT_BYTES
+    assert valid_snapshot(snapshot, 9001) is True
+    snapshot["launch_options"] += "x"
     assert valid_snapshot(snapshot, 9001) is False
