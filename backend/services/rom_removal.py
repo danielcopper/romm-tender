@@ -319,15 +319,19 @@ class RomRemovalService:
 
         An uninstall without the file deletion: the same conflict rules as
         ``remove_rom``, the same claim on the ROM, the install record dropped
-        through the same writer, and on success the same ``rom_uninstall`` lease
-        for the frontend's reset of the shortcut's launch command. Refused with
-        ``file_present``, naming the ``path`` found, while the recorded folder
-        or file exists.
+        through the same writer, and the same ``rom_uninstall`` lease in
+        ``prune_lease_token`` for the frontend's reset of the shortcut's launch
+        command.
+
+        Raises :class:`NotInstalled` for a ROM with no install record, and
+        ``in_progress`` while another removal holds the ROM. Refused with
+        ``file_present``, the ``path`` found in its details, while the recorded
+        folder or file exists, and with ``unknown`` when the record could not be
+        dropped.
         """
         async with self._rules.hold("forget_download", update=True, migration=True, prune=True):
             result = await self._forget_download(int(rom_id))
-            if result.get("success"):
-                result["prune_lease_token"] = await self._rules.acquire_lease("rom_uninstall")
+            result["prune_lease_token"] = await self._rules.acquire_lease("rom_uninstall")
             return result
 
     async def _forget_download(self, rom_id: int) -> dict[str, Any]:
@@ -338,15 +342,10 @@ class RomRemovalService:
                 present = await asyncio.shield(forget)
             except Exception as e:
                 self._logger.error(f"Failed to forget the download after {self._elapsed(started)}: {e}")
-                return {"success": False, "reason": "unknown", "message": "Failed to forget the download"}
+                raise Refused("unknown", "Failed to forget the download") from e
         if present is not None:
             self._logger.info(f"Forget download refused: rom_id={rom_id}: {present} exists")
-            return {
-                "success": False,
-                "reason": "file_present",
-                "message": f"The recorded download exists: {present}",
-                "path": present,
-            }
+            raise Refused("file_present", f"The recorded download exists: {present}", path=present)
         self._complete_removal(rom_id, "Forget download", started)
         return {"success": True, "message": "Download forgotten"}
 

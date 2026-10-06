@@ -1768,14 +1768,15 @@ class TestForgetDownload:
     async def test_a_file_that_is_there_refuses_it(self, service, uow, rom_files, prune_conflicts):
         rom_path = _seed_installed_file(uow, rom_files, 42)
 
-        result = await service.forget_download(42)
+        forget = service.forget_download(42)
+        with pytest.raises(Refused) as refused:
+            await forget
 
-        assert result == {
-            "success": False,
-            "reason": "file_present",
-            "message": f"The recorded download exists: {rom_path}",
-            "path": rom_path,
-        }
+        assert (refused.value.reason, refused.value.message, refused.value.details) == (
+            "file_present",
+            f"The recorded download exists: {rom_path}",
+            {"path": rom_path},
+        )
         assert uow.rom_installs.get(42) is not None
         assert rom_path in rom_files.files
         assert prune_conflicts.conflicting_operations == 0
@@ -1789,53 +1790,61 @@ class TestForgetDownload:
             platform_slug="psx",
         )
 
-        result = await service.forget_download(42)
+        forget = service.forget_download(42)
+        with pytest.raises(Refused) as refused:
+            await forget
 
-        assert result["reason"] == "file_present"
-        assert result["path"] == rom_dir
+        assert refused.value.reason == "file_present"
+        assert refused.value.details == {"path": rom_dir}
         assert uow.rom_installs.get(42) is not None
 
     async def test_a_rom_with_no_record_is_not_installed(self, service, prune_conflicts):
-        result = await service.forget_download(999)
+        forget = service.forget_download(999)
+        with pytest.raises(NotInstalled) as refused:
+            await forget
 
-        assert result["reason"] == "not_installed"
-        assert "prune_lease_token" not in result
+        assert refused.value.message == "ROM not installed"
         assert prune_conflicts.conflicting_operations == 0
 
     async def test_it_is_refused_while_a_removal_holds_the_rom(self, service, uow, rom_files):
         rom_path = f"{_ROMS_BASE}/n64/game.z64"
         rom_files.files[rom_path] = b"rom"
         _seed_install(uow, _make_install(42, file_path=rom_path))
-        forgotten: dict[str, object] = {}
+        refusals: list[Refused] = []
         original = service._delete_rom_files
 
         def remove_while_a_forget_arrives(*args, **kwargs):
-            forgotten.update(asyncio.run_coroutine_threadsafe(service.forget_download(42), service._loop).result())
+            with pytest.raises(Refused) as refused:
+                asyncio.run_coroutine_threadsafe(service.forget_download(42), service._loop).result()
+            refusals.append(refused.value)
             return original(*args, **kwargs)
 
         service._delete_rom_files = remove_while_a_forget_arrives
         result = await service.remove_rom(42)
 
         assert result["success"] is True
-        assert forgotten == {
-            "success": False,
-            "reason": "in_progress",
-            "message": "This ROM is already being uninstalled or forgotten",
-        }
+        assert [(r.reason, r.message) for r in refusals] == [
+            ("in_progress", "This ROM is already being uninstalled or forgotten")
+        ]
 
     async def test_an_uninstall_after_a_refused_forget_is_accepted(self, service, uow, rom_files):
         rom_path = _seed_installed_file(uow, rom_files, 42)
 
-        refused = await service.forget_download(42)
+        forget = service.forget_download(42)
+        with pytest.raises(Refused) as refused:
+            await forget
         removed = await service.remove_rom(42)
 
-        assert refused["reason"] == "file_present"
+        assert refused.value.reason == "file_present"
         assert removed["success"] is True
         assert rom_path not in rom_files.files
 
     async def test_a_second_forget_after_a_refused_one_is_accepted(self, service, uow, rom_files):
         rom_path = _seed_installed_file(uow, rom_files, 42)
-        assert (await service.forget_download(42))["reason"] == "file_present"
+        forget = service.forget_download(42)
+        with pytest.raises(Refused) as refused:
+            await forget
+        assert refused.value.reason == "file_present"
         del rom_files.files[rom_path]
 
         result = await service.forget_download(42)
@@ -1861,10 +1870,12 @@ class TestForgetDownload:
             raise RuntimeError("database is locked")
 
         monkeypatch.setattr(service, "_drop_install_record", fail_once)
-        failed = await service.forget_download(42)
+        forget = service.forget_download(42)
+        with pytest.raises(Refused) as failed:
+            await forget
         removed = await service.remove_rom(42)
 
-        assert failed["reason"] == "unknown"
+        assert failed.value.reason == "unknown"
         assert removed["success"] is True
 
     async def test_it_evicts_the_download_queue_entry(self, service, uow, rom_files, queue_cleanup):
@@ -1902,14 +1913,49 @@ class TestForgetDownload:
         assert uow.rom_installs.get(42) is not None
         assert prune_conflicts.conflicting_operations == 0
 
-    async def test_a_failed_write_answers_a_failure(self, service, uow, rom_files, monkeypatch):
+    async def test_a_failed_write_refuses_it_and_carries_no_lease(
+        self, service, uow, rom_files, prune_conflicts, monkeypatch
+    ):
         _seed_missing_download(uow, 42)
 
         def fail(_rom_id):
             raise RuntimeError("database is locked")
 
         monkeypatch.setattr(service, "_drop_install_record", fail)
-        result = await service.forget_download(42)
+        forget = service.forget_download(42)
+        with pytest.raises(Refused) as refused:
+            await forget
 
-        assert result == {"success": False, "reason": "unknown", "message": "Failed to forget the download"}
-        assert "prune_lease_token" not in result
+        assert (refused.value.reason, refused.value.message) == ("unknown", "Failed to forget the download")
+        assert prune_conflicts.conflicting_operations == 0
+
+    async def test_a_cancelled_forget_keeps_refusing_a_removal_until_its_record_is_dropped(
+        self, service, uow, rom_files, prune_conflicts
+    ):
+        """The call goes, the thread dropping the record does not, and the claim is the thread's."""
+        _seed_missing_download(uow, 42)
+        entered = threading.Event()
+        release = threading.Event()
+        original = service._drop_install_record
+
+        def drop_once_released(rom_id):
+            entered.set()
+            assert release.wait(timeout=5)
+            original(rom_id)
+
+        service._drop_install_record = drop_once_released
+        first = asyncio.ensure_future(service.forget_download(42))
+        assert await asyncio.to_thread(entered.wait, 5)
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+
+        second = service.remove_rom(42)
+        with pytest.raises(Refused) as refused:
+            await second
+        assert refused.value.reason == "in_progress"
+        assert prune_conflicts.conflicting_operations == 1
+
+        release.set()
+        await _until(lambda: not service._removals_in_flight)
+        assert uow.rom_installs.get(42) is None
