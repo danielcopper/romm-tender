@@ -518,7 +518,7 @@ open the page. If the drive or folder comes back, the game is playable again as 
 - **Forget this download** asks first, naming the game and the path its file was downloaded to. Confirmed, it is an
   uninstall without the deletion: the game becomes not downloaded and its shortcut's launch command is cleared, as after
   an uninstall, and no file is touched. It is refused while the file or folder is in fact there: the drive or folder
-  came back, so reopen the game page to play it.
+  came back, and the page offers **Play** again at once.
 
 While the file is missing, the **RomM Actions** menu behind the gamepad icon at the right of the play row offers no
 **Uninstall** — there is nothing to delete — and neither the disc picker nor the **CPU button** (the emulator picker) is
