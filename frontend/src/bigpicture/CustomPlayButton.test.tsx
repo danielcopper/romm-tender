@@ -5233,7 +5233,7 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
       item.click();
     });
     const calls = vi.mocked(showModal).mock.calls;
-    expect(calls.length).toBe(before + 1);
+    expect(calls).toHaveLength(before + 1);
     return (calls[calls.length - 1]![0] as ReactElement<ForgetConfirmProps>).props;
   };
 
