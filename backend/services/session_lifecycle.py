@@ -312,6 +312,25 @@ class SessionLifecycleService:
             conflicts_toast=None,
         )
 
+    def _failed_on_romm_error(self, rom_id: int, error: RommApiError) -> SessionFinalizeSyncResult:
+        """The failed-sync verdict for a RomM error the post-exit sync raised, toasted with its classified message."""
+        reason, message = classify_error(error)
+        # An offline handheld is an expected state, so it logs below warning, as the translator does.
+        level = logging.INFO if reason == ErrorCode.SERVER_UNREACHABLE.value else logging.WARNING
+        self._logger.log(
+            level, f"SessionLifecycle post-exit sync failed for rom_id={rom_id}: {type(error).__name__}: {error}"
+        )
+        return SessionFinalizeSyncResult(
+            offline=False,
+            success=False,
+            synced=None,
+            uploaded=0,
+            downloaded=0,
+            conflicts=[],
+            failure_toast=_render_failure_toast(offline=False, success=False, message=message, reason=reason),
+            conflicts_toast=None,
+        )
+
     async def _build_sync_result(self, rom_id: int) -> SessionFinalizeSyncResult:
         """Run post-exit sync and build the frontend's sync verdict.
 
@@ -352,22 +371,7 @@ class SessionLifecycleService:
                 conflicts_toast=None,
             )
         except RommApiError as e:
-            reason, message = classify_error(e)
-            # An offline handheld is an expected state, so it logs below warning, as the translator does.
-            level = logging.INFO if reason == ErrorCode.SERVER_UNREACHABLE.value else logging.WARNING
-            self._logger.log(
-                level, f"SessionLifecycle post-exit sync failed for rom_id={rom_id}: {type(e).__name__}: {e}"
-            )
-            return SessionFinalizeSyncResult(
-                offline=False,
-                success=False,
-                synced=None,
-                uploaded=0,
-                downloaded=0,
-                conflicts=[],
-                failure_toast=_render_failure_toast(offline=False, success=False, message=message, reason=reason),
-                conflicts_toast=None,
-            )
+            return self._failed_on_romm_error(rom_id, e)
         except Exception as e:
             self._logger.warning(f"SessionLifecycle post-exit sync failed for rom_id={rom_id}: {e}")
             # No classified message on this path: the sync raised something
