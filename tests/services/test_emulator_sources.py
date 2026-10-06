@@ -57,7 +57,7 @@ class _Rig:
                 settings=self.settings,
                 settings_persister=self.persister,
                 loop=running_loop(),
-                log_debug=lambda message: None,
+                log_debug=lambda msg: None,
             )
         )
 

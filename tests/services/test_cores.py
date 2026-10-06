@@ -794,10 +794,10 @@ def _retire_rom_between_transactions(uow: FakeUnitOfWork, core_info: FakeCoreInf
     """
     get_emulator_options = core_info.get_emulator_options
 
-    def retiring(system_name):
+    def retiring(system_name, *, reading=None):
         with uow:
             uow.roms.delete(rom_id)
-        return get_emulator_options(system_name)
+        return get_emulator_options(system_name, reading=reading)
 
     core_info.get_emulator_options = retiring
 
@@ -813,10 +813,10 @@ def _move_platform_between_transactions(
     """
     get_emulator_options = core_info.get_emulator_options
 
-    def resyncing(system_name):
+    def resyncing(system_name, *, reading=None):
         with uow:
             _seed_rom(uow, rom_id=rom_id, platform_slug=platform_slug, shortcut_app_id=99)
-        return get_emulator_options(system_name)
+        return get_emulator_options(system_name, reading=reading)
 
     core_info.get_emulator_options = resyncing
 
