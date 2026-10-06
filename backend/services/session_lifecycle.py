@@ -20,15 +20,15 @@ the backend-owned message convention.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.save_answer import BENIGN_SYNC_SKIP_REASONS
 from lib.errors import DeviceSyncDisabled, Refused, RommApiError, SyncBusy, classify_error
+from lib.list_result import ErrorCode
 
 if TYPE_CHECKING:
-    import logging
-
     from services.protocols import ConflictRules, UpdateInProgressFn
     from services.protocols.cross_service import (
         SessionAchievementSync,
@@ -352,8 +352,12 @@ class SessionLifecycleService:
                 conflicts_toast=None,
             )
         except RommApiError as e:
-            self._logger.warning(f"SessionLifecycle post-exit sync failed for rom_id={rom_id}: {type(e).__name__}: {e}")
             reason, message = classify_error(e)
+            # An offline handheld is an expected state, so it logs below warning, as the translator does.
+            level = logging.INFO if reason == ErrorCode.SERVER_UNREACHABLE.value else logging.WARNING
+            self._logger.log(
+                level, f"SessionLifecycle post-exit sync failed for rom_id={rom_id}: {type(e).__name__}: {e}"
+            )
             return SessionFinalizeSyncResult(
                 offline=False,
                 success=False,

@@ -19,6 +19,7 @@ from lib.errors import (
     DeviceSyncDisabled,
     Refused,
     RommAuthError,
+    RommServerError,
     RommSSLError,
     ServerUnreachable,
     SyncBusy,
@@ -434,7 +435,26 @@ class TestFinalizeSyncToasts:
         )
         # The generic fallback must NOT be used when a classified cause is present.
         assert result.sync.failure_toast != "Failed to sync saves after exit"
-        assert any("RommAuthError" in record.getMessage() for record in caplog.records)
+        assert [r.levelno for r in caplog.records if "RommAuthError" in r.getMessage()] == [logging.WARNING]
+
+    def test_a_server_the_sync_could_not_reach_logs_below_warning(self, event_loop, logger, caplog):
+        """A RomM error whose verdict is ``server_unreachable`` is an expected state: it logs at info, not warning."""
+        failure = RommServerError("HTTP 502: Bad Gateway", status_code=502)
+        post = FakePostExitSync(side_effect=failure)
+        service = _make_service(
+            playtime_recorder=FakePlaytimeRecorder(),
+            post_exit_sync=post,
+            achievement_sync=FakeAchievementSync(),
+            migration_reader=FakeMigrationReader(),
+            logger=logger,
+        )
+
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            result = event_loop.run_until_complete(service.finalize(99))
+        event_loop.run_until_complete(_drain_background_tasks(service))
+
+        assert result.sync.failure_toast == classify_error(failure)[1]
+        assert [r.levelno for r in caplog.records if "RommServerError" in r.getMessage()] == [logging.INFO]
 
     def test_failure_with_ssl_message_names_the_cause(self, event_loop, logger):
         """#971: an SSL error the sync raises surfaces ``classify_error``'s specific message, never offline."""
