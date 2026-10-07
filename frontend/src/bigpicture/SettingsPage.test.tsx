@@ -1782,8 +1782,8 @@ describe("SettingsPage", () => {
     it("declares that section's row the area entry focus belongs in, so the open is not undone", async () => {
       // Mounting on the section is only half of it: focus selects on this
       // layout, so entry focus landing on row one would select Connections a
-      // moment later — which is what a notice's jump into a later section did
-      // on the device. The declaration is what the frame places focus on instead.
+      // moment later, undoing any jump into a later section. The declaration is
+      // what the frame places focus on instead.
       //
       // **The undoing itself is not reachable here.** It needs Steam's focus
       // resolution after the mount and the frame's timer; happy-dom has no nav

@@ -2170,8 +2170,9 @@ The pages land in this order under #1808, each with the open work that already s
    Carries #886's presentation half. **Landed**, in two PRs: the backend half, then the page and Main's reduction. The
    import choice (#1364) is the one thing the page leaves space for.
 4. **Settings** ([#1816](https://github.com/danielcopper/romm-tender/issues/1816)) — the sections, Steam Library, the
-   home for the save-sort migration with its notice on Main. Carries #1020's URL and double-press fixes. **Landed**, in
-   one PR; RetroAchievements has no sign-in for Connections to hold until #1627.
+   homes for the `input_driver` fix and the save-sort migration with their notices on Main (both since removed). Carries
+   #1020's URL and double-press fixes. **Landed**, in one PR; RetroAchievements has no sign-in for Connections to hold
+   until #1627.
 5. **Data Management** ([#1817](https://github.com/danielcopper/romm-tender/issues/1817)) — the page becomes an
    inventory of what this device holds, the removed-games review stays a dialog and is redrawn, and recovery bundles
    become visible. After Library, which removes the platform modal.
@@ -2233,8 +2234,9 @@ screenshots (#830) are taken after.
   not a description of the page.
 - The static prototype the decisions were made on: [qam-prototype.html](../assets/qam-prototype.html), a single
   self-contained page kept in `docs/assets/`. Every page at device size with numbered notes; its example data is
-  invented, and it reflects the decisions as of this page's first version — the save-sort notice and its Settings home
-  it draws no longer exist, and the device-list study above draws the same notice. Redrawn to the Deck's real 854 × 534
-  CSS px — Steam's 80 px top bar over a 454 px panel — once the device round had measured them.
+  invented, and it reflects the decisions as of this page's first version — the save-sort notice, the `input_driver` fix
+  and the Settings homes it draws for both no longer exist, and the device-list study above draws the save-sort notice
+  too. Redrawn to the Deck's real 854 × 534 CSS px — Steam's 80 px top bar over a 454 px panel — once the device round
+  had measured them.
 - [ADR-0029](../adr/0029-wide-qam-pages-drive-steams-friends-expansion.md) — why the panel widens through Steam's
   Friends expansion and not a full-screen route, and what that rests on.

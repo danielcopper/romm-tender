@@ -28,14 +28,14 @@ accounts.
 
 ### Getting there from a notice
 
-Three of the notices on Tender's main panel are doors into a section, and the action they are about lives only behind
+Four of the notices on Tender's main panel are doors into a section, and the action they are about lives only behind
 that door:
 
-| The notice says       | Its button           | Where it takes you     |
-| --------------------- | -------------------- | ---------------------- |
-| Cross-device playtime | **Open Connections** | Settings › Connections |
-| Update to X failed    | **Open Updates**     | Settings › Updates     |
-| Tender X is available | **Open Updates**     | Settings › Updates     |
+| The notice says                                                     | Its button           | Where it takes you     |
+| ------------------------------------------------------------------- | -------------------- | ---------------------- |
+| Cross-device playtime                                               | **Open Connections** | Settings › Connections |
+| Update to X failed (rolled back, refused, or the installer stopped) | **Open Updates**     | Settings › Updates     |
+| Tender X is available                                               | **Open Updates**     | Settings › Updates     |
 
 The main panel only names the condition, so there is one place to do each of these and no chance of two of them
 disagreeing. **B** takes you back to the main panel from anywhere on the page.

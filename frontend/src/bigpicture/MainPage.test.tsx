@@ -2479,7 +2479,7 @@ describe("MainPage", () => {
   });
 
   // ===========================================================================
-  // J. handleClearCache — Force Full Sync flow
+  // J. The input_driver notice — never shown
   // ===========================================================================
   describe("the input_driver notice", () => {
     it("is not shown, even for a settings payload carrying the field it was read from", async () => {

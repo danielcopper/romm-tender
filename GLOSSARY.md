@@ -1220,8 +1220,8 @@ block, below the conditional slot. `docs/architecture/qam-panel.md`'s Main secti
 condition is the one page where it is acted on. A notice names the condition and jumps to its home; the action exists
 only there, never on the notice. A condition answered **once and for all** — the user picks between named outcomes, and
 answering ends the condition for good — has no page to return to, so its home is a modal opened from the notice; that
-modal _is_ the home, not a second exception to the rule. A condition with no home in the panel stays a notice without a
-jump, with Dismiss where there is a sensible end to it. _Avoid_: banner (component names only), warning, alert.
+modal _is_ the home, not an exception to the rule. A condition with no home in the panel stays a notice without a jump,
+with Dismiss where there is a sensible end to it. _Avoid_: banner (component names only), warning, alert.
 
 ### Available release / installed program
 
