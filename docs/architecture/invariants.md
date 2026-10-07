@@ -610,20 +610,20 @@ Format: **invariant** — tier — enforced by.
   `services/shortcut_removal.py` and `services/library/reporter.py`, and `check_retroarch_input_driver()` from
   `services/settings.py` — those are unlisted, and their being unlisted is a gap, not a judgement),
   `FirmwarePlatformResolver` (reads what one system's emulators want WITH content verification: it opens each candidate
-  in a declared folder and reads it the way the emulator does — 64-318 ms per system on the reference machine) and its
-  whole-machine sibling `FirmwareResolver`, the save answer — `resolve_save_answer` and the saves package's own
-  `save_answer` wrapper, a full read of the machine per ROM (the first ask about a core also runs that core's probe) —
-  the savestate question put to the same catalogue entry (`resolve_savestate_location`) and the seam's detection
-  question (`installation_detected`, which detects the emulator sources afresh and reads the answering one's health),
-  the two path resolvers — `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a directory that
-  may sit on the SD card the marker is pending a migration away from) and `ResolvedPathFn` (the same walk, but on
-  **both** sides of a comparison, so a call site costs what the rows it checks cost, not what it checks them against) —
-  and the `RetroDeckPaths` getters that answer with a root: `bios_path`, `roms_path`, `saves_path` and `retrodeck_home`,
-  four of the Protocol's five path getters, each resolving on every call. The fifth, `config_path`, stays out because it
-  resolves nothing — it is `os.path.join` over the user home, so calling it costs no I/O. That timing is the only entry
-  a cost was measured for; every other one is listed from reading its implementation. One other real I/O seam was
-  weighed and kept out — the reason is in the script's docstring, and it is not an exemption; nor is it an inventory of
-  what else touches the disk. **"It's only a read" is the reasoning this rule exists to refuse**:
+  in a declared folder and reads it the way the emulator does — 59-173 ms per system on the reference machine at
+  emu-atlas 0.22) and its whole-machine sibling `FirmwareResolver`, the save answer — `resolve_save_answer` and the
+  saves package's own `save_answer` wrapper, a full read of the machine per ROM (the first ask about a core also runs
+  that core's probe) — the savestate question put to the same catalogue entry (`resolve_savestate_location`) and the
+  seam's detection question (`installation_detected`, which detects the emulator sources afresh and reads the answering
+  one's health), the two path resolvers — `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a
+  directory that may sit on the SD card the marker is pending a migration away from) and `ResolvedPathFn` (the same
+  walk, but on **both** sides of a comparison, so a call site costs what the rows it checks cost, not what it checks
+  them against) — and the `RetroDeckPaths` getters that answer with a root: `bios_path`, `roms_path`, `saves_path` and
+  `retrodeck_home`, four of the Protocol's five path getters, each resolving on every call. The fifth, `config_path`,
+  stays out because it resolves nothing — it is `os.path.join` over the user home, so calling it costs no I/O. That
+  timing is the only entry a cost was measured for; every other one is listed from reading its implementation. One other
+  real I/O seam was weighed and kept out — the reason is in the script's docstring, and it is not an exemption; nor is
+  it an inventory of what else touches the disk. **"It's only a read" is the reasoning this rule exists to refuse**:
   `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The database is
   in WAL, so readers are unaffected — but every other **writer** waits on the lock for up to `busy_timeout=5000` and
   fails with `SQLITE_BUSY` if it is still held then, and `FakeUnitOfWork` shares no connection, so no unit test notices.
@@ -1095,18 +1095,18 @@ Format: **invariant** — tier — enforced by.
   whole-page tests compose through a local helper that would reproduce a composition bug rather than catch it. **The
   rule spans three frontend modules and one backend split, and nothing joins them.** `services/firmware/status.py`
   answers `get_firmware_status` (which platforms the page can speak for) and `get_platform_firmware_status` (one
-  platform's whole entry — 106-486 ms each against 4.6 ms for the overview, measured); `usePlatformsPage` owns the walk,
-  the per-slug ordering counter and the four-valued `firmwareState`; `PlatformsTab` draws the dot; `PlatformDetail`
-  words the pane. Every failure here is silent and looks like an answer. A state-bearing field creeping back onto the
-  overview payload gets rendered over a platform nobody has asked about yet. A fifth rendering path reading
-  `firmware === null` instead of the state says "nothing could be established" about most of the list for the first
-  seconds of every visit — which is the confusion this cut exists to remove, restored by a truthiness test. An answer
-  already held is not taken back by a later failure (`firmwareStale` beside the state, never instead of it), and "the
-  overview did not name this platform" is one of the two ways to hold one. **Two halves no test reaches**: the `alive`
-  guard in the hook's `accept` is unobservable under React Testing Library, which drops a write to an unmounted tree
-  itself — what a test can see is the walk stopping, so the guard states the rule rather than being held to it; and
-  whether an 8px outline reads as "not yet" against a filled dot is device-only, like everything else about this list's
-  legibility
+  platform's whole entry — 199-314 ms each, 5.3 s across the reference library's 25 platforms, against 171 ms for the
+  overview, measured at emu-atlas 0.22); `usePlatformsPage` owns the walk, the per-slug ordering counter and the
+  four-valued `firmwareState`; `PlatformsTab` draws the dot; `PlatformDetail` words the pane. Every failure here is
+  silent and looks like an answer. A state-bearing field creeping back onto the overview payload gets rendered over a
+  platform nobody has asked about yet. A fifth rendering path reading `firmware === null` instead of the state says
+  "nothing could be established" about most of the list for the first seconds of every visit — which is the confusion
+  this cut exists to remove, restored by a truthiness test. An answer already held is not taken back by a later failure
+  (`firmwareStale` beside the state, never instead of it), and "the overview did not name this platform" is one of the
+  two ways to hold one. **Two halves no test reaches**: the `alive` guard in the hook's `accept` is unobservable under
+  React Testing Library, which drops a write to an unmounted tree itself — what a test can see is the walk stopping, so
+  the guard states the rule rather than being held to it; and whether an 8px outline reads as "not yet" against a filled
+  dot is device-only, like everything else about this list's legibility
 - **The whole-machine firmware inventory is never asked with content verification, and the per-platform reading is never
   asked without it** — prompt-only — `firmware_inventory()` (`FirmwareResolver`, `AtlasFirmwareAdapter`) is asked
   unverified: `verify=True` there sweeps every unclaimed file under the BIOS root plus each declared file the packaged
@@ -1116,9 +1116,10 @@ Format: **invariant** — tier — enforced by.
   likely to "optimise": drop the flag and two answers go silent rather than loud — a packaged card that identifies its
   image by content names no file at all (DuckStation comes back `declaration="packaged"` with an empty list and no
   system recording), and every folder declaration's verdict falls to `None`, which takes each platform holding one to
-  `unknown`. Measured on the reference machine: 64-318 ms per system verified, against 248 ms for one unverified
-  whole-machine sweep — the per-system read performs no unclaimed sweep at all, which is what bounds it. Nothing detects
-  either direction: `verify` is one keyword argument on each call and every test stays green
+  `unknown`. Measured on the reference machine at emu-atlas 0.22, the median of five runs each: 59-173 ms per system
+  verified, against 172 ms for one unverified whole-machine sweep — the per-system read performs no unclaimed sweep at
+  all, which is what bounds it. Nothing detects either direction: `verify` is one keyword argument on each call and
+  every test stays green
 - **No sentinel objects on the wire — explicit JSON-representable tagged values only** — prompt-only — no sentinel
   survives on the wire today (`NO_MIGRATION` retired with #1004, legacy `slot:null` confirmation with #1276), so the
   rule now guards reintroduction; nothing mechanical detects a new one

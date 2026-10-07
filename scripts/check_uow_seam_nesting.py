@@ -256,11 +256,11 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # FirmwarePlatformResolver (services/protocols/paths.py) — reads what
         # one system's emulators want, with content verification: it opens each
         # candidate in a declared folder and reads it the way the emulator does,
-        # 64-318 ms per system on the reference machine. Another call-shaped
-        # seam, so the list carries the attribute every consumer in services/
-        # binds it to, as it does for the others. Its whole-machine sibling
-        # FirmwareResolver is bound to ``_firmware_resolver`` and is listed for
-        # the same reason.
+        # 59-173 ms per system on the reference machine at emu-atlas 0.22.
+        # Another call-shaped seam, so the list carries the attribute every
+        # consumer in services/ binds it to, as it does for the others. Its
+        # whole-machine sibling FirmwareResolver is bound to
+        # ``_firmware_resolver`` and is listed for the same reason.
         "_platform_firmware_resolver",
         "_firmware_resolver",
         # SystemSupportedExtensionsFn / SystemKnownFn

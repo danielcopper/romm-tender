@@ -1167,11 +1167,12 @@ class TestAFileWithSomethingElseAtItsDestination:
 class TestTheOverviewNamesPlatformsWithoutReadingThem:
     """``get_firmware_status`` says WHICH platforms the page can speak for, and no more.
 
-    The reading a platform's state costs is a live per-system one — 64-350 ms
-    each on the reference machine, and a library of 28 platforms put roughly
-    three seconds in front of the first row when the overview paid them all. So
-    the overview pays none, and every assertion here is about an ABSENCE: what
-    this call does NOT read, and what it does NOT carry.
+    The reading a platform's state costs is a live per-system one — 59-175 ms
+    each on the reference machine at emu-atlas 0.22, and the 25 platforms of its
+    library add up to 1.8 s of them, which the overview would put in front of
+    the first row if it paid them all. So the overview pays none, and every
+    assertion here is about an ABSENCE: what this call does NOT read, and what
+    it does NOT carry.
 
     A field on this payload is a field the page can render before any reading
     has happened, which is why the key set is pinned rather than sampled: a
