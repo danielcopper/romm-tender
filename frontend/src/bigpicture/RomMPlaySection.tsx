@@ -307,7 +307,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
      *  cannot be called at all is as much a reachability signal as a rejected
      *  promise. Except a call refused because the panel is stranded: a backend
      *  runs and refused this panel, which says nothing about RomM, so it writes
-     *  no verdict and the badge states the socket's own answer instead. Only
+     *  no verdict and the badge says Tender was restarted instead. Only
      *  the CALL is guarded: a throw out of applyVerdict is a subscriber's
      *  defect, not a verdict, and must not be reported as one. */
     const runVerdict = async () => {

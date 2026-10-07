@@ -308,7 +308,7 @@ below.
 `backend/host/protocol.py`. The port and the token are read off the URL this bundle was loaded from: the host mints
 exactly that address, so they arrive with the code that needs them and cannot be stale.
 
-Four properties are worth knowing before changing anything there:
+Five properties are worth knowing before changing anything there:
 
 - **A transport failure is thrown, never returned.** `error.reason` names something that went wrong _carrying_ a call;
   an endpoint's own failure is a perfectly successful transport and arrives inside `result` as

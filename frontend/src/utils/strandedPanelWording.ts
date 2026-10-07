@@ -5,9 +5,6 @@
  * one running refuses it; the answer is whether that backend reloads Steam's
  * interface once no game is running — which replaces the panel — or Steam has to
  * be restarted.
- *
- * The notification shows the headline with the detail as its subtext; Main and a
- * press that could not reach the backend show the sentence.
  */
 
 /** The two answers a stranded panel can be given (`backend/host/protocol.py`'s two close codes). */
