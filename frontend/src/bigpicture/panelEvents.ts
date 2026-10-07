@@ -211,9 +211,17 @@ async function handleCoreChange(ctx: PanelEventContext): Promise<void> {
 
 /** A switch or a move of an emulator source can change which source answers for
  *  this game, and with it everything `handleCoreChange` re-reads and the save's
- *  shape. */
+ *  shape. The save details are read only while save sync is on, as the cached
+ *  detail says; `handleCoreChange` has invalidated it and asked for it again
+ *  before its first await, so this joins that read rather than opening a
+ *  second one. */
 async function handleEmulatorSourcesChange(ctx: PanelEventContext): Promise<void> {
-  await Promise.all([handleCoreChange(ctx), refreshSaveDetails(ctx, undefined)]);
+  const core = handleCoreChange(ctx);
+  const saves = getCachedGameDetail(ctx.appId).then(
+    (cached) => (cached.found && cached.save_sync_enabled ? refreshSaveDetails(ctx, undefined) : undefined),
+    () => undefined,
+  );
+  await Promise.all([core, saves]);
 }
 
 async function handleVersionSwitched(

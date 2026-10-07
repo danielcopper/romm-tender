@@ -1589,6 +1589,34 @@ describe("RomMGameInfoPanel", () => {
       expect(view.container.textContent).not.toContain("INITIAL_CORE");
     });
 
+    it("emulator_sources: leaves the save status and the slots unread while save sync is off", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 61,
+        platform_slug: "snes",
+        save_sync_enabled: false,
+        metadata: makeMetadata(),
+        stale_fields: [],
+      });
+      render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      vi.mocked(backend.getPlatformCoreInfo).mockClear();
+      vi.mocked(backend.getSaveStatus).mockClear();
+      vi.mocked(backend.isSaveTrackingConfigured).mockClear();
+      vi.mocked(backend.getSaveSlots).mockClear();
+
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
+        await Promise.resolve();
+      });
+      await flushAsync();
+
+      expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledWith(61);
+      expect(vi.mocked(backend.getSaveStatus)).not.toHaveBeenCalled();
+      expect(vi.mocked(backend.isSaveTrackingConfigured)).not.toHaveBeenCalled();
+      expect(vi.mocked(backend.getSaveSlots)).not.toHaveBeenCalled();
+    });
+
     it("core_changed: invalidates cache + re-fetches getCachedGameDetail and updates biosStatus state", async () => {
       // Mount without bios_status so the initial state.biosStatus is null
       // and the BIOS tab is NOT visible. Then dispatch core_changed with a
