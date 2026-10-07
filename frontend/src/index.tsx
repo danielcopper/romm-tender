@@ -1,4 +1,4 @@
-import { definePanel, addEventListener, recheckStranded, toaster } from "./api/host";
+import { definePanel, addEventListener, toaster } from "./api/host";
 import { showToast, DISPLAY_NAME } from "./utils/toast";
 import { useState, useRef, useEffect, FC, type ReactNode } from "react";
 import { Focusable } from "@decky/ui";
@@ -15,7 +15,7 @@ import { OWNS_ENTRY_FOCUS_ATTR } from "./bigpicture/layout/WidePage";
 import { installQuickAccessEntry } from "./qam/installEntry";
 import { TabIcon } from "./qam/TabIcon";
 import { initUnitSyncManager, resetSyncCancel } from "./utils/syncManager";
-import { watchStrandedPanel } from "./utils/strandedPanelStore";
+import { useRecheckStrandedWhenOpened, watchStrandedPanel } from "./utils/strandedPanelStore";
 import { setSyncProgress, getSyncProgress, updateSyncProgress } from "./utils/syncProgress";
 import { estimatePlanSeconds } from "./utils/syncEstimate";
 import { beginEtaRun } from "./utils/syncEta";
@@ -109,6 +109,13 @@ let currentPage: Page = "main";
 // section rather than the one the reader was sent to.
 let currentSection: SettingsSection | null = null;
 
+// A component of its own so that the menu opening and closing re-renders it
+// rather than the page under it.
+const StrandedRecheck: FC = () => {
+  useRecheckStrandedWhenOpened();
+  return null;
+};
+
 const QAMPanel: FC = () => {
   const [page, setPageState] = useState<Page>(currentPage); // NOSONAR(typescript:S6754) — setter intentionally renamed; setPage wraps it below to provide custom navigation behavior.
   const [settingsSection, setSettingsSectionState] = useState<SettingsSection | null>(currentSection); // NOSONAR(typescript:S6754) — set through setPage, which owns both halves of a navigation.
@@ -126,14 +133,6 @@ const QAMPanel: FC = () => {
     if (typeof target === "string") setPage(target);
     else setPage(target.page, target.section);
   };
-
-  // Tender opened in Quick Access is one of the moments a stranded panel asks
-  // the backend again: what it answered may have changed since — a reload limit
-  // that freed up, or a recovery that gave up. Where the panel is not stranded
-  // this asks nothing.
-  useEffect(() => {
-    detach(recheckStranded());
-  }, []);
 
   useEffect(() => {
     const el = rootRef.current;
@@ -206,6 +205,7 @@ const QAMPanel: FC = () => {
   // legend, which this makes true.
   return (
     <div ref={rootRef}>
+      <StrandedRecheck />
       {page === "main" ? content : <Focusable onCancelButton={() => setPage("main")}>{content}</Focusable>}
     </div>
   );

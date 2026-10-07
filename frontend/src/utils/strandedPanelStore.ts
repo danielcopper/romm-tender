@@ -8,14 +8,16 @@
  * differently. So "one notification when the panel becomes stranded, and one
  * more each time the answer changes" is one notification per change heard.
  *
- * Read by MainPage.tsx through {@link useStrandedAnswer}; the notification is
- * raised from {@link watchStrandedPanel}, which `index.tsx` starts once per
- * panel load.
+ * The notification is raised from {@link watchStrandedPanel}, which `index.tsx`
+ * starts once per panel load.
  */
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
-import { onStrandedAnswerChange, strandedAnswer } from "../api/host";
+import { onStrandedAnswerChange, recheckStranded, strandedAnswer } from "../api/host";
+import { detach } from "./detach";
+import { useOwningQamTabActive } from "./owningQamTab";
+import { useQuickAccessVisible } from "./quickAccessVisible";
 import { STRANDED_PANEL_HEADLINE, strandedPanelDetail, type StrandedAnswer } from "./strandedPanelWording";
 import { showToast } from "./toast";
 
@@ -36,4 +38,21 @@ export function watchStrandedPanel(): () => void {
 /** The stranded answer from a component, or `null` while the panel is not stranded. Re-renders on a change. */
 export function useStrandedAnswer(): StrandedAnswer | null {
   return useSyncExternalStore(onStrandedAnswerChange, strandedAnswer);
+}
+
+/**
+ * Ask the backend again each time Tender's Quick Access page is opened: the
+ * menu comes on screen with Tender's tab the active one. What a stranded panel
+ * was told may have changed since — a reload limit that freed up, or a recovery
+ * that gave up. Opening is read off the two signals the update dots' dwell uses
+ * (`utils/updateDot.ts`), not off a mount: Quick Access keeps the panel mounted
+ * while it is closed. Where the panel is not stranded the re-check asks nothing.
+ */
+export function useRecheckStrandedWhenOpened(): void {
+  const qamVisible = useQuickAccessVisible();
+  const tabActive = useOwningQamTabActive();
+  const opened = qamVisible && tabActive;
+  useEffect(() => {
+    if (opened) detach(recheckStranded());
+  }, [opened]);
 }

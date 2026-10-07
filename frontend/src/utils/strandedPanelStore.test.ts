@@ -1,9 +1,32 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
+import { useSyncExternalStore } from "react";
 
-import { toaster } from "../api/host";
+import { recheckStranded, toaster } from "../api/host";
 import { setStrandedAnswer } from "../test-utils/stranded-panel";
-import { useStrandedAnswer, watchStrandedPanel } from "./strandedPanelStore";
+import { setOwningQamTabActive } from "./owningQamTab";
+import { useRecheckStrandedWhenOpened, useStrandedAnswer, watchStrandedPanel } from "./strandedPanelStore";
+
+// The Quick Access menu's own visibility, backed by a store the tests flip:
+// test-setup.ts's `() => true` cannot close the menu.
+let qamVisible = true;
+const visibilityListeners = new Set<() => void>();
+const subscribeVisibility = (onChange: () => void) => {
+  visibilityListeners.add(onChange);
+  return () => {
+    visibilityListeners.delete(onChange);
+  };
+};
+const setQamVisible = (visible: boolean) =>
+  act(() => {
+    qamVisible = visible;
+    visibilityListeners.forEach((fn) => fn());
+  });
+const setTabActive = (active: boolean) => act(() => setOwningQamTabActive(active));
+
+vi.mock("./quickAccessVisible", () => ({
+  useQuickAccessVisible: () => useSyncExternalStore(subscribeVisibility, () => qamVisible),
+}));
 
 const raised = () => vi.mocked(toaster.toast).mock.calls.map(([toast]) => toast);
 
@@ -67,5 +90,52 @@ describe("useStrandedAnswer", () => {
 
     act(() => setStrandedAnswer("restart_steam"));
     expect(result.current).toBe("restart_steam");
+  });
+});
+
+describe("useRecheckStrandedWhenOpened", () => {
+  beforeEach(() => {
+    vi.mocked(recheckStranded).mockClear();
+  });
+
+  afterEach(() => {
+    qamVisible = true;
+    setOwningQamTabActive(true);
+  });
+
+  it("asks once when Tender's page is opened, and not again while it stays open", () => {
+    const { rerender } = renderHook(() => useRecheckStrandedWhenOpened());
+    rerender();
+
+    expect(recheckStranded).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks again when the menu is closed and opened again, with the panel still mounted", () => {
+    renderHook(() => useRecheckStrandedWhenOpened());
+
+    setQamVisible(false);
+    expect(recheckStranded).toHaveBeenCalledTimes(1);
+    setQamVisible(true);
+
+    expect(recheckStranded).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks again when Tender's tab is chosen again after another one", () => {
+    renderHook(() => useRecheckStrandedWhenOpened());
+
+    setTabActive(false);
+    setTabActive(true);
+
+    expect(recheckStranded).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks nothing while mounted behind a closed menu, and once it opens", () => {
+    qamVisible = false;
+    renderHook(() => useRecheckStrandedWhenOpened());
+    expect(recheckStranded).not.toHaveBeenCalled();
+
+    setQamVisible(true);
+
+    expect(recheckStranded).toHaveBeenCalledTimes(1);
   });
 });

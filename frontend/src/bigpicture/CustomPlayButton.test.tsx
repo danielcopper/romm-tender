@@ -24,6 +24,7 @@ import * as deckyUi from "@decky/ui";
 import type { ReactElement } from "react";
 import { CustomPlayButton } from "./CustomPlayButton";
 import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
+import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import * as backend from "../api/backend";
 import type { CachedGameDetail } from "../api/backend";
 import type { DownloadCompleteEvent, DownloadFailedEvent, DownloadProgressEvent } from "../types";
@@ -3765,6 +3766,30 @@ describe("CustomPlayButton — Stop Game", () => {
     const reopened = openRunningMenu(chevron);
     expect(await reopened.findByText("Stop Game")).toBeInTheDocument();
     expect(reopened.queryByText("Stopping...")).toBeNull();
+    expect(utils.getByText("Resume")).toBeInTheDocument();
+  });
+
+  it("says so before the confirm on a panel already known to be stranded, and calls nothing", async () => {
+    vi.mocked(recheckStranded).mockClear();
+    vi.mocked(showStopGameModal).mockClear();
+    vi.mocked(backend.stopRunningGame).mockClear();
+    const { utils, menu } = await renderRunningWithMenu();
+    act(() => setStrandedAnswer("reloads"));
+    const stopItem = await menu.findByText("Stop Game");
+
+    await act(async () => {
+      stopItem.click();
+      await Promise.resolve();
+    });
+
+    expect(showStopGameModal).not.toHaveBeenCalled();
+    expect(backend.stopRunningGame).not.toHaveBeenCalled();
+    expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith({
+      title: "Tender",
+      body: "Couldn't stop the game",
+      subtext: "Tender was restarted — it reloads Steam's interface once no game is running.",
+    });
+    expect(recheckStranded).toHaveBeenCalledTimes(1);
     expect(utils.getByText("Resume")).toBeInTheDocument();
   });
 
