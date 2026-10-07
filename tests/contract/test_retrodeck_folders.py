@@ -5,7 +5,8 @@ RetroDECK laid down under the harness home — marker, ES-DE's ROM folder settin
 deploy. The four findings that make RetroDECK's folders defaults are each
 produced the way the resolver meets them, and under every one a press that would
 download, delete or clean up there is refused and leaves the folders as they were
-— as it is where asking the resolver about RetroDECK's health raised.
+— as it is where detecting the sources, or asking the resolver about RetroDECK's
+health or one of its roots, raised.
 """
 
 from __future__ import annotations
@@ -143,20 +144,30 @@ async def test_under_the_finding_nothing_is_downloaded_deleted_or_cleaned_up_the
     assert all(os.path.exists(path) for path in on_disk)
 
 
-def _health_raises(_self: RetroDeck) -> None:
+def _raises(*_args: object) -> None:
     raise RuntimeError("the resolver failed")
 
 
 _UNANSWERED = "RetroDECK's folders could not be established, so Tender downloads into and removes from none of them."
+# RetroDECK's health and its four roots, asked together up front: one that
+# raises leaves none of its folders established.
+_ROOT_QUESTIONS = ["health", "root", "roms_dir", "bios_dir", "saves_root"]
 
 
+def _detection_raises(harness) -> None:
+    harness.app.services.download_service._retrodeck_folders._sources._detect = _raises
+
+
+@pytest.mark.parametrize("raising", _ROOT_QUESTIONS)
 @pytest.mark.parametrize("press", list(_PRESSES))
-async def test_where_retrodeck_s_health_could_not_be_asked_the_press_is_refused(harness, monkeypatch, press):
-    # A healthy RetroDECK whose health question fails: nothing says its folders
-    # are not defaults, so every press is refused as under a finding.
+async def test_where_a_question_about_retrodeck_s_roots_raises_the_press_is_refused(
+    harness, monkeypatch, press, raising
+):
+    # A healthy RetroDECK whose question fails: nothing establishes its
+    # folders, so every press is refused as under a finding.
     on_disk = _seed_what_a_press_would_touch(harness)
     seed_es_systems(harness)
-    monkeypatch.setattr(RetroDeck, "health", _health_raises)
+    monkeypatch.setattr(RetroDeck, raising, _raises)
     before = sorted(os.walk(harness.retrodeck_home))
 
     result = await _PRESSES[press](harness)
@@ -168,11 +179,48 @@ async def test_where_retrodeck_s_health_could_not_be_asked_the_press_is_refused(
     assert all(os.path.exists(path) for path in on_disk)
 
 
-async def test_where_retrodeck_s_health_could_not_be_asked_check_against_server_says_so(harness, monkeypatch):
+@pytest.mark.parametrize("press", list(_PRESSES))
+async def test_where_detecting_the_sources_raises_the_press_is_refused_never_as_not_installed(harness, press):
+    on_disk = _seed_what_a_press_would_touch(harness)
+    seed_es_systems(harness)
+    _detection_raises(harness)
+    before = sorted(os.walk(harness.retrodeck_home))
+
+    result = await _PRESSES[press](harness)
+
+    assert result["success"] is False
+    assert result["reason"] == "retrodeck_unanswered"
+    assert result["message"] == _UNANSWERED
+    assert sorted(os.walk(harness.retrodeck_home)) == before
+    assert all(os.path.exists(path) for path in on_disk)
+
+
+@pytest.mark.parametrize("raising", [*_ROOT_QUESTIONS, "detection"])
+async def test_switched_off_a_download_says_so_where_a_question_raises(harness, monkeypatch, raising):
+    _seed_what_a_press_would_touch(harness)
+    seed_es_systems(harness)
+    harness.settings["emulator_sources_off"] = ["retrodeck"]
+    if raising == "detection":
+        _detection_raises(harness)
+    else:
+        monkeypatch.setattr(RetroDeck, raising, _raises)
+
+    game = await harness.endpoints.start_download(8)
+    bios = await harness.endpoints.download_platform_firmware_file("dc", "dc_boot.bin")
+    removal = await harness.endpoints.remove_rom(_ROM_ID)
+
+    assert game["reason"] == "retrodeck_switched_off"
+    assert game["message"] == "Downloads need RetroDECK, which is switched off in Settings → Emulator sources."
+    assert bios["reason"] == "retrodeck_switched_off"
+    assert removal["message"] == _UNANSWERED
+
+
+@pytest.mark.parametrize("raising", [*_ROOT_QUESTIONS, "rom_location"])
+async def test_where_a_question_raises_check_against_server_says_so(harness, monkeypatch, raising):
     # Its answer is a status rather than a success flag, so it is not one of the presses above.
     _seed_what_a_press_would_touch(harness)
     seed_es_systems(harness)
-    monkeypatch.setattr(RetroDeck, "health", _health_raises)
+    monkeypatch.setattr(RetroDeck, raising, _raises)
 
     result = await harness.endpoints.verify_existing_content(8)
 
@@ -181,14 +229,36 @@ async def test_where_retrodeck_s_health_could_not_be_asked_check_against_server_
     assert result["message"] == _UNANSWERED
 
 
-async def test_where_retrodeck_s_health_could_not_be_asked_no_leftover_is_removed(harness, monkeypatch):
+@pytest.mark.parametrize("raising", [*_ROOT_QUESTIONS, "detection"])
+async def test_where_a_question_about_retrodeck_s_roots_raises_no_leftover_is_removed(harness, monkeypatch, raising):
     on_disk = _seed_what_a_press_would_touch(harness)
     seed_es_systems(harness)
-    monkeypatch.setattr(RetroDeck, "health", _health_raises)
+    if raising == "detection":
+        _detection_raises(harness)
+    else:
+        monkeypatch.setattr(RetroDeck, raising, _raises)
 
     harness.app.services.leftover_tmp_cleanup_service.cleanup_leftover_tmp_files()
 
     assert all(os.path.exists(path) for path in on_disk)
+
+
+async def test_where_a_system_s_folder_question_raises_only_the_presses_that_ask_it_are_refused(harness, monkeypatch):
+    # A system's own ROM folder is not one of the roots asked up front: its
+    # raise refuses the presses that need that folder, and nothing else.
+    on_disk = _seed_what_a_press_would_touch(harness)
+    seed_es_systems(harness)
+    monkeypatch.setattr(RetroDeck, "rom_location", _raises)
+
+    asking = [await harness.endpoints.start_download(8), await harness.endpoints.adopt_existing_rom(8, None, None)]
+    removal = await harness.endpoints.remove_rom(_ROM_ID)
+
+    for result in asking:
+        assert result["success"] is False
+        assert result["reason"] == "retrodeck_unanswered"
+        assert result["message"] == _UNANSWERED
+    assert removal["success"] is True
+    assert not os.path.exists(on_disk[0])
 
 
 @pytest.mark.usefixtures("seeded_retrodeck")
@@ -304,12 +374,16 @@ async def test_after_retrodeck_s_home_moves_the_move_code_keeps_its_records_righ
         assert uow.kv_config.get("retrodeck_home_path") == new_home
 
 
-async def test_where_retrodeck_s_health_could_not_be_asked_no_move_is_seen(harness, monkeypatch):
+@pytest.mark.parametrize("raising", [*_ROOT_QUESTIONS, "detection"])
+async def test_where_a_question_about_retrodeck_s_roots_raises_no_move_is_seen(harness, monkeypatch, raising):
     seed_es_systems(harness)
     recorded = os.path.realpath(os.path.join(str(harness.tmp_path), "A", "retrodeck"))
     with harness.uow_factory() as uow:
         uow.kv_config.set("retrodeck_home_path", recorded)
-    monkeypatch.setattr(RetroDeck, "health", _health_raises)
+    if raising == "detection":
+        _detection_raises(harness)
+    else:
+        monkeypatch.setattr(RetroDeck, raising, _raises)
 
     harness.app.services.migration_service.detect_retrodeck_path_change()
 

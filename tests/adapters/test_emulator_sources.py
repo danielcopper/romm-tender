@@ -126,6 +126,24 @@ class TestDetection:
         assert reading.no_answer_reason() == "no_source"
         assert any("detection failed" in line for line in traces)
 
+    def test_a_raising_detection_says_so_on_the_reading(self, traces):
+        def explode(home: str, machine: Any) -> list[Any]:
+            raise OSError("no such home")
+
+        assert _holder(explode, traces).read().detection_failed is True
+
+    def test_a_detection_that_finds_nothing_has_not_failed(self, traces):
+        assert _holder(_Detect(), traces).read().detection_failed is False
+
+    def test_a_switch_is_answered_for_a_source_the_reading_did_not_detect(self, traces):
+        def explode(home: str, machine: Any) -> list[Any]:
+            raise OSError("no such home")
+
+        reading = _holder(explode, traces, {"emulator_sources_off": ["retrodeck"]}).read()
+
+        assert reading.switched_off("retrodeck") is True
+        assert reading.switched_off("emudeck") is False
+
 
 class TestTheSettingsAreReadLive:
     def test_a_switch_written_after_a_reading_holds_from_the_next_one(self, traces):

@@ -80,8 +80,11 @@ class RetroDeckFolders(Protocol):
     that exists. A removal asks for the root it is bounded by: :meth:`rom_root`
     refuses where it cannot be named, in the words an uninstall says;
     :meth:`bios_folder` and :meth:`saves_root` answer ``None`` instead. All
-    three refuse while the folders are defaults or a question about them
-    failed, and none minds the switch. A
+    three refuse while the folders are defaults, and none minds the switch.
+    Where detecting the sources, or asking about RetroDECK's health or one of
+    its roots, raised, every question refuses — a download only once RetroDECK
+    is not switched off, which it says first; a raise on a system's own folder
+    refuses only :meth:`download_folder`. A
     refusal comes back as a value; the caller that needed the folder raises it.
     :meth:`move_roots` is the move code's. Every path is symlink-resolved.
     """

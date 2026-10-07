@@ -80,10 +80,19 @@ class DetectedSourcesReading:
     so a reading is kept no longer than the call or the run that took it.
     """
 
-    def __init__(self, *, installations: tuple[Any, ...], sources: tuple[ArrangedSource, ...]) -> None:
+    def __init__(
+        self,
+        *,
+        installations: tuple[Any, ...],
+        sources: tuple[ArrangedSource, ...],
+        switched_off: frozenset[str] = frozenset(),
+        detection_failed: bool = False,
+    ) -> None:
         self._detected = installations
         self._installations = {installation.kind: installation for installation in installations}
         self._sources = sources
+        self._switched_off = switched_off
+        self._detection_failed = detection_failed
         self._answering = answering_source(sources)
         self._answers: dict[Hashable, Any] = {}
 
@@ -96,6 +105,19 @@ class DetectedSourcesReading:
     def sources(self) -> tuple[ArrangedSource, ...]:
         """Every detected source, in the user's order."""
         return self._sources
+
+    @property
+    def detection_failed(self) -> bool:
+        """Whether detecting the sources raised, so that none detected establishes nothing about any of them.
+
+        Only RetroDECK's folders read it (``adapters/retrodeck_folders.py``);
+        every other reader takes such a reading as one that detected nothing.
+        """
+        return self._detection_failed
+
+    def switched_off(self, kind: str) -> bool:
+        """Whether the user switched the source of *kind* off — detected in this reading or not."""
+        return kind in self._switched_off
 
     @property
     def answering(self) -> ArrangedSource | None:
@@ -151,14 +173,15 @@ class EmulatorSourcesAdapter:
 
     def read(self) -> DetectedSourcesReading:
         """A fresh reading: detect the sources, and arrange them as the settings stand now."""
+        failed = False
         try:
             installations = tuple(self._detect(self._user_home, self._machine))
         except Exception as exc:
             # Deliberately broad: detection is the resolver's own, and the
             # honest answer to "could not detect" is the same whatever raised.
             self._log_debug(f"[sources] detection failed, answering with none: {exc!r}")
-            installations = ()
-        reading = self._arranged(installations)
+            installations, failed = (), True
+        reading = self._arranged(installations, detection_failed=failed)
         self._log_debug(
             f"[sources] detected={[source.kind for source in reading.sources]} "
             f"off={[source.kind for source in reading.sources if not source.enabled]} "
@@ -176,13 +199,19 @@ class EmulatorSourcesAdapter:
         arranged = self._arranged(reading.installations) if reading is not None else self.read()
         return tuple(self._report(source, arranged.installation(source.kind)) for source in arranged.sources)
 
-    def _arranged(self, installations: tuple[Any, ...]) -> DetectedSourcesReading:
+    def _arranged(self, installations: tuple[Any, ...], *, detection_failed: bool = False) -> DetectedSourcesReading:
+        switched_off = frozenset(stored_kinds(self._settings.get(SWITCHED_OFF_SETTING)))
         sources = arrange_sources(
             detected=tuple(installation.kind for installation in installations),
             stored_order=stored_kinds(self._settings.get(ORDER_SETTING)),
-            switched_off=stored_kinds(self._settings.get(SWITCHED_OFF_SETTING)),
+            switched_off=switched_off,
         )
-        return DetectedSourcesReading(installations=installations, sources=sources)
+        return DetectedSourcesReading(
+            installations=installations,
+            sources=sources,
+            switched_off=switched_off,
+            detection_failed=detection_failed,
+        )
 
     def _report(self, source: ArrangedSource, installation: Any) -> SourceReport:
         findings = self._findings(source.kind, installation)

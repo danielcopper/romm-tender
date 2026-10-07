@@ -22,11 +22,14 @@ it, and so is a BIOS folder inside RetroDECK's own folder; a root that is not
 there — a drive or an SD card that is out — is never created, because the folder
 would land on internal storage and the drive would hide it once it is back.
 
-A resolver call that raises is logged, and the answer it was for is the
-refusal that every one of RetroDECK's folders could not be established — the
-health question's raise included, since without it nothing says the folders
-are not defaults. Every question then refuses, the removal's bounds as well as
-a download's, and the move code sees no move.
+**RetroDECK's roots are asked together, up front.** Every question first
+reads RetroDECK's health and its four roots — home, ROM root, BIOS folder and
+saves root — in one go, so a raise from any of them, or from the detection of
+the sources, establishes none of them: every question then answers that
+RetroDECK's folders could not be established, the removal's bounds as well as a
+download's, and the move code sees no move. Only a download refused for the
+switch keeps saying so. A system's own ROM folder is not a root and is asked
+only by the question that needs it, so its raise refuses that answer alone.
 """
 
 from __future__ import annotations
@@ -70,19 +73,49 @@ class _Unasked(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class _Roots:
+    """RetroDECK's four roots, as the resolver spells them."""
+
+    home: str
+    roms: str | None
+    bios: str
+    saves: str
+
+
+@dataclass(frozen=True, slots=True)
+class _Answered:
+    """RetroDECK's health findings by code, and its roots, from one up-front asking."""
+
+    findings: dict[str, dict[str, str]]
+    roots: _Roots
+
+
+@dataclass(frozen=True, slots=True)
 class _RetroDeck:
-    """RetroDECK's handle in one reading, its switch, and its health findings by code — ``None`` where unasked."""
+    """RetroDECK in one reading: its handle, its switch, and what it answered — ``None`` where a question raised.
+
+    The handle is ``None`` where the detection itself raised.
+    """
 
     installation: Any
-    enabled: bool
-    findings: dict[str, dict[str, str]] | None
+    switched_off: bool
+    answered: _Answered | None
 
-    def refusal(self, codes: frozenset[str]) -> FolderRefused | None:
-        """The refusal for the first finding among *codes*, the unanswered one where health raised, or ``None``."""
-        if self.findings is None:
+    def usable(self, codes: frozenset[str]) -> _Answered | FolderRefused:
+        """What RetroDECK answered — or the refusal where a question raised, or for its first finding in *codes*."""
+        if self.answered is None:
             return unanswered_refusal()
-        code = next((code for code in self.findings if code in codes), None)
-        return None if code is None else finding_refusal(code, self.findings[code])
+        findings = self.answered.findings
+        code = next((code for code in findings if code in codes), None)
+        return self.answered if code is None else finding_refusal(code, findings[code])
+
+
+@dataclass(frozen=True, slots=True)
+class _Download:
+    """RetroDECK's handle and roots as a download may use them."""
+
+    installation: Any
+    roots: _Roots
 
 
 class RetroDeckFoldersAdapter:
@@ -100,12 +133,11 @@ class RetroDeckFoldersAdapter:
         retrodeck = self._for_download(GAME_DOWNLOAD)
         if isinstance(retrodeck, FolderRefused):
             return retrodeck
-        handle = retrodeck.installation
         try:
-            placement = self._ask(handle, f"rom_location({system!r})", lambda h: h.rom_location(system))
-            root = self._ask(handle, "roms_dir", lambda h: h.roms_dir())
+            placement = self._ask(retrodeck.installation, f"rom_location({system!r})", lambda h: h.rom_location(system))
         except _Unasked:
             return unanswered_refusal()
+        root = retrodeck.roots.roms
         if placement.dir is None or root is None:
             self._log_debug(
                 f"[folders] no ROM folder for {system!r}: caveats={sorted({c.code for c in placement.caveats})}"
@@ -121,91 +153,93 @@ class RetroDeckFoldersAdapter:
         retrodeck = self._for_download(BIOS_DOWNLOAD)
         if isinstance(retrodeck, FolderRefused):
             return retrodeck
-        handle = retrodeck.installation
-        try:
-            folder = os.path.realpath(self._ask(handle, "bios_dir", lambda h: h.bios_dir()))
-            home = os.path.realpath(self._ask(handle, "root", lambda h: h.root()))
-        except _Unasked:
-            return unanswered_refusal()
+        folder, home = os.path.realpath(retrodeck.roots.bios), os.path.realpath(retrodeck.roots.home)
         if os.path.isdir(folder) or (_inside(folder, home) and os.path.isdir(home)):
             return folder
         return bios_folder_missing(folder)
 
     def rom_root(self) -> str | FolderRefused:
         """The ROM root a removal of installed content is bounded by — or why there is none."""
-        retrodeck = self._retrodeck()
-        if retrodeck is None:
+        roots = self._for_removal()
+        if roots is None:
             return uninstall_not_installed()
-        refused = retrodeck.refusal(ROOTS_ARE_DEFAULTS)
-        if refused is not None:
-            return refused
-        try:
-            root = self._ask(retrodeck.installation, "roms_dir", lambda h: h.roms_dir())
-        except _Unasked:
-            return unanswered_refusal()
-        return no_rom_root() if not root else os.path.realpath(root)
+        if isinstance(roots, FolderRefused):
+            return roots
+        return no_rom_root() if not roots.roms else os.path.realpath(roots.roms)
 
     def bios_folder(self) -> str | FolderRefused | None:
         """The BIOS folder a removal is bounded by; ``None`` where RetroDECK names none."""
-        return self._for_removal("bios_dir", lambda h: h.bios_dir())
+        roots = self._for_removal()
+        if roots is None or isinstance(roots, FolderRefused):
+            return roots
+        return os.path.realpath(roots.bios) if roots.bios else None
 
     def saves_root(self) -> str | FolderRefused | None:
         """The saves root a removal is bounded by; ``None`` where RetroDECK names none."""
-        return self._for_removal("saves_root", lambda h: h.saves_root())
+        roots = self._for_removal()
+        if roots is None or isinstance(roots, FolderRefused):
+            return roots
+        return os.path.realpath(roots.saves) if roots.saves else None
 
     def move_roots(self) -> MoveRoots | None:
-        """RetroDECK's home, BIOS folder and saves root; ``None`` without RetroDECK or while they are defaults."""
-        retrodeck = self._retrodeck()
-        if retrodeck is None or retrodeck.refusal(ROOTS_ARE_DEFAULTS) is not None:
+        """RetroDECK's home, BIOS folder and saves root; ``None`` without RetroDECK or where they may not be used."""
+        roots = self._for_removal()
+        if roots is None or isinstance(roots, FolderRefused):
             return None
-        handle = retrodeck.installation
-        try:
-            return MoveRoots(
-                home=os.path.realpath(self._ask(handle, "root", lambda h: h.root())),
-                bios=os.path.realpath(self._ask(handle, "bios_dir", lambda h: h.bios_dir())),
-                saves=os.path.realpath(self._ask(handle, "saves_root", lambda h: h.saves_root())),
-            )
-        except _Unasked:
-            return None
+        return MoveRoots(
+            home=os.path.realpath(roots.home),
+            bios=os.path.realpath(roots.bios),
+            saves=os.path.realpath(roots.saves),
+        )
 
-    def _for_download(self, purpose: str) -> _RetroDeck | FolderRefused:
-        """RetroDECK as a download may use it: detected, switched on, its folders neither defaults nor missing."""
+    def _for_download(self, purpose: str) -> _Download | FolderRefused:
+        """RetroDECK as a download uses it: detected, switched on, its folders established, not defaults or missing."""
         retrodeck = self._retrodeck()
         if retrodeck is None:
             return not_installed(purpose)
-        if not retrodeck.enabled:
+        if retrodeck.switched_off:
             return switched_off(purpose)
-        return retrodeck.refusal(_REFUSES_DOWNLOADS) or retrodeck
+        answered = retrodeck.usable(_REFUSES_DOWNLOADS)
+        if isinstance(answered, FolderRefused):
+            return answered
+        return _Download(installation=retrodeck.installation, roots=answered.roots)
 
-    def _for_removal(self, subject: str, question: Callable[[Any], str | None]) -> str | FolderRefused | None:
-        """One root as a removal may use it: RetroDECK detected, whatever its switch, its folders not defaults."""
+    def _for_removal(self) -> _Roots | FolderRefused | None:
+        """RetroDECK's roots as a removal may use them: detected, whatever its switch, established and not defaults."""
         retrodeck = self._retrodeck()
         if retrodeck is None:
             return None
-        refused = retrodeck.refusal(ROOTS_ARE_DEFAULTS)
-        if refused is not None:
-            return refused
-        try:
-            path = self._ask(retrodeck.installation, subject, question)
-        except _Unasked:
-            return unanswered_refusal()
-        return os.path.realpath(path) if path else None
+        answered = retrodeck.usable(ROOTS_ARE_DEFAULTS)
+        return answered if isinstance(answered, FolderRefused) else answered.roots
 
     def _retrodeck(self) -> _RetroDeck | None:
-        """RetroDECK in a fresh reading, or ``None`` where it is not detected."""
+        """RetroDECK in a fresh reading, its health and roots asked together; ``None`` where it is not detected."""
         reading = self._sources.read()
+        switched = reading.switched_off(RETRODECK)
+        if reading.detection_failed:
+            return _RetroDeck(installation=None, switched_off=switched, answered=None)
         installation = reading.installation(RETRODECK)
         if installation is None:
             return None
-        enabled = any(source.kind == RETRODECK and source.enabled for source in reading.sources)
         try:
-            health = self._ask(installation, "health", lambda h: h.health())
+            answered = self._answered(installation)
         except _Unasked:
-            return _RetroDeck(installation=installation, enabled=enabled, findings=None)
+            answered = None
+        return _RetroDeck(installation=installation, switched_off=switched, answered=answered)
+
+    def _answered(self, installation: Any) -> _Answered:
+        """RetroDECK's health and four roots; :class:`_Unasked` where any one of the questions raised."""
+        health = self._ask(installation, "health", lambda h: h.health())
+        roots = _Roots(
+            home=self._ask(installation, "root", lambda h: h.root()),
+            roms=self._ask(installation, "roms_dir", lambda h: h.roms_dir()),
+            bios=self._ask(installation, "bios_dir", lambda h: h.bios_dir()),
+            saves=self._ask(installation, "saves_root", lambda h: h.saves_root()),
+        )
         findings: dict[str, dict[str, str]] = {}
         for issue in health.issues:
             findings.setdefault(issue.code, {str(key): str(value) for key, value in issue.data.items()})
-        return _RetroDeck(installation=installation, enabled=enabled, findings=findings)
+        return _Answered(findings=findings, roots=roots)
 
     def _ask(self, installation: Any, subject: str, question: Callable[[Any], Any]) -> Any:
         """One question to RetroDECK's handle; a raise is logged and ends the answer with :class:`_Unasked`.
