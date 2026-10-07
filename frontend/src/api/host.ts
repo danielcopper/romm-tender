@@ -2,13 +2,14 @@
  * The one module the panel imports for what it gets from its host: `endpoint`,
  * `addEventListener`, `removeEventListener`, `toaster` and `definePanel`.
  * Three of them are the wire — they go over the WebSocket in `hostSocket.ts`.
- * Beside them, the socket's own word on a stranded panel: what the backend
- * answered it (`strandedAnswer`, `onStrandedAnswerChange`), asking again
- * (`recheckStranded`), and telling such a call's failure apart
- * (`isStrandedPanelFailure`).
  * **Two of them reach no socket at all**, and they live here anyway: `index.tsx`
  * takes both kinds, and splitting the module would give it two imports for a
  * distinction it does not have.
+ *
+ * Beside the five, the socket's own word on a stranded panel: what the backend
+ * answered it (`strandedAnswer`, `onStrandedAnswerChange`), asking again
+ * (`recheckStranded`, which opens a socket of its own for one knock), and
+ * telling such a call's failure apart (`isStrandedPanelFailure`).
  *
  * ## The two that are not the wire
  *

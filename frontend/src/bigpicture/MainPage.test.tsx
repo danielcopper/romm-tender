@@ -678,7 +678,7 @@ describe("MainPage", () => {
   });
 
   // ===========================================================================
-  // D. ConnectionIndicator — 4 states (covered via top-level rendering)
+  // D. ConnectionIndicator — 5 states (covered via top-level rendering)
   // ===========================================================================
   describe("ConnectionIndicator", () => {
     it("connected=null (testConnection never resolves) renders 'Checking...' + Spinner", async () => {

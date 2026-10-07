@@ -42,9 +42,10 @@ import { strandedPanelSentence, type StrandedAnswer } from "../utils/strandedPan
  *
  *  The vocabulary of `error.reason` is owned by `backend/host/protocol.py`, and
  *  this is one of the two values no backend ever sends: it is what a caller's
- *  own pending register answers with. It is named there too, for exactly this reason
- *  — so that the two ends cannot invent two spellings of it. Nothing mechanical
- *  holds the two files together; this is the only place the frontend spells it. */
+ *  own pending register answers with. It is named there too, for exactly this
+ *  reason — so that the two ends cannot invent two spellings of it. Nothing
+ *  mechanical holds the two files together; this is the only place the frontend
+ *  spells it. */
 const CONNECTION_LOST = "connection_lost";
 
 /** The reason every call of a stranded panel fails with. Spelled in
