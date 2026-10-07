@@ -1800,7 +1800,6 @@ async def test_claimed_action_result_is_attached_before_request_task_reraises_ca
     assert request_task.cancelled()
     assert state.action_result is not None
     assert state.action_result.success is True
-    assert state.action_result.claimed is True
 
 
 @pytest.mark.asyncio
@@ -1998,7 +1997,6 @@ async def test_an_action_nobody_claimed_in_time_is_recorded_as_a_timeout(harness
     assert outcome == ActionOutcome(
         success=False,
         message="Steam did not claim the action in time.",
-        claimed=False,
         reason="action_timeout",
     )
 
@@ -2017,7 +2015,6 @@ async def test_a_claimed_action_with_no_outcome_in_time_is_recorded_as_ambiguous
     assert outcome == ActionOutcome(
         success=False,
         message="Steam action was claimed but its outcome is unknown.",
-        claimed=True,
         reason="action_ambiguous",
     )
 

@@ -15,15 +15,13 @@ if TYPE_CHECKING:
 class ActionOutcome:
     """What became of one frontend Steam action: the panel's validated report, or the stand-in when none came in time.
 
-    The stand-in is never a success: its ``reason`` is ``action_timeout`` for an
-    action nobody claimed and ``action_ambiguous`` for one claimed without an
-    outcome, when Steam may already have been changed. ``mutation_attempted``
-    is the panel saying it issued the Steam call before the action failed.
+    The stand-in is never a success, and it may stand for an action Steam has
+    already carried out. ``mutation_attempted`` is the panel saying it issued
+    the Steam call before the action failed.
     """
 
     success: bool
     message: str
-    claimed: bool
     reason: str | None = None
     snapshot: dict[str, object] | None = None
     shortcut_absent: bool = False

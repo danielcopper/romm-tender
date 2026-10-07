@@ -469,7 +469,6 @@ class PruneService:
             ActionOutcome(
                 success=request["success"],
                 message=request["message"],
-                claimed=pending.claimed,
                 reason=reason if isinstance(reason, str) else None,
                 snapshot=request.get("snapshot"),
                 shortcut_absent=request.get("shortcut_absent") is True,
@@ -592,7 +591,6 @@ class PruneService:
                 if pending.claimed
                 else "Steam did not claim the action in time."
             ),
-            claimed=pending.claimed,
             reason="action_ambiguous" if pending.claimed else "action_timeout",
         )
 
