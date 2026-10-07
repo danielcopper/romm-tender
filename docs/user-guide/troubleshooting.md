@@ -53,8 +53,11 @@ answers with its own message instead — "Server unreachable", "Sign-in rejected
 - "Tender was restarted — it reloads Steam's interface once no game is running."
 - "Tender was restarted — restart Steam to use it again."
 
-Until then nothing in Tender's panel works. **Stop Game** on a game page says so at once: it shows "Couldn't stop the
-game" with the same note.
+Until then nothing in Tender's panel works. On a game's page the play row shows **Tender restarted** where it would show
+**RomM offline**. A game page opened since the restart cannot load the game's details, and the section below the play
+row shows the same note instead; while that game is running it adds "Use Steam's menu to exit the game.", since Tender's
+**Stop Game** is not on the page then. On a page that had loaded before the restart, **Stop Game** says so at once: it
+shows "Couldn't stop the game" with the same note.
 
 **Explanation**: Tender's backend restarted while Steam kept running, and the panel in Steam is the one the backend that
 stopped had loaded. The running backend can never accept it, and it told the panel what happens next. The first note
@@ -83,9 +86,10 @@ talk to the new one, so the new backend asks Steam to reload its interface once 
 a game is running. If Steam cannot reload, or the old panel is still there after the reload, it restarts part of Steam
 once, which takes the interface away for a few more seconds.
 
-**Fix**: If no game is running and a few minutes later Tender's panel is still missing, or its section on a game page is
-missing or still says "Loading...", restart Steam to load the new panel. The backend tries only once after each backend
-restart, and it takes Steam's interface away no more than twice in ten minutes. The log says what was tried:
+**Fix**: If no game is running and a few minutes later Tender's panel is still missing, or its section on a game page
+still says "Loading..." or that Tender was restarted, restart Steam to load the new panel. The backend tries only once
+after each backend restart, and it takes Steam's interface away no more than twice in ten minutes. The log says what was
+tried:
 
 ```bash
 grep "inject:" ~/.local/state/romm-tender/backend.log | tail -n 20

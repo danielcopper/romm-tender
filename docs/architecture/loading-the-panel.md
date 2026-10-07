@@ -116,8 +116,9 @@ one reads as an empty instance, which no running process has.
 When the backend restarts while Steam keeps running — a reinstall, `systemctl --user restart romm-tender`, or the unit's
 `Restart=always` after a crash — the panel the previous process loaded stays in Steam. It carries the previous process's
 token, so the new server refuses its socket, and the new injector finds the marker and loads nothing over it. The game
-page's Tender section stays at "Loading..." in a panel built before panels read the close codes below, and is missing in
-one that reads them — and a game launched from Steam starts without Tender: no save sync around it and no playtime.
+page's Tender section stays at "Loading..." in a panel built before panels read the close codes below, and says that
+Tender was restarted in one that reads them — and a game launched from Steam starts without Tender: no save sync around
+it and no playtime.
 
 **How the backend knows.** Whenever the injector finds a marker, it asks whose it is. Its own instance means a panel it
 loaded — the ordinary case after the debugger connection was lost and re-attached — and is left alone. Any other
@@ -214,8 +215,12 @@ rebuilt, and the log-once rule keeps that to one line.
 **What the panel does with it**: on either code the socket gives up for good
 ([frontend-bundles.md](frontend-bundles.md#talking-to-the-backend), Talking to the backend). One notification says the
 answer when the panel becomes stranded, and one more each time it changes; Main's connection row says it in place of the
-probe's verdict. The panel asks again — one connection opened only to read the close, bounded at two seconds, never two
-at once — when the Quick Access menu is opened on Tender's page and when Stop is pressed.
+probe's verdict. On a game's page the play row reads **Tender restarted** in place of **RomM offline** — a connection
+check refused as stranded is no verdict on RomM, so it writes none — and on a page opened since, whose details cannot be
+read, the section below the play row shows the same sentence as Main, adding **Use Steam's menu to exit the game.**
+while Steam reports that game running, since Tender's Stop is not on the page then. The panel asks again — one
+connection opened only to read the close, bounded at two seconds, never two at once — when the Quick Access menu is
+opened on Tender's page and when Stop is pressed.
 
 ## The crash watchdog
 
