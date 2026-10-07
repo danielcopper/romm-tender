@@ -229,12 +229,25 @@ class PruneSaveSupport:
     def quarantine_prune_saves(
         self, files: list[dict[str, str]], claims: dict[str, SourceClaim] | None = None
     ) -> SaveQuarantine:
-        """Move exclusive current saves through the sanctioned backup funnel."""
-        moved: list[str] = []
+        """Move exclusive current saves through the sanctioned backup funnel.
+
+        Nothing to move asks RetroDECK for nothing, so a game without saves is
+        never held up by a saves root that is not there. Where there are saves
+        and no root to move them within, nothing has been touched yet, so the
+        failure is a definite one rather than ambiguous.
+        """
+        if not files:
+            return SaveQuarantine(moved=[], ambiguous=False)
         try:
             saves_root = self._saves_root()
-            if saves_root is None:
-                raise ValueError("RetroDECK names no saves root to quarantine saves under")
+        except FolderRefused as refused:
+            return SaveQuarantine(moved=[], ambiguous=False, failure=refused.message)
+        if saves_root is None:
+            return SaveQuarantine(
+                moved=[], ambiguous=False, failure="RetroDECK names no saves folder, so no save was moved."
+            )
+        moved: list[str] = []
+        try:
             for item in files:
                 backup_dir = os.path.join(item["saves_dir"], BACKUP_DIR_NAME)
                 if (
@@ -259,6 +272,8 @@ class PruneSaveSupport:
 
     def validate_prune_absences(self, claims: dict[str, SourceClaim]) -> bool:
         """Require every quarantined purge-owned path to remain absent before cascade."""
+        if not claims:
+            return True
         try:
             saves_root = self._saves_root()
             if saves_root is None:
