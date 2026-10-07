@@ -229,9 +229,10 @@ different save states per device).
 
 `switch_slot` makes the active slot, the local saves directory, and per-file tracking coherent with the chosen slot in
 one locked critical section (the per-rom `asyncio.Lock` — see the "Per-rom asyncio.Lock" section). After the pre-checks
-pass (sync enabled, a real non-empty target slot name, ROM installed, not a content-dir layout, no un-uploaded local
-changes on tracked files, server reachable — the first that fails refuses the switch, and `pending_uploads` names the
-changed files in `files`):
+pass (sync enabled, a real non-empty target slot name, ROM installed, not a content-dir layout, a save answer a sync
+would carry, no un-uploaded local changes on tracked files, server reachable — the first that fails ends the switch with
+a failure answer, `pending_uploads` names the changed files in `files`, and a RomM error from the fetch answers
+`classify_error`'s reason rather than a refusal):
 
 1. The active slot is flipped in memory.
 2. Every local save file the target slot does **not** provide is quarantined into `.romm-backup` (never deleted
@@ -363,11 +364,12 @@ classifies it. A **wholesale** failure _before_ the apply phase confirms **nothi
 refuses with `device_not_registered` or `not_installed`, a RomM error from `list_saves` or a phase-1 download answers
 `classify_error`'s reason and message, and a save file on this device that cannot be read, or a saves folder that cannot
 be created, refuses with `migration_failed`. A failure writing the scratch download is not among them: the RomM adapter
-reports it as a connection error, so it answers `server_unreachable`. The scratch temps are cleared and the wizard stays open on the message, so the user can simply retry
-Track. Once the apply phase begins, a **per-target** upload failure is **counted, not fatal**
-(`Could not migrate N save(s)`): the slot is still confirmed and the failed source is left in place, so no save that
-lives only in the legacy bucket is ever lost. (A migration whose server had no legacy saves is a no-op that confirms the
-slot silently; a requested migration can never return `success: true` with nothing migrated while legacy saves existed.)
+reports it as a connection error, so it answers `server_unreachable`. The scratch temps are cleared and the wizard stays
+open on the message, so the user can simply retry Track. Once the apply phase begins, a **per-target** upload failure is
+**counted, not fatal** (`Could not migrate N save(s)`): the slot is still confirmed and the failed source is left in
+place, so no save that lives only in the legacy bucket is ever lost. (A migration whose server had no legacy saves is a
+no-op that confirms the slot silently; a requested migration can never return `success: true` with nothing migrated
+while legacy saves existed.)
 
 The wizard names the target slot on **every** surface — the pre-click explainer under the legacy entry ("the archived
 save itself is left untouched"), the confirm modal ("Copy the archived save into 'default'? If a local save differs,
@@ -419,11 +421,10 @@ The wizard confirms a slot through `confirm_slot_choice(rom_id, chosen_slot, mig
   `{success: false, reason: "invalid_slot_name", …}` before the aggregate is touched — legacy confirm is retired, so
   there is no longer a "confirm legacy mode" branch ([#1276](https://github.com/danielcopper/romm-tender/issues/1276)).
   `confirm_slot` on the aggregate mirrors this: it raises on an empty/`None` name.
-- `migrate` is an explicit boolean — the default (`false`) never migrates. When `true`, saves are migrated from
-  `migrate_from_slot` (`null` = the legacy `slot:null` **source**) into the named `chosen_slot`, and a server save is
-  deleted from the old slot **only if it was successfully re-uploaded** into the new one; non-matching saves are left in
-  place and reported (so a save uploaded under a different ROM filename by another device is never destroyed). This is
-  how legacy saves reach a named slot now that legacy is no longer a confirmable target.
+- `migrate` is an explicit boolean — the default (`false`) never migrates. When `true`, the content of the saves in
+  `migrate_from_slot` (`null` = the legacy `slot:null` **source**) is copied into the named `chosen_slot`, as "Migrating
+  legacy saves into a named slot" above describes; no server save is deleted from the source. This is how legacy saves
+  reach a named slot now that legacy is no longer a confirmable target.
 
 ### Not yet implemented
 

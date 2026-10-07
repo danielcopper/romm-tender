@@ -14,10 +14,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { SaveSlotsFailure } from "../api/backend";
 import type { LastKnownSlots, SaveSlotSummary } from "../types";
 
-/** A `get_save_slots` answer as these helpers read it: a success that omits
- *  `active_slot` keeps the previous one (#1747). The persisted listing a failure
- *  hands back is null — never an empty list — when the device knows nothing, so
- *  "we know nothing" cannot be read as "this ROM has no slots" (#1755). */
+/** A `get_save_slots` answer as these helpers read it. */
 export type SlotsResponse = { success: true; slots: SaveSlotSummary[]; active_slot?: string | null } | SaveSlotsFailure;
 
 /** Read the snapshot a failure carries, or `null` when it carries none. */

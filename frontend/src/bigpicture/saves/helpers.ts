@@ -88,11 +88,7 @@ export function formatAttributionSegment(
   return null;
 }
 
-/**
- * Pick the toast body to surface when `get_slot_delete_info` refused. The
- * frontend uses this to refuse the destructive confirm modal and explain why —
- * a slot whose server saves could not be listed is never offered for a wipe.
- */
+/** The toast for a failed `get_slot_delete_info`. */
 export function slotDeleteFailureToast(info: EndpointFailure): string {
   if (info.reason === "active_slot") {
     return "Cannot delete the active slot. Switch to a different slot first.";

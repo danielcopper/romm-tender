@@ -47,7 +47,7 @@ Converted modules
 
 A module on :data:`CONVERTED_MODULES` builds no failure shape: a service there
 raises its refusals (``lib.errors.Refused``, or ``domain.refusal.DomainRefused``
-from a domain rule) and the entrypoint, ``main.Endpoints``, builds the shape; an
+from a domain rule) and ``main.Endpoints`` answers them in the failure shape; an
 adapter there reports an outcome its service decides on. In such a
 module ``--check`` also fails on any dict literal with a falsy ``success``
 entry, wherever it stands and whatever keys it carries, on any

@@ -243,7 +243,7 @@ async def test_get_save_slots_happy_shape(harness):
 
 
 async def test_get_save_slots_sync_disabled_failure_shape(harness):
-    """Sync disabled → failure shape with no slot fields beside it."""
+    """Sync disabled → failure shape with no live `slots` / `active_slot` beside it."""
     # save_sync_enabled defaults to False — do not enable it.
     result = await harness.endpoints.get_save_slots(42)
     assert result["success"] is False
@@ -255,7 +255,7 @@ async def test_get_save_slots_sync_disabled_failure_shape(harness):
 
 
 async def test_get_save_slots_server_failure_shape(harness):
-    """Server unreachable → canonical SERVER_UNREACHABLE failure with no slot fields beside it."""
+    """Server unreachable → canonical SERVER_UNREACHABLE failure with no live `slots` / `active_slot` beside it."""
     enable_save_sync(harness)
     harness.romm.get_save_summary_side_effect = RommConnectionError("offline")
     result = await harness.endpoints.get_save_slots(42)

@@ -40,8 +40,9 @@ if TYPE_CHECKING:
 
 
 class PendingUploads(NamedRefused):
-    """Local saves changed since the last sync to the current slot; a switch would lose them.
+    """Local saves changed since the last sync to the current slot.
 
+    A switch would keep those changes off the server's copy of that slot.
     Raised with ``files``, the names of the changed saves.
     """
 
@@ -50,7 +51,10 @@ class PendingUploads(NamedRefused):
 
 @dataclass(frozen=True)
 class SlotSwitchIncomplete(PartialFailure):
-    """A slot switch that flipped the slot and persisted it, but downloaded only part of the new slot."""
+    """A slot switch that flipped the slot and persisted it, but downloaded only part of the new slot.
+
+    What was done is the type itself, so it declares no field of its own.
+    """
 
 
 class SlotSwitcher:
@@ -95,11 +99,11 @@ class SlotSwitcher:
         return state, self._device_registry.get_device_id()
 
     def _pending_local_changes(self, rom_id: int, save_state: RomSaveSyncState) -> list[str]:
-        """The local saves changed since the last sync to the current slot; empty when a switch is safe.
+        """The local saves changed since the last sync to the current slot; empty when there are none.
 
-        A switch over such a file would lose its changes. Files that were never
-        synced do not block: the switch quarantines them into ``.romm-backup``
-        rather than destroying them (#965).
+        A switch over such a file would keep its changes off the server's copy
+        of the current slot. Files that were never synced do not count: the
+        switch quarantines them into ``.romm-backup`` (#965).
         """
         files_state = save_state.files
 

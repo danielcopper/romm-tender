@@ -217,8 +217,7 @@ describe("slotDeleteFailureToast", () => {
   });
 
   it("surfaces the backend message when the server could not be reached", () => {
-    // Regression for #626: without a refusal here the modal opens and the user
-    // confirms a destructive delete based on stale/empty data.
+    // The text only; that the modal stays shut is SlotPanel's (#626).
     const info: EndpointFailure = {
       success: false,
       reason: "server_unreachable",

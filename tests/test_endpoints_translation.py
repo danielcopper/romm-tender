@@ -985,7 +985,9 @@ def _slots_seeded(tmp_path: Path, *, files: dict[str, FileSyncState] | None = No
 
 
 class TestTheSlotRefusalsOnTheWire:
-    """The save slots' refusals and partial answers, raised through the real service, keep their details."""
+    """The save slots' failure answers — refusals, RomM errors and the partial switch — keep their details
+    through the real service.
+    """
 
     async def test_an_unreachable_server_answers_the_last_known_slots(self, tmp_path):
         svc, fake = _slots_seeded(tmp_path)

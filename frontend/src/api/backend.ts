@@ -1062,7 +1062,9 @@ export const updateSaveSyncSettings = endpoint<[SaveSyncSettings], { success: bo
 // `last_known` is present ONLY on a failure whose server could not be reached,
 // and is null there unless the ROM's active slot was confirmed: it is the slot
 // listing the last successful contact left on disk, not an answer about now
-// (#1755). A failure carries no live `slots` / `active_slot`.
+// (#1755). Null — never an empty list — when the device knows nothing, so "we
+// know nothing" cannot be read as "this ROM has no slots". A failure carries no
+// live `slots` / `active_slot`.
 export type SaveSlotsFailure = EndpointFailure & {
   last_known?: {
     slots: SaveSlotSummary[];
