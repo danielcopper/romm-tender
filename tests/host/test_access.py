@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from host.access import STEAM_UI_ORIGIN, AccessPolicy, check_access, new_token
+from host.protocol import ReloadOutlook
 from lib.http_messages import parse_request_head
 from lib.websocket_frames import OPCODE_CLOSE
 from tests.host.conftest import SERVER_IDENTITY
@@ -18,6 +19,10 @@ from tests.host.ws_client import WsTestClient, http_get
 PORT = 27737
 TOKEN = "the-admission-token"
 POLICY = AccessPolicy(port=PORT, token=TOKEN)
+
+
+async def no_reload() -> ReloadOutlook:
+    return ReloadOutlook.NO_RELOAD
 
 
 def head(*, host: str = f"127.0.0.1:{PORT}", origin: str | None = STEAM_UI_ORIGIN, token: str | None = TOKEN):
@@ -188,7 +193,9 @@ class TestTheChecksOnTheWire:
         with pytest.raises(AssertionError, match="refused with 401"):
             await WsTestClient.connect(running_host.port, "")
         # A wrong token is answered with a completed handshake and an immediate
-        # close (``test_server_stranded_panel.py``) — still never a connection.
+        # close once the backend has looked at Steam (``test_server_stranded_panel.py``)
+        # — still never a connection.
+        running_host.server.answer_stranded_panels_from(no_reload)
         refused = await WsTestClient.connect(running_host.port, "not-the-token")
         try:
             opcode, _ = await refused.recv_frame()

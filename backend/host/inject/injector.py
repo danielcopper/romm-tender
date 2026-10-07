@@ -69,6 +69,8 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable, Mapping
 
+    from host.protocol import ReloadOutlook
+
 # How long to wait before attaching again after the debugger could not be
 # reached. Steam not running is the ordinary reason, and it may not be running
 # for hours.
@@ -237,9 +239,9 @@ class PanelInjector:
         """
         return await asyncio.get_running_loop().run_in_executor(None, self._reload_limit.frees_at)
 
-    async def reload_to_come(self) -> bool:
+    async def reload_outlook(self) -> ReloadOutlook:
         """Will Steam's interface be reloaded for a panel an earlier backend left there?"""
-        return await self._recovery.reload_to_come()
+        return await self._recovery.reload_outlook()
 
     async def run(self) -> None:
         """Attach, inject, and stay attached until cancelled or stopped for cause."""

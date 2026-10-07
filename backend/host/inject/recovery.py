@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from host.inject.bootstrap import marker_owner_expression, read_panel_marker
 from host.inject.cdp import CdpConnectionLost, CdpUnavailableError
+from host.protocol import ReloadOutlook
 
 if TYPE_CHECKING:
     import logging
@@ -156,9 +157,11 @@ class StrandedPanelRecovery:
         self._reloaded_for: str | None = None
         self._said_not_again = False
         self._task: asyncio.Task[None] | None = None
+        self._looked = False
 
     def seen(self, marker: PanelMarker) -> None:
         """The attached context carries *marker*, which is not this backend's."""
+        self._looked = True
         self._stranded = marker
         if self._task is not None and not self._task.done():
             return
@@ -176,21 +179,27 @@ class StrandedPanelRecovery:
 
     def cleared(self) -> None:
         """The attached context carries no panel but this backend's, or none at all."""
+        self._looked = True
         self._stranded = None
 
-    async def reload_to_come(self) -> bool:
+    async def reload_outlook(self) -> ReloadOutlook:
         """Will Steam's interface be taken down for a stranded panel this recovery has seen?
 
-        ``True`` only while the recovery for that panel is still under way and
-        the limit would let it act now. Everything else is ``False``: no
-        stranded panel seen yet, a recovery that ended — given up, or done — and
-        a limit that refuses. The limit is read as it stands, so a window that
-        frees later is a later answer rather than a promise now. The limit is a
-        file, so it is read off the loop.
+        ``NOT_YET_LOOKED`` until the injector has read the context's marker for
+        the first time — the first :meth:`seen` or :meth:`cleared`, whichever it
+        found. After that, ``RELOAD_TO_COME`` only while the recovery for that
+        panel is still under way and the limit would let it act now; everything
+        else is ``NO_RELOAD``: no stranded panel there, a recovery that ended —
+        given up, or done — and a limit that refuses. The limit is read as it
+        stands, so a window that frees later is a later answer rather than a
+        promise now. The limit is a file, so it is read off the loop.
         """
+        if not self._looked:
+            return ReloadOutlook.NOT_YET_LOOKED
         if self._task is None or self._task.done():
-            return False
-        return await asyncio.get_running_loop().run_in_executor(None, self._limit.allows)
+            return ReloadOutlook.NO_RELOAD
+        allows = await asyncio.get_running_loop().run_in_executor(None, self._limit.allows)
+        return ReloadOutlook.RELOAD_TO_COME if allows else ReloadOutlook.NO_RELOAD
 
     async def close(self) -> None:
         """Stop whatever is under way; the backend is going."""

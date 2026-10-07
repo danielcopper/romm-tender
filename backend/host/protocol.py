@@ -29,6 +29,7 @@ programming error stands.
 from __future__ import annotations
 
 import json
+from enum import Enum
 from typing import Any
 
 # Message kinds, both directions.
@@ -52,8 +53,8 @@ REASON_PAYLOAD_TOO_LARGE = "payload_too_large"
 REASON_BACKEND_EXCEPTION = "backend_exception"
 REASON_MALFORMED_MESSAGE = "malformed_message"
 REASON_CONNECTION_LOST = "connection_lost"
-# The second reason only the caller's own register answers with: every call of a
-# panel this backend told it is stranded (the close codes below).
+# The second reason only the caller's own socket answers with: every queued and
+# later call of a panel this backend told it is stranded (the close codes below).
 REASON_STRANDED_PANEL = "stranded_panel"
 
 TRANSPORT_REASONS = frozenset(
@@ -78,6 +79,22 @@ TRANSPORT_REASONS = frozenset(
 # rewords.
 CLOSE_STRANDED_PANEL_RELOADS = 4001
 CLOSE_STRANDED_PANEL_RESTART_STEAM = 4002
+
+
+class ReloadOutlook(Enum):
+    """What this backend can say about reloading Steam's interface for a stranded panel.
+
+    Three answers, because the third is not "no": until the backend has read
+    Steam's JS context for the first time, it does not know whether a stranded
+    panel is there, and a panel told "restart Steam" in that moment is told
+    something a reload may contradict a second later. Such an upgrade is refused
+    with the plain 401 instead, so the panel keeps knocking until the backend
+    knows. The other two are the two close codes.
+    """
+
+    NOT_YET_LOOKED = "not_yet_looked"
+    RELOAD_TO_COME = "reload_to_come"
+    NO_RELOAD = "no_reload"
 
 
 def decode_message(text: str) -> dict[str, Any]:
