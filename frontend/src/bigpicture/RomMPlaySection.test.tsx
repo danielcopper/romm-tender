@@ -4372,8 +4372,9 @@ describe("RomMPlaySection", () => {
 
         const items = await openCoreMenuAndGetItems(testAppId);
 
-        expect(items.map((item) => item.props.children)).toEqual([emulatorDataReasonSentence(reason, source)]);
-        expect(items[0].props.disabled).toBe(true);
+        expect(items.map((item) => [item.props.children, item.props.disabled])).toEqual([
+          [emulatorDataReasonSentence(reason, source), true],
+        ]);
       },
     );
 
