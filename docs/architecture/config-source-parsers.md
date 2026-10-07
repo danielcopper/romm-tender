@@ -284,7 +284,7 @@ Which rule a folder answers by:
 
 Under the four `marker-*` / `not-set-up` findings the resolver's root, BIOS and saves folders are its defaults
 (`~/retrodeck/…`), not where RetroDECK lies, so Tender uses none of RetroDECK's folders then; the refusal carries the
-finding, and the panel words it with the sentence the finding's banner shows (`withFindingSentence` in
+finding, and the panel words it with the sentence the finding's notice shows (`withFindingSentence` in
 `frontend/src/utils/emulatorSourceWording.ts`, applied to every endpoint answer in `frontend/src/api/host.ts`). A
 download also stops on `root-missing`, because everything it would land in lies below a folder that is not there.
 

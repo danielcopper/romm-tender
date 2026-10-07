@@ -325,9 +325,9 @@ Five properties are worth knowing before changing anything there:
   `recheckStranded`, `isStrandedPanelFailure`) — what it means and when the panel asks again is
   [loading-the-panel.md](loading-the-panel.md#what-the-stranded-panel-is-told).
 - **One endpoint answer is reworded on its way back.** A refusal for one of RetroDECK's findings
-  (`reason: "retrodeck_finding"`, the finding beside it) gets the message Main's banner shows for that finding
+  (`reason: "retrodeck_finding"`, the finding beside it) gets the message Main's notice shows for that finding
   (`withFindingSentence` in `frontend/src/utils/emulatorSourceWording.ts`), so every press that refuses for it reads the
-  same as the banner whichever endpoint refused. Every other answer comes back as it was sent. The suite stubs this
+  same as the notice whichever endpoint refused. Every other answer comes back as it was sent. The suite stubs this
   module, so `api/host.test.ts` is where the rewording is pinned.
 
 **The fourth thing `host.ts` hands out opens no socket and is the one the panel reaches the screen through.**

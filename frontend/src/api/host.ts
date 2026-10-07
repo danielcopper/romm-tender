@@ -116,7 +116,7 @@ function socket(): HostSocket {
  * implementation detail on that side.
  *
  * Every answer passes through `withFindingSentence`, so a press refused for one
- * of RetroDECK's findings reads the way that finding's banner does, whichever
+ * of RetroDECK's findings reads the way that finding's notice does, whichever
  * endpoint refused it.
  */
 export const endpoint =

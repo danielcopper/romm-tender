@@ -41,7 +41,7 @@ export function sourceName(kind: string): string {
   return SOURCE_NAMES.get(kind) ?? kind;
 }
 
-/** Whether a finding shows as a banner. `content-tree-unwired` concerns nothing
+/** Whether a finding shows as a notice on Main. `content-tree-unwired` concerns nothing
  *  Tender does, so it shows only on the source's own card. */
 export function findingIsBanner(finding: SourceHealthFinding): boolean {
   return finding.code !== "content-tree-unwired";
@@ -123,8 +123,8 @@ function isFinding(value: unknown): value is SourceHealthFinding {
 
 /**
  * An endpoint's answer, with the message of a refusal for one of RetroDECK's
- * findings replaced by the sentence Main's banner shows for that finding, so a
- * refused press and the banner say the same thing. Every other answer comes
+ * findings replaced by the sentence Main's notice shows for that finding, so a
+ * refused press and the notice say the same thing. Every other answer comes
  * back as it is.
  */
 export function withFindingSentence<T>(answer: T): T {
@@ -134,7 +134,7 @@ export function withFindingSentence<T>(answer: T): T {
   return { ...answer, message: findingSentence("retrodeck", finding) };
 }
 
-/** Main's banner, and the settings section's line, while no emulator source is detected. */
+/** Main's notice, and the settings section's line, while no emulator source is detected. */
 export const NO_SOURCE_BANNER = "No emulator source was found.";
 
 /** The settings section's line while its listing has not answered yet. */
@@ -210,7 +210,7 @@ export function sourceRowLines(source: EmulatorSource): SourceRowLine[] {
   ];
 }
 
-/** One banner on Main: its sentence, a key no other banner of the same listing
+/** One notice on Main: its sentence, a key no other notice of the same listing
  *  has, and its tone — an "info" notice is drawn without the warning sign. */
 export interface SourceBanner {
   key: string;
@@ -219,8 +219,8 @@ export interface SourceBanner {
 }
 
 /**
- * Main's banners about the emulator sources, in the sources' order: one where
- * none is detected, one per banner finding of a switched-on source, and one per
+ * Main's notices about the emulator sources, in the sources' order: one where
+ * none is detected, one per finding of a switched-on source that shows on Main, and one per
  * switched-on source Tender cannot start games through, whether or not it is
  * the one that answers. A switched-off source says either only on its card.
  */

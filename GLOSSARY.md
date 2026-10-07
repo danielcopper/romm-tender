@@ -610,6 +610,14 @@ standalone unless the user changes it under Settings › Emulator sources. Every
 RetroDECK is detected and switched on a game's answers come from it, wherever it stands in the order; only without it
 does the order decide, and then the first switched-on source answers, one Tender cannot start games through yet.
 
+### Answering source
+
+The one emulator source a game's emulator, firmware and save answers come from: the first switched-on source Tender
+starts games through — RetroDECK, wherever it stands in the order — or, without one, the first switched-on source in the
+**emulator source order**, which answers for a start through that source's own frontend. There is none where no source
+is detected or every detected one is switched off, and the pages say which of the two
+(`domain/emulator_sources.py::answering_source`).
+
 ### Not supported vs not established
 
 Two different absences of an answer. **Not supported**: emu-atlas has no knowledge for this at all (an emulator it has
@@ -1215,14 +1223,14 @@ card, banner (a **notice** names a condition that needs the user; this states wh
 ### Notice / home
 
 A **notice** is Main's standing statement of a condition that needs the user (settings were reset, a sync paused on the
-session budget, an update was rolled back). They do not all sit at the top: four lead the panel above the status rows —
-two sections of their own, then two warnings at the head of the status block — and five more sit inside the status
-block, below the conditional slot. `docs/architecture/qam-panel.md`'s Main section has the order. The **home** of a
-condition is the one page where it is acted on. A notice names the condition and jumps to its home; the action exists
-only there, never on the notice. A condition answered **once and for all** — the user picks between named outcomes, and
-answering ends the condition for good — has no page to return to, so its home is a modal opened from the notice; that
-modal _is_ the home, not an exception to the rule. A condition with no home in the panel stays a notice without a jump,
-with Dismiss where there is a sensible end to it. _Avoid_: banner (component names only), warning, alert.
+session budget, an update was rolled back). They do not all sit at the top: some lead the panel above the status rows,
+and others sit inside the status block, below the conditional slot. `docs/architecture/qam-panel.md`'s Main section has
+which and the order. The **home** of a condition is the one page where it is acted on. A notice names the condition and
+jumps to its home; the action exists only there, never on the notice. A condition answered **once and for all** — the
+user picks between named outcomes, and answering ends the condition for good — has no page to return to, so its home is
+a modal opened from the notice; that modal _is_ the home, not an exception to the rule. A condition with no home in the
+panel stays a notice without a jump, with Dismiss where there is a sensible end to it. _Avoid_: banner (component names
+only), warning, alert.
 
 ### Available release / installed program
 

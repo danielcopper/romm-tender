@@ -488,22 +488,22 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `importlib`. Prompt-only: no adapter keeps a handle or an answer past the reading it came through
 - **Every RetroDECK folder Tender downloads into, removes from, bounds a removal by or reads for the move code is the
   resolver's answer, asked through `adapters/retrodeck_folders.py`; no module reads RetroDECK's settings or builds such
-  a folder from a root, and while RetroDECK reports `marker-missing`, `marker-unreadable`, `marker-invalid` or
-  `not-set-up`, or where detecting the sources or a question about RetroDECK's health or one of its four roots raised,
-  none of those folders is used — except that a download while RetroDECK is switched off says so, and a raise on a
-  system's own ROM folder refuses only the press that asked for it** — test + prompt-only —
-  `tests/adapters/test_retrodeck_folders.py` (the real resolver over tmp homes: every folder its answer, each finding
-  refusing every question, `TestWhereAQuestionToTheResolverRaises` and `TestWhereDetectingTheSourcesRaises` refusing
-  every question for a raise on the detection, the health or a root and only its own for a system's folder, and
+  a folder from a root — except the move code, which joins `bios` and `saves` onto each old home a pending move left —
+  and while RetroDECK reports `marker-missing`, `marker-unreadable`, `marker-invalid` or `not-set-up`, or where
+  detecting the sources or a question about RetroDECK's health or one of its four roots raised, none of those folders is
+  used — except that a download while RetroDECK is switched off says so, and a raise on a system's own ROM folder
+  refuses only the press that asked for it** — test + prompt-only — `tests/adapters/test_retrodeck_folders.py` (the real
+  resolver over tmp homes: every folder its answer, each finding refusing every question,
+  `TestWhereAQuestionToTheResolverRaises` and `TestWhereDetectingTheSourcesRaises` refusing every question for a raise
+  on the detection, the health or a root and only its own for a system's folder, and
   `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and `tests/contract/test_retrodeck_folders.py`
   (under each finding, and where the detection, RetroDECK's health or one of its roots could not be asked, no press
   downloads, deletes or cleans up there). A save's folder and a firmware file's place take the other route, the save and
   firmware answers (`adapters/atlas_saves.py`, `adapters/atlas_firmware.py`), and this entry does not cover them: under
   the three `marker-*` findings a save is still synced where the save answer places it, which is then RetroDECK's
-  default — keeping saves out of it is #2220 D9's and not yet held. Unseen by them: a folder joined onto a root under
-  another name, and a caller that puts the question to RetroDECK's handle itself. Prompt-only: a new caller that
-  downloads into, removes from or bounds a removal by a RetroDECK folder asks `RetroDeckFolders` and raises the refusal
-  it answers with
+  default — keeping saves out of it is #2286's. Unseen by them: a folder joined onto a root under another name, and a
+  caller that puts the question to RetroDECK's handle itself. Prompt-only: a new caller that downloads into, removes
+  from or bounds a removal by a RetroDECK folder asks `RetroDeckFolders` and raises the refusal it answers with
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (the file's own calls only: a write behind a helper, a write passed as a
   bound method (`run_in_executor(None, uow.roms.save, …)`), an aliased handle, a `getattr`-reached repository, and a

@@ -289,8 +289,9 @@ while the source is switched on, an empty grey ring and a grey name while it is 
 - the folder it lives in — left out while the source's own settings file is missing or broken, or while the source has
   not been set up yet, because the folder Tender would show is then only a default;
 - what its health says, one line per problem, each led by a warning sign; with none, a green check and **No problems
-  found.** — or, where Tender could not read the source's emulator list, **_Source_'s emulator list is not
-  established.**, with a warning sign, unless one of the two lines below already says why;
+  found.** where Tender read the source's emulator list;
+- where it could not, **_Source_'s emulator list is not established.**, with a warning sign, unless a line already says
+  why — a problem with ES-DE's systems file, a source not set up yet, or one of the two lines below;
 - **EmuDeck's emulator list cannot be read yet.**, with a warning sign, for EmuDeck, whose list Tender cannot read yet;
 - **Tender cannot start games through _source_ yet.**, with an information sign, for every source but RetroDECK — every
   game still starts through RetroDECK. A RetroArch without a frontend has no emulator list at all, so for it this line
@@ -317,7 +318,7 @@ no emulator list.
 RetroDECK once and finish its first-run setup.**), a settings file that is missing, unreadable or damaged, a folder that
 does not exist (an SD card that is not inserted), a saves folder that does not exist, ES-DE's systems file that does not
 load (ES-DE then shows no systems, and Tender cannot tell which emulators the source offers), or EmuDeck's RetroArch
-settings that cannot be read. Two kinds stay in the source's line here only: texture packs or mods that do not reach an
+settings that cannot be read. Two kinds stay on the source's card here only: texture packs or mods that do not reach an
 emulator, which concern nothing Tender does, and every problem of a source you switched off. Where Tender cannot get an
 emulator list, the platform page and the emulator menu say why — no source found, every source switched off, a broken
 systems file, a RetroDECK that has not been set up yet, a list that cannot be read yet — rather than showing an empty
