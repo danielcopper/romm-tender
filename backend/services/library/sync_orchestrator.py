@@ -464,8 +464,8 @@ class SyncOrchestrator:
             raise Refused("cancelled", _SYNC_CANCELLED) from e
         except Exception as e:
             box.discard_preview()
-            _reason, _msg = classify_error(e)
-            await self.emit_progress(SyncStage.ERROR, message=_msg, running=False)
+            _, message = classify_error(e)
+            await self.emit_progress(SyncStage.ERROR, message=message, running=False)
             raise
         finally:
             box.finish_run(run_id)
