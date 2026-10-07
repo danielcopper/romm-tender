@@ -27,8 +27,12 @@ const SOURCE_NAMES: ReadonlyMap<string, string> = new Map([
 ]);
 
 // A RetroArch without a frontend has no emulator list, and its "cannot start
-// games" line stands in place of the "not established" one (#2188 D33).
+// games" line stands in place of the "not established" one.
 const NO_CATALOGUE_KINDS: ReadonlySet<string> = new Set(["bare_retroarch_flatpak", "bare_retroarch_native"]);
+
+// The findings whose sentence says why a source's emulator list is missing. Any
+// other finding leaves the "not established" line standing beside it.
+const LIST_EXPLAINING_CODES: ReadonlySet<string> = new Set(["catalogue-invalid", "not-set-up"]);
 
 const RETRODECK_REPAIR = " Repair it with RetroDECK's 'Repair RetroDECK Paths'.";
 
@@ -193,15 +197,14 @@ export function sourceRowLines(source: EmulatorSource): SourceRowLine[] {
   const health = source.findings.map((finding) => warning(findingSentence(source.kind, finding)));
   // A sealed catalogue, and a source with no catalogue at all, each have a
   // sentence of their own below that stands in for the "not established" line.
-  const quiet: Record<EmulatorSource["catalogue"], SourceRowLine[]> = {
-    read: [{ tone: "ok", text: "No problems found." }],
-    sealed: [],
-    unavailable: NO_CATALOGUE_KINDS.has(source.kind)
-      ? []
-      : [warning(`${sourceName(source.kind)}'s emulator list is not established.`)],
-  };
+  const unexplained =
+    source.catalogue === "unavailable" &&
+    !NO_CATALOGUE_KINDS.has(source.kind) &&
+    !source.findings.some((finding) => LIST_EXPLAINING_CODES.has(finding.code));
+  const quiet = source.catalogue === "read" ? [{ tone: "ok" as const, text: "No problems found." }] : [];
   return [
-    ...(health.length > 0 ? health : quiet[source.catalogue]),
+    ...(health.length > 0 ? health : quiet),
+    ...(unexplained ? [warning(`${sourceName(source.kind)}'s emulator list is not established.`)] : []),
     ...(source.catalogue === "sealed" ? [warning(sealedCatalogueSentence(source.kind))] : []),
     ...(source.starts_games ? [] : [{ tone: "info" as const, text: cannotStartSentence(source.kind) }]),
   ];

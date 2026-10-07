@@ -282,6 +282,28 @@ describe("sourceRowLines", () => {
     ]);
   });
 
+  it.each([
+    ["content-tree-unwired", { hub: "/rd/mods", path: "/emu/mods", problem: "missing" }],
+    ["saves-root-missing", { path: "/rd/saves" }],
+    ["root-missing", { path: "/sd" }],
+  ])("keeps the not-established line beside %s, which does not say why the list is missing", (code, data) => {
+    const finding = { code, data };
+    expect(sourceRowLines(source({ findings: [finding], catalogue: "unavailable" }))).toEqual([
+      { tone: "warning", text: findingSentence("retrodeck", finding) },
+      { tone: "warning", text: "RetroDECK's emulator list is not established." },
+    ]);
+  });
+
+  it.each([
+    ["catalogue-invalid", { path: "/rd/es_systems.xml", problem: "parse-error" }],
+    ["not-set-up", { path: "/rd" }],
+  ])("leaves the not-established line to %s, which says why the list is missing", (code, data) => {
+    const finding = { code, data };
+    expect(sourceRowLines(source({ findings: [finding], catalogue: "unavailable" }))).toEqual([
+      { tone: "warning", text: findingSentence("retrodeck", finding) },
+    ]);
+  });
+
   it("words every finding, the one kept out of the banners too", () => {
     const unwired = {
       code: "content-tree-unwired",
