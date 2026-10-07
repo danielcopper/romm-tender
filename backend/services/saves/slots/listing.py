@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING, Any
 
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_slot import save_in_slot, slot_query_param
-from lib.errors import classify_error
+from lib.errors import Refused, RommApiError, ServerUnreachable, classify_error
+from lib.list_result import ErrorCode
 from services.saves._messages import SAVE_SYNC_DISABLED
 from services.saves._save_state import write_save_state
 from services.saves._settings import resolve_default_slot, save_sync_enabled
@@ -64,20 +65,15 @@ class SlotListing:
         when they appear on the server. Removes server slots that no longer
         exist on the server (unless they are the active_slot).
 
-        A failed server fetch answers no slots — but carries the persisted
-        listing in its own ``last_known`` field for a ROM whose active slot the
-        user confirmed, so the QAM can show what the last contact left behind
-        (:func:`_last_known_snapshot`).
+        Refuses with ``sync_disabled`` while save sync is off. A server that
+        cannot be reached raises ``ServerUnreachable`` carrying the persisted
+        listing in ``last_known`` for a ROM whose active slot the user
+        confirmed, so the QAM can show what the last contact left behind
+        (:func:`_last_known_snapshot`); any other RomM error propagates.
         """
         rom_id = int(rom_id)
         if not save_sync_enabled(self._settings):
-            return {
-                "success": False,
-                "reason": "sync_disabled",
-                "message": SAVE_SYNC_DISABLED,
-                "slots": [],
-                "active_slot": "autosave",
-            }
+            raise Refused("sync_disabled", SAVE_SYNC_DISABLED)
 
         rom_state, device_id = await self._loop.run_in_executor(None, self._read_inputs, rom_id)
         default_slot = resolve_default_slot(self._settings)
@@ -102,19 +98,12 @@ class SlotListing:
                     lambda: self._romm_api.get_save_summary(rom_id, device_id=device_id),
                 ),
             )
-        except Exception as e:
+        except RommApiError as e:
             self._log_debug(f"Failed to fetch save slots for rom {rom_id}: {e}")
-            reason, _message = classify_error(e)
-            return {
-                "success": False,
-                "reason": reason,
-                # The raw exception text is neutral and carries the concrete
-                # detail; only the routing slug was ever wrong here.
-                "message": str(e),
-                "slots": [],
-                "active_slot": active_slot,
-                "last_known": _last_known_snapshot(rom_state),
-            }
+            reason, message = classify_error(e)
+            if reason == ErrorCode.SERVER_UNREACHABLE.value:
+                raise ServerUnreachable(message, last_known=_last_known_snapshot(rom_state)) from e
+            raise
         server_slots_list: list[dict[str, Any]] = summary.get("slots", [])
 
         # Merge: update persisted slots with server data, promote local→server
@@ -167,54 +156,39 @@ class SlotListing:
         """Fetch server save files for a specific slot.
 
         Used by the frontend to show save files when expanding an inactive slot panel.
-        Lightweight — no local file scanning or conflict detection.
+        Lightweight — no local file scanning or conflict detection. Refuses with
+        ``sync_disabled`` while save sync is off; a RomM error propagates.
         """
         rom_id = int(rom_id)
         slot = str(slot).strip() if slot else ""
 
         if not save_sync_enabled(self._settings):
-            return {
-                "success": False,
-                "reason": "sync_disabled",
-                "message": SAVE_SYNC_DISABLED,
-                "slot": slot,
-                "saves": [],
-            }
+            raise Refused("sync_disabled", SAVE_SYNC_DISABLED)
 
         device_id = await self._loop.run_in_executor(None, self._device_registry.get_device_id)
 
-        try:
-            # Legacy slot ("" → null on the server) can't be addressed by any
-            # ``slot=`` value, so omit the param (slot_query_param → None) and
-            # filter the result client-side (#1061). Named slots filter
-            # server-side and re-filter for safety.
-            server_saves: list[dict[str, Any]] = await self._loop.run_in_executor(
-                None,
-                lambda: self._retry.with_retry(
-                    lambda: self._romm_api.list_saves(rom_id, device_id=device_id, slot=slot_query_param(slot)),
-                ),
-            )
-            saves = [
-                {
-                    "filename": s["file_name"],
-                    "id": s["id"],
-                    "size": s.get("file_size_bytes"),
-                    "updated_at": s.get("updated_at", ""),
-                    "emulator": s.get("emulator", ""),
-                }
-                for s in server_saves
-                if save_in_slot(s, slot)
-            ]
-            return {"success": True, "slot": slot, "saves": saves}
-        except Exception as e:
-            reason, _message = classify_error(e)
-            return {
-                "success": False,
-                "reason": reason,
-                "message": str(e),
-                "slot": slot,
-                "saves": [],
+        # Legacy slot ("" → null on the server) can't be addressed by any
+        # ``slot=`` value, so omit the param (slot_query_param → None) and
+        # filter the result client-side (#1061). Named slots filter
+        # server-side and re-filter for safety.
+        server_saves: list[dict[str, Any]] = await self._loop.run_in_executor(
+            None,
+            lambda: self._retry.with_retry(
+                lambda: self._romm_api.list_saves(rom_id, device_id=device_id, slot=slot_query_param(slot)),
+            ),
+        )
+        saves = [
+            {
+                "filename": s["file_name"],
+                "id": s["id"],
+                "size": s.get("file_size_bytes"),
+                "updated_at": s.get("updated_at", ""),
+                "emulator": s.get("emulator", ""),
             }
+            for s in server_saves
+            if save_in_slot(s, slot)
+        ]
+        return {"success": True, "slot": slot, "saves": saves}
 
 
 def _slot_rows(slots: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:

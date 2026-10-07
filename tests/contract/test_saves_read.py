@@ -243,19 +243,19 @@ async def test_get_save_slots_happy_shape(harness):
 
 
 async def test_get_save_slots_sync_disabled_failure_shape(harness):
-    """Sync disabled → failure shape WITH fallback fields the frontend renders."""
+    """Sync disabled → failure shape with no slot fields beside it."""
     # save_sync_enabled defaults to False — do not enable it.
     result = await harness.endpoints.get_save_slots(42)
     assert result["success"] is False
     assert result["reason"] == "sync_disabled"
     assert isinstance(result["message"], str)
     assert result["message"]
-    assert result["slots"] == []
-    assert result["active_slot"] == "autosave"
+    assert "slots" not in result
+    assert "active_slot" not in result
 
 
 async def test_get_save_slots_server_failure_shape(harness):
-    """Server unreachable → canonical SERVER_UNREACHABLE failure with fallbacks."""
+    """Server unreachable → canonical SERVER_UNREACHABLE failure with no slot fields beside it."""
     enable_save_sync(harness)
     harness.romm.get_save_summary_side_effect = RommConnectionError("offline")
     result = await harness.endpoints.get_save_slots(42)
@@ -263,8 +263,8 @@ async def test_get_save_slots_server_failure_shape(harness):
     assert result["reason"] == ErrorCode.SERVER_UNREACHABLE
     assert isinstance(result["message"], str)
     assert result["message"]
-    assert result["slots"] == []
-    assert "active_slot" in result
+    assert "slots" not in result
+    assert "active_slot" not in result
 
 
 async def test_get_save_slots_server_failure_carries_last_known_slots(harness):
@@ -274,7 +274,7 @@ async def test_get_save_slots_server_failure_carries_last_known_slots(harness):
     harness.romm.get_save_summary_side_effect = RommConnectionError("offline")
     result = await harness.endpoints.get_save_slots(42)
     assert result["success"] is False
-    assert result["slots"] == []
+    assert "slots" not in result
     assert result["last_known"] == {
         "slots": [{"slot": "main", "source": "server", "count": 1, "latest_updated_at": "2026-01-01T00:00:00Z"}],
         "active_slot": "main",
@@ -323,8 +323,8 @@ async def test_get_slot_saves_server_failure_shape(harness):
     assert result["success"] is False
     assert result["reason"] == ErrorCode.SERVER_UNREACHABLE
     assert isinstance(result["message"], str)
-    assert result["slot"] == "main"
-    assert result["saves"] == []
+    assert "slot" not in result
+    assert "saves" not in result
 
 
 # ── #877 null-slot isolation ─────────────────────────────────────────────

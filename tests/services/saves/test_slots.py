@@ -8,7 +8,7 @@ import pytest
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
-from lib.errors import RommApiError, RommConnectionError, RommNotFoundError
+from lib.errors import Refused, RommApiError, RommAuthError, RommConnectionError, RommNotFoundError, ServerUnreachable
 from lib.list_result import ErrorCode
 from tests.services.saves._helpers import (
     _create_save,
@@ -93,12 +93,13 @@ class TestSaveSlots:
     @pytest.mark.asyncio
     async def test_get_save_slots_disabled(self, tmp_path):
         svc, _ = make_service(tmp_path)
-        result = await svc.get_save_slots(123)
-        assert result["success"] is False
-        assert result["reason"] == "sync_disabled"
-        assert "disabled" in result["message"].lower()
-        assert result["slots"] == []
-        assert result["active_slot"] == "autosave"
+        listing = svc.get_save_slots(123)
+
+        with pytest.raises(Refused) as refused:
+            await listing
+
+        assert (refused.value.reason, refused.value.message) == ("sync_disabled", "Save sync is disabled")
+        assert refused.value.details == {}
 
     @pytest.mark.asyncio
     async def test_get_save_slots_preserves_map_on_api_failure(self, tmp_path):
@@ -130,16 +131,13 @@ class TestSaveSlots:
             ),
         )
 
-        fake.fail_on_next(ConnectionError("connection refused"))
+        fake.fail_on_next(RommConnectionError("connection refused"))
+        listing = svc.get_save_slots(123)
 
-        result = await svc.get_save_slots(123)
+        with pytest.raises(ServerUnreachable) as refused:
+            await listing
 
-        # Response indicates failure with the carried-over active slot.
-        assert result["success"] is False
-        assert result["reason"] == "server_unreachable"
-        assert result["slots"] == []
-        assert result["active_slot"] == "default"
-        assert "connection refused" in result["message"]
+        assert refused.value.message == "Server unreachable — check your URL and ensure RomM is running"
         # Persisted slot map is untouched (no merge / overwrite happened).
         assert _require_save_state(svc, 123).slots == original_slots
 
@@ -163,21 +161,22 @@ class TestSaveSlots:
             ),
         )
 
-        fake.fail_on_next(ConnectionError("connection refused"))
+        fake.fail_on_next(RommConnectionError("connection refused"))
+        listing = svc.get_save_slots(123)
 
-        result = await svc.get_save_slots(123)
+        with pytest.raises(ServerUnreachable) as refused:
+            await listing
 
-        assert result["success"] is False
-        # The live fields still answer nothing — the snapshot is beside them.
-        assert result["slots"] == []
         # Exact: the row's own last_sync_check_at is seeded above and stays out
         # — it tracks syncs and slot switches, not this listing (#1755).
-        assert result["last_known"] == {
-            "slots": [
-                {"slot": "default", "source": "server", "count": 2, "latest_updated_at": "2026-04-17T10:00:00"},
-                {"slot": "save1", "source": "local", "count": 0, "latest_updated_at": None},
-            ],
-            "active_slot": "default",
+        assert refused.value.details == {
+            "last_known": {
+                "slots": [
+                    {"slot": "default", "source": "server", "count": 2, "latest_updated_at": "2026-04-17T10:00:00"},
+                    {"slot": "save1", "source": "local", "count": 0, "latest_updated_at": None},
+                ],
+                "active_slot": "default",
+            }
         }
 
     @pytest.mark.asyncio
@@ -196,12 +195,13 @@ class TestSaveSlots:
             ),
         )
 
-        fake.fail_on_next(ConnectionError("connection refused"))
+        fake.fail_on_next(RommConnectionError("connection refused"))
+        listing = svc.get_save_slots(123)
 
-        result = await svc.get_save_slots(123)
+        with pytest.raises(ServerUnreachable) as refused:
+            await listing
 
-        assert result["success"] is False
-        assert result["last_known"] is None
+        assert refused.value.details == {"last_known": None}
 
     @pytest.mark.asyncio
     async def test_get_save_slots_failure_withholds_a_snapshot_for_an_untracked_rom(self, tmp_path):
@@ -211,12 +211,13 @@ class TestSaveSlots:
         _set_device_id(svc, "dev-1")
         _seed_rom(svc, 123)
 
-        fake.fail_on_next(ConnectionError("connection refused"))
+        fake.fail_on_next(RommConnectionError("connection refused"))
+        listing = svc.get_save_slots(123)
 
-        result = await svc.get_save_slots(123)
+        with pytest.raises(ServerUnreachable) as refused:
+            await listing
 
-        assert result["success"] is False
-        assert result["last_known"] is None
+        assert refused.value.details == {"last_known": None}
 
     @pytest.mark.asyncio
     async def test_get_save_slots_success_carries_no_snapshot(self, tmp_path):
@@ -268,14 +269,50 @@ class TestSaveSlots:
         )
 
         fake.fail_on_next(RommNotFoundError("HTTP 404: Not Found"))
+        listing = svc.get_save_slots(123)
 
-        result = await svc.get_save_slots(123)
+        with pytest.raises(RommNotFoundError):
+            await listing
 
-        assert result["success"] is False
-        assert result["reason"] == "not_found"
-        assert result["reason"] != "server_unreachable"
         # The #625 guard is unchanged by the reclassification.
         assert _require_save_state(svc, 123).slots == original_slots
+
+    @pytest.mark.asyncio
+    async def test_get_save_slots_a_romm_error_that_is_no_outage_carries_no_snapshot(self, tmp_path):
+        """Only an unreachable server answers with ``last_known``; any other RomM error propagates as itself."""
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "dev-1")
+        _seed_save_state(
+            svc,
+            123,
+            RomSaveSyncState(
+                active_slot="default",
+                slot_confirmed=True,
+                slots={"default": {"source": "server", "count": 1, "latest_updated_at": None}},
+            ),
+        )
+        failure = RommAuthError("401 Unauthorized")
+        fake.fail_on_next(failure)
+        listing = svc.get_save_slots(123)
+
+        with pytest.raises(RommAuthError) as raised:
+            await listing
+
+        assert raised.value is failure
+
+    @pytest.mark.asyncio
+    async def test_get_save_slots_a_fault_that_is_not_romms_is_no_refusal(self, tmp_path):
+        """An exception outside the RomM family is not read as an outage: it propagates as itself."""
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "dev-1")
+        _seed_rom(svc, 123)
+        fake.fail_on_next(ConnectionError("connection refused"))
+        listing = svc.get_save_slots(123)
+
+        with pytest.raises(ConnectionError):
+            await listing
 
     @pytest.mark.asyncio
     async def test_get_save_slots_empty_server_response_persists(self, tmp_path):
@@ -1132,19 +1169,18 @@ class TestGetSlotSaves:
 
     @pytest.mark.asyncio
     async def test_server_error(self, tmp_path):
-        """Returns error response when list_saves raises an exception."""
+        """A RomM error from list_saves propagates as itself."""
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "server-dev-1")
-        fake.fail_on_next(RommApiError("connection timeout"))
+        failure = RommApiError("connection timeout")
+        fake.fail_on_next(failure)
+        listing = svc.get_slot_saves(42, "default")
 
-        result = await svc.get_slot_saves(42, "default")
+        with pytest.raises(RommApiError) as raised:
+            await listing
 
-        assert result["success"] is False
-        assert result["reason"] == "server_unreachable"
-        assert result["slot"] == "default"
-        assert result["saves"] == []
-        assert "connection timeout" in result["message"]
+        assert raised.value is failure
 
     @pytest.mark.asyncio
     async def test_definitive_404_is_not_found(self, tmp_path):
@@ -1153,27 +1189,23 @@ class TestGetSlotSaves:
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "server-dev-1")
         fake.fail_on_next(RommNotFoundError("HTTP 404: Not Found"))
+        listing = svc.get_slot_saves(42, "default")
 
-        result = await svc.get_slot_saves(42, "default")
-
-        assert result["success"] is False
-        assert result["reason"] == "not_found"
-        assert result["reason"] != "server_unreachable"
-        assert result["saves"] == []
+        with pytest.raises(RommNotFoundError):
+            await listing
 
     @pytest.mark.asyncio
     async def test_sync_disabled(self, tmp_path):
-        """Returns error response when save sync is disabled."""
+        """Refuses while save sync is disabled."""
         svc, _ = make_service(tmp_path)
         # save_sync_enabled defaults to False
+        listing = svc.get_slot_saves(42, "default")
 
-        result = await svc.get_slot_saves(42, "default")
+        with pytest.raises(Refused) as refused:
+            await listing
 
-        assert result["success"] is False
-        assert result["reason"] == "sync_disabled"
-        assert result["slot"] == "default"
-        assert result["saves"] == []
-        assert "disabled" in result["message"].lower()
+        assert (refused.value.reason, refused.value.message) == ("sync_disabled", "Save sync is disabled")
+        assert refused.value.details == {}
 
     @pytest.mark.asyncio
     async def test_legacy_slot_returns_only_null_saves(self, tmp_path):
