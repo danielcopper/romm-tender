@@ -51,7 +51,7 @@ _RELEASE_TIMEOUT_SECONDS = 5.0
 
 
 class StaleAction(NamedRefused):
-    """The reported action token is not the one the run awaits, or it has expired.
+    """The report names no action the run awaits (wrong token, wrong run, or none pending), or its token has expired.
 
     The panel stops retrying its report on this reason.
     """

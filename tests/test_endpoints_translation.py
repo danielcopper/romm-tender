@@ -1256,7 +1256,7 @@ _A_PREVIEW_PAGE = {"scope": "bulk", "rom_id": None, "preview_id": None, "offset"
 
 class TestTheCleanupRefusalsOnTheWire:
     """The cleanup's refusals answer their reason and message — the two the panel branches on included — and a fault
-    in its preview is a transport error, not ``unknown``.
+    in its preview is a transport error.
     """
 
     async def test_a_stale_action_answers_its_reason_and_message(self):
@@ -1277,7 +1277,7 @@ class TestTheCleanupRefusalsOnTheWire:
         dispatcher, service = _dispatcher_over_cleanup(FakeUnitOfWorkFactory(FakeUnitOfWork()), events)
         app_id = 0x80000001
         # The run's own requester, so the action is pending exactly as a run leaves it; the empty
-        # database no longer binds the shortcut it names.
+        # database binds no shortcut to it, so the claim's binding check fails.
         requested = asyncio.create_task(
             service._request_action("run-1", "remove_shortcut", {"app_id": app_id}, 1, None, {1})
         )
