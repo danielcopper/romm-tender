@@ -481,8 +481,8 @@ class TestFirmwareDestPath:
             dest = fw._demand.dest_path(firmware, placement)
             assert dest == os.path.join(bios, "bios7.bin")
 
-    def test_uses_dynamic_bios_path(self, fw, tmp_path):
-        """Uses ``retrodeck_folders.bios`` for the base directory."""
+    def test_places_under_the_bios_folder_retrodeck_names(self, fw, tmp_path):
+        """The base directory is the BIOS folder a download lands in, wherever RetroDECK names it."""
         sd_bios = "/run/media/deck/Emulation/retrodeck/bios"
         with patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=sd_bios)):
             firmware = {"file_name": "fw.bin", "file_path": "bios/saturn/fw.bin"}

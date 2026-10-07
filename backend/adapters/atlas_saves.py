@@ -209,7 +209,8 @@ class AtlasSaveLocationAdapter:
         health could not be asked, nothing is claimed missing: the placement
         question that follows answers for itself. Only RetroDECK is asked: the
         refusal's sentence names it, and no other source reaches a save answer
-        Tender syncs (``domain.save_answer.save_shape_message``).
+        Tender syncs, because a sealed catalogue is a refusal
+        (``adapters/atlas_catalogue.catalogue_refused``).
         """
         if kind != RETRODECK:
             return None

@@ -314,9 +314,8 @@ def save_shape_message(answer: SaveAnswer) -> str:
     """The sentence a refusal is reported with, named after the emulator it is about.
 
     A missing saves root is no statement about the emulator, so it names the
-    folder instead, and only RetroDECK's: the adapter asks no other source
-    whether its saves root is missing, since none reaches a save answer — a
-    sealed catalogue is a refusal (``adapters/atlas_catalogue.catalogue_refused``).
+    folder instead — RetroDECK's, the one source the adapter asks about it
+    (``adapters/atlas_saves.py``).
     """
     if answer.state == SAVE_STATE_SAVES_ROOT_MISSING:
         return f"Save sync is unavailable: RetroDECK's saves folder {answer.missing_saves_root} does not exist."
@@ -390,7 +389,7 @@ def saves_root_missing_answer(*, path: str, emulator: str | None, content_instal
 
     A refusal, and one nothing below the root is probed for: the sync would
     create the root to write into, and a created root lands on internal storage
-    while the card it belongs on is out.
+    while the SD card it belongs on is out.
     """
     return SaveAnswer(
         state=SAVE_STATE_SAVES_ROOT_MISSING,

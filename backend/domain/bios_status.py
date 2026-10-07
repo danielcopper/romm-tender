@@ -424,9 +424,9 @@ def _row_verdict(placement: FirmwarePlacement | None, downloaded: bool, dest: st
     will be opened from. Where the declaration carries no ``relative_path`` the
     destination is one Tender cannot honour, so the resolver read somewhere
     else and ``FirmwareDemand.is_downloaded`` answers with its own look at the
-    path assembled here instead — and where there is no *dest* to look at, no
-    BIOS folder having been named, that row's verdict is withheld too: nothing
-    established it.
+    path assembled here instead — and where there is no *dest* to look at,
+    because no download may land in the BIOS folder, that row's verdict is
+    withheld too: nothing established it.
     """
     if placement is not None and placement.declares_directory:
         return placement.folder.satisfied if placement.folder is not None else None

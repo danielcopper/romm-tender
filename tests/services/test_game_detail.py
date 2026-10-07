@@ -602,7 +602,7 @@ class TestTargetPathOccupied:
         assert len(probed) == 1
 
     @pytest.mark.asyncio
-    async def test_false_when_the_roms_path_is_unknown(self, game_detail, path_probe):
+    async def test_false_where_retrodeck_names_no_rom_folder(self, game_detail, path_probe):
         game_detail.service._retrodeck_folders.roms = ""
         path_probe.exists = lambda _path: True
         _seed_rom(game_detail, 10, app_id=50000, platform_slug="snes", fs_name="game_10.sfc")

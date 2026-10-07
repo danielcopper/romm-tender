@@ -416,7 +416,7 @@ class TestPathChangeDetection:
         assert "cleared" not in payload
 
     def test_empty_current_home_no_action(self, migration, tmp_path):
-        """If ``retrodeck_folders`` returns empty string, do nothing."""
+        """Where RetroDECK gives the move code no folders, nothing is done."""
 
         loop = _RecordingLoop()
         migration.service._loop = loop

@@ -116,7 +116,7 @@ class TestCleanupLeftoverTmpFilesNoRetrodeckPaths:
     no ROM root and no BIOS folder. Service must not walk an empty path.
     """
 
-    def test_empty_roms_and_bios_paths_skip_walk(self, logger):
+    def test_no_rom_root_and_no_bios_folder_skip_walk(self, logger):
         fake = FakeDownloadFileStore()
         # RetroDECK's folders present but naming neither root — the service
         # must early-return on each branch.

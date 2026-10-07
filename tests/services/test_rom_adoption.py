@@ -2262,7 +2262,7 @@ class TestHasAdoptionCandidate:
         assert h.service.has_adoption_candidate("snes", "Game (USA).zip") is True
         assert opened == []
 
-    async def test_a_missing_roms_path_answers_quietly(self, h):
+    async def test_without_a_rom_folder_it_answers_quietly(self, h):
         h.paths.roms = ""
 
         assert h.service.has_adoption_candidate("snes", "Game (USA).sfc") is False

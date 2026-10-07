@@ -197,7 +197,7 @@ class FirmwareDemand:
         apart: what satisfies the emulator is a file inside the folder, and the
         folder itself is there on every stock RetroDECK.
 
-        A *dest* of ``None`` is a row with no BIOS folder to place it under
+        A *dest* of ``None`` is a row placed where no download may land
         (:meth:`status_root`): our own probe has nowhere to look, so it answers
         ``False`` and the row's verdict is withheld
         (``domain.bios_status.build_file_entry``).
