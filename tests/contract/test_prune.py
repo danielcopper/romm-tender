@@ -6,6 +6,7 @@ import asyncio
 import json
 import threading
 from pathlib import Path
+from typing import Any
 
 import pytest
 from _vendor.atlas.installations import RetroDeck
@@ -799,7 +800,7 @@ def _seed_install_at(harness, rom_id: int, rom_path: Path, system: str) -> None:
     harness.romm.get_rom_once_side_effect_by_id[rom_id] = RommNotFoundError("gone")
 
 
-async def _run_installed_cleanup(harness, rom_ids: list[int]) -> dict:
+async def _run_installed_cleanup(harness, rom_ids: list[int]) -> dict[str, Any]:
     """Preview, select *rom_ids*' installed content, run, and answer the run's completion frame."""
     preview = await harness.endpoints.get_prune_preview(_preview_request())
     staged = await harness.endpoints.stage_prune_installed_selection(
