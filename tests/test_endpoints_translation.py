@@ -1078,17 +1078,24 @@ class TestTheSlotRefusalsOnTheWire:
         assert set(result) == {"success", "reason", "message", "needs_conflict_resolution", "conflicts"}
         assert [(c["filename"], c["server_save_id"]) for c in result["conflicts"]] == [("pokemon.srm", 1)]
 
-    async def test_a_migration_whose_local_files_fail_answers_migration_failed(self, tmp_path):
+    async def test_a_migration_over_a_local_save_that_cannot_be_read_answers_migration_failed(
+        self, tmp_path, monkeypatch
+    ):
         svc, fake = make_service(tmp_path)
         _enable_sync_with_device(svc)
         _install_rom(svc, tmp_path)
-        _create_save(tmp_path, content=b"L" * 100)
+        local_save = _create_save(tmp_path, content=b"L" * 100)
         fake.saves[1] = _server_save(save_id=1, filename="pokemon [ts].srm", slot=None)
+        fake.set_server_save_content(1, b"S" * 100)
+        store = svc._save_file_store
+        content_hash = store.content_hash
 
-        def failing_download(_save_id, _dest_path):
-            raise PermissionError("saves dir not writable")
+        def unreadable_local_save(path: str) -> str:
+            if path == str(local_save):
+                raise PermissionError(f"cannot read {path}")
+            return content_hash(path)
 
-        fake.download_save = failing_download  # type: ignore[method-assign]
+        monkeypatch.setattr(store, "content_hash", unreadable_local_save)
 
         message = json.loads(
             await _dispatcher_over_saves(svc).dispatch(1, "confirm_slot_choice", [42, "default", True, None, False])
@@ -1097,7 +1104,8 @@ class TestTheSlotRefusalsOnTheWire:
         assert message["result"] == {
             "success": False,
             "reason": "migration_failed",
-            "message": "The saves could not be migrated: a save file on this device could not be read or written.",
+            "message": "The saves could not be migrated: a save file on this device could not be read,"
+            " or its folder could not be created.",
         }
 
     @pytest.mark.parametrize("route_name", ["get_slot_delete_info", "delete_slot"])

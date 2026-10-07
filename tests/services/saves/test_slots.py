@@ -1067,9 +1067,26 @@ class TestConfirmSlotChoice:
         return svc, fake
 
     @pytest.mark.asyncio
-    async def test_confirm_migration_a_local_file_failure_refuses_with_migration_failed(self, tmp_path):
-        """A file on this device that cannot be read or written before the apply phase: nothing confirmed."""
-        svc, fake = self._a_migration_whose_download_raises(tmp_path, PermissionError("saves dir not writable"))
+    async def test_confirm_migration_over_a_local_save_that_cannot_be_read_refuses_with_migration_failed(
+        self, tmp_path, monkeypatch
+    ):
+        """A local save that cannot be read before the apply phase: nothing confirmed."""
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "dev-1")
+        _install_rom(svc, tmp_path)
+        local_save = _create_save(tmp_path, content=b"L" * 100)
+        fake.saves[1] = _server_save(save_id=1, filename="pokemon [ts].srm", slot=None)
+        fake.set_server_save_content(1, b"S" * 100)
+        store = svc._save_file_store
+        content_hash = store.content_hash
+
+        def unreadable_local_save(path: str) -> str:
+            if path == str(local_save):
+                raise PermissionError(f"cannot read {path}")
+            return content_hash(path)
+
+        monkeypatch.setattr(store, "content_hash", unreadable_local_save)
         confirming = svc.confirm_slot_choice(42, "default", True, None)
 
         with pytest.raises(Refused) as refused:
@@ -1077,7 +1094,8 @@ class TestConfirmSlotChoice:
 
         assert (refused.value.reason, refused.value.message) == (
             "migration_failed",
-            "The saves could not be migrated: a save file on this device could not be read or written.",
+            "The saves could not be migrated: a save file on this device could not be read,"
+            " or its folder could not be created.",
         )
         assert refused.value.details == {}
         assert _get_save_state(svc, 42) is None

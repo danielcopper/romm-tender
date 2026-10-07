@@ -14,10 +14,9 @@ DEVICE_NOT_REGISTERED = "Device not registered"
 MIGRATION_DEVICE_NOT_REGISTERED = (
     "This device isn't registered with RomM yet — retry in a moment (it registers automatically on the next save sync)."
 )
-# Wizard legacy migration: reading or writing the save files on this device
-# failed before anything was confirmed, so the wizard stays open for a retry.
+# The wizard's legacy migration (``confirm_slot_choice``).
 MIGRATION_LOCAL_FILES_FAILED = (
-    "The saves could not be migrated: a save file on this device could not be read or written."
+    "The saves could not be migrated: a save file on this device could not be read, or its folder could not be created."
 )
 DEVICE_SYNC_DISABLED = "Save sync is disabled for this device on the RomM server"
 SAVE_SYNC_BUSY = "Another save sync is still running"

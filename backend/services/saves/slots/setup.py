@@ -292,7 +292,8 @@ class SetupWizard:
 
         Before anything is confirmed, a migration refuses with
         ``device_not_registered`` or ``NotInstalled``. A RomM error before the
-        apply phase propagates, and a local file failure there refuses with
+        apply phase propagates, and a save on this device that cannot be read,
+        or a saves folder that cannot be created, refuses with
         ``migration_failed``; either way nothing is confirmed.
         """
         rom_id = int(rom_id)
@@ -437,11 +438,11 @@ class SetupWizard:
         legacy saves), ``{"status": "conflict", "conflicts": [...]}`` (a differing
         local save needs the user's decision), or ``{"status": "migrated",
         "migrated": int, "failed": int}`` (the apply phase ran). The **wholesale**
-        pre-apply failures — a ``list_saves`` throw or a phase-1 download throw —
-        **propagate** so the caller refuses without confirming: phase 1 writes
-        only scratch ``.tmp`` files (never the real save files) and the
-        ``finally`` clears them, so nothing durable is mutated before the apply
-        phase begins.
+        pre-apply failures — a ``list_saves`` or phase-1 download throw, a local
+        save that cannot be read, a saves folder that cannot be created —
+        **propagate** so the caller confirms nothing: phase 1 writes only scratch
+        ``.tmp`` files (never the real save files) and the ``finally`` clears
+        them, so nothing durable is mutated before the apply phase begins.
         """
         rom_name = info["rom_name"]
         saves_dir = info["saves_dir"]

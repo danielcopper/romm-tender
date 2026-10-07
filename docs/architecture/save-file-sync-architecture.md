@@ -361,8 +361,9 @@ preconditions (a registered device — otherwise the #1478 upload guard would on
 and an installed ROM), then downloads every target to a scratch `.tmp` sibling (never the real save files) and
 classifies it. A **wholesale** failure _before_ the apply phase confirms **nothing**: the device/install precheck
 refuses with `device_not_registered` or `not_installed`, a RomM error from `list_saves` or a phase-1 download answers
-`classify_error`'s reason and message, and a save file on this device that cannot be read or written refuses with
-`migration_failed`. The scratch temps are cleared and the wizard stays open on the message, so the user can simply retry
+`classify_error`'s reason and message, and a save file on this device that cannot be read, or a saves folder that cannot
+be created, refuses with `migration_failed`. A failure writing the scratch download is not among them: the RomM adapter
+reports it as a connection error, so it answers `server_unreachable`. The scratch temps are cleared and the wizard stays open on the message, so the user can simply retry
 Track. Once the apply phase begins, a **per-target** upload failure is **counted, not fatal**
 (`Could not migrate N save(s)`): the slot is still confirmed and the failed source is left in place, so no save that
 lives only in the legacy bucket is ever lost. (A migration whose server had no legacy saves is a no-op that confirms the
