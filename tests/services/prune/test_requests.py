@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from lib.errors import Refused
 from services.prune._models import PruneOptions
 from services.prune.requests import (
     _MAX_STEAM_SNAPSHOT_BYTES,
@@ -28,12 +31,13 @@ def _snapshot(app_id: int = 9001) -> dict[str, object]:
 def test_preview_request_defaults_and_rejects_bad_pages() -> None:
     assert parse_preview_request({"scope": "bulk"}) == ("bulk", None, None, 0, 50)
     assert parse_preview_request({"scope": "rom", "rom_id": 7}) == ("rom", 7, None, 0, 50)
-    invalid = parse_preview_request({"scope": "bulk", "offset": -1, "limit": 101})
-    assert invalid == {
-        "success": False,
-        "reason": "invalid_page",
-        "message": "Offset must be non-negative and limit 0-100.",
-    }
+    bad_page = {"scope": "bulk", "offset": -1, "limit": 101}
+    with pytest.raises(Refused) as caught:
+        parse_preview_request(bad_page)
+    assert (caught.value.reason, caught.value.message) == (
+        "invalid_page",
+        "Offset must be non-negative and limit 0-100.",
+    )
 
 
 def test_options_require_explicit_booleans_and_recovery_for_content_selection() -> None:
@@ -47,17 +51,16 @@ def test_options_require_explicit_booleans_and_recovery_for_content_selection() 
         frozenset({7}),
     )
     assert parsed == PruneOptions(True, True, False, True, frozenset({7}))
-    invalid = parse_options(
-        {
-            "repoint_shortcuts": True,
-            "remove_rows": True,
-            "remove_fully_vanished": False,
-            "create_recovery_bundle": False,
-        },
-        frozenset({7}),
-    )
-    assert isinstance(invalid, dict)
-    assert invalid["reason"] == "invalid_options"
+    without_recovery = {
+        "repoint_shortcuts": True,
+        "remove_rows": True,
+        "remove_fully_vanished": False,
+        "create_recovery_bundle": False,
+    }
+    selected = frozenset({7})
+    with pytest.raises(Refused) as caught:
+        parse_options(without_recovery, selected)
+    assert caught.value.reason == "invalid_options"
 
 
 def test_installed_selection_pages_are_wire_bounded_without_total_selection_cap() -> None:
@@ -65,11 +68,10 @@ def test_installed_selection_pages_are_wire_bounded_without_total_selection_cap(
         {"preview_id": "preview", "selection_id": None, "rom_ids": list(range(1, 101)), "final": False}
     )
     assert page == ("preview", None, list(range(1, 101)), False)
-    too_large = parse_selection_page(
-        {"preview_id": "preview", "selection_id": None, "rom_ids": list(range(1, 102)), "final": True}
-    )
-    assert isinstance(too_large, dict)
-    assert too_large["reason"] == "invalid_selection"
+    too_large = {"preview_id": "preview", "selection_id": None, "rom_ids": list(range(1, 102)), "final": True}
+    with pytest.raises(Refused) as caught:
+        parse_selection_page(too_large)
+    assert caught.value.reason == "invalid_selection"
 
 
 def test_snapshot_requires_exact_app_complete_shape_and_no_base64() -> None:

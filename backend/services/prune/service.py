@@ -195,12 +195,9 @@ class PruneService:
             return await self._get_prune_preview(request)
 
     async def _get_prune_preview(self, request: object) -> dict[str, Any]:
-        parsed = parse_preview_request(request)
-        if isinstance(parsed, dict):
-            return parsed
+        scope, explicit_rom_id, preview_id, offset, limit = parse_preview_request(request)
         if self.is_active():
             return self._failure("prune_active", "A removed-game cleanup is already running.")
-        scope, explicit_rom_id, preview_id, offset, limit = parsed
         try:
             preview = self._preview
             if preview_id is None:
@@ -227,10 +224,7 @@ class PruneService:
 
     async def stage_prune_installed_selection(self, request: object) -> dict[str, Any]:
         """Append one bounded page to an ephemeral preview-bound selection."""
-        parsed = parse_selection_page(request)
-        if isinstance(parsed, dict):
-            return parsed
-        preview_id, selection_id, rom_ids, final = parsed
+        preview_id, selection_id, rom_ids, final = parse_selection_page(request)
         async with self._admission_lock:
             preview = self._preview
             if self.is_active() or preview is None or preview.preview_id != preview_id:
@@ -287,8 +281,6 @@ class PruneService:
         if isinstance(selected, dict):
             return selected
         options = parse_options(request, selected)
-        if isinstance(options, dict):
-            return options
         preview_id = request.get("preview_id")
         async with self._admission_lock:
             if self._closed:
