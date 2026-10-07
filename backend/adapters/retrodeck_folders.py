@@ -19,7 +19,7 @@ refused as outside it.
 **A download creates a folder only below a root that exists.** A system's ROM
 folder that is not there yet is created by the download, as ES-DE would create
 it, and so is a BIOS folder inside RetroDECK's own folder; a root that is not
-there — a drive or a card that is out — is never created, because the folder
+there — a drive or an SD card that is out — is never created, because the folder
 would land on internal storage and the drive would hide it once it is back.
 
 A resolver call that raises is logged and read as RetroDECK not being there to

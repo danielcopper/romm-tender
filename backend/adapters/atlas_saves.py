@@ -100,7 +100,7 @@ class AtlasSaveLocationAdapter:
         declines and a resolver that raises WERE asked, so both are
         ``nothing_established``. A source that reports its saves root missing is
         not asked at all: the answer is ``saves_root_missing``, which refuses the
-        sync, so no folder is created where the card that holds the root is out.
+        sync, so no folder is created while the SD card that holds the root is out.
 
         *content_installed* is the caller's own statement about *content_path*:
         ``False`` where it is the path a ROM WOULD occupy rather than a file on
