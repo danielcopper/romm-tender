@@ -191,7 +191,7 @@ A version's downloaded files are deleted only inside the ROM folder RetroDECK na
 [uninstall](#uninstalling-roms) keeps. Where there is none — RetroDECK not installed, or naming no ROM folder — the run
 still goes ahead: it removes shortcuts, and the records of games without a download record. A game with one keeps it,
 its files on disk or not, so Tender still knows its files may be there, and the report names it with the uninstall's
-sentence; [**Forget this download**](#when-a-downloaded-games-file-is-missing) removes such a record. While RetroDECK's
+sentence. The record stays until RetroDECK is back; the next cleanup then removes it with its files. While RetroDECK's
 settings are in doubt, or Tender could not ask about its folders ([below](#downloading-roms)), **Confirm Cleanup**
 starts nothing and answers with the sentence that says why.
 
@@ -238,7 +238,7 @@ folder if it is not there yet, as ES-DE would; it never creates the ROM folder a
 
 **A download needs RetroDECK.** **Download** is refused, saying why, while RetroDECK is not installed (**Downloads need
 RetroDECK, which is not installed.**), while it is switched off in **Settings › Emulator sources** (**Downloads need
-RetroDECK, which is switched off in Settings → Emulator sources.**), or where it names no ROM folder for the game's
+RetroDECK, which is switched off in Settings › Emulator sources.**), or where it names no ROM folder for the game's
 system (**RetroDECK names no ROM folder for _system_, so Tender cannot download this game.**). **Use Existing Files**
 and **Check Against Server** answer the same way. A download already running when you switch RetroDECK off finishes in
 the folder it started in. Where the ROM folder ES-DE uses lies on a drive or SD card that is not there, Tender creates
