@@ -84,6 +84,7 @@ if TYPE_CHECKING:
 
 
 _SYNC_CANCELLED = "Sync cancelled"
+_SYNC_IN_PROGRESS = "Sync already in progress"
 # Terminal reason when the run died externally (heartbeat timeout — the
 # frontend crashed or reloaded) rather than by the user's Cancel. Stored in
 # ``sync_runs.error`` via ``mark_interrupted``; the status split lets the UI
@@ -209,7 +210,7 @@ class SyncOrchestrator:
         box = self._sync_state
         run_id = self._uuid_gen.uuid4()
         if not box.try_begin_run(run_id, kind=SyncRunKind.APPLY):
-            raise Refused("sync_in_progress", "Sync already in progress")
+            raise Refused("sync_in_progress", _SYNC_IN_PROGRESS)
         box.sync_last_heartbeat = self._clock.monotonic()
         self._loop.create_task(self._do_sync_per_unit())
         return {"success": True, "message": "Sync started"}
@@ -266,7 +267,7 @@ class SyncOrchestrator:
         box = self._sync_state
         run_id = self._uuid_gen.uuid4()
         if not box.try_begin_run(run_id, kind=SyncRunKind.PREVIEW):
-            raise Refused("sync_in_progress", "Sync already in progress")
+            raise Refused("sync_in_progress", _SYNC_IN_PROGRESS)
         box.sync_last_heartbeat = self._clock.monotonic()
         try:
             await self.emit_progress(SyncStage.DISCOVERING, message="Fetching platforms...")
@@ -532,7 +533,7 @@ class SyncOrchestrator:
         # apply (#1202). Claim the run slot BEFORE discarding the preview.
         run_id = self._uuid_gen.uuid4()
         if not box.try_begin_run(run_id, kind=SyncRunKind.APPLY):
-            raise Refused("sync_in_progress", "Sync already in progress")
+            raise Refused("sync_in_progress", _SYNC_IN_PROGRESS)
         box.discard_preview()
         box.sync_last_heartbeat = self._clock.monotonic()
 
