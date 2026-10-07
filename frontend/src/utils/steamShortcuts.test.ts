@@ -72,6 +72,59 @@ describe("setLaunchOptionsConfirmed", () => {
     expect(setLaunchOptions).toHaveBeenCalledWith(99, "new-value");
     expect(unregister).toHaveBeenCalled();
   });
+
+  it("confirms a write whose report misses the wait when the re-read shows the value", async () => {
+    vi.useFakeTimers();
+    // The first registration only ever reports the old value; a fresh read
+    // after the wait sees the value Steam took.
+    let registrations = 0;
+    const { fn } = makeRegisterForAppDetails(() => ({
+      strLaunchOptions: ++registrations === 1 ? "old-value" : "new-value",
+    }));
+    vi.stubGlobal("SteamClient", {
+      Apps: { SetAppLaunchOptions: vi.fn(), RegisterForAppDetails: fn },
+    });
+
+    const promise = setLaunchOptionsConfirmed(5, "new-value", 2000);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await expect(promise).resolves.toBe(true);
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("still resolves false when the re-read after the wait shows a different value", async () => {
+    vi.useFakeTimers();
+    const { fn } = makeRegisterForAppDetails(() => ({ strLaunchOptions: "old-value" }));
+    vi.stubGlobal("SteamClient", {
+      Apps: { SetAppLaunchOptions: vi.fn(), RegisterForAppDetails: fn },
+    });
+
+    const promise = setLaunchOptionsConfirmed(5, "new-value", 2000);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await expect(promise).resolves.toBe(false);
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("resolves false once the re-read is out of time too, when Steam never answers it", async () => {
+    vi.useFakeTimers();
+    const { fn, unregister } = makeRegisterForAppDetails(() => undefined);
+    vi.stubGlobal("SteamClient", {
+      Apps: { SetAppLaunchOptions: vi.fn(), RegisterForAppDetails: fn },
+    });
+
+    let outcome: boolean | undefined;
+    void setLaunchOptionsConfirmed(5, "new-value", 2000).then((confirmed) => {
+      outcome = confirmed;
+    });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(fn).toHaveBeenCalledTimes(2);
+    expect(outcome).toBeUndefined();
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(outcome).toBe(false);
+    expect(unregister).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("removeShortcutConfirmedOutcome", () => {

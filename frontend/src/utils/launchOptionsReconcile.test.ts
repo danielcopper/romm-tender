@@ -62,6 +62,39 @@ describe("batchConfirmLaunchOptions", () => {
     expect(msg).toContain("boom");
   });
 
+  it.each([
+    { reread: "cmd 1", logged: [] },
+    { reread: "old cmd", logged: ["startup_reconcile: failed to confirm launch options for appId 1"] },
+  ])(
+    "logs a failure for a report that misses the wait only when the re-read shows another value ($reread)",
+    async ({ reread, logged }) => {
+      const actual = await vi.importActual<typeof steamShortcuts>("./steamShortcuts");
+      vi.mocked(steamShortcuts.setLaunchOptionsConfirmed).mockImplementation(actual.setLaunchOptionsConfirmed);
+      vi.useFakeTimers();
+      let registrations = 0;
+      vi.stubGlobal("SteamClient", {
+        Apps: {
+          SetAppLaunchOptions: vi.fn(),
+          RegisterForAppDetails: (_appId: number, callback: (details: SteamAppDetails) => void) => {
+            const launchOptions = ++registrations === 1 ? "old cmd" : reread;
+            queueMicrotask(() => callback({ strLaunchOptions: launchOptions }));
+            return { unregister: vi.fn() };
+          },
+        },
+      });
+      try {
+        const applying = batchConfirmLaunchOptions(items(1), "startup_reconcile");
+        await vi.advanceTimersByTimeAsync(2000);
+        await applying;
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(vi.mocked(backend.logError).mock.calls.map(([message]) => message)).toEqual(logged);
+      expect(registrations).toBe(2);
+    },
+  );
+
   it("does not begin a later Steam batch after cancellation", async () => {
     let settle!: () => void;
     const firstBatch = new Promise<boolean>((resolve) => {
