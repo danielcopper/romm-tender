@@ -492,13 +492,15 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   and while RetroDECK reports `marker-missing`, `marker-unreadable`, `marker-invalid` or `not-set-up`, or where
   detecting the sources or a question about RetroDECK's health or one of its four roots raised, none of those folders is
   used — except that a download while RetroDECK is switched off says so, and a raise on a system's own ROM folder
-  refuses only the press that asked for it** — test + prompt-only — `tests/adapters/test_retrodeck_folders.py` (the real
-  resolver over tmp homes: every folder its answer, each finding refusing every question,
-  `TestWhereAQuestionToTheResolverRaises` and `TestWhereDetectingTheSourcesRaises` refusing every question for a raise
-  on the detection, the health or a root and only its own for a system's folder, and
-  `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and `tests/contract/test_retrodeck_folders.py`
-  (under each finding, and where the detection, RetroDECK's health or one of its roots could not be asked, no press
-  downloads, deletes or cleans up there). A save's folder and a firmware file's place take the other route, the save and
+  refuses only the presses that need that folder; a removal of a game's files is bounded by its system's own ROM folder,
+  never by the ROM root** — test + prompt-only — `tests/adapters/test_retrodeck_folders.py` (the real resolver over tmp
+  homes: every folder its answer, each finding refusing every question, `TestWhereAQuestionToTheResolverRaises` and
+  `TestWhereDetectingTheSourcesRaises` refusing every question for a raise on the detection, the health or a root and
+  only its own for a system's folder, and `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and
+  `tests/contract/test_retrodeck_folders.py` (under each finding, and where the detection, RetroDECK's health or one of
+  its roots could not be asked, no press downloads, deletes, cleans up or migrates there); the system-folder bound by
+  `tests/services/test_downloads.py::TestASystemFolderLinkedToAnotherDrive` and the linked-folder and one-system cases
+  of `tests/contract/test_prune.py`. A save's folder and a firmware file's place take the other route, the save and
   firmware answers (`adapters/atlas_saves.py`, `adapters/atlas_firmware.py`), and this entry does not cover them: under
   the three `marker-*` findings a save is still synced where the save answer places it, which is then RetroDECK's
   default — keeping saves out of it is #2286's. Unseen by them: a folder joined onto a root under another name, and a
@@ -555,10 +557,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   download affordance or a progress ratio** — test + prompt-only — `tests/services/test_firmware.py` and
   `frontend/src/bigpicture/library/PlatformsTab.test.tsx`; prompt-only: the three axes stay apart — readiness
   (`domain/bios_status.py::count_required`, every required row), the progress ratio
-  (`services/firmware/status.py::_bios_aggregates`, `on_server` rows only) and the download affordance (`isFetchable`,
-  `frontend/src/utils/biosFetchable.ts`). The platform detail and the game page's BIOS tab call `isFetchable`, never a
-  copy, while the game page's row-visibility rule stays its own; display-only readers (the On-disk `⊘` mark,
-  `rowBelongsOnThisPage`) neither count nor gate
+  (`services/firmware/status.py::_bios_aggregates`, `on_server` rows only, and the stated pair only those with a
+  verdict) and the download affordance (`isFetchable`, `frontend/src/utils/biosFetchable.ts`). The platform detail and
+  the game page's BIOS tab call `isFetchable`, never a copy, while the game page's row-visibility rule stays its own;
+  display-only readers (the On-disk `⊘` mark, `rowBelongsOnThisPage`) neither count nor gate
 - **No BIOS answer outlives the page that asked for it** — test + prompt-only —
   `tests/services/test_game_detail.py::TestGetCachedGameDetailCarriesNoBiosAnswer` and the two contract cases in
   `tests/contract/test_game_detail_read.py`; prompt-only: no stored or cached BIOS answer is added back (`BiosChecker`
@@ -716,10 +718,11 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   platform's catalogue, a placement Tender cannot honour, and the already-there check before a download (the batch and
   the per-row fetch). Where no BIOS download may land — anything that refuses one, so that `FirmwareDemand.status_root`
   answers `None` — the probe looks nowhere, and a row only it could answer has its verdict withheld rather than read as
-  absent (#2244 D11). `present is None` reads as absent. A withheld verdict is not an absence: its cause is read off the
-  row's caveat codes and a declared file's `checked`, never off the verdict, and nothing checks that a consumer keeps
-  `checked`'s values apart — a file the emulator read and did not recognise is never worded "could not be checked", and
-  `refused` is not a withheld verdict
+  absent (#2244 D11). `present is None` reads as absent, except in the `RomM library files` ratio, which leaves a row
+  whose verdict was withheld out (`ratio_server_count`, #2285 D3). A withheld verdict is not an absence: its cause is
+  read off the row's caveat codes and a declared file's `checked`, never off the verdict, and nothing checks that a
+  consumer keeps `checked`'s values apart — a file the emulator read and did not recognise is never worded "could not be
+  checked", and `refused` is not a withheld verdict
 - **A firmware row's verdict is `BiosFileEntry.satisfied`, and for a folder declaration it is what the folder HOLDS —
   never that the folder is there** — test + prompt-only —
   `tests/services/test_firmware.py::TestAFolderRequirementIsAnsweredByItsContents`,

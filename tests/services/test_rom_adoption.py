@@ -409,9 +409,27 @@ class TestReplace:
         assert result["reason"] == "unsafe_replace_target"
         assert h.store.files["/elsewhere/Game.sfc"] == b"precious"
 
+    async def test_replace_removes_inside_a_system_folder_linked_out_of_the_roms_tree(self, h):
+        # The system's own folder is the bound, wherever it lies.
+        h.paths.system_dirs["psx"] = "/sdcard/psx"
+        h.store.files["/sdcard/psx/Game/a.bin"] = b"x"
+
+        assert await h.service.check_download_target(_multi_file_detail(), "/sdcard/psx/Game", replace=True) is None
+
+        assert "/sdcard/psx/Game/a.bin" not in h.store.files
+
+    async def test_replace_refuses_inside_another_system_s_folder(self, h):
+        h.store.files["/roms/gba/Game/a.bin"] = b"x"
+
+        result = await h.service.check_download_target(_multi_file_detail(), "/roms/gba/Game", replace=True)
+
+        assert result is not None
+        assert result["reason"] == "unsafe_replace_target"
+        assert h.store.files["/roms/gba/Game/a.bin"] == b"x"
+
     async def test_replace_refuses_a_bare_platform_directory(self, h):
-        # is_safe_rom_path demands two segments below the base, so the shared
-        # platform folder can never be the thing a replace removes.
+        # The system's own folder is the bound, and a path must lie strictly
+        # inside it, so the shared platform folder is never what a replace removes.
         h.store.files["/roms/psx/Game/a.bin"] = b"x"
 
         result = await h.service.check_download_target(_multi_file_detail(), "/roms/psx", replace=True)

@@ -3,7 +3,8 @@
 The single place Tender asks where RetroDECK keeps a system's ROMs, its ROM
 root, its BIOS folder and its saves root. Each question takes one reading of
 :mod:`adapters.emulator_sources` and asks RetroDECK's handle in it, because
-RetroDECK is the one source Tender downloads into and removes from: a system's
+until Tender keeps downloads in a library of its own, RetroDECK is the one
+source Tender downloads into and removes from: a system's
 folder is the handle's ``rom_location(system).dir``, the ROM root ES-DE's
 ``ROMDirectory`` (``roms_dir()``), and the BIOS folder and saves root the
 handle's own ``bios_dir()`` and ``saves_root()``. Tender reads no RetroDECK
@@ -54,12 +55,13 @@ from domain.retrodeck_folders import (
     not_installed,
     rom_root_missing,
     switched_off,
+    system_unanswered_refusal,
     unanswered_refusal,
     uninstall_not_installed,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
 
     from adapters.emulator_sources import EmulatorSourcesAdapter
 
@@ -111,8 +113,8 @@ class _RetroDeck:
 
 
 @dataclass(frozen=True, slots=True)
-class _Download:
-    """RetroDECK's handle and roots as a download may use them."""
+class _Usable:
+    """RetroDECK's handle and roots as a download or a removal may use them."""
 
     installation: Any
     roots: _Roots
@@ -159,40 +161,69 @@ class RetroDeckFoldersAdapter:
         return bios_folder_missing(folder)
 
     def rom_root(self) -> str | FolderRefused:
-        """The ROM root a removal of installed content is bounded by — or why there is none."""
-        roots = self._for_removal()
-        if roots is None:
+        """RetroDECK's ROM root — or why a removal of installed content may not go ahead at all."""
+        retrodeck = self._for_removal()
+        if retrodeck is None:
             return uninstall_not_installed()
-        if isinstance(roots, FolderRefused):
-            return roots
-        return no_rom_root() if not roots.roms else os.path.realpath(roots.roms)
+        if isinstance(retrodeck, FolderRefused):
+            return retrodeck
+        roms = retrodeck.roots.roms
+        return no_rom_root() if not roms else os.path.realpath(roms)
+
+    def rom_folders(self, systems: Iterable[str]) -> dict[str, str | FolderRefused] | FolderRefused:
+        """Each of *systems*' own ROM folder, which bounds a removal of its installed content — or why none may.
+
+        The refusals :meth:`rom_root` answers stand for every system; a system
+        RetroDECK names no folder for, or whose question raised, is refused on
+        its own. A folder is the system's, not the ROM root's, because a
+        system's folder may be a link to another drive, where its games land.
+        """
+        retrodeck = self._for_removal()
+        if retrodeck is None:
+            return uninstall_not_installed()
+        if isinstance(retrodeck, FolderRefused):
+            return retrodeck
+        if not retrodeck.roots.roms:
+            return no_rom_root()
+        return {system: self._removal_folder(retrodeck.installation, system) for system in set(systems)}
+
+    def _removal_folder(self, installation: Any, system: str) -> str | FolderRefused:
+        """The *system*'s own ROM folder as a removal is bounded by it, or that system's refusal."""
+        try:
+            placement = self._ask(installation, f"rom_location({system!r})", lambda h: h.rom_location(system))
+        except _Unasked:
+            return system_unanswered_refusal()
+        return no_rom_root() if placement.dir is None else os.path.realpath(placement.dir)
 
     def bios_folder(self) -> str | FolderRefused | None:
         """The BIOS folder a removal is bounded by; ``None`` where RetroDECK names none."""
-        roots = self._for_removal()
-        if roots is None or isinstance(roots, FolderRefused):
-            return roots
-        return os.path.realpath(roots.bios) if roots.bios else None
+        retrodeck = self._for_removal()
+        if retrodeck is None or isinstance(retrodeck, FolderRefused):
+            return retrodeck
+        bios = retrodeck.roots.bios
+        return os.path.realpath(bios) if bios else None
 
     def saves_root(self) -> str | FolderRefused | None:
         """The saves root a removal is bounded by; ``None`` where RetroDECK names none."""
-        roots = self._for_removal()
-        if roots is None or isinstance(roots, FolderRefused):
-            return roots
-        return os.path.realpath(roots.saves) if roots.saves else None
+        retrodeck = self._for_removal()
+        if retrodeck is None or isinstance(retrodeck, FolderRefused):
+            return retrodeck
+        saves = retrodeck.roots.saves
+        return os.path.realpath(saves) if saves else None
 
-    def move_roots(self) -> MoveRoots | None:
-        """RetroDECK's home, BIOS folder and saves root; ``None`` without RetroDECK or where they may not be used."""
-        roots = self._for_removal()
-        if roots is None or isinstance(roots, FolderRefused):
-            return None
+    def move_roots(self) -> MoveRoots | FolderRefused | None:
+        """RetroDECK's home, BIOS and saves roots; ``None`` without RetroDECK, or the refusal where they are unfit."""
+        retrodeck = self._for_removal()
+        if retrodeck is None or isinstance(retrodeck, FolderRefused):
+            return retrodeck
+        roots = retrodeck.roots
         return MoveRoots(
             home=os.path.realpath(roots.home),
             bios=os.path.realpath(roots.bios),
             saves=os.path.realpath(roots.saves),
         )
 
-    def _for_download(self, purpose: str) -> _Download | FolderRefused:
+    def _for_download(self, purpose: str) -> _Usable | FolderRefused:
         """RetroDECK as a download uses it: detected, switched on, its folders established, not defaults or missing."""
         retrodeck = self._retrodeck()
         if retrodeck is None:
@@ -202,15 +233,17 @@ class RetroDeckFoldersAdapter:
         answered = retrodeck.usable(_REFUSES_DOWNLOADS)
         if isinstance(answered, FolderRefused):
             return answered
-        return _Download(installation=retrodeck.installation, roots=answered.roots)
+        return _Usable(installation=retrodeck.installation, roots=answered.roots)
 
-    def _for_removal(self) -> _Roots | FolderRefused | None:
-        """RetroDECK's roots as a removal may use them: detected, whatever its switch, established and not defaults."""
+    def _for_removal(self) -> _Usable | FolderRefused | None:
+        """RetroDECK as a removal uses it: detected, whatever its switch, its folders established and not defaults."""
         retrodeck = self._retrodeck()
         if retrodeck is None:
             return None
         answered = retrodeck.usable(ROOTS_ARE_DEFAULTS)
-        return answered if isinstance(answered, FolderRefused) else answered.roots
+        if isinstance(answered, FolderRefused):
+            return answered
+        return _Usable(installation=retrodeck.installation, roots=answered.roots)
 
     def _retrodeck(self) -> _RetroDeck | None:
         """RetroDECK in a fresh reading, its health and roots asked together; ``None`` where it is not detected."""

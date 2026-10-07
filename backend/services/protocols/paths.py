@@ -15,6 +15,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from domain.emulator_sources import SourceReport, SourcesReading
     from domain.firmware_wants import FirmwareCatalogue
     from domain.retrodeck_folders import FolderRefused, MoveRoots
@@ -77,16 +79,20 @@ class RetroDeckFolders(Protocol):
     A download asks :meth:`download_folder` or :meth:`bios_download_folder`,
     which refuse unless RetroDECK is detected and switched on, its folders are
     neither defaults nor missing, and the folder can be created below a root
-    that exists. A removal asks for the root it is bounded by: :meth:`rom_root`
-    refuses where it cannot be named, in the words an uninstall says;
-    :meth:`bios_folder` and :meth:`saves_root` answer ``None`` instead. All
-    three refuse while the folders are defaults, and none minds the switch.
+    that exists. A removal of a game's installed content is bounded by its
+    system's own folder, which :meth:`rom_folders` answers for several systems
+    at once; it refuses where :meth:`rom_root` cannot be named, in the words an
+    uninstall says, and refuses one system alone where RetroDECK names no
+    folder for it. :meth:`bios_folder` and :meth:`saves_root` answer ``None``
+    where RetroDECK names none. All of them refuse while the folders are
+    defaults, and none minds the switch.
     Where detecting the sources, or asking about RetroDECK's health or one of
     its roots, raised, every question refuses — a download only once RetroDECK
     is not switched off, which it says first; a raise on a system's own folder
-    refuses only :meth:`download_folder`. A
+    refuses only that system's folder. A
     refusal comes back as a value; the caller that needed the folder raises it.
-    :meth:`move_roots` is the move code's. Every path is symlink-resolved.
+    :meth:`move_roots` is the move code's, ``None`` where RetroDECK is not
+    detected. Every path is symlink-resolved.
     """
 
     def download_folder(self, system: str) -> str | FolderRefused: ...
@@ -95,11 +101,13 @@ class RetroDeckFolders(Protocol):
 
     def rom_root(self) -> str | FolderRefused: ...
 
+    def rom_folders(self, systems: Iterable[str]) -> dict[str, str | FolderRefused] | FolderRefused: ...
+
     def bios_folder(self) -> str | FolderRefused | None: ...
 
     def saves_root(self) -> str | FolderRefused | None: ...
 
-    def move_roots(self) -> MoveRoots | None: ...
+    def move_roots(self) -> MoveRoots | FolderRefused | None: ...
 
 
 class CoreResolverFn(Protocol):

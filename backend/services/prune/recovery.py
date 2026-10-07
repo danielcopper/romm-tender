@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.prune import recovery_bundle_id
-from domain.retrodeck_folders import EveryFolderRefused, FolderRefused
+from domain.retrodeck_folders import EveryFolderRefused, FolderRefused, folder_of
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -219,25 +219,24 @@ class RecoveryCoordinator:
 
     def _installed_rom_artifacts(self, snapshot: dict[str, object], rom_ids: set[int]) -> list[RecoveryArtifact]:
         """The installed content of each of *rom_ids* the snapshot records an install for."""
-        roms_root = self._retrodeck_folders.rom_root()
-        if isinstance(roms_root, EveryFolderRefused):
-            raise roms_root
         raw_installs = snapshot.get("installs")
         installs = raw_installs if isinstance(raw_installs, list) else []
         installs_by_id = {
             int(item["rom_id"]): item for item in installs if isinstance(item, dict) and type(item.get("rom_id")) is int
         }
+        wanted = [installs_by_id[rom_id] for rom_id in sorted(rom_ids) if rom_id in installs_by_id]
+        folders = self._retrodeck_folders.rom_folders(str(install.get("system", "")) for install in wanted)
+        if isinstance(folders, EveryFolderRefused):
+            raise folders
         artifacts: list[RecoveryArtifact] = []
-        for rom_id in sorted(rom_ids):
-            install = installs_by_id.get(rom_id)
-            if install is None:
-                continue
+        for install in wanted:
             source = install.get("rom_dir") or install.get("file_path")
-            # Without a ROM root to bound it, the removal of this content is
-            # refused too, so the bundle has nothing of it to hold.
-            if isinstance(source, str) and source and not isinstance(roms_root, FolderRefused):
+            folder = folder_of(folders, str(install.get("system", "")))
+            # Without its system's folder to bound it, the removal of this
+            # content is refused too, so the bundle has nothing of it to hold.
+            if isinstance(source, str) and source and not isinstance(folder, FolderRefused):
                 artifacts.append(
-                    {"source_path": source, "safe_root": roms_root, "kind": "installed_rom", "rom_id": rom_id}
+                    {"source_path": source, "safe_root": folder, "kind": "installed_rom", "rom_id": install["rom_id"]}
                 )
         return artifacts
 

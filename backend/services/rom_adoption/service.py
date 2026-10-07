@@ -26,7 +26,7 @@ from dataclasses import dataclass, replace
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
-from domain.retrodeck_folders import FolderRefused
+from domain.retrodeck_folders import FolderRefused, folder_of
 from domain.rom_adoption import (
     DigestRequest,
     FileDifference,
@@ -52,7 +52,7 @@ from domain.rom_files import (
     synthetic_rom_name,
 )
 from lib.errors import error_response
-from lib.path_safety import PathTraversalError, coerce_safe_component, is_safe_rom_path, safe_join
+from lib.path_safety import PathTraversalError, coerce_safe_component, is_inside_folder, safe_join
 from services.rom_adoption._target import Target as _Target
 from services.rom_adoption.renamer import AdoptionRenamer, AdoptionRenamerConfig
 from services.rom_adoption.search import CandidateSearch, CandidateSearchConfig
@@ -129,7 +129,7 @@ def _add_carried_note(refusal: dict[str, Any], carried: tuple[RenamePair, ...]) 
 
 
 def _unsafe_replace_refusal() -> dict[str, Any]:
-    """The refusal a replace returns for a path outside the RetroDECK ROMs tree."""
+    """The refusal a replace returns for a path outside its system's own ROM folder."""
     return {
         "success": False,
         "reason": "unsafe_replace_target",
@@ -384,33 +384,33 @@ class RomAdoptionService:
         :meth:`_remove_under_roms` directly: a candidate under a different name is
         never the thing ``os.replace`` swaps, so leaving it would leave it.
         """
+        system = self._resolve_system(rom_detail.get("platform_slug", ""), rom_detail.get("platform_fs_slug"))
         if not is_dir and not is_multi_file_download(rom_detail):
-            roms_base = self._roms_base()
-            return None if is_safe_rom_path(checked_path, roms_base) else _unsafe_replace_refusal()
-        return self._remove_under_roms(checked_path, is_dir=is_dir)
+            folder = self._rom_folder(system)
+            return None if is_inside_folder(checked_path, folder) else _unsafe_replace_refusal()
+        return self._remove_under_roms(checked_path, system, is_dir=is_dir)
 
-    def _roms_base(self) -> str:
-        """RetroDECK's ROM root a replace is bounded by.
+    def _rom_folder(self, system: str) -> str:
+        """*system*'s own ROM folder, which bounds a replace as it bounds an uninstall.
 
-        Raises the refusal where there is none to name, the uninstall's own
-        (``RetroDeckFolders.rom_root``), so nothing is removed under a guessed
-        root.
+        Raises the uninstall's own refusal where there is none to name
+        (``RetroDeckFolders.rom_folders``), so nothing is removed under a
+        guessed folder.
         """
-        root = self._retrodeck_folders.rom_root()
-        if isinstance(root, FolderRefused):
-            raise root
-        return root
+        folder = folder_of(self._retrodeck_folders.rom_folders([system]), system)
+        if isinstance(folder, FolderRefused):
+            raise folder
+        return folder
 
-    def _remove_under_roms(self, path: str, *, is_dir: bool) -> dict[str, Any] | None:
-        """Delete *path*, refusing anything that is not safely inside the ROMs tree.
+    def _remove_under_roms(self, path: str, system: str, *, is_dir: bool) -> dict[str, Any] | None:
+        """Delete *path*, refusing anything that is not safely inside *system*'s own ROM folder.
 
         The one place this service deletes ROM content, shared by both legs of a
         replace so neither can acquire its own containment rule. Reports a failed
         removal instead of letting the download proceed onto ground it could not
         clear.
         """
-        roms_base = self._roms_base()
-        if not is_safe_rom_path(path, roms_base):
+        if not is_inside_folder(path, self._rom_folder(system)):
             self._logger.error(f"Refusing to replace content outside the ROMs directory: {path}")
             return _unsafe_replace_refusal()
         try:
@@ -478,7 +478,7 @@ class RomAdoptionService:
         )
         if refusal is not None:
             return refusal
-        removal = self._remove_under_roms(source_path, is_dir=existing["kind"] == DIR)
+        removal = self._remove_under_roms(source_path, target.system, is_dir=existing["kind"] == DIR)
         return removal if removal is None else _add_carried_note(removal, carried)
 
     # ── Adopt ───────────────────────────────────────────────────────
@@ -569,8 +569,8 @@ class RomAdoptionService:
         if not candidate_path:
             return target.path
         path = os.path.normpath(str(candidate_path))
-        roms_base = self._roms_base()
-        if os.path.dirname(path) != os.path.dirname(target.path) or not is_safe_rom_path(path, roms_base):
+        folder = self._rom_folder(target.system)
+        if os.path.dirname(path) != os.path.dirname(target.path) or not is_inside_folder(path, folder):
             self._logger.error(f"Rejected adoption candidate outside this game's platform directory: {path}")
             return None
         return path

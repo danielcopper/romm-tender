@@ -21,6 +21,7 @@ from domain.migration_paths import (
     remap_under_current,
     stranded_source_candidates,
 )
+from domain.retrodeck_folders import FolderRefused, MoveRoots, moving_not_installed
 from services.migration._moves import FileMover
 
 if TYPE_CHECKING:
@@ -167,7 +168,7 @@ class MigrationService:
         with is a directory, and not the live one.
         """
         roots = self._retrodeck_folders.move_roots()
-        if roots is None:
+        if not isinstance(roots, MoveRoots):
             return
         current_home = roots.home
         if not self._migration_file_store.is_dir(current_home):
@@ -456,7 +457,7 @@ class MigrationService:
 
         return update
 
-    def _collect_untracked_bios_items(self, pending_homes, tracked_file_names):
+    def _collect_untracked_bios_items(self, pending_homes, tracked_file_names, roots: MoveRoots | None):
         """Collect untracked BIOS migration items (downloaded before state tracking).
 
         ``tracked_file_names`` is the set of BIOS file names already covered by
@@ -471,9 +472,10 @@ class MigrationService:
         A resolver that could not answer yields no candidates, so the sweep moves
         nothing rather than sweeping the directory wholesale — a missed file
         stays readable in the old home, where a wrongly-moved one would not.
+        Without *roots* — only the status counts without them — nothing is
+        collected.
         """
         items = []
-        roots = self._retrodeck_folders.move_roots()
         if roots is None:
             return items
         new_bios = roots.bios
@@ -493,16 +495,16 @@ class MigrationService:
                 break
         return items
 
-    def _collect_save_items(self, pending_homes):
+    def _collect_save_items(self, pending_homes, roots: MoveRoots | None):
         """Collect save file migration items by scanning every pending saves dir.
 
         Scans ``<home>/saves`` for each pending home (#1042) and deduplicates by
         relative path, newest mtime winning — the same save can exist under
         several homes if the user played while a change was pending, and only
         the freshest copy should survive. Which files a scan is willing to see
-        at all is :meth:`_migratable_saves`'s contract, not this one's.
+        at all is :meth:`_migratable_saves`'s contract, not this one's. Without
+        *roots* nothing is collected.
         """
-        roots = self._retrodeck_folders.move_roots()
         if roots is None:
             return []
         new_saves = roots.saves
@@ -555,7 +557,9 @@ class MigrationService:
         except OSError:
             return 0.0
 
-    def _collect_migration_items(self, pending_homes, new_home, installs, bios_files, relocations, bios_relocations):
+    def _collect_migration_items(
+        self, pending_homes, new_home, installs, bios_files, relocations, bios_relocations, roots: MoveRoots | None
+    ):
         """Collect all files that need migration across ROMs, BIOS, and saves.
 
         Returns list of (label, old_path, new_path, state_update_fn, kind) tuples.
@@ -565,14 +569,15 @@ class MigrationService:
         ``installs``/``bios_files`` are the pre-snapshotted ``RomInstall`` and
         ``BiosFile`` lists; ``relocations`` accumulates the per-``rom_id`` new
         paths and ``bios_relocations`` the per-``(platform_slug, file_name)`` new
-        paths for the post-move write UoW.
+        paths for the post-move write UoW. *roots* are RetroDECK's, where the
+        BIOS files and saves go.
         """
         tracked_bios_names = {bf.file_name for bf in bios_files}
         items = []
         items.extend(self._collect_rom_items(pending_homes, new_home, installs, relocations))
         items.extend(self._collect_tracked_bios_items(pending_homes, new_home, bios_files, bios_relocations))
-        items.extend(self._collect_untracked_bios_items(pending_homes, tracked_bios_names))
-        items.extend(self._collect_save_items(pending_homes))
+        items.extend(self._collect_untracked_bios_items(pending_homes, tracked_bios_names, roots))
+        items.extend(self._collect_save_items(pending_homes, roots))
         return items
 
     def _find_conflicts(self, items):
@@ -583,7 +588,7 @@ class MigrationService:
                 conflict_set.add(label)
         return sorted(conflict_set)
 
-    def _migrate_retrodeck_files_io(self, pending_homes, new_home, conflict_strategy):
+    def _migrate_retrodeck_files_io(self, pending_homes, new_home, conflict_strategy, roots: MoveRoots):
         """Sync helper for migrate_retrodeck_files — FS traversal + moves in executor.
 
         ``pending_homes`` is the full pending set; the current home is filtered
@@ -596,7 +601,9 @@ class MigrationService:
             bios_files = list(uow.bios_files.iter_all())
         relocations: dict[int, dict[str, str]] = {}
         bios_relocations: dict[tuple[str, str], str] = {}
-        items = self._collect_migration_items(homes, new_home, installs, bios_files, relocations, bios_relocations)
+        items = self._collect_migration_items(
+            homes, new_home, installs, bios_files, relocations, bios_relocations, roots
+        )
         conflicts = self._find_conflicts(items)
 
         # If no strategy given and there are conflicts, return them for user decision
@@ -702,21 +709,30 @@ class MigrationService:
         if not pending or not new_home:
             return {"success": False, "reason": "no_migration_needed", "message": "No path migration needed"}
 
+        # Asked once, before anything moves: where RetroDECK's roots may not be
+        # used, or no RetroDECK is detected, nothing moves and the pending move
+        # stays recorded for a later press.
+        roots = await self._loop.run_in_executor(None, self._retrodeck_folders.move_roots)
+        if roots is None:
+            raise moving_not_installed()
+        if isinstance(roots, FolderRefused):
+            raise roots
+
         self._migrations_in_flight += 1
         try:
             self._status_in_flight = await self._loop.run_in_executor(
                 None, self._get_migration_status_io, pending, new_home
             )
-            return await self._run_migration(pending, new_home, conflict_strategy)
+            return await self._run_migration(pending, new_home, conflict_strategy, roots)
         finally:
             self._migrations_in_flight -= 1
             if not self._migrations_in_flight:
                 self._status_in_flight = None
 
-    async def _run_migration(self, pending, new_home, conflict_strategy):
+    async def _run_migration(self, pending, new_home, conflict_strategy, roots: MoveRoots):
         """Move the files, re-bake the shortcuts and re-record the save directories, in that order."""
         result = await self._loop.run_in_executor(
-            None, self._migrate_retrodeck_files_io, pending, new_home, conflict_strategy
+            None, self._migrate_retrodeck_files_io, pending, new_home, conflict_strategy, roots
         )
         # Pop the internal relaunch payload (only present on the actual-migration
         # path, not the needs-confirmation early return) and emit it so the live
@@ -792,7 +808,9 @@ class MigrationService:
         with self._uow_factory() as uow:
             installs = list(uow.rom_installs.iter_all())
             bios_files = list(uow.bios_files.iter_all())
-        items = self._collect_migration_items(homes, new_home, installs, bios_files, {}, {})
+        roots = self._retrodeck_folders.move_roots()
+        moves = roots if isinstance(roots, MoveRoots) else None
+        items = self._collect_migration_items(homes, new_home, installs, bios_files, {}, {}, moves)
         roms_count = sum(1 for _, _, _, _, kind in items if kind in ("rom", "rom_dir"))
         bios_count = sum(1 for _, _, _, _, kind in items if kind == "bios")
         saves_count = sum(1 for _, _, _, _, kind in items if kind == "save")

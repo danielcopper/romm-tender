@@ -267,13 +267,15 @@ Format: **invariant** — tier — enforced by.
   and while RetroDECK reports `marker-missing`, `marker-unreadable`, `marker-invalid` or `not-set-up`, or where
   detecting the sources or a question about RetroDECK's health or one of its four roots raised, none of those folders is
   used — except that a download while RetroDECK is switched off says so, and a raise on a system's own ROM folder
-  refuses only the press that asked for it** — test + prompt-only — `tests/adapters/test_retrodeck_folders.py` (the real
-  resolver over tmp homes: every folder its answer, each finding refusing every question,
-  `TestWhereAQuestionToTheResolverRaises` and `TestWhereDetectingTheSourcesRaises` refusing every question for a raise
-  on the detection, the health or a root and only its own for a system's folder, and
-  `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and `tests/contract/test_retrodeck_folders.py`
-  (under each finding, and where the detection, RetroDECK's health or one of its roots could not be asked, no press
-  downloads, deletes or cleans up there). A folder of Tender's own beside the resolver's is the drift this replaced:
+  refuses only the presses that need that folder; a removal of a game's files is bounded by its system's own ROM folder,
+  never by the ROM root** — test + prompt-only — `tests/adapters/test_retrodeck_folders.py` (the real resolver over tmp
+  homes: every folder its answer, each finding refusing every question, `TestWhereAQuestionToTheResolverRaises` and
+  `TestWhereDetectingTheSourcesRaises` refusing every question for a raise on the detection, the health or a root and
+  only its own for a system's folder, and `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and
+  `tests/contract/test_retrodeck_folders.py` (under each finding, and where the detection, RetroDECK's health or one of
+  its roots could not be asked, no press downloads, deletes, cleans up or migrates there); the system-folder bound by
+  `tests/services/test_downloads.py::TestASystemFolderLinkedToAnotherDrive` and the linked-folder and one-system cases
+  of `tests/contract/test_prune.py`. A folder of Tender's own beside the resolver's is the drift this replaced:
   `retrodeck.json` read twice, a system's ROM folder built as `<roms root>/<system>` in five places while ES-DE may
   declare another, and a fallback to `~/retrodeck` that pointed downloads, deletes and the move code at internal storage
   while RetroDECK lay on an SD card. Under the four findings the resolver's own root, BIOS and saves folders are its
@@ -420,8 +422,9 @@ Format: **invariant** — tier — enforced by.
   `frontend/src/bigpicture/library/PlatformsTab.test.tsx` pins that the buttons key off the fetchable set. **The three
   axes live in three places and nothing joins them.** `domain/bios_status.py::count_required` is readiness and counts
   every required row; `services/firmware/status.py::_bios_aggregates` scopes `server_count` / `local_count` to
-  `on_server` rows; the download buttons' condition is `isFetchable` (`frontend/src/utils/biosFetchable.ts`), called
-  from `frontend/src/bigpicture/library/PlatformDetail.tsx` — and since #1815 the per-row Download button reads the same
+  `on_server` rows, and the stated pair `ratio_server_count` / `ratio_local_count` further to those with a verdict; the
+  download buttons' condition is `isFetchable` (`frontend/src/utils/biosFetchable.ts`), called from
+  `frontend/src/bigpicture/library/PlatformDetail.tsx` — and since #1815 the per-row Download button reads the same
   filtered set, so a fourth reader of the axis now exists in that one file. A fifth reads it in the same file for the
   On-disk cell's second mark (`⊘`), and that one is display alone: it neither counts nor gates, which is what keeps it
   out of all three folds below. **A sixth reader is the game page's BIOS tab** (`BiosTab.tsx`'s `rowBelongsOnThisPage`),
@@ -644,11 +647,13 @@ Format: **invariant** — tier — enforced by.
   directory that may sit on the SD card the marker is pending a migration away from) and `ResolvedPathFn` (the same
   walk, but on **both** sides of a comparison, so a call site costs what the rows it checks cost, not what it checks
   them against) — and every `RetroDeckFolders` question: `download_folder`, `bios_download_folder`, `rom_root`,
-  `bios_folder`, `saves_root` and `move_roots`, each a fresh reading of the emulator sources and a question to the
-  resolver, which reads RetroDECK's settings file and ES-DE's, and a `realpath` of the answer. The firmware timing is
-  the only entry a cost was measured for; every other one is listed from reading its implementation. One other real I/O
-  seam was weighed and kept out — the reason is in the script's docstring, and it is not an exemption; nor is it an
-  inventory of what else touches the disk. **"It's only a read" is the reasoning this rule exists to refuse**:
+  `rom_folders`, `bios_folder`, `saves_root` and `move_roots`, each a fresh reading of the emulator sources and a
+  question to the resolver, which reads RetroDECK's settings file and ES-DE's, and a `realpath` of the answer — together
+  with the services' own wrappers around them (`_rom_folder`, `_rom_folders`, `_resolve_target`, `_platform_dir`,
+  `_saves_root`, `download_root`, `status_root`), which are what the services call. The firmware timing is the only
+  entry a cost was measured for; every other one is listed from reading its implementation. One other real I/O seam was
+  weighed and kept out — the reason is in the script's docstring, and it is not an exemption; nor is it an inventory of
+  what else touches the disk. **"It's only a read" is the reasoning this rule exists to refuse**:
   `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The database is
   in WAL, so readers are unaffected — but every other **writer** waits on the lock for up to `busy_timeout=5000` and
   fails with `SQLITE_BUSY` if it is still held then, and `FakeUnitOfWork` shares no connection, so no unit test notices.
@@ -939,17 +944,20 @@ Format: **invariant** — tier — enforced by.
   only it could answer has its verdict withheld rather than read as absent (#2244 D11). Everything else reads the
   resolver's `present`, which follows symlinks Tender would have to re-implement — the PS2 folder is one directory
   reached through two spellings. `present is None` reads as absent, the safe direction, because the row then shows work
-  outstanding rather than a readiness nobody established. **Nothing enforces the crossing point.** A fourth status
-  builder calling `_firmware_file_store.exists(dest)` directly would go green, and its rows would silently answer from
-  the weaker source — `os.path.exists` on a path Tender assembled, which can render a satisfied requirement as missing.
-  `services/firmware/status.py` holds that store itself, for `_stamp_deletable`'s records-still-on-disk probe, so the
-  wrong probe is one line away from every row builder that should be asking `FirmwareDemand`. Related and separate:
-  presence is not the row's verdict (GLOSSARY.md → Row verdict), and a withheld verdict is not an absence — its cause is
-  read off the row's caveat codes and, for a declared FILE, off its `checked` (GLOSSARY.md → Byte reading), never off
-  the verdict itself. Three of that vocabulary's eight values sit behind one withheld verdict and are three different
-  statements: a file the emulator READ and does not recognise was checked, so wording it "could not be checked" is
-  untrue; `refused` is not withheld at all, arriving with the verdict already `false`. Nothing checks that a consumer
-  keeps them apart — `checked` is a plain string on the row beside a `satisfied` that reads like its summary
+  outstanding rather than a readiness nobody established — except in the `RomM library files` ratio, which counts only
+  the rows whose verdict was established (`ratio_server_count` / `ratio_local_count`): there a withheld row would read
+  as a file missing ([#2285](https://github.com/danielcopper/romm-tender/issues/2285) D3). **Nothing enforces the
+  crossing point.** A fourth status builder calling `_firmware_file_store.exists(dest)` directly would go green, and its
+  rows would silently answer from the weaker source — `os.path.exists` on a path Tender assembled, which can render a
+  satisfied requirement as missing. `services/firmware/status.py` holds that store itself, for `_stamp_deletable`'s
+  records-still-on-disk probe, so the wrong probe is one line away from every row builder that should be asking
+  `FirmwareDemand`. Related and separate: presence is not the row's verdict (GLOSSARY.md → Row verdict), and a withheld
+  verdict is not an absence — its cause is read off the row's caveat codes and, for a declared FILE, off its `checked`
+  (GLOSSARY.md → Byte reading), never off the verdict itself. Three of that vocabulary's eight values sit behind one
+  withheld verdict and are three different statements: a file the emulator READ and does not recognise was checked, so
+  wording it "could not be checked" is untrue; `refused` is not withheld at all, arriving with the verdict already
+  `false`. Nothing checks that a consumer keeps them apart — `checked` is a plain string on the row beside a `satisfied`
+  that reads like its summary
 - **A firmware row's verdict is `BiosFileEntry.satisfied`, and for a folder declaration it is what the folder HOLDS —
   never that the folder is there** — test + prompt-only —
   `tests/services/test_firmware.py::TestAFolderRequirementIsAnsweredByItsContents` pins all three answers end-to-end,

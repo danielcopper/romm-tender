@@ -53,6 +53,12 @@ To perform the migration:
 
 Tender updates its internal tracking to point to the new paths and moves any files that need relocating.
 
+**Migrate Files** moves nothing while RetroDECK cannot tell where its folders are: while its settings file is missing,
+unreadable or damaged, or it has not been set up yet, the button answers with the main panel's notice for that, and
+where Tender could not ask RetroDECK about its folders it says **RetroDECK's folders could not be established, so Tender
+downloads into and removes from none of them.** Without RetroDECK it says **Moving needs RetroDECK, which is not
+installed.** The migration stays pending in every case, so you can press again once RetroDECK is back in order.
+
 ## Conflict Handling
 
 If files already exist at the destination (for example, you copied some files manually before migrating), a popup

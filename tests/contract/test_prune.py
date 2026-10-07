@@ -8,6 +8,7 @@ import threading
 from pathlib import Path
 
 import pytest
+from _vendor.atlas.installations import RetroDeck
 
 from domain.platform_sync_state import PlatformSyncState
 from domain.rom import Rom
@@ -18,6 +19,7 @@ from domain.version_metadata import VersionMetadata
 from lib.errors import RommNotFoundError
 
 from ._harness import hold_sync_in_flight
+from ._seed import seed_es_systems
 
 # Every download, adoption and removal here lands in RetroDECK's folders.
 pytestmark = pytest.mark.usefixtures("seeded_retrodeck")
@@ -779,3 +781,130 @@ async def test_without_a_rom_root_the_cleanup_runs_and_reports_the_files_it_coul
     # The recovery bundle was still sealed, without the content nothing bounds.
     manifest = json.loads((Path(result["bundle_path"]) / "manifest.json").read_text())
     assert "installed_rom" not in {item["kind"] for item in manifest["artifacts"]}
+
+
+def _seed_install_at(harness, rom_id: int, rom_path: Path, system: str) -> None:
+    rom_path.write_bytes(b"installed rom")
+    with harness.uow_factory() as uow:
+        uow.rom_installs.save(
+            RomInstall.mark_installed(
+                rom_id=rom_id,
+                file_path=str(rom_path),
+                rom_dir=None,
+                platform_slug=system,
+                system=system,
+                installed_at="2026-01-01T00:00:00",
+            )
+        )
+    harness.romm.get_rom_once_side_effect_by_id[rom_id] = RommNotFoundError("gone")
+
+
+async def _run_installed_cleanup(harness, rom_ids: list[int]) -> dict:
+    """Preview, select *rom_ids*' installed content, run, and answer the run's completion frame."""
+    preview = await harness.endpoints.get_prune_preview(_preview_request())
+    staged = await harness.endpoints.stage_prune_installed_selection(
+        _selection_request(preview["preview_id"], None, rom_ids, True)
+    )
+    started = await harness.endpoints.start_prune(
+        {
+            "preview_id": preview["preview_id"],
+            "confirmed": True,
+            "repoint_shortcuts": True,
+            "remove_rows": True,
+            "remove_fully_vanished": True,
+            "create_recovery_bundle": True,
+            "installed_selection_id": staged["selection_id"],
+        }
+    )
+    assert started["success"] is True
+    task = harness.app.services.prune_service._task
+    assert task is not None
+    await task
+    return [call.args[1] for call in harness.emit.await_args_list if call.args[0] == "prune_complete"][-1]
+
+
+async def test_a_game_in_a_system_folder_linked_to_another_drive_is_removed_there(harness):
+    # The system's own folder bounds the removal, resolved, so the game lands
+    # on the other drive and is removed there.
+    drive = Path(harness.tmp_path) / "sdcard" / "gba"
+    drive.mkdir(parents=True)
+    link = Path(harness.roms_root) / "gba"
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(drive)
+    _seed_bulk_candidate(harness)
+    rom_path = drive.resolve() / "Removed Game.gba"
+    _seed_install_at(harness, 41, rom_path, "gba")
+
+    complete = await _run_installed_cleanup(harness, [41])
+
+    assert complete["removed_rom_ids"] == [41]
+    assert not rom_path.exists()
+    assert drive.is_dir()
+    assert link.is_symlink()
+    with harness.uow_factory() as uow:
+        assert uow.rom_installs.get(41) is None
+
+
+_TWO_SYSTEMS_XML = """\
+<?xml version="1.0"?>
+<systemList>
+  <system>
+    <name>gba</name>
+    <path>%ROMPATH%/gba</path>
+    <command label="mGBA">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>
+  </system>
+  <system>
+    <name>snes</name>
+    <path>%ROMPATH%/snes</path>
+    <command label="Snes9x">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>
+  </system>
+</systemList>
+"""
+
+
+async def test_where_asking_for_one_system_s_folder_raises_the_cleanup_keeps_that_game_and_goes_on(
+    harness, monkeypatch
+):
+    # The failed question refuses the removal of that system's games alone:
+    # their records stay and are reported, and every other system's go.
+    seed_es_systems(harness, _TWO_SYSTEMS_XML)
+    _seed_bulk_candidate(harness)
+    gba = Path(harness.roms_root) / "gba" / "Removed Game.gba"
+    gba.parent.mkdir(parents=True, exist_ok=True)
+    _seed_install_at(harness, 41, gba, "gba")
+    snes_row = Rom.synced(
+        rom_id=43,
+        platform_slug="snes",
+        name="Removed Snes Game",
+        fs_name="Removed Snes Game.sfc",
+        shortcut_app_id=None,
+        synced_at="2026-01-01T00:00:00",
+    )
+    snes_row.record_fetch_generation("older-snes-fetch")
+    with harness.uow_factory() as uow:
+        uow.roms.save(snes_row)
+    snes = Path(harness.roms_root) / "snes" / "Removed Snes Game.sfc"
+    snes.parent.mkdir(parents=True, exist_ok=True)
+    _seed_install_at(harness, 43, snes, "snes")
+    asked = RetroDeck.rom_location
+
+    def rom_location(self, system: str):
+        if system == "gba":
+            raise RuntimeError("the resolver failed")
+        return asked(self, system)
+
+    monkeypatch.setattr(RetroDeck, "rom_location", rom_location)
+
+    complete = await _run_installed_cleanup(harness, [41, 43])
+
+    assert complete["removed_rom_ids"] == [43]
+    assert gba.exists()
+    assert not snes.exists()
+    kept = next(result for result in complete["results"] if result["rom_ids"] == [41])
+    assert kept["message"] == (
+        "RetroDECK's folders could not be established, so Tender downloads into and removes from none of them."
+    )
+    assert "ambiguous_mutations" not in kept
+    with harness.uow_factory() as uow:
+        assert uow.rom_installs.get(41) is not None
+        assert uow.rom_installs.get(43) is None

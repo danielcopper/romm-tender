@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
@@ -9,6 +9,9 @@ from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.version_metadata import VersionMetadata
 from services.prune.preview import PreviewBuilder, PreviewBuilderConfig
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 class _Recovery:
@@ -22,6 +25,9 @@ class _Recovery:
 class _Paths:
     def rom_root(self) -> str:
         return "/roms"
+
+    def rom_folders(self, systems: Iterable[str]) -> dict[str, str]:
+        return {system: f"/roms/{system}" for system in systems}
 
 
 def _rom(rom_id: int, *, name: str, group: str, fetch_id: str | None) -> Rom:
