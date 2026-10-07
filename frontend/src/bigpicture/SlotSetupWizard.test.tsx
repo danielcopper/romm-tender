@@ -153,6 +153,7 @@ describe("SlotSetupWizard", () => {
     vi.mocked(backend.getSaveSetupInfo).mockResolvedValue(makeSetupInfo());
     vi.mocked(backend.confirmSlotChoice).mockResolvedValue({
       success: true,
+      needs_conflict_resolution: false,
       message: "",
     });
     // The wizard now reads/feeds the shared connection store (#1345). Reset it
@@ -498,6 +499,7 @@ describe("SlotSetupWizard", () => {
       });
       vi.mocked(backend.confirmSlotChoice).mockResolvedValue({
         success: false,
+        reason: "unknown",
         message: "Slot already exists",
       });
       const onComplete = vi.fn();
@@ -522,6 +524,7 @@ describe("SlotSetupWizard", () => {
       });
       vi.mocked(backend.confirmSlotChoice).mockResolvedValue({
         success: false,
+        reason: "unknown",
         message: "",
       });
       const { container, getByText } = render(<SlotSetupWizard {...defaultProps()} />);
@@ -563,8 +566,9 @@ describe("SlotSetupWizard", () => {
         server_slots: [{ slot: null, saves: [], count: 1, latest_updated_at: null }],
       });
 
-    const conflictResult = () => ({
+    const conflictResult = (): Awaited<ReturnType<typeof backend.confirmSlotChoice>> => ({
       success: false,
+      reason: "local_conflict",
       needs_conflict_resolution: true,
       message: "A local save differs",
       conflicts: [
@@ -647,7 +651,13 @@ describe("SlotSetupWizard", () => {
       vi.mocked(applyWizardInitialSetupResult).mockImplementation(async (_r, deps) => {
         deps.setInfo(legacyInfo());
       });
-      vi.mocked(backend.confirmSlotChoice).mockResolvedValue({ success: true, message: "", migrated: 1, failed: 0 });
+      vi.mocked(backend.confirmSlotChoice).mockResolvedValue({
+        success: true,
+        needs_conflict_resolution: false,
+        message: "",
+        migrated: 1,
+        failed: 0,
+      });
       const onComplete = vi.fn();
       const { getByText } = render(<SlotSetupWizard {...defaultProps({ romId: 5, onComplete })} />);
       await flushAsync();
@@ -676,7 +686,6 @@ describe("SlotSetupWizard", () => {
       });
       vi.mocked(backend.confirmSlotChoice).mockResolvedValue({
         success: false,
-        needs_conflict_resolution: false,
         reason: "device_not_registered",
         message: "This device isn't registered with RomM yet — retry in a moment.",
       });
@@ -730,9 +739,13 @@ describe("SlotSetupWizard", () => {
       vi.mocked(applyWizardInitialSetupResult).mockImplementation(async (_r, deps) => {
         deps.setInfo(legacyInfo());
       });
-      vi.mocked(backend.confirmSlotChoice)
-        .mockResolvedValueOnce(conflictResult())
-        .mockResolvedValueOnce({ success: true, message: "", migrated: 1, failed: 0 });
+      vi.mocked(backend.confirmSlotChoice).mockResolvedValueOnce(conflictResult()).mockResolvedValueOnce({
+        success: true,
+        needs_conflict_resolution: false,
+        message: "",
+        migrated: 1,
+        failed: 0,
+      });
       const { getByText } = render(<SlotSetupWizard {...defaultProps({ romId: 5 })} />);
       await flushAsync();
 

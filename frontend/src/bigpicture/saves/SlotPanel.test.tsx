@@ -158,8 +158,8 @@ describe("SlotPanel", () => {
     it("falls back to an empty list when getSlotSaves returns success=false", async () => {
       vi.mocked(backend.getSlotSaves).mockResolvedValue({
         success: false,
-        slot: "default",
-        saves: [],
+        reason: "server_unreachable",
+        message: "Server unreachable — check your URL and ensure RomM is running",
       });
       const { container } = render(<SlotPanel {...defaultProps()} />);
       fireEvent.click(container.querySelector("button")!);
@@ -395,6 +395,7 @@ describe("SlotPanel", () => {
         vi.mocked(backend.switchSlot).mockResolvedValue({
           success: false,
           reason: "pending_uploads",
+          message: "Pending local changes — upload or discard first",
         });
 
         const { container, getByText } = render(<SlotPanel {...defaultProps()} />);
@@ -458,6 +459,7 @@ describe("SlotPanel", () => {
         vi.mocked(backend.switchSlot).mockResolvedValue({
           success: false,
           reason: "pending_uploads",
+          message: "Pending local changes — upload or discard first",
         });
 
         const { container, getByText } = render(<SlotPanel {...defaultProps()} />);
@@ -493,6 +495,7 @@ describe("SlotPanel", () => {
         vi.mocked(backend.switchSlot).mockResolvedValue({
           success: false,
           reason: "server_unreachable",
+          message: "Server unreachable — check your URL and ensure RomM is running",
         });
         const { container, getByText } = render(<SlotPanel {...defaultProps()} />);
         fireEvent.click(container.querySelector("button")!);
@@ -521,6 +524,7 @@ describe("SlotPanel", () => {
         vi.mocked(backend.switchSlot).mockResolvedValue({
           success: false,
           reason: "not_installed",
+          message: "ROM is not installed",
         });
         const { container, getByText } = render(<SlotPanel {...defaultProps()} />);
         fireEvent.click(container.querySelector("button")!);
@@ -549,6 +553,7 @@ describe("SlotPanel", () => {
         vi.mocked(backend.switchSlot).mockResolvedValue({
           success: false,
           reason: "sync_disabled",
+          message: "Save sync is disabled",
         });
         const { container, getByText } = render(<SlotPanel {...defaultProps()} />);
         fireEvent.click(container.querySelector("button")!);
@@ -602,6 +607,7 @@ describe("SlotPanel", () => {
       vi.mocked(backend.getSlotDeleteInfo).mockResolvedValue({
         success: false,
         reason: "active_slot",
+        message: "Cannot delete the active slot. Switch to a different slot first.",
       });
       const { container, getByText } = render(<SlotPanel {...defaultProps()} />);
       fireEvent.click(container.querySelector("button")!);
@@ -628,10 +634,15 @@ describe("SlotPanel", () => {
         slot: "default",
         source: "server",
         server_save_count: 3,
+        server_save_ids: [1, 2, 3],
         local_file_count: 2,
+        local_filenames: ["a.srm", "b.srm"],
+        is_active: false,
       });
       vi.mocked(backend.deleteSlot).mockResolvedValue({
         success: true,
+        deleted_server_saves: 3,
+        cleaned_files: 2,
       });
 
       const onSlotDeleted = vi.fn();
@@ -671,7 +682,10 @@ describe("SlotPanel", () => {
         slot: "default",
         source: "local",
         server_save_count: 0,
+        server_save_ids: [],
         local_file_count: 1,
+        local_filenames: ["a.srm"],
+        is_active: false,
       });
 
       const { container, getByText } = render(<SlotPanel {...defaultProps()} />);
@@ -695,9 +709,15 @@ describe("SlotPanel", () => {
         success: true,
         slot: "default",
         source: "local",
+        server_save_count: 0,
+        server_save_ids: [],
+        local_file_count: 0,
+        local_filenames: [],
+        is_active: false,
       });
       vi.mocked(backend.deleteSlot).mockResolvedValue({
         success: false,
+        reason: "server_unreachable",
         message: "couldn't reach server",
       });
 
@@ -725,6 +745,11 @@ describe("SlotPanel", () => {
         success: true,
         slot: "default",
         source: "local",
+        server_save_count: 0,
+        server_save_ids: [],
+        local_file_count: 0,
+        local_filenames: [],
+        is_active: false,
       });
       vi.mocked(backend.deleteSlot).mockRejectedValue(new Error("network"));
 

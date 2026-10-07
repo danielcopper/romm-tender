@@ -228,7 +228,7 @@ export const SavesTab: FC<SavesTabProps> = ({
               // Named slot — use switchSlot to do pre-checks + immediate download
               try {
                 const result = await switchSlot(romId, name);
-                if (result.success && result.save_status) {
+                if (result.success) {
                   reportServerReachable(true);
                   onSlotSwitched(name, result.save_status);
                 } else {

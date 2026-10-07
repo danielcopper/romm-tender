@@ -8,14 +8,7 @@ import { useState, useRef, useEffect, FC, type ReactElement } from "react";
 import { ConfirmModal, DialogButton, showModal } from "@decky/ui";
 import { showToast } from "../../utils/toast";
 import { getSlotSaves, switchSlot, debugLog, getSlotDeleteInfo, deleteSlot } from "../../api/backend";
-import type {
-  SaveStatus,
-  SyncConflict,
-  SaveSlotSummary,
-  SlotSaveFile,
-  SwitchSlotResponse,
-  SlotDeleteInfo,
-} from "../../types";
+import type { SaveStatus, SyncConflict, SaveSlotSummary, SlotSaveFile } from "../../types";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { reportServerReachable } from "../../utils/connectionState";
 import { MUTED_COLOR, computeSyncSummary, displaySlot, slotDeleteFailureToast } from "./helpers";
@@ -190,8 +183,8 @@ export const SlotPanel: FC<SlotPanelProps> = ({
     setSwitching(true);
     setSwitchError(null);
     try {
-      const result: SwitchSlotResponse = await switchSlot(romId, slotName);
-      if (result.success && result.save_status) {
+      const result = await switchSlot(romId, slotName);
+      if (result.success) {
         reportServerReachable(true);
         onSlotSwitched(slotName, result.save_status);
       } else {
@@ -225,7 +218,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const info: SlotDeleteInfo = await getSlotDeleteInfo(romId, slotName);
+      const info = await getSlotDeleteInfo(romId, slotName);
       if (!info.success) {
         showToast(slotDeleteFailureToast(info));
         return;
@@ -233,16 +226,16 @@ export const SlotPanel: FC<SlotPanelProps> = ({
 
       // Build confirmation message
       const lines: string[] = [];
-      if (info.source === "server" && (info.server_save_count ?? 0) > 0) {
-        const n = info.server_save_count ?? 0;
+      if (info.source === "server" && info.server_save_count > 0) {
+        const n = info.server_save_count;
         lines.push(
           `This will permanently delete ${n} save${n === 1 ? "" : "s"} from slot '${info.slot}' on the RomM server.`,
         );
       } else {
         lines.push(`This will remove slot '${info.slot}' from your local configuration.`);
       }
-      if ((info.local_file_count ?? 0) > 0) {
-        const n = info.local_file_count ?? 0;
+      if (info.local_file_count > 0) {
+        const n = info.local_file_count;
         lines.push(`${n} tracked file${n === 1 ? "" : "s"} will be unlinked.`);
       }
       lines.push("This cannot be undone.");
@@ -262,7 +255,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
                     showToast(`Slot '${slotName}' deleted`);
                     onSlotDeleted();
                   } else {
-                    showToast(result.message ?? "Failed to delete slot");
+                    showToast(result.message);
                   }
                 } catch (e) {
                   detach(debugLog(`SavesTab: deleteSlot error: ${e}`));

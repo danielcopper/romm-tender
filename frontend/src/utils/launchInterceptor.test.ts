@@ -1037,7 +1037,11 @@ describe("launchInterceptor — full funnel watcher", () => {
         active_slot: null,
         recommended_action: "auto_confirm_default",
       });
-      vi.mocked(backend.confirmSlotChoice).mockResolvedValue({ success: true, message: "" });
+      vi.mocked(backend.confirmSlotChoice).mockResolvedValue({
+        success: true,
+        needs_conflict_resolution: false,
+        message: "",
+      });
 
       const tabSwitch = vi.fn();
       globalThis.addEventListener("romm_tab_switch", tabSwitch);

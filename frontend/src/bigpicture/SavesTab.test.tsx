@@ -6,7 +6,7 @@ import * as backend from "../api/backend";
 import { showModal } from "@decky/ui";
 import * as connectionState from "../utils/connectionState";
 import { setRommConnectionState } from "../utils/connectionState";
-import type { SaveStatus, SaveSlotSummary, SaveFileStatus, SwitchSlotResponse, LastKnownSlots } from "../types";
+import type { SaveStatus, SaveSlotSummary, SaveFileStatus, LastKnownSlots } from "../types";
 // Type-only — vi.mock("./saves/SlotPanel", ...) below replaces the runtime
 // implementation, but the prop interface comes from the real component so
 // captured-prop assertions stay in sync as SlotPanel evolves.
@@ -623,6 +623,7 @@ describe("SavesTab", () => {
         vi.mocked(backend.switchSlot).mockResolvedValue({
           success: false,
           reason: "pending_uploads",
+          message: "Pending local changes — upload or discard first",
         });
         const { container, getByText } = render(<SavesTab {...defaultProps()} />);
         fireEvent.click(getByText("+ New Slot"));
@@ -642,6 +643,7 @@ describe("SavesTab", () => {
         vi.mocked(backend.switchSlot).mockResolvedValue({
           success: false,
           reason: "pending_uploads",
+          message: "Pending local changes — upload or discard first",
         });
         const { container, getByText } = render(<SavesTab {...defaultProps()} />);
         fireEvent.click(getByText("+ New Slot"));
@@ -665,6 +667,7 @@ describe("SavesTab", () => {
         vi.mocked(backend.switchSlot).mockResolvedValue({
           success: false,
           reason: "server_unreachable",
+          message: "Server unreachable — check your URL and ensure RomM is running",
         });
         const { container, getByText } = render(<SavesTab {...defaultProps()} />);
         fireEvent.click(getByText("+ New Slot"));
@@ -684,6 +687,7 @@ describe("SavesTab", () => {
         vi.mocked(backend.switchSlot).mockResolvedValue({
           success: false,
           reason: "sync_disabled",
+          message: "Save sync is disabled",
         });
         const { container, getByText } = render(<SavesTab {...defaultProps()} />);
         fireEvent.click(getByText("+ New Slot"));
@@ -741,7 +745,8 @@ describe("SavesTab", () => {
         vi.mocked(backend.switchSlot).mockResolvedValue({
           success: false,
           reason: "server_unreachable",
-        } as SwitchSlotResponse);
+          message: "Server unreachable — check your URL and ensure RomM is running",
+        });
 
         const { getByText, unmount } = render(<SavesTab {...defaultProps()} />);
         fireEvent.click(getByText("+ New Slot"));

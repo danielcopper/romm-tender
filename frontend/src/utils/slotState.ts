@@ -4,33 +4,24 @@
  * "success:false means keep existing UI state" guard so it can be unit-tested
  * without rendering the panel component.
  *
- * Backend contract: on API failure the endpoint returns `success:false` with
- * an empty `slots` array so it doesn't clobber persisted state — the UI must
- * preserve the last-known good slot list rather than blank it on a transient
- * blip. Such a failure may additionally carry the persisted listing under
+ * Backend contract: a failure carries no slots, and the UI must preserve the
+ * last-known good slot list rather than blank it on a transient blip. A failure
+ * whose server could not be reached may carry the persisted listing under
  * `last_known`, which lands in its own field and never in the live ones.
  */
 
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
+import type { SaveSlotsFailure } from "../api/backend";
 import type { LastKnownSlots, SaveSlotSummary } from "../types";
 
-export interface SlotsResponse {
-  success: boolean;
-  slots: SaveSlotSummary[];
-  active_slot?: string | null;
-  reason?: string;
-  message?: string;
-  /** The persisted listing a failed fetch hands back for a confirmed ROM;
-   *  null — never an empty list — when the device knows nothing, so "we know
-   *  nothing" cannot be read as "this ROM has no slots" (#1755). */
-  last_known?: {
-    slots: SaveSlotSummary[];
-    active_slot: string | null;
-  } | null;
-}
+/** A `get_save_slots` answer as these helpers read it: a success that omits
+ *  `active_slot` keeps the previous one (#1747). The persisted listing a failure
+ *  hands back is null — never an empty list — when the device knows nothing, so
+ *  "we know nothing" cannot be read as "this ROM has no slots" (#1755). */
+export type SlotsResponse = { success: true; slots: SaveSlotSummary[]; active_slot?: string | null } | SaveSlotsFailure;
 
-/** Read the snapshot a response carries, or `null` when it carries none. */
-function lastKnownFrom(result: SlotsResponse): LastKnownSlots | null {
+/** Read the snapshot a failure carries, or `null` when it carries none. */
+function lastKnownFrom(result: SaveSlotsFailure): LastKnownSlots | null {
   const known = result.last_known;
   if (!known?.slots.length) return null;
   return { slots: known.slots, activeSlot: known.active_slot };
@@ -86,7 +77,7 @@ export function applyLoadSlotsResult<S extends LoadSlotsFields>(
   logError: (msg: string) => void,
 ): void {
   if (!result.success) {
-    logError(`Failed to load save slots: ${result.message ?? result.reason ?? "unknown"}`);
+    logError(`Failed to load save slots: ${result.message}`);
     loadedRef.current = false;
     const lastKnown = lastKnownFrom(result);
     setter((prev) => ({ ...prev, slotsLoading: false, lastKnownSlots: lastKnown ?? prev.lastKnownSlots }));

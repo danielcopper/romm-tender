@@ -10,7 +10,8 @@ import {
   statusLabel,
   unsupportedRestoreMessage,
 } from "./helpers";
-import type { DeviceSyncInfo, SaveStatus, SyncConflict, SlotDeleteInfo } from "../../types";
+import type { EndpointFailure } from "../../api/backend";
+import type { DeviceSyncInfo, SaveStatus, SyncConflict } from "../../types";
 
 describe("displaySlot", () => {
   it("returns 'Manual archive' for null", () => {
@@ -211,39 +212,24 @@ describe("statusLabel", () => {
 
 describe("slotDeleteFailureToast", () => {
   it("explains the active-slot guard when reason='active_slot'", () => {
-    const info: SlotDeleteInfo = { success: false, reason: "active_slot" };
+    const info: EndpointFailure = { success: false, reason: "active_slot", message: "Slot is active" };
     expect(slotDeleteFailureToast(info)).toBe("Cannot delete the active slot. Switch to a different slot first.");
   });
 
-  it("explains the active-slot guard when is_active flag is set", () => {
-    const info: SlotDeleteInfo = { success: false, is_active: true };
-    expect(slotDeleteFailureToast(info)).toBe("Cannot delete the active slot. Switch to a different slot first.");
-  });
-
-  it("surfaces the server-unreachable warning when reason='server_unreachable'", () => {
-    // Regression for #626: without this branch the modal opens and the user
+  it("surfaces the backend message when the server could not be reached", () => {
+    // Regression for #626: without a refusal here the modal opens and the user
     // confirms a destructive delete based on stale/empty data.
-    const info: SlotDeleteInfo = {
+    const info: EndpointFailure = {
       success: false,
       reason: "server_unreachable",
-      message: "Cannot inspect slot — server unreachable",
+      message: "Server unreachable — check your URL and ensure RomM is running",
     };
-    expect(slotDeleteFailureToast(info)).toBe("Cannot inspect slot — server unreachable");
-  });
-
-  it("falls back to a generic server-unreachable message when no message is provided", () => {
-    const info: SlotDeleteInfo = { success: false, reason: "server_unreachable" };
-    expect(slotDeleteFailureToast(info)).toBe("Cannot inspect slot — RomM server is not reachable");
+    expect(slotDeleteFailureToast(info)).toBe("Server unreachable — check your URL and ensure RomM is running");
   });
 
   it("surfaces the backend message for unrecognised failure reasons", () => {
-    const info: SlotDeleteInfo = { success: false, reason: "weird", message: "Custom failure" };
+    const info: EndpointFailure = { success: false, reason: "weird", message: "Custom failure" };
     expect(slotDeleteFailureToast(info)).toBe("Custom failure");
-  });
-
-  it("falls back to a generic message when no message and no special reason", () => {
-    const info: SlotDeleteInfo = { success: false };
-    expect(slotDeleteFailureToast(info)).toBe("Cannot delete this slot");
   });
 });
 

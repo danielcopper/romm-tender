@@ -1059,29 +1059,26 @@ export const resolveSyncConflict = endpoint<
 export const recordSessionStart = endpoint<[number], { success: boolean }>("record_session_start");
 export const getSaveSyncSettings = endpoint<[], SaveSyncSettings>("get_save_sync_settings");
 export const updateSaveSyncSettings = endpoint<[SaveSyncSettings], { success: boolean }>("update_save_sync_settings");
-// `last_known` is present ONLY on the failed-server-fetch branch, and is null
-// there unless the ROM's active slot was confirmed: it is the slot listing the
-// last successful contact left on disk, not an answer about now. `slots` /
-// `active_slot` keep their meaning on every branch (#1755).
-export const getSaveSlots = endpoint<
-  [number],
-  {
-    success: boolean;
+// `last_known` is present ONLY on a failure whose server could not be reached,
+// and is null there unless the ROM's active slot was confirmed: it is the slot
+// listing the last successful contact left on disk, not an answer about now
+// (#1755). A failure carries no live `slots` / `active_slot`.
+export type SaveSlotsFailure = EndpointFailure & {
+  last_known?: {
     slots: SaveSlotSummary[];
     active_slot: string | null;
-    reason?: string;
-    message?: string;
-    last_known?: {
-      slots: SaveSlotSummary[];
-      active_slot: string | null;
-    } | null;
-  }
->("get_save_slots");
-export const getSlotSaves = endpoint<[number, string], SlotSavesResponse>("get_slot_saves");
-export const switchSlot = endpoint<[number, string], SwitchSlotResponse>("switch_slot");
+  } | null;
+};
+export type SaveSlotsResult =
+  { success: true; slots: SaveSlotSummary[]; active_slot: string | null } | SaveSlotsFailure;
+export const getSaveSlots = endpoint<[number], SaveSlotsResult>("get_save_slots");
+export const getSlotSaves = endpoint<[number, string], SlotSavesResponse | EndpointFailure>("get_slot_saves");
+// `files` names the changed local saves on a `pending_uploads` refusal.
+export type SwitchSlotResult = SwitchSlotResponse | (EndpointFailure & { files?: string[] });
+export const switchSlot = endpoint<[number, string], SwitchSlotResult>("switch_slot");
 
-export const getSlotDeleteInfo = endpoint<[number, string], SlotDeleteInfo>("get_slot_delete_info");
-export const deleteSlot = endpoint<[number, string], DeleteSlotResult>("delete_slot");
+export const getSlotDeleteInfo = endpoint<[number, string], SlotDeleteInfo | EndpointFailure>("get_slot_delete_info");
+export const deleteSlot = endpoint<[number, string], DeleteSlotResult | EndpointFailure>("delete_slot");
 
 export const isSaveTrackingConfigured = endpoint<[number], { configured: boolean; active_slot: string | null }>(
   "is_save_tracking_configured",
@@ -1093,25 +1090,15 @@ export const getSaveSetupInfo = endpoint<[number], SaveSetupInfo>("get_save_setu
 // `invalid_slot_name` guard. `migrate` is an explicit boolean — the
 // non-destructive paths pass `false`; `migrate_from_slot` is `null` unless
 // migrating (then the source slot, with `null` meaning the legacy no-slot source).
-// A content-based migration (#1498) that finds a differing local save returns
-// `needs_conflict_resolution: true` + `conflicts` and confirms nothing — the
-// wizard asks; `use_server_on_conflict: true` resolves in the server's favour
-// (quarantine local, replace with the server content). On success the response
-// carries `migrated`/`failed` counts for the completion copy.
+// A content-based migration (#1498) that finds a differing local save refuses
+// with `local_conflict`, `needs_conflict_resolution: true` and `conflicts`, and
+// confirms nothing — the wizard asks; `use_server_on_conflict: true` resolves in
+// the server's favour (quarantine local, replace with the server content). On
+// success the response carries `migrated`/`failed` counts for the completion copy.
 export const confirmSlotChoice = endpoint<
   [number, string, boolean, string | null, boolean],
-  {
-    success: boolean;
-    needs_conflict_resolution?: boolean;
-    // Canonical failure slug on a wholesale (pre-apply) migration failure —
-    // e.g. "server_unreachable" / "device_not_registered" / "not_installed".
-    // The wizard surfaces `message`; `reason` is for routing/telemetry parity.
-    reason?: string;
-    message: string;
-    conflicts?: SlotMigrationConflict[];
-    migrated?: number;
-    failed?: number;
-  }
+  | { success: true; needs_conflict_resolution: false; message: string; migrated?: number; failed?: number }
+  | (EndpointFailure & { needs_conflict_resolution?: true; conflicts?: SlotMigrationConflict[] })
 >("confirm_slot_choice");
 export const checkCoreChange = endpoint<
   [number],

@@ -165,27 +165,17 @@ export interface SlotSaveFile {
   emulator: string;
 }
 
+/** A slot's server saves, as `get_slot_saves` answers them; its failure is the endpoints' shared one. */
 export interface SlotSavesResponse {
-  success: boolean;
+  success: true;
   slot: string;
   saves: SlotSaveFile[];
-  reason?: "server_unreachable" | "sync_disabled";
-  message?: string;
 }
 
+/** A switch that went through; its failure answers are in `api/backend.ts` beside `switchSlot`. */
 export interface SwitchSlotResponse {
-  success: boolean;
-  reason?:
-    | "pending_uploads"
-    | "server_unreachable"
-    | "sync_disabled"
-    | "not_installed"
-    | "switch_incomplete"
-    | "savefiles_in_content_dir"
-    | "save_shape_unsupported";
-  message?: string;
-  files?: string[];
-  save_status?: SaveStatus;
+  success: true;
+  save_status: SaveStatus;
 }
 
 interface SaveSetupSlotInfo {
@@ -233,27 +223,23 @@ export interface SlotMigrationConflict {
   local_size: number;
 }
 
+/** What deleting a slot would do, for the confirmation modal; its failure is the endpoints' shared one. */
 export interface SlotDeleteInfo {
-  success: boolean;
-  slot?: string;
-  source?: "server" | "local";
-  server_save_count?: number;
-  server_save_ids?: number[];
-  local_file_count?: number;
-  local_filenames?: string[];
-  is_active?: boolean;
-  // Coarse failure category for routing (e.g. "server_unreachable",
-  // "not_found", "not_installed", "disabled", "active_slot").
-  reason?: string;
-  message?: string;
+  success: true;
+  slot: string;
+  source: "server" | "local";
+  server_save_count: number;
+  server_save_ids: number[];
+  local_file_count: number;
+  local_filenames: string[];
+  is_active: boolean;
 }
 
+/** A slot deletion that went through; its failure is the endpoints' shared one. */
 export interface DeleteSlotResult {
-  success: boolean;
-  deleted_server_saves?: number;
-  cleaned_files?: number;
-  reason?: string;
-  message?: string;
+  success: true;
+  deleted_server_saves: number;
+  cleaned_files: number;
 }
 
 export interface SaveVersionEntry {

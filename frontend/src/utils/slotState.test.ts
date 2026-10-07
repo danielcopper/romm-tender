@@ -61,7 +61,7 @@ const callCount = <S>(setter: Dispatch<SetStateAction<S>>): number =>
 describe("applyRefreshSlotResult", () => {
   it("skips the setter when success=false (preserves persisted state)", () => {
     const setter = makeSetter<RefreshState>();
-    const result: SlotsResponse = { success: false, slots: [], message: "boom" };
+    const result: SlotsResponse = { success: false, reason: "not_found", message: "boom" };
     applyRefreshSlotResult<RefreshState>(result, setter);
     expect(callCount(setter)).toBe(0);
   });
@@ -112,8 +112,8 @@ describe("applyRefreshSlotResult", () => {
     applyRefreshSlotResult<RefreshState>(
       {
         success: false,
-        slots: [],
         reason: "server_unreachable",
+        message: "Server unreachable",
         last_known: { slots: [slot("a")], active_slot: "a" },
       },
       setter,
@@ -151,7 +151,7 @@ describe("applyLoadSlotsResult", () => {
     const setter = makeSetter<LoadState>();
     const loadedRef: MutableRefObject<boolean> = { current: true };
     const logError = vi.fn();
-    const result: SlotsResponse = { success: false, slots: [], message: "boom" };
+    const result: SlotsResponse = { success: false, reason: "not_found", message: "boom" };
     applyLoadSlotsResult<LoadState>(result, setter, loadedRef, logError);
 
     expect(logError).toHaveBeenCalledWith("Failed to load save slots: boom");
@@ -181,8 +181,8 @@ describe("applyLoadSlotsResult", () => {
     applyLoadSlotsResult<LoadState>(
       {
         success: false,
-        slots: [],
         reason: "server_unreachable",
+        message: "Server unreachable",
         last_known: { slots: [slot("a"), slot("b")], active_slot: "b" },
       },
       setter,
@@ -201,7 +201,12 @@ describe("applyLoadSlotsResult", () => {
   it("on failure with no snapshot: keeps the one already held (#1755)", () => {
     const setter = makeSetter<LoadState>();
     const held = { slots: [slot("a")], activeSlot: "a" };
-    applyLoadSlotsResult<LoadState>({ success: false, slots: [] }, setter, { current: true }, vi.fn());
+    applyLoadSlotsResult<LoadState>(
+      { success: false, reason: "not_found", message: "Resource not found on server" },
+      setter,
+      { current: true },
+      vi.fn(),
+    );
     const next = lastUpdater(setter)(loadState({ lastKnownSlots: held }));
     expect(next.lastKnownSlots).toBe(held);
   });
@@ -216,17 +221,6 @@ describe("applyLoadSlotsResult", () => {
     );
     const next = lastUpdater(setter)(loadState({ lastKnownSlots: { slots: [slot("old")], activeSlot: "old" } }));
     expect(next.lastKnownSlots).toBeNull();
-  });
-
-  it("on failure with no error field: logs 'unknown'", () => {
-    const logError = vi.fn();
-    applyLoadSlotsResult<LoadState>(
-      { success: false, slots: [] },
-      makeSetter<LoadState>(),
-      { current: true },
-      logError,
-    );
-    expect(logError).toHaveBeenCalledWith("Failed to load save slots: unknown");
   });
 
   it("on success: merges slots + active_slot, clears spinner, does not log or touch ref", () => {

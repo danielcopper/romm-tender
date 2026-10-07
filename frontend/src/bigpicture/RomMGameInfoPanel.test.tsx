@@ -2608,7 +2608,7 @@ describe("RomMGameInfoPanel", () => {
       // swallows its write, and the retry frame is cleared on settle (the load
       // that owned it is still the latest → generation guard permits the clear).
       await act(async () => {
-        resolveSlots({ success: false, slots: [], active_slot: "", reason: "server_unreachable" });
+        resolveSlots({ success: false, reason: "server_unreachable", message: "Server unreachable" });
         await Promise.resolve();
         await Promise.resolve();
       });
@@ -2676,7 +2676,7 @@ describe("RomMGameInfoPanel", () => {
       // The stale slot fetch finally resolves — its settle must NOT clear the
       // shared store, because a newer load now owns it (shared generation guard).
       await act(async () => {
-        resolveSlots({ success: false, slots: [], active_slot: "", reason: "server_unreachable" });
+        resolveSlots({ success: false, reason: "server_unreachable", message: "Server unreachable" });
         await Promise.resolve();
         await Promise.resolve();
       });
@@ -2717,14 +2717,14 @@ describe("RomMGameInfoPanel", () => {
 
     it("slot-load feed: reason=server_unreachable reports offline", async () => {
       setRommConnectionState("connected");
-      await activateSavesTabWithSlots({ success: false, slots: [], active_slot: "", reason: "server_unreachable" });
+      await activateSavesTabWithSlots({ success: false, reason: "server_unreachable", message: "Server unreachable" });
       expect(getRommConnectionState()).toBe("offline");
     });
 
     it("slot-load feed: any OTHER failure reason leaves the store untouched", async () => {
       setRommConnectionState("connected");
       // A server-side "no" (the server answered) — NOT a connectivity verdict.
-      await activateSavesTabWithSlots({ success: false, slots: [], active_slot: "", reason: "not_found" });
+      await activateSavesTabWithSlots({ success: false, reason: "not_found", message: "Resource not found on server" });
       expect(getRommConnectionState()).toBe("connected");
     });
 
@@ -5157,7 +5157,7 @@ describe("RomMGameInfoPanel", () => {
         // exactly like a bound one.
         const realSlotState = await vi.importActual<typeof slotState>("../utils/slotState");
         vi.mocked(slotState.applyRefreshSlotResult).mockImplementation(realSlotState.applyRefreshSlotResult);
-        const slots = holdReadFor(1, { success: true, slots: [], active_slot: "japan" });
+        const slots = holdReadFor<backend.SaveSlotsResult>(1, { success: true, slots: [], active_slot: "japan" });
         vi.mocked(backend.getSaveSlots).mockImplementation(slots.impl);
         vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "main" });
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detailFor(1, { save_sync_enabled: true }));
@@ -5723,8 +5723,7 @@ describe("RomMGameInfoPanel", () => {
         laneRead.release({
           success: false,
           reason: "server_unreachable",
-          slots: [],
-          active_slot: "main",
+          message: "Server unreachable",
           last_known: {
             slots: [{ slot: "stale", source: "server", count: 4, latest_updated_at: null }],
             active_slot: "stale",
