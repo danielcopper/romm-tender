@@ -17,15 +17,16 @@ from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import epoch_to_iso, parse_iso_to_epoch
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, SAVE_SYNC_CONTENT_DIR_REASON, save_shape_message
+from domain.save_answer import save_shape_message
 from domain.save_slot import save_in_slot
-from lib.errors import RommNotFoundError, classify_error
+from lib.errors import NotInstalled, Refused, RommNotFoundError
 from services.saves._helpers import newest_server_saves_by_target
 from services.saves._messages import (
-    DEVICE_NOT_REGISTERED_REASON,
     MIGRATION_DEVICE_NOT_REGISTERED,
+    MIGRATION_LOCAL_FILES_FAILED,
     SAVE_SYNC_IN_CONTENT_DIR,
 )
+from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
 from services.saves._save_state import read_save_state, write_save_state
 from services.saves._settings import autocleanup_limit, resolve_default_slot
 
@@ -258,7 +259,7 @@ class SetupWizard:
         Sets slot_confirmed=true and active_slot in state.
 
         ``chosen_slot`` must be a non-empty named slot. ``None`` and a string
-        that strips to ``""`` are both rejected as an invalid slot name: the
+        that strips to ``""`` both refuse with ``invalid_slot_name``: the
         legacy no-slot mode can no longer be confirmed as a target (#1276) — it
         survives only as a migration *source*.
 
@@ -272,8 +273,9 @@ class SetupWizard:
           silently (content copied into the slot, baseline adopted).
         - A **differing** local file → held for the user's decision unless
           ``use_server_on_conflict`` is set. Without it, the slot is *not*
-          confirmed and the response carries ``needs_conflict_resolution=True`` +
-          a ``conflicts`` list (both sides' timestamp/size) so the wizard can ask.
+          confirmed and the call refuses with ``local_conflict``, carrying
+          ``needs_conflict_resolution=True`` and a ``conflicts`` list (both
+          sides' timestamp/size) so the wizard can ask.
           With it, the differing local file is quarantined into ``.romm-backup``
           (never deleted, #965) before the server content replaces it.
 
@@ -282,11 +284,16 @@ class SetupWizard:
         bucket (#1478).
 
         When a migration is requested but the save is written beside the game
-        file (#239, ``reason="savefiles_in_content_dir"``), or is any other
-        answer a sync would not carry (``reason="save_shape_unsupported"``),
-        the migration is refused before any download; the slot confirmation
-        itself — a non-destructive metadata flip — is still persisted. The
+        file (#239, ``SavefilesInContentDir``), or is any other answer a sync
+        would not carry (``SaveShapeUnsupported``), the migration is refused
+        before any download; the slot confirmation itself — a non-destructive
+        metadata flip — is still persisted before the refusal is raised. The
         non-migration path is never gated (no file write).
+
+        Before anything is confirmed, a migration refuses with
+        ``device_not_registered`` or ``NotInstalled``. A RomM error before the
+        apply phase propagates, and a local file failure there refuses with
+        ``migration_failed``; either way nothing is confirmed.
         """
         rom_id = int(rom_id)
         # Legacy ``slot:null`` confirmation is retired (#1276): a slot must carry
@@ -295,20 +302,10 @@ class SetupWizard:
         # string that strips to ``""`` is rejected the same way. The legacy
         # no-slot mode can no longer be confirmed as a target.
         if chosen_slot is None:
-            return {
-                "success": False,
-                "reason": "invalid_slot_name",
-                "needs_conflict_resolution": False,
-                "message": "Slot name cannot be empty",
-            }
+            raise Refused("invalid_slot_name", "Slot name cannot be empty")
         normalized_slot = str(chosen_slot).strip()
         if not normalized_slot:
-            return {
-                "success": False,
-                "reason": "invalid_slot_name",
-                "needs_conflict_resolution": False,
-                "message": "Slot name cannot be empty",
-            }
+            raise Refused("invalid_slot_name", "Slot name cannot be empty")
 
         # The read→confirm→(migrate)→write of the RomSaveSyncState aggregate must
         # serialise against every other path that touches this ROM's state.
@@ -335,12 +332,7 @@ class SetupWizard:
                 self._log_debug(f"confirm_slot_choice: rom {rom_id} saves beside its content; skipping migration")
                 save_state.confirm_slot(normalized_slot)
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
-                return {
-                    "success": False,
-                    "reason": SAVE_SYNC_CONTENT_DIR_REASON,
-                    "needs_conflict_resolution": False,
-                    "message": SAVE_SYNC_IN_CONTENT_DIR,
-                }
+                raise SavefilesInContentDir(SAVE_SYNC_IN_CONTENT_DIR)
 
             # Migration preconditions, checked BEFORE any confirm or mutation so
             # a precondition failure holds the wizard open (no half-state) and the
@@ -349,34 +341,19 @@ class SetupWizard:
             # touched, so it must be caught here first.
             device_id = await self._loop.run_in_executor(None, self._device_registry.get_device_id)
             if not device_id:
-                return {
-                    "success": False,
-                    "reason": DEVICE_NOT_REGISTERED_REASON,
-                    "needs_conflict_resolution": False,
-                    "message": MIGRATION_DEVICE_NOT_REGISTERED,
-                }
+                raise Refused("device_not_registered", MIGRATION_DEVICE_NOT_REGISTERED)
             info = await self._loop.run_in_executor(
                 None, functools.partial(self._rom_info.get_rom_save_info, rom_id, save_answer=save_answer)
             )
             if not info:
-                return {
-                    "success": False,
-                    "reason": "not_installed",
-                    "needs_conflict_resolution": False,
-                    "message": "ROM is not installed",
-                }
+                raise NotInstalled("ROM is not installed")
             # Any other answer a sync would not carry is refused for what it is,
             # and the slot is confirmed all the same.
             if info["save_answer"].sync_directory is None:
                 self._log_debug(f"confirm_slot_choice: rom {rom_id} has no save a sync could carry; skipping migration")
                 save_state.confirm_slot(normalized_slot)
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
-                return {
-                    "success": False,
-                    "reason": SAVE_SHAPE_UNSUPPORTED_REASON,
-                    "needs_conflict_resolution": False,
-                    "message": save_shape_message(info["save_answer"]),
-                }
+                raise SaveShapeUnsupported(save_shape_message(info["save_answer"]))
 
             # Confirm in memory so the migration uploads resolve to the chosen
             # slot, but persist only once the migration reaches the apply phase
@@ -393,31 +370,24 @@ class SetupWizard:
                     device_id,
                     info,
                 )
-            except Exception as e:
-                # Wholesale failure BEFORE the apply phase (list_saves or a phase-1
-                # download threw) — nothing durable was mutated (only scratch
-                # temps, cleaned up). Do NOT confirm: return the canonical failure
-                # so the wizard stays open on the message and Track can be retried.
-                reason, message = classify_error(e)
+            except OSError as e:
+                # Wholesale failure BEFORE the apply phase — nothing durable was
+                # mutated (only scratch temps, cleaned up), and nothing is
+                # confirmed, so the wizard stays open and Track can be retried.
+                # A RomM error from the same phase propagates unconfirmed alike.
                 self._logger.warning(f"confirm_slot_choice({rom_id}): migration failed before apply: {e}")
-                return {
-                    "success": False,
-                    "reason": reason,
-                    "needs_conflict_resolution": False,
-                    "message": message,
-                }
+                raise Refused("migration_failed", MIGRATION_LOCAL_FILES_FAILED) from e
 
             if outcome["status"] == "conflict":
                 # A local save differs — hold for the user. Do NOT persist the
                 # confirm; the wizard re-calls (keep-local → migrate=false;
                 # use-server → use_server_on_conflict=true).
-                return {
-                    "success": False,
-                    "needs_conflict_resolution": True,
-                    "reason": "local_conflict",
-                    "message": f"A local save differs from the legacy save for slot '{normalized_slot}'",
-                    "conflicts": outcome["conflicts"],
-                }
+                raise Refused(
+                    "local_conflict",
+                    f"A local save differs from the legacy save for slot '{normalized_slot}'",
+                    needs_conflict_resolution=True,
+                    conflicts=outcome["conflicts"],
+                )
 
             # ``no_op`` (server had no legacy saves) and ``migrated`` (the apply
             # phase ran) both confirm the slot. A partial per-target failure in
@@ -468,10 +438,10 @@ class SetupWizard:
         local save needs the user's decision), or ``{"status": "migrated",
         "migrated": int, "failed": int}`` (the apply phase ran). The **wholesale**
         pre-apply failures — a ``list_saves`` throw or a phase-1 download throw —
-        **propagate** so the caller returns a canonical failure without
-        confirming: phase 1 writes only scratch ``.tmp`` files (never the real
-        save files) and the ``finally`` clears them, so nothing durable is
-        mutated before the apply phase begins.
+        **propagate** so the caller refuses without confirming: phase 1 writes
+        only scratch ``.tmp`` files (never the real save files) and the
+        ``finally`` clears them, so nothing durable is mutated before the apply
+        phase begins.
         """
         rom_name = info["rom_name"]
         saves_dir = info["saves_dir"]

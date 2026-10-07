@@ -567,11 +567,6 @@ class TestAWritePathRefusesWhatASyncWouldNotCarry:
                 ),
                 id="rollback",
             ),
-            pytest.param(
-                lambda svc: svc.confirm_slot_choice(42, "default", True, None),
-                lambda result: result["reason"] == SAVE_SHAPE_UNSUPPORTED_REASON,
-                id="confirm-migrate",
-            ),
         ],
     )
     async def test_nothing_lands_in_the_roms_folder(self, tmp_path, call, refused):
@@ -585,7 +580,10 @@ class TestAWritePathRefusesWhatASyncWouldNotCarry:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "call",
-        [pytest.param(lambda svc: svc.switch_slot(42, "other"), id="switch-slot")],
+        [
+            pytest.param(lambda svc: svc.switch_slot(42, "other"), id="switch-slot"),
+            pytest.param(lambda svc: svc.confirm_slot_choice(42, "default", True, None), id="confirm-migrate"),
+        ],
     )
     async def test_a_slot_write_refuses_with_the_skip_and_nothing_lands(self, tmp_path, call):
         svc = self._inside_the_game_file(tmp_path)

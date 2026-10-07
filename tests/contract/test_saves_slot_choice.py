@@ -208,7 +208,7 @@ async def test_confirm_legacy_migration_server_unreachable_holds_wizard(harness)
 
     assert result["success"] is False
     assert result["reason"] == ErrorCode.SERVER_UNREACHABLE.value
-    assert result["needs_conflict_resolution"] is False
+    assert "needs_conflict_resolution" not in result
     assert isinstance(result["message"], str)
     # Nothing confirmed, nothing uploaded — no half-state.
     with harness.uow_factory() as uow:

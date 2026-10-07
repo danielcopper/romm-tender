@@ -17,7 +17,6 @@ from lib.errors import (
     RommNotFoundError,
     ServerUnreachable,
 )
-from lib.list_result import ErrorCode
 from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
 from services.saves.slots.switching import PendingUploads, SlotSwitchIncomplete
 from tests.services.saves._helpers import (
@@ -690,16 +689,23 @@ class TestConfirmSlotChoice:
     async def test_confirm_empty_slot_rejected(self, tmp_path):
         """An empty-string slot is still rejected — distinct from the legacy ``None`` slot."""
         svc, _ = make_service(tmp_path)
-        result = await svc.confirm_slot_choice(42, "", False, None)
-        assert result["success"] is False
-        assert result["reason"] == "invalid_slot_name"
-        assert "empty" in result["message"].lower()
+        confirming = svc.confirm_slot_choice(42, "", False, None)
+
+        with pytest.raises(Refused) as refused:
+            await confirming
+
+        assert (refused.value.reason, refused.value.message) == ("invalid_slot_name", "Slot name cannot be empty")
+        assert refused.value.details == {}
 
     @pytest.mark.asyncio
     async def test_confirm_whitespace_slot_rejected(self, tmp_path):
         svc, _ = make_service(tmp_path)
-        result = await svc.confirm_slot_choice(42, "   ")
-        assert result["success"] is False
+        confirming = svc.confirm_slot_choice(42, "   ")
+
+        with pytest.raises(Refused) as refused:
+            await confirming
+
+        assert refused.value.reason == "invalid_slot_name"
 
     @pytest.mark.asyncio
     async def test_confirm_preserves_existing_files_state(self, tmp_path):
@@ -735,16 +741,18 @@ class TestConfirmSlotChoice:
         """``chosen_slot=None`` is rejected — legacy slot:null confirmation is retired (#1276).
 
         The no-slot mode can no longer be confirmed as a target; ``None`` is
-        guarded before the aggregate call and returns the canonical
-        ``invalid_slot_name`` failure, never leaving a confirmed legacy state.
+        guarded before the aggregate call and refuses with ``invalid_slot_name``,
+        never leaving a confirmed legacy state.
         """
         svc, _ = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         _seed_rom(svc, 42)
-        result = await svc.confirm_slot_choice(42, None, False, None)
-        assert result["success"] is False
-        assert result["reason"] == "invalid_slot_name"
-        assert isinstance(result["message"], str)
+        confirming = svc.confirm_slot_choice(42, None, False, None)
+
+        with pytest.raises(Refused) as refused:
+            await confirming
+
+        assert refused.value.reason == "invalid_slot_name"
         # No confirmed legacy state was persisted.
         assert _get_save_state(svc, 42) is None
 
@@ -841,7 +849,7 @@ class TestConfirmSlotChoice:
     async def test_confirm_migration_differing_local_holds_for_conflict(self, tmp_path):
         """A differing local file holds the migration for the user's decision.
 
-        The response carries ``needs_conflict_resolution=True`` + a conflict
+        The refusal carries ``needs_conflict_resolution=True`` + a conflict
         entry, nothing is uploaded/deleted, the local file is untouched, and the
         slot is NOT confirmed (#1498).
         """
@@ -853,11 +861,15 @@ class TestConfirmSlotChoice:
         fake.saves[1] = _server_save(save_id=1, filename="pokemon [ts].srm", slot=None)
         fake.set_server_save_content(1, b"SERVER" * 10)
 
-        result = await svc.confirm_slot_choice(42, "default", True, None)
-        assert result["success"] is False
-        assert result["needs_conflict_resolution"] is True
-        assert result["reason"] == "local_conflict"
-        conflicts = result["conflicts"]
+        confirming = svc.confirm_slot_choice(42, "default", True, None)
+
+        with pytest.raises(Refused) as refused:
+            await confirming
+
+        assert refused.value.reason == "local_conflict"
+        assert refused.value.message == "A local save differs from the legacy save for slot 'default'"
+        assert refused.value.details["needs_conflict_resolution"] is True
+        conflicts = refused.value.details["conflicts"]
         assert len(conflicts) == 1
         assert conflicts[0]["filename"] == "pokemon.srm"
         assert conflicts[0]["server_save_id"] == 1
@@ -936,11 +948,11 @@ class TestConfirmSlotChoice:
 
     @pytest.mark.asyncio
     async def test_confirm_migration_download_failure_holds_wizard(self, tmp_path):
-        """A phase-1 download failure is wholesale (pre-apply): canonical failure, slot NOT confirmed.
+        """A phase-1 download failure is wholesale (pre-apply): the RomM error propagates, slot NOT confirmed.
 
         No durable state was mutated (only scratch temps, which are cleaned up),
-        so the migration must not silently confirm-and-close — it returns the
-        canonical failure and the wizard stays open for a retry (#1498 review).
+        so the migration must not silently confirm-and-close — the error reaches
+        the caller and the wizard stays open for a retry (#1498 review).
         """
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
@@ -953,11 +965,11 @@ class TestConfirmSlotChoice:
             raise RommConnectionError("offline")
 
         fake.download_save = failing_download
+        confirming = svc.confirm_slot_choice(42, "default", True, None)
 
-        result = await svc.confirm_slot_choice(42, "default", True, None)
-        assert result["success"] is False
-        assert result["reason"] == ErrorCode.SERVER_UNREACHABLE.value
-        assert result["needs_conflict_resolution"] is False
+        with pytest.raises(RommConnectionError):
+            await confirming
+
         # Slot NOT confirmed, local file untouched, no scratch temp left behind.
         assert _get_save_state(svc, 42) is None
         assert (tmp_path / "saves" / "gba" / "pokemon.srm").read_bytes() == b"L" * 100
@@ -969,7 +981,7 @@ class TestConfirmSlotChoice:
     async def test_confirm_migration_list_saves_failure_holds_then_retry_works(self, tmp_path):
         """The reviewer's scenario: a transient list_saves throw holds the wizard; a retry migrates.
 
-        First attempt: list_saves throws → canonical failure, slot NOT confirmed,
+        First attempt: list_saves throws → the error propagates, slot NOT confirmed,
         no local mutation (migrated=0/failed=0 must NEVER be a silent success).
         Second attempt (server back): the migration runs and the slot is confirmed.
         """
@@ -991,11 +1003,11 @@ class TestConfirmSlotChoice:
             return orig_list(*args, **kwargs)
 
         fake.list_saves = flaky_list
+        confirming = svc.confirm_slot_choice(42, "default", True, None)
 
-        result = await svc.confirm_slot_choice(42, "default", True, None)
-        assert result["success"] is False
-        assert result["reason"] == ErrorCode.SERVER_UNREACHABLE.value
-        assert result["needs_conflict_resolution"] is False
+        with pytest.raises(RommConnectionError):
+            await confirming
+
         # Nothing confirmed, nothing uploaded, local untouched.
         assert _get_save_state(svc, 42) is None
         assert not any(c[0] == "upload_save" for c in fake.call_log)
@@ -1029,14 +1041,57 @@ class TestConfirmSlotChoice:
             return orig_download(save_id, dest_path)
 
         fake.download_save = selective_download
+        confirming = svc.confirm_slot_choice(42, "default", True, None)
 
-        result = await svc.confirm_slot_choice(42, "default", True, None)
-        assert result["success"] is False
-        assert result["reason"] == ErrorCode.SERVER_UNREACHABLE.value
+        with pytest.raises(RommConnectionError):
+            await confirming
+
         # The first target's downloaded temp was cleaned up by the finally.
         saves_dir = tmp_path / "saves" / "gba"
         assert not (saves_dir / "pokemon.srm.tmp").exists()
         assert not (saves_dir / "pokemon.rtc.tmp").exists()
+        assert _get_save_state(svc, 42) is None
+
+    def _a_migration_whose_download_raises(self, tmp_path, failure: Exception):
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "dev-1")
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path, content=b"L" * 100)
+        fake.saves[1] = _server_save(save_id=1, filename="pokemon [ts].srm", slot=None)
+
+        def failing_download(save_id, dest_path):
+            raise failure
+
+        fake.download_save = failing_download
+        return svc, fake
+
+    @pytest.mark.asyncio
+    async def test_confirm_migration_a_local_file_failure_refuses_with_migration_failed(self, tmp_path):
+        """A file on this device that cannot be read or written before the apply phase: nothing confirmed."""
+        svc, fake = self._a_migration_whose_download_raises(tmp_path, PermissionError("saves dir not writable"))
+        confirming = svc.confirm_slot_choice(42, "default", True, None)
+
+        with pytest.raises(Refused) as refused:
+            await confirming
+
+        assert (refused.value.reason, refused.value.message) == (
+            "migration_failed",
+            "The saves could not be migrated: a save file on this device could not be read or written.",
+        )
+        assert refused.value.details == {}
+        assert _get_save_state(svc, 42) is None
+        assert not any(c[0] == "upload_save" for c in fake.call_log)
+
+    @pytest.mark.asyncio
+    async def test_confirm_migration_a_fault_that_is_neither_romms_nor_the_devices_files_is_no_refusal(self, tmp_path):
+        """Anything but a RomM error or an ``OSError`` propagates as itself, and nothing is confirmed."""
+        svc, _fake = self._a_migration_whose_download_raises(tmp_path, KeyError("id"))
+        confirming = svc.confirm_slot_choice(42, "default", True, None)
+
+        with pytest.raises(KeyError):
+            await confirming
+
         assert _get_save_state(svc, 42) is None
 
     @pytest.mark.asyncio
@@ -1053,10 +1108,13 @@ class TestConfirmSlotChoice:
         _create_save(tmp_path, content=b"L" * 100)
         fake.saves[1] = _server_save(save_id=1, slot=None)
 
-        result = await svc.confirm_slot_choice(42, "default", True, None)
-        assert result["success"] is False
-        assert result["reason"] == "device_not_registered"
-        assert result["needs_conflict_resolution"] is False
+        confirming = svc.confirm_slot_choice(42, "default", True, None)
+
+        with pytest.raises(Refused) as refused:
+            await confirming
+
+        assert refused.value.reason == "device_not_registered"
+        assert refused.value.details == {}
         # No mutation, no server traffic (the precheck runs before list_saves).
         assert _get_save_state(svc, 42) is None
         assert (tmp_path / "saves" / "gba" / "pokemon.srm").read_bytes() == b"L" * 100
@@ -1065,17 +1123,18 @@ class TestConfirmSlotChoice:
 
     @pytest.mark.asyncio
     async def test_confirm_migration_not_installed_holds_wizard(self, tmp_path):
-        """ROM not installed → canonical failure, slot NOT confirmed (never a silent 0/0 success)."""
+        """ROM not installed → refuses with not_installed, slot NOT confirmed (never a silent 0/0 success)."""
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "dev-1")
         # No _install_rom — the ROM has no install row.
         fake.saves[1] = _server_save(save_id=1, slot=None)
 
-        result = await svc.confirm_slot_choice(42, "default", True, None)
-        assert result["success"] is False
-        assert result["reason"] == "not_installed"
-        assert result["needs_conflict_resolution"] is False
+        confirming = svc.confirm_slot_choice(42, "default", True, None)
+
+        with pytest.raises(NotInstalled):
+            await confirming
+
         assert _get_save_state(svc, 42) is None
         assert not any(c[0] == "upload_save" for c in fake.call_log)
 
@@ -2024,11 +2083,12 @@ class TestSlotsContentDirGate:
         _create_save(tmp_path)
         fake.saves[1] = _server_save(save_id=1, slot="desktop")
 
-        result = await svc.confirm_slot_choice(42, "default", True, "desktop")
+        confirming = svc.confirm_slot_choice(42, "default", True, "desktop")
 
-        assert result["success"] is False
-        assert result["reason"] == "savefiles_in_content_dir"
-        assert "content directory" in result["message"]
+        with pytest.raises(SavefilesInContentDir) as refused:
+            await confirming
+
+        assert "content directory" in refused.value.message
         # No migration I/O — gate fired before the upload/delete/list path.
         assert not any(c[0] in ("upload_save", "delete_server_saves", "list_saves") for c in fake.call_log), (
             fake.call_log
@@ -2046,11 +2106,12 @@ class TestSlotsContentDirGate:
         _no_save_directory(svc)
         fake.saves[1] = _server_save(save_id=1, slot="desktop")
 
-        result = await svc.confirm_slot_choice(42, "default", True, "desktop")
+        confirming = svc.confirm_slot_choice(42, "default", True, "desktop")
 
-        assert result["success"] is False
-        assert result["reason"] == "save_shape_unsupported"
-        assert result["needs_conflict_resolution"] is False
+        with pytest.raises(SaveShapeUnsupported) as refused:
+            await confirming
+
+        assert refused.value.details == {}
         assert not any(c[0] in ("upload_save", "delete_server_saves", "list_saves") for c in fake.call_log), (
             fake.call_log
         )

@@ -8,14 +8,16 @@ literals in service code.
 
 SAVE_SYNC_DISABLED = "Save sync is disabled"
 DEVICE_NOT_REGISTERED = "Device not registered"
-# The ``reason`` of the slot setup's migration precheck when no device is
-# registered (``slots/setup.py``).
-DEVICE_NOT_REGISTERED_REASON = "device_not_registered"
 # Wizard legacy-migration precheck: no device is registered yet, so the migration
 # can't upload into the slot. Refused before any local/server mutation so the
 # wizard just stays open and the user can retry (#1498 review).
 MIGRATION_DEVICE_NOT_REGISTERED = (
     "This device isn't registered with RomM yet — retry in a moment (it registers automatically on the next save sync)."
+)
+# Wizard legacy migration: reading or writing the save files on this device
+# failed before anything was confirmed, so the wizard stays open for a retry.
+MIGRATION_LOCAL_FILES_FAILED = (
+    "The saves could not be migrated: a save file on this device could not be read or written."
 )
 DEVICE_SYNC_DISABLED = "Save sync is disabled for this device on the RomM server"
 SAVE_SYNC_BUSY = "Another save sync is still running"
