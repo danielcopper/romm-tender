@@ -7,10 +7,12 @@ interface WarningCardProps {
   message?: string;
   /** Compact mode for narrow contexts (QAM panel). */
   compact?: boolean;
+  /** Left out for a notice that reports a fact rather than something wrong. */
+  showIcon?: boolean;
 }
 
 /** Shared warning card layout: amber-bordered panel with icon, title and message. */
-export const WarningCard: FC<WarningCardProps> = ({ title, message, compact = false }) => {
+export const WarningCard: FC<WarningCardProps> = ({ title, message, compact = false, showIcon = true }) => {
   return (
     <div
       style={{
@@ -27,7 +29,7 @@ export const WarningCard: FC<WarningCardProps> = ({ title, message, compact = fa
         margin: compact ? "8px 4px" : "24px 2.8vw",
       }}
     >
-      <FaExclamationTriangle style={{ color: "#ffaa00", fontSize: compact ? "28px" : "42px" }} />
+      {showIcon && <FaExclamationTriangle style={{ color: "#ffaa00", fontSize: compact ? "28px" : "42px" }} />}
       <div
         style={{
           fontSize: compact ? "15px" : "19px",

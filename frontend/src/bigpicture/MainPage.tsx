@@ -587,7 +587,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
                 focus contract of its own. This QAM-only wrapper's no-op activation
                 makes the notice itself a stop for focus-driven scrolling. */}
             <Focusable onActivate={() => {}}>
-              <WarningCard title={banner.text} compact />
+              <WarningCard title={banner.text} compact showIcon={banner.tone === "warning"} />
             </Focusable>
           </PanelSectionRow>
         ))}

@@ -17,6 +17,19 @@ describe("WarningCard", () => {
     expect(root.children).toHaveLength(2);
   });
 
+  it("draws the warning sign by default", () => {
+    const { container } = render(<WarningCard title="t" />);
+    expect(container.querySelector("svg")).not.toBeNull();
+  });
+
+  it("leaves the warning sign out when showIcon is false", () => {
+    const { container } = render(<WarningCard title="Only a fact" showIcon={false} />);
+    const root = container.firstChild as HTMLElement;
+    expect(container.querySelector("svg")).toBeNull();
+    expect(root.children).toHaveLength(1);
+    expect(screen.getByText("Only a fact")).toBeInTheDocument();
+  });
+
   it("applies compact padding when compact=true", () => {
     const { container } = render(<WarningCard title="t" message="m" compact />);
     const root = container.firstChild as HTMLElement;

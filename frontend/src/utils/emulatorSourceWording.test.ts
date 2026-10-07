@@ -4,6 +4,7 @@ import {
   NO_SOURCE_BANNER,
   SOURCES_READING,
   SOURCES_UNREAD,
+  cannotStartNotice,
   cannotStartSentence,
   emulatorDataReasonSentence,
   findingIsBanner,
@@ -309,22 +310,42 @@ describe("mainSourceBanners", () => {
       "RetroDECK: its settings file /rd.json is damaged, so Tender cannot tell where its folders are. " +
         "Repair it with RetroDECK's 'Repair RetroDECK Paths'.",
       "EmuDeck: RetroArch's settings file /ra.cfg cannot be read; EmuDeck's RetroArch may be missing or broken.",
-      "Tender cannot start games through EmuDeck yet.",
+      "EmuDeck is switched on in Settings → Emulator sources, but Tender cannot start games through it yet.",
     ]);
   });
 
-  it("says Tender cannot start games through the answering source where that is the case", () => {
+  it("says the answering source is switched on but cannot start games where that is the case", () => {
     const listing = { answering: "emudeck", sources: [source({ kind: "emudeck", starts_games: false })] };
-    expect(texts(listing)).toEqual([cannotStartSentence("emudeck")]);
+    expect(texts(listing)).toEqual([cannotStartNotice("emudeck")]);
+    expect(cannotStartNotice("emudeck")).toBe(
+      "EmuDeck is switched on in Settings → Emulator sources, but Tender cannot start games through it yet.",
+    );
+  });
+
+  it("leaves the card's own cannot-start line as it was", () => {
     expect(cannotStartSentence("emudeck")).toBe("Tender cannot start games through EmuDeck yet.");
   });
 
-  it("says Tender cannot start games through EmuDeck while RetroDECK answers beside it", () => {
+  it("says EmuDeck is switched on but cannot start games while RetroDECK answers beside it", () => {
     const listing = {
       answering: "retrodeck",
       sources: [source({}), source({ kind: "emudeck", starts_games: false })],
     };
-    expect(texts(listing)).toEqual(["Tender cannot start games through EmuDeck yet."]);
+    expect(texts(listing)).toEqual([
+      "EmuDeck is switched on in Settings → Emulator sources, but Tender cannot start games through it yet.",
+    ]);
+  });
+
+  it("makes the cannot-start notice the one banner without the warning sign", () => {
+    const listing = {
+      answering: "retrodeck",
+      sources: [
+        source({ findings: [{ code: "marker-invalid", data: { path: "/rd.json" } }] }),
+        source({ kind: "emudeck", starts_games: false }),
+      ],
+    };
+    expect(mainSourceBanners(listing).map((banner) => banner.tone)).toEqual(["warning", "info"]);
+    expect(mainSourceBanners({ sources: [], answering: null }).map((banner) => banner.tone)).toEqual(["warning"]);
   });
 
   it("keeps a switched-off source's findings off Main", () => {
