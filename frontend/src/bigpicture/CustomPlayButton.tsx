@@ -963,7 +963,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   const stopInFlightRef = useRef(false);
 
   // Stop the running game. Steam cannot do this itself: the shortcut execs
-  // `flatpak run net.retrodeck.retrodeck` and flatpak's portal starts the
+  // `flatpak run … net.retrodeck.retrodeck` and flatpak's portal starts the
   // sandbox outside Steam's `reaper` ancestry, so `SteamClient.Apps.TerminateApp`
   // has nothing to signal (measured on-device: a no-op even with force=true).
   // The backend owns the kill instead — it resolves the flatpak instance's host

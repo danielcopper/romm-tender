@@ -47,6 +47,7 @@ from typing import TYPE_CHECKING, Any
 
 from _vendor.atlas import (
     HEALTH_ISSUE_NOT_SET_UP,
+    HEALTH_ISSUE_SAVES_ROOT_MISSING,
     SavestateAbsence,
     SavestatePlacement,
     Unresolved,
@@ -54,11 +55,13 @@ from _vendor.atlas import (
 )
 
 from adapters.atlas_catalogue import catalogue_refused
+from domain.emulator_sources import RETRODECK
 from domain.save_answer import (
     UNESTABLISHED_NOT_ASKED,
     SaveAnswer,
     SaveGroup,
     build_save_answer,
+    saves_root_missing_answer,
     unestablished_answer,
 )
 from domain.savestate_location import NoSavestates, SavestateLocation
@@ -95,7 +98,9 @@ class AtlasSaveLocationAdapter:
         label are all ``not_asked`` — the question never reached the resolver,
         so none of them is a statement about the emulator. An entry that
         declines and a resolver that raises WERE asked, so both are
-        ``nothing_established``.
+        ``nothing_established``. A source that reports its saves root missing is
+        not asked at all: the answer is ``saves_root_missing``, which refuses the
+        sync, so no folder is created while the SD card that holds the root is out.
 
         *content_installed* is the caller's own statement about *content_path*:
         ``False`` where it is the path a ROM WOULD occupy rather than a file on
@@ -107,13 +112,20 @@ class AtlasSaveLocationAdapter:
             self._log_debug(f"[saves] {system}: no emulator resolved for this ROM; nothing to ask")
             return unestablished_answer(shape=UNESTABLISHED_NOT_ASKED, content_installed=content_installed)
 
-        entry = self._entry(system, content_path, emulator_label)
-        if entry is None:
+        found = self._entry(system, content_path, emulator_label)
+        if found is None:
             # No answering source, a refused catalogue, or no entry under that
             # label: the question never reached the resolver, so this says
             # nothing about the emulator itself.
             return unestablished_answer(
                 emulator=emulator_label, shape=UNESTABLISHED_NOT_ASKED, content_installed=content_installed
+            )
+        kind, installation, entry = found
+        missing_root = self._missing_saves_root(kind, installation)
+        if missing_root is not None:
+            self._log_debug(f"[saves] {system}: the saves root {missing_root} does not exist; nothing is synced")
+            return saves_root_missing_answer(
+                path=missing_root, emulator=emulator_label, content_installed=content_installed
             )
 
         subject = f"savefile_location({system!r}, {emulator_label!r})"
@@ -146,9 +158,10 @@ class AtlasSaveLocationAdapter:
         """
         if emulator_label is None:
             return None
-        entry = self._entry(system, content_path, emulator_label)
-        if entry is None:
+        found = self._entry(system, content_path, emulator_label)
+        if found is None:
             return None
+        _kind, _installation, entry = found
         subject = f"savestate_location({system!r}, {emulator_label!r})"
         placement = self._ask(lambda: entry.savestate_location(content_path=content_path), subject)
         if isinstance(placement, SavestateAbsence):
@@ -163,8 +176,8 @@ class AtlasSaveLocationAdapter:
 
     # -- helpers -------------------------------------------------------------
 
-    def _entry(self, system: str, content_path: str, emulator_label: str) -> Any:
-        """The catalogue entry carrying *emulator_label*, or ``None`` with nothing to ask."""
+    def _entry(self, system: str, content_path: str, emulator_label: str) -> tuple[str | None, Any, Any] | None:
+        """The answering source's kind, its installation and its entry carrying *emulator_label*, or ``None``."""
         reading = self._sources.read()
         installation = reading.answering_installation()
         if installation is None:
@@ -185,7 +198,27 @@ class AtlasSaveLocationAdapter:
         entry = next((candidate for candidate in answer.entries if candidate.label == emulator_label), None)
         if entry is None:
             self._log_debug(f"[saves] {system}: the catalogue offers no entry labelled {emulator_label!r}")
-        return entry
+            return None
+        return reading.answering_kind, installation, entry
+
+    def _missing_saves_root(self, kind: str | None, installation: Any) -> str | None:
+        """The saves root RetroDECK's *installation* names and reports missing, or ``None``.
+
+        The resolver still places a save under a root that does not exist, and
+        a sync writing there would create it (``saves-root-missing``). Where the
+        health could not be asked, nothing is claimed missing: the placement
+        question that follows answers for itself. Only RetroDECK is asked: the
+        refusal's sentence names it, and no other source reaches a save answer
+        Tender syncs, because a sealed catalogue is a refusal
+        (``adapters/atlas_catalogue.catalogue_refused``).
+        """
+        if kind != RETRODECK:
+            return None
+        health = self._ask(installation.health, "health")
+        if health is None:
+            return None
+        issue = next((issue for issue in health.issues if issue.code == HEALTH_ISSUE_SAVES_ROOT_MISSING), None)
+        return None if issue is None else str(issue.data.get("path", ""))
 
     def installation_detected(self) -> bool:
         """Whether an emulator source answers that has been set up, so there is an installation to put questions to.

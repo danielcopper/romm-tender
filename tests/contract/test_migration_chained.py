@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import os
 
-from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 
 from domain.rom import Rom
 from domain.rom_install import RomInstall
@@ -61,7 +61,7 @@ def _relaunch_payload(harness):
 
 async def _detect_at(harness, home: str) -> None:
     """Point the RetroDECK home at *home* and run one detection pass."""
-    harness.app.services.migration_service._retrodeck_paths = FakeRetroDeckPaths(home=home)
+    harness.app.services.migration_service._retrodeck_folders = FakeRetroDeckFolders(home=home)
     harness.app.services.migration_service.detect_retrodeck_path_change()
     await asyncio.sleep(0)  # drain the spawned retrodeck_path_changed emit
 

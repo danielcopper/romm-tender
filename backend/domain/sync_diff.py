@@ -39,15 +39,18 @@ def classify_roms(
     shortcuts_data: list[dict[str, Any]],
     registry: dict[str, Any],
     fetched_platform_names: set[str],
+    *,
+    skipped_rom_ids: frozenset[int] = frozenset(),
 ) -> ClassificationResult:
     """Bucket fetched ROMs against the saved shortcut registry.
 
     Returns the ROMs split into new (not in registry), changed (registry
     entry exists but a *persisted* identity field — name, platform_slug, or
-    fs_name — differs, OR the target ``launch_options`` differs from the
-    recorded ``applied_launch_options``), unchanged_ids (registry matches
-    exactly), stale (in registry but not in the current fetch), and the count of
-    stale ROMs whose stored platform no longer appears in fetched_platform_names.
+    fs_name — differs, OR, for an entry outside *skipped_rom_ids*, the target
+    ``launch_options`` differs from the recorded ``applied_launch_options``),
+    unchanged_ids (otherwise), stale (in registry but not in the current
+    fetch), and the count of stale ROMs whose stored platform no longer appears
+    in fetched_platform_names.
 
     ``applied_launch_options`` is the launch command last written to the ROM's
     Steam shortcut (recorded by the six writer sites, #1383). Comparing the
@@ -55,11 +58,22 @@ def classify_roms(
     apply skip a content-correct shortcut rather than re-touching it: an identity
     match with a launch-options match is genuinely unchanged, while an
     install/uninstall (or core/disc pin change) that leaves identity untouched
-    still flips the item to "changed". A NULL recorded value (``None`` — a
-    pre-migration-015 row, or a freshly created row not yet recorded) never
-    matches a target string, so such a row is always "changed" and re-applied
-    once; the writer sites then record the value and the next sync skips it. No
-    skip is ever taken on unknown recorded state — no data is invented.
+    still flips the item to "changed". Outside *skipped_rom_ids*, no skip is
+    ever taken on unknown recorded state — no data is invented: a NULL recorded
+    value (``None`` — a pre-migration-015 row, or a freshly created row not yet
+    recorded) never matches a target string, so such a row is always "changed"
+    and re-applied once; the writer sites then record the value and the next
+    sync skips it.
+
+    *skipped_rom_ids* are the ROMs the preview took from a unit the fetcher
+    reported as skipped. Apply returns before it classifies such a unit, so it
+    never rewrites their shortcuts and never records their launch command; a
+    launch command that differs from the recorded one there — NULL included —
+    is no change the apply would make, and counting it would show the same
+    phantom "changed" on every preview. Such an entry is "changed" only for an
+    identity difference; Steam's copy of an installed game's command is kept
+    current by the launch-options reconcile instead. The apply path classifies
+    only units it fetched and passes none.
 
     ``platform_name`` is deliberately excluded from the changed comparison:
     it is a derived display field, never persisted on the ``roms`` row. The
@@ -84,18 +98,8 @@ def classify_roms(
         reg = registry.get(str(sd["rom_id"]))
         if not reg or not reg.get("app_id"):
             new.append(sd)
-        # Compare the persisted identity fields plus the recorded applied
-        # launch command. platform_name is a derived display field (never on the
-        # roms row) — comparing it produced a permanent phantom "changed" delta
-        # (#1292). applied_launch_options catches an install/uninstall or pin
-        # change that leaves identity untouched; a NULL recorded value never
-        # matches, so an unknown-state row is always "changed" (#1383). See the
-        # docstring.
-        elif (
-            reg.get("name") != sd["name"]
-            or reg.get("platform_slug") != sd.get("platform_slug")
-            or reg.get("fs_name") != sd.get("fs_name", "")
-            or reg.get("applied_launch_options") != sd.get("launch_options", "")
+        elif _identity_differs(reg, sd) or (
+            sd["rom_id"] not in skipped_rom_ids and reg.get("applied_launch_options") != sd.get("launch_options", "")
         ):
             changed.append({**sd, "existing_app_id": reg["app_id"]})
         else:
@@ -107,6 +111,15 @@ def classify_roms(
         1 for rid in stale if registry.get(str(rid), {}).get("platform_name") not in fetched_platform_names
     )
     return ClassificationResult(new, changed, unchanged_ids, stale, disabled_count)
+
+
+def _identity_differs(reg: dict[str, Any], sd: dict[str, Any]) -> bool:
+    """Whether a persisted identity field — name, platform_slug, fs_name — differs."""
+    return (
+        reg.get("name") != sd["name"]
+        or reg.get("platform_slug") != sd.get("platform_slug")
+        or reg.get("fs_name") != sd.get("fs_name", "")
+    )
 
 
 def platform_breakdown(

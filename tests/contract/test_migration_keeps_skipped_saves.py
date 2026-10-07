@@ -14,7 +14,7 @@ import asyncio
 import os
 from typing import TYPE_CHECKING, cast
 
-from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 
 from domain.answered_save_directory import AnsweredSaveDirectory
 from domain.rom import Rom
@@ -56,7 +56,7 @@ def _read(path: str) -> bytes:
 
 
 async def _detect_at(harness, home: str) -> None:
-    harness.app.services.migration_service._retrodeck_paths = FakeRetroDeckPaths(
+    harness.app.services.migration_service._retrodeck_folders = FakeRetroDeckFolders(
         home=home,
         saves=os.path.join(home, "saves"),
         roms=os.path.join(home, "roms"),

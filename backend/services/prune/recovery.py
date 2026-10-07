@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.prune import recovery_bundle_id
+from domain.retrodeck_folders import EveryFolderRefused, FolderRefused
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
         Clock,
         PruneArtifactStore,
         RecoveryBundleStore,
-        RetroDeckPaths,
+        RetroDeckFolders,
         SteamRecoveryStore,
         UnitOfWorkFactory,
         UuidGen,
@@ -33,7 +34,7 @@ class RecoveryCoordinatorConfig:
     recovery_store: RecoveryBundleStore
     prune_artifacts: PruneArtifactStore
     steam_recovery: SteamRecoveryStore
-    retrodeck_paths: RetroDeckPaths
+    retrodeck_folders: RetroDeckFolders
     clock: Clock
     uuid_gen: UuidGen
 
@@ -46,7 +47,7 @@ class RecoveryCoordinator:
         self._recovery_store = config.recovery_store
         self._prune_artifacts = config.prune_artifacts
         self._steam_recovery = config.steam_recovery
-        self._retrodeck_paths = config.retrodeck_paths
+        self._retrodeck_folders = config.retrodeck_folders
         self._clock = config.clock
         self._uuid_gen = config.uuid_gen
 
@@ -162,21 +163,7 @@ class RecoveryCoordinator:
         rom_ids = [row.rom_id for row in rows]
         artifacts: list[RecoveryArtifact] = list(save_inventory["artifacts"])
         artifacts.extend(self._prune_artifacts.recovery_artifacts(sorted(delete_ids)))
-        roms_root = self._retrodeck_paths.roms_path()
-        raw_installs = snapshot.get("installs")
-        installs = raw_installs if isinstance(raw_installs, list) else []
-        installs_by_id = {
-            int(item["rom_id"]): item for item in installs if isinstance(item, dict) and type(item.get("rom_id")) is int
-        }
-        for rom_id in sorted(include_installed_rom_ids.intersection(rom_ids)):
-            install = installs_by_id.get(rom_id)
-            if install is None:
-                continue
-            source = install.get("rom_dir") or install.get("file_path")
-            if isinstance(source, str) and source:
-                artifacts.append(
-                    {"source_path": source, "safe_root": roms_root, "kind": "installed_rom", "rom_id": rom_id}
-                )
+        artifacts.extend(self._installed_rom_artifacts(snapshot, include_installed_rom_ids.intersection(rom_ids)))
 
         steam_backend: SteamRecoverySnapshot | None = None
         if app_id is not None:
@@ -229,6 +216,30 @@ class RecoveryCoordinator:
             bundle_id, snapshot, artifacts, readme_context, playtime_text, should_abort
         )
         return sealed, steam_backend
+
+    def _installed_rom_artifacts(self, snapshot: dict[str, object], rom_ids: set[int]) -> list[RecoveryArtifact]:
+        """The installed content of each of *rom_ids* the snapshot records an install for."""
+        roms_root = self._retrodeck_folders.rom_root()
+        if isinstance(roms_root, EveryFolderRefused):
+            raise roms_root
+        raw_installs = snapshot.get("installs")
+        installs = raw_installs if isinstance(raw_installs, list) else []
+        installs_by_id = {
+            int(item["rom_id"]): item for item in installs if isinstance(item, dict) and type(item.get("rom_id")) is int
+        }
+        artifacts: list[RecoveryArtifact] = []
+        for rom_id in sorted(rom_ids):
+            install = installs_by_id.get(rom_id)
+            if install is None:
+                continue
+            source = install.get("rom_dir") or install.get("file_path")
+            # Without a ROM root to bound it, the removal of this content is
+            # refused too, so the bundle has nothing of it to hold.
+            if isinstance(source, str) and source and not isinstance(roms_root, FolderRefused):
+                artifacts.append(
+                    {"source_path": source, "safe_root": roms_root, "kind": "installed_rom", "rom_id": rom_id}
+                )
+        return artifacts
 
     @staticmethod
     def _bundle_role(rom_id: int, delete_ids: set[int]) -> str:

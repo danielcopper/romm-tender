@@ -7,7 +7,8 @@ carrying ``{success: False, reason, message}``, a bug as the host's
 what a case hands them, which puts the exception exactly where a use case would
 raise it; Stop Game's refusals, the connection's, a partial bulk uninstall, the
 conflict resolution's, a partial save deletion, the save syncs' and device
-list's refusals and the save slots' run through the real services.
+list's refusals, the save slots' and the library preview's failures run through
+the real services.
 """
 
 from __future__ import annotations
@@ -26,15 +27,24 @@ from unittest.mock import MagicMock
 import pytest
 from _factories import _make_application, _make_conflict_rules, _make_retry, _make_services_bundle
 from bootstrap import ServicesBundle
+from fakes.fake_active_core_resolver import FakeActiveCoreResolver
+from fakes.fake_disc_resolver import FakeDiscResolver
+from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcessControlAdapter
-from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_renderer_gc import FakeRendererGc
+from fakes.fake_renderer_rss import FakeRendererRss
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_rom_file_store import FakeRomFileStore
 from fakes.fake_rom_launch_path import FakeRomLaunchPathReader
+from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
+from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
-from fakes.system_time import FakeClock
+from fakes.library_peers import FakeArtworkManager
+from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
+from adapters.steam_config import SteamConfigAdapter
 from domain.refusal import DomainRefused, NamedDomainRefused
 from domain.rom import Rom
 from domain.rom_install import RomInstall
@@ -64,6 +74,7 @@ from lib.partial_failure import PartialFailure
 from main import Endpoints
 from services.connection import ConnectionService, ConnectionServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
+from services.library import LibraryService, LibraryServiceConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
 from tests.services.saves._helpers import (
@@ -637,7 +648,7 @@ def _dispatcher_over_rom_removal(uow: FakeUnitOfWork, rom_files: FakeRomFileStor
             clock=FakeClock(),
             emit=FakeEventSink().emit,
             rom_file_store=rom_files,
-            retrodeck_paths=FakeRetroDeckPaths(roms="/retrodeck/roms"),
+            retrodeck_folders=FakeRetroDeckFolders(roms="/retrodeck/roms"),
             download_queue_cleanup=None,
             uow_factory=FakeUnitOfWorkFactory(uow),
             conflict_rules=_make_conflict_rules(),
@@ -1130,3 +1141,71 @@ class TestTheSlotRefusalsOnTheWire:
 
         reason, text = classify_error(failure)
         assert message["result"] == {"success": False, "reason": reason, "message": text}
+
+
+def _dispatcher_over_library(romm_api: FakeRommApi, events: FakeEventSink, home: Path) -> CallDispatcher:
+    """The real dispatcher over ``Endpoints`` whose library use cases are the real ``LibraryService`` over a fake."""
+    service = LibraryService(
+        config=LibraryServiceConfig(
+            romm_api=romm_api,
+            steam_config=SteamConfigAdapter(user_home=str(home), logger=LOGGER),
+            settings={"enabled_platforms": {}, "enabled_collections": {"standard": {}, "smart": {}, "virtual": {}}},
+            loop=asyncio.get_running_loop(),
+            logger=LOGGER,
+            launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
+            emit=events.emit,
+            clock=FakeClock(),
+            uuid_gen=FakeUuidGen(),
+            sleeper=FakeSleeper(),
+            settings_persister=FakeSettingsPersister(),
+            log_debug=lambda msg: None,
+            artwork=FakeArtworkManager(),
+            uow_factory=FakeUnitOfWorkFactory(FakeUnitOfWork()),
+            active_core=FakeActiveCoreResolver(default=(None, None)),
+            disc_resolver=FakeDiscResolver(),
+            emulator_sources=FakeEmulatorSources(),
+            renderer_rss=FakeRendererRss(),
+            renderer_gc=FakeRendererGc(),
+            conflict_rules=_make_conflict_rules(),
+        )
+    )
+    endpoints = Endpoints(_make_application(_make_services_bundle(sync_service=service)), HostStatus())
+    return CallDispatcher(endpoints, LOGGER)
+
+
+class TestTheLibraryPreviewFailuresOnTheWire:
+    """A library preview that fails ends its progress with an error frame, and the failure reaches the wire as
+    ``classify_error``'s answer for a RomM error and as a transport error for anything else.
+    """
+
+    async def test_a_romm_error_answers_classify_errors_reason_and_message(self, tmp_path):
+        romm_api = FakeRommApi()
+        failure = RommConnectionError("connection refused")
+        romm_api.list_platforms_side_effect = failure
+        events = FakeEventSink()
+
+        message = json.loads(await _dispatcher_over_library(romm_api, events, tmp_path).dispatch(1, "sync_preview", []))
+
+        reason, text = classify_error(failure)
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {"success": False, "reason": reason, "message": text}
+        progress = [payload for name, payload in events.events if name == "sync_progress"]
+        assert (progress[-1]["stage"], progress[-1]["message"], progress[-1]["running"]) == ("error", text, False)
+
+    async def test_any_other_error_answers_a_transport_error(self, tmp_path):
+        romm_api = FakeRommApi()
+        romm_api.list_platforms_side_effect = RuntimeError("something broke")
+        events = FakeEventSink()
+
+        message = json.loads(await _dispatcher_over_library(romm_api, events, tmp_path).dispatch(1, "sync_preview", []))
+
+        assert message["type"] == TYPE_ERROR
+        assert message["reason"] == REASON_BACKEND_EXCEPTION
+        assert message["message"] == "RuntimeError: something broke"
+        assert "result" not in message
+        progress = [payload for name, payload in events.events if name == "sync_progress"]
+        assert (progress[-1]["stage"], progress[-1]["message"], progress[-1]["running"]) == (
+            "error",
+            "something broke",
+            False,
+        )

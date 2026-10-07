@@ -13,6 +13,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.retrodeck_folders import FolderRefused
 from domain.save_answer import UNESTABLISHED_NOT_ASKED, unestablished_answer
 
 if TYPE_CHECKING:
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
     from domain.save_answer import SaveAnswer
     from services.protocols import (
         ActiveCoreReader,
-        RetroDeckPaths,
+        RetroDeckFolders,
         SaveFileStore,
         SaveLocationReader,
         SystemResolver,
@@ -35,18 +36,18 @@ class RomInfoServiceConfig:
 
     Holds the Unit-of-Work factory (the ``rom_installs`` aggregate is the
     source of truth for installed-ROM file records — WS3), the Protocol-typed
-    filesystem adapter, the RetroDECK runtime-path accessor, the per-ROM
-    active-core resolver, the
-    save-location reader that answers what a game's save consists of, the
-    platform-slug-to-system resolver (which, with ``roms.fs_name``, builds the
-    path a ROM the library knows but has not installed WOULD occupy — a save
+    filesystem adapter, RetroDECK's folders, the per-ROM active-core resolver,
+    the save-location reader that answers what a game's save consists of, the
+    platform-slug-to-system resolver (which, with the folder a download of it
+    would land in and ``roms.fs_name``, builds the path a ROM the library knows
+    but has not installed WOULD occupy — a save
     answer turns on the content file's extension, so omitting the path asks a
     different question), and the standard-library logger.
     """
 
     uow_factory: UnitOfWorkFactory
     save_file_store: SaveFileStore
-    retrodeck_paths: RetroDeckPaths
+    retrodeck_folders: RetroDeckFolders
     active_core: ActiveCoreReader
     save_locations: SaveLocationReader
     resolve_system: SystemResolver
@@ -60,7 +61,7 @@ class RomInfoService:
         self._config = config
         self._uow_factory = config.uow_factory
         self._save_file_store = config.save_file_store
-        self._retrodeck_paths = config.retrodeck_paths
+        self._retrodeck_folders = config.retrodeck_folders
         self._active_core = config.active_core
         self._save_locations = config.save_locations
         self._resolve_system = config.resolve_system
@@ -155,7 +156,11 @@ class RomInfoService:
             # any emulator.
             return unestablished_answer(shape=UNESTABLISHED_NOT_ASKED)
         system = self._resolve_system(rom.platform_slug)
-        content_path = os.path.join(self._retrodeck_paths.roms_path(), system, rom.fs_name)
+        folder = self._retrodeck_folders.download_folder(system)
+        if isinstance(folder, FolderRefused):
+            # No folder a download could land in, so no path to ask about.
+            return unestablished_answer(shape=UNESTABLISHED_NOT_ASKED)
+        content_path = os.path.join(folder, rom.fs_name)
         return self._ask_resolver(rom_id, system, content_path, installed=False)
 
     def _installed_answer(self, rom_id: int, system: str, file_path: str) -> SaveAnswer:

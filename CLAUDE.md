@@ -486,6 +486,24 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/adapters/test_atlas_firmware.py::TestDegradation` and
   `tests/adapters/test_atlas_saves.py::TestWhichSourceAnswers`. Unseen by the scan: a name reached through `getattr` or
   `importlib`. Prompt-only: no adapter keeps a handle or an answer past the reading it came through
+- **Every RetroDECK folder Tender downloads into, removes from, bounds a removal by or reads for the move code is the
+  resolver's answer, asked through `adapters/retrodeck_folders.py`; no module reads RetroDECK's settings or builds such
+  a folder from a root, and while RetroDECK reports `marker-missing`, `marker-unreadable`, `marker-invalid` or
+  `not-set-up`, or where detecting the sources or a question about RetroDECK's health or one of its four roots raised,
+  none of those folders is used — except that a download while RetroDECK is switched off says so, and a raise on a
+  system's own ROM folder refuses only the press that asked for it** — test + prompt-only —
+  `tests/adapters/test_retrodeck_folders.py` (the real resolver over tmp homes: every folder its answer, each finding
+  refusing every question, `TestWhereAQuestionToTheResolverRaises` and `TestWhereDetectingTheSourcesRaises` refusing
+  every question for a raise on the detection, the health or a root and only its own for a system's folder, and
+  `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and `tests/contract/test_retrodeck_folders.py`
+  (under each finding, and where the detection, RetroDECK's health or one of its roots could not be asked, no press
+  downloads, deletes or cleans up there). A save's folder and a firmware file's place take the other route, the save and
+  firmware answers (`adapters/atlas_saves.py`, `adapters/atlas_firmware.py`), and this entry does not cover them: under
+  the three `marker-*` findings a save is still synced where the save answer places it, which is then RetroDECK's
+  default — keeping saves out of it is #2220 D9's and not yet held. Unseen by them: a folder joined onto a root under
+  another name, and a caller that puts the question to RetroDECK's handle itself. Prompt-only: a new caller that
+  downloads into, removes from or bounds a removal by a RetroDECK folder asks `RetroDeckFolders` and raises the refusal
+  it answers with
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (the file's own calls only: a write behind a helper, a write passed as a
   bound method (`run_in_executor(None, uow.roms.save, …)`), an aliased handle, a `getattr`-reached repository, and a
@@ -696,7 +714,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   covers only three leftovers** — prompt-only — `services/firmware/demand.py::FirmwareDemand.is_downloaded` is the
   single crossing point, and nothing enforces it. The three leftovers: a library file with no placement in the
   platform's catalogue, a placement Tender cannot honour, and the already-there check before a download (the batch and
-  the per-row fetch). `present is None` reads as absent. A withheld verdict is not an absence: its cause is read off the
+  the per-row fetch). Where no BIOS download may land — anything that refuses one, so that `FirmwareDemand.status_root`
+  answers `None` — the probe looks nowhere, and a row only it could answer has its verdict withheld rather than read as
+  absent (#2244 D11). `present is None` reads as absent. A withheld verdict is not an absence: its cause is read off the
   row's caveat codes and a declared file's `checked`, never off the verdict, and nothing checks that a consumer keeps
   `checked`'s values apart — a file the emulator read and did not recognise is never worded "could not be checked", and
   `refused` is not a withheld verdict
@@ -784,7 +804,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — prompt-only — sync
   paths, `get_save_status`, and the three slot mutations hold the lock; mechanize via a `rom_save_sync_states.save`
   call-site audit
-- **Which files a game's save consists of is the EMULATOR's answer, read live, and four of its five states refuse the
+- **Which files a game's save consists of is the EMULATOR's answer, read live, and five of its six states refuse the
   sync — no probe, no state written** — test + prompt-only — `tests/adapters/test_atlas_saves.py`,
   `tests/domain/test_save_answer.py` and `tests/services/saves/test_save_shape_gate.py`, where each absence test stands
   beside a control that asserts the probe does happen, and every per-system pin names the extension it asked with

@@ -37,8 +37,9 @@ Three required fields:
 * ``reason`` — coarse routing slug. For server-reachability failures use
   :data:`ErrorCode.SERVER_UNREACHABLE`; the rest of the small Lean enum
   (auth/not-found/unsupported/unknown plus the frontend-routed
-  ``version_error`` / ``stale_conflict`` / ``stale_preview``) covers the
-  categories a consumer branches on. For bespoke static guards
+  ``version_error`` / ``stale_conflict``) covers the categories a consumer
+  branches on, and ``stale_preview`` refuses a preview that can no longer be
+  acted on. For bespoke static guards
   (``sync_disabled``, ``not_installed``, ``active_slot``,
   ``config_error``, ``blocked_by_migration``, …) a plain string literal is
   fine — the ``ErrorCode | str`` union allows it.
@@ -93,8 +94,8 @@ class ErrorCode(StrEnum):
     ``SERVER_UNREACHABLE`` folds connection/timeout/SSL/5xx/generic-API
     failures; ``AUTH_FAILED`` folds 401 and 403 (same slug, distinct
     ``message`` so a Cloudflare bot-fight 403 stays distinguishable from
-    wrong credentials). ``VERSION_ERROR`` / ``STALE_CONFLICT`` /
-    ``STALE_PREVIEW`` stay distinct because the frontend routes on them.
+    wrong credentials). ``VERSION_ERROR`` / ``STALE_CONFLICT`` stay distinct
+    because the frontend routes on them.
 
     ``NOT_FOUND`` is narrower than "the server answered 404": it means RomM's
     entity layer said the entity does not exist, which the RomM adapter proves

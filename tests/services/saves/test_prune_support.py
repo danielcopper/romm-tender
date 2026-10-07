@@ -3,8 +3,10 @@
 from pathlib import Path
 
 import pytest
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from models.prune import SaveQuarantine
 
+from domain.retrodeck_folders import finding_refusal, unanswered_refusal
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from tests.services.saves._helpers import (
     _create_save,
@@ -12,6 +14,15 @@ from tests.services.saves._helpers import (
     _seed_rom,
     make_service,
 )
+
+_UNANSWERED = "RetroDECK's folders could not be established, so Tender downloads into and removes from none of them."
+
+
+def _folders(support) -> FakeRetroDeckFolders:
+    """The fake RetroDECK folders behind *support*, for a test to take a folder away."""
+    folders = support._retrodeck_folders
+    assert isinstance(folders, FakeRetroDeckFolders)
+    return folders
 
 
 class TestLockPruneRoms:
@@ -222,3 +233,63 @@ class TestQuarantinePruneSaves:
 
         assert result == SaveQuarantine(moved=[str(first)], ambiguous=True, failure="backup directory went away")
         assert second.read_bytes() == b"second"
+
+    def test_nothing_to_quarantine_asks_retrodeck_for_no_saves_root(self, tmp_path):
+        svc, _ = make_service(tmp_path)
+        support = svc.prune_support
+        folders = _folders(support)
+        folders.saves = ""
+        folders.refusal = finding_refusal("marker-missing", {})
+
+        assert support.quarantine_prune_saves([], {}) == SaveQuarantine(moved=[], ambiguous=False)
+
+    def test_saves_without_a_saves_root_fail_without_moving_anything(self, tmp_path):
+        svc, _ = make_service(tmp_path)
+        support = svc.prune_support
+        _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="game.gba")
+        save = _create_save(tmp_path, system="gba", rom_name="game", content=b"mine")
+        inventory = support.inventory_prune_saves([42])
+        _folders(support).saves = ""
+
+        result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
+
+        assert result == SaveQuarantine(
+            moved=[], ambiguous=False, failure="RetroDECK names no saves folder, so no save was moved."
+        )
+        assert save.read_bytes() == b"mine"
+
+    def test_saves_under_a_finding_fail_with_it_without_moving_anything(self, tmp_path):
+        svc, _ = make_service(tmp_path)
+        support = svc.prune_support
+        _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="game.gba")
+        save = _create_save(tmp_path, system="gba", rom_name="game", content=b"mine")
+        inventory = support.inventory_prune_saves([42])
+        refusal = finding_refusal("marker-missing", {})
+        _folders(support).refusal = refusal
+
+        result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
+
+        assert result == SaveQuarantine(moved=[], ambiguous=False, failure=refusal.message)
+        assert save.read_bytes() == b"mine"
+
+    def test_saves_where_the_saves_root_could_not_be_established_fail_without_moving_anything(self, tmp_path):
+        svc, _ = make_service(tmp_path)
+        support = svc.prune_support
+        _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="game.gba")
+        save = _create_save(tmp_path, system="gba", rom_name="game", content=b"mine")
+        inventory = support.inventory_prune_saves([42])
+        _folders(support).refusal = unanswered_refusal()
+
+        result = support.quarantine_prune_saves(inventory["exclusive"], inventory["source_claims"])
+
+        assert result == SaveQuarantine(moved=[], ambiguous=False, failure=_UNANSWERED)
+        assert save.read_bytes() == b"mine"
+
+
+class TestValidatePruneAbsences:
+    def test_with_nothing_claimed_absent_it_holds_without_a_saves_root(self, tmp_path):
+        svc, _ = make_service(tmp_path)
+        support = svc.prune_support
+        _folders(support).saves = ""
+
+        assert support.validate_prune_absences({}) is True

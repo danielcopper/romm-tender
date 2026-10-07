@@ -24,7 +24,7 @@ from ._seed import enable_save_sync, seed_install, seed_save_state, seed_server_
 
 
 def _write_local_save(harness, *, system: str, content: bytes, filename: str) -> None:
-    saves_dir = os.path.join(harness.retrodeck_paths.saves_path(), system)
+    saves_dir = os.path.join(harness.saves_root, system)
     os.makedirs(saves_dir, exist_ok=True)
     with open(os.path.join(saves_dir, filename), "wb") as fh:
         fh.write(content)

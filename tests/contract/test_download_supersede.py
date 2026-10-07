@@ -15,8 +15,13 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from ._harness import hold_migration_pending, hold_prune_active
 from ._seed import seed_group_member
+
+# Every download, adoption and removal here lands in RetroDECK's folders.
+pytestmark = pytest.mark.usefixtures("seeded_retrodeck")
 
 _GROUP = "igdb:100:99"
 _APP_ID = 42

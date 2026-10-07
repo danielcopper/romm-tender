@@ -885,10 +885,10 @@ path it WOULD occupy, because `roms.fs_name` carries the extension the answer tu
 a prediction. `content_installed` says which it is, and a surface that renders the names without reading it tells a user
 their uninstalled game already has save files.
 
-### Save state: per-game files / shared / inside the content / hole / not established
+### Save state: per-game files / shared / inside the content / hole / not established / saves root missing
 
-The five values a save answer classifies a ROM into, **exactly one of which holds**. Only the first is a save Tender can
-carry; the other four **refuse** — the sync probes no path, writes no sync state, and refuses with the benign skip
+The six values a save answer classifies a ROM into, **exactly one of which holds**. Only the first is a save Tender can
+carry; the other five **refuse** — the sync probes no path, writes no sync state, and refuses with the benign skip
 rather than a failure. A refusing answer can still have its directory recorded as the
 [answered save directory](#answered-save-directory), which is not sync state.
 
@@ -902,6 +902,8 @@ rather than a failure. A refusing answer can still have its directory recorded a
   not, or no question reached the resolver at all. **These are three shapes, `nothing_established`, `directory_known`
   and `not_asked`, and they stay apart**: they are different sentences to a reader, and collapsing them claims ignorance
   about a folder we can point at, or claims a refusal where nobody was ever asked.
+- **saves root missing** — RetroDECK reports its saves folder missing, so a sync would create it on internal storage.
+  This one is about RetroDECK rather than the emulator, which is not asked; the folder is never created.
 
 Detail, including which systems land where on a stock RetroDECK, is in
 [Save sync coverage](docs/architecture/save-sync-coverage.md).

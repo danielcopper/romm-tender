@@ -20,6 +20,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.retrodeck_folders import FolderRefused
 from domain.rom_adoption import is_archive_name, server_manifest
 from domain.rom_candidates import (
     DIR,
@@ -34,7 +35,6 @@ from domain.rom_candidates import (
     vanished_candidate_refusal,
 )
 from domain.rom_files import is_multi_file_download, resolve_local_file_name
-from lib.path_safety import PathTraversalError, safe_join
 
 if TYPE_CHECKING:
     import logging
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from services.protocols import (
         DebugLogger,
         DownloadFileStore,
-        RetroDeckPaths,
+        RetroDeckFolders,
         SystemKnownFn,
         SystemResolver,
         SystemSupportedExtensionsFn,
@@ -92,7 +92,7 @@ class CandidateSearchConfig:
     resolve_system: SystemResolver
     system_extensions: SystemSupportedExtensionsFn
     system_known: SystemKnownFn
-    retrodeck_paths: RetroDeckPaths
+    retrodeck_folders: RetroDeckFolders
     uow_factory: UnitOfWorkFactory
     logger: logging.Logger
     log_debug: DebugLogger
@@ -106,7 +106,7 @@ class CandidateSearch:
         self._resolve_system = config.resolve_system
         self._system_extensions = config.system_extensions
         self._system_known = config.system_known
-        self._retrodeck_paths = config.retrodeck_paths
+        self._retrodeck_folders = config.retrodeck_folders
         self._uow_factory = config.uow_factory
         self._logger = config.logger
         self._log_debug = config.log_debug
@@ -195,10 +195,10 @@ class CandidateSearch:
 
         The system is resolved from the slug alone — a ``roms`` row carries no
         ``platform_fs_slug``, which the resolver consults only for a slug that
-        misses its platform map. The directory that comes out is then the RomM
-        slug taken verbatim, which is why :meth:`_searchable_dir` refuses one
-        that is not an ES-DE system: a namesake in such a directory is content
-        no emulator will ever look at.
+        misses its platform map — so an unmapped slug comes out verbatim. ES-DE
+        names no folder for a system it does not declare, and
+        :meth:`_searchable_dir` refuses one besides: a namesake in such a
+        directory is content no emulator will ever look at.
         """
         system = self._resolve_system(platform_slug)
         platform_dir = self._platform_dir(system)
@@ -236,28 +236,25 @@ class CandidateSearch:
         )
 
     def _platform_dir(self, system: str) -> str | None:
-        """The folder *system*'s games live in, derived as the download derives it.
+        """The folder *system*'s games live in — the folder a download of one lands in.
 
-        ``safe_join`` is the download's own derivation (``services/downloads.py``
-        builds every target path with it), and it resolves symlinks. Both sides
-        must use it or neither may: with the ROMs root behind a link — a library
-        on removable storage — one side would describe a file under a path the
-        other never produces, and the install rows the search subtracts are
-        recorded under the download's spelling. The page would then report a copy
-        the click search cannot find, and the backstop would fire on
+        The download's own folder, from the same question
+        (``RetroDeckFolders.download_folder``), and resolved the same way. Both
+        sides must use it or neither may: with the ROMs root behind a link — a
+        library on removable storage — one side would describe a file under a
+        path the other never produces, and the install rows the search subtracts
+        are recorded under the download's spelling. The page would then report
+        a copy the click search cannot find, and the backstop would fire on
         Tender's own installs.
 
-        ``None`` for anything that cannot be derived, including the traversal
-        ``safe_join`` refuses; the caller's answer is "no candidate", which is
-        what an unresolvable directory honestly supports.
+        ``None`` wherever a download would be refused; the caller's answer is
+        "no candidate", which is what a folder nobody may download into honestly
+        supports.
         """
-        roms_path = self._retrodeck_paths.roms_path()
-        if not roms_path or not system:
+        if not system:
             return None
-        try:
-            return safe_join(roms_path, system)
-        except PathTraversalError:
-            return None
+        folder = self._retrodeck_folders.download_folder(system)
+        return None if isinstance(folder, FolderRefused) else folder
 
     # ── Shared ──────────────────────────────────────────────────────
 

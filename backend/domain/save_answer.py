@@ -1,17 +1,19 @@
 """What a game's save consists of, where it lives, and whether Tender may sync it.
 
 The vocabulary the resolver's savefile answer is translated into, and the rule
-that turns one such answer into exactly one of five states. Adapters read the
+that turns one such answer into exactly one of six states. Adapters read the
 machine; this module decides what the reading MEANS, so the decision is pure and
 testable without a machine, and so ``services/`` never sees a resolver type.
 
-The five states are the whole point. Save sync copies a per-game file to a
+The six states are the whole point. Save sync copies a per-game file to a
 per-ROM record on the server, and that model is simply wrong for most of what
 emulators actually write — a card many games share, a directory whose contents
 nobody enumerated, a path or a name half of which is the game's own identity.
 Only
-:data:`SAVE_STATE_PER_GAME_FILES` is a save Tender can carry; the other four
-are refusals, and each says something different about why. Every one of them is
+:data:`SAVE_STATE_PER_GAME_FILES` is a save Tender can carry; the other five
+are refusals, and each says something different about why. The sixth is about
+the emulator source rather than the emulator: its saves root does not exist, and
+a sync would create it — on internal storage while an SD card is out. Every one of them is
 an honest "we are not touching this", never "there is nothing here".
 
 **Scope is the emulator, never the platform.** Two emulators for one system
@@ -34,12 +36,13 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-# The five states. Exactly one holds for any ROM.
+# The six states. Exactly one holds for any ROM.
 SAVE_STATE_PER_GAME_FILES = "per_game_files"
 SAVE_STATE_SHARED = "shared"
 SAVE_STATE_INSIDE_CONTENT = "inside_content"
 SAVE_STATE_HOLE = "hole"
 SAVE_STATE_UNESTABLISHED = "unestablished"
+SAVE_STATE_SAVES_ROOT_MISSING = "saves_root_missing"
 
 SaveState = Literal[
     "per_game_files",
@@ -47,6 +50,7 @@ SaveState = Literal[
     "inside_content",
     "hole",
     "unestablished",
+    "saves_root_missing",
 ]
 
 # The three shapes inside ``unestablished``. They are kept apart because they
@@ -208,6 +212,9 @@ class SaveAnswer:
     note (the resolver's ``fallback_dir``). Both are ``None`` wherever no
     placement was resolved.
 
+    ``missing_saves_root`` is the saves root the source names and that does not
+    exist, set on :data:`SAVE_STATE_SAVES_ROOT_MISSING` alone.
+
     ``content_installed`` says whether this ROM's content is on disk. It is
     ``False`` for a ROM the library holds but has not installed — the question
     was then about the path the ROM WOULD occupy, so every name in the answer is
@@ -231,6 +238,7 @@ class SaveAnswer:
     content_installed: bool
     root_kind: str | None = None
     fallback_directory: str | None = None
+    missing_saves_root: str | None = None
 
     @property
     def syncable(self) -> bool:
@@ -288,9 +296,10 @@ class SaveAnswer:
         return tuple(component.name for component in self.synced_files)
 
 
-# One sentence per refusing state, for the skip result's ``message``. Neutral by
-# design: none of these is an error, and three of the four are permanent facts
-# about the emulator rather than anything the user did.
+# One sentence per refusing state about the emulator, for the skip result's
+# ``message``. Neutral by design: none of these is an error, and three of the
+# four are permanent facts about the emulator rather than anything the user did.
+# The missing saves root names a folder, so ``save_shape_message`` words it.
 _STATE_MESSAGES: dict[str, str] = {
     SAVE_STATE_SHARED: "Save sync is unavailable: this emulator keeps one save card that all games share.",
     SAVE_STATE_INSIDE_CONTENT: "Save sync is unavailable: this emulator writes saves inside the game file itself.",
@@ -302,7 +311,14 @@ _STATE_MESSAGES: dict[str, str] = {
 
 
 def save_shape_message(answer: SaveAnswer) -> str:
-    """The sentence a refusal is reported with, named after the emulator it is about."""
+    """The sentence a refusal is reported with, named after the emulator it is about.
+
+    A missing saves root is no statement about the emulator, so it names the
+    folder instead — RetroDECK's, the one source the adapter asks about it
+    (``adapters/atlas_saves.py``).
+    """
+    if answer.state == SAVE_STATE_SAVES_ROOT_MISSING:
+        return f"Save sync is unavailable: RetroDECK's saves folder {answer.missing_saves_root} does not exist."
     sentence = _STATE_MESSAGES.get(answer.state, _STATE_MESSAGES[SAVE_STATE_UNESTABLISHED])
     return f"{sentence} ({answer.emulator})" if answer.emulator else sentence
 
@@ -365,6 +381,28 @@ def unestablished_answer(
         components=(),
         caveats=caveats,
         content_installed=content_installed,
+    )
+
+
+def saves_root_missing_answer(*, path: str, emulator: str | None, content_installed: bool) -> SaveAnswer:
+    """The answer while the emulator source's saves root *path* does not exist.
+
+    A refusal, and one nothing below the root is probed for: the sync would
+    create the root to write into, and a created root lands on internal storage
+    while the SD card it belongs on is out.
+    """
+    return SaveAnswer(
+        state=SAVE_STATE_SAVES_ROOT_MISSING,
+        unestablished=None,
+        emulator=emulator,
+        directory=None,
+        backing_directory=None,
+        granularity=None,
+        needs=(),
+        components=(),
+        caveats=(),
+        content_installed=content_installed,
+        missing_saves_root=path,
     )
 
 

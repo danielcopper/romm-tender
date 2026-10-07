@@ -7,7 +7,7 @@ reads and ``os.kill`` only — no ``subprocess``, no shelling out to
 ``flatpak kill``.
 
 Why the host process table at all — Steam cannot terminate these games.
-A RomM shortcut execs ``flatpak run <app>``; flatpak's D-Bus portal starts the
+A RomM shortcut execs ``flatpak run … <app>``; flatpak's D-Bus portal starts the
 sandbox from the session helper, so the emulator is **not** a descendant of
 Steam's ``reaper`` and ``SteamClient.Apps.TerminateApp`` has nothing to signal
 (measured on-device: a proven no-op). The flatpak instance registry is the only

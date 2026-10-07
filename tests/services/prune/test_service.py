@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 import pytest
 import pytest_asyncio
 from _factories import _make_conflict_rules
-from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeUuidGen
 from models.prune import InstalledContentRemoval, SaveQuarantine, SealedSourceClaims
@@ -21,6 +21,7 @@ from models.prune import InstalledContentRemoval, SaveQuarantine, SealedSourceCl
 from domain.fetch_generation import count_rows_for_skip, prune_candidate_ids
 from domain.platform_sync_state import PlatformSyncState
 from domain.playtime import Playtime
+from domain.retrodeck_folders import FindingRefused, finding_refusal
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.version_metadata import VersionMetadata
@@ -357,7 +358,7 @@ async def harness() -> Harness:
             recovery_store=recovery,
             prune_artifacts=artifacts,
             steam_recovery=steam_recovery,
-            retrodeck_paths=FakeRetroDeckPaths(saves="/saves", roms="/roms", bios="/bios", home="/retrodeck"),
+            retrodeck_folders=FakeRetroDeckFolders(saves="/saves", roms="/roms", bios="/bios", home="/retrodeck"),
             save_coordinator=saves,
             active_downloads=lambda: set(active),
             drift_probe=drift,
@@ -588,6 +589,35 @@ async def test_unbound_confirmed_404_row_is_deleted_after_final_reprobes(harness
     frames = [payload for name, payload in harness.events.events if name in {"prune_progress", "prune_complete"}]
     assert frames
     assert all(frame["preview_id"] == preview["preview_id"] for frame in frames)
+
+
+@pytest.mark.asyncio
+async def test_while_retrodeck_s_folders_are_defaults_the_cleanup_does_not_start(harness):
+    _seed(harness.uow, _rom(1, fetch="old"))
+    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
+    preview = await _preview(harness)
+    harness.service._retrodeck_folders = FakeRetroDeckFolders(roms="/roms", refusal=finding_refusal("not-set-up", {}))
+
+    with pytest.raises(FindingRefused):
+        await _start(harness, preview["preview_id"], remove_fully_vanished=True)
+
+    assert harness.service._task is None
+    assert harness.uow.roms.get(1) is not None
+
+
+@pytest.mark.asyncio
+async def test_without_a_rom_root_the_cleanup_still_starts(harness):
+    # Only each game's files wait on a ROM root; its shortcut and records do not.
+    _seed(harness.uow, _rom(1, fetch="old"))
+    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
+    preview = await _preview(harness)
+    harness.service._retrodeck_folders = FakeRetroDeckFolders()
+
+    await _start(harness, preview["preview_id"], remove_fully_vanished=True)
+    complete = await _finish(harness)
+
+    assert complete["removed_rom_ids"] == [1]
+    assert harness.uow.roms.get(1) is None
 
 
 @pytest.mark.asyncio

@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
+from domain.retrodeck_folders import EveryFolderRefused
 from lib.list_result import ErrorCode
 from lib.url_host import romm_namespace
 from services.prune._models import InstalledSelection, PendingAction, PruneOptions, PrunePreview, cancellation_state
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
         PruneRunClaim,
         PruneSaveCoordinator,
         RecoveryBundleStore,
-        RetroDeckPaths,
+        RetroDeckFolders,
         RommLivenessApi,
         SaveDriftProbeFn,
         SteamRecoveryStore,
@@ -62,7 +63,7 @@ class PruneServiceConfig:
     recovery_store: RecoveryBundleStore
     prune_artifacts: PruneArtifactStore
     steam_recovery: SteamRecoveryStore
-    retrodeck_paths: RetroDeckPaths
+    retrodeck_folders: RetroDeckFolders
     save_coordinator: PruneSaveCoordinator
     active_downloads: ActiveDownloadRomIdsFn
     drift_probe: SaveDriftProbeFn
@@ -119,11 +120,12 @@ class PruneService:
         self._run_claim = config.run_claim
         self._rules = config.conflict_rules
         self._recovery_store = config.recovery_store
+        self._retrodeck_folders = config.retrodeck_folders
         self._preview_builder = PreviewBuilder(
             config=PreviewBuilderConfig(
                 uow_factory=config.uow_factory,
                 recovery_store=config.recovery_store,
-                retrodeck_paths=config.retrodeck_paths,
+                retrodeck_folders=config.retrodeck_folders,
                 settings=config.settings,
             )
         )
@@ -133,7 +135,7 @@ class PruneService:
                 recovery_store=config.recovery_store,
                 prune_artifacts=config.prune_artifacts,
                 steam_recovery=config.steam_recovery,
-                retrodeck_paths=config.retrodeck_paths,
+                retrodeck_folders=config.retrodeck_folders,
                 clock=config.clock,
                 uuid_gen=config.uuid_gen,
             )
@@ -274,6 +276,13 @@ class PruneService:
     async def _start_prune(self, request: object) -> dict[str, Any]:
         if not isinstance(request, dict) or request.get("confirmed") is not True:
             return self._failure("confirmation_required", "Explicit confirmation is required before cleanup.")
+        # While RetroDECK's folders are defaults, or could not be established,
+        # the cleanup does not start at all, whatever it would remove, so
+        # nothing of it is half done. Any other missing ROM root refuses only
+        # the removal of each game's files.
+        root = await self._loop.run_in_executor(None, self._retrodeck_folders.rom_root)
+        if isinstance(root, EveryFolderRefused):
+            raise root
         selected = self._finalized_selection(request)
         if isinstance(selected, dict):
             return selected

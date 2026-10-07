@@ -261,6 +261,29 @@ Format: **invariant** — tier — enforced by.
   source — the old "first detected" — and would build a fresh machine, so every save question would run its core's probe
   again. Unseen by the scan: a name reached through `getattr` or `importlib`. Prompt-only: no adapter keeps a handle or
   an answer past the reading it came through (a panel call's per question, a run's for the run)
+- **Every RetroDECK folder Tender downloads into, removes from, bounds a removal by or reads for the move code is the
+  resolver's answer, asked through `adapters/retrodeck_folders.py`; no module reads RetroDECK's settings or builds such
+  a folder from a root, and while RetroDECK reports `marker-missing`, `marker-unreadable`, `marker-invalid` or
+  `not-set-up`, or where detecting the sources or a question about RetroDECK's health or one of its four roots raised,
+  none of those folders is used — except that a download while RetroDECK is switched off says so, and a raise on a
+  system's own ROM folder refuses only the press that asked for it** — test + prompt-only —
+  `tests/adapters/test_retrodeck_folders.py` (the real resolver over tmp homes: every folder its answer, each finding
+  refusing every question, `TestWhereAQuestionToTheResolverRaises` and `TestWhereDetectingTheSourcesRaises` refusing
+  every question for a raise on the detection, the health or a root and only its own for a system's folder, and
+  `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and `tests/contract/test_retrodeck_folders.py`
+  (under each finding, and where the detection, RetroDECK's health or one of its roots could not be asked, no press
+  downloads, deletes or cleans up there). A folder of Tender's own beside the resolver's is the drift this replaced:
+  `retrodeck.json` read twice, a system's ROM folder built as `<roms root>/<system>` in five places while ES-DE may
+  declare another, and a fallback to `~/retrodeck` that pointed downloads, deletes and the move code at internal storage
+  while RetroDECK lay on an SD card. Under the four findings the resolver's own root, BIOS and saves folders are its
+  defaults, so using them would be that guess again. The rules each question answers by are on
+  [Config source parsers](config-source-parsers.md#retrodecks-folders-retrodeckjson). A save's folder and a firmware
+  file's place take the other route, the save and firmware answers (`adapters/atlas_saves.py`,
+  `adapters/atlas_firmware.py`), and this entry does not cover them: under the three `marker-*` findings a save is still
+  synced where the save answer places it, which is then RetroDECK's default — keeping saves out of it is #2220 D9's and
+  not yet held. Unseen by the tests: a folder joined onto a root under another name, and a caller that puts the question
+  to RetroDECK's handle itself. Prompt-only: a new caller that downloads into, removes from or bounds a removal by a
+  RetroDECK folder asks `RetroDeckFolders` and raises the refusal it answers with
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (AST over the declared file's own calls, matching the two-attribute
   `<...>.<repo>.<method>` shape against the twelve repositories the UoW exposes). Read or write is decided **by the
@@ -618,12 +641,12 @@ Format: **invariant** — tier — enforced by.
   one's health), the two path resolvers — `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a
   directory that may sit on the SD card the marker is pending a migration away from) and `ResolvedPathFn` (the same
   walk, but on **both** sides of a comparison, so a call site costs what the rows it checks cost, not what it checks
-  them against) — and the `RetroDeckPaths` getters that answer with a root: `bios_path`, `roms_path`, `saves_path` and
-  `retrodeck_home`, four of the Protocol's five path getters, each resolving on every call. The fifth, `config_path`,
-  stays out because it resolves nothing — it is `os.path.join` over the user home, so calling it costs no I/O. That
-  timing is the only entry a cost was measured for; every other one is listed from reading its implementation. One other
-  real I/O seam was weighed and kept out — the reason is in the script's docstring, and it is not an exemption; nor is
-  it an inventory of what else touches the disk. **"It's only a read" is the reasoning this rule exists to refuse**:
+  them against) — and every `RetroDeckFolders` question: `download_folder`, `bios_download_folder`, `rom_root`,
+  `bios_folder`, `saves_root` and `move_roots`, each a fresh reading of the emulator sources and a question to the
+  resolver, which reads RetroDECK's settings file and ES-DE's, and a `realpath` of the answer. The firmware timing is
+  the only entry a cost was measured for; every other one is listed from reading its implementation. One other real I/O
+  seam was weighed and kept out — the reason is in the script's docstring, and it is not an exemption; nor is it an
+  inventory of what else touches the disk. **"It's only a read" is the reasoning this rule exists to refuse**:
   `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The database is
   in WAL, so readers are unaffected — but every other **writer** waits on the lock for up to `busy_timeout=5000` and
   fails with `SQLITE_BUSY` if it is still held then, and `FakeUnitOfWork` shares no connection, so no unit test notices.
@@ -909,7 +932,9 @@ Format: **invariant** — tier — enforced by.
   covers only three leftovers** — prompt-only — `services/firmware/demand.py::FirmwareDemand.is_downloaded` is the
   single crossing point and states the boundary: the probe answers for a library file with no placement in the
   platform's catalogue (no emulator the resolver read declares it), for a placement whose location Tender cannot honour,
-  and for the already-there check before a download (the batch and the per-row fetch). Everything else reads the
+  and for the already-there check before a download (the batch and the per-row fetch). Where no BIOS download may land —
+  anything that refuses one, so that `FirmwareDemand.status_root` answers `None` — the probe looks nowhere, and a row
+  only it could answer has its verdict withheld rather than read as absent (#2244 D11). Everything else reads the
   resolver's `present`, which follows symlinks Tender would have to re-implement — the PS2 folder is one directory
   reached through two spellings. `present is None` reads as absent, the safe direction, because the row then shows work
   outstanding rather than a readiness nobody established. **Nothing enforces the crossing point.** A fourth status
@@ -1199,8 +1224,8 @@ Format: **invariant** — tier — enforced by.
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — prompt-only — sync
   paths, `get_save_status`, and the three slot mutations hold the lock; mechanize via a `rom_save_sync_states.save`
   call-site audit
-- **Which files a game's save consists of is the EMULATOR's answer, read live, and four of its five states refuse the
-  sync — no probe, no state written** — test + prompt-only — `tests/adapters/test_atlas_saves.py` pins the five states
+- **Which files a game's save consists of is the EMULATOR's answer, read live, and five of its six states refuse the
+  sync — no probe, no state written** — test + prompt-only — `tests/adapters/test_atlas_saves.py` pins the six states
   and every way the question cannot be put, `tests/domain/test_save_answer.py` pins the precedence that makes "exactly
   one" well defined, and `tests/services/saves/test_save_shape_gate.py` pins the absences **each beside a control that
   asserts the same probe DOES happen for a syncable answer** — without those controls a service that had stopped probing

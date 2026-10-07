@@ -29,6 +29,7 @@ from domain.save_answer import (
     build_save_answer,
     pick_download_name,
     save_shape_message,
+    saves_root_missing_answer,
     unestablished_answer,
 )
 
@@ -339,6 +340,14 @@ class TestTheRefusalIsReportedNeutrally:
 
     def test_an_answer_with_no_emulator_still_reads_as_a_sentence(self):
         assert save_shape_message(unestablished_answer()).endswith(".")
+
+    def test_a_missing_saves_root_names_the_folder_rather_than_the_emulator(self):
+        answer = saves_root_missing_answer(path="/run/media/sd/saves", emulator="mGBA", content_installed=True)
+
+        assert answer.syncable is False
+        assert save_shape_message(answer) == (
+            "Save sync is unavailable: RetroDECK's saves folder /run/media/sd/saves does not exist."
+        )
 
 
 class TestTheBenignSkipListsAgreeAcrossTheWire:

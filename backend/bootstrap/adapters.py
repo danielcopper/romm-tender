@@ -51,7 +51,7 @@ from adapters.recovery_bundle import RecoveryBundleAdapter
 from adapters.renderer_gc import RendererGcAdapter
 from adapters.renderer_rss import RendererRssAdapter
 from adapters.repositories.unit_of_work import SqliteUnitOfWork
-from adapters.retrodeck_paths import RetroDeckPathsAdapter
+from adapters.retrodeck_folders import RetroDeckFoldersAdapter
 from adapters.rom_files import RomFileAdapter
 from adapters.romm.http import RommHttpAdapter
 from adapters.romm.romm_api import RommApiAdapter
@@ -109,7 +109,7 @@ if TYPE_CHECKING:
         RendererRssFn,
         ResolvedPathFn,
         ResolveUploadConflictFn,
-        RetroDeckPaths,
+        RetroDeckFolders,
         RomFileStore,
         RommApi,
         SandboxLauncherFn,
@@ -227,7 +227,7 @@ class RuntimeBundle:
 class CallbackBundle:
     """Provider callables and persister Protocols injected into services."""
 
-    retrodeck_paths: RetroDeckPaths
+    retrodeck_folders: RetroDeckFolders
     platform_core_reader: PlatformCoreReader
     m3u_support: SystemM3uSupportFn
     sandbox_launcher: SandboxLauncherFn
@@ -376,7 +376,6 @@ def bootstrap(
     # service config — the service cutover (#784) consumes it.
     uow_factory: UnitOfWorkFactory = functools.partial(SqliteUnitOfWork, db_path)
 
-    retrodeck_paths = RetroDeckPathsAdapter(user_home=user_home, logger=logger)
     es_find_rules = EsFindRulesAdapter(logger=logger, user_home=user_home)
 
     persistence = PersistenceAdapter(directories.config_dir, logger, clock=clock)
@@ -465,6 +464,7 @@ def bootstrap(
     # the emulator catalogue. Every one of them asks the one holder of the
     # emulator sources, which picks the source that answers.
     emulator_sources = EmulatorSourcesAdapter(user_home=user_home, settings=settings, log_debug=debug_logger)
+    retrodeck_folders = RetroDeckFoldersAdapter(sources=emulator_sources, log_debug=debug_logger)
     firmware_resolver = AtlasFirmwareAdapter(sources=emulator_sources, log_debug=debug_logger)
     platform_firmware_resolver = AtlasPlatformFirmwareAdapter(sources=emulator_sources, log_debug=debug_logger)
     emulator_catalogue = AtlasCatalogueAdapter(
@@ -515,7 +515,7 @@ def bootstrap(
         settings=settings,
     )
     callbacks = CallbackBundle(
-        retrodeck_paths=retrodeck_paths,
+        retrodeck_folders=retrodeck_folders,
         platform_core_reader=platform_core_reader,
         m3u_support=emulator_catalogue.system_supports_m3u,
         sandbox_launcher=es_find_rules.resolve_sandbox_launcher,

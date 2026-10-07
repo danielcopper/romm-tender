@@ -41,7 +41,7 @@ from fakes.fake_release_download import FakeReleaseDownload
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_resolved_path import FakeResolvedPath
-from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_rom_file_store import FakeRomFileStore
 from fakes.fake_save_file_store import FakeSaveFileStore
 from fakes.fake_save_location_reader import FakeSaveLocationReader
@@ -53,7 +53,7 @@ from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 from models.shortcut_launcher import ShortcutLauncher
 
 from adapters.gavel_native import GavelNativeAdapter
-from adapters.retrodeck_paths import RetroDeckPathsAdapter
+from adapters.retrodeck_folders import RetroDeckFoldersAdapter
 from adapters.romm.http import RommHttpAdapter
 from adapters.romm.romm_api import RommApiAdapter
 from adapters.steam_config import SteamConfigAdapter
@@ -149,10 +149,10 @@ class TestBootstrap:
         result = _bootstrap_for(tmp_path)
         assert isinstance(result.adapters.romm_api, RommApiAdapter)
 
-    def test_returns_retrodeck_paths_adapter(self, tmp_path):
+    def test_returns_retrodeck_folders_adapter(self, tmp_path):
         """Bootstrap instantiates the RetroDECK paths adapter for the callbacks bundle."""
         result = _bootstrap_for(tmp_path)
-        assert isinstance(result.callbacks.retrodeck_paths, RetroDeckPathsAdapter)
+        assert isinstance(result.callbacks.retrodeck_folders, RetroDeckFoldersAdapter)
 
     def test_returns_core_info_provider_on_adapters(self, tmp_path):
         """``core_info_provider`` is bundled with adapters, not callbacks.
@@ -596,7 +596,7 @@ class TestWireServices:
             "hostname_provider": FakeHostnameReader(),
             "machine_id_provider": FakeMachineIdReader(),
             "min_required_version": MIN_ROMM_VERSION,
-            "retrodeck_paths": FakeRetroDeckPaths(
+            "retrodeck_folders": FakeRetroDeckFolders(
                 saves=str(tmp_path / "saves"),
                 roms=str(tmp_path / "retrodeck" / "roms"),
                 bios=str(tmp_path / "retrodeck" / "bios"),
@@ -675,7 +675,7 @@ class TestWireServices:
                 steam=FakeSteamInterface(),
             ),
             callbacks=CallbackBundle(
-                retrodeck_paths=deps["retrodeck_paths"],
+                retrodeck_folders=deps["retrodeck_folders"],
                 platform_core_reader=deps["platform_core_reader"],
                 m3u_support=deps["m3u_support"],
                 sandbox_launcher=deps["sandbox_launcher"],

@@ -12,12 +12,13 @@ from fakes.fake_core_info_provider import FakeCoreInfoProvider
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
-from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock
 
 from adapters.firmware_file import FirmwareFileAdapter
+from domain.retrodeck_folders import GAME_DOWNLOAD, switched_off
 from domain.rom_save_sync_state import FileSyncState
 from services.achievements import AchievementsService, AchievementsServiceConfig
 from services.firmware import FirmwareService, FirmwareServiceConfig
@@ -109,7 +110,7 @@ def game_detail(clock, active_core_resolver, path_probe) -> GameDetailHarness:
             firmware_file_store=FirmwareFileAdapter(),
             firmware_resolver=FakeFirmwareResolver(),
             platform_firmware_resolver=FakeFirmwareResolver(),
-            retrodeck_paths=FakeRetroDeckPaths(),
+            retrodeck_folders=FakeRetroDeckFolders(),
             core_info=FakeCoreInfoProvider(),
             resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
             platform_core_reader=FakePlatformCoreReader(),
@@ -133,7 +134,7 @@ def game_detail(clock, active_core_resolver, path_probe) -> GameDetailHarness:
             achievements=achievements,
             active_core=active_core_resolver,
             path_exists=path_probe,
-            retrodeck_paths=FakeRetroDeckPaths(roms=_ROMS_BASE),
+            retrodeck_folders=FakeRetroDeckFolders(roms=_ROMS_BASE),
             resolve_system=lambda platform_slug, platform_fs_slug=None: platform_fs_slug or platform_slug,
             candidate_probe=candidate_probe,
         ),
@@ -601,8 +602,16 @@ class TestTargetPathOccupied:
         assert len(probed) == 1
 
     @pytest.mark.asyncio
-    async def test_false_when_the_roms_path_is_unknown(self, game_detail, path_probe):
-        game_detail.service._retrodeck_paths.roms = ""
+    async def test_false_where_retrodeck_names_no_rom_folder(self, game_detail, path_probe):
+        game_detail.service._retrodeck_folders.roms = ""
+        path_probe.exists = lambda _path: True
+        _seed_rom(game_detail, 10, app_id=50000, platform_slug="snes", fs_name="game_10.sfc")
+        result = await game_detail.service.get_cached_game_detail(50000)
+        assert result["target_path_occupied"] is False
+
+    @pytest.mark.asyncio
+    async def test_false_while_no_download_may_land_in_retrodeck(self, game_detail, path_probe):
+        game_detail.service._retrodeck_folders.download_refusal = switched_off(GAME_DOWNLOAD)
         path_probe.exists = lambda _path: True
         _seed_rom(game_detail, 10, app_id=50000, platform_slug="snes", fs_name="game_10.sfc")
         result = await game_detail.service.get_cached_game_detail(50000)
@@ -717,7 +726,7 @@ class TestGetCachedGameDetailCarriesNoBiosAnswer:
         ]
         listing._firmware_cache_epoch = 99.0
 
-        with patch.object(game_detail.firmware._demand, "_retrodeck_paths", FakeRetroDeckPaths(bios=str(tmp_path))):
+        with patch.object(game_detail.firmware._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(tmp_path))):
             result = await game_detail.service.get_cached_game_detail(50000)
 
         assert result["bios_status"] is None

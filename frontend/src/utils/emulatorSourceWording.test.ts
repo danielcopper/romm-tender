@@ -12,6 +12,7 @@ import {
   mainSourceBanners,
   sourceName,
   sourceRowLines,
+  withFindingSentence,
 } from "./emulatorSourceWording";
 
 const REPAIR = " Repair it with RetroDECK's 'Repair RetroDECK Paths'.";
@@ -132,6 +133,51 @@ describe("findingSentence", () => {
     ["an unknown link problem", { code: "content-tree-unwired", data: { path: "/p", hub: "/h", problem: "toString" } }],
   ])("falls back to the code where a fact the sentence needs is missing: %s", (_label, finding) => {
     expect(findingSentence("retrodeck", finding)).toBe(`Problem with RetroDECK: ${finding.code}`);
+  });
+});
+
+describe("withFindingSentence", () => {
+  const refusal = (finding: unknown) => ({
+    success: false,
+    reason: "retrodeck_finding",
+    message: "Problem with RetroDECK: root-missing",
+    finding,
+  });
+
+  it.each([
+    [
+      "not-set-up",
+      {},
+      "RetroDECK is installed but has not been set up yet. Start RetroDECK once and finish its first-run setup.",
+    ],
+    [
+      "marker-invalid",
+      {},
+      `RetroDECK: its settings file /m is damaged, so Tender cannot tell where its folders are.${REPAIR}`,
+    ],
+    [
+      "root-missing",
+      {},
+      "RetroDECK: its folder /m does not exist. If it is on an SD card or another drive, insert it.",
+    ],
+  ])("words a refusal for %s with the sentence of its banner", (code, extra, sentence) => {
+    const answer = withFindingSentence(refusal({ code, data: { path: "/m", ...extra } }));
+
+    expect(answer.message).toBe(sentence);
+    expect(answer.reason).toBe("retrodeck_finding");
+  });
+
+  it("leaves a refusal whose finding it cannot read as it came", () => {
+    const answer = refusal("marker-missing");
+    expect(withFindingSentence(answer)).toBe(answer);
+  });
+
+  it.each([
+    ["another refusal", { success: false, reason: "no_rom_folder", message: "m", finding: { code: "x", data: {} } }],
+    ["a success", { success: true, message: "ROM removed" }],
+    ["no object", null],
+  ])("hands back %s untouched", (_label, answer) => {
+    expect(withFindingSentence(answer)).toBe(answer);
   });
 });
 

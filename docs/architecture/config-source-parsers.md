@@ -50,8 +50,8 @@ picking the right parser for each business flow.
 The principle has three parts:
 
 1. **One parser per source.** Adding a second reader for the same file creates drift — sooner or later the two readers
-   disagree and the bug lives in the newer one. `retrodeck.json` has one parser. `es_systems.xml` has one parser. Every
-   new source follows suit.
+   disagree and the bug lives in the newer one. `retrodeck.json` has one parser, the vendored resolver's.
+   `es_systems.xml` has one parser. Every new source follows suit.
 
 2. **No cross-contamination.** When a parser cannot answer a question — the file is missing, a field is absent, the
    value is malformed — the parser returns `None` (or raises), it does **not** defer to another parser. Cross-parser
@@ -104,18 +104,18 @@ the clearest case of the rule.
 
 ## Question-to-source mapping
 
-| Question                                                                       | Authoritative source                                                                                    | Why                                                                                                                                                                              |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| What's the **default** emulator for **system X**?                              | ES-DE `es_systems.xml` (live, sole source)                                                              | The default is the first safely-bakeable `<command>` in ES-DE's document order (libretro or standalone). Tender reads the live file only — never a snapshot, never the gamelist. |
-| Which core has the user **pinned for a platform** (per-platform deviation)?    | `settings.json` `platform_cores` map                                                                    | A per-platform core is Tender's own user-set intent (ADR-0003 bucket 1), not ES-DE's. See [Core and Emulator Selection](core-emulator-selection.md).                             |
-| Which core is active for **ROM Y** (per-game)?                                 | Tender's database (`roms.emulator_override`), layered on the platform and system layers                 | The per-game override is Tender's own state, not ES-DE's. See [Core and Emulator Selection](core-emulator-selection.md).                                                         |
-| Which emulator will **ROM Y actually launch with** (active core)?              | `ActiveCoreResolver`: per-game DB → per-platform `settings.json` → live es_systems.xml default → `None` | One resolver folds Tender's two deviations over the live ES-DE default; the launched emulator is baked from the same answer (libretro or standalone).                            |
-| What's the ES-DE display label for a core?                                     | ES-DE                                                                                                   | Label is an ES-DE/RetroDECK UI concern, chosen at the ES-DE config level.                                                                                                        |
-| Where does an emulator keep one game's save (sort-by-core subfolder included)? | The save answer — the vendored resolver                                                                 | The resolver reads `retroarch.cfg` and probes the core for its `library_name` the way RetroArch does, so Tender reads neither for a save path (ADR-0041).                        |
-| What ROM extensions does a core support?                                       | RetroArch `.info` `supported_extensions` field                                                          | libretro-maintainer-authoritative, updated with every core release.                                                                                                              |
-| What firmware files does a core need?                                          | RetroArch `.info` `firmware_count` + `firmwareN_*` fields                                               | libretro-maintainer-authoritative; optional flags included.                                                                                                                      |
-| What datfile database matches a core's ROMs?                                   | RetroArch `.info` `database` field                                                                      | libretro-maintainer-authoritative.                                                                                                                                               |
-| Where does RetroDECK put ROMs, saves, BIOS, states, and its home directory?    | `retrodeck.json`                                                                                        | RetroDECK owns path configuration; it's the file users edit via the RetroDECK configurator.                                                                                      |
+| Question                                                                                     | Authoritative source                                                                                    | Why                                                                                                                                                                              |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| What's the **default** emulator for **system X**?                                            | ES-DE `es_systems.xml` (live, sole source)                                                              | The default is the first safely-bakeable `<command>` in ES-DE's document order (libretro or standalone). Tender reads the live file only — never a snapshot, never the gamelist. |
+| Which core has the user **pinned for a platform** (per-platform deviation)?                  | `settings.json` `platform_cores` map                                                                    | A per-platform core is Tender's own user-set intent (ADR-0003 bucket 1), not ES-DE's. See [Core and Emulator Selection](core-emulator-selection.md).                             |
+| Which core is active for **ROM Y** (per-game)?                                               | Tender's database (`roms.emulator_override`), layered on the platform and system layers                 | The per-game override is Tender's own state, not ES-DE's. See [Core and Emulator Selection](core-emulator-selection.md).                                                         |
+| Which emulator will **ROM Y actually launch with** (active core)?                            | `ActiveCoreResolver`: per-game DB → per-platform `settings.json` → live es_systems.xml default → `None` | One resolver folds Tender's two deviations over the live ES-DE default; the launched emulator is baked from the same answer (libretro or standalone).                            |
+| What's the ES-DE display label for a core?                                                   | ES-DE                                                                                                   | Label is an ES-DE/RetroDECK UI concern, chosen at the ES-DE config level.                                                                                                        |
+| Where does an emulator keep one game's save (sort-by-core subfolder included)?               | The save answer — the vendored resolver                                                                 | The resolver reads `retroarch.cfg` and probes the core for its `library_name` the way RetroArch does, so Tender reads neither for a save path (ADR-0041).                        |
+| What ROM extensions does a core support?                                                     | RetroArch `.info` `supported_extensions` field                                                          | libretro-maintainer-authoritative, updated with every core release.                                                                                                              |
+| What firmware files does a core need?                                                        | RetroArch `.info` `firmware_count` + `firmwareN_*` fields                                               | libretro-maintainer-authoritative; optional flags included.                                                                                                                      |
+| What datfile database matches a core's ROMs?                                                 | RetroArch `.info` `database` field                                                                      | libretro-maintainer-authoritative.                                                                                                                                               |
+| Where does RetroDECK put a system's ROMs, its ROM root, BIOS, saves, and its home directory? | The vendored resolver, through RetroDECK's handle (`adapters/retrodeck_folders.py`)                     | A system's ROM folder and the ROM root come from ES-DE's own settings, the rest from `retrodeck.json`; the resolver reads both, Tender neither.                                  |
 
 If a new question appears, the first step is to figure out which source authoritatively owns it. The mapping above grows
 as new questions are added — treat this table as part of the contract, not a passive catalog.
@@ -248,7 +248,7 @@ services independent of any single parser and makes them straightforward to test
 
 | Source                         | Format                  | Parser location                                                                                          | Layer status                                 | What it answers                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------------------------ | ----------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `retrodeck.json`               | JSON                    | `adapters/retrodeck_paths.py` — `RetroDeckPathsAdapter`                                                  | ✅ adapter (correct layering)                | Where RetroDECK puts saves, ROMs, BIOS, and its home directory.                                                                                                                                                                                                                                                                                                                                                                                                |
+| `retrodeck.json`               | JSON                    | `_vendor/atlas`, through `adapters/retrodeck_folders.py` — `RetroDeckFoldersAdapter`                     | ✅ adapter (correct layering)                | Where RetroDECK keeps its home, BIOS folder and saves root. Tender reads the file not at all: every folder is the resolver's answer, see [RetroDECK's folders](#retrodecks-folders-retrodeckjson).                                                                                                                                                                                                                                                             |
 | `retroarch.cfg`                | INI-ish `key = "value"` | `adapters/steam_config.py` — `SteamConfigAdapter.check_retroarch_input_driver`, for `input_driver` alone | ⚠️ one key, read inline                      | **Save sorting removed.** Tender used to read the save-sorting flags from it to build save paths; the save answer now carries the directory those flags produce ([ADR-0041](../adr/0041-the-save-directory-is-the-resolvers-answer.md)). What remains is the controller check reading and rewriting `input_driver`; every other key is the vendored resolver's to read.                                                                                        |
 | `es_systems.xml`               | XML                     | `_vendor/atlas`, through `adapters/atlas_catalogue.py`                                                   | ✅ adapter (correct layering)                | The **sole** core/emulator source (#1210): every `<command>` per system, the default emulator, the libretro active core for the BIOS filter, and the `<extension>` accept-list. The resolver applies ES-DE's `custom_systems` overlay and states its entries in EFFECTIVE order; the adapter re-sorts on the shipped `declared_index` so document order decides the default (ADR-0030). The pure classifier `domain/emulator_commands.py` decides bake-safety. |
 | `es_find_rules.xml`            | XML                     | `adapters/es_find_rules.py` — `EsFindRulesAdapter`                                                       | ✅ adapter (correct layering)                | Where an emulator's **binary** is, which the catalogue never states. Two questions: whether a standalone emulator is installed in RetroDECK (a bakeable one that is absent is downgraded to `needs_setup`/`not_installed`, ADR-0020 §2 — absence-only, so `systempath`-only / unreadable cases assume installed), and the sandbox component launcher the folder-boot bake execs (ADR-0019). Mtime-cached parse; the on-disk probes run per call.               |
@@ -262,30 +262,70 @@ reaches a service. `adapters/es_find_rules.py` keeps its XML parsing inline rath
 module; that is acceptable because the adapter owns its I/O. A new source that warrants a pure-parse split should follow
 the [parser layout template](#parser-layout-template) above (pure parse in `domain/`, I/O in `adapters/`).
 
-### Best-effort fallback and config health (`retrodeck.json`)
+### RetroDECK's folders (`retrodeck.json`)
 
-`RetroDeckPathsAdapter` resolves all RetroDECK roots (ROMs, saves, BIOS, home) from the `paths` block of
-`retrodeck.json`. The path getters (`roms_path`, `saves_path`, `bios_path`, `retrodeck_home`) are **best-effort and
-never raise**: when the file is missing, unreadable, or malformed, each getter falls back to
-`<user_home>/retrodeck/<subdir>`. That fallback is RetroDECK's own default root, so it is correct for a default install
-but **wrong** for an SD-card install where the user pointed RetroDECK at external storage.
+Every folder Tender uses in RetroDECK is the resolver's answer, asked through RetroDECK's handle in one reading of the
+emulator sources (`adapters/retrodeck_folders.py`, behind the `RetroDeckFolders` Protocol): a system's ROM folder is
+`rom_location(system).dir`, the ROM root ES-DE's `ROMDirectory` (`roms_dir()`), and the BIOS folder, saves root and home
+the handle's `bios_dir()`, `saves_root()` and `root()`. Tender reads no RetroDECK file of its own, builds no folder from
+a root, and has no fallback folder: where the resolver names none, nothing that depends on it runs and the answer says
+why. The ROM root, BIOS folder and saves root are whole-source roots, which not every source has; they are used only as
+RetroDECK's, and only by what still lies in RetroDECK's folders — the bounds of uninstalling, the removed-game cleanup
+and an archive's extraction, the BIOS download destination and its bound, the cleanup's save backups, the start-up
+removal of leftover `.tmp` files, and the move code.
 
-Every root is returned **symlink-resolved**, whichever of the two sources answered. The content roots (`roms_path`,
-`saves_path`, `bios_path`) are handed to the path guards as safe roots, and the ROM paths those guards are asked about
-are recorded resolved wherever `lib/path_safety.safe_join` built them — so a root left as `retrodeck.json` spells it
-makes one directory look like two on any system where `/home` is a link to `/var/home` (Bazzite, Silverblue, and the
-other image-based distributions), and uninstalling a downloaded ROM fails with `Path is outside its safe root`
-([#1838](https://github.com/danielcopper/romm-tender/issues/1838)). `realpath` on a path that is not on disk resolves as
-far as it can instead of raising, so the getters stay best-effort.
+Which rule a folder answers by:
 
-`retrodeck_home()` is not a safe root, and it is resolved for a different reason: `MigrationService` stores it and diffs
+| Asked for                                                   | Needs RetroDECK               | Refused while RetroDECK reports                                                       |
+| ----------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------- |
+| a download (`download_folder`, `bios_download_folder`)      | detected **and** switched on  | `marker-missing`, `marker-unreadable`, `marker-invalid`, `not-set-up`, `root-missing` |
+| a removal's bound (`rom_root`, `bios_folder`, `saves_root`) | detected, whatever its switch | `marker-missing`, `marker-unreadable`, `marker-invalid`, `not-set-up`                 |
+| the move code (`move_roots`)                                | detected, whatever its switch | the same four, as no move                                                             |
+
+Under the four `marker-*` / `not-set-up` findings the resolver's root, BIOS and saves folders are its defaults
+(`~/retrodeck/…`), not where RetroDECK lies, so Tender uses none of RetroDECK's folders then; the refusal carries the
+finding, and the panel words it with the sentence the finding's banner shows (`withFindingSentence` in
+`frontend/src/utils/emulatorSourceWording.ts`, applied to every endpoint answer in `frontend/src/api/host.ts`). A
+download also stops on `root-missing`, because everything it would land in lies below a folder that is not there.
+
+**A question that fails is treated like one of those four findings.** RetroDECK's health and its four roots — home, ROM
+root, BIOS folder and saves root — are asked together, up front, for every folder question. Where detecting the emulator
+sources raises, or any one of those five questions does, nothing established that the folders are not defaults, so every
+folder question refuses — a removal's bound as well as a download's — the start-up removal of `.tmp` files removes
+nothing, and the move code sees no move. The one exception is a download while RetroDECK is switched off, which says so
+as it would anyway: the switch is the user's setting, and holds whatever the resolver answered. The refusal is its own
+(`retrodeck_unanswered`) and says **RetroDECK's folders could not be established, so Tender downloads into and removes
+from none of them.**; it never reads as RetroDECK not installed — a detection that raised is not one that found nothing,
+and the reading says which (`DetectedSourcesReading.detection_failed`, read by this adapter alone; every other reader of
+the sources still takes such a reading as one that detected none) — nor as RetroDECK naming no folder, both of which
+would be statements about an installation nobody heard from. Like a finding's refusal it also keeps the removed-game
+cleanup from starting (`EveryFolderRefused`, which both are).
+
+A system's own ROM folder (`rom_location(system)`) is not a root: it is asked only by the question that needs it, the
+download's folder. Its raise refuses that question alone, with the same sentence — a game download, using files already
+on disk and Check Against Server, and the adoption's target — and every other press goes on. From
+[#2244](https://github.com/danielcopper/romm-tender/issues/2244) D13.
+
+**A download creates a folder only below a root that exists.** A system's ROM folder that is not there yet is created by
+the download, as ES-DE would create it, and so is a BIOS folder inside RetroDECK's own folder. A ROM root, or a BIOS
+folder outside RetroDECK's folder, that does not exist — a drive or SD card that is out — is never created: the folder
+would land on internal storage, and the drive would hide it once it is back. The saves root follows the same rule
+through the save answer ([Save-file sync](save-file-sync-architecture.md)).
+
+Every folder is returned **symlink-resolved**. The roots are handed to the path guards as safe roots, and the ROM paths
+those guards are asked about are recorded resolved wherever `lib/path_safety.safe_join` built them — so a root left as
+the resolver spells it makes one directory look like two on any system where `/home` is a link to `/var/home` (Bazzite,
+Silverblue, and the other image-based distributions), and uninstalling a downloaded ROM fails with
+`Path is outside its safe root` ([#1838](https://github.com/danielcopper/romm-tender/issues/1838)).
+
+RetroDECK's home is not a safe root, and it is resolved for a different reason: `MigrationService` stores it and diffs
 the stored value against the live one on every startup to decide whether RetroDECK moved. Resolving one side is not
-enough there, because a marker written before this change still carries the other spelling — so the service resolves
+enough there, because a marker written before resolving began still carries the other spelling — so the service resolves
 what it read from `kv_config` before comparing, through a `realpath` seam on `MigrationFileStore`. Two spellings of one
 directory read as "unchanged"; a move away from a home since deleted still reads as a move, because `realpath` follows
-the links in it that still exist and leaves the missing tail as spelled. A marker that survived from before the change
-and turns out to name the live home is dropped on that same pass, because otherwise it would stand until the user
-migrates or dismisses.
+the links in it that still exist and leaves the missing tail as spelled. A marker that survived from before and turns
+out to name the live home is dropped on that same pass, because otherwise it would stand until the user migrates or
+dismisses.
 
 The start-up report of missing installs (`StartupHealingService`, via the `ResolvedPathFn` seam) resolves **both** sides
 before its prefix match: the pending-home markers, and each install's own recorded paths. Neither side is reliably one
@@ -294,29 +334,8 @@ whatever spelling the home had when it ran — and a match that misses reports a
 missing. Resolving the recorded path is safe there in a way it is not in the deletion guards: the report decides what a
 log line says and authorizes nothing.
 
-Two user-visible spellings change with this: the migration-blocked page renders `old_path` and `new_path`, both of which
-are now the resolved markers.
-
-Silently operating on the wrong root is the failure mode [#948](https://github.com/danielcopper/romm-tender/issues/948)
-addresses. The fix keeps the getters silent-and-best-effort but pairs them with a health signal.
-`RetroDeckPathsAdapter.config_health()` returns a `RetroDeckConfigHealth` enum (`backend/lib/retrodeck_health.py` —
-placed in `lib/` because the adapter and the `RetroDeckPaths` Protocol both import it, and import-linter forbids the
-adapter↔service directions). The four states:
-
-| State          | When                                                                                         | Meaning                                                                                                                                                                       |
-| -------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ok`           | `retrodeck.json` read successfully **and** the resolved home exists on disk                  | Healthy — roots are trustworthy.                                                                                                                                              |
-| `absent`       | `retrodeck.json` not found (`FileNotFoundError`)                                             | The legitimate fresh-install case — `~/retrodeck` is RetroDECK's own default root. `absent` wins over `root_missing` even when the `~/retrodeck` fallback does not exist yet. |
-| `unreadable`   | file exists but cannot be read or parsed (`OSError` / `PermissionError` / `JSONDecodeError`) | We know RetroDECK is configured but cannot read where its roots point — derived paths are likely wrong.                                                                       |
-| `root_missing` | `retrodeck.json` read OK, but the resolved home directory does not exist on disk             | The library volume is gone (e.g. SD card ejected) — syncs and downloads would target a missing/wrong location.                                                                |
-
-`config_health()` reuses the same 30-second TTL cache as the path getters (`_load_config()`) — no second independent
-file read — and tracks the last load outcome so it can distinguish `absent` from `unreadable` (a bare `None` would
-conflate them). The `root_missing` disk probe (`os.path.isdir`) only runs when the config read OK; it never runs for
-`absent`.
-
-Nothing reads it. The panel's health notices come from the resolver's own health findings, per emulator source and
-worded per finding code (`get_emulator_sources`; [qam-panel.md](qam-panel.md#notices-and-homes)).
+Two user-visible spellings follow from this: the migration-blocked page renders `old_path` and `new_path`, both of which
+are the resolved markers.
 
 ## Known consumer gaps
 
@@ -441,12 +460,13 @@ When Tender needs to read a new external config/metadata source, the checklist i
 
 Non-obvious design choices worth preserving:
 
-- **No combined RetroDECK/RetroArch config adapter.** `RetroDeckPathsAdapter` reads `retrodeck.json` and nothing else.
-  The one `retroarch.cfg` key Tender reads itself, `input_driver`, is read by `SteamConfigAdapter` beside the controller
-  check it serves; the rest of `retroarch.cfg`, and the `.info` files, are the vendored resolver's. Folding these into
-  one "RetroDECK/RetroArch config" adapter would conflate different owners (the RetroDECK team vs RetroArch and the
-  libretro core maintainers), different change triggers (user configurator edits vs RetroArch's own settings and Flatpak
-  core releases) and different file layouts. This is the applied form of the "one parser per source" principle for the
+- **No combined RetroDECK/RetroArch config adapter.** Tender reads no RetroDECK file of its own: `retrodeck.json` and
+  ES-DE's settings are the vendored resolver's, asked through `RetroDeckFoldersAdapter`. The one `retroarch.cfg` key
+  Tender reads itself, `input_driver`, is read by `SteamConfigAdapter` beside the controller check it serves; the rest
+  of `retroarch.cfg`, and the `.info` files, are the vendored resolver's too. Folding these into one
+  "RetroDECK/RetroArch config" adapter would conflate different owners (the RetroDECK team vs RetroArch and the libretro
+  core maintainers), different change triggers (user configurator edits vs RetroArch's own settings and Flatpak core
+  releases) and different file layouts. This is the applied form of the "one parser per source" principle for the
   RetroDECK/RetroArch side of the codebase.
 
 - **`core_so` is the full `.so` basename including `_libretro`, and without the `.so`.**

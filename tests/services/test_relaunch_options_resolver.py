@@ -125,7 +125,7 @@ def test_single_installed_bound_default_core():
     assert resolver.installed_relaunch_items() == [
         {
             "app_id": 4242,
-            "launch_options": f'flatpak run net.retrodeck.retrodeck "{file_path}"',
+            "launch_options": f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{file_path}"',
         }
     ]
 
@@ -141,7 +141,7 @@ def test_core_override_bakes_e_form():
         {
             "app_id": 7,
             "launch_options": (
-                "flatpak run net.retrodeck.retrodeck -e "
+                "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
                 '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/mupen64plus_next.so %ROM%" '
                 f'"{file_path}"'
             ),
@@ -158,8 +158,8 @@ def test_multiple_installs_yield_multiple_items():
     resolver = _make_resolver(uow=uow)
     items = resolver.installed_relaunch_items()
     assert items == [
-        {"app_id": 11, "launch_options": 'flatpak run net.retrodeck.retrodeck "/roms/n64/a.z64"'},
-        {"app_id": 22, "launch_options": 'flatpak run net.retrodeck.retrodeck "/roms/n64/b.z64"'},
+        {"app_id": 11, "launch_options": 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/n64/a.z64"'},
+        {"app_id": 22, "launch_options": 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/n64/b.z64"'},
     ]
 
 
@@ -214,7 +214,9 @@ def test_multi_disc_pin_bakes_selected_disc_path():
     _seed_multi_disc(uow, rom_id=1, selected_disc=_DISC2, app_id=555)
     resolver = _make_resolver(uow=uow, disc_resolver=_multi_disc_resolver())
     items = resolver.installed_relaunch_items()
-    assert items == [{"app_id": 555, "launch_options": f'flatpak run net.retrodeck.retrodeck "{_DISC2_PATH}"'}]
+    assert items == [
+        {"app_id": 555, "launch_options": f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{_DISC2_PATH}"'}
+    ]
 
 
 def test_multi_disc_unpinned_defaults_to_disc_1():
@@ -223,7 +225,7 @@ def test_multi_disc_unpinned_defaults_to_disc_1():
     _seed_multi_disc(uow, rom_id=1, selected_disc=None, app_id=555)
     resolver = _make_resolver(uow=uow, disc_resolver=_multi_disc_resolver())
     items = resolver.installed_relaunch_items()
-    assert items[0]["launch_options"] == f'flatpak run net.retrodeck.retrodeck "{_DISC1_PATH}"'
+    assert items[0]["launch_options"] == f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{_DISC1_PATH}"'
 
 
 # ── relaunch_item_for_rom — the single-ROM re-confirm seam (#1150) ──────────
@@ -237,7 +239,7 @@ def test_single_rom_installed_bound_default_core():
     resolver = _make_resolver(uow=uow)
     assert resolver.relaunch_item_for_rom(1) == {
         "app_id": 4242,
-        "launch_options": f'flatpak run net.retrodeck.retrodeck "{file_path}"',
+        "launch_options": f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{file_path}"',
     }
 
 
@@ -251,7 +253,7 @@ def test_single_rom_core_override_bakes_e_form():
     assert resolver.relaunch_item_for_rom(1) == {
         "app_id": 7,
         "launch_options": (
-            "flatpak run net.retrodeck.retrodeck -e "
+            "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
             '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/mupen64plus_next.so %ROM%" '
             f'"{file_path}"'
         ),
@@ -297,7 +299,7 @@ def test_single_rom_multi_disc_pin_bakes_selected_disc_path():
     resolver = _make_resolver(uow=uow, disc_resolver=_multi_disc_resolver())
     assert resolver.relaunch_item_for_rom(1) == {
         "app_id": 555,
-        "launch_options": f'flatpak run net.retrodeck.retrodeck "{_DISC2_PATH}"',
+        "launch_options": f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{_DISC2_PATH}"',
     }
 
 
@@ -389,7 +391,7 @@ async def test_the_reconfirm_answers_the_item_with_success_and_a_lease():
     assert token.startswith("launch_reconfirm:")
     assert item == {
         "app_id": 4242,
-        "launch_options": f'flatpak run net.retrodeck.retrodeck "{file_path}"',
+        "launch_options": f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{file_path}"',
         "success": True,
     }
     assert prune_conflicts.conflicting_operations == 1

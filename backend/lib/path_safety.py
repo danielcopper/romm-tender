@@ -5,7 +5,7 @@ root Y?". Uses ``os.path.realpath`` to resolve symlinks before comparing,
 so callers cannot escape the configured root via a symlink — which means
 this is not pure compute (``realpath`` is an ``lstat`` syscall) and
 belongs in ``lib/`` rather than ``domain/``. The source of the
-configured root (e.g. the ``RetroDeckPaths`` Protocol) stays in
+configured root (e.g. the ``RetroDeckFolders`` Protocol) stays in
 ``services/``; this module only consumes the resolved string.
 
 Guards for server-supplied path components:

@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain import firmware_paths
+from domain.retrodeck_folders import FolderRefused
 from lib.list_result import ErrorCode
 
 if TYPE_CHECKING:
@@ -27,7 +28,7 @@ if TYPE_CHECKING:
 
     from domain.bios_file import BiosFile
     from services.firmware.listing import FirmwareListing
-    from services.protocols import FirmwareFileStore, UnitOfWorkFactory
+    from services.protocols import FirmwareFileStore, RetroDeckFolders, UnitOfWorkFactory
 
 
 @dataclass(frozen=True)
@@ -35,12 +36,14 @@ class PlatformBiosDeleterConfig:
     """Frozen wiring bundle handed to ``PlatformBiosDeleter.__init__``.
 
     Holds the listing peer whose cache a removal invalidates, the file store
-    the unlinks go through, the Unit-of-Work factory the records are read and
-    pruned through, and runtime infrastructure.
+    the unlinks go through, RetroDECK's folders, which say whether any may
+    run, the Unit-of-Work factory the records are read and pruned through, and
+    runtime infrastructure.
     """
 
     listing: FirmwareListing
     firmware_file_store: FirmwareFileStore
+    retrodeck_folders: RetroDeckFolders
     uow_factory: UnitOfWorkFactory
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
@@ -52,6 +55,7 @@ class PlatformBiosDeleter:
     def __init__(self, *, config: PlatformBiosDeleterConfig) -> None:
         self._listing = config.listing
         self._firmware_file_store = config.firmware_file_store
+        self._retrodeck_folders = config.retrodeck_folders
         self._uow_factory = config.uow_factory
         self._loop = config.loop
         self._logger = config.logger
@@ -108,7 +112,13 @@ class PlatformBiosDeleter:
         rows for one file name under different firmware slugs harmless: they
         name one path, the first unlink takes it, and the second prunes its row
         over an absence.
+
+        Raises RetroDECK's folder refusal while it reports that its folders are
+        defaults, or where a question about them failed: then nothing is removed in them, whatever a record says.
         """
+        refused = self._retrodeck_folders.bios_folder()
+        if isinstance(refused, FolderRefused):
+            raise refused
         deleted = 0
         errors: list[str] = []
         pruned: list[tuple[str, str]] = []

@@ -26,7 +26,7 @@ from ._seed import enable_save_sync, seed_install, seed_rom, seed_server_save
 
 def _write_local_save(harness, *, system: str = "gba", filename: str = "game.srm", content: bytes = b"x") -> str:
     """Materialize a local save file under the harness saves tree."""
-    saves_dir = os.path.join(harness.retrodeck_paths.saves_path(), system)
+    saves_dir = os.path.join(harness.saves_root, system)
     os.makedirs(saves_dir, exist_ok=True)
     path = os.path.join(saves_dir, filename)
     with open(path, "wb") as fh:

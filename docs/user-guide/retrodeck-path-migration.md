@@ -9,7 +9,9 @@ Every time Tender's backend starts, it compares the current RetroDECK home path 
 last session. If they are different **folders**, Tender flags a migration — two ways of writing one folder are not a
 move, so a system that reaches your home through a link (`/home` is a link to `/var/home` on Bazzite and other
 image-based distributions) does not raise a migration for the spelling alone. This typically happens after you use
-RetroDECK's built-in move tool or manually relocate your `retrodeck/` directory.
+RetroDECK's built-in move tool or manually relocate your `retrodeck/` directory. The current home is the one RetroDECK's
+own settings name; while its settings file is missing, unreadable or damaged, or RetroDECK has not been set up yet, the
+home Tender would read is only a default, so it detects no move then and moves nothing.
 
 Tender does not move your RetroDECK files — RetroDECK handles that. What Tender migrates are the files _it_ manages:
 downloaded ROMs, BIOS files, and save files that it tracks for sync purposes.

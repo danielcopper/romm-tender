@@ -102,9 +102,9 @@ flagged — the safety is in the call site's bare import, not in the name.
 Seams considered and left out
 -----------------------------
 One seam was weighed for :data:`IO_SEAM_METHODS` and kept out. This records that
-decision, and one that was reversed; neither is a survey of what touches the
-disk, and the kept-out one is not exempt from the rule — a UoW held across that
-listing is a breach, and the reason is not that its I/O matters less:
+decision; it is not a survey of what touches the disk, and the kept-out one is
+not exempt from the rule — a UoW held across that listing is a breach, and the
+reason is not that its I/O matters less:
 
 * ``DirectoryFileListerFn`` — a directory listing, and its consumer binds it to
   ``self._list_files``. Its call-shaped siblings are *in* the list, matched by
@@ -113,13 +113,6 @@ listing is a breach, and the reason is not that its I/O matters less:
   it holds — any class might bind it to something unrelated — so an entry would
   key the gate on a coincidence, where ``_system_extensions`` and
   ``_resolve_system`` each mean one thing.
-* ``RetroDeckPaths``'s path getters were kept out on the grounds that a
-  30-second TTL cache made a call usually a dict lookup, so a ban would fire
-  mostly where nothing is spent — which teaches writers to reach for a pragma
-  instead of looking. That argument died with #1838: every getter now resolves
-  its answer, so a call walks the path with ``realpath`` whether or not the
-  config cache hits. They are listed. Adding them moved no code — every call
-  site in ``services/`` already sat outside its UoW.
 
 The escape hatch is a trailing comment on the seam-call line:
 
@@ -284,15 +277,16 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # values it checks them against. Call-shaped, so what the list carries is
         # the attribute its consumers bind it to, as for its siblings above.
         "_resolve_path",
-        # RetroDeckPaths (services/protocols/paths.py) — every root getter
-        # resolves its answer with realpath (#1838), so a call walks the path
-        # component by component even when the 30-second config cache hits.
-        # These were excluded while they were string algebra over a cached dict;
-        # the docstring records why that no longer holds.
-        "bios_path",
-        "roms_path",
-        "saves_path",
-        "retrodeck_home",
+        # RetroDeckFolders (services/protocols/paths.py) — every call takes a
+        # fresh reading of the emulator sources, asks the resolver, which reads
+        # RetroDECK's settings file and ES-DE's, and resolves the answer with
+        # realpath.
+        "download_folder",
+        "bios_download_folder",
+        "rom_root",
+        "bios_folder",
+        "saves_root",
+        "move_roots",
         # RecoveryBundleInventoryReader (services/protocols/files.py) — lists the
         # recovery root and measures every bundle under it, one descriptor walk
         # per bundle. Object-shaped, so the method name is the whole entry.

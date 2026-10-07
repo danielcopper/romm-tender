@@ -20,7 +20,7 @@ class _Recovery:
 
 
 class _Paths:
-    def roms_path(self) -> str:
+    def rom_root(self) -> str:
         return "/roms"
 
 
@@ -44,7 +44,7 @@ def _builder(uow: FakeUnitOfWork) -> PreviewBuilder:
         config=PreviewBuilderConfig(
             uow_factory=FakeUnitOfWorkFactory(uow),
             recovery_store=cast("Any", _Recovery()),
-            retrodeck_paths=cast("Any", _Paths()),
+            retrodeck_folders=cast("Any", _Paths()),
             settings={},
         )
     )
@@ -162,7 +162,7 @@ def test_a_row_carries_its_text_whole_and_no_truncation_flag() -> None:
         config=PreviewBuilderConfig(
             uow_factory=FakeUnitOfWorkFactory(uow),
             recovery_store=cast("Any", _UnmeasurableRecovery()),
-            retrodeck_paths=cast("Any", _Paths()),
+            retrodeck_folders=cast("Any", _Paths()),
             settings={},
         )
     )

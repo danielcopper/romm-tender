@@ -1,7 +1,7 @@
 """The refusal a per-ROM sync entry point performs before it syncs.
 
-Two things refuse a sync outright, and both are read off one live answer: four
-of the five save states (:mod:`domain.save_answer`), and a save the emulator
+Two things refuse a sync outright, and both are read off one live answer: five
+of the six save states (:mod:`domain.save_answer`), and a save the emulator
 writes beside the game's content. The three per-ROM entry points all handle
 them identically: take one live reading of the machine, follow a moved save
 directory with it, and where either holds, raise the benign skip instead of

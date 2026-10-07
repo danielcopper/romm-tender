@@ -25,7 +25,7 @@ if TYPE_CHECKING:
         MachineIdReader,
         MigrationPendingFn,
         ResolveUploadConflictFn,
-        RetroDeckPaths,
+        RetroDeckFolders,
         RetryStrategy,
         RommSyncApi,
         SaveFileStore,
@@ -73,11 +73,11 @@ class SaveServiceConfig:
         The backend's ``asyncio`` event loop (for ``run_in_executor``).
     logger:
         Standard-library logger, injected rather than fetched.
-    retrodeck_paths:
-        Bundled accessor for the four RetroDECK runtime directory
-        paths. SaveService consumes ``saves_path()`` and ``roms_path()``;
-        the BIOS and home accessors are unused here but the Protocol
-        is bundled so every service shares a uniform shape.
+    retrodeck_folders:
+        RetroDECK's folders, as the resolver names them. The saves package
+        asks for a system's ROM folder (the path an uninstalled ROM would
+        occupy) and the saves root the removed-game cleanup's save backups
+        stay inside.
     active_core:
         ``ActiveCoreReader`` seam resolving the active RetroArch core for a
         ROM by ``rom_id``. Returns ``(core_so, label)``; either may be None if
@@ -131,7 +131,7 @@ class SaveServiceConfig:
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
     clock: Clock
-    retrodeck_paths: RetroDeckPaths
+    retrodeck_folders: RetroDeckFolders
     active_core: ActiveCoreReader
     save_locations: SaveLocationReader
     resolve_system: SystemResolver

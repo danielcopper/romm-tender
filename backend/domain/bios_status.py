@@ -152,7 +152,7 @@ class BiosFileEntry:
 
     file_name: str
     downloaded: bool
-    local_path: str
+    local_path: str | None
     declared_path: str
     description: str
     wanted: str
@@ -281,7 +281,7 @@ def format_bios_status(
 def build_file_entry(
     file_name: str,
     downloaded: bool,
-    dest: str,
+    dest: str | None,
     placement: FirmwarePlacement | None,
     complete: bool,
     launching_emulator: str | None,
@@ -326,7 +326,7 @@ def build_file_entry(
         one_of=active.one_of,
         fetch_for_required=fetched_as_required(placement, launching_emulator, _groups_of(groups, launching_emulator)),
         supplied_by=placement.supplied_by if placement is not None else None,
-        satisfied=_row_verdict(placement, downloaded),
+        satisfied=_row_verdict(placement, downloaded, dest),
         declared_kind=placement.declared_kind if placement is not None else DECLARED_FILE,
         declaration=placement.declaration if placement is not None else None,
         caveats=placement.caveats if placement is not None else (),
@@ -404,7 +404,7 @@ def _active_core_answer(
     )
 
 
-def _row_verdict(placement: FirmwarePlacement | None, downloaded: bool) -> bool | None:
+def _row_verdict(placement: FirmwarePlacement | None, downloaded: bool, dest: str | None) -> bool | None:
     """Is this row's requirement met? ``None`` where nothing established it.
 
     Three shapes, and the first is the reason the axis exists at all. A **folder
@@ -424,13 +424,15 @@ def _row_verdict(placement: FirmwarePlacement | None, downloaded: bool) -> bool 
     will be opened from. Where the declaration carries no ``relative_path`` the
     destination is one Tender cannot honour, so the resolver read somewhere
     else and ``FirmwareDemand.is_downloaded`` answers with its own look at the
-    path assembled here instead.
+    path assembled here instead — and where there is no *dest* to look at,
+    because no download may land in the BIOS folder, that row's verdict is
+    withheld too: nothing established it.
     """
-    if placement is None:
-        return downloaded
-    if placement.declares_directory:
+    if placement is not None and placement.declares_directory:
         return placement.folder.satisfied if placement.folder is not None else None
-    if VERDICT_WITHHOLDING_CAVEATS.intersection(placement.caveats):
+    if (placement is None or placement.relative_path is None) and dest is None:
+        return None
+    if placement is not None and VERDICT_WITHHOLDING_CAVEATS.intersection(placement.caveats):
         return None
     return downloaded
 

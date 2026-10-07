@@ -351,6 +351,27 @@ appears on the main QAM page with a **Change to sdl2** button. Tap it to fix the
 If the warning doesn't appear, you can manually change `input_driver = "x"` to `input_driver = "sdl2"` in your RetroArch
 config file.
 
+### RetroDECK runs through XWayland in Desktop Mode
+
+In Desktop Mode on a Wayland session, a game started from Tender opens an XWayland window rather than a native Wayland
+one, on purpose.
+
+**Why**: Steam is an X11 program and learns which window has focus only through X11, where a native Wayland window is
+invisible. Started on Wayland, RetroArch opens such a window, and so can a standalone emulator that supports Wayland;
+Steam cannot tell that it belongs to the running game, and it applies Steam Input's Desktop Layout to every controller:
+the Deck's built-in controls act as mouse and keyboard, and the game gets no controller input at all. So Tender starts
+RetroDECK with `flatpak run --nosocket=wayland`, which leaves it no Wayland connection and makes every emulator draw
+through XWayland, where Steam sees the window and applies the game's controller configuration. In Gaming Mode games
+already draw through gamescope's XWayland, so nothing changes there.
+
+This is a workaround for a Steam limitation
+([ValveSoftware/steam-for-linux#8020](https://github.com/ValveSoftware/steam-for-linux/issues/8020)). It will be removed
+once Steam handles Wayland windows; that is tracked in [#2271](https://github.com/danielcopper/romm-tender/issues/2271).
+
+Shortcuts an earlier version of Tender made need nothing from you: Tender writes an installed game's launch command
+again when Tender's panel loads, after every sync, and just before the game starts, so an existing shortcut normally
+carries the new command by its next launch.
+
 ### Apply to All Shortcuts says "Not applied"
 
 **Symptom**: Under **Settings › Controller**, tapping **Apply to All Shortcuts** shows a line starting with "Not
@@ -360,6 +381,11 @@ applied".
 listed under [Steam Input Mode](configuration.md#steam-input-mode).
 
 ## Saves Not Syncing
+
+### RetroDECK's saves folder does not exist
+
+**Fix**: Insert the SD card or drive the saves folder is on. If it is there, repair the folder with RetroDECK's **Repair
+RetroDECK Paths**. Tender does not create the folder itself ([Save Sync](save-sync.md#save-file-location)).
 
 ### Auto-sync is disabled
 
@@ -554,6 +580,13 @@ reachable, try cancelling and restarting the download from the game detail page.
 **Fix**: Open the **Downloads** page from the QAM to see error details. Common causes include insufficient disk space,
 network interruption, or the ROM being unavailable on the server. Failed downloads can be retried from the game detail
 page.
+
+### Download refused before it starts
+
+**Fix**: The refusal says why. A download goes only into RetroDECK's folders, so it needs RetroDECK installed and
+switched on in **Settings › Emulator sources**, a ROM folder for the game's system, and RetroDECK's settings in order —
+when the main panel shows a notice for RetroDECK, the refusal repeats it; follow what the notice says. See
+[Managing Games](managing-games.md#downloading-roms) for every case.
 
 ## Data Management
 

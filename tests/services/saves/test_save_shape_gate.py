@@ -1,6 +1,6 @@
 """A save Tender cannot carry per game is refused, and the refusal costs nothing.
 
-Four of the five states refuse, and a refusal has to be a real one: no file is
+Five of the six states refuse, and a refusal has to be a real one: no file is
 probed for, no sync state is written, and the result is the benign-skip shape
 rather than a failure. Probing anyway is not merely wasted work — it is how
 Tender used to search forever for an Amiga ``.nvr`` that no core writes, and how
@@ -37,7 +37,7 @@ from tests.services.saves._helpers import (
 
 
 def _refusing(state: str, **overrides: Any) -> SaveAnswer:
-    """One of the four refusing answers, as the resolver's translation produces it."""
+    """One of the five refusing answers, as the resolver's translation produces it."""
     kwargs: dict[str, Any] = {
         "state": state,
         "unestablished": "nothing_established" if state == "unestablished" else None,
@@ -107,7 +107,7 @@ def _saved_files(svc) -> dict[str, object]:
     return dict(state.files) if state is not None else {}
 
 
-_REFUSING_STATES = ["shared", "inside_content", "hole", "unestablished"]
+_REFUSING_STATES = ["shared", "inside_content", "hole", "unestablished", "saves_root_missing"]
 
 
 class TestARefusalProbesNothing:

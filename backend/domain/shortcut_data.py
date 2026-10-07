@@ -17,13 +17,19 @@ from domain.sibling_group import compute_sibling_group_key
 from domain.user_data_location import LAUNCHER_EXE_SUFFIX
 
 # RetroDECK's flatpak application id — the single source of the string across
-# Tender. Its plain ``flatpak run <app>`` form is the emulator invocation prefix
+# Tender. Its plain ``flatpak run … <app>`` form is the emulator invocation prefix
 # the launch command wraps the resolved ROM path with; the folder-boot ``direct``
-# form threads a ``--command=<launcher>`` between the ``flatpak run`` verb and the
-# app id (see :func:`resolve_emulator_invocation`). It is also the identity the
+# form threads a ``--command=<launcher>`` between the ``flatpak run`` options and
+# the app id (see :func:`resolve_emulator_invocation`). It is also the identity the
 # stop-game path resolves live processes by, so it is public.
 RETRODECK_APP_ID = "net.retrodeck.retrodeck"
-RETRODECK_INVOCATION = f"flatpak run {RETRODECK_APP_ID}"
+
+# Without its Wayland socket RetroDECK draws through XWayland, where Steam Input can
+# follow the game's window; why, and when it goes: docs/user-guide/troubleshooting.md,
+# "RetroDECK runs through XWayland in Desktop Mode". It is a ``flatpak run`` option,
+# so it must stand before the app id.
+_RETRODECK_RUN = "flatpak run --nosocket=wayland"
+RETRODECK_INVOCATION = f"{_RETRODECK_RUN} {RETRODECK_APP_ID}"
 
 # The leading ``%EMULATOR_<NAME>%`` binary token and the trailing ``%ROM%`` target
 # of an ES-DE ``<command>`` — stripped from a standalone command to recover the
@@ -56,7 +62,7 @@ class EmulatorInvocation:
       same full ES-DE standalone command AND ``launcher`` is the emulator's
       sandbox launcher path (e.g.
       ``/app/retrodeck/components/rpcs3/component_launcher.sh``). The renderer
-      emits ``flatpak run --command=<launcher> <app> <args>`` — running the
+      emits ``flatpak run … --command=<launcher> <app> <args>`` — running the
       emulator launcher directly INSIDE the sandbox, bypassing ``run_game.sh``,
       because ``run_game.sh`` reinterprets any directory ``%ROM%`` as an ES-DE
       "directory as a file" and can never launch a bare game folder. The ``<args>``
@@ -131,7 +137,7 @@ def resolve_emulator_invocation(rom: dict[str, Any], emulator: EmulatorInvocatio
         # directory-as-a-file reinterpretation (ADR-0019). The game folder is
         # appended by build_launch_options; only the middle args ride here.
         args = _direct_launch_args(emulator.command)
-        base = f"flatpak run --command={emulator.launcher} {RETRODECK_APP_ID}"
+        base = f"{_RETRODECK_RUN} --command={emulator.launcher} {RETRODECK_APP_ID}"
         return f"{base} {args}" if args else base
     if emulator.kind == "standalone" and emulator.command:
         return f'{RETRODECK_INVOCATION} -e "{emulator.command}"'

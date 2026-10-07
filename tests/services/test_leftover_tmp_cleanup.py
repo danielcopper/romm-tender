@@ -4,24 +4,24 @@ import logging
 import os
 
 from fakes.fake_download_file_store import FakeDownloadFileStore
-from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 
 from adapters.download_file import DownloadFileAdapter
 from services.leftover_tmp_cleanup import LeftoverTmpCleanupService, LeftoverTmpCleanupServiceConfig
 
 
-def _service(logger, retrodeck_paths, file_store=None) -> LeftoverTmpCleanupService:
+def _service(logger, retrodeck_folders, file_store=None) -> LeftoverTmpCleanupService:
     return LeftoverTmpCleanupService(
         config=LeftoverTmpCleanupServiceConfig(
             logger=logger,
             download_file_store=file_store if file_store is not None else DownloadFileAdapter(),
-            retrodeck_paths=retrodeck_paths,
+            retrodeck_folders=retrodeck_folders,
         )
     )
 
 
-def _paths_under(tmp_path) -> FakeRetroDeckPaths:
-    return FakeRetroDeckPaths(
+def _paths_under(tmp_path) -> FakeRetroDeckFolders:
+    return FakeRetroDeckFolders(
         roms=str(tmp_path / "retrodeck" / "roms"),
         bios=str(tmp_path / "retrodeck" / "bios"),
     )
@@ -112,16 +112,15 @@ class TestCleanupLeftoverTmpFiles:
 class TestCleanupLeftoverTmpFilesNoRetrodeckPaths:
     """Tests for cleanup_leftover_tmp_files when retrodeck paths resolve to empty.
 
-    Covers the early-return guard inside _clean_rom_tmp_files /
-    _clean_bios_tmp_files when retrodeck.json is absent (roms_path()
-    / bios_path() return ""). Service must not walk an empty path.
+    Covers the early return inside _clean_tmp_files where RetroDECK names
+    no ROM root and no BIOS folder. Service must not walk an empty path.
     """
 
-    def test_empty_roms_and_bios_paths_skip_walk(self, logger):
+    def test_no_rom_root_and_no_bios_folder_skip_walk(self, logger):
         fake = FakeDownloadFileStore()
-        # retrodeck_paths present but both helpers return empty (no
-        # retrodeck.json) — service must early-return on each branch.
-        service = _service(logger, FakeRetroDeckPaths(roms="", bios=""), fake)
+        # RetroDECK's folders present but naming neither root — the service
+        # must early-return on each branch.
+        service = _service(logger, FakeRetroDeckFolders(roms="", bios=""), fake)
 
         service.cleanup_leftover_tmp_files()
 

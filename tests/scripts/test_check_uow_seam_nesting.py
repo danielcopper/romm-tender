@@ -274,15 +274,16 @@ class TestIoSeamsViolations:
         assert len(findings) == 1
         assert "enumerate_discs" in findings[0]
 
-    @pytest.mark.parametrize("getter", ["bios_path", "roms_path", "saves_path", "retrodeck_home"])
-    def test_every_retrodeck_root_getter_inside_uow_is_flagged(self, getter: str):
-        # Each getter resolves its answer, so a call walks the path even on a
-        # config-cache hit — the reason they stopped being an exclusion.
+    @pytest.mark.parametrize(
+        "getter", ["download_folder", "bios_download_folder", "rom_root", "bios_folder", "saves_root", "move_roots"]
+    )
+    def test_every_retrodeck_folder_question_inside_uow_is_flagged(self, getter: str):
+        # Each question reads the resolver live and resolves its answer.
         findings = check.scan_source(
             "class S:\n"
             "    def go(self):\n"
             "        with self._uow_factory() as uow:\n"
-            f"            root = self._retrodeck_paths.{getter}()\n"
+            f"            root = self._retrodeck_folders.{getter}()\n"
             "        return root\n",
             "svc.py",
         )

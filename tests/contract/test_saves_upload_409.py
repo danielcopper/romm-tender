@@ -26,7 +26,7 @@ from ._seed import enable_save_sync, seed_install, seed_save_state, seed_server_
 
 def _write_local_save(harness, *, system: str, content: bytes, filename: str) -> str:
     """Write a real local save under the resolved saves dir; return its path."""
-    saves_dir = os.path.join(harness.retrodeck_paths.saves_path(), system)
+    saves_dir = os.path.join(harness.saves_root, system)
     os.makedirs(saves_dir, exist_ok=True)
     path = os.path.join(saves_dir, filename)
     with open(path, "wb") as fh:
@@ -81,7 +81,7 @@ async def test_saves_upload_409_stale_downgrades_to_download(harness):
     # …then the backstop downloaded the fresh server head into the local file.
     downloads = [c for c in harness.romm.call_log if c[0] == "download_save_content"]
     assert [c[1][0] for c in downloads] == [foreign["id"]]
-    local = os.path.join(harness.retrodeck_paths.saves_path(), "gba", "game.srm")
+    local = os.path.join(harness.saves_root, "gba", "game.srm")
     with open(local, "rb") as fh:
         assert fh.read() == b"newer from device B"
 

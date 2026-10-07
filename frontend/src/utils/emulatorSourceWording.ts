@@ -108,6 +108,28 @@ function wordedFinding(kind: string, { code, data }: SourceHealthFinding): strin
   }
 }
 
+/** The reason a press is refused with while a finding of RetroDECK's stands in the way of its folders. */
+export const RETRODECK_FINDING_REASON = "retrodeck_finding";
+
+function isFinding(value: unknown): value is SourceHealthFinding {
+  if (typeof value !== "object" || value === null) return false;
+  const { code, data } = value as { code?: unknown; data?: unknown };
+  return typeof code === "string" && typeof data === "object" && data !== null;
+}
+
+/**
+ * An endpoint's answer, with the message of a refusal for one of RetroDECK's
+ * findings replaced by the sentence Main's banner shows for that finding, so a
+ * refused press and the banner say the same thing. Every other answer comes
+ * back as it is.
+ */
+export function withFindingSentence<T>(answer: T): T {
+  if (typeof answer !== "object" || answer === null) return answer;
+  const { reason, finding } = answer as { reason?: unknown; finding?: unknown };
+  if (reason !== RETRODECK_FINDING_REASON || !isFinding(finding)) return answer;
+  return { ...answer, message: findingSentence("retrodeck", finding) };
+}
+
 /** Main's banner, and the settings section's line, while no emulator source is detected. */
 export const NO_SOURCE_BANNER = "No emulator source was found.";
 

@@ -2,6 +2,8 @@
 
 from typing import Any
 
+import pytest
+
 from domain.sync_diff import (
     BIND_ROM_ID_KEY,
     ClassificationResult,
@@ -298,6 +300,76 @@ class TestClassifyRoms:
         assert "existing_app_id" not in sd_item
         # The returned changed entry does carry existing_app_id
         assert changed[0]["existing_app_id"] == 1001
+
+
+class TestClassifyRomsOnASkippedUnit:
+    """classify_roms(skipped_rom_ids=…) — the entries of a unit the apply will skip.
+
+    Apply never rewrites such a unit's shortcuts, so a launch command that differs
+    from the recorded one there is no change it would make; only an identity
+    difference still counts.
+    """
+
+    OLD_CMD = 'flatpak run net.retrodeck.retrodeck "/roms/n64/a.z64"'
+    NEW_CMD = 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/n64/a.z64"'
+
+    def test_a_launch_command_only_difference_is_unchanged(self):
+        registry = {"1": _reg(name="Game A", fs_name="a.z64", applied_launch_options=self.OLD_CMD)}
+        sd = [_make_sd(1, "Game A", fs_name="a.z64", launch_options=self.NEW_CMD)]
+
+        new, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"N64"}, skipped_rom_ids=frozenset({1}))
+
+        assert new == []
+        assert changed == []
+        assert unchanged_ids == [1]
+
+    def test_an_unrecorded_launch_command_is_unchanged(self):
+        # NULL is unknown, and outside a skipped unit it forces a re-apply; inside
+        # one no apply comes, so it is a launch-command difference like any other.
+        registry = {"1": _reg(name="Game A", fs_name="a.z64", applied_launch_options=None)}
+        sd = [_make_sd(1, "Game A", fs_name="a.z64", launch_options=self.NEW_CMD)]
+
+        _, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"N64"}, skipped_rom_ids=frozenset({1}))
+
+        assert changed == []
+        assert unchanged_ids == [1]
+
+    @pytest.mark.parametrize(
+        ("field", "recorded", "built"),
+        [
+            ("name", "Old Name", "Game A"),
+            ("fs_name", "old.z64", "a.z64"),
+            ("platform_slug", "gb", "n64"),
+        ],
+    )
+    def test_an_identity_difference_is_still_changed(self, field, recorded, built):
+        reg_fields: dict[str, Any] = {"name": "Game A", "fs_name": "a.z64", "platform_slug": "n64", field: recorded}
+        sd_fields: dict[str, Any] = {"name": "Game A", "fs_name": "a.z64", "platform_slug": "n64", field: built}
+        registry = {"1": _reg(**reg_fields, applied_launch_options=self.OLD_CMD)}
+        sd = [_make_sd(1, **sd_fields, launch_options=self.NEW_CMD)]
+
+        _, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"N64"}, skipped_rom_ids=frozenset({1}))
+
+        assert [c["rom_id"] for c in changed] == [1]
+        assert changed[0]["existing_app_id"] == 1001
+        assert unchanged_ids == []
+
+    def test_only_the_skipped_entries_are_spared(self):
+        # The same launch-command difference on two games: the one outside the
+        # skipped ids is a change the apply will make.
+        registry = {
+            "1": _reg(name="Game A", fs_name="a.z64", app_id=1001, applied_launch_options=self.OLD_CMD),
+            "2": _reg(name="Game B", fs_name="b.z64", app_id=1002, applied_launch_options=self.OLD_CMD),
+        }
+        sd = [
+            _make_sd(1, "Game A", fs_name="a.z64", launch_options=self.NEW_CMD),
+            _make_sd(2, "Game B", fs_name="b.z64", launch_options=self.NEW_CMD),
+        ]
+
+        _, changed, unchanged_ids, _, _ = classify_roms(sd, registry, {"N64"}, skipped_rom_ids=frozenset({1}))
+
+        assert [c["rom_id"] for c in changed] == [2]
+        assert unchanged_ids == [1]
 
 
 class TestComputeCollectionDiff:

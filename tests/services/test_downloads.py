@@ -18,7 +18,7 @@ from _factories import (
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
-from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
@@ -27,6 +27,7 @@ from fakes.system_time import FakeClock, FakeSleeper
 from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.download_file import DownloadFileAdapter
 from adapters.rom_files import RomFileAdapter
+from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused, finding_refusal, switched_off
 from domain.rom import Rom
 from domain.rom_files import TMP_EXT, ZIP_TMP_EXT
 from domain.rom_install import RomInstall
@@ -162,7 +163,7 @@ def downloads(emit, logger) -> DownloadsHarness:
         ),
     )
 
-    retrodeck_paths = FakeRetroDeckPaths(
+    retrodeck_folders = FakeRetroDeckFolders(
         roms=os.path.join(os.path.expanduser("~"), "retrodeck", "roms"),
         bios=os.path.join(os.path.expanduser("~"), "retrodeck", "bios"),
     )
@@ -184,7 +185,7 @@ def downloads(emit, logger) -> DownloadsHarness:
             romm_api=romm_api,
             download_file_store=download_file_store,
             resolve_system=resolve_system,
-            retrodeck_paths=retrodeck_paths,
+            retrodeck_folders=retrodeck_folders,
             install_recorder=install_recorder,
             adoption_move=AdoptionMoveAdapter(),
             quarantine_save=lambda saves_dir, filename: False,
@@ -193,7 +194,7 @@ def downloads(emit, logger) -> DownloadsHarness:
             # ``None`` is "es_systems.xml could not answer", which the search
             # reads as permission to proceed — the behaviour these tests predate.
             system_known=lambda system_name: None,
-            save_locations=FakeSaveLocationReader(saves_root=retrodeck_paths.saves_path()),
+            save_locations=FakeSaveLocationReader(saves_root=retrodeck_folders.saves),
             active_core=active_core,
             # Late-bound like production: the download service is constructed below.
             sibling_supersede=lambda: harness.service.supersede_sibling_installs,
@@ -216,7 +217,7 @@ def downloads(emit, logger) -> DownloadsHarness:
             emit=emit,
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             sleeper=FakeSleeper(),
-            retrodeck_paths=retrodeck_paths,
+            retrodeck_folders=retrodeck_folders,
             install_recorder=install_recorder,
             target_gate=adoption.check_download_target,
             m3u_support=lambda system_name: harness.m3u_supported,
@@ -234,7 +235,7 @@ def downloads(emit, logger) -> DownloadsHarness:
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             emit=emit,
             rom_file_store=RomFileAdapter(),
-            retrodeck_paths=FakeRetroDeckPaths(
+            retrodeck_folders=FakeRetroDeckFolders(
                 roms=os.path.join(os.path.expanduser("~"), "retrodeck", "roms"),
             ),
             download_queue_cleanup=service,
@@ -272,11 +273,11 @@ class TestStartDownload:
     async def test_starts_download_task(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -337,11 +338,11 @@ class TestStartDownload:
     async def test_checks_disk_space(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -659,7 +660,7 @@ class TestOccupiedTargetPreFlight:
         return store
 
     def _roms_path(self, downloads, system):
-        return os.path.join(downloads.service._retrodeck_paths.roms_path(), system)
+        return os.path.join(downloads.service._retrodeck_folders.roms, system)
 
     @pytest.mark.asyncio
     async def test_single_file_refuses_with_the_comparison(self, downloads):
@@ -761,10 +762,10 @@ class TestOccupiedTargetPreFlight:
         from unittest.mock import AsyncMock
 
         roms = tmp_path / "retrodeck" / "roms"
-        paths = FakeRetroDeckPaths(roms=str(roms), bios=str(tmp_path / "retrodeck" / "bios"))
-        downloads.service._retrodeck_paths = paths
-        downloads.adoption._retrodeck_paths = paths
-        downloads.removal._retrodeck_paths = paths
+        paths = FakeRetroDeckFolders(roms=str(roms), bios=str(tmp_path / "retrodeck" / "bios"))
+        downloads.service._retrodeck_folders = paths
+        downloads.adoption._retrodeck_folders = paths
+        downloads.removal._retrodeck_folders = paths
 
         (roms / "n64").mkdir(parents=True)
         sibling_file = roms / "n64" / "game_2.z64"
@@ -832,7 +833,7 @@ class TestResumingAReplaceDownload:
         return store
 
     def _roms(self, downloads, system):
-        return os.path.join(downloads.service._retrodeck_paths.roms_path(), system)
+        return os.path.join(downloads.service._retrodeck_folders.roms, system)
 
     @pytest.mark.asyncio
     async def test_a_paused_single_file_replace_resumes(self, downloads):
@@ -893,11 +894,11 @@ class TestResumingAReplaceDownload:
 class TestRemoveRom:
     @pytest.mark.asyncio
     async def test_deletes_file_and_clears_state(self, downloads, tmp_path):
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -930,11 +931,11 @@ class TestRemoveRom:
 class TestUninstallAllRoms:
     @pytest.mark.asyncio
     async def test_removes_all_installed(self, downloads, tmp_path):
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -956,11 +957,11 @@ class TestUninstallAllRoms:
 
     @pytest.mark.asyncio
     async def test_clears_state(self, downloads, tmp_path):
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -976,11 +977,11 @@ class TestUninstallAllRoms:
 
     @pytest.mark.asyncio
     async def test_handles_missing_files(self, downloads, tmp_path):
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1116,11 +1117,11 @@ class TestDiskSpaceMultiFile:
     async def test_multi_file_rom_requires_double_space(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1150,11 +1151,11 @@ class TestDiskSpaceMultiFile:
     async def test_single_file_rom_uses_normal_space_check(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1192,11 +1193,11 @@ class TestDiskSpaceMultiFile:
         """#855: nested-multi (has_multiple_files=False, len(files) > 1) reserves 2x."""
         from unittest.mock import AsyncMock
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1235,11 +1236,11 @@ class TestMultiFileRomDeletion:
     async def test_remove_rom_deletes_rom_dir(self, downloads, tmp_path):
         """Multi-file ROM with rom_dir should delete the entire directory."""
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1267,11 +1268,11 @@ class TestMultiFileRomDeletion:
     async def test_uninstall_all_deletes_rom_dirs(self, downloads, tmp_path):
         """uninstall_all_roms should delete multi-file ROM directories."""
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1485,11 +1486,11 @@ class TestDoDownloadSingleFile:
     async def test_single_file_happy_path(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1540,7 +1541,7 @@ class TestDoDownloadSingleFile:
         # so the frontend confirm-sets launch options without a full-library scan.
         assert payload["app_id"] == 1042
         # launch_options carries the full RetroDECK launch command for the resolved path.
-        assert payload["launch_options"] == f'flatpak run net.retrodeck.retrodeck "{target_path}"'
+        assert payload["launch_options"] == f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{target_path}"'
         # download_queue status is completed
         assert downloads.service._download_queue[42]["status"] == "completed"
 
@@ -1554,7 +1555,7 @@ class TestDoDownloadSingleFile:
         """
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -1605,7 +1606,7 @@ class TestDoDownloadSingleFile:
         next sync skips the now-correct shortcut instead of re-touching it (#1383)."""
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -1631,7 +1632,7 @@ class TestDoDownloadSingleFile:
             rom = uow.roms.get(42)
         assert rom is not None
         assert rom.applied_launch_options == payload["launch_options"]
-        assert rom.applied_launch_options == f'flatpak run net.retrodeck.retrodeck "{target_path}"'
+        assert rom.applied_launch_options == f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{target_path}"'
 
     @pytest.mark.asyncio
     async def test_download_complete_does_not_record_applied_for_unbound_rom(self, downloads, tmp_path, emit):
@@ -1639,7 +1640,7 @@ class TestDoDownloadSingleFile:
         is no shortcut to reflect; the next sync creates it and records the value."""
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -1693,7 +1694,7 @@ class TestDoDownloadOverrideRebake:
         """Download one single-file ROM (bound) with ``override`` pre-pinned; return payload."""
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -1739,7 +1740,7 @@ class TestDoDownloadOverrideRebake:
         )
         assert payload["app_id"] == 1042
         assert payload["launch_options"] == (
-            "flatpak run net.retrodeck.retrodeck "
+            "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
             '-e "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/pcsx_rearmed_libretro.so %ROM%" '
             f'"{target_path}"'
         )
@@ -1751,7 +1752,7 @@ class TestDoDownloadOverrideRebake:
             {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
         ]
         payload, target_path = await self._run_single_download(downloads, tmp_path, emit, rom_id=43, override=None)
-        assert payload["launch_options"] == f'flatpak run net.retrodeck.retrodeck "{target_path}"'
+        assert payload["launch_options"] == f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{target_path}"'
         assert "-e" not in payload["launch_options"]
 
     @pytest.mark.asyncio
@@ -1766,7 +1767,7 @@ class TestDoDownloadOverrideRebake:
             payload, target_path = await self._run_single_download(
                 downloads, tmp_path, emit, rom_id=44, override="Removed Core"
             )
-        assert payload["launch_options"] == f'flatpak run net.retrodeck.retrodeck "{target_path}"'
+        assert payload["launch_options"] == f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{target_path}"'
         assert "-e" not in payload["launch_options"]
         assert "Removed Core" in caplog.text
         assert "no longer resolves" in caplog.text
@@ -1780,11 +1781,11 @@ class TestDoDownloadMultiFile:
         import zipfile as zf
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1845,7 +1846,10 @@ class TestDoDownloadMultiFile:
         assert len(emit_calls) == 1
         payload = emit_calls[0][0][1]
         assert payload["file_path"] == installed.file_path
-        assert payload["launch_options"] == f'flatpak run net.retrodeck.retrodeck "{installed.file_path}"'
+        assert (
+            payload["launch_options"]
+            == f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{installed.file_path}"'
+        )
         # Status is completed
         assert downloads.service._download_queue[55]["status"] == "completed"
 
@@ -1861,11 +1865,11 @@ class TestDoDownloadMultiFile:
         import zipfile as zf
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -1943,11 +1947,11 @@ class TestDoDownloadMultiFile:
         """
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2002,11 +2006,11 @@ class TestDoDownloadMultiFile:
         import zipfile as zf
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2077,11 +2081,11 @@ class TestDoDownloadMultiFile:
         """
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2137,7 +2141,7 @@ class TestDoDownloadMultiFile:
 
         from fakes.fake_download_file_store import FakeDownloadFileStore
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -2208,6 +2212,70 @@ class TestDoDownloadMultiFile:
         assert downloads.service._download_queue[55]["status"] == "completed"
 
 
+class TestADownloadUnderWay:
+    """A download that started lands where it started; only a finding of RetroDECK's stops its extraction."""
+
+    @staticmethod
+    async def _run(downloads, tmp_path, folders: FakeRetroDeckFolders) -> str:
+        from unittest.mock import patch
+
+        from fakes.fake_download_file_store import FakeDownloadFileStore
+
+        downloads.service._retrodeck_folders = folders
+        roms_base = str(tmp_path / "retrodeck" / "roms")
+        target_path = os.path.join(roms_base, "psx", "FF7.zip")
+        fake = FakeDownloadFileStore()
+        fake.make_dirs(roms_base)
+        fake.set_zip_members(target_path + ".zip.tmp", {"disc1.bin": b"\x00" * 6, "disc2.bin": b"\x00" * 4})
+        downloads.service._download_file_store = fake
+        rom_detail = {
+            "id": 55,
+            "name": "Final Fantasy VII",
+            "fs_name": "FF7.zip",
+            "fs_name_no_ext": "FF7",
+            "platform_slug": "psx",
+            "platform_name": "PlayStation",
+            "has_multiple_files": True,
+        }
+
+        def fake_download(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
+            fake.files[dest] = b"ZIPDATA"
+
+        _seed_rom(downloads.uow, 55, platform_slug="psx")
+        downloads.service._loop = asyncio.get_running_loop()
+        downloads.service._download_queue[55] = {
+            "rom_id": 55,
+            "rom_name": "Final Fantasy VII",
+            "platform_name": "PlayStation",
+            "file_name": "FF7.zip",
+            "status": "downloading",
+            "progress": 0,
+            "bytes_downloaded": 0,
+            "total_bytes": 0,
+            "resumable": False,
+        }
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(55, rom_detail, target_path, "psx", "FF7.zip")
+        await asyncio.sleep(0)
+        return downloads.service._download_queue[55]["status"]
+
+    @pytest.mark.asyncio
+    async def test_retrodeck_switched_off_after_the_start_still_lets_it_finish(self, downloads, tmp_path):
+        folders = FakeRetroDeckFolders(
+            roms=str(tmp_path / "retrodeck" / "roms"), download_refusal=switched_off(GAME_DOWNLOAD)
+        )
+
+        assert await self._run(downloads, tmp_path, folders) == "completed"
+
+    @pytest.mark.asyncio
+    async def test_a_finding_that_makes_its_folders_defaults_stops_the_extraction(self, downloads, tmp_path):
+        folders = FakeRetroDeckFolders(
+            roms=str(tmp_path / "retrodeck" / "roms"), refusal=finding_refusal("marker-invalid", {})
+        )
+
+        assert await self._run(downloads, tmp_path, folders) == "failed"
+
+
 class TestDoDownloadBundledM3uPlatformGate:
     """#1111: a RomM-bundled .m3u must not drive launch/collapse on non-m3u systems.
 
@@ -2225,11 +2293,11 @@ class TestDoDownloadBundledM3uPlatformGate:
         import zipfile as zf
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
         # Switch does not list .m3u in ES-DE's es_systems.xml.
@@ -2287,11 +2355,11 @@ class TestDoDownloadBundledM3uPlatformGate:
         import zipfile as zf
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
         # psx lists .m3u in ES-DE's es_systems.xml.
@@ -2343,11 +2411,11 @@ class TestEsDeCollapseRename:
     """Tests for the ES-DE directory-collapse rename on new multi-file downloads (#943)."""
 
     def _wire_paths(self, downloads, tmp_path):
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2631,11 +2699,11 @@ class TestDoDownloadNestedSingleFile:
         """Regression: simple-single-file still uses fs_name as the local filename."""
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2677,11 +2745,11 @@ class TestDoDownloadNestedSingleFile:
         """Happy path: has_nested_single_file derives the local filename from files[0].file_name."""
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2728,11 +2796,11 @@ class TestDoDownloadNestedSingleFile:
         """start_download: nested-single-file enters the queue with the resolved filename."""
         from unittest.mock import AsyncMock
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2768,11 +2836,11 @@ class TestDoDownloadNestedSingleFile:
         """Defensive: empty files list falls back to fs_name and logs a warning."""
         from unittest.mock import AsyncMock
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2810,11 +2878,11 @@ class TestDoDownloadNestedSingleFile:
         """Defensive: missing files key falls back to fs_name and logs a warning."""
         from unittest.mock import AsyncMock
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2852,11 +2920,11 @@ class TestDoDownloadNestedSingleFile:
         """Defensive: path traversal in files[0].file_name is sanitized via os.path.basename."""
         from unittest.mock import AsyncMock
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2895,11 +2963,11 @@ class TestPathTraversalDeleteRomFiles:
 
     @pytest.mark.asyncio
     async def test_rejects_rom_dir_outside_roms_base(self, downloads, tmp_path):
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2928,11 +2996,11 @@ class TestPathTraversalDeleteRomFiles:
 
     @pytest.mark.asyncio
     async def test_rejects_file_path_outside_roms_base(self, downloads, tmp_path):
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -2962,11 +3030,11 @@ class TestPathTraversalFsName:
     async def test_fs_name_traversal_sanitized(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3005,11 +3073,11 @@ class TestPathTraversalFsName:
         resolve to the platform dir's parent (the roms root)."""
         from unittest.mock import AsyncMock
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3040,12 +3108,12 @@ class TestPathTraversalFsName:
 
 
 class TestPathTraversalPlatformSlug:
-    """#967: an unmapped server platform slug must not escape roms_path."""
+    """#967: an unmapped server platform slug must not escape the ROM folder."""
 
     @pytest.mark.asyncio
-    async def test_traversal_slug_rejected_before_make_dirs(self, downloads, tmp_path, emit):
+    async def test_traversal_slug_rejected_before_make_dirs(self, downloads, tmp_path):
         roms_root = tmp_path / "retrodeck" / "roms"
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(roms_root),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -3069,10 +3137,14 @@ class TestPathTraversalPlatformSlug:
         from unittest.mock import patch
 
         coro = downloads.service.start_download(77)
-        with patch.object(downloads.romm_api, "get_rom", return_value=rom_detail), pytest.raises(Refused) as refused:
+        with (
+            patch.object(downloads.romm_api, "get_rom", return_value=rom_detail),
+            pytest.raises(FolderRefused) as refused,
+        ):
             await coro
 
-        assert refused.value.reason == "path_traversal"
+        # A slug that is no ES-DE system has no folder the resolver names.
+        assert refused.value.reason == "no_rom_folder"
         # Rejected before any make_dirs.
         assert made_dirs == []
         # No directory created outside the roms root.
@@ -3080,10 +3152,6 @@ class TestPathTraversalPlatformSlug:
         assert not escape_dir.exists()
         # The rom is no longer marked in-progress (cleaned up on rejection).
         assert 77 not in downloads.service._download_in_progress
-        # download_failed event fired so the UI doesn't hang on "downloading".
-        failed = [c for c in emit.call_args_list if c[0][0] == "download_failed"]
-        assert len(failed) == 1
-        assert failed[0][0][1]["rom_id"] == 77
 
 
 class TestCleanupPartialDownload:
@@ -3184,11 +3252,11 @@ class TestDoDownloadCancelled:
     async def test_cancelled_sets_status_and_cleans_up(self, downloads, tmp_path):
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3231,11 +3299,11 @@ class TestDoDownloadZipFailure:
     async def test_zip_failure_sets_failed_and_cleans_up(self, downloads, tmp_path):
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3276,11 +3344,11 @@ class TestDoDownloadPostDecodeTraversal:
         import zipfile as zf
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3346,11 +3414,11 @@ class TestDoDownloadPostDecodeTraversal:
         import zipfile as zf
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3405,11 +3473,11 @@ class TestDoDownloadFailureEmit:
     async def test_failure_emits_download_failed(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3462,7 +3530,7 @@ class TestDoDownloadInvariantFailure:
     async def test_single_file_invariant_failure_cleans_up_and_persists_nothing(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -3508,7 +3576,7 @@ class TestDoDownloadInvariantFailure:
         import zipfile as zf
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -3563,11 +3631,11 @@ class TestStartDownloadReDownload:
     async def test_re_download_after_completed(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3650,11 +3718,11 @@ class TestUninstallAllRomsMixedResults:
 
     @pytest.mark.asyncio
     async def test_mixed_success_and_failure(self, downloads, tmp_path):
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3690,11 +3758,11 @@ class TestRemoveRomFileAlreadyGone:
 
     @pytest.mark.asyncio
     async def test_file_already_gone_cleans_state(self, downloads, tmp_path):
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3719,11 +3787,11 @@ class TestUrlEncodedFilenameRename:
         import zipfile as zf
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3773,11 +3841,11 @@ class TestUrlEncodedFilenameRename:
         import zipfile as zf
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -3900,11 +3968,11 @@ class TestStartDownloadCreateTaskFailure:
     async def test_create_task_failure_propagates_and_releases_the_flag(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        downloads.removal._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.removal._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
 
@@ -4276,14 +4344,14 @@ class TestStartDownloadInProgressLeak:
 
     A raise between ``_download_in_progress.add`` and the task's creation — an
     OSError from make_dirs or disk_free (SD card unmounted), refused with
-    ``download_start_failed``; a TypeError from the path join when roms_path()
-    returns None; a cancelled call — fails the call and leaves the ROM free to
+    ``download_start_failed``; a TypeError from a bug in the folder lookup; a
+    cancelled call — fails the call and leaves the ROM free to
     be downloaded again, not stuck "Already downloading" until the backend
     restarts.
     """
 
     def _wire(self, downloads, tmp_path):
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -4395,14 +4463,18 @@ class TestStartDownloadInProgressLeak:
         assert 46 not in downloads.service._download_in_progress
 
     @pytest.mark.asyncio
-    async def test_roms_path_none_releases_flag(self, downloads, tmp_path):
+    async def test_a_bug_in_the_folder_lookup_releases_flag(self, downloads, tmp_path):
         from unittest.mock import AsyncMock
 
-        # roms_path() returns None → the os.path.realpath inside safe_join raises
-        # a TypeError, a bug that stays one and still releases the flag.
-        paths = FakeRetroDeckPaths(roms="", bios="")
-        paths.roms_path = lambda: None  # type: ignore[method-assign,return-value]
-        downloads.service._retrodeck_paths = paths
+        # A TypeError from the folder lookup is a bug that stays one, and still
+        # releases the flag.
+        paths = FakeRetroDeckFolders(roms="", bios="")
+
+        def broken(_system: str) -> str:
+            raise TypeError("expected str, bytes or os.PathLike object, not NoneType")
+
+        paths.download_folder = broken  # type: ignore[method-assign]
+        downloads.service._retrodeck_folders = paths
         rom_detail = {
             "id": 44,
             "name": "DK",
@@ -4527,7 +4599,7 @@ class TestAProgressTickAfterTheDownloadEnded:
             await asyncio.sleep(0)
 
     def _wire_paths(self, downloads, tmp_path):
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -4670,7 +4742,7 @@ class TestDoDownloadRedownloadPreservesExisting:
     async def test_failed_redownload_keeps_preexisting_file(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -4724,7 +4796,7 @@ class TestDoDownloadCancelReconcile:
         import threading
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -4799,7 +4871,7 @@ class TestDoDownloadCancelReconcile:
         import threading
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -4890,7 +4962,7 @@ class TestDoDownloadCancelEmitsEvent:
     async def test_cancel_emits_cancelled_progress_event(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -4945,7 +5017,7 @@ class TestConcurrencyReservation:
     """#1053: bounded concurrency + reserved-bytes preflight + queued status."""
 
     def _wire(self, downloads, tmp_path):
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -5001,7 +5073,7 @@ class TestConcurrencyReservation:
     async def test_reservation_released_after_download(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -5039,7 +5111,7 @@ class TestConcurrencyReservation:
     async def test_third_download_emits_queued_while_two_run(self, downloads, tmp_path, emit):
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -5152,7 +5224,7 @@ class TestCooperativeCancel:
         """
         from unittest.mock import patch
 
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
@@ -5272,7 +5344,7 @@ class TestPauseResume:
 
     @staticmethod
     def _retrodeck(downloads, tmp_path):
-        downloads.service._retrodeck_paths = FakeRetroDeckPaths(
+        downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )

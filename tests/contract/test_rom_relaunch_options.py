@@ -86,7 +86,7 @@ async def test_ps3_folder_install_bakes_direct_sandbox_invocation(harness):
 
     The install's ``file_path`` stays the ``…/PS3_GAME/USRDIR/EBOOT.BIN`` launch
     file (the ADR-0008 anchor), but the folder-boot rewrite bakes a
-    ``flatpak run --command=<launcher>`` command that runs RPCS3 directly inside
+    ``flatpak run --nosocket=wayland --command=<launcher>`` command that runs RPCS3 directly inside
     the sandbox over the game FOLDER — bypassing ``run_game.sh``, which would
     reinterpret the directory as an ES-DE "directory as a file" and never boot
     it. Drives the real bake seam (es_systems + es_find_rules + the on-disk
@@ -119,6 +119,9 @@ async def test_ps3_folder_install_bakes_direct_sandbox_invocation(harness):
     assert item is not None
     launch_options = item["launch_options"]
     # Direct sandbox invocation over the game folder; never the nested EBOOT, never run_game -e.
-    assert launch_options == f'flatpak run --command={launcher} net.retrodeck.retrodeck --no-gui "{rom_dir}"'
+    assert (
+        launch_options
+        == f'flatpak run --nosocket=wayland --command={launcher} net.retrodeck.retrodeck --no-gui "{rom_dir}"'
+    )
     assert "EBOOT.BIN" not in launch_options
     assert "-e " not in launch_options

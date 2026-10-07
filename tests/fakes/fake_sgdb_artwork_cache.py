@@ -19,6 +19,9 @@ class FakeSgdbArtworkCache:
     Tests can pre-populate ``files`` directly to stage cached artwork.
     ``isdir_paths`` can be set explicitly when a test needs to model an
     empty cache directory.
+
+    Safe to read while another thread writes ``files``: a read that walks
+    the entries walks a copy, and ``read_bytes`` looks the path up once.
     """
 
     def __init__(self, cache_root: str = "/runtime", files: dict[str, bytes] | None = None) -> None:
@@ -40,7 +43,9 @@ class FakeSgdbArtworkCache:
     def listdir(self, directory: str) -> list[str]:
         prefix = directory.rstrip("/") + "/"
         return [
-            path[len(prefix) :] for path in self.files if path.startswith(prefix) and "/" not in path[len(prefix) :]
+            path[len(prefix) :]
+            for path in self.files.copy()
+            if path.startswith(prefix) and "/" not in path[len(prefix) :]
         ]
 
     def is_dir(self, path: str) -> bool:
@@ -49,9 +54,10 @@ class FakeSgdbArtworkCache:
         if path == self._cache_dir:
             return True
         prefix = path.rstrip("/") + "/"
-        return any(stored.startswith(prefix) for stored in self.files)
+        return any(stored.startswith(prefix) for stored in self.files.copy())
 
     def read_bytes(self, path: str) -> bytes:
-        if path not in self.files:
-            raise FileNotFoundError(path)
-        return self.files[path]
+        try:
+            return self.files[path]
+        except KeyError:
+            raise FileNotFoundError(path) from None

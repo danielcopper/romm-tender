@@ -76,6 +76,7 @@ from domain.save_answer import (
     SAVE_STATE_HOLE,
     SAVE_STATE_INSIDE_CONTENT,
     SAVE_STATE_PER_GAME_FILES,
+    SAVE_STATE_SAVES_ROOT_MISSING,
     SAVE_STATE_SHARED,
     SAVE_STATE_UNESTABLISHED,
     UNESTABLISHED_DIRECTORY_KNOWN,
@@ -182,7 +183,7 @@ class _Installation:
         raises: Exception | None = None,
         caveats: tuple[str, ...] = (),
         kind: str = "retrodeck",
-        health: tuple[str, ...] | Exception = (),
+        health: tuple[str | Caveat, ...] | Exception = (),
     ) -> None:
         self.kind = kind
         self._entries = entries
@@ -194,7 +195,7 @@ class _Installation:
     def health(self) -> Health:
         if isinstance(self._health, Exception):
             raise self._health
-        return Health(tuple(_caveat(code) for code in self._health))
+        return Health(tuple(code if isinstance(code, Caveat) else _caveat(code) for code in self._health))
 
     def emulators_for(self, system: str, *, content_path: str | None = None) -> Any:
         self.asked.append((system, content_path))
@@ -308,6 +309,77 @@ class TestTheFiveStates:
         )
 
         assert answer.state == SAVE_STATE_HOLE
+
+
+class TestAMissingSavesRoot:
+    """While the answering RetroDECK reports its saves root missing, no save of its emulators is synced."""
+
+    _MISSING = Caveat(code=HEALTH_ISSUE_SAVES_ROOT_MISSING, message="prose", data={"path": "/run/media/sd/saves"})
+
+    def test_the_answer_refuses_names_the_folder_and_asks_the_emulator_nothing(self, traces):
+        entry = _Entry("mGBA", _placement())
+        adapter = _adapter(_Installation((entry,), health=(self._MISSING,)), traces)
+
+        answer = adapter.resolve_save_answer(
+            system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
+        )
+
+        assert answer.state == SAVE_STATE_SAVES_ROOT_MISSING
+        assert answer.syncable is False
+        assert answer.missing_saves_root == "/run/media/sd/saves"
+        assert answer.emulator == "mGBA"
+        assert entry.asked == []
+
+    def test_another_source_s_missing_saves_root_is_not_read_as_retrodeck_s(self, traces):
+        # The refusal's sentence names RetroDECK; no other source reaches a save
+        # answer through a catalogue that is not refused.
+        entry = _Entry("mGBA", _placement())
+        adapter = _adapter(_Installation((entry,), kind="emudeck", health=(self._MISSING,)), traces)
+
+        answer = adapter.resolve_save_answer(
+            system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
+        )
+
+        assert answer.state == SAVE_STATE_PER_GAME_FILES
+        assert entry.asked == [_CONTENT]
+
+    def test_the_real_resolver_s_finding_refuses_and_creates_no_folder(self, tmp_path, monkeypatch, traces):
+        monkeypatch.setattr(
+            "_vendor.atlas.installations._FLATPAK_DEPLOY_SYSTEM", str(tmp_path / "no_system_flatpak" / "app")
+        )
+        home = tmp_path / "home"
+        saves = tmp_path / "card" / "saves"
+        marker = home / ".var" / "app" / "net.retrodeck.retrodeck" / "config" / "retrodeck" / "retrodeck.json"
+        marker.parent.mkdir(parents=True)
+        marker.write_text(
+            json.dumps({"paths": {"rd_home_path": str(home / "retrodeck"), "saves_path": str(saves)}}),
+            encoding="utf-8",
+        )
+        (home / "retrodeck").mkdir()
+        systems = (
+            home
+            / ".local/share/flatpak/app/net.retrodeck.retrodeck/current/active/files"
+            / "retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml"
+        )
+        systems.parent.mkdir(parents=True)
+        systems.write_text(
+            '<?xml version="1.0"?>\n<systemList><system><name>gba</name><extension>.gba</extension>'
+            '<command label="mGBA">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>'
+            "</system></systemList>\n",
+            encoding="utf-8",
+        )
+        sources = EmulatorSourcesAdapter(user_home=str(home), settings={}, log_debug=traces.append)
+
+        answer = AtlasSaveLocationAdapter(sources=sources, log_debug=traces.append).resolve_save_answer(
+            system="gba",
+            content_path=str(home / "retrodeck" / "roms" / "gba" / "g.gba"),
+            emulator_label="mGBA",
+            content_installed=True,
+        )
+
+        assert answer.state == SAVE_STATE_SAVES_ROOT_MISSING
+        assert answer.missing_saves_root == str(saves)
+        assert not saves.exists()
 
 
 class TestTheTwoShapesAnAnswerReaches:
