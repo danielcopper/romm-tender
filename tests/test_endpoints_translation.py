@@ -6,8 +6,8 @@ carrying ``{success: False, reason, message}``, a bug as the host's
 ``backend_exception`` error. The services are stand-ins that raise or answer
 what a case hands them, which puts the exception exactly where a use case would
 raise it; Stop Game's refusals, the connection's, a partial bulk uninstall, the
-conflict resolution's, a partial save deletion and the save syncs' and device
-list's refusals run through the real services.
+conflict resolution's, a partial save deletion, the save syncs' and device
+list's refusals and the save slots' run through the real services.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from fakes.system_time import FakeClock
 from domain.refusal import DomainRefused, NamedDomainRefused
 from domain.rom import Rom
 from domain.rom_install import RomInstall
-from domain.rom_save_sync_state import RomSaveSyncState
+from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from host import CallDispatcher, HostStatus
 from host.dispatch import route_names
 from host.protocol import REASON_BACKEND_EXCEPTION, TYPE_ERROR, TYPE_REPLY
@@ -69,6 +69,7 @@ from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
+    _file_md5,
     _install_rom,
     _seed_save_state,
     _server_save,
@@ -957,6 +958,165 @@ class TestTheSaveSyncRefusalsOnTheWire:
         fake.fail_on_next(failure)
 
         message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, "list_devices", []))
+
+        reason, text = classify_error(failure)
+        assert message["result"] == {"success": False, "reason": reason, "message": text}
+
+
+def _slots_seeded(tmp_path: Path, *, files: dict[str, FileSyncState] | None = None) -> tuple[Any, Any]:
+    """A real ``SaveService`` with an installed ROM whose confirmed active slot is ``default``, beside ``save1``."""
+    svc, fake = make_service(tmp_path)
+    _enable_sync_with_device(svc)
+    _install_rom(svc, tmp_path)
+    _seed_save_state(
+        svc,
+        42,
+        RomSaveSyncState(
+            active_slot="default",
+            slot_confirmed=True,
+            slots={
+                "default": {"source": "server", "count": 1, "latest_updated_at": "2026-04-17T10:00:00"},
+                "save1": {"source": "server", "count": 1, "latest_updated_at": None},
+            },
+            files=files or {},
+        ),
+    )
+    return svc, fake
+
+
+class TestTheSlotRefusalsOnTheWire:
+    """The save slots' refusals and partial answers, raised through the real service, keep their details."""
+
+    async def test_an_unreachable_server_answers_the_last_known_slots(self, tmp_path):
+        svc, fake = _slots_seeded(tmp_path)
+        fake.fail_on_next(RommConnectionError("connection refused"))
+
+        message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, "get_save_slots", [42]))
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "server_unreachable",
+            "message": "Server unreachable — check your URL and ensure RomM is running",
+            "last_known": {
+                "slots": [
+                    {"slot": "default", "source": "server", "count": 1, "latest_updated_at": "2026-04-17T10:00:00"},
+                    {"slot": "save1", "source": "server", "count": 1, "latest_updated_at": None},
+                ],
+                "active_slot": "default",
+            },
+        }
+
+    async def test_an_auth_failure_answers_without_the_last_known_slots(self, tmp_path):
+        svc, fake = _slots_seeded(tmp_path)
+        failure = RommAuthError("401 Unauthorized")
+        fake.fail_on_next(failure)
+
+        message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, "get_save_slots", [42]))
+
+        reason, text = classify_error(failure)
+        assert message["result"] == {"success": False, "reason": reason, "message": text}
+
+    async def test_a_switch_that_downloaded_only_part_answers_switch_incomplete(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        save_path = _create_save(tmp_path)
+        _seed_save_state(
+            svc,
+            42,
+            RomSaveSyncState(
+                active_slot="default",
+                slot_confirmed=True,
+                files={"pokemon.srm": FileSyncState(last_sync_hash=_file_md5(str(save_path)), tracked_save_id=100)},
+            ),
+        )
+        fake.saves[700] = _server_save(save_id=700, slot="target")
+        fake.fail_download_on(700, RommServerError("download blew up", status_code=500))
+
+        message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, "switch_slot", [42, "target"]))
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "switch_incomplete",
+            "message": "Switched to slot but 1 save(s) failed to download — retry",
+        }
+
+    async def test_a_switch_over_unsynced_changes_answers_the_files(self, tmp_path):
+        svc, _fake = _slots_seeded(
+            tmp_path, files={"pokemon.srm": FileSyncState(last_sync_hash="before-the-last-play", tracked_save_id=100)}
+        )
+        _create_save(tmp_path, content=b"played since the last sync")
+
+        message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, "switch_slot", [42, "save1"]))
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "pending_uploads",
+            "message": "Pending local changes — upload or discard first",
+            "files": ["pokemon.srm"],
+        }
+
+    async def test_a_migration_over_a_differing_local_save_answers_the_conflicts(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path, content=b"LOCAL" * 10)
+        fake.saves[1] = _server_save(save_id=1, filename="pokemon [ts].srm", slot=None)
+        fake.set_server_save_content(1, b"SERVER" * 10)
+
+        message = json.loads(
+            await _dispatcher_over_saves(svc).dispatch(1, "confirm_slot_choice", [42, "default", True, None, False])
+        )
+
+        result = message["result"]
+        assert {key: result[key] for key in ("success", "reason", "message", "needs_conflict_resolution")} == {
+            "success": False,
+            "reason": "local_conflict",
+            "message": "A local save differs from the legacy save for slot 'default'",
+            "needs_conflict_resolution": True,
+        }
+        assert set(result) == {"success", "reason", "message", "needs_conflict_resolution", "conflicts"}
+        assert [(c["filename"], c["server_save_id"]) for c in result["conflicts"]] == [("pokemon.srm", 1)]
+
+    async def test_a_migration_whose_local_files_fail_answers_migration_failed(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path, content=b"L" * 100)
+        fake.saves[1] = _server_save(save_id=1, filename="pokemon [ts].srm", slot=None)
+
+        def failing_download(_save_id, _dest_path):
+            raise PermissionError("saves dir not writable")
+
+        fake.download_save = failing_download  # type: ignore[method-assign]
+
+        message = json.loads(
+            await _dispatcher_over_saves(svc).dispatch(1, "confirm_slot_choice", [42, "default", True, None, False])
+        )
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "migration_failed",
+            "message": "The saves could not be migrated: a save file on this device could not be read or written.",
+        }
+
+    @pytest.mark.parametrize("route_name", ["get_slot_delete_info", "delete_slot"])
+    async def test_a_romm_error_inspecting_or_deleting_a_slot_answers_classify_errors_message(
+        self, tmp_path, route_name
+    ):
+        svc, fake = _slots_seeded(tmp_path)
+        fake.saves[10] = _server_save(save_id=10, filename="pokemon.srm", slot="save1")
+        failure = RommServerError("bad gateway", status_code=502)
+        if route_name == "delete_slot":
+
+            def failing_delete(_save_ids):
+                raise failure
+
+            fake.delete_server_saves = failing_delete  # type: ignore[method-assign]
+        else:
+            fake.fail_on_next(failure)
+
+        message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, route_name, [42, "save1"]))
 
         reason, text = classify_error(failure)
         assert message["result"] == {"success": False, "reason": reason, "message": text}
