@@ -125,7 +125,6 @@ class SlotsService:
             romm_api=config.romm_api,
             retry=config.retry,
             loop=config.loop,
-            logger=config.logger,
             log_debug=config.log_debug,
             sync_engine=config.sync_engine,
         )

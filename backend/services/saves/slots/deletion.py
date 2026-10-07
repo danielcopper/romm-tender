@@ -13,13 +13,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from domain.save_slot import save_in_slot, slot_query_param
-from lib.errors import classify_error
+from lib.errors import NotInstalled, Refused
+from services.saves._messages import SAVE_SYNC_DISABLED
 from services.saves._save_state import read_save_state, write_save_state
 from services.saves._settings import save_sync_enabled
 
 if TYPE_CHECKING:
     import asyncio
-    import logging
 
     from domain.rom_save_sync_state import RomSaveSyncState
     from services.protocols import (
@@ -46,7 +46,6 @@ class SlotDeleter:
         romm_api: RommSaveApi,
         retry: RetryStrategy,
         loop: asyncio.AbstractEventLoop,
-        logger: logging.Logger,
         log_debug: DebugLogger,
         sync_engine: SyncEngine,
     ) -> None:
@@ -57,40 +56,39 @@ class SlotDeleter:
         self._romm_api = romm_api
         self._retry = retry
         self._loop = loop
-        self._logger = logger
         self._log_debug = log_debug
         self._sync_engine = sync_engine
 
-    def _validate_slot_operation(
-        self, rom_id: int, slot: str
-    ) -> dict[str, Any] | tuple[RomSaveSyncState, dict[str, dict[str, Any]]]:
+    def _validate_slot_operation(self, rom_id: int, slot: str) -> tuple[RomSaveSyncState, dict[str, dict[str, Any]]]:
         """Shared validation for slot delete operations.
 
-        Returns an error dict on failure, or a (rom_state, slots_dict) tuple on
-        success. The returned ``rom_state`` is the loaded aggregate; callers that
-        mutate it must persist via :func:`write_save_state`.
+        Refuses with ``disabled`` while save sync is off, ``not_installed``, or
+        ``not_found`` when the ROM has no save state or no such slot; otherwise
+        returns the loaded aggregate and its slots. Callers that mutate the
+        aggregate must persist it via :func:`write_save_state`.
         """
         if not save_sync_enabled(self._settings):
-            return {"success": False, "reason": "disabled", "message": "Save sync is disabled"}
+            raise Refused("disabled", SAVE_SYNC_DISABLED)
         if not self._rom_info.is_content_installed(rom_id):
-            return {"success": False, "reason": "not_installed", "message": "ROM is not installed"}
+            raise NotInstalled("ROM is not installed")
         save_state = read_save_state(self._uow_factory, rom_id)
         if save_state is None:
-            return {"success": False, "reason": "not_found", "message": "No save state found"}
+            raise Refused("not_found", "No save state found")
         slots_dict: dict[str, dict[str, Any]] = save_state.slots
         if slot not in slots_dict:
-            return {"success": False, "reason": "not_found", "message": "Slot not found"}
+            raise Refused("not_found", "Slot not found")
         return save_state, slots_dict
 
     async def get_slot_delete_info(self, rom_id: int, slot: str) -> dict[str, Any]:
-        """Return info about what deleting a slot would do, for the confirmation modal."""
+        """Return info about what deleting a slot would do, for the confirmation modal.
+
+        Refuses as :meth:`_validate_slot_operation` does. A RomM error listing a
+        server slot's saves propagates.
+        """
         rom_id = int(rom_id)
         slot = str(slot).strip() if slot else ""
 
-        result = await self._loop.run_in_executor(None, self._validate_slot_operation, rom_id, slot)
-        if isinstance(result, dict):
-            return result
-        save_state, slots_dict = result
+        save_state, slots_dict = await self._loop.run_in_executor(None, self._validate_slot_operation, rom_id, slot)
 
         slot_info = slots_dict[slot]
         source = slot_info.get("source", "server")
@@ -101,32 +99,19 @@ class SlotDeleter:
         server_save_ids: list[int] = []
         if source == "server":
             device_id = await self._loop.run_in_executor(None, self._device_registry.get_device_id)
-            try:
-                # Legacy slot ("" → null on the server) is addressed by omitting
-                # ``slot=`` and filtering client-side (#1061), so a legacy delete
-                # inspects ONLY the null saves. Named slots filter server-side and
-                # re-filter for safety.
-                server_saves: list[dict[str, Any]] = await self._loop.run_in_executor(
-                    None,
-                    lambda: self._retry.with_retry(
-                        lambda: self._romm_api.list_saves(rom_id, device_id=device_id, slot=slot_query_param(slot)),
-                    ),
-                )
-                server_save_ids = [s["id"] for s in server_saves if save_in_slot(s, slot)]
-            except Exception as e:
-                # Don't return a fake "0 server saves" — the confirmation modal
-                # would render "delete 0 saves" and the user would confirm a
-                # destructive wipe of a slot we never actually inspected. Surface
-                # the failure so the frontend can refuse to open the confirm.
-                self._logger.warning(
-                    f"get_slot_delete_info: failed to list saves for slot '{slot}': {e}",
-                )
-                reason, message = classify_error(e)
-                return {
-                    "success": False,
-                    "reason": reason,
-                    "message": f"Cannot inspect slot — {message}",
-                }
+            # Legacy slot ("" → null on the server) is addressed by omitting
+            # ``slot=`` and filtering client-side (#1061), so a legacy delete
+            # inspects ONLY the null saves. Named slots filter server-side and
+            # re-filter for safety. A failed listing is never answered as "0
+            # server saves": the confirmation modal would then offer a
+            # destructive wipe of a slot nobody inspected.
+            server_saves: list[dict[str, Any]] = await self._loop.run_in_executor(
+                None,
+                lambda: self._retry.with_retry(
+                    lambda: self._romm_api.list_saves(rom_id, device_id=device_id, slot=slot_query_param(slot)),
+                ),
+            )
+            server_save_ids = [s["id"] for s in server_saves if save_in_slot(s, slot)]
 
         # Local tracked files pointing to server saves in this slot
         files_state = save_state.files
@@ -148,36 +133,27 @@ class SlotDeleter:
             "is_active": is_active,
         }
 
-    async def _delete_server_slot_saves(self, rom_id: int, slot: str) -> dict[str, Any]:
-        """Delete all server saves in a slot. Returns result dict with count and IDs."""
+    async def _delete_server_slot_saves(self, rom_id: int, slot: str) -> list[int]:
+        """Delete all server saves in a slot and return their ids; a RomM error propagates."""
         device_id = await self._loop.run_in_executor(None, self._device_registry.get_device_id)
-        try:
-            # Legacy slot ("" → null on the server) deletes ONLY the null saves:
-            # omit ``slot=`` and filter client-side (#1061). Named slots filter
-            # server-side and re-filter for safety.
-            server_saves: list[dict[str, Any]] = await self._loop.run_in_executor(
+        # Legacy slot ("" → null on the server) deletes ONLY the null saves:
+        # omit ``slot=`` and filter client-side (#1061). Named slots filter
+        # server-side and re-filter for safety.
+        server_saves: list[dict[str, Any]] = await self._loop.run_in_executor(
+            None,
+            lambda: self._retry.with_retry(
+                lambda: self._romm_api.list_saves(rom_id, device_id=device_id, slot=slot_query_param(slot)),
+            ),
+        )
+        save_ids = [s["id"] for s in server_saves if save_in_slot(s, slot)]
+        if save_ids:
+            await self._loop.run_in_executor(
                 None,
                 lambda: self._retry.with_retry(
-                    lambda: self._romm_api.list_saves(rom_id, device_id=device_id, slot=slot_query_param(slot)),
+                    lambda: self._romm_api.delete_server_saves(save_ids),
                 ),
             )
-            save_ids = [s["id"] for s in server_saves if save_in_slot(s, slot)]
-            if save_ids:
-                await self._loop.run_in_executor(
-                    None,
-                    lambda: self._retry.with_retry(
-                        lambda: self._romm_api.delete_server_saves(save_ids),
-                    ),
-                )
-            return {"success": True, "count": len(save_ids), "ids": set(save_ids)}
-        except Exception as e:
-            self._logger.warning(f"delete_slot: server delete failed for slot '{slot}': {e}")
-            reason, _message = classify_error(e)
-            return {
-                "success": False,
-                "reason": reason,
-                "message": f"Failed to delete server saves: {e}",
-            }
+        return save_ids
 
     async def delete_slot(self, rom_id: int, slot: str) -> dict[str, Any]:
         """Delete a save slot and all its saves (local state + server if applicable).
@@ -186,9 +162,12 @@ class SlotDeleter:
         whitespace-only / ``None`` slot name is the slot-less bucket — a manual
         upload or an older web player's save — which is managed in the RomM web
         app and must never be torn down from here.
-        It is rejected up front with the canonical ``invalid_slot_name`` failure
-        — before any lock acquisition, server I/O, or state change — mirroring
-        the switch-target refusal in :class:`SlotSwitcher` (#1276).
+        It is refused up front with ``invalid_slot_name`` — before any lock
+        acquisition, server I/O, or state change — mirroring the switch-target
+        refusal in :class:`SlotSwitcher` (#1276). The active slot refuses with
+        ``active_slot``; otherwise it refuses as :meth:`_validate_slot_operation`
+        does, and a RomM error deleting the server saves propagates with the
+        slot left as it was.
         """
         rom_id = int(rom_id)
         slot = str(slot).strip() if slot else ""
@@ -197,11 +176,7 @@ class SlotDeleter:
         # deleting "" would wipe the game's entire slot-less bucket. Named slots
         # fall through to the normal delete flow.
         if not slot:
-            return {
-                "success": False,
-                "reason": "invalid_slot_name",
-                "message": "The legacy bucket is read-only and cannot be deleted",
-            }
+            raise Refused("invalid_slot_name", "The legacy bucket is read-only and cannot be deleted")
 
         # The read→delete-server→mutate→write of the RomSaveSyncState aggregate must
         # serialise against every other path that touches this ROM's state.
@@ -209,18 +184,11 @@ class SlotDeleter:
         # inside the held lock is safe (no re-entry). There is no tail status
         # call, so no deadlock risk.
         async with self._sync_engine.rom_lock(rom_id):
-            result = await self._loop.run_in_executor(None, self._validate_slot_operation, rom_id, slot)
-            if isinstance(result, dict):
-                return result
-            save_state, slots_dict = result
+            save_state, slots_dict = await self._loop.run_in_executor(None, self._validate_slot_operation, rom_id, slot)
 
             effective_active = save_state.active_slot or ""
             if slot == effective_active:
-                return {
-                    "success": False,
-                    "reason": "active_slot",
-                    "message": "Cannot delete the active slot. Switch to a different slot first.",
-                }
+                raise Refused("active_slot", "Cannot delete the active slot. Switch to a different slot first.")
 
             slot_info = slots_dict[slot]
             source = slot_info.get("source", "server")
@@ -230,11 +198,9 @@ class SlotDeleter:
             deleted_ids: set[int] = set()
 
             if source == "server":
-                delete_result = await self._delete_server_slot_saves(rom_id, slot)
-                if not delete_result["success"]:
-                    return delete_result
-                deleted_server_saves = delete_result["count"]
-                deleted_ids = delete_result["ids"]
+                deleted_save_ids = await self._delete_server_slot_saves(rom_id, slot)
+                deleted_server_saves = len(deleted_save_ids)
+                deleted_ids = set(deleted_save_ids)
 
             # Clean up tracked file entries pointing to deleted saves
             files_state = save_state.files

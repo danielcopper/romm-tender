@@ -8,7 +8,15 @@ import pytest
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
-from lib.errors import Refused, RommApiError, RommAuthError, RommConnectionError, RommNotFoundError, ServerUnreachable
+from lib.errors import (
+    NotInstalled,
+    Refused,
+    RommApiError,
+    RommAuthError,
+    RommConnectionError,
+    RommNotFoundError,
+    ServerUnreachable,
+)
 from lib.list_result import ErrorCode
 from tests.services.saves._helpers import (
     _create_save,
@@ -2136,18 +2144,19 @@ class TestDeleteSlot:
 
     @pytest.mark.asyncio
     async def test_get_slot_delete_info_nonexistent_slot(self, tmp_path):
-        """Non-existent slot returns not_found."""
+        """Non-existent slot refuses with not_found."""
         svc, _fake = make_service(tmp_path)
         self._setup_state_with_slots(svc, tmp_path)
+        info = svc.get_slot_delete_info(42, "nonexistent")
 
-        result = await svc.get_slot_delete_info(42, "nonexistent")
+        with pytest.raises(Refused) as refused:
+            await info
 
-        assert result["success"] is False
-        assert result["reason"] == "not_found"
+        assert (refused.value.reason, refused.value.message) == ("not_found", "Slot not found")
 
     @pytest.mark.asyncio
     async def test_get_slot_delete_info_server_unreachable(self, tmp_path):
-        """list_saves failure surfaces as success=False, not a fake 0-count.
+        """A list_saves failure propagates, never a fake 0-count.
 
         Regression for #626: silently returning ``server_save_count: 0`` made
         the confirmation modal claim the slot was empty, so the user could
@@ -2162,31 +2171,21 @@ class TestDeleteSlot:
                 "pokemon.srm": {"tracked_save_id": 10, "last_sync_hash": "abc"},
             },
         )
-        fake.fail_on_next(ConnectionError("connection refused"))
+        failure = RommConnectionError("connection refused")
+        fake.fail_on_next(failure)
+        info = svc.get_slot_delete_info(42, "save1")
 
-        result = await svc.get_slot_delete_info(42, "save1")
+        with pytest.raises(RommConnectionError) as raised:
+            await info
 
-        assert result["success"] is False
-        assert result["reason"] == "server_unreachable"
-        assert "message" in result
-        # The message asserted reachability before #1570; it must stay honest
-        # while still refusing the destructive confirm.
-        assert "Cannot inspect slot" in result["message"]
-        # Drift guard: the legacy duplicate ``error`` field was dropped in #652.
-        # Frontend now reads ``reason`` only. Re-adding ``error`` would
-        # reintroduce the dual-write that was deliberately removed.
-        assert "error" not in result
-        # Critically: no fake "0 saves" count that would let the confirm modal
-        # render "delete 0 saves".
-        assert "server_save_count" not in result
-        assert "server_save_ids" not in result
+        assert raised.value is failure
 
     @pytest.mark.asyncio
     async def test_get_slot_delete_info_definitive_404_is_not_found(self, tmp_path):
-        """A 404 still refuses the confirm, but does not blame the connection (#1570).
+        """A 404 still refuses the confirm, and propagates as the 404 it is (#1570).
 
         The #626 safety property is unchanged — no fake "0 saves" count reaches
-        the modal — only the slug and the message stop claiming an outage.
+        the modal.
         """
         svc, fake = make_service(tmp_path)
         self._setup_state_with_slots(
@@ -2198,16 +2197,10 @@ class TestDeleteSlot:
             },
         )
         fake.fail_on_next(RommNotFoundError("HTTP 404: Not Found"))
+        info = svc.get_slot_delete_info(42, "save1")
 
-        result = await svc.get_slot_delete_info(42, "save1")
-
-        assert result["success"] is False
-        assert result["reason"] == "not_found"
-        assert result["reason"] != "server_unreachable"
-        assert "unreachable" not in result["message"].lower()
-        # The #626 guard still holds.
-        assert "server_save_count" not in result
-        assert "server_save_ids" not in result
+        with pytest.raises(RommNotFoundError):
+            await info
 
     @pytest.mark.asyncio
     async def test_get_slot_delete_info_local_slot_unaffected_by_server_failure(self, tmp_path):
@@ -2285,8 +2278,8 @@ class TestDeleteSlot:
         """#1478: deleting the legacy bucket ("") is refused — it is read-only.
 
         The slot-less bucket is managed in the RomM web app; an accidental tap
-        must not wipe it. The refusal returns the canonical ``invalid_slot_name``
-        failure before any lock, server I/O, or state change — no ``list_saves``,
+        must not wipe it. The refusal raises ``invalid_slot_name`` before any
+        lock, server I/O, or state change — no ``list_saves``,
         no ``delete_server_saves``, and every slot (including "") left intact.
         """
         svc, fake = make_service(tmp_path)
@@ -2311,13 +2304,16 @@ class TestDeleteSlot:
         fake.saves[10] = _server_save(save_id=10, rom_id=42, filename="legacy.srm", slot=None)
         fake.saves[11] = _server_save(save_id=11, rom_id=42, filename="named.srm", slot="default")
 
-        result = await svc.delete_slot(42, "")
+        deletion = svc.delete_slot(42, "")
 
-        assert result == {
-            "success": False,
-            "reason": "invalid_slot_name",
-            "message": "The legacy bucket is read-only and cannot be deleted",
-        }
+        with pytest.raises(Refused) as refused:
+            await deletion
+
+        assert (refused.value.reason, refused.value.message) == (
+            "invalid_slot_name",
+            "The legacy bucket is read-only and cannot be deleted",
+        )
+        assert refused.value.details == {}
         # No server I/O of any kind — not even a read to inspect the bucket.
         assert not any(c[0] == "list_saves" for c in fake.call_log)
         assert not any(c[0] == "delete_server_saves" for c in fake.call_log)
@@ -2336,10 +2332,12 @@ class TestDeleteSlot:
         svc, fake = make_service(tmp_path)
         self._setup_state_with_slots(svc, tmp_path, active_slot="default")
 
-        result = await svc.delete_slot(42, "   ")
+        deletion = svc.delete_slot(42, "   ")
 
-        assert result["success"] is False
-        assert result["reason"] == "invalid_slot_name"
+        with pytest.raises(Refused) as refused:
+            await deletion
+
+        assert refused.value.reason == "invalid_slot_name"
         assert not any(c[0] == "delete_server_saves" for c in fake.call_log)
 
     @pytest.mark.asyncio
@@ -2367,10 +2365,15 @@ class TestDeleteSlot:
         svc, _fake = make_service(tmp_path)
         self._setup_state_with_slots(svc, tmp_path, active_slot="default")
 
-        result = await svc.delete_slot(42, "default")
+        deletion = svc.delete_slot(42, "default")
 
-        assert result["success"] is False
-        assert result["reason"] == "active_slot"
+        with pytest.raises(Refused) as refused:
+            await deletion
+
+        assert (refused.value.reason, refused.value.message) == (
+            "active_slot",
+            "Cannot delete the active slot. Switch to a different slot first.",
+        )
         # Slot still exists
         assert "default" in _require_save_state(svc, 42).slots
 
@@ -2391,11 +2394,11 @@ class TestDeleteSlot:
             raise RommApiError(500, "Server error")
 
         fake.delete_server_saves = fail_delete
+        deletion = svc.delete_slot(42, "save1")
 
-        result = await svc.delete_slot(42, "save1")
+        with pytest.raises(RommApiError):
+            await deletion
 
-        assert result["success"] is False
-        assert result["reason"] == "server_unreachable"
         # Slot NOT removed from state (rollback on failure)
         assert "save1" in _require_save_state(svc, 42).slots
 
@@ -2417,12 +2420,11 @@ class TestDeleteSlot:
             raise RommNotFoundError("HTTP 404: Not Found")
 
         fake.delete_server_saves = fail_delete
+        deletion = svc.delete_slot(42, "save1")
 
-        result = await svc.delete_slot(42, "save1")
+        with pytest.raises(RommNotFoundError):
+            await deletion
 
-        assert result["success"] is False
-        assert result["reason"] == "not_found"
-        assert result["reason"] != "server_unreachable"
         assert "save1" in _require_save_state(svc, 42).slots
 
         fake.delete_server_saves = original_delete
@@ -2455,26 +2457,26 @@ class TestDeleteSlot:
 
     @pytest.mark.asyncio
     async def test_delete_slot_not_installed_rom(self, tmp_path):
-        """ROM not installed returns failure."""
+        """ROM not installed refuses with not_installed."""
         svc, _fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         # Don't install any ROM
+        deletion = svc.delete_slot(42, "default")
 
-        result = await svc.delete_slot(42, "default")
-
-        assert result["success"] is False
-        assert result["reason"] == "not_installed"
+        with pytest.raises(NotInstalled):
+            await deletion
 
     @pytest.mark.asyncio
     async def test_delete_slot_sync_disabled(self, tmp_path):
-        """Save sync disabled returns failure."""
+        """Save sync disabled refuses with disabled."""
         svc, _fake = make_service(tmp_path)
         # save_sync_enabled defaults to False
+        deletion = svc.delete_slot(42, "default")
 
-        result = await svc.delete_slot(42, "default")
+        with pytest.raises(Refused) as refused:
+            await deletion
 
-        assert result["success"] is False
-        assert result["reason"] == "disabled"
+        assert (refused.value.reason, refused.value.message) == ("disabled", "Save sync is disabled")
 
 
 class TestSlotMutationLocking:
