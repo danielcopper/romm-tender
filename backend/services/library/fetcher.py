@@ -25,7 +25,7 @@ from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled, SyncState
 from domain.virtual_collection_id import virtual_types_to_list
 from domain.work_unit import WorkUnit, collection_units
-from lib.errors import classify_error
+from lib.errors import Refused
 from lib.romm_paging import LIST_PAGE_SIZE
 
 if TYPE_CHECKING:
@@ -145,12 +145,7 @@ class LibraryFetcher:
     # ── Platform metadata use cases ──────────────────────────────
 
     async def get_platforms(self):
-        try:
-            platforms = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
-        except Exception as e:
-            self._logger.error(f"Failed to fetch platforms: {e}")
-            _reason, _msg = classify_error(e)
-            return {"success": False, "reason": _reason, "message": _msg}
+        platforms = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
 
         # Only platforms with ROMs are shown (and thus toggleable), so the
         # materialized map covers exactly the set the user can act on.
@@ -192,12 +187,7 @@ class LibraryFetcher:
 
     async def set_all_platforms_sync(self, enabled):
         enabled = bool(enabled)
-        try:
-            platforms = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
-        except Exception as e:
-            self._logger.error(f"Failed to fetch platforms: {e}")
-            _reason, _msg = classify_error(e)
-            return {"success": False, "reason": _reason, "message": _msg}
+        platforms = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
 
         ep = {}
         for p in platforms:
@@ -209,12 +199,7 @@ class LibraryFetcher:
     # ── Collection metadata use cases ────────────────────────────
 
     async def get_collections(self):
-        try:
-            standard_collections = await self._loop.run_in_executor(None, self._romm_api.list_collections)
-        except Exception as e:
-            self._logger.error(f"Failed to fetch collections: {e}")
-            _reason, _msg = classify_error(e)
-            return {"success": False, "reason": _reason, "message": _msg}
+        standard_collections = await self._loop.run_in_executor(None, self._romm_api.list_collections)
         try:
             smart_collections = await self._loop.run_in_executor(None, self._romm_api.list_smart_collections)
         except Exception as e:
@@ -282,7 +267,7 @@ class LibraryFetcher:
 
     def save_collection_sync(self, collection_id, kind, enabled):
         if kind not in ("standard", "smart", "virtual"):
-            return {"success": False, "reason": "invalid_kind", "message": f"Invalid collection kind: {kind}"}
+            raise Refused("invalid_kind", f"Invalid collection kind: {kind}")
         buckets = self._get_enabled_collections_buckets()
         buckets[kind][str(collection_id)] = bool(enabled)
         self._settings["enabled_collections"] = buckets
@@ -295,14 +280,14 @@ class LibraryFetcher:
         The Collections tab's Enable all / Disable all, over the ids its table
         lists. One settings write stamps every id in ``collection_ids`` to
         ``enabled`` in the ``kind`` bucket and touches nothing else in it. An
-        unknown kind or a non-list id argument is rejected with the canonical
-        failure shape; an empty id list is a success no-op (nothing to stamp, no
-        write).
+        unknown kind refuses with ``invalid_kind`` and a non-list id argument
+        with ``invalid_ids``, both before any write; an empty id list is a
+        success no-op (nothing to stamp, no write).
         """
         if kind not in ("standard", "smart", "virtual"):
-            return {"success": False, "reason": "invalid_kind", "message": f"Invalid collection kind: {kind}"}
+            raise Refused("invalid_kind", f"Invalid collection kind: {kind}")
         if not isinstance(collection_ids, list):
-            return {"success": False, "reason": "invalid_ids", "message": "collection_ids must be a list"}
+            raise Refused("invalid_ids", "collection_ids must be a list")
         if not collection_ids:
             return {"success": True}
         buckets = self._get_enabled_collections_buckets()

@@ -9,6 +9,7 @@ from fakes.fake_settings_persister import FakeSettingsPersister
 from domain.rom import Rom
 from domain.sync_diff import classify_roms
 from domain.sync_run_kind import SyncRunKind
+from lib.errors import Refused
 from services.library._state import CollectionMembership
 from tests.services.library._helpers import (
     _make_collections_loop,
@@ -121,13 +122,16 @@ class TestGetPlatforms:
     async def test_http_error(self, library):
         from unittest.mock import AsyncMock, MagicMock
 
+        failure = Exception("Connection refused")
         mock_loop = MagicMock()
-        mock_loop.run_in_executor = AsyncMock(side_effect=Exception("Connection refused"))
+        mock_loop.run_in_executor = AsyncMock(side_effect=failure)
         rebind_loop(library.sync, mock_loop)
+        call = library.sync.get_platforms()
 
-        result = await library.sync.get_platforms()
-        assert result["success"] is False
-        assert "reason" in result
+        with pytest.raises(Exception, match="Connection refused") as excinfo:
+            await call
+
+        assert excinfo.value is failure
 
 
 class TestSavePlatformSync:
@@ -182,12 +186,16 @@ class TestSetAllPlatformsSync:
     async def test_http_error(self, library):
         from unittest.mock import AsyncMock, MagicMock
 
+        failure = Exception("timeout")
         mock_loop = MagicMock()
-        mock_loop.run_in_executor = AsyncMock(side_effect=Exception("timeout"))
+        mock_loop.run_in_executor = AsyncMock(side_effect=failure)
         rebind_loop(library.sync, mock_loop)
+        call = library.sync.set_all_platforms_sync(True)
 
-        result = await library.sync.set_all_platforms_sync(True)
-        assert result["success"] is False
+        with pytest.raises(Exception, match="timeout") as excinfo:
+            await call
+
+        assert excinfo.value is failure
 
 
 class TestGetCollections:
@@ -320,15 +328,16 @@ class TestGetCollections:
             assert c["sync_enabled"] is False
 
     @pytest.mark.asyncio
-    async def test_api_error_returns_error_response(self, library):
-        """When list_collections raises an exception the response has success=False."""
-        rebind_loop(library.sync, _make_loop_raising(Exception("Connection refused")))
+    async def test_api_error_reaches_the_caller(self, library):
+        """When list_collections raises, the exception reaches the caller unchanged."""
+        failure = Exception("Connection refused")
+        rebind_loop(library.sync, _make_loop_raising(failure))
+        call = library.sync.get_collections()
 
-        result = await library.sync.get_collections()
+        with pytest.raises(Exception, match="Connection refused") as excinfo:
+            await call
 
-        assert result["success"] is False
-        assert "reason" in result
-        assert "message" in result
+        assert excinfo.value is failure
 
     @pytest.mark.asyncio
     async def test_empty_collections(self, library):
@@ -651,12 +660,14 @@ class TestSaveCollectionSync:
         assert result == {"success": True}
 
     async def test_rejects_invalid_kind(self, library):
-        """Passing an unknown kind returns success=False without writing."""
-        result = await library.sync.save_collection_sync("1", "bogus", True)
+        """Passing an unknown kind refuses with ``invalid_kind`` without writing."""
+        call = library.sync.save_collection_sync("1", "bogus", True)
 
-        assert result["success"] is False
-        assert result["reason"] == "invalid_kind"
-        assert "Invalid collection kind" in result["message"]
+        with pytest.raises(Refused) as excinfo:
+            await call
+
+        assert excinfo.value.reason == "invalid_kind"
+        assert "Invalid collection kind" in excinfo.value.message
 
     async def test_string_id_stored_from_int(self, library):
         """Passing an integer id is coerced to a string key."""
@@ -689,8 +700,10 @@ class TestSaveCollectionSync:
         """Invalid kind short-circuits before persistence."""
         recorder = FakeSettingsPersister()
         library.sync._fetcher._settings_persister = recorder
+        call = library.sync.save_collection_sync("1", "bogus", True)
 
-        await library.sync.save_collection_sync("1", "bogus", True)
+        with pytest.raises(Refused):
+            await call
 
         assert recorder.save_count == 0
 

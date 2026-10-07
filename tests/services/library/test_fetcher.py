@@ -18,7 +18,7 @@ import pytest
 
 from domain.sync_state import SyncCancelled, SyncState
 from domain.work_unit import WorkUnit
-from lib.errors import RommApiError, RommNotFoundError
+from lib.errors import Refused, RommApiError, RommNotFoundError, classify_error
 from lib.romm_paging import LIST_PAGE_SIZE
 
 
@@ -446,18 +446,19 @@ class TestGetCollectionsMalformedListing:
         client = MagicMock()
         client.request.side_effect = lambda path: {"detail": "not a list"} if path == "/api/collections" else []
         library.sync._fetcher._romm_api = RommApiAdapter(client)
+        call = library.sync._fetcher.get_collections()
 
-        result = await library.sync._fetcher.get_collections()
+        with pytest.raises(RommApiError) as excinfo:
+            await call
 
-        assert result == {
-            "success": False,
-            "reason": "server_unreachable",
-            "message": "Unexpected response from /api/collections: dict",
-        }
+        assert classify_error(excinfo.value) == (
+            "server_unreachable",
+            "Unexpected response from /api/collections: dict",
+        )
 
 
 class TestPlatformListingThatIsNotAList:
-    """The Library page's two platform reads answer a non-list listing with the failure shape."""
+    """The Library page's two platform reads let the adapter's error on a non-list listing reach the caller."""
 
     @staticmethod
     def _wire_malformed_listing(library):
@@ -470,27 +471,23 @@ class TestPlatformListingThatIsNotAList:
     @pytest.mark.asyncio
     async def test_get_platforms_fails(self, library):
         self._wire_malformed_listing(library)
+        call = library.sync._fetcher.get_platforms()
 
-        result = await library.sync._fetcher.get_platforms()
+        with pytest.raises(RommApiError) as excinfo:
+            await call
 
-        assert result == {
-            "success": False,
-            "reason": "server_unreachable",
-            "message": "Unexpected response from /api/platforms: dict",
-        }
+        assert classify_error(excinfo.value) == ("server_unreachable", "Unexpected response from /api/platforms: dict")
 
     @pytest.mark.asyncio
     async def test_set_all_platforms_sync_fails_and_writes_nothing(self, library):
         self._wire_malformed_listing(library)
         library.settings["enabled_platforms"] = {"1": True}
+        call = library.sync._fetcher.set_all_platforms_sync(False)
 
-        result = await library.sync._fetcher.set_all_platforms_sync(False)
+        with pytest.raises(RommApiError) as excinfo:
+            await call
 
-        assert result == {
-            "success": False,
-            "reason": "server_unreachable",
-            "message": "Unexpected response from /api/platforms: dict",
-        }
+        assert classify_error(excinfo.value) == ("server_unreachable", "Unexpected response from /api/platforms: dict")
         assert library.settings["enabled_platforms"] == {"1": True}
 
 
@@ -532,28 +529,28 @@ class TestSaveCollectionsSync:
         bucket = library.settings["enabled_collections"]["standard"]
         assert bucket == {"7": True, "8": True}
 
-    def test_rejects_invalid_kind_with_failure_shape(self, library):
-        """An unknown kind is rejected with the canonical failure shape, no write."""
+    def test_rejects_invalid_kind(self, library):
+        """An unknown kind refuses with ``invalid_kind``, no write."""
         recorder = library.settings_persister
+        save_collections_sync = library.sync._fetcher.save_collections_sync
 
-        result = library.sync._fetcher.save_collections_sync(["1"], "bogus", True)
+        with pytest.raises(Refused) as excinfo:
+            save_collections_sync(["1"], "bogus", True)
 
-        assert result["success"] is False
-        assert result["reason"] == "invalid_kind"
-        assert "Invalid collection kind" in result["message"]
-        assert "error" not in result
-        assert "error_code" not in result
+        assert excinfo.value.reason == "invalid_kind"
+        assert "Invalid collection kind" in excinfo.value.message
         assert recorder.save_count == 0
 
-    def test_rejects_non_list_ids_with_failure_shape(self, library):
-        """A non-list ids argument from the wire is rejected, no write."""
+    def test_rejects_non_list_ids(self, library):
+        """A non-list ids argument from the wire refuses with ``invalid_ids``, no write."""
         recorder = library.settings_persister
+        save_collections_sync = library.sync._fetcher.save_collections_sync
 
-        result = library.sync._fetcher.save_collections_sync("not-a-list", "standard", True)
+        with pytest.raises(Refused) as excinfo:
+            save_collections_sync("not-a-list", "standard", True)
 
-        assert result["success"] is False
-        assert result["reason"] == "invalid_ids"
-        assert isinstance(result["message"], str) and result["message"]
+        assert excinfo.value.reason == "invalid_ids"
+        assert excinfo.value.message == "collection_ids must be a list"
         assert recorder.save_count == 0
 
     def test_empty_ids_is_a_success_no_op(self, library):
