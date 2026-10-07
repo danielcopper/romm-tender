@@ -884,6 +884,56 @@ class TestPreviewOverASkippedUnit:
         assert result["changed_names"] == ["A"]
         assert [row["changed_count"] for row in summary["platform_breakdown"]] == [1]
 
+    @pytest.mark.asyncio
+    async def test_a_skipped_collection_member_on_a_fetched_platform_is_changed(
+        self, library, fake_romm_api, monkeypatch
+    ):
+        from domain.collection_sync_state import CollectionSyncState
+
+        # The platform has no stamp and is fetched; the collection holding the
+        # same game is stamped and skipped. The game belongs to the platform unit,
+        # whose apply rewrites the command.
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A", "fs_name": "a.z64"}]
+        )
+        _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[10])
+        fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00+00:00"
+        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+        self._installed_game(library, applied_launch_options=self.OLD_CMD)
+        with library.uow as uow:
+            uow.collection_sync_state.save(
+                CollectionSyncState.stamp(
+                    collection_id="7",
+                    collection_kind="standard",
+                    updated_at="2025-01-01T00:00:00+00:00",
+                    completed_at="2025-06-01T00:00:00",
+                    rom_count=1,
+                    member_rom_ids=(10,),
+                )
+            )
+        fetcher = library.sync._fetcher
+        fetch_collection_unit = fetcher.fetch_collection_unit
+        collection_skips: list[bool] = []
+
+        async def recording_fetch_collection_unit(*args, **kwargs):
+            answer = await fetch_collection_unit(*args, **kwargs)
+            collection_skips.append(answer[2])
+            return answer
+
+        monkeypatch.setattr(fetcher, "fetch_collection_unit", recording_fetch_collection_unit)
+
+        result = await library.sync.sync_preview()
+
+        assert collection_skips == [True]
+        assert result["success"] is True
+        summary = result["summary"]
+        assert summary["changed_count"] == 1
+        assert summary["unchanged_count"] == 0
+        assert result["changed_names"] == ["A"]
+        assert [row["changed_count"] for row in summary["platform_breakdown"]] == [1]
+
 
 class TestSyncApplyDelta:
     """Tests for sync_apply_delta().
