@@ -349,6 +349,11 @@ listed under [Steam Input Mode](configuration.md#steam-input-mode).
 
 ## Saves Not Syncing
 
+### RetroDECK's saves folder does not exist
+
+**Fix**: Insert the SD card or drive the saves folder is on. If it is there, repair the folder with RetroDECK's **Repair
+RetroDECK Paths**. Tender does not create the folder itself ([Save Sync](save-sync.md#save-file-location)).
+
 ### Auto-sync is disabled
 
 **Fix**: Go to **Save Sync** in the QAM and make sure both "Sync before launch" and "Sync after exit" are toggled on.
@@ -542,6 +547,13 @@ reachable, try cancelling and restarting the download from the game detail page.
 **Fix**: Open the **Downloads** page from the QAM to see error details. Common causes include insufficient disk space,
 network interruption, or the ROM being unavailable on the server. Failed downloads can be retried from the game detail
 page.
+
+### Download refused before it starts
+
+**Fix**: The refusal says why. A download goes only into RetroDECK's folders, so it needs RetroDECK installed and
+switched on in **Settings › Emulator sources**, a ROM folder for the game's system, and RetroDECK's settings in order —
+when the main panel shows a card for RetroDECK, the refusal repeats it; follow what the card says. See
+[Managing Games](managing-games.md#downloading-roms) for every case.
 
 ## Data Management
 

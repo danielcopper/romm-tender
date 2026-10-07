@@ -485,6 +485,15 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/adapters/test_atlas_firmware.py::TestDegradation` and
   `tests/adapters/test_atlas_saves.py::TestWhichSourceAnswers`. Unseen by the scan: a name reached through `getattr` or
   `importlib`. Prompt-only: no adapter keeps a handle or an answer past the reading it came through
+- **Every folder Tender uses in RetroDECK is the resolver's answer, asked through `adapters/retrodeck_folders.py`; no
+  module reads RetroDECK's settings or builds a folder from a root, and while RetroDECK reports `marker-missing`,
+  `marker-unreadable`, `marker-invalid` or `not-set-up` none of its folders is used** — test + prompt-only —
+  `tests/adapters/test_retrodeck_folders.py` (the real resolver over tmp homes: every folder its answer, each finding
+  refusing every question, and `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and
+  `tests/contract/test_retrodeck_folders.py` (under each finding no press downloads, deletes or cleans up there). Unseen
+  by them: a folder joined onto a root under another name, and a caller that puts the question to RetroDECK's handle
+  itself. Prompt-only: a new caller that downloads into, removes from or creates a folder in RetroDECK asks
+  `RetroDeckFolders` and raises the refusal it answers with
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (the file's own calls only: a write behind a helper, a write passed as a
   bound method (`run_in_executor(None, uow.roms.save, …)`), an aliased handle, a `getattr`-reached repository, and a
@@ -782,7 +791,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — prompt-only — sync
   paths, `get_save_status`, and the three slot mutations hold the lock; mechanize via a `rom_save_sync_states.save`
   call-site audit
-- **Which files a game's save consists of is the EMULATOR's answer, read live, and four of its five states refuse the
+- **Which files a game's save consists of is the EMULATOR's answer, read live, and five of its six states refuse the
   sync — no probe, no state written** — test + prompt-only — `tests/adapters/test_atlas_saves.py`,
   `tests/domain/test_save_answer.py` and `tests/services/saves/test_save_shape_gate.py`, where each absence test stands
   beside a control that asserts the probe does happen, and every per-system pin names the extension it asked with

@@ -284,6 +284,12 @@ Some cores keep their saves in a folder of their own below that — the 3DO core
 `saves/3do/opera/per_game` — and Tender now looks there, because that is where the answer points. That has not yet been
 observed on a device.
 
+Tender never creates RetroDECK's saves folder itself. While it does not exist — on an SD card that is not inserted, say
+— no save of RetroDECK's emulators is synced, and a game's save sync says **Save sync is unavailable: RetroDECK's saves
+folder _path_ does not exist.**; the main panel's card for that folder says the same. Created anyway, the folder would
+land on internal storage, and the card would hide what was synced into it once it is back. Folders below an existing
+saves folder, for one emulator or one game, are still created as the emulator would create them.
+
 ## RetroArch Save Sorting
 
 RetroArch's two "Sort Saves into Folders" settings (**Settings > Saving**) decide which folder a game's save goes into.

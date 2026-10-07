@@ -318,6 +318,11 @@ Three properties are worth knowing before changing anything there:
   change, is stated at the top of `frontend/src/api/hostSocket.ts`.
 - **A dropped connection fails the calls that were already sent, and only those.** A frame still queued never left, so
   re-sending it is safe; one already on the wire may have run, and retrying it would repeat whatever it did.
+- **One endpoint answer is reworded on its way back.** A refusal for one of RetroDECK's findings
+  (`reason: "retrodeck_finding"`, the finding beside it) gets the message Main's banner shows for that finding
+  (`withFindingSentence` in `frontend/src/utils/emulatorSourceWording.ts`), so every press that refuses for it reads the
+  same as the banner whichever endpoint refused. Every other answer comes back as it was sent. The suite stubs this
+  module, so `api/host.test.ts` is where the rewording is pinned.
 
 **A fourth opens no socket and is the one the panel reaches the screen through.** `definePanel` answers with the factory
 unchanged; `index.tsx` hands that factory to `frontend/src/qam/installEntry.tsx`, which calls it exactly once and mounts
