@@ -445,10 +445,11 @@ export function usePlatformsPage(): PlatformsPageState {
   // pane is open and should not wait behind the rows above it.
   //
   // One at a time: every answer is a live reading of the machine for that
-  // system — 106-486 ms per platform, measured on the reference device — and
-  // running them together would take away the one thing that makes the focused
-  // row cheap, which is being able to choose what goes next. Whether a parallel
-  // walk would finish the whole list sooner is unmeasured.
+  // system — 199-314 ms per platform, measured on the reference device at
+  // emu-atlas 0.22 — and running them together would take away the one thing
+  // that makes the focused row cheap, which is being able to choose what goes
+  // next. Whether a parallel walk would finish the whole list sooner is
+  // unmeasured.
   //
   // A platform the overview names but the list does not show is never asked:
   // RomM files firmware under its own directory names, so a key can belong to

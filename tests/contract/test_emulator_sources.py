@@ -6,7 +6,7 @@ listed, switched and answered here is what the real holder detects under it.
 
 from __future__ import annotations
 
-from ._seed import _retrodeck_marker_path, seed_es_systems
+from ._seed import _retrodeck_marker_path, seed_es_systems, seed_retrodeck_not_set_up, seed_rom
 
 
 async def test_the_listing_names_a_detected_retrodeck(harness):
@@ -49,6 +49,27 @@ async def test_switching_the_source_off_takes_its_emulators_away_and_on_brings_t
     assert on["emulators"] != []
 
 
+async def test_a_game_s_emulators_follow_the_source_switched_off_and_on(harness):
+    seed_es_systems(harness)
+    seed_rom(harness, 42, platform_slug="gba")
+    before = await harness.endpoints.get_platform_core_info(42)
+
+    await harness.endpoints.set_emulator_source_enabled("retrodeck", False)
+    off = await harness.endpoints.get_platform_core_info(42)
+    await harness.endpoints.set_emulator_source_enabled("retrodeck", True)
+    on = await harness.endpoints.get_platform_core_info(42)
+
+    assert (off["emulator_data_available"], off["emulators"], off["emulator_data_reason"]) == (
+        False,
+        [],
+        "switched_off",
+    )
+    assert off["active_core_label"] is None
+    assert on == before
+    assert on["emulator_data_available"] is True
+    assert on["active_core_label"] == "mGBA"
+
+
 async def test_a_source_that_is_not_detected_is_refused_in_the_failure_shape(harness):
     seed_es_systems(harness)
 
@@ -69,3 +90,21 @@ async def test_a_malformed_retrodeck_json_is_listed_with_its_finding(harness):
     assert source["kind"] == "retrodeck"
     assert "marker-invalid" in {finding["code"] for finding in source["findings"]}
     assert source["root"] is None
+
+
+async def test_a_retrodeck_that_is_not_set_up_is_listed_and_answers_why_it_has_no_emulator_list(harness):
+    seed_retrodeck_not_set_up(harness)
+
+    listing = await harness.endpoints.get_emulator_sources()
+    info = await harness.endpoints.get_system_core_info("gba")
+
+    assert listing["answering"] == "retrodeck"
+    (source,) = listing["sources"]
+    assert [finding["code"] for finding in source["findings"]] == ["not-set-up"]
+    assert (source["enabled"], source["root"], source["catalogue"]) == (True, None, "unavailable")
+    assert (info["emulator_data_available"], info["emulators"], info["emulator_data_reason"]) == (
+        False,
+        [],
+        "not_set_up",
+    )
+    assert info["emulator_source"] == {"kind": "retrodeck", "starts_games": True}

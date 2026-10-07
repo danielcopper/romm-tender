@@ -1,7 +1,10 @@
 """Detection — what emulator installations are present on a machine.
 
 ``detect(home, machine)`` probes the config markers of each known arrangement
-and returns a handle for every one it finds. Detection labels markers, it does
+and returns a handle for every one it finds — RetroDECK's Flatpak deploy too,
+because a RetroDECK that has not been started, or left its first-run setup at
+the storage step, has no marker and is an installation all the same
+(``not-set-up``). Detection labels markers, it does
 not partition: EmuDeck *is* a configured ``org.libretro.RetroArch``, so the
 EmuDeck marker is checked before concluding "a bare RetroArch", and the EmuDeck
 handle claims that Flatpak (its ``kinds`` carries both descriptions —
@@ -28,6 +31,7 @@ from .installations import (
     BareRetroArchNative,
     RetroDeck,
     BareRetroArchFlatpak,
+    retrodeck_deployed,
 )
 from .machine import KIND_MISSING, Machine, RealMachine
 
@@ -49,6 +53,12 @@ def detect(home: str, machine: Machine | None = None) -> list[Installation]:
     # (REVIEW H10). The handles are live: they re-read their sources per query.
     if machine.path_kind(os.path.join(home, RETRODECK_JSON_SUFFIX)) != KIND_MISSING:
         found.append(RetroDeck(home, machine))
+    # A deployed RetroDECK without its marker has not been started, or left
+    # its first-run setup at the storage step, which deletes the marker it
+    # wrote — an installation all the same: its health says not-set-up, and it
+    # answers nothing else.
+    elif retrodeck_deployed(machine, home):
+        found.append(RetroDeck(home, machine, detected_by_deploy=True))
 
     emudeck_present = machine.path_kind(os.path.join(home, EMUDECK_SETTINGS_SUFFIX)) != KIND_MISSING
     if emudeck_present:

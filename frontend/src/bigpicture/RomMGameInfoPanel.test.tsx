@@ -1524,6 +1524,99 @@ describe("RomMGameInfoPanel", () => {
       expect(container.textContent).toContain("BIOS");
     });
 
+    it("emulator_sources: re-reads the emulators, the BIOS state and the save status", async () => {
+      const detail = {
+        found: true,
+        rom_id: 60,
+        platform_slug: "snes",
+        save_sync_enabled: true,
+        bios_status: { platform_slug: "snes", server_count: 1, local_count: 1, all_downloaded: true } as never,
+        metadata: makeMetadata(),
+        stale_fields: [],
+      };
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(detail);
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
+        active_core: "initial_core.so",
+        active_core_label: "INITIAL_CORE",
+        platform_core_label: null,
+        has_game_override: false,
+        emulator_data_available: true,
+        emulator_data_reason: null,
+        emulator_source: { kind: "retrodeck", starts_games: true },
+        emulators: [
+          {
+            label: "INITIAL_CORE",
+            kind: "libretro",
+            core_so: "initial_core.so",
+            emulator: "initial_core.so",
+            is_default: true,
+            bakeable: true,
+            reason: null,
+          },
+        ],
+      });
+      const view = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+        await Promise.resolve();
+      });
+      expect(view.container.textContent).toContain("INITIAL_CORE");
+      vi.mocked(backend.getPlatformCoreInfo).mockClear();
+      vi.mocked(backend.getSaveStatus).mockClear();
+      vi.mocked(cachedStore.invalidateCachedGameDetail).mockClear();
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
+        active_core: null,
+        active_core_label: null,
+        platform_core_label: null,
+        has_game_override: false,
+        emulator_data_available: false,
+        emulator_data_reason: "switched_off",
+        emulator_source: null,
+        emulators: [],
+      });
+
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await flushAsync();
+
+      expect(vi.mocked(cachedStore.invalidateCachedGameDetail)).toHaveBeenCalledWith(testAppId);
+      expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledWith(60);
+      expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledWith(60);
+      expect(view.container.textContent).not.toContain("INITIAL_CORE");
+    });
+
+    it("emulator_sources: leaves the save status and the slots unread while save sync is off", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 61,
+        platform_slug: "snes",
+        save_sync_enabled: false,
+        metadata: makeMetadata(),
+        stale_fields: [],
+      });
+      render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      vi.mocked(backend.getPlatformCoreInfo).mockClear();
+      vi.mocked(backend.getSaveStatus).mockClear();
+      vi.mocked(backend.isSaveTrackingConfigured).mockClear();
+      vi.mocked(backend.getSaveSlots).mockClear();
+
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
+        await Promise.resolve();
+      });
+      await flushAsync();
+
+      expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledWith(61);
+      expect(vi.mocked(backend.getSaveStatus)).not.toHaveBeenCalled();
+      expect(vi.mocked(backend.isSaveTrackingConfigured)).not.toHaveBeenCalled();
+      expect(vi.mocked(backend.getSaveSlots)).not.toHaveBeenCalled();
+    });
+
     it("core_changed: invalidates cache + re-fetches getCachedGameDetail and updates biosStatus state", async () => {
       // Mount without bios_status so the initial state.biosStatus is null
       // and the BIOS tab is NOT visible. Then dispatch core_changed with a

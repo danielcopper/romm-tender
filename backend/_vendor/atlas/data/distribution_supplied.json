@@ -63,7 +63,7 @@
           "kind": "file",
           "source": "prboom.wad",
           "destination": "prboom.wad",
-          "purpose": "PrBoom's own wad. prboom_libretro declares no firmware at all — its .info states in notes that the file belongs in the ROM directory — so on the reference machine this copy is an UnclaimedFile rather than a requirement; the entry stands because the copy is the same copy either way",
+          "purpose": "PrBoom's own wad. prboom_libretro declares no firmware at all — its .info states in notes that the file belongs in the ROM directory — and no other shipped .info declares the name either, so this copy is an UnclaimedFile rather than a requirement; the entry stands because the copy is the same copy either way",
           "citation": "[V-script] components/retroarch/component_prepare.sh:65 in the Flatpak's components tree at RetroDECK 0.10.9b"
         },
         {
@@ -126,7 +126,7 @@
           "kind": "file",
           "source": "Amiga/capsimg.so",
           "destination": "capsimg.so",
-          "purpose": "the Amiga IPF support library, copied with cp -f out of the Amiga subtree and landing at the firmware root under a shortened name. No installed core's .info declares it, so on the reference machine it is an UnclaimedFile rather than a requirement",
+          "purpose": "the Amiga IPF support library, copied with cp -f out of the Amiga subtree and landing at the firmware root under a shortened name. No shipped .info declares it, so the copy is an UnclaimedFile rather than a requirement",
           "citation": "[V-script] components/retroarch/component_prepare.sh:131 in the Flatpak's components tree at RetroDECK 0.10.9b"
         }
       ]

@@ -1,0 +1,95 @@
+{
+  "schema": 1,
+  "spec": "DESIGN.md — Vocabulary. The public platform ids that stand for exactly one ES-DE system. Most of these systems share their <platform> tag with others (arcade; pc, pcwindows), so the platform-keyed crosswalk (platform_ids_crosswalk.json) cannot carry their ids without answering every system under the tag. World knowledge under CLAUDE.md's boundary rule — nothing here is read off a machine, so it is versioned and source-cited, and the loader refuses a malformed table rather than answering out of one. An id listed here wins over the crosswalk.",
+  "description": "systems: ES-DE system name → the public ids that stand for it alone. Each id names its vocabulary (one of the crosswalk's four), its value as the string a question asks with (a numeric id as its decimal digits, a libretro database name verbatim) and its source at the pinned revision. The system field cites the system's <name> and <platform> lines in ES-DE's catalogue — a shared tag is why most rows exist. The comment field is that catalogue's <fullname> — prose, non-contractual. One vocabulary/value pair stands for one system, never two (the hand-curated join lives in scripts/generate_platform_ids_by_system.py, HAND_JOIN).",
+  "sources": {
+    "systems": "ES-DE v3.4.1 resources/systems/linux/es_systems.xml (<name>, <fullname>, <platform>)",
+    "screenscraper": "rommapp/romm@95599dad (tag 5.3.1) backend/handler/metadata/ss_handler.py SCREENSAVER_PLATFORM_LIST — ScreenScraper's own system list needs API credentials",
+    "libretro": "rommapp/romm@95599dad (tag 5.3.1) backend/handler/metadata/libretro_handler.py LIBRETRO_PLATFORM_LIST, each name held against libretro/libretro-database@fbeefcb4 rdb/<name>.rdb",
+    "generator": "scripts/generate_platform_ids_by_system.py"
+  },
+  "systems": {
+    "cps1": {
+      "comment": "Capcom Play System I",
+      "system": "ES-DE v3.4.1 resources/systems/linux/es_systems.xml:475 <name>cps1</name>, :489 <platform>arcade</platform>",
+      "ids": [
+        {
+          "vocabulary": "screenscraper",
+          "value": "6",
+          "source": "rommapp/romm@95599dad (tag 5.3.1) backend/handler/metadata/ss_handler.py:1124 UPS.CPS1 → :223 CPS1_SS_ID = 6"
+        }
+      ]
+    },
+    "cps2": {
+      "comment": "Capcom Play System II",
+      "system": "ES-DE v3.4.1 resources/systems/linux/es_systems.xml:493 <name>cps2</name>, :507 <platform>arcade</platform>",
+      "ids": [
+        {
+          "vocabulary": "screenscraper",
+          "value": "7",
+          "source": "rommapp/romm@95599dad (tag 5.3.1) backend/handler/metadata/ss_handler.py:1125 UPS.CPS2 → :224 CPS2_SS_ID = 7"
+        }
+      ]
+    },
+    "cps3": {
+      "comment": "Capcom Play System III",
+      "system": "ES-DE v3.4.1 resources/systems/linux/es_systems.xml:511 <name>cps3</name>, :525 <platform>arcade</platform>",
+      "ids": [
+        {
+          "vocabulary": "screenscraper",
+          "value": "8",
+          "source": "rommapp/romm@95599dad (tag 5.3.1) backend/handler/metadata/ss_handler.py:1126 UPS.CPS3 → :225 CPS3_SS_ID = 8"
+        }
+      ]
+    },
+    "doom": {
+      "comment": "Doom",
+      "system": "ES-DE v3.4.1 resources/systems/linux/es_systems.xml:566 <name>doom</name>, :575 <platform>pc, pcwindows</platform>",
+      "ids": [
+        {
+          "vocabulary": "libretro",
+          "value": "DOOM",
+          "source": "rommapp/romm@95599dad (tag 5.3.1) backend/handler/metadata/libretro_handler.py:207 UPS.DOOM; libretro/libretro-database@fbeefcb4 rdb/DOOM.rdb"
+        },
+        {
+          "vocabulary": "screenscraper",
+          "value": "290",
+          "source": "rommapp/romm@95599dad (tag 5.3.1) backend/handler/metadata/ss_handler.py:1129 UPS.DOOM"
+        }
+      ]
+    },
+    "model2": {
+      "comment": "Sega Model 2",
+      "system": "ES-DE v3.4.1 resources/systems/linux/es_systems.xml:1192 <name>model2</name>, :1200 <platform>arcade</platform>",
+      "ids": [
+        {
+          "vocabulary": "screenscraper",
+          "value": "54",
+          "source": "rommapp/romm@95599dad (tag 5.3.1) backend/handler/metadata/ss_handler.py:1160 UPS.MODEL2"
+        }
+      ]
+    },
+    "scummvm": {
+      "comment": "ScummVM Game Engine",
+      "system": "ES-DE v3.4.1 resources/systems/linux/es_systems.xml:1823 <name>scummvm</name>, :1830 <platform>scummvm</platform>",
+      "ids": [
+        {
+          "vocabulary": "libretro",
+          "value": "ScummVM",
+          "source": "rommapp/romm@95599dad (tag 5.3.1) backend/handler/metadata/libretro_handler.py:242 UPS.SCUMMVM; libretro/libretro-database@fbeefcb4 rdb/ScummVM.rdb"
+        }
+      ]
+    },
+    "stv": {
+      "comment": "Sega Titan Video Game System",
+      "system": "ES-DE v3.4.1 resources/systems/linux/es_systems.xml:2011 <name>stv</name>, :2019 <platform>arcade</platform>",
+      "ids": [
+        {
+          "vocabulary": "screenscraper",
+          "value": "69",
+          "source": "rommapp/romm@95599dad (tag 5.3.1) backend/handler/metadata/ss_handler.py:1230 UPS.STV"
+        }
+      ]
+    }
+  }
+}

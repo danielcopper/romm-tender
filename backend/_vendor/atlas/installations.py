@@ -41,6 +41,7 @@ from typing import (
 from dataclasses import dataclass, field, replace as _dc_replace
 
 from . import _xml as _ET
+from ._question import one_question
 from . import whdload
 from .content_path import (
     content_basename,
@@ -80,6 +81,7 @@ from .platforms import (
     PlatformIdentities,
     platform_identities,
     platforms_for,
+    systems_for,
 )
 from .systems import known_systems, vocabulary_platform_tags
 from .firmware import (
@@ -112,6 +114,20 @@ from .firmware import (
     read_core_declarations,
     xemu_file_value,
 )
+from .find_rules import NO_FIND_RULES, FindRules, merge_find_rules, parse_find_rules
+from .find_rules import Availability
+from .launch import (
+    PROBE_HIT,
+    PROBE_MISS,
+    PROBE_UNKNOWN,
+    Launcher,
+    LaunchResolution,
+    LaunchLookup,
+    LayeredFindRules,
+    Probe,
+    command_unsupported,
+    unsupported,
+)
 from .launch_formats import lookup_install_first, lookup_standalone_launch
 from .firmware import firmware_for_core as _resolve_for_core
 from .firmware import firmware_for_system as _resolve_for_system
@@ -119,6 +135,9 @@ from .firmware import firmware_inventory as _resolve_inventory
 from .firmware import identify_firmware as _resolve_identification
 from .machine import (
     ARCHIVE_MISSING,
+    FileStamp,
+    StampingMachine,
+    DIGEST_MD5,
     GLOB_COMPLETE,
     GLOB_INCOMPLETE,
     KIND_DIRECTORY,
@@ -189,6 +208,7 @@ from .placement import (
     CAVEAT_CORE_MODE_UNESTABLISHED,
     CAVEAT_CORE_OWN_WRITES_UNESTABLISHED,
     CAVEAT_CORE_OPTION_VALUE_UNESTABLISHED,
+    CAVEAT_CORE_OPTIONS_UNAUDITED,
     CAVEAT_CORE_SAVESTATES_UNSUPPORTED,
     CAVEAT_DEAD_SYMLINK,
     CAVEAT_OPTION_ENTRY_RETIRED,
@@ -267,6 +287,7 @@ from .placement import (
     UNRESOLVED_EMULATOR_CONFIG_PATH_UNTRANSLATABLE,
     UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
     UNRESOLVED_MOD_WIRING_UNESTABLISHED,
+    UNRESOLVED_SLOT_DEVICE_UNINTERPRETED,
     UNRESOLVED_STANDALONE,
     UNRESOLVED_STANDALONE_VARIANT_UNESTABLISHED,
     UNRESOLVED_TEXTURE_WIRING_UNESTABLISHED,
@@ -278,6 +299,7 @@ from .placement import (
     REASON_CONFIGURED_USER_REACH_UNESTABLISHED,
     REASON_CONFIGURED_USER_SETUP_UNESTABLISHED,
     REASON_HDD_PATH_UNSET,
+    REASON_KEY_REPEATED,
     REASON_KEY_UNREAD,
     REASON_LISTED_USER_ACCOUNT_UNESTABLISHED,
     REASON_MLC_LAUNCH_FLAG_OUTRANKS_CONFIG,
@@ -353,8 +375,7 @@ from .retroarch_cfg import (
     chain_value,
     expand_home,
     is_app_relative,
-    parse_cfg,
-    parse_cfg_text,
+    parse_cfg_once,
     resolve_layout,
 )
 
@@ -390,6 +411,28 @@ HEALTH_ISSUE_CATALOGUE_INVALID = "catalogue-invalid"
 # names exactly the version the wiring table was read at — any other version
 # made promises atlas never read, so no row is checked there (fail closed).
 HEALTH_ISSUE_CONTENT_TREE_UNWIRED = "content-tree-unwired"
+# RetroDECK is installed and its marker is not there: its Flatpak is deployed
+# and ``retrodeck.json`` is missing. RetroDECK writes that marker at the start of
+# every launch that finds none (libexec/global.sh:159-197, the copy at :184 @
+# 0.10.10b), ahead of its first-run setup, and that setup deletes it again when
+# the user leaves at the storage step (``rm -f "$rd_conf"`` in finit,
+# libexec/other_functions.sh:674-678, and the other cancel paths at :712, :724,
+# :737 and :756). So its absence beside a deploy says RetroDECK has not been
+# started for this home, or left its first-run setup at the storage step —
+# start it once. Nothing of the app's own need exist under the home before a
+# first run: flatpak creates the app's ``~/.var/app`` tree on that run
+# (flatpak_ensure_data_dir, common/flatpak-run.c:759-790, called from
+# flatpak_run_app at :3287 @ 1.16.6). The setup's own end is a later file
+# (``.lock``, create_lock in libexec/other_functions.sh:842-846), which atlas
+# does not check. Distinct from ``marker-missing``: that one is a marker gone
+# from a handle detected by it, this one a handle detected by its deploy, which
+# therefore answers nothing else — every other question refuses with this
+# finding rather than name a directory or a catalogue setup has not made yet.
+HEALTH_ISSUE_NOT_SET_UP = "not-set-up"
+# One fact, one code on every route, the sharing ``core-not-installed`` has:
+# the placement routes refuse a not-set-up installation with this outcome,
+# health and every other answer state it as the finding of the same spelling.
+UNRESOLVED_NOT_SET_UP = HEALTH_ISSUE_NOT_SET_UP
 
 
 def _content_tree_unwired_finding(
@@ -544,6 +587,16 @@ def _running_deploy(machine: Machine, home: str, app_id: str) -> _Deploy | None:
         if machine.path_kind(deployed) == KIND_DIRECTORY:
             return _Deploy(os.path.join(deployed, "files"), system)
     return None
+
+
+def retrodeck_deployed(machine: Machine, home: str) -> bool:
+    """Whether a RetroDECK Flatpak deploy runs on this machine for *home*.
+
+    The one resolution every other read of the deploy goes through
+    (:func:`_running_deploy`), asked for RetroDECK — which is how detection
+    finds an installation whose marker is not there yet, or not any more.
+    """
+    return _running_deploy(machine, home, RETRODECK_APP_ID) is not None
 
 
 # Config markers, as ``home``-relative suffixes.
@@ -806,7 +859,8 @@ def _core_directory_in(sandbox: _Sandbox, global_text: str) -> str | None:
     Where the core binaries live is a question every arrangement asks the same
     way; only which app's spellings the cfg is written in differs.
     """
-    resolved = sandbox.cfg_path("libretro_directory", parse_cfg_text(global_text).get("libretro_directory"))
+    raw = parse_cfg_once(global_text).values.get("libretro_directory")
+    resolved = sandbox.cfg_path("libretro_directory", raw)
     return resolved.path if resolved is not None else None
 
 
@@ -843,6 +897,556 @@ def _core_path_from(sandbox: _Sandbox, global_text: str | None, core_so: str) ->
     if cores_dir is None:
         return _CoreLookup()
     return _CoreLookup(os.path.join(cores_dir, core_so), cores_dir)
+
+
+# Where each installation keeps its deployed runtimes, beside its apps — the
+# deploy base of ``runtime/<id>/<arch>/<branch>`` (``flatpak_dir_get_deploy_dir``,
+# flatpak-dir.c:3087-3093 @ 1.16.6), whose ``active`` link names the deployed
+# commit as an app's ``current/active`` does.
+_FLATPAK_RUNTIME_SYSTEM = os.path.join("/var", "lib", "flatpak", "runtime")
+_FLATPAK_RUNTIME_USER = os.path.join(_FLATPAK_USER_BASE, "runtime")
+
+# The PATH flatpak gives every sandboxed process (``default_exports``,
+# flatpak-run.c:542-543 @ 1.16.6) — the app's own bin directory, then the
+# runtime's.
+_FLATPAK_DEFAULT_PATH = ("/app/bin", "/usr/bin")
+
+# The root directories a merged-/usr runtime reaches through a link flatpak
+# creates in the sandbox (``/bin -> usr/bin``; ``abs_usrmerged_dirs``,
+# flatpak-exports.c:49-58, linked at flatpak-run.c:2189-2218 @ 1.16.6).
+_FLATPAK_USRMERGED = frozenset(("bin", "lib", "lib32", "lib64", "sbin"))
+
+# The sandbox root's own directories that flatpak builds rather than binds
+# whole: a walk steps through them without asking the host about them, because
+# the host's directory of that name is not what the sandbox holds.
+_FLATPAK_BUILT_DIRS = frozenset(("/var", "/run"))
+
+# Under a ``host`` grant flatpak binds every directory of the host's root into
+# the sandbox except these (``dont_mount_in_root``, flatpak-context.c:2765-2786,
+# the loop at :2855-2881 @ 1.16.6). The host's own ``/var``, ``/run``,
+# ``/boot``, ``/efi`` and ``/root`` are therefore not where the sandbox's
+# paths of those names lead: what the sandbox has there is what flatpak binds
+# into them on purpose — the per-app directories, ``/var/home``,
+# ``/run/media`` and ``/run/host``, each answered by name — and an explicit
+# grant, which the view checks first. Anything else there is no file the
+# frontend sees, the host's copy included: the host's
+# ``/var/lib/flatpak/exports`` entries the shipped find rules name never hit.
+# The sandbox's ``/etc``, ``/tmp``, ``/dev``, ``/proc`` and ``/sys`` are not
+# that: they hold the runtime's, flatpak's or the kernel's files, which atlas
+# does not read, so a path there is not established rather than a miss.
+_FLATPAK_HOST_HIDDEN = frozenset(("var", "run", "boot", "efi", "root"))
+_FLATPAK_SANDBOX_OWN = frozenset(("etc", "tmp", "dev", "proc", "sys"))
+
+# Where the host's operating system shows inside the sandbox under a ``host``
+# (or ``host-os`` / ``host-etc``) grant: its ``/usr`` and ``/etc`` bound at
+# ``/run/host/usr`` and ``/run/host/etc`` (flatpak-context.c:2891-2901;
+# flatpak-exports.c:547-550, :640-643 @ 1.16.6), and each merged-``/usr``
+# root directory recreated there the way the host has it (:559-597).
+_RUN_HOST = "/run/host"
+# The removable-media root, which a ``host`` grant exports by name
+# (flatpak-context.c:2884-2888).
+_RUN_MEDIA = "/run/media"
+
+
+class _Hidden:
+    """A sandbox path that holds nothing the frontend can see — a miss, established."""
+
+
+_HIDDEN = _Hidden()
+
+
+class _NotOwn:
+    """No answer of this step's own: not one of the app's trees, or no link to follow."""
+
+
+_NOT_OWN = _NotOwn()
+
+
+def _components(path: str) -> list[str]:
+    """A path's components, the empty and ``.`` ones dropped as the kernel drops them."""
+    return [part for part in path.split("/") if part and part != "."]
+
+
+def _under(path: str, prefix: str) -> bool:
+    """Whether *path* is *prefix* or lies beneath it — every absolute path lies beneath ``/``."""
+    if prefix == "/":
+        return path.startswith("/")
+    return path == prefix or path.startswith(prefix + "/")
+
+
+def _flatpak_metadata_path(deploy: _Deploy) -> str:
+    """The deployed commit's ``metadata``, beside its ``files/`` — the file ``flatpak run`` loads the app's runtime and
+    context from (``flatpak_deploy_get_metadata``, flatpak-run.c:3076-3079 @ 1.16.6).
+    """
+    return os.path.join(os.path.dirname(deploy.files), "metadata")
+
+
+def _keyfile_groups(text: str) -> dict[str, dict[str, str]]:
+    """A GKeyFile's ``key=value`` lines by group, each value raw.
+
+    Raw means leading whitespace off, as GKeyFile reads it, and nothing
+    decoded: a string and a list decode differently (:func:`_gkeyfile_string`,
+    :func:`_gkeyfile_list`), and the caller knows which a key is.
+    """
+    groups: dict[str, dict[str, str]] = {}
+    group: dict[str, str] | None = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith(("#", ";")):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            group = groups.setdefault(line[1:-1], {})
+            continue
+        if group is not None and "=" in raw:
+            key, _, value = raw.partition("=")
+            group[key.strip()] = value.lstrip(" \t")
+    return groups
+
+
+@dataclass(frozen=True, slots=True)
+class _FlatpakGrants:
+    """What the deploy's metadata grants the sandbox of the host's filesystem, as far as the launch view reads it.
+
+    ``host``, ``home``, ``host_os`` and ``host_etc`` are the special tokens.
+    ``paths`` are the host paths every other granted entry binds (``~/…``,
+    ``/…`` and the three ``xdg-*`` bases, resolved by
+    :func:`_fs_resolve_entry`), whatever their ``:ro``/``:create`` mode
+    (flatpak-context.c:2930-3011) — less those flatpak refuses to export
+    (:func:`_flatpak_refuses`), which bind nothing. ``hidden`` are the host
+    paths a revoked entry names: a negated entry has mode NONE
+    (``parse_negated``, flatpak-context.c:1720) and is exported as a tmpfs
+    (flatpak-exports.c:1104-1105), so it hides what is under it rather than
+    binding anything — less those flatpak refuses, which hide nothing.
+    Read on the machine (:func:`_revocations_read`), only the directories
+    among them stay, since flatpak mounts that tmpfs on a directory alone
+    (flatpak-exports.c:493, :507-510), and ``unread`` are those whose kind
+    the machine cannot read, under which nothing is established.
+
+    ``unplaced`` is a granted entry the model cannot place (an ``xdg-*``
+    user directory): it may bind anything, so no path is taken to be masked
+    while one stands. ``refiled`` is an overrides file that sets
+    ``filesystems`` at all, or a revocation the model cannot place: either
+    may have revoked or widened every one of these and is not composed here.
+    """
+
+    host: bool = False
+    home: bool = False
+    host_os: bool = False
+    host_etc: bool = False
+    paths: tuple[str, ...] = ()
+    hidden: tuple[str, ...] = ()
+    unread: tuple[str, ...] = ()
+    unplaced: bool = False
+    refiled: bool = False
+
+
+# The granted entry whose binding lands under the sandbox's private /run/user
+# ($XDG_RUNTIME_DIR), where every path is unknown to the view anyway.
+_FS_XDG_RUN = "xdg-run"
+
+# Where flatpak refuses to export a path, or a parent of one: its own trees
+# and the host spellings it does not share (``dont_export_in``,
+# flatpak-exports.c:64-74, checked both ways at :973-997 @ 1.16.6).
+_FLATPAK_DONT_EXPORT_IN = (
+    "/.flatpak-info",
+    "/app",
+    "/dev",
+    "/etc",
+    "/proc",
+    "/run/flatpak",
+    "/run/host",
+    "/usr",
+)
+
+
+def _flatpak_refuses(path: str) -> bool:
+    """Whether flatpak refuses a ``filesystems`` entry for *path*, so that it binds nothing.
+
+    At or under a ``dont_export_in`` entry, a parent of one (``/run``,
+    ``/``), or at or under a merged-``/usr`` directory
+    (flatpak-exports.c:973-1011 @ 1.16.6). A path there is answered by its
+    own branch of the view, never as a granted host read — and a revocation
+    there is refused the same way (a tmpfs goes through the same check,
+    flatpak-exports.c:1088-1092 into :889), so it masks nothing either.
+    """
+    return any(_under(path, reserved) or _under(reserved, path) for reserved in _FLATPAK_DONT_EXPORT_IN) or any(
+        _under(path, "/" + merged) for merged in _FLATPAK_USRMERGED
+    )
+
+
+def _flatpak_grants(
+    metadata: Mapping[str, Mapping[str, str]] | None, home: str, *, refiled: bool
+) -> _FlatpakGrants:
+    """The metadata's ``[Context] filesystems`` read into :class:`_FlatpakGrants`.
+
+    The entries go into one table, each key's last spelling winning — the
+    per-key insert ``flatpak_context_take_filesystem`` makes
+    (flatpak-context.c:1042-1055), which ``load_metadata`` reads each entry
+    through (:1876).
+    """
+    if metadata is None:
+        return _FlatpakGrants(refiled=refiled)
+    table: dict[str, bool] = {}
+    for entry in _gkeyfile_list(metadata.get("Context", {}).get("filesystems", "")):
+        key, negated = _fs_entry_key(entry)
+        table[key] = negated
+    tokens = {key for key, negated in table.items() if key in _FS_SPECIAL_TOKENS and not negated}
+    placed = {
+        key: _fs_resolve_entry(key, home)
+        for key in table
+        if key not in _FS_SPECIAL_TOKENS and key.split("/", 1)[0] != _FS_XDG_RUN
+    }
+    unplaced_keys = [key for key, resolved in placed.items() if resolved is None]
+    resolved_paths = {key: (resolved.rstrip("/") or "/") for key, resolved in placed.items() if resolved is not None}
+    paths = [path for key, path in resolved_paths.items() if not table[key] and not _flatpak_refuses(path)]
+    # A refused revocation masks nothing. ``!/`` is the one that would mask
+    # every path; flatpak drops it earlier still, its parse rejecting ``/``
+    # (flatpak-context.c:997-1006) and the load skipping it (:1867-1871).
+    hidden = [path for key, path in resolved_paths.items() if table[key] and not _flatpak_refuses(path)]
+    return _FlatpakGrants(
+        host="host" in tokens,
+        home="home" in tokens,
+        host_os="host-os" in tokens,
+        host_etc="host-etc" in tokens,
+        paths=tuple(paths),
+        hidden=tuple(hidden),
+        unplaced=any(not table[key] for key in unplaced_keys),
+        refiled=refiled or any(table[key] for key in unplaced_keys),
+    )
+
+
+def _revocations_read(machine: Machine, grants: _FlatpakGrants) -> _FlatpakGrants:
+    """*grants* with each revoked path read on the machine: a directory stays masked, a file or nothing masks nothing.
+
+    flatpak mounts a revocation's tmpfs only where a directory stands
+    (``path_is_dir``, flatpak-exports.c:493), and skips anything else
+    (:507-510 @ 1.16.6); a path that is not there it never exports at all,
+    failing to open it (:920-935). A path whose kind the machine cannot read
+    goes to ``unread``: whether it masks is not known.
+    """
+    kinds = {path: machine.path_kind(path) for path in grants.hidden}
+    return cast(
+        _FlatpakGrants,
+        _dc_replace(
+            grants,
+            hidden=tuple(path for path, kind in kinds.items() if kind == KIND_DIRECTORY),
+            unread=tuple(path for path, kind in kinds.items() if kind == KIND_INACCESSIBLE),
+        ),
+    )
+
+
+def _runtime_files(machine: Machine, home: str, metadata: Mapping[str, Mapping[str, str]] | None) -> str | None:
+    """The runtime deploy whose ``files/`` the app's ``/usr`` is — ``None`` where none is established.
+
+    The runtime is the ``[Application] runtime`` key of the app's metadata
+    (``id/arch/branch``, flatpak-run.c:3076-3087), and its deploy is found the
+    way any ref's is: the user installation first, then the system one, the
+    first that has it deployed (``flatpak_find_deploy_for_ref``,
+    flatpak-dir-utils.c:294-317, used at flatpak-run.c:3127 @ 1.16.6). The same
+    two-installation model, and the same limit, as :func:`_running_deploy`.
+    """
+    if metadata is None:
+        return None
+    ref = _gkeyfile_string(metadata.get("Application", {}).get("runtime", "")) or ""
+    parts = ref.split("/")
+    if len(parts) != 3 or not all(parts):
+        return None
+    for base in (os.path.join(home, _FLATPAK_RUNTIME_USER), _FLATPAK_RUNTIME_SYSTEM):
+        active = os.path.join(base, *parts, "active")
+        if machine.path_kind(active) == KIND_DIRECTORY:
+            return os.path.join(active, "files")
+    return None
+
+
+@dataclass(frozen=True, slots=True)
+class _SandboxLaunchView:
+    """A Flatpak frontend's view of the filesystem: its sandbox, read from the host.
+
+    Implements :class:`atlas.launch.LaunchView` for a frontend running inside
+    *app_id*'s sandbox. A sandbox path is answered from the tree that holds it
+    there:
+
+    - ``/app`` is the running deploy (:func:`_running_deploy`), ``/usr`` the
+      runtime's deploy (:func:`_runtime_files`), and ``/bin``, ``/lib`` and
+      the other merged-``/usr`` directories are flatpak's links into it;
+    - ``/var/config``, ``/var/data`` and ``/var/cache`` are the app's per-app
+      directories (:data:`_SANDBOX_XDG_BINDS`), and ``~/.var/app/<app id>``
+      is that same tree under its home spelling, which flatpak always binds
+      (flatpak-context.c:3033-3044 @ 1.16.6);
+    - an explicit grant of the metadata (``~/…``, ``/…``, ``xdg-data`` and
+      its siblings — :class:`_FlatpakGrants`) is the host's own path, and so
+      are the directories leading to it, which flatpak creates to bind it — a
+      grant flatpak refuses (:func:`_flatpak_refuses`) binds nothing;
+    - under the ``host`` grant (or ``host-os`` / ``host-etc``) ``/run/host``
+      holds the host's ``/usr``, ``/etc`` and merged-``/usr`` directories
+      (:data:`_RUN_HOST`); without it they are not there, and anything else
+      under ``/run/host`` is not established;
+    - the rest of ``~/.var/app``, the user's own Flatpak installation and
+      every revoked directory are masked with a tmpfs, and the host's ``/var``,
+      ``/run``, ``/boot``, ``/efi`` and ``/root`` are not bound
+      (:meth:`_mask_root`) — ``/run/media`` excepted, which the ``host`` grant
+      binds (flatpak-context.c:2884-2888), and ``/var/home``, the host's homes
+      on an ostree system (:data:`_OSTREE_HOME`). Only a grant at or under such
+      a root lifts it. Under the ``host`` grant a path there is an established
+      miss;
+    - everything else is the host's own path under the ``host`` grant
+      (under ``home``, the home directory alone). The sandbox's own ``/etc``,
+      ``/tmp``, ``/dev``, ``/proc`` and ``/sys``, its private ``/run/user``,
+      a relative path — ES-DE tests one against its working directory
+      (``FileSystemUtil.cpp:1018-1033`` @ v3.4.1), which atlas cannot know —
+      and, where the grants are not established (no ``host`` grant, an
+      overrides file that sets ``filesystems``, a revocation the model cannot
+      place), every path outside the app's own trees, a masked one included,
+      and where a grant the model cannot place stands, every masked path, as
+      is every path under a revoked one whose kind the machine cannot read:
+      atlas cannot say what is there, so the walk stops unestablished rather
+      than guess a miss.
+
+    Links are followed **inside** the sandbox: a link's target is a sandbox
+    path and is translated again, which is the case that decides RetroDECK's
+    cores — its ``/var/config/retroarch/cores`` is a link to an ``/app/…``
+    directory that does not exist on the host at all.
+    """
+
+    machine: Machine
+    real_home: str
+    app_id: str
+    home: str
+    search_path: tuple[str, ...]
+    es_path: str
+    deploy_files: str | None
+    runtime_files: str | None
+    grants: _FlatpakGrants
+    rom_root: Callable[[], str | None]
+    # Each host path's readlink, asked once: the walks of one answer share
+    # every directory above the files they test.
+    links: dict[str, str | None] = field(default_factory=dict)
+
+    def rom_directory(self) -> str | None:
+        return self.rom_root()
+
+    def _readlink(self, host: str) -> str | None:
+        if host not in self.links:
+            self.links[host] = self.machine.readlink(host)
+        return self.links[host]
+
+    def _host_of(self, path: str) -> str | _Hidden | None:
+        """Where the host reads the sandbox's *path*, :data:`_HIDDEN`, or ``None`` for "cannot tell"."""
+        own = self._own_tree(path)
+        if not isinstance(own, _NotOwn):
+            return own
+        grants = self.grants
+        if grants.refiled or _under(path, "/run/user"):
+            return None
+        if _under(path, _RUN_HOST):
+            return self._run_host(path)
+        explicit = self._granted_or_masked(path)
+        if not isinstance(explicit, _NotOwn):
+            return explicit
+        if not grants.host:
+            return path if grants.home and _under(path, self.real_home) else None
+        first = path.split("/")[1] if path != "/" else ""
+        return None if first in _FLATPAK_SANDBOX_OWN else path
+
+    def _granted_or_masked(self, path: str) -> str | _Hidden | None | _NotOwn:
+        """*path* as an explicit grant or a mask decides it — :data:`_NOT_OWN` where neither does."""
+        grants = self.grants
+        if any(granted.startswith(path + "/") for granted in grants.paths):
+            # A directory leading to a grant, which flatpak creates to bind it.
+            return path
+        granted = max((g for g in grants.paths if _under(path, g)), key=len, default=None)
+        mask = self._mask_root(path)
+        if mask is not None and (granted is None or not _under(granted, mask)):
+            if mask in grants.unread:
+                return None
+            return _HIDDEN if grants.host and not grants.unplaced else None
+        return _NOT_OWN if granted is None else path
+
+    def _mask_root(self, path: str) -> str | None:
+        """The innermost masked or unbound root over *path* — ``None`` where nothing masks it.
+
+        Masked with a tmpfs: the rest of ``~/.var/app``, the user's own
+        Flatpak installation, and every revoked directory
+        (flatpak-context.c:3019-3031, :3131-3143; flatpak-exports.c:1104-1105);
+        a revoked path whose kind is unread is a root too, which
+        :meth:`_granted_or_masked` answers as unknown. Not bound under the
+        ``host`` grant: the host's ``/var``, ``/run``, ``/boot``, ``/efi`` and
+        ``/root`` (:data:`_FLATPAK_HOST_HIDDEN`), ``/var/home`` and
+        ``/run/media`` aside. Only a grant at or under such a root lifts it. At
+        the root itself the higher mode wins and a tmpfs is mode NONE
+        (flatpak-exports.c:102, :772-790), so a grant there binds it; beneath
+        the root, exports are emitted parents first (:309-337, :445-447,
+        :487-506), so a parent's bind is mounted before the tmpfs over the root
+        and does not reach beneath it.
+        """
+        roots = [
+            os.path.join(self.real_home, ".var", "app"),
+            os.path.join(self.real_home, _FLATPAK_USER_BASE),
+            *self.grants.hidden,
+            *self.grants.unread,
+        ]
+        first = path.split("/")[1] if path != "/" else ""
+        shared = _under(path, _OSTREE_HOME.rstrip("/")) or _under(path, _RUN_MEDIA)
+        if self.grants.host and not shared and first in _FLATPAK_HOST_HIDDEN:
+            roots.append("/" + first)
+        return max((root for root in roots if _under(path, root)), key=len, default=None)
+
+    def _run_host(self, path: str) -> str | _Hidden | None:
+        """The host path a ``/run/host`` spelling binds.
+
+        :data:`_HIDDEN` without the grant, ``None`` beyond the model.
+        """
+        grants = self.grants
+        if path == _RUN_HOST:
+            return path
+        name = path[len(_RUN_HOST) + 1 :].split("/", 1)[0]
+        if name == "etc":
+            granted = grants.host or grants.host_etc
+        elif name == "usr" or name in _FLATPAK_USRMERGED:
+            granted = grants.host or grants.host_os
+        else:
+            return None
+        if not granted:
+            return None if grants.unplaced else _HIDDEN
+        return path[len(_RUN_HOST) :]
+
+    def _own_tree(self, path: str) -> str | None | _NotOwn:
+        """*path* in one of the trees flatpak binds for the app whatever its grants — :data:`_NOT_OWN` elsewhere."""
+        if _under(path, "/app"):
+            return None if self.deploy_files is None else self.deploy_files + path[len("/app") :]
+        if _under(path, "/usr"):
+            return None if self.runtime_files is None else self.runtime_files + path[len("/usr") :]
+        app_dir = os.path.join(self.real_home, ".var", "app", self.app_id)
+        for prefix, xdg_dir in _SANDBOX_XDG_BINDS:
+            if _under(path, prefix):
+                return os.path.join(app_dir, xdg_dir) + path[len(prefix) :]
+        if _under(path, app_dir) or app_dir.startswith(path + "/"):
+            # The app's own tree, and the directories leading to it, which
+            # flatpak recreates as the host spells them to bind it there.
+            return path
+        return _NOT_OWN
+
+    def _target(self, candidate: str) -> str | _Hidden | None | _NotOwn:
+        """The link *candidate* is in the sandbox — :data:`_NOT_OWN` where it is no link (or a directory flatpak
+        builds).
+
+        ``/bin`` and its merged-``/usr`` siblings are links flatpak itself
+        creates (``usr/bin``), so they answer without asking the host.
+        """
+        if candidate in _FLATPAK_BUILT_DIRS or candidate == _RUN_HOST:
+            return _NOT_OWN
+        if candidate.lstrip("/") in _FLATPAK_USRMERGED:
+            return "usr" + candidate
+        if os.path.dirname(candidate) == _RUN_HOST and os.path.basename(candidate) in _FLATPAK_USRMERGED:
+            return self._run_host_link(candidate)
+        host = self._host_of(candidate)
+        if not isinstance(host, str):
+            return host
+        target = self._readlink(host)
+        return _NOT_OWN if target is None else target
+
+    def _run_host_link(self, candidate: str) -> _Hidden | None | _NotOwn:
+        """``/run/host/bin`` and its siblings, which the walk must not follow as a sandbox link.
+
+        Flatpak recreates each the way the host has it — a link into ``usr/``
+        made relative even where the host's is absolute, a directory bound as
+        itself (flatpak-exports.c:559-597 @ 1.16.6) — so in every case it
+        leads where the host's own ``/bin`` leads, which is what reading the
+        host's path does. Taken as a sandbox link, the host's absolute
+        ``/usr/bin`` would lead into the runtime instead.
+        """
+        host = self._run_host(candidate)
+        return host if not isinstance(host, str) else _NOT_OWN
+
+    def _resolve(self, path: str, *, follow_last: bool) -> str | _Hidden | None:
+        """*path* with every link on the way followed in the sandbox, as a host path.
+
+        ``None`` is "cannot tell"; :data:`_HIDDEN` an established nothing, which
+        a link loop is too (the kernel answers ``ELOOP`` and ES-DE's tests
+        answer false). The last component is followed only on request: ES-DE's
+        ``isSymlink`` asks about the link itself.
+        """
+        parts = _components(path)
+        current = "/"
+        hops = SYMLINK_HOPS
+        while parts:
+            segment = parts.pop(0)
+            if segment == "..":
+                current = os.path.dirname(current) or "/"
+                continue
+            candidate = os.path.join(current, segment)
+            target = _NOT_OWN if not parts and not follow_last else self._target(candidate)
+            if isinstance(target, _NotOwn):
+                current = candidate
+                continue
+            if not isinstance(target, str):
+                return target
+            hops -= 1
+            if hops < 0:
+                return _HIDDEN
+            parts = _components(target) + parts
+            current = "/" if target.startswith("/") else current
+        return self._host_of(current)
+
+    def found(self, path: str) -> Probe:
+        """ES-DE's ``isRegularFile || isSymlink`` on the sandbox's *path* (``FileSystemUtil.cpp:1018-1071``).
+
+        An empty path is no file; a relative one is tested against ES-DE's
+        working directory, which atlas cannot read, so it cannot be told.
+        """
+        if not path:
+            return PROBE_MISS
+        if not path.startswith("/"):
+            return PROBE_UNKNOWN
+        host = self._resolve(path, follow_last=False)
+        if host is None:
+            return PROBE_UNKNOWN
+        if isinstance(host, _Hidden):
+            return PROBE_MISS
+        if self.machine.readlink(host) is not None:
+            return PROBE_HIT
+        return self._regular(host)
+
+    def executable(self, path: str) -> Probe:
+        """``[ -x ]`` read as "a file once every link is followed" — the seam reads no mode bits."""
+        host = self._resolve(path, follow_last=True)
+        if host is None:
+            return PROBE_UNKNOWN
+        if isinstance(host, _Hidden):
+            return PROBE_MISS
+        return self._regular(host)
+
+    def _regular(self, host: str) -> Probe:
+        kind = self.machine.path_kind(host)
+        if kind == KIND_INACCESSIBLE:
+            return PROBE_UNKNOWN
+        return PROBE_HIT if kind == KIND_FILE else PROBE_MISS
+
+    def listing(self, directory: str) -> tuple[str, ...] | None:
+        """The names in the sandbox's *directory*, read through the host — all of them, hidden ones included.
+
+        A relative directory is ES-DE's working directory's business, so its
+        listing cannot be told.
+        """
+        if not directory.startswith("/"):
+            return None
+        host = self._resolve(directory, follow_last=True)
+        if host is None:
+            return None
+        if isinstance(host, _Hidden):
+            return ()
+        kind = self.machine.path_kind(host)
+        if kind == KIND_INACCESSIBLE:
+            return None
+        if kind != KIND_DIRECTORY:
+            return ()
+        names: list[str] = []
+        for pattern in ("*", ".*"):
+            result = self.machine.glob(os.path.join(_glob_escape(host), pattern))
+            if result.status != GLOB_COMPLETE:
+                return None
+            names.extend(os.path.basename(match) for match in result.matches)
+        return tuple(names)
 
 
 # One file of the override chain as it is read: where it came from and its
@@ -1733,6 +2337,31 @@ def _rule_confirmed_choice(card: CoreCard, registered: Mapping[str, CoreOption])
             f"feature-detected: core registers {', '.join(card.rule_options or ())} — card "
             "generation confirmed by observation, not by version comparison",
         ),
+    )
+
+
+def _options_unaudited(card: CoreCard, core_info: CoreInfo | None) -> Caveat | None:
+    """The ``core-options-unaudited`` statement for an applied card, where it holds.
+
+    Keys against keys: the ones the card's audit record lists and the ones the
+    installed core registers. What the caveat sees, what it leaves to other
+    checks and why, is stated once, at :data:`CAVEAT_CORE_OPTIONS_UNAUDITED`.
+    """
+    audit = lookup_audit(card.key)
+    recorded = audit.registration if audit is not None else None
+    registered = core_info.options if core_info is not None else None
+    if recorded is None or registered is None:
+        return None
+    added = sorted(set(registered) - set(recorded))
+    if not added:
+        return None
+    return Caveat(
+        CAVEAT_CORE_OPTIONS_UNAUDITED,
+        f"core {card.key!r} registers options its recorded save behaviour was never audited "
+        f"against ({', '.join(added)}) — the audit never examined them, so whether one of them "
+        "changes where or how this core saves is unknown; the answer below is the recorded "
+        "behaviour, stated as it stands",
+        {"core": card.key, "added": added, "removed": sorted(set(recorded) - set(registered))},
     )
 
 
@@ -2890,9 +3519,17 @@ def _content_system_root(content: _Content, *, provenance: str) -> _SystemRoot:
 # branch. ``LIBRETRO_SYSTEM_DIRECTORY`` in the environment wins when it is set
 # (``platform_unix.c:2137-2140``), and atlas cannot read the environment the
 # emulator will run with — it is not on disk, and the seam abstracts the
-# machine, not the process. [V] unset on the reference machine, so the join is
-# what applies there; an installation that exports it is [O] — the answer would
-# name this directory while RetroArch used the exported one.
+# machine, not the process. [V] RetroDECK's own launch sets it nowhere:
+# neither the app's Flatpak metadata nor any shipped component script names
+# it (read over the deployed 0.10.9b Flatpak). So the join is what applies
+# under that arrangement; a launching process that exports it, or a flatpak
+# override that names it, is [O] — the host environment enters the sandbox
+# (``flatpak-run.c:3055``) and the merged context environment, overrides
+# included, lands on top of it (``:3352``, the same route a HOME override
+# takes; see ``docs/research/retrodeck-save-placement.md`` §15), while among
+# the environment keys the overrides files are read here for ``HOME`` alone
+# (:689-700). Either way the answer would name this directory while RetroArch
+# used the other one.
 PLATFORM_SYSTEM_DIR_SOURCE = (
     "default: system_directory unset — RetroArch platform default applies "
     "('system' under the config tree, platform_unix.c:2142-2143)"
@@ -2928,9 +3565,11 @@ def _core_system_root(
       ``system`` under the config tree (``platform_unix.c:2141-2143``, the same
       block that seeds the saves default this resolver answers with) unless
       ``LIBRETRO_SYSTEM_DIRECTORY`` is exported, which wins (``:2137-2140``) and
-      which atlas cannot read off a disk — [V] unset on the reference machine,
-      [O] anywhere it is set. So an unset key resolves; it is not a hole and
-      never was one.
+      which atlas cannot read off a disk — [V] RetroDECK's own launch sets it
+      nowhere, [O] where a launching process exports it or a flatpak override
+      names it (``flatpak-run.c:3055``, ``:3352``; among the environment keys
+      the overrides files are read here for ``HOME`` alone). So an unset key
+      resolves; it is not a hole and never was one.
     - **Blank or the literal ``default``** — ``system_directory`` passes
       ``handle_setting = true`` (``configuration.c:1691``), so the generic path
       loop writes whatever the merged config holds, with no directory test
@@ -4378,7 +5017,7 @@ def _read_chain(machine: Machine, query: _SaveQuery, keys: LayoutKeys) -> _Chain
         gates=gates,
         layers=tuple(layers),
         layout=layout,
-        global_values=parse_cfg_text(query.global_text) if query.global_text is not None else {},
+        global_values=parse_cfg_once(query.global_text).values if query.global_text is not None else {},
         reachable=saves_root.reachable,
         platform_default_dir=platform_default_dir,
         retroarch_config_dir=retroarch_config_dir,
@@ -4531,6 +5170,8 @@ def _savefile_location_resolved(machine: Machine, query: _SaveQuery) -> Savefile
         )
         card, card_mode, granularity = applied.card, applied.mode, applied.granularity
         caveats.extend(applied.caveats)
+        if card is not None:
+            caveats.extend(_optional(_options_unaudited(card, core.info)))
 
     if card is not None and card_mode is not None and card_mode.root != ROOT_SAVEFILE_DIRECTORY:
         diverted = {
@@ -6078,11 +6719,15 @@ _DOLPHIN_CITATION_SLOTS = frozenset(
     {
         "build",  # the release label an answer says its evidence is "at"
         "slot_devices",  # the EXI device ids a slot key spells
-        "slot_defaults",  # what an unset SlotA/SlotB falls back to
+        "slot_defaults",  # what an unset or unparsed SlotA/SlotB falls back to
+        "slot_parse",  # how a SlotA/SlotB value is parsed, and when the default wins
         "session_overrides",  # the GCIFolder*PathOverride keys a session sets
         "gci_names",  # how a .gci file inside a folder card is named
         "nand_tree",  # the Wii NAND's title/<hi>/<lo>/data shape
         "wii_dir",  # the NAND's default directory below the user directory
+        "agp_paths",  # the AgpCartA/BPath keys a GBA cartridge adapter reads
+        "agp_save",  # how the adapter loads, sizes and writes back its .sav
+        "split_path",  # how the cartridge path's extension is cut for that .sav
     }
 )
 
@@ -6173,6 +6818,10 @@ _DOLPHIN_FORK_LINES = {
 # build row raises.
 _DOLPHIN_FAMILY = frozenset({"DOLPHIN", "PRIMEHACK"})
 
+# The Dolphin build the cards cite, the same string as their
+# ``citations.build``.
+_DOLPHIN_BUILD = "dolphin 2603a"
+
 # Keyed the way every standalone registry is: the token, and the flatpak app id
 # where the build differs per installation (#246). ``None`` covers an
 # arrangement's own bundled build. Stating 81bfb96's lines for the Flathub
@@ -6180,10 +6829,10 @@ _DOLPHIN_FAMILY = frozenset({"DOLPHIN", "PRIMEHACK"})
 # block exists to prevent, which is why that row is keyed separately.
 _DOLPHIN_GAME_LAYERS: dict[tuple[str, str | None], _DolphinGameLayer] = {
     ("DOLPHIN", None): _DolphinGameLayer(
-        name="Dolphin", build="dolphin 2603a", **_DOLPHIN_MODERN_LINES
+        name="Dolphin", build=_DOLPHIN_BUILD, **_DOLPHIN_MODERN_LINES
     ),
     ("DOLPHIN", "org.DolphinEmu.dolphin-emu"): _DolphinGameLayer(
-        name="Dolphin", build="dolphin 2603a", **_DOLPHIN_MODERN_LINES
+        name="Dolphin", build=_DOLPHIN_BUILD, **_DOLPHIN_MODERN_LINES
     ),
     ("PRIMEHACK", None): _DolphinGameLayer(
         name="PrimeHack", build="shiiion/dolphin 81bfb96", **_DOLPHIN_FORK_LINES
@@ -6229,7 +6878,7 @@ def _dolphin_game_settings_caveats(
     this answer cannot name — never that any file does so.
 
     *keys* are section-qualified the way a game ini must spell them: the
-    memory-card keys live in ``[Core]``, but ``NANDRootPath`` and ``LoadPath``
+    slot path keys live in ``[Core]``, but ``NANDRootPath`` and ``LoadPath``
     are reached through the free-form ``<System>.<Section>`` parse, and the
     name that parse resolves for ``System::Main`` is ``Dolphin`` — so the
     section is ``[Dolphin.General]``, and ``[Main.General]`` is dropped with a
@@ -6311,8 +6960,10 @@ def _dolphin_game_settings_caveats(
     return caveats
 
 
-# The section-qualified keys each Dolphin-family answer depends on. The memory
-# card keys map through the legacy section table ([Core] -> {Main, "Core"});
+# The section-qualified keys each Dolphin-family answer depends on. The slot
+# path keys — the memory cards', the GCI folders' and the GBA cartridges'
+# (MainSettings.cpp:92-93 at dolphin 2603a) — map through the legacy section
+# table ([Core] -> {Main, "Core"});
 # the General ones only through the free-form <System>.<Section> parse, whose
 # name for System::Main is "Dolphin" — [Main.General] resolves to nothing.
 _DOLPHIN_GC_LAYER_KEYS = (
@@ -6320,6 +6971,8 @@ _DOLPHIN_GC_LAYER_KEYS = (
     "[Core] MemcardBPath",
     "[Core] GCIFolderAPath",
     "[Core] GCIFolderBPath",
+    "[Core] AgpCartAPath",
+    "[Core] AgpCartBPath",
 )
 _DOLPHIN_WII_LAYER_KEYS = ("[Dolphin.General] NANDRootPath",)
 # One key moves both the texture tree and the graphics-mod tree: it re-points
@@ -6334,10 +6987,15 @@ _DOLPHIN_DEVICE_FOLDER = 8
 _DOLPHIN_DEVICE_AGP = 9
 _DOLPHIN_DEVICE_NONE = 255
 _DOLPHIN_SLOT_DEFAULTS = {"A": _DOLPHIN_DEVICE_FOLDER, "B": _DOLPHIN_DEVICE_NONE}
+# What a sentence calls each slot's default device.
+_DOLPHIN_DEFAULT_DEVICE_NAMES = {
+    _DOLPHIN_DEVICE_FOLDER: "the GCI folder",
+    _DOLPHIN_DEVICE_NONE: "no device",
+}
 
 
 def _parse_sectioned_ini(text: str) -> dict[tuple[str, str], str]:
-    """``key = value`` lines under ``[section]`` headers — Dolphin.ini, kept as written.
+    """``key = value`` under ``[section]`` headers — Dolphin.ini, keys as written, values as ``ParseLine`` stores them.
 
     The mapping keeps the file's own spellings in file order; *matching* is
     the lookup's job, and it is ASCII case-insensitive with the last
@@ -6353,6 +7011,19 @@ def _parse_sectioned_ini(text: str) -> dict[tuple[str, str], str]:
     exact-duplicate key collapses at parse here the way it does upstream;
     case-variant duplicates stay separate entries and the lookup
     (:func:`atlas.qt_ini.simpleini_value`) takes the last in file order.
+
+    A value is stored the way ``ParseLine`` stores it: whitespace stripped
+    (``str.strip``, wider than StripWhitespace's `` \\t\\r\\n``; the two
+    differ only for a value beginning or ending in another whitespace
+    character), then one pair of surrounding double quotes — both ends or
+    neither, and nothing inside them (``StripQuotes(StripWhitespace(...))``,
+    IniFile.cpp:34 with StringUtil.cpp:219-225 at dolphin 2603a and at
+    shiiion/dolphin@53f53e0, IniFile.cpp:34 with StringUtil.cpp:228-234 at
+    @81bfb96). Every ini file a value can come from is read through that
+    parse — ``Dolphin.ini`` by BaseConfigLoader.cpp:156-173 and both per-game
+    layers' files by GameConfigLoader.cpp:187-196 at 2603a and @53f53e0
+    (:105-123 and :178-187 at @81bfb96) — so
+    ``MemcardAPath = "/mnt/cards/a.raw"`` names the path without its quotes.
     """
     parsed: dict[tuple[str, str], str] = {}
     section = ""
@@ -6365,19 +7036,116 @@ def _parse_sectioned_ini(text: str) -> dict[tuple[str, str], str]:
             continue
         key, sep, value = line.partition("=")
         if sep:
-            parsed[(section, key.strip())] = value.strip()
+            parsed[(section, key.strip())] = _dolphin_strip_quotes(value.strip())
     return parsed
+
+
+def _dolphin_strip_quotes(value: str) -> str:
+    """*value* without one pair of surrounding double quotes — ``StripQuotes``.
+
+    Only where the first and the last character are both ``"``; a lone ``"``
+    is both, and leaves nothing.
+    """
+    if value.startswith('"') and value.endswith('"'):
+        return value[1:-1]
+    return value
+
+
+# What strtoll skips before a number: C's isspace in the C locale.
+_C_WHITESPACE = " \t\n\v\f\r"
+_C_DIGITS = "0123456789abcdef"
+_C_HEX_DIGITS = _C_DIGITS + _C_DIGITS[10:].upper()
+# ``EXIDeviceType`` is ``enum class ... : int`` (EXI_Device.h:25 at every pin),
+# and the enum overload of TryParse parses its underlying type.
+_C_INT_MIN = -(2**31)
+_C_INT_MAX = 2**31 - 1
+
+
+def _dolphin_literal_base(text: str) -> tuple[str, int]:
+    """Base 0's reading of an unsigned literal: its digits, and their base.
+
+    ``0x``/``0X`` before a hex digit is hexadecimal, ``0b``/``0B`` before a
+    binary digit is binary, a leading ``0`` is octal (and is itself a digit,
+    so ``0`` alone reads as zero), everything else decimal. The binary prefix
+    is C23's, read here because the deployed builds call the C23 strtoll:
+    every Dolphin-family binary this answer describes — RetroDECK's
+    ``dolphin/bin/dolphin-emu`` and ``primehack/bin/primehack``, the Flathub
+    ``org.DolphinEmu.dolphin-emu`` and ``io.github.shiiion.primehack``
+    ``bin/dolphin-emu`` — imports ``__isoc23_strtoll@GLIBC_2.38`` and no
+    plain ``strtoll``. The source alone does not say it;
+    ``tests/test_dolphin_strtoll_tripwire.py`` holds the deployed binaries to
+    it and says why the import is a fact of the build.
+    """
+    if not text.startswith("0"):
+        return text, 10
+    prefix, first = text[1:2], text[2:3]
+    if prefix in ("x", "X") and first and first in _C_HEX_DIGITS:
+        return text[2:], 16
+    if prefix in ("b", "B") and first in ("0", "1"):
+        return text[2:], 2
+    return text, 8
+
+
+def _dolphin_try_parse_int(raw: str) -> int | None:
+    """What Dolphin's ``TryParse`` makes of a slot value — ``None`` where it fails.
+
+    ``GetUncached`` parses the stored string and takes the setting's default
+    where the parse fails (Config.h:82-88 at dolphin 2603a); an enum setting
+    parses its underlying ``int`` (Layer.h:36-43), through ``strtoll`` in base
+    0 (StringUtil.h:63-100): leading whitespace is skipped and a sign read, the
+    whole string must be consumed, and the value must fit the ``int`` — an
+    out-of-range value fails like a word does, so the default governs. An
+    empty value is the one spelling that parses with no digit at all:
+    ``strtoll`` leaves its end at the start of the string, which is its end,
+    so ``SlotA =`` reads as 0. The same lines are the fork's at
+    shiiion/dolphin@53f53e0 and sit at Config.h:83-89, Layer.h:30-37 and
+    StringUtil.h:75-113 at @81bfb96.
+    """
+    rest = raw.lstrip(_C_WHITESPACE)
+    negative = rest.startswith("-")
+    if rest.startswith(("+", "-")):
+        rest = rest[1:]
+    if not rest:
+        return 0 if not raw else None
+    digits, base = _dolphin_literal_base(rest)
+    allowed = _C_DIGITS[:base] + _C_DIGITS[10:base].upper()
+    if not all(char in allowed for char in digits):
+        return None
+    try:
+        magnitude = int(digits, base)
+    except ValueError:
+        # CPython refuses a decimal string longer than its digit limit
+        # (sys.get_int_max_str_digits); every such value is far outside the
+        # int, where strtoll answers ERANGE and TryParse fails.
+        return None
+    value = -magnitude if negative else magnitude
+    return value if _C_INT_MIN <= value <= _C_INT_MAX else None
 
 
 @dataclass(frozen=True, slots=True)
 class _DolphinSlot:
-    """One card slot's contribution to the answer: groups, readings, caveats."""
+    """One card slot's contribution to the answer: groups, readings, caveats.
+
+    ``unreachable`` is the grouping of a card the slot holds at a path this
+    host cannot locate: the emulator writes its saves there, so the slot is
+    not empty, but atlas has no directory to state a group in and cannot tell
+    whether those writes are kept. A GBA cartridge's save that cannot be
+    located or examined is stated the same way. ``None`` wherever the slot's
+    groups say everything, or it holds no device, or what it holds is known
+    to keep nothing, or is a device atlas cannot interpret.
+
+    ``device`` is the EXI id Dolphin reads out of a slot value naming a device
+    atlas cannot interpret, so a sentence about it can say which id the value
+    became; ``None`` for every other slot.
+    """
 
     mode: str
     groups: tuple[FileGroup, ...] = ()
     readings: tuple[OptionReading, ...] = ()
     caveats: tuple[Caveat, ...] = ()
     template_dir: str | None = None
+    unreachable: str | None = None
+    device: int | None = None
 
 
 def _dolphin_region_split(value: str, *, separator: str) -> tuple[str, str]:
@@ -6419,6 +7187,7 @@ def _dolphin_raw_slot(
         if resolved.path is None:
             return _DolphinSlot(
                 mode="card",
+                unreachable=GRANULARITY_SHARED_FILE,
                 caveats=(
                     Caveat(
                         CAVEAT_SANDBOX_PATH_UNTRANSLATED,
@@ -6477,6 +7246,7 @@ def _dolphin_folder_slot(
         if resolved.path is None:
             return _DolphinSlot(
                 mode="folder",
+                unreachable=GRANULARITY_PER_GAME_FILES,
                 caveats=(
                     Caveat(
                         CAVEAT_SANDBOX_PATH_UNTRANSLATED,
@@ -6513,6 +7283,185 @@ def _dolphin_folder_slot(
     )
 
 
+# Whether a build writes the cartridge save back when no cartridge is
+# configured. Dolphin writes it only for a non-empty stem (~CEXIAgp,
+# EXI_DeviceAGP.cpp:43-44 at dolphin 2603a, and at shiiion/dolphin 53f53e0,
+# whose file is Dolphin's byte for byte); the PrimeHack revision RetroDECK
+# builds writes it unconditionally (:44 at shiiion/dolphin 81bfb96), so there
+# an unset key writes ``.sav`` into the launching process's working directory,
+# sized by whatever ``.sav`` LoadRom found there (:73-85). Keyed by the card's
+# ``build`` citation, and a build with no row raises the way the per-game layer
+# table does: a default would state one build's behaviour for another's answer.
+_DOLPHIN_AGP_WRITES_UNSET_CARTRIDGE = {
+    _DOLPHIN_BUILD: False,
+    "shiiion/dolphin 53f53e0": False,
+    "shiiion/dolphin 81bfb96": True,
+}
+
+
+def _dolphin_agp_writes_unset_cartridge(cite: "_Cite") -> bool:
+    build = cite("build")
+    writes = _DOLPHIN_AGP_WRITES_UNSET_CARTRIDGE.get(build)
+    if writes is None:
+        raise ValueError(
+            f"{build!r} is a build the GBA cartridge table states nothing for — whether it "
+            "writes a cartridge save with no cartridge configured is unread, and the cards "
+            "and the code shipped out of step"
+        )
+    return writes
+
+
+def _dolphin_split_path_stem(full_path: str) -> str:
+    """*full_path* with its extension cut the way Dolphin's ``SplitPath`` cuts it.
+
+    ``path + filename`` of the split: the extension starts at the last ``.``
+    at or after the last ``/``, so a dot in a directory name stays, and
+    ``/d/.gba`` has an empty filename and leaves ``/d/``; an empty value
+    splits into nothing (``split_path`` on the card). Not
+    :func:`os.path.splitext`, which keeps a leading-dot name whole.
+    """
+    dir_end = full_path.rfind("/") + 1
+    fname_end = full_path.rfind(".")
+    if fname_end < dir_end:
+        fname_end = len(full_path)
+    return full_path[:fname_end]
+
+
+def _dolphin_sav_size(machine: Machine, path: str) -> int | None:
+    """The size a cartridge save loads with — ``None`` where this host cannot tell.
+
+    The adapter opens the ``.sav`` ``"rb"`` and takes the open file's size, 0
+    where it does not open. Nothing opens at a missing path, and a directory
+    is never written back, so both keep nothing. A file whose size stats but
+    whose bytes do not read is one the emulator may not open either, and
+    whether it can is not atlas's to see from here — so it is as unexamined
+    as a path whose kind the machine withholds.
+    """
+    kind = machine.path_kind(path)
+    if kind == KIND_INACCESSIBLE:
+        return None
+    if kind != KIND_FILE:
+        return 0
+    size = machine.file_size(path)
+    if not size:
+        return size
+    return size if machine.file_digest(path, DIGEST_MD5) is not None else None
+
+
+def _dolphin_agp_slot(
+    letter: str,
+    values: Mapping[tuple[str, str], str],
+    machine: Machine,
+    sandbox: _Sandbox,
+    cite: "_Cite",
+    *,
+    token: str,
+) -> _DolphinSlot:
+    """A GBA cartridge adapter in one slot: the ``.sav`` beside the configured cartridge.
+
+    The adapter loads ``AgpCart<slot>Path`` and, beside it, that path with its
+    extension swapped for ``.sav``; the cartridge's save is as large as that
+    file, 0 where it does not open, and at shutdown exactly that many bytes
+    are written back to it (``agp_save`` on the card). So a ``.sav`` that is
+    missing, empty or a directory keeps nothing — a missing or empty one gives
+    the cartridge no size to save with, and a directory cannot be written back
+    — and one with a size is one file every GameCube game run with this
+    configuration writes: ``shared-file``, a battery save.
+
+    The ``.sav`` is read the way the slot's card paths are: the key matched
+    the emulator's way, the path translated out of the sandbox, and a
+    spelling only the sandbox has leaves the save where this host cannot
+    locate it (#523). A relative spelling is opened from the launching
+    process's working directory — the launch's, not the machine's — and is
+    stated the same way with the launch named as the reason; so is the unset
+    key of a build that writes ``.sav`` back regardless
+    (:data:`_DOLPHIN_AGP_WRITES_UNSET_CARTRIDGE`). A ``.sav`` this host could
+    not examine — its kind withheld, or a size stated for a file that would
+    not read (:func:`_dolphin_sav_size`) — leaves whether it holds anything
+    unestablished.
+    """
+    key = f"AgpCart{letter}Path"
+    configured, spelled = _simpleini_value(values, "Core", key)
+    # The unset key's default is its own registration, not the slot defaults
+    # the shared default sentence cites.
+    unset = (
+        f'[Core] {key} is unset — the compiled-in default "" governs '
+        f"({cite('agp_paths')} at {cite('build')})"
+    )
+    readings = (
+        _dolphin_reading(key, configured, None if configured is not None else unset, spelled=spelled),
+    )
+    stem = _dolphin_split_path_stem(configured or "")
+    if not stem and not _dolphin_agp_writes_unset_cartridge(cite):
+        return _DolphinSlot(mode="agp", readings=readings)
+    save = stem + ".sav"
+    where = f"{cite('agp_save')} with {cite('split_path')} at {cite('build')}"
+    if not save.startswith("/"):
+        return _DolphinSlot(
+            mode="agp",
+            readings=readings,
+            unreachable=GRANULARITY_SHARED_FILE,
+            caveats=(
+                Caveat(
+                    CAVEAT_SAVE_DIR_LAUNCH_DEPENDENT,
+                    f"slot {letter}'s GBA cartridge save is the relative path {save!r}, which "
+                    f"the emulator opens and writes back relative to the working directory of "
+                    f"the launching process ({where}) — a property of the launch, not of the "
+                    "machine, so where it lies and whether it holds anything is not stated here",
+                    {"token": token, "key": key, "path": save},
+                ),
+            ),
+        )
+    resolved = sandbox.host(key, save)
+    if resolved.path is None:
+        return _DolphinSlot(
+            mode="agp",
+            readings=readings,
+            unreachable=GRANULARITY_SHARED_FILE,
+            caveats=(
+                Caveat(
+                    CAVEAT_SANDBOX_PATH_UNTRANSLATED,
+                    f"Dolphin.ini sets {key} to {configured!r}, a path only the emulator's "
+                    f"sandbox can read — the cartridge's save beside it, {save!r} ({where}), "
+                    "could not be located from here",
+                    {"key": key, "path": configured or ""},
+                ),
+            ),
+        )
+    size = _dolphin_sav_size(machine, resolved.path)
+    if size is None:
+        return _DolphinSlot(
+            mode="agp",
+            readings=readings,
+            unreachable=GRANULARITY_SHARED_FILE,
+            caveats=(
+                Caveat(
+                    CAVEAT_CORE_MODE_UNESTABLISHED,
+                    f"slot {letter} holds a GBA cartridge adapter (AGP, EXI device 9) whose "
+                    f"cartridge save is {resolved.path}, and this host could not examine that "
+                    f"file — the save is only as large as the file already is ({where}), so "
+                    "whether the cartridge save holds anything is unestablished",
+                    {"token": token, "reason": REASON_SLOT_HOLDS_AGP_DEVICE, "slot": letter},
+                ),
+            ),
+        )
+    if not size:
+        return _DolphinSlot(mode="agp", readings=readings)
+    directory, name = os.path.split(resolved.path)
+    return _DolphinSlot(
+        mode="agp",
+        groups=(
+            FileGroup(
+                dir=directory,
+                files=(name,),
+                granularity=GRANULARITY_SHARED_FILE,
+                role=ROLE_BATTERY,
+            ),
+        ),
+        readings=readings,
+    )
+
+
 def _dolphin_reading(
     key: str,
     value: str | None,
@@ -6543,30 +7492,24 @@ def _dolphin_reading(
     )
 
 
-def _dolphin_slot(
+def _dolphin_carded_slot(
     letter: str,
+    device: int | None,
     values: Mapping[tuple[str, str], str],
     sandbox: _Sandbox,
     gc_root: str,
     cite: "_Cite",
-) -> _DolphinSlot:
-    """One slot read the way the emulator reads it: device id first, then the path.
+) -> _DolphinSlot | None:
+    """What slot *letter* carries with *device* in it — ``None`` where that device keeps no card.
 
-    Every key is matched ASCII case-insensitively, last occurrence winning,
-    because that is the emulator's own matching (the chain is on
-    :func:`_parse_sectioned_ini`, #295).
+    The path key each device reads, read the emulator's way and translated the
+    emulator's way: this is the one place either is done, so the slot in force
+    and the slot an alternative names are resolved by the same code rather than
+    by two readings that could drift apart (#518).
     """
-    raw_value, slot_spelled = _simpleini_value(values, "Core", f"Slot{letter}")
-    try:
-        device = int(raw_value) if raw_value is not None else _DOLPHIN_SLOT_DEFAULTS[letter]
-    except ValueError:
-        device = None
-    slot_reading = _dolphin_reading(f"Slot{letter}", raw_value, None, cite, spelled=slot_spelled)
-    if device == _DOLPHIN_DEVICE_NONE:
-        return _DolphinSlot(mode="none", readings=(slot_reading,))
     if device == _DOLPHIN_DEVICE_FOLDER:
         folder_value, folder_spelled = _simpleini_value(values, "Core", f"GCIFolder{letter}Path")
-        slot = _dolphin_folder_slot(
+        return _dolphin_folder_slot(
             letter,
             folder_value,
             sandbox,
@@ -6574,9 +7517,9 @@ def _dolphin_slot(
             cite,
             spelled=folder_spelled,
         )
-    elif device == _DOLPHIN_DEVICE_RAW:
+    if device == _DOLPHIN_DEVICE_RAW:
         card_value, card_spelled = _simpleini_value(values, "Core", f"Memcard{letter}Path")
-        slot = _dolphin_raw_slot(
+        return _dolphin_raw_slot(
             letter,
             card_value,
             sandbox,
@@ -6584,53 +7527,167 @@ def _dolphin_slot(
             cite,
             spelled=card_spelled,
         )
-    elif device == _DOLPHIN_DEVICE_AGP:
+    return None
+
+
+def _dolphin_slot(
+    letter: str,
+    values: Mapping[tuple[str, str], str],
+    machine: Machine,
+    sandbox: _Sandbox,
+    gc_root: str,
+    cite: "_Cite",
+    *,
+    token: str,
+) -> _DolphinSlot:
+    """One slot read the way the emulator reads it: device id first, then the path.
+
+    Every key is matched ASCII case-insensitively, last occurrence winning,
+    because that is the emulator's own matching (the chain is on
+    :func:`_parse_sectioned_ini`, #295). The GBA cartridge adapter is read
+    here rather than in :func:`_dolphin_carded_slot`, because it keeps no card
+    and no flip names it: whether it keeps a save is its ``.sav``'s size,
+    which only this machine answers (:func:`_dolphin_agp_slot`).
+
+    The device id is the value parsed the way ``TryParse`` parses it
+    (:func:`_dolphin_try_parse_int`), and a value that does not parse is the
+    slot's compiled default, as it is in the emulator — so only a value that
+    parses to an id atlas does not model leaves the slot uninterpreted.
+    """
+    raw_value, slot_spelled = _simpleini_value(values, "Core", f"Slot{letter}")
+    parsed = _dolphin_try_parse_int(raw_value) if raw_value is not None else None
+    device = parsed if parsed is not None else _DOLPHIN_SLOT_DEFAULTS[letter]
+    slot_reading = _dolphin_slot_reading(letter, raw_value, parsed, cite, spelled=slot_spelled)
+    if device == _DOLPHIN_DEVICE_NONE:
+        return _DolphinSlot(mode="none", readings=(slot_reading,))
+    slot = _dolphin_carded_slot(letter, device, values, sandbox, gc_root, cite)
+    if slot is None and device == _DOLPHIN_DEVICE_AGP:
+        slot = _dolphin_agp_slot(letter, values, machine, sandbox, cite, token=token)
+    if slot is not None:
         return _DolphinSlot(
-            mode="agp",
-            readings=(slot_reading,),
-            caveats=(
-                Caveat(
-                    CAVEAT_CORE_MODE_UNESTABLISHED,
-                    f"Dolphin's slot {letter} holds a GBA cartridge adapter (AGP, EXI device 9) — "
-                    "its saves go onto the cartridge image the emulator is configured with, which "
-                    "this answer does not model; the other slot's statement stands on its own",
-                    {
-                        "token": "DOLPHIN",
-                        "reason": REASON_SLOT_HOLDS_AGP_DEVICE,
-                        "slot": letter,
-                    },
-                ),
-            ),
-        )
-    else:
-        return _DolphinSlot(
-            mode="unknown",
-            readings=(slot_reading,),
-            caveats=(
-                Caveat(
-                    CAVEAT_CORE_MODE_UNESTABLISHED,
-                    f'Dolphin.ini sets Slot{letter} to "{raw_value}", a device this card cannot '
-                    "interpret — what sits in that slot and where it saves is unestablished",
-                    {
-                        "token": "DOLPHIN",
-                        "reason": REASON_SLOT_DEVICE_UNINTERPRETED,
-                        "slot": letter,
-                        # A slot whose key is absent takes the compiled
-                        # default, which this card reads, so the raw value is
-                        # a string wherever this branch is reached; the empty
-                        # spelling is the one a blank ``Slot<letter> =`` has.
-                        "value": raw_value or "",
-                    },
-                ),
-            ),
+            mode=slot.mode,
+            groups=slot.groups,
+            readings=(slot_reading, *slot.readings),
+            caveats=slot.caveats,
+            template_dir=slot.template_dir,
+            unreachable=slot.unreachable,
         )
     return _DolphinSlot(
-        mode=slot.mode,
-        groups=slot.groups,
-        readings=(slot_reading, *slot.readings),
-        caveats=slot.caveats,
-        template_dir=slot.template_dir,
+        mode="unknown",
+        readings=(slot_reading,),
+        caveats=(
+            Caveat(
+                CAVEAT_CORE_MODE_UNESTABLISHED,
+                f'Dolphin.ini sets Slot{letter} to "{raw_value}", which Dolphin reads as EXI '
+                f"device {device}, one this card cannot interpret — what sits in that slot "
+                "and where it saves is unestablished",
+                {
+                    "token": token,
+                    "reason": REASON_SLOT_DEVICE_UNINTERPRETED,
+                    "slot": letter,
+                    # A value that does not parse, and an absent key, both
+                    # take the compiled default, which this card reads — so
+                    # the raw value is one that parsed wherever this branch
+                    # is reached; the empty spelling is the one a blank
+                    # ``Slot<letter> =`` has, which parses as 0.
+                    "value": raw_value or "",
+                },
+            ),
+        ),
+        device=device,
     )
+
+
+def _dolphin_slot_reading(
+    letter: str,
+    raw_value: str | None,
+    parsed: int | None,
+    cite: "_Cite",
+    *,
+    spelled: str,
+) -> OptionReading:
+    """The slot key's reading, saying which device id its value became.
+
+    A value spelled other than the plain decimal of the id it parses to says
+    the id, and a value that does not parse says that the default governs and
+    why, the way DuckStation's ``Card{n}Type`` reading does for a name it does
+    not know. An unset key is :func:`_dolphin_reading`'s own default sentence.
+    """
+    key = f"Slot{letter}"
+    if raw_value is None:
+        return _dolphin_reading(key, None, None, cite)
+    parse = f"{cite('slot_parse')} at {cite('build')}"
+    if parsed is None:
+        default = _DOLPHIN_SLOT_DEFAULTS[letter]
+        return _dolphin_reading(
+            key,
+            raw_value,
+            f'Dolphin.ini sets [Core] {spelled} to "{raw_value}", a value TryParse does not '
+            f"read as an EXI device id ({parse}) — the compiled default, "
+            f"{_DOLPHIN_DEFAULT_DEVICE_NAMES[default]} ({default}), governs "
+            f"({cite('slot_defaults')} at {cite('build')})",
+        )
+    if str(parsed) != raw_value:
+        return _dolphin_reading(
+            key,
+            raw_value,
+            f'Dolphin.ini: [Core] {spelled} = "{raw_value}" — EXI device {parsed}, the value '
+            f"read the way TryParse reads it ({parse})",
+        )
+    return _dolphin_reading(key, raw_value, None, cite, spelled=spelled)
+
+
+def _dolphin_ungrouped_value(slots: Sequence[_DolphinSlot]) -> str:
+    """The granularity a GameCube answer carrying no group states.
+
+    The card of the first slot whose path this host cannot locate groups the
+    way its device does — it is still where the emulator writes, atlas only
+    cannot reach it — so the answer states that grouping with no group beside
+    it, and :data:`GRANULARITY_NONE` is left for where no slot holds a card
+    or a save: none holds a raw card or a GCI folder, and no GBA cartridge
+    adapter's ``.sav`` has a size or sits where this host cannot examine it.
+    Where two such cards group differently the first slot's word is stated,
+    the way ``groups[0]`` decides the value of an answer that carries groups.
+    The answer and the alternative naming its mode both read it here, so what
+    the alternative promises is what the reached answer states.
+    """
+    return next((slot.unreachable for slot in slots if slot.unreachable), GRANULARITY_NONE)
+
+
+def _dolphin_uninterpreted_refusal(
+    slots: tuple[_DolphinSlot, _DolphinSlot],
+    *,
+    token: str,
+    config: str,
+) -> Unresolved | None:
+    """The refusal where a device atlas cannot interpret is all the slots say.
+
+    A slot holding such a device may keep saves anywhere, so where no other
+    slot gives the answer something to stand on — a group, or a card or
+    cartridge save atlas cannot reach — neither a location nor "nothing is
+    kept" is true to say. Beside a slot that does, the answer stands and the
+    device rides it as ``core-mode-unestablished``. The first such slot is
+    named.
+    """
+    if any(slot.groups or slot.unreachable for slot in slots):
+        return None
+    for letter, slot in zip(("A", "B"), slots):
+        if slot.mode != "unknown":
+            continue
+        # The slot key's reading comes first; this device's value is set,
+        # because an absent key and a value that does not parse both fall to
+        # a default this card reads.
+        value = slot.readings[0].value or ""
+        return Unresolved(
+            UNRESOLVED_SLOT_DEVICE_UNINTERPRETED,
+            f'Dolphin.ini sets Slot{letter} to "{value}", which Dolphin reads as EXI device '
+            f"{slot.device}, one this card cannot interpret, and no other slot states "
+            "anything this answer could stand on — "
+            "what that device keeps and where is unestablished, so neither a location nor "
+            "that nothing is kept can be said",
+            {"token": token, "slot": letter, "value": value, "config": config},
+        )
+    return None
 
 
 def _dolphin_gc_answer(
@@ -6640,9 +7697,16 @@ def _dolphin_gc_answer(
     ini_path: str | None,
     card: StandaloneSaveCard,
     cite: _Cite,
+    alternatives: tuple[ModeAlternative, ...],
     extra_caveats: tuple[Caveat, ...],
 ) -> SavefilePlacement:
-    """The GameCube answer assembled from both slots' contributions."""
+    """The GameCube answer assembled from both slots' contributions.
+
+    *alternatives* arrives resolved rather than being built here, because
+    naming the other mode's groupings takes a second resolution of slot A and
+    so the configuration this answer was read from — which the caller holds and
+    this assembly does not.
+    """
     groups = tuple(g for slot in slots for g in slot.groups)
     readings = tuple(
         _reading_with_file(r, ini_path) for slot in slots for r in slot.readings
@@ -6651,6 +7715,7 @@ def _dolphin_gc_answer(
     mode = "+".join(slot.mode for slot in slots)
     template = next((slot.template_dir for slot in slots if slot.template_dir), None)
     if groups:
+        value = groups[0].granularity
         directory = template or groups[0].dir
         needs = (HOLE_REGION,) if template else ()
         named_first = groups[0].files is not None
@@ -6676,18 +7741,23 @@ def _dolphin_gc_answer(
                 if g.files is None
             )
     else:
-        # No device keeps a card: nothing on this machine takes a GameCube
-        # game's save writes until a slot is configured again.
+        # No slot carries a group: either no slot holds a card or a save, and
+        # no save data lands anywhere until the configuration changes, or a
+        # card or a cartridge save sits where this host cannot locate or
+        # examine it — see _dolphin_ungrouped_value.
+        value = _dolphin_ungrouped_value(slots)
         directory = template or (ini_path and os.path.dirname(ini_path)) or "/"
         needs = ()
         files = ()
         state = FILE_SET_DECLARED
+    if value == GRANULARITY_NONE:
         caveats.append(
             Caveat(
                 CAVEAT_SAVE_WRITES_DISCARDED,
-                "no memory card sits in either slot (Dolphin.ini [Core] SlotA/SlotB) — a "
-                "GameCube game finds nowhere to save and nothing is kept; the granularity "
-                "block names the switches that would change that",
+                "neither slot keeps a save (Dolphin.ini [Core] SlotA/SlotB) — no memory card "
+                "sits in either one, and a GBA cartridge adapter keeps one only in a .sav that "
+                "has a size — so a GameCube game finds nowhere to save and nothing is kept; the "
+                "granularity block names the switches that would change that",
                 {"token": card.token, "mode": mode},
             )
         )
@@ -6711,10 +7781,10 @@ def _dolphin_gc_answer(
         caveats=tuple(caveats),
         physical_dir=physical,
         granularity=Granularity(
-            value=groups[0].granularity if groups else GRANULARITY_NONE,
+            value=value,
             mode=mode,
             readings=readings,
-            alternatives=_dolphin_alternatives(slots),
+            alternatives=alternatives,
             provenance=(
                 f"standalone save card '{card.token}': mode {mode!r} from Dolphin.ini's slot "
                 f"devices ({cite('slot_devices')} at {cite('build')})"
@@ -6727,30 +7797,72 @@ def _reading_with_file(reading: OptionReading, options_file: str | None) -> Opti
     return OptionReading(reading.key, reading.value, reading.provenance, options_file)
 
 
-# The one edit a player actually makes: flip slot A between the folder
-# (per-game files) and the raw card (one shared file per region). Keyed by
-# the mode it flips FROM; slot B's combinations multiply the space without
-# changing the shape of any answer, so they stay as they are.
+# The one edit a player actually makes: flip slot A between the folder and the
+# raw card. Keyed by the mode it flips FROM, and holding what that edit writes
+# — the mode the answer will then name, and the device id that selects it. Slot
+# B is left as it stands rather than enumerated beside it, because changing slot
+# B is a different edit than the one this table is about and offering both
+# slots' devices would publish their product. What each mode GROUPS by is not
+# here: that follows from the path the flipped slot would then read, which only
+# a resolution of that slot answers (#518).
 _DOLPHIN_SLOT_A_FLIPS = {
-    "folder": ("card", _DOLPHIN_DEVICE_RAW, GRANULARITY_SHARED_FILE),
-    "card": ("folder", _DOLPHIN_DEVICE_FOLDER, GRANULARITY_PER_GAME_FILES),
+    "folder": ("card", _DOLPHIN_DEVICE_RAW),
+    "card": ("folder", _DOLPHIN_DEVICE_FOLDER),
 }
 
 
 def _dolphin_alternatives(
-    slots: tuple[_DolphinSlot, _DolphinSlot]
+    slots: tuple[_DolphinSlot, _DolphinSlot],
+    values: Mapping[tuple[str, str], str],
+    sandbox: _Sandbox,
+    gc_root: str,
+    cite: "_Cite",
 ) -> tuple[ModeAlternative, ...]:
-    """The other card scheme for slot A — every other mode is a caveat, not a mode."""
+    """The other card scheme for slot A — every other mode is a caveat, not a mode.
+
+    The mode named is both slots, so its ``values`` is both slots' groupings,
+    the flipped slot's first. Neither is a constant. Slot A is resolved again
+    with the flipped device in it, through :func:`_dolphin_carded_slot`, so it
+    reads the path key that device reads, from this same configuration and
+    through this same sandbox translation; slot B is left as it stands and
+    contributes the granularity of the groups it already carries. Each slot
+    contributes the distinct granularities of its own groups and nothing at all
+    where it carries none — among those, a slot whose configured path this host
+    cannot locate, because a group needs a directory and this host can state
+    none for that card.
+
+    Where neither slot would carry a group, ``values`` is the one word the
+    reached answer states as its own ``granularity.value`` instead, read by the
+    same :func:`_dolphin_ungrouped_value`. The flipped slot always holds a card,
+    so that word is the grouping of a card at a path this host cannot locate,
+    never :data:`GRANULARITY_NONE`. An empty tuple would say it differently and
+    worse: nothing refuses one, and a client reading ``values[0]`` the way
+    :class:`ModeAlternative` tells it to would raise instead of reading a word.
+
+    The flipped slot's caveats ride the alternative as its ``caveats``: they are
+    what the reached answer says about the path that slot would read — today
+    only ``sandbox-path-untranslated`` for a path this host cannot locate — and
+    they say why that slot carries no group there. Slot B's stay on the answer,
+    whose own slot it is.
+    """
     a, b = slots
     alternatives: list[ModeAlternative] = []
     flip = _DOLPHIN_SLOT_A_FLIPS.get(a.mode)
     if flip is not None:
-        other, device, value = flip
+        other, device = flip
+        flipped = _dolphin_carded_slot("A", device, values, sandbox, gc_root, cite)
+        assert flipped is not None  # every device a flip writes keeps a card
+        reached = (flipped, b)
+        groups = tuple(g for slot in reached for g in slot.groups)
+        groupings = tuple(dict.fromkeys(g.granularity for g in groups)) or (
+            _dolphin_ungrouped_value(reached),
+        )
         alternatives.append(
             ModeAlternative(
                 mode=f"{other}+{b.mode}",
                 options=(("SlotA", str(device)),),
-                values=(value,),
+                values=groupings,
+                caveats=flipped.caveats,
             )
         )
     return tuple(alternatives)
@@ -6944,15 +8056,19 @@ def _dolphin_savefile_placement(
         if _simpleini_value(values, "Core", key)[0]
     )
     slots = (
-        _dolphin_slot("A", values, sandbox, gc_root, cite),
-        _dolphin_slot("B", values, sandbox, gc_root, cite),
+        _dolphin_slot("A", values, machine, sandbox, gc_root, cite, token=card.token),
+        _dolphin_slot("B", values, machine, sandbox, gc_root, cite, token=card.token),
     )
+    refusal = _dolphin_uninterpreted_refusal(slots, token=card.token, config=ini_path)
+    if refusal is not None:
+        return refusal
     return _dolphin_gc_answer(
         slots,
         machine=machine,
         ini_path=stated_ini,
         card=card,
         cite=cite,
+        alternatives=_dolphin_alternatives(slots, values, sandbox, gc_root, cite),
         extra_caveats=(
             *extra_caveats,
             *override_caveats,
@@ -6961,7 +8077,7 @@ def _dolphin_savefile_placement(
                 token=card.token,
                 homes=homes,
                 keys=_DOLPHIN_GC_LAYER_KEYS,
-                governs="which file or folder each memory card slot reads",
+                governs="which file or folder each slot reads",
             ),
         ),
     )
@@ -7776,12 +8892,21 @@ def _duckstation_settings(
 
 @dataclass(frozen=True, slots=True)
 class _DuckSlot:
-    """One memory-card slot's contribution to the answer."""
+    """One memory-card slot's contribution to the answer.
+
+    ``unreachable`` is the grouping of a card the slot holds at a path this
+    host cannot locate: the emulator writes its saves there, so the slot is
+    not configured empty, but atlas has no directory to state a group in and
+    cannot tell whether those writes are kept. ``None`` wherever the slot's
+    group says everything, or it holds no card, or a card whose writes are
+    discarded.
+    """
 
     mode: str
     group: FileGroup | None = None
     readings: tuple[OptionReading, ...] = ()
     caveats: tuple[Caveat, ...] = ()
+    unreachable: str | None = None
 
 
 def _duckstation_shared_slot(
@@ -7833,6 +8958,7 @@ def _duckstation_shared_slot(
         if host.path is None:
             return _DuckSlot(
                 mode="Shared",
+                unreachable=GRANULARITY_SHARED_CARD,
                 readings=(type_reading, path_reading),
                 caveats=(
                     Caveat(
@@ -7987,6 +9113,21 @@ def _duckstation_slot(
     return _duckstation_per_game_slot(
         slot, mode, values, memcards_dir, card, type_reading, content_path
     )
+
+
+def _duckstation_ungrouped_value(slots: Sequence[_DuckSlot]) -> str:
+    """The granularity a DuckStation answer carrying no group states.
+
+    A shared card at a path this host cannot locate groups the way any shared
+    card does — it is still where the emulator writes, atlas only cannot reach
+    it — so the answer states that grouping with no group beside it, and
+    :data:`GRANULARITY_NONE` is left for where no slot keeps a card: ``None``
+    and ``NonPersistent`` alike. Only a shared card's own path is translated
+    per slot — a per-game card sits in the memory-card directory, and a
+    directory with no host spelling refuses the whole answer before any slot
+    is read — so every such slot names the same word.
+    """
+    return next((slot.unreachable for slot in slots if slot.unreachable), GRANULARITY_NONE)
 
 
 def _first_directory_files(groups: tuple[FileGroup, ...]) -> tuple[str, ...]:
@@ -8188,13 +9329,19 @@ def _duckstation_savefile_placement(
     caveats.extend(c for slot in slots for c in slot.caveats)
     mode = "+".join(slot.mode for slot in slots)
     if groups:
+        value = groups[0].granularity
         directory = groups[0].dir
         files = _first_directory_files(groups)
         needs = _duckstation_needs(groups)
     else:
+        # No slot carries a group: either no slot keeps a card, and nothing a
+        # game writes is kept until a slot is given one, or a shared card sits
+        # at a path this host cannot locate — see _duckstation_ungrouped_value.
+        value = _duckstation_ungrouped_value(slots)
         directory = memcards_dir
         files = ()
         needs = ()
+    if value == GRANULARITY_NONE:
         caveats.append(
             Caveat(
                 CAVEAT_SAVE_WRITES_DISCARDED,
@@ -8204,10 +9351,12 @@ def _duckstation_savefile_placement(
                 {"token": card.token, "mode": mode},
             )
         )
-    # The answer's own directory, which is the memory-card one only while no
-    # slot points elsewhere: a slot with an absolute CardXPath moves `dir`, and
-    # `physical_dir` is a statement about `dir` (a dead link on the directory
-    # the answer names is what makes writes fail).
+    # The answer's own directory, which is the memory-card one unless the
+    # first group sits elsewhere, as a shared card whose CardXPath names
+    # another directory does; a shared card this host cannot locate carries
+    # no group, and where no slot carries one the memory-card directory
+    # stands in. `physical_dir` is a statement about `dir` (a dead link on the
+    # directory the answer names is what makes writes fail).
     physical, link_caveats = _link_view(machine, directory)
     caveats.extend(link_caveats)
     return SavefilePlacement(
@@ -8226,7 +9375,7 @@ def _duckstation_savefile_placement(
         caveats=tuple(caveats),
         physical_dir=physical,
         granularity=Granularity(
-            value=groups[0].granularity if groups else GRANULARITY_NONE,
+            value=value,
             mode=mode,
             readings=tuple(_reading_with_file(r, stated_ini) for r in readings),
             alternatives=(),
@@ -9056,6 +10205,14 @@ def _melonds_savefile_placement(
 _RPCS3_EMULATOR_DIR_KEY = "$(EmulatorDir)"
 _RPCS3_HDD0_KEY = "/dev_hdd0/"
 _RPCS3_HDD0_DEFAULT = "$(EmulatorDir)dev_hdd0/"
+# The route the drive is mounted by, which is where $(EmulatorDir) is settled:
+# Emulator::Init asks get_emu_dir() for it (System.cpp:395) and hands the answer,
+# never empty, to cfg_vfs::get — so that function's own fallback for an empty
+# argument (vfs_config.cpp:32-48) is never taken for this drive.
+_RPCS3_EMULATOR_DIR_ROUTE = (
+    "get_emu_dir, system_utils.cpp:146-150, called at System.cpp:395 and passed at "
+    ":483 into vfs_config.cpp:50 at build 7c6b3dcd"
+)
 # The user home the emulator starts with (Emulator::m_usr, System.h:164), used
 # where no home directory can be listed — never as a claim that it is the one
 # in force, which the caveat states.
@@ -9711,6 +10868,212 @@ def _rpcs3_listing_claim(survey: _PerUserSurvey) -> str:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _Rpcs3Drive:
+    """The drive vfs.yml leaves RPCS3, and the two ways an answer speaks of it.
+
+    ``raw`` is the drive before host translation: the value vfs.yml states for
+    ``/dev_hdd0/`` as the scalar reader resolved it, or, where that key is
+    unset, empty or null, atlas's substitution of ``$(EmulatorDir)`` into the
+    compiled default ``$(EmulatorDir)dev_hdd0/``. ``provenance`` is the
+    reading's sentence about where it came from. ``origin`` names it inside a
+    sentence of its own — the drive the file names, or the compiled default
+    and what it was composed off — so a refusal about the drive never calls a
+    composed default a drive the file names.
+    """
+
+    raw: str
+    provenance: str
+    origin: str
+
+
+def _rpcs3_default_drive(read: YamlScalars, config_dir: str) -> tuple[str, str, str]:
+    """The compiled default with ``$(EmulatorDir)`` replaced: the drive, its clause, its name.
+
+    The replacement is the one the mount makes: ``get_emu_dir()`` answers the
+    value vfs.yml states, as written — no separator is added to it, so a value
+    without a trailing ``/`` runs straight into ``dev_hdd0/`` — or the config
+    directory, which carries its own (fs::get_config_dir, Utilities/File.cpp:2284-2292
+    at build 7c6b3dcd), where the node holds nothing. It holds nothing where
+    ``$(EmulatorDir)`` is unset, empty or a null node, which no cfg::string
+    takes a value from — the citations ride the null-node sentence
+    :func:`_rpcs3_drive` emits. The caller has refused a ``$(EmulatorDir)`` the
+    reader skipped before it asks (see :func:`_rpcs3_vfs_refusal`).
+
+    Returns the drive, the clause the provenance sentence ends with, and the
+    drive's name for :attr:`_Rpcs3Drive.origin`.
+    """
+    emulator_dir = read.get(_RPCS3_EMULATOR_DIR_KEY)
+    if emulator_dir:
+        composed_off = f"the {_RPCS3_EMULATOR_DIR_KEY} vfs.yml states ({emulator_dir!r})"
+        clause = (
+            f', with {_RPCS3_EMULATOR_DIR_KEY} the "{emulator_dir}" vfs.yml states, '
+            f"substituted as written ({_RPCS3_EMULATOR_DIR_ROUTE})"
+        )
+    else:
+        emulator_dir = f"{config_dir}/"
+        composed_off = "the config directory"
+        clause = (
+            f", with {_RPCS3_EMULATOR_DIR_KEY} the config directory an unset, empty or null "
+            f"one means ({_RPCS3_EMULATOR_DIR_ROUTE})"
+        )
+    raw = _RPCS3_HDD0_DEFAULT.replace(_RPCS3_EMULATOR_DIR_KEY, emulator_dir)
+    origin = (
+        f"the compiled default {_RPCS3_HDD0_DEFAULT}, composed off {composed_off} "
+        f"into {raw!r},"
+    )
+    return raw, clause, origin
+
+
+def _rpcs3_drive(read: YamlScalars, config_dir: str) -> _Rpcs3Drive:
+    """The drive vfs.yml leaves RPCS3, and where it came from.
+
+    A stated ``/dev_hdd0/`` is returned as the scalar reader resolved it: the
+    reader substitutes ``$(EmulatorDir)`` itself, with the config directory
+    standing in for an empty, null, absent or skipped one, and where that departs
+    from the emulator's own substitution is open (#511). Anything else — the
+    key unset, stated empty, or stated as a null node — leaves the compiled
+    default governing, composed as :func:`_rpcs3_default_drive` composes it.
+
+    Four sentences for four files, and two of them — an empty value and a null
+    node — are why there are four rather than two: both reach the same
+    directory as a key nobody wrote, and a reader who opens vfs.yml sees a
+    key. Each sentence carries its own citations, and the three that fall to
+    the compiled default name the ``$(EmulatorDir)`` it was composed off,
+    because the same default lands in two different places.
+    """
+    stated = read.get(_RPCS3_HDD0_KEY)
+    if stated:
+        return _Rpcs3Drive(
+            raw=stated,
+            provenance=f'vfs.yml: {_RPCS3_HDD0_KEY} = "{stated}"',
+            origin=f"the drive RPCS3's VFS configuration names ({stated!r})",
+        )
+    raw, clause, origin = _rpcs3_default_drive(read, config_dir)
+    governs = f"the compiled default {_RPCS3_HDD0_DEFAULT} governs (vfs_config.h:13){clause}"
+    if _RPCS3_HDD0_KEY in read.null:
+        provenance = (
+            f"{_RPCS3_HDD0_KEY} is stated as a null node, which RPCS3's reader passes over "
+            "— a cfg::string takes a value only where convert<std::string>::decode accepts "
+            "it (Utilities/Config.cpp:645-655 at build 7c6b3dcd) and a null node is no "
+            "scalar for it to accept (convert.h:73-75 at the yaml-cpp fork 51a5d623, the "
+            f"submodule that build pins) — so {governs}"
+        )
+    elif stated is not None:
+        provenance = (
+            f"{_RPCS3_HDD0_KEY} is stated empty, and cfg_vfs::get falls to the default "
+            f"for an empty path (vfs_config.cpp:18-28 at build 7c6b3dcd) — so {governs}"
+        )
+    else:
+        provenance = f"{_RPCS3_HDD0_KEY} is unset — {governs}"
+    return _Rpcs3Drive(raw=raw, provenance=provenance, origin=origin)
+
+
+def _rpcs3_repeated_drive_key(read: YamlScalars) -> str | None:
+    """Which repeated key leaves the drive unknowable here — the drive or its variable.
+
+    A shape where this reader and this emulator read one statement two ways.
+    ``cfg::decode`` walks every pair of the map in file order and takes each one
+    it can, so the last statement that is a scalar is the one that stands, while
+    the scalar reader holds the first, the way a yaml-cpp lookup answers. Both
+    keys reach the drive: ``/dev_hdd0/`` states it, and ``$(EmulatorDir)`` is the
+    variable a stated drive — or the compiled default an unstated one falls to —
+    is composed off (``fmt::replace_all``, vfs_config.cpp:50 at build 7c6b3dcd;
+    the default vfs_config.h:13).
+
+    A repeated ``$(EmulatorDir)`` refuses whatever the drive's own statement
+    looks like: the scalar reader resolves every ``$(Name)`` before it answers,
+    so whether the drive's statement referenced the variable is not a fact this
+    answer holds, and refusing on the repetition alone is the reading that
+    cannot be wrong.
+    """
+    if _RPCS3_HDD0_KEY in read.repeated:
+        return _RPCS3_HDD0_KEY
+    if _RPCS3_EMULATOR_DIR_KEY in read.repeated:
+        return _RPCS3_EMULATOR_DIR_KEY
+    return None
+
+
+def _rpcs3_vfs_refusal(
+    read: YamlScalars, *, card: StandaloneSaveCard, vfs_path: str
+) -> Unresolved | None:
+    """Why vfs.yml settles nothing about the drive, or ``None`` where it does.
+
+    Four ways, in the order they take precedence. A construct the scalar
+    reader refuses stops the whole file. A key stated more than once is read by
+    the emulator and by this reader from two different statements, so neither
+    can be published as the drive. A ``/dev_hdd0/`` the reader passed over is
+    stated and unread, which is not the unset key whose compiled default the
+    answer would otherwise name. And where the drive does fall to that default,
+    a ``$(EmulatorDir)`` the reader passed over is the same gap one step later:
+    the default is composed off it, and RPCS3 takes a multi-line scalar there
+    as the directory while it passes over a block or a list and keeps the
+    config directory, because a cfg::string takes a value from a scalar and
+    nothing else — cited in the null-node sentence :func:`_rpcs3_drive` emits.
+    The reader records all three as skipped, so which of them the file states
+    is exactly what was not read.
+
+    A drive stated with the ``$(EmulatorDir)`` token beside a skipped one is
+    the same gap and is not refused here: the reader has already substituted
+    its config-directory fallback into the drive, so the token is gone by the
+    time this check could look for it. That case is open (#511).
+    """
+    if read.refusal is not None:
+        return Unresolved(
+            UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
+            f"RPCS3's VFS configuration ({vfs_path}) states a construct atlas does not read "
+            f"({read.refusal}) — which drive its saves live on is unknowable here",
+            {"token": card.token, "config": vfs_path, "reason": read.refusal},
+        )
+    repeated = _rpcs3_repeated_drive_key(read)
+    if repeated is not None:
+        return Unresolved(
+            UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
+            f"RPCS3's VFS configuration ({vfs_path}) states {repeated} more than once; the "
+            "emulator applies every statement in turn and keeps the last it reads as a "
+            "scalar (cfg::decode, Utilities/Config.cpp:477-505 at build 7c6b3dcd), which "
+            "this reader does not follow — which drive its saves live on is unknowable here",
+            {
+                "token": card.token,
+                "config": vfs_path,
+                "reason": REASON_KEY_REPEATED,
+                "key": repeated,
+            },
+        )
+    if _RPCS3_HDD0_KEY in read.skipped:
+        # Stated as a nested block, a list or a multi-line scalar: RPCS3 reads a
+        # drive here and atlas did not. Treating that as an unset key answered
+        # the compiled default and said "the compiled default governs" — a
+        # provenance line about a key the file does set.
+        return Unresolved(
+            UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
+            f"RPCS3's VFS configuration ({vfs_path}) states {_RPCS3_HDD0_KEY} as a construct "
+            "atlas does not read — its value is unread, not absent, so which drive its saves "
+            "live on is unknowable here",
+            {
+                "token": card.token,
+                "config": vfs_path,
+                "reason": REASON_KEY_UNREAD,
+                "key": _RPCS3_HDD0_KEY,
+            },
+        )
+    if _RPCS3_EMULATOR_DIR_KEY in read.skipped and not read.get(_RPCS3_HDD0_KEY):
+        return Unresolved(
+            UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
+            f"RPCS3's VFS configuration ({vfs_path}) leaves {_RPCS3_HDD0_KEY} unset, empty "
+            f"or null and states {_RPCS3_EMULATOR_DIR_KEY} as a construct atlas does not "
+            f"read — the compiled default {_RPCS3_HDD0_DEFAULT} is composed off a value that "
+            "is unread, not absent, so which drive its saves live on is unknowable here",
+            {
+                "token": card.token,
+                "config": vfs_path,
+                "reason": REASON_KEY_UNREAD,
+                "key": _RPCS3_EMULATOR_DIR_KEY,
+            },
+        )
+    return None
+
+
 def _rpcs3_savefile_placement(
     machine: Machine,
     *,
@@ -9726,8 +11089,11 @@ def _rpcs3_savefile_placement(
 
     Two steps, both the emulator's own. ``cfg_vfs::get`` takes the configured
     ``/dev_hdd0/`` or its compiled default, replaces ``$(EmulatorDir)``
-    everywhere — an empty one meaning the config directory — and appends a
-    separator (vfs_config.cpp:14-62). Below the drive the tree is
+    everywhere and ends the resulting path with a separator where it has none
+    (vfs_config.cpp:14-62). What it replaces the token with is
+    ``get_emu_dir()``'s answer — the stated value as written, or the config
+    directory where it is empty (system_utils.cpp:146-150, called at
+    System.cpp:395 and passed at :483). Below the drive the tree is
     ``home/<user>/savedata``, one directory per title id.
 
     The user is where this answer stops short of certainty: it is a runtime
@@ -9756,46 +11122,18 @@ def _rpcs3_savefile_placement(
         )
     text = result.text or "" if result.status == READ_OK else ""
     read = read_scalars(text, fallbacks={_RPCS3_EMULATOR_DIR_KEY: f"{config_dir}/"})
-    if read.refusal is not None:
-        return Unresolved(
-            UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
-            f"RPCS3's VFS configuration ({vfs_path}) states a construct atlas does not read "
-            f"({read.refusal}) — which drive its saves live on is unknowable here",
-            {"token": card.token, "config": vfs_path, "reason": read.refusal},
-        )
-    if _RPCS3_HDD0_KEY in read.skipped:
-        # Stated as a nested block, a list or a multi-line scalar: RPCS3 reads a
-        # drive here and atlas did not. Treating that as an unset key answered
-        # the compiled default and said "the compiled default governs" — a
-        # provenance line about a key the file does set.
-        return Unresolved(
-            UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
-            f"RPCS3's VFS configuration ({vfs_path}) states {_RPCS3_HDD0_KEY} as a construct "
-            "atlas does not read — its value is unread, not absent, so which drive its saves "
-            "live on is unknowable here",
-            {
-                "token": card.token,
-                "config": vfs_path,
-                "reason": REASON_KEY_UNREAD,
-                "key": _RPCS3_HDD0_KEY,
-            },
-        )
+    refused = _rpcs3_vfs_refusal(read, card=card, vfs_path=vfs_path)
+    if refused is not None:
+        return refused
     stated = read.get(_RPCS3_HDD0_KEY)
-    if stated:
-        provenance = f'vfs.yml: {_RPCS3_HDD0_KEY} = "{stated}"'
-    else:
-        provenance = (
-            f"{_RPCS3_HDD0_KEY} is unset — the compiled default "
-            f"{_RPCS3_HDD0_DEFAULT} governs (vfs_config.h:13)"
-        )
-    raw = stated or f"{config_dir}/dev_hdd0/"
-    host = sandbox.host(_RPCS3_HDD0_KEY, raw)
+    drive = _rpcs3_drive(read, config_dir)
+    host = sandbox.host(_RPCS3_HDD0_KEY, drive.raw)
     if host.path is None:
         return Unresolved(
             UNRESOLVED_EMULATOR_CONFIG_PATH_UNTRANSLATABLE,
-            f"the drive RPCS3's VFS configuration names ({raw!r}) has no spelling on "
-            f"this host — {vfs_path} read fine, and nothing this answer could anchor at",
-            {"token": card.token, "config": vfs_path, "path": raw},
+            f"{drive.origin} has no spelling on this host — {vfs_path} read fine, and "
+            "nothing this answer could anchor at",
+            {"token": card.token, "config": vfs_path, "path": drive.raw},
         )
     hdd0 = host.path
     vmc = os.path.join(hdd0, _RPCS3_VMC_SUBDIR)
@@ -9861,7 +11199,7 @@ def _rpcs3_savefile_placement(
             skipped=survey.skipped,
             unestablished=survey.unestablished,
             mode="hdd0",
-            readings=(OptionReading(_RPCS3_HDD0_KEY, stated, provenance, None),),
+            readings=(OptionReading(_RPCS3_HDD0_KEY, stated, drive.provenance, None),),
             reading_file=vfs_path if result.status == READ_OK else None,
             provenance=(
                 f"standalone save card '{card.token}': the drive from vfs.yml "
@@ -9923,32 +11261,24 @@ _VITA3K_PREF_PATH_KEY = "pref-path"
 # only matter through init_home (gui.cpp:688-696) — see the caveat sentence.
 _VITA3K_USER_ID_KEY = "user-id"
 _VITA3K_AUTO_CONNECT_KEY = "user-auto-connect"
-# The id that ``user-id``, stated with nothing after the colon, hands the
-# emulator. Vita3K reads the key as a std::string (config.h:189) and yaml-cpp's
-# string conversion answers a null node with this literal rather than with an
-# empty string (as_if<std::string, void>, impl.h:145-146) — so the key the
-# emulator looks up in gui.users is these four letters, and a directory listed
-# under them is the user that record preselects. Read and run at the commit
-# this build pins, external/yaml-cpp@2f86d137.
-#
-# WHAT THIS READING REACHES, AND WHAT IT DOES NOT. A plain scalar is a null
-# node whenever ``IsNullString`` says so — an empty one, ``~``, ``null``,
-# ``Null`` or ``NULL`` (null.cpp:13-16), asked of every untagged plain scalar
-# at singledocparser.cpp:96-97 — and all five convert to this same literal,
-# measured by running each of them at the pin above. atlas reaches the id by
-# two roads only: the key stated with no value, which the scalar reader names
-# (YamlScalars.null), and a file writing ``null`` out, which that reader reads
-# as the text it is. The other three are read here as ``~``, ``Null`` and
-# ``NULL`` — ids the emulator never looks up — which is a limit of this
-# reading, not a shape the answer states anything about.
+# The id that ``user-id``, stated as a null node, hands the emulator. Vita3K
+# reads the key as a std::string (config.h:189) and yaml-cpp's string
+# conversion answers a null node with this literal rather than with an empty
+# string (as_if<std::string, void>, impl.h:145-146, read and run at the commit
+# this build pins, external/yaml-cpp@2f86d137) — so the key the emulator looks
+# up in gui.users is these four letters, and a directory listed under them is
+# the user that record preselects. Which plain scalars are that node, and where
+# that is read, is the scalar reader's own fact: it names a key stated as any of
+# them in YamlScalars.null, and its ``_NULL_SPELLINGS`` carries the spellings
+# and their citations.
 _VITA3K_NULL_ID = "null"
-# The sentence for a key stated with no value, said once because two readings
+# The sentence for a key stated as a null node, said once because two readings
 # publish it — the record clause and the key's provenance — and a yaml-cpp bump
 # must move one citation, not two copies of it.
-_VITA3K_VALUELESS_ID_SENTENCE = (
-    f"config.yml states user-id with no value, which yaml-cpp reads as "
-    f'the id "{_VITA3K_NULL_ID}" (impl.h:145-146, read and run at '
-    "external/yaml-cpp@2f86d137)"
+_VITA3K_NULL_NODE_ID_SENTENCE = (
+    f"config.yml states {_VITA3K_USER_ID_KEY} as a null node (nothing after the colon, or "
+    f'one of ~, null, Null, NULL), which yaml-cpp reads as the id "{_VITA3K_NULL_ID}" '
+    "(impl.h:145-146, read and run at external/yaml-cpp@2f86d137)"
 )
 _VITA3K_USER_TREE = os.path.join("ux0", "user")
 # How the emulator's own listing decides what a user is, said once because
@@ -10310,9 +11640,9 @@ class _Vita3kUser:
 
     ``configured`` is the id ``user-id`` hands the emulator, which is ``None``
     only where the key is absent or unread: a key stated as the empty value
-    states the empty id, the one the emulator starts from, and a key stated
-    with no value at all states the id ``null``, the literal its own reader
-    makes of that spelling (:data:`_VITA3K_NULL_ID`).
+    states the empty id, the one the emulator starts from, and a key stated as
+    a null node states the id ``null``, the literal its own reader makes of
+    every spelling of that node (:data:`_VITA3K_NULL_ID`).
     """
 
     configured: str | None
@@ -10335,20 +11665,20 @@ def _vita3k_identities(homes: tuple[_Vita3kListedUser, ...]) -> tuple[str, ...]:
     return tuple(home.identity for home in homes if home.identity is not None)
 
 
-def _vita3k_recorded_record(configured: str, *, valueless: bool) -> str:
+def _vita3k_recorded_record(configured: str, *, null_node: bool) -> str:
     """How config.yml states the id the answer holds against the listing.
 
     The twin of :func:`_vita3k_unset_record`, and there for the same reason: a
     reader who opens config.yml sees which spelling is in it, and an answer
     that named only the resulting id would be describing a file nobody has. A
-    key with nothing after the colon reaches the id ``null`` through yaml-cpp's
-    string conversion and a file writing ``null`` out reaches it as the text it
-    is — see :data:`_VITA3K_NULL_ID` for what that conversion takes for a null
-    node and which of those spellings this reading reaches — so the clause says
-    which file was read rather than making one state what the other does.
+    key stated as a null node reaches the id ``null`` through yaml-cpp's string
+    conversion and a file writing ``null`` out in quotes reaches it as the text
+    it is — see :data:`_VITA3K_NULL_ID` for the spellings that conversion takes
+    for a null node — so the clause says which file was read rather than making
+    one state what the other does.
     """
-    if valueless:
-        return _VITA3K_VALUELESS_ID_SENTENCE
+    if null_node:
+        return _VITA3K_NULL_NODE_ID_SENTENCE
     return f'config.yml records {_VITA3K_USER_ID_KEY} "{configured}"'
 
 
@@ -10409,7 +11739,7 @@ def _vita3k_recorded_user_state(
     claim: str,
     truncating: tuple[str, ...],
     *,
-    valueless: bool,
+    null_node: bool,
 ) -> tuple[str | None, str, str]:
     """The recorded user held against the emulator's own listing — five states.
 
@@ -10432,15 +11762,15 @@ def _vita3k_recorded_user_state(
     ``truncating`` is what the listed state needs beyond the clause — see
     :func:`_vita3k_listed_recorded_state`, which is where that state's two
     halves live, because the reopening it used to assert is withdrawn there.
-    ``valueless`` says that the id came from a key stated with nothing after
-    the colon rather than from a value, which every sentence here opens with
+    ``null_node`` says that the id came from a key stated as a null node
+    rather than from a value, which every sentence here opens with
     (:func:`_vita3k_recorded_record`) and none of them turns on: what the
     listing is held against is the id, however the file spells it.
     """
     identities = _vita3k_identities(homes)
     own = next((u for u in homes if u.directory == configured), None)
     tail = _vita3k_survey_tail(survey, claim)
-    record = _vita3k_recorded_record(configured, valueless=valueless)
+    record = _vita3k_recorded_record(configured, null_node=null_node)
     if configured in identities:
         return _vita3k_listed_recorded_state(
             configured, record, survey, claim, truncating, tail
@@ -10501,8 +11831,8 @@ def _vita3k_unset_record(stated_empty: bool) -> str:
     sees the difference and an answer that denied it would be describing a
     file nobody has.
 
-    A key stated with nothing after the colon is neither of them. It is a null
-    node, which yaml-cpp's string conversion answers with the literal ``null``
+    A key stated as a null node is neither of them: yaml-cpp's string
+    conversion answers that node with the literal ``null``
     (:data:`_VITA3K_NULL_ID`) — an id like any other, held against the listing
     by :func:`_vita3k_recorded_user_state` rather than here.
     """
@@ -10530,8 +11860,8 @@ def _vita3k_unset_user_state(
 
     Two readings reach here and ``stated_empty`` tells them apart: the key the
     file does not state at all, and the key stated as the empty value ``""``.
-    A key stated with nothing after the colon reaches neither — yaml-cpp makes
-    the id ``null`` of it, not the empty one (:data:`_VITA3K_NULL_ID`).
+    A key stated as a null node reaches neither — yaml-cpp makes the id
+    ``null`` of it, not the empty one (:data:`_VITA3K_NULL_ID`).
 
     Returns ``(headline, sentence, reason)``. The record's own emptiness is
     not the end of the question, which is what this answer used to make of it:
@@ -10643,21 +11973,20 @@ def _vita3k_user(
     ``std::string`` (config.h:189), and the empty string is an id a directory
     can be listed under.
 
-    A key stated with nothing after the colon takes neither of those roads. It
-    is an id of its own, ``null``, because that is what the emulator's own
-    reader makes of it — see :data:`_VITA3K_NULL_ID`, which is where what that
-    reading reaches, and what it does not, is written down.
+    A key stated as a null node takes neither of those roads. It is an id of
+    its own, ``null``, because that is what the emulator's own reader makes of
+    it — see :data:`_VITA3K_NULL_ID`, which is where the five spellings of that
+    node and the conversion they all reach are written down.
     """
     unread = _VITA3K_USER_ID_KEY in read.skipped
     # Which spelling the file holds, which the scalar reader's own third
     # statement answers: its ``values`` say the empty string for a key stated
-    # with nothing after the colon and for an empty quoted scalar alike, and
-    # the emulator does not, so reading the value alone made one file's id of
-    # the other.
-    valueless = not unread and _VITA3K_USER_ID_KEY in read.null
+    # as a null node and for an empty quoted scalar alike, and the emulator
+    # does not, so reading the value alone made one file's id of the other.
+    null_node = not unread and _VITA3K_USER_ID_KEY in read.null
     if unread:
         configured = None
-    elif valueless:
+    elif null_node:
         configured = _VITA3K_NULL_ID
     else:
         # Stated as written, and ``""`` is written: collapsing a stated empty
@@ -10688,7 +12017,7 @@ def _vita3k_user(
         # reads it. A value the guide documents and no machine produces is the
         # defect in data that the sentences were in prose, so the slug is gone.
         headline, sentence, reason = _vita3k_recorded_user_state(
-            configured, homes, user_root, survey, claim, truncating, valueless=valueless
+            configured, homes, user_root, survey, claim, truncating, null_node=null_node
         )
     else:
         # No user named — which names one all the same, the empty id, and the
@@ -10705,14 +12034,21 @@ def _vita3k_user(
         OptionReading(
             _VITA3K_USER_ID_KEY,
             configured,
-            _vita3k_user_id_provenance(configured, unread=unread, valueless=valueless),
+            _vita3k_user_id_provenance(
+                configured,
+                unread=unread,
+                null_node=null_node,
+                repeated=_VITA3K_USER_ID_KEY in read.repeated,
+            ),
             None,
         ),
         OptionReading(
             _VITA3K_AUTO_CONNECT_KEY,
             auto,
             _vita3k_auto_connect_provenance(
-                auto, unread=_VITA3K_AUTO_CONNECT_KEY in read.skipped
+                auto,
+                unread=_VITA3K_AUTO_CONNECT_KEY in read.skipped,
+                repeated=_VITA3K_AUTO_CONNECT_KEY in read.repeated,
             ),
             None,
         ),
@@ -10721,7 +12057,7 @@ def _vita3k_user(
 
 
 def _vita3k_user_id_provenance(
-    configured: str | None, *, unread: bool, valueless: bool
+    configured: str | None, *, unread: bool, null_node: bool, repeated: bool
 ) -> str:
     """Where the recorded user id came from — the shared grammar, this key's sentences.
 
@@ -10729,19 +12065,20 @@ def _vita3k_user_id_provenance(
     absent key, and this key's sentence for that state names the value the file
     holds instead of calling a stated key unset.
 
-    The key stated with no value at all is the state where this key parts from
-    the other: Vita3K reads it as a ``std::string`` (config.h:189) and
-    yaml-cpp's string conversion of a null node is the literal ``null``, so the
-    sentence names the id that conversion hands the emulator and the reading
-    beside it carries that id. The other key's two spellings meet — both throw
-    — so only this one passes a sentence for the third state.
+    A key stated as a null node is the state where this key parts from the
+    other: Vita3K reads it as a ``std::string`` (config.h:189) and yaml-cpp's
+    string conversion of a null node is the literal ``null``, so the sentence
+    names the id that conversion hands the emulator and the reading beside it
+    carries that id. The other key's two spellings meet — both throw — so only
+    this one passes a sentence for the third state.
     """
-    stated_valueless = _VITA3K_VALUELESS_ID_SENTENCE if valueless else None
+    stated_null_node = _VITA3K_NULL_NODE_ID_SENTENCE if null_node else None
     return _vita3k_key_provenance(
         _VITA3K_USER_ID_KEY,
         configured,
         unread=unread,
-        stated_valueless=stated_valueless,
+        repeated=repeated,
+        stated_null_node=stated_null_node,
         stated_empty=(
             f'config.yml states {_VITA3K_USER_ID_KEY} as the empty value "" — the id the '
             "emulator starts from is that same empty one (config.h:189)"
@@ -10750,18 +12087,19 @@ def _vita3k_user_id_provenance(
     )
 
 
-def _vita3k_auto_connect_provenance(auto: str | None, *, unread: bool) -> str:
+def _vita3k_auto_connect_provenance(auto: str | None, *, unread: bool, repeated: bool) -> str:
     """Where the auto-connect switch came from — the shared grammar, this key's sentences.
 
     One false, two roads. An absent key is assigned the default its declaration
     names (config.cpp:45-46); a key stated with nothing in it is never assigned
     at all and keeps the initializer its member was declared with, because
-    yaml-cpp converts neither spelling of an empty bool: a key with nothing
-    after the colon is a null node, which is no scalar (convert.cpp:42-43), and
-    an empty quoted scalar passes the case test (:28-29) and then matches none
-    of y/yes/true/on or their negatives (:57-72), so ``decode`` fails both
-    times and ``as<bool>()`` throws (impl.h:131-133) — read and run at the
-    commit this build pins, external/yaml-cpp@2f86d137. ``update_members``
+    yaml-cpp converts neither spelling of an empty bool: a key stated as a null
+    node — nothing after the colon, or any of the words folded with it — is no
+    scalar (convert.cpp:42-43), and an empty quoted scalar passes the case test
+    (:28-29) and then matches none of y/yes/true/on or their negatives
+    (:57-72), so ``decode`` fails both times and ``as<bool>()`` throws
+    (impl.h:131-133) — read and run at the commit this build pins,
+    external/yaml-cpp@2f86d137. ``update_members``
     carries the throw out of the assignments the declaration order writes
     (config.cpp:41-49), ``parse`` logs it and answers FileNotFound
     (config.cpp:182-187), and ``init_config`` drops that answer
@@ -10774,12 +12112,14 @@ def _vita3k_auto_connect_provenance(auto: str | None, *, unread: bool) -> str:
         _VITA3K_AUTO_CONNECT_KEY,
         auto,
         unread=unread,
+        repeated=repeated,
         stated_empty=(
-            f"config.yml states {_VITA3K_AUTO_CONNECT_KEY} with nothing in it, which is no "
-            "boolean yaml-cpp converts (convert.cpp:42-43, :57-72 and impl.h:131-133 at "
-            "external/yaml-cpp@2f86d137) — the load throws there and applies no key declared "
-            "after it, so the default false governs all the same (config.cpp:182-187, "
-            "config.h:190)"
+            f"config.yml states {_VITA3K_AUTO_CONNECT_KEY} with nothing in it — as a null "
+            "node (nothing after the colon, or one of ~, null, Null, NULL) or as an empty "
+            "quoted scalar — which is no boolean yaml-cpp converts (convert.cpp:42-43, "
+            ":57-72 and impl.h:131-133 at external/yaml-cpp@2f86d137) — the load throws "
+            "there and applies no key declared after it, so the default false governs all "
+            "the same (config.cpp:182-187, config.h:190)"
         ),
         unset="the default false governs (config.h:190)",
     )
@@ -10792,7 +12132,8 @@ def _vita3k_key_provenance(
     unread: bool,
     stated_empty: str,
     unset: str,
-    stated_valueless: str | None = None,
+    stated_null_node: str | None = None,
+    repeated: bool = False,
 ) -> str:
     """Where one config.yml key's value came from — one grammar, two keys.
 
@@ -10810,24 +12151,41 @@ def _vita3k_key_provenance(
     second, which only an empty one reaches, tests that there is a value at
     all.
 
-    ``stated_valueless`` is how a key stated with nothing after the colon
-    enters that grammar without a branch of its own per key: the caller passes
-    a sentence exactly where its emulator makes something else of that
-    spelling than of an empty value, and the sentence is answered before the
-    value is looked at, because the value the emulator holds there is the
-    library's doing rather than the file's text. Where the two spellings meet
-    — ``user-auto-connect`` throws on both — the caller passes none and both
+    ``stated_null_node`` is how a key stated as a null node enters that
+    grammar without a branch of its own per key: the caller passes a sentence
+    exactly where its emulator makes something else of that spelling than of
+    an empty value, and the sentence is answered before the value is looked
+    at, because the value the emulator holds there is the library's doing
+    rather than the file's text. Where the two spellings meet —
+    ``user-auto-connect`` throws on both — the caller passes none and both
     reach ``stated_empty``.
+
+    ``repeated`` rides on top of whichever sentence was earned rather than
+    being a state beside them: what the file states twice it states all the
+    same, so the sentence above says what atlas read and this clause says
+    which of the statements that was. The emulator reads that same one — its
+    lookup answers with the first — so the clause qualifies the reading rather
+    than unsettling it, and every caller passes the flag without a sentence of
+    its own, because the fact is the library's rather than the key's.
     """
     if unread:
-        return f"{key} is stated as a construct atlas does not read — its value is unread, not absent"
-    if stated_valueless is not None:
-        return stated_valueless
-    if value:
-        return f'config.yml: {key}: "{value}"'
-    if value is not None:
-        return stated_empty
-    return f"{key} is unset — {unset}"
+        stated = (
+            f"{key} is stated as a construct atlas does not read — its value is unread, not absent"
+        )
+    elif stated_null_node is not None:
+        stated = stated_null_node
+    elif value:
+        stated = f'config.yml: {key}: "{value}"'
+    elif value is not None:
+        stated = stated_empty
+    else:
+        stated = f"{key} is unset — {unset}"
+    if not repeated:
+        return stated
+    return (
+        f"{stated}; config.yml states the key more than once and the emulator reads the "
+        "first statement (node_data::get, detail/impl.h:118-138 at external/yaml-cpp@2f86d137)"
+    )
 
 
 def _vita3k_savefile_placement(
@@ -13479,7 +14837,7 @@ def _retroarch_soft_patch_candidates(
     if core.not_installed is not None:
         return core.not_installed
 
-    parsed = parse_cfg_text(query.global_text) if query.global_text is not None else {}
+    parsed = parse_cfg_once(query.global_text).values if query.global_text is not None else {}
     caveats = [*query.extra_caveats, *core.caveats]
     sources = [*query.extra_sources, *core.sources]
 
@@ -13606,7 +14964,7 @@ def _retroarch_firmware_context(
     # resolves silently to the platform default, a line the parser refused
     # looks exactly like a key nobody wrote — and the user did write it. The
     # card route states the same fact for the same reason.
-    read = parse_cfg(global_text) if global_text is not None else ParsedCfg({})
+    read = parse_cfg_once(global_text) if global_text is not None else ParsedCfg({})
     parsed = read.values
     # The installation's own health leads: whether the arrangement is broken is
     # the most general thing about any answer, so it stands before what this
@@ -13872,14 +15230,17 @@ class _FirmwareQueries:
         """The handle's live read, stated — the context all four questions answer from."""
         return self._stated(self._read_firmware_context())
 
+    @one_question
     def firmware_for_core(self, core_so: str, *, verify: bool = False) -> FirmwareAnswer:
         """Does *core_so* need firmware, where does each file go, and is it there?"""
         return _resolve_for_core(self._machine, self._firmware_context(), core_so=core_so, verify=verify)
 
+    @one_question
     def firmware_for_system(self, system: str, *, verify: bool = False) -> FirmwareAnswer:
         """Which emulators can run *system*, and what does each of them want?"""
         return _resolve_for_system(self._machine, self._firmware_context(), system=system, verify=verify)
 
+    @one_question
     def firmware_inventory(self, *, verify: bool = False) -> FirmwareAnswer:
         """Every installed emulator's firmware, plus what is lying around unclaimed.
 
@@ -13891,6 +15252,7 @@ class _FirmwareQueries:
         """
         return _resolve_inventory(self._machine, self._firmware_context(), verify=verify)
 
+    @one_question
     def identify_firmware(
         self, *, md5: str | None = None, sha1: str | None = None, size: int | None = None
     ) -> FirmwareIdentification:
@@ -14054,6 +15416,8 @@ class _CatalogueHost(Protocol):
     concrete handle. It used to be ``RetroDeck``, which made every entry — and
     so the catalogue answer itself — RetroDECK's to hand out.
     """
+
+    kind: str
 
     def entry_savefile_location(
         self,
@@ -14221,11 +15585,14 @@ class PlatformSystemMatch:
 class PlatformSystemsAnswer:
     """Which of this installation's systems answer to a public platform id.
 
-    ``platforms`` is what the crosswalk resolved the id to — empty exactly
-    when the ``platform-unmapped`` caveat states why. ``matches`` is ordered:
-    declared systems first, then disabled, then absent, each alphabetical.
-    An empty match list under resolved platforms is a statement about this
-    machine — the platform is real and nothing here answers to it.
+    The id resolves one of two ways, never both: ``systems`` holds the one
+    system the per-system table says it stands for (ScreenScraper ``6`` is
+    ``cps1``, whose ``arcade`` tag every arcade system shares), and
+    ``platforms`` what the crosswalk resolved it to otherwise. Both are empty
+    exactly when the ``platform-unmapped`` caveat states why. ``matches`` is
+    ordered: declared systems first, then disabled, then absent, each
+    alphabetical. An empty match list under resolved platforms is a statement
+    about this machine — the platform is real and nothing here answers to it.
     """
 
     vocabulary: str
@@ -14237,12 +15604,17 @@ class PlatformSystemsAnswer:
     decimal string.
     """
     platforms: tuple[str, ...] = ()
-    """What the crosswalk resolved the id to — empty exactly when the
-    ``platform-unmapped`` caveat states why.
+    """What the crosswalk resolved the id to — empty when the per-system table resolved
+    it instead, and when the ``platform-unmapped`` caveat states that nothing did.
+    """
+    systems: tuple[str, ...] = ()
+    """The one system the per-system table says the id stands for alone — listed there,
+    it wins over the crosswalk; empty when the table does not list the id.
     """
     matches: tuple[PlatformSystemMatch, ...] = ()
-    """Every system answering to those platforms, each qualified by how firmly it is
-    here — declared first, then disabled, then absent, each group alphabetical.
+    """Every system answering to those platforms, or the system the id stands for, each
+    qualified by how firmly it is here — declared first, then disabled, then absent,
+    each group alphabetical.
     """
     sources: tuple[str, ...] = ()
     caveats: tuple[Caveat, ...] = ()
@@ -14510,10 +15882,10 @@ def _environment_overrides(text: str) -> dict[str, str | None]:
 
 # Flatpak's overrides directories, one per installation. Both hold a file
 # per app id and a file named "global" that applies to every app. Each of
-# the four spellings was observed live under `strace` (flatpak 1.16.6,
-# reference machine 2026-08-08): one `flatpak override --show` invocation
-# opens exactly one file, and the four flag combinations — plain,
-# `--user`, `<app id>`, `--user <app id>` — open these four in turn.
+# the four spellings was observed live (flatpak 1.16.6, under `strace`):
+# one `flatpak override --show` invocation opens exactly one file, and the
+# four flag combinations — plain, `--user`, `<app id>`, `--user <app id>` —
+# open these four in turn.
 _FLATPAK_OVERRIDES_USER = os.path.join(_FLATPAK_USER_BASE, "overrides")
 _FLATPAK_OVERRIDES_SYSTEM = os.path.join("/var", "lib", "flatpak", "overrides")
 _FLATPAK_OVERRIDES_GLOBAL = "global"
@@ -14783,8 +16155,8 @@ def _host_export_prefix(path: str) -> str | None:
     A ``host`` grant binds every root entry except flatpak's own reserved
     names, plus ``/run/media`` explicitly (flatpak-context.c:2856-2888).
     """
-    if path == "/run/media" or path.startswith("/run/media/"):
-        return "/run/media"
+    if path == _RUN_MEDIA or path.startswith(_RUN_MEDIA + "/"):
+        return _RUN_MEDIA
     first = path.split("/", 2)[1] if path.startswith("/") else ""
     if first and first not in _FS_HOST_UNMOUNTED:
         return f"/{first}"
@@ -15214,6 +16586,7 @@ def _entries_from(
     *,
     system_roms_dir: str | None,
     content_path: str | None,
+    launch_for: Callable[[EmulatorSpec], LaunchResolution],
 ) -> tuple[EmulatorEntry, ...]:
     """Apply ES-DE's selection hierarchy to one already-read catalogue snapshot.
 
@@ -15226,6 +16599,9 @@ def _entries_from(
     against — either nothing named content, or the directory could not be
     resolved. Per-game matching is skipped either way; the caller that
     asked for it is the one holding the caveat that says why.
+
+    ``launch_for`` answers each entry's launch question (#84) over the one
+    find-rules read the caller made for this answer.
     """
     chosen_label: str | None = None
     chosen_source: str | None = None
@@ -15250,7 +16626,26 @@ def _entries_from(
     entry_caveats: tuple[Caveat, ...] = ()
     if content_path is None and selections.per_game:
         entry_caveats = (_per_game_alternative_emulator_caveat(selections.per_game),)
-    return tuple(EmulatorEntry(host, spec, (*entry_caveats, *_own_caveats(spec))) for spec in specs)
+    return tuple(
+        EmulatorEntry(host, spec, (*entry_caveats, *_own_caveats(spec)), launch_for(spec)) for spec in specs
+    )
+
+
+# Why an EmuDeck entry's launch is not evaluated yet: its frontend runs on the
+# host with no --home and its find rules' bundled layer is sealed in the
+# AppImage, a lookup of its own (#84, a later part).
+_EMUDECK_LAUNCH_LATER = "EmuDeck's frontend lookup is not evaluated yet"
+
+
+def _launch_unsupported(kind: str, reason: str) -> Callable[[EmulatorSpec], LaunchResolution]:
+    """``launch_for`` for entries whose launch is not evaluated: one answer, built once, for every entry."""
+    answer = unsupported(kind, reason)
+
+    def launch_for(spec: EmulatorSpec) -> LaunchResolution:
+        del spec
+        return answer
+
+    return launch_for
 
 
 def _own_caveats(spec: EmulatorSpec) -> tuple[Caveat, ...]:
@@ -15282,7 +16677,8 @@ def _firmware_catalogue_entries(
     and a second copy is how the two would drift apart. No content is named on
     the firmware route, so no per-game entry can match and the anchor is never
     consulted — the enumeration and its gamelist promotion are all that cross
-    the seam.
+    the seam. Nor is the launch question asked: the projection carries no
+    launch answer, so the find rules are not read for it.
     """
     entries = _entries_from(
         host,
@@ -15290,6 +16686,7 @@ def _firmware_catalogue_entries(
         selections,
         system_roms_dir=None,
         content_path=None,
+        launch_for=_launch_unsupported(host.kind, "the firmware route does not ask the launch question"),
     )
     shaped: list[CatalogueEntry] = []
     for entry in entries:
@@ -15483,11 +16880,16 @@ class EmulatorEntry:
     """
 
     def __init__(
-        self, installation: "_CatalogueHost", spec: EmulatorSpec, caveats: tuple[Caveat, ...] = ()
+        self,
+        installation: "_CatalogueHost",
+        spec: EmulatorSpec,
+        caveats: tuple[Caveat, ...],
+        launch: LaunchResolution,
     ) -> None:
         self._installation = installation
         self._spec = spec
         self._caveats = caveats
+        self._launch = launch
 
     @property
     def system(self) -> str:
@@ -15568,10 +16970,48 @@ class EmulatorEntry:
         return self._spec.selection
 
     @property
-    def caveats(self) -> tuple[Caveat, ...]:
-        """Stated catalogue-level degradations (e.g. unchecked per-game overrides)."""
-        return self._caveats
+    def availability(self) -> Availability:
+        """Whether the frontend's own lookup finds what this entry launches: ``startable``, ``not-installed`` or
+        ``unestablished`` — ES-DE's lookup, not a promise that the program runs; every value but ``startable`` carries
+        exactly one reason caveat on the entry, and a value you do not know reads as ``unestablished``.
 
+        The lookup is the frontend's own, mirrored from its find rules
+        (:meth:`atlas.launch.LaunchLookup.resolve`); an arrangement it is not yet
+        evaluated for answers ``unestablished`` with
+        ``launch-resolution-unsupported``.
+        """
+        return self._launch.availability
+
+    @property
+    def launcher(self) -> Launcher | None:
+        """What the frontend would run for this entry's emulator, where it is valid and which rule found it; ``null``
+        unless ``availability`` is ``startable``.
+
+        For a libretro entry this is RetroArch, the runner; the core it loads
+        is :attr:`core_path`.
+        """
+        return self._launch.launcher
+
+    @property
+    def core_path(self) -> str | None:
+        """The core file ES-DE's core lookup finds for a libretro entry — the first ``corepath`` directory holding
+        the file its ``%CORE_X%`` names — spelled where ``launcher.app_id`` reads it; ``null`` on every other entry
+        and wherever none is found.
+
+        That lookup is ``launchGame``'s, not ``findEmulator``'s
+        (``es-app/src/FileData.cpp:1466-1568`` @ v3.4.1), and runs once the
+        launcher is found.
+        """
+        return self._launch.core_path
+
+    @property
+    def caveats(self) -> tuple[Caveat, ...]:
+        """Stated degradations of this entry, in a fixed order: the catalogue's first (e.g. unchecked per-game
+        overrides, a core file of another host), then the launch answer's — its one reason, then its notes.
+        """
+        return (*self._caveats, *self._launch.caveats)
+
+    @one_question
     def savefile_location(self, *, content_path: str | None = None) -> SavefilePlacement | Unresolved:
         """Where this emulator keeps the save — core filled in from the catalogue.
 
@@ -15588,6 +17028,7 @@ class EmulatorEntry:
             self._spec, self._caveats, content_path=content_path
         )
 
+    @one_question
     def savestate_location(
         self, *, content_path: str | None = None
     ) -> SavestatePlacement | SavestateAbsence | Unresolved:
@@ -15608,6 +17049,7 @@ class EmulatorEntry:
             self._spec, self._caveats, content_path=content_path
         )
 
+    @one_question
     def texture_pack_location(self, *, content_path: str | None = None) -> TexturePlacement | Unresolved:
         """Where this emulator reads texture packs — the emulator taken from the catalogue.
 
@@ -15628,6 +17070,7 @@ class EmulatorEntry:
             self._spec, self._caveats, content_path=content_path
         )
 
+    @one_question
     def mod_location(self, *, content_path: str | None = None) -> ModPlacement | Unresolved:
         """Where this emulator reads mods — the emulator taken from the catalogue.
 
@@ -16066,9 +17509,11 @@ def _derived_catalogue_entries(
     ``emulator-list-derived`` caveat says all of that in one stable code. That
     is also why every entry's ``declared_index`` is ``None`` rather than its
     place in this list: a number here would read as a shipped position, and no
-    layer shipped one.
+    layer shipped one. With no command there is nothing for a launch lookup to
+    read, so every entry answers ``launch-resolution-unsupported``.
     """
     selected, hidden = derived_core_selection(context.cores, system)
+    launch = unsupported(host.kind, "a derived entry carries no launch command")
     entries = tuple(
         EmulatorEntry(
             host,
@@ -16086,6 +17531,8 @@ def _derived_catalogue_entries(
                 emulator=core.core_so,
                 declared_index=None,
             ),
+            (),
+            launch,
         )
         for core in selected
     )
@@ -16147,6 +17594,9 @@ def _entry_mod_with_caveats(
 
 
 _CROSSWALK_SOURCE = "platform crosswalk (platform_ids_crosswalk.json, pinned sources cited inside)"
+_SYSTEM_IDS_SOURCE = (
+    "per-system platform ids (platform_ids_by_system.json, pinned sources cited inside)"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -16182,6 +17632,43 @@ def _absent_vocabulary_systems(view: _PlatformView) -> tuple[tuple[str, tuple[st
     )
 
 
+def _platform_matches(
+    view: _PlatformView, answers: Callable[[str, tuple[str, ...]], bool]
+) -> tuple[PlatformSystemMatch, ...]:
+    """Every system of *view* that *answers* ``(system, tags)`` accepts, status-qualified.
+
+    One walk for both routes of the forward question — a crosswalk platform
+    matched by tag, a per-system id matched by name — so a system answers
+    with the same status and tag provenance whichever route named it: declared
+    first, then disabled, then absent, each group alphabetical.
+    """
+    matches = [
+        PlatformSystemMatch(
+            system,
+            PLATFORM_STATUS_DECLARED,
+            view.declared[system],
+            PLATFORM_TAGS_VOCABULARY
+            if system in view.vocabulary_backed
+            else PLATFORM_TAGS_CATALOGUE,
+        )
+        for system in sorted(view.declared)
+        if answers(system, view.declared[system])
+    ]
+    matches += [
+        PlatformSystemMatch(
+            system, PLATFORM_STATUS_DISABLED, view.disabled[system], PLATFORM_TAGS_CATALOGUE
+        )
+        for system in sorted(view.disabled)
+        if system not in view.declared and answers(system, view.disabled[system])
+    ]
+    matches += [
+        PlatformSystemMatch(system, PLATFORM_STATUS_ABSENT, tags, PLATFORM_TAGS_VOCABULARY)
+        for system, tags in _absent_vocabulary_systems(view)
+        if answers(system, tags)
+    ]
+    return tuple(matches)
+
+
 def _commented_map(texts: tuple[str | None, ...]) -> dict[str, tuple[str, ...]]:
     """The commented-out systems of *texts*, first sighting of a name winning."""
     disabled: dict[str, tuple[str, ...]] = {}
@@ -16215,6 +17702,7 @@ class _CatalogueQueries:
 
     kind: str
 
+    @one_question
     def standalone_firmware_token(self, command: str) -> str | None:
         """The emulator identity *command* states, for the firmware seam.
 
@@ -16224,6 +17712,7 @@ class _CatalogueQueries:
         """
         return emulator_token(command)
 
+    @one_question
     def entry_emulator(self, spec: EmulatorSpec) -> str | None:
         """Which emulator this entry launches — the catalogue's reading by default.
 
@@ -16242,6 +17731,7 @@ class _CatalogueQueries:
         """
         return spec.emulator
 
+    @one_question
     def standalone_firmware_homes(self, command: str) -> "_XdgHomes | None":
         """The per-entry override of the context's standalone bases — none by default.
 
@@ -16253,6 +17743,7 @@ class _CatalogueQueries:
         del command
         return None
 
+    @one_question
     def standalone_firmware_sandbox(self, homes: "_XdgHomes") -> "_Sandbox | None":
         """The per-entry override of the context's sandbox — none by default.
 
@@ -16268,6 +17759,7 @@ class _CatalogueQueries:
     def _catalogue_absence(self) -> Caveat:
         raise NotImplementedError  # pragma: no cover - every handle supplies one
 
+    @one_question
     def systems(self) -> SystemsAnswer:
         """Every system the frontend catalogue declares, sorted."""
         answer, version = self._systems_answer()
@@ -16278,6 +17770,7 @@ class _CatalogueQueries:
     def _platform_view(self) -> tuple[_PlatformView, str | None]:
         raise NotImplementedError  # pragma: no cover - every handle supplies one
 
+    @one_question
     def systems_for_platform(self, vocabulary: str, value: str) -> PlatformSystemsAnswer:
         """Which systems here answer to a public platform id, and how firmly.
 
@@ -16288,12 +17781,19 @@ class _CatalogueQueries:
         ``<platform>`` tags connect each system to its platform, so a system
         the user added by hand translates without any table knowing it.
 
+        An id that stands for one system rather than a platform — ScreenScraper
+        ``6`` is ``cps1``, tagged ``arcade`` like every arcade system — is
+        listed in the per-system table, and a listed id wins over the
+        crosswalk: the answer names that system in ``systems``, leaves
+        ``platforms`` empty, and qualifies the one system exactly as a tag
+        match would be — declared, disabled or absent.
+
         *vocabulary* is one of :data:`atlas.platforms.KNOWN_PLATFORM_VOCABULARIES`
         and anything else raises — the set is atlas's own and closed. *value* is
         a string, and a numeric id passes as its decimal string: a client
         holding IGDB's numeric ``igdb_id`` asks with ``str(igdb_id)``, and a
-        non-string value raises rather than being coerced. A *value* no
-        crosswalk row carries answers no platforms, no matches and the
+        non-string value raises rather than being coerced. A *value* neither
+        table carries answers no systems, no platforms, no matches and the
         ``platform-unmapped`` caveat: "no platform corresponds" is an answer,
         and inventing a folder name out of the raw id is exactly the failure
         this question exists to prevent.
@@ -16307,53 +17807,39 @@ class _CatalogueQueries:
         """
         view, version = self._platform_view()
         tail = arrangement_caveats(self.kind, observed_version=version)
+        systems = systems_for(vocabulary, value)
+        if systems:
+            named = frozenset(systems)
+            return PlatformSystemsAnswer(
+                vocabulary,
+                value,
+                systems=systems,
+                matches=_platform_matches(view, lambda system, _tags: system in named),
+                sources=(*view.sources, _SYSTEM_IDS_SOURCE),
+                caveats=(*view.caveats, *tail),
+            )
         resolved = platforms_for(vocabulary, value)
         if not resolved:
             unmapped = Caveat(
                 CAVEAT_PLATFORM_UNMAPPED,
-                "no platform in the crosswalk answers to this id — placing content under "
-                "the raw id would name a folder no catalogue declares",
+                "neither the per-system table nor the crosswalk answers to this id — "
+                "placing content under the raw id would name a folder no catalogue declares",
                 {"vocabulary": vocabulary, "value": value},
             )
             return PlatformSystemsAnswer(
                 vocabulary, value, caveats=(*view.caveats, unmapped, *tail)
             )
         wanted = frozenset(resolved)
-        matches = [
-            PlatformSystemMatch(
-                system,
-                PLATFORM_STATUS_DECLARED,
-                view.declared[system],
-                PLATFORM_TAGS_VOCABULARY
-                if system in view.vocabulary_backed
-                else PLATFORM_TAGS_CATALOGUE,
-            )
-            for system in sorted(view.declared)
-            if wanted & frozenset(view.declared[system])
-        ]
-        matches += [
-            PlatformSystemMatch(
-                system, PLATFORM_STATUS_DISABLED, view.disabled[system], PLATFORM_TAGS_CATALOGUE
-            )
-            for system in sorted(view.disabled)
-            if system not in view.declared and wanted & frozenset(view.disabled[system])
-        ]
-        matches += [
-            PlatformSystemMatch(
-                system, PLATFORM_STATUS_ABSENT, tags, PLATFORM_TAGS_VOCABULARY
-            )
-            for system, tags in _absent_vocabulary_systems(view)
-            if wanted & frozenset(tags)
-        ]
         return PlatformSystemsAnswer(
             vocabulary,
             value,
             resolved,
-            tuple(matches),
-            (*view.sources, _CROSSWALK_SOURCE),
-            (*view.caveats, *tail),
+            matches=_platform_matches(view, lambda _system, tags: bool(wanted & frozenset(tags))),
+            sources=(*view.sources, _CROSSWALK_SOURCE),
+            caveats=(*view.caveats, *tail),
         )
 
+    @one_question
     def platform_ids(self, system: str) -> SystemPlatformsAnswer:
         """One system's platform tags and their public identities, status-qualified.
 
@@ -16364,6 +17850,12 @@ class _CatalogueQueries:
         does not (``tags_source`` says which). A name neither this machine
         nor the vocabulary knows answers no identities and the
         ``platform-unmapped`` caveat.
+
+        Only the crosswalk is translated out here, tag by tag. The ids the
+        per-system table lists for a system are not among the identities:
+        ``platform_ids("cps1")`` answers the ``arcade`` identities, not
+        ScreenScraper ``6``, though ``systems_for_platform("screenscraper",
+        "6")`` answers ``cps1``.
         """
         view, version = self._platform_view()
         tail = arrangement_caveats(self.kind, observed_version=version)
@@ -16438,6 +17930,7 @@ class _CatalogueQueries:
             (*view.caveats, *notes, *tail),
         )
 
+    @one_question
     def rom_location(self, system: str) -> RomPlacement:
         """Where *system*'s ROMs live, and which extensions the frontend launches.
 
@@ -16457,6 +17950,7 @@ class _CatalogueQueries:
             answer, (*answer.caveats, *arrangement_caveats(self.kind, observed_version=version))
         )
 
+    @one_question
     def emulators_for(self, system: str, *, content_path: str | None = None) -> CatalogueAnswer:
         """The emulators that can launch *system*, in launch-priority order.
 
@@ -16493,6 +17987,7 @@ class _CatalogueQueries:
             answer, (*answer.caveats, *arrangement_caveats(self.kind, observed_version=version))
         )
 
+    @one_question
     def launchable(self, system: str, content_path: str) -> LaunchabilityAnswer:
         """Whether *content_path* launches as *system* content here — and why not, when not.
 
@@ -16535,6 +18030,7 @@ class _CatalogueQueries:
     # already read it — asking for it here would read the marker a second time
     # inside one query, and the two reads could disagree.
 
+    @one_question
     def health(self) -> Health:
         raise NotImplementedError  # pragma: no cover - every handle answers it
 
@@ -16574,22 +18070,46 @@ class _CatalogueQueries:
         return RomPlacement(caveats=(*self.health().issues, self._catalogue_absence())), None
 
 
+def _not_set_up(marker_issues: tuple[Caveat, ...]) -> Caveat | None:
+    """The ``not-set-up`` finding among one marker read's issues, or ``None``."""
+    return next((issue for issue in marker_issues if issue.code == HEALTH_ISSUE_NOT_SET_UP), None)
+
+
+def _not_set_up_message(marker: str) -> str:
+    """What the not-set-up finding and the refusal of the same spelling both say."""
+    return (
+        f"RetroDECK is installed but {marker} is not there: it has not been started for this "
+        "home, or left its first-run setup at the storage step, which deletes the marker it "
+        "wrote (libexec/other_functions.sh:674-678 @ 0.10.10b); start it once"
+    )
+
+
 class RetroDeck(_FirmwareQueries, _CatalogueQueries):
     """A RetroDECK installation — cfg is the truth, ``retrodeck.json`` is context.
 
     The handle is *live*: it stores only its identity (home) and the machine
     seam. Every query re-reads the governing sources — each exactly once — and
     derives all decisions from that one snapshot, so a concurrent config edit
-    can never mix two revisions inside one answer (REVIEW M4).
+    can never mix two revisions inside one answer (REVIEW M4). The one thing it
+    keeps is the parse of ES-DE's find rules, and only under the stat identity
+    the file was read at: an answer that evaluates its entries' launch stats
+    each find-rules file it consults, and a changed one is read again
+    (:meth:`_parsed_find_rules`).
     """
 
     kind = "retrodeck"
     kinds = ("retrodeck",)
     _APP_ID = RETRODECK_APP_ID
 
-    def __init__(self, home: str, machine: Machine) -> None:
+    def __init__(self, home: str, machine: Machine, *, detected_by_deploy: bool = False) -> None:
         self._home = home
         self._machine = machine
+        # Detection found the deploy and no marker: a missing marker then reads
+        # as not set up (not-set-up), not as one that went away.
+        self._detected_by_deploy = detected_by_deploy
+        # The one parse this handle keeps between questions: each find-rules
+        # file's, under the stat stamp it was read at (_parsed_find_rules).
+        self._find_rules_parsed: dict[str, tuple[FileStamp, FindRules | None]] = {}
 
     def _marker_path(self) -> str:
         return os.path.join(self._home, RETRODECK_JSON_SUFFIX)
@@ -16599,7 +18119,10 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
 
         Missing, unreadable, and invalid are distinct states — a marker that
         exists but cannot be read or parsed is a *present, broken* RetroDECK,
-        never an absent one (REVIEW H10).
+        never an absent one (REVIEW H10). A missing marker is
+        ``marker-missing`` on a handle detected by it, and ``not-set-up`` on
+        one detected by its deploy; the handle is live, so once RetroDECK has
+        been started the same handle reads the marker it wrote.
 
         A defect is scoped to what it actually costs. A ``paths`` value atlas
         cannot read as a path takes the whole snapshot down, because every root
@@ -16610,6 +18133,14 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         """
         path = self._marker_path()
         result = self._machine.read_text(path)
+        if result.status == READ_MISSING and self._detected_by_deploy:
+            return {}, (
+                Caveat(
+                    HEALTH_ISSUE_NOT_SET_UP,
+                    _not_set_up_message(path),
+                    {"path": path, "app_id": RETRODECK_APP_ID},
+                ),
+            )
         if result.status == READ_MISSING:
             return {}, (Caveat(HEALTH_ISSUE_MARKER_MISSING, f"marker {path} does not exist", {"path": path}),)
         if result.text is None:
@@ -16651,6 +18182,13 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             )
         return data, ()
 
+    def _not_set_up_refusal(self) -> Unresolved:
+        """A placement question's refusal on a RetroDECK that is not set up."""
+        path = self._marker_path()
+        return Unresolved(
+            UNRESOLVED_NOT_SET_UP, _not_set_up_message(path), {"path": path, "app_id": RETRODECK_APP_ID}
+        )
+
     def _config_path(self, config: dict[str, Any], key: str, fallback_subdir: str) -> tuple[str, str]:
         """Resolve a RetroDECK path and its provenance from a marker snapshot.
 
@@ -16675,18 +18213,31 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             fallback = os.path.join(root, fallback_subdir)
         return fallback, f"default: {key} unset → {fallback}"
 
+    @one_question
     def root(self) -> str:
-        """The RetroDECK home directory (``rd_home_path`` or the fallback)."""
+        """The RetroDECK home directory (``rd_home_path`` or the fallback).
+
+        On a not-set-up installation there is no marker to read it from, so
+        this is ``<home>/retrodeck``: the root RetroDECK's first-run setup
+        chooses for internal storage (``rd_home_path="$HOME/retrodeck"``,
+        libexec/other_functions.sh:683 @ 0.10.10b) — the shipped
+        ``retrodeck.json`` names a literal ``/home/deck/retrodeck`` instead —
+        and one the setup's other choices move; the ``not-set-up`` finding
+        beside it says so.
+        """
         return self._config_path(self._read_marker()[0], "rd_home_path", "")[0]
 
+    @one_question
     def saves_root(self) -> str:
         """The RetroDECK saves root (``saves_path`` or the fallback)."""
         return self._config_path(self._read_marker()[0], "saves_path", "saves")[0]
 
+    @one_question
     def bios_dir(self) -> str:
         """The RetroDECK BIOS directory (``bios_path`` or the fallback)."""
         return self._config_path(self._read_marker()[0], "bios_path", "bios")[0]
 
+    @one_question
     def roms_dir(self) -> str | None:
         """The ROM root the frontend substitutes for ``%ROMPATH%`` — or ``None``.
 
@@ -16707,11 +18258,19 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         configured value is not an absolute path even after the frontend's own
         ``~`` expansion. A bare string cannot carry which, and raising is not
         this domain's grammar, so a caller who needs the reason asks
-        ``rom_location(system)`` and reads its caveats.
+        ``rom_location(system)`` and reads its caveats. A not-set-up
+        installation refuses too: the frontend has no settings of RetroDECK's
+        making yet.
         """
+        if _not_set_up(self._read_marker()[1]) is not None:
+            return None
         return self._rom_root().directory
 
     def _health_from(self, config: dict[str, Any], marker_issues: tuple[Caveat, ...]) -> Health:
+        # Never started: the roots are paths setup has not created yet, so
+        # their absence is no finding of its own.
+        if _not_set_up(marker_issues) is not None:
+            return Health(marker_issues)
         issues = list(marker_issues)
         root = self._config_path(config, "rd_home_path", "")[0]
         if self._machine.path_kind(root) != KIND_DIRECTORY:
@@ -16729,6 +18288,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             )
         return Health(tuple(issues))
 
+    @one_question
     def health(self) -> Health:
         """Installation health — marker readable and parseable, roots present, catalogue loadable.
 
@@ -16737,10 +18297,13 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         health computation must not open sources the question itself never
         reads, so the catalogue-invalid finding rides the health question
         (its own single read here) and every answer whose question reads the
-        catalogue anyway — never the others.
+        catalogue anyway — never the others. A not-set-up installation stops
+        at its finding: nothing past the missing marker is RetroDECK's yet.
         """
         config, marker_issues = self._read_marker()
         health = self._health_from(config, marker_issues)
+        if _not_set_up(marker_issues) is not None:
+            return health
         root = self._config_path(config, "rd_home_path", "")[0]
         catalogue_invalid = self._read_catalogue(root)[3]
         issues = health.issues
@@ -16951,6 +18514,178 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
     def _esde_settings_path(self) -> str:
         return os.path.join(self._esde_config_home(), self._ESDE_SETTINGS_SUFFIX)
 
+    # The find rules RetroDECK ships, beside the catalogue — the one file its
+    # own run_game.sh reads too (es-de component_functions.sh:7).
+    _ESDE_FIND_RULES_SANDBOX = (
+        "/app/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml"
+    )
+    # Under ES-DE's app-data directory, ``<--home>/ES-DE`` (getAppDataDirectory,
+    # FileSystemUtil.cpp:259-285 @ v3.4.1; RetroDECK sets no ESDE_APPDATA_DIR):
+    # the custom layer (SystemData.cpp:46-51) and the per-file resource
+    # override that shadows the shipped file (getResourcePath,
+    # ResourceManager.cpp:34-37).
+    _FIND_RULES_CUSTOM_SUFFIX = os.path.join("ES-DE", "custom_systems", "es_find_rules.xml")
+    _FIND_RULES_SHADOW_SUFFIX = os.path.join("ES-DE", "resources", "systems", "linux", "es_find_rules.xml")
+    # %ESPATH%: the directory of the binary component_launcher.sh:10 execs.
+    _ESDE_BINARY_DIR = "/app/retrodeck/components/es-de/bin"
+    # The ES-DE build the launch lookup mirrors: RetroDECK's fork at this tag,
+    # whose FileData::findEmulator is line for line ES-DE v3.4.1's
+    # (es-app/src/FileData.cpp:2398-2763 there, :2285-2650 upstream). The
+    # deploy names its build in components/es-de/component_version.
+    ESDE_FORK_BUILD = "retrodeck-main-20260926-172324"
+    # RetroDECK's direct start, under the deploy's files/.
+    _RUN_GAME_SH = "libexec/run_game.sh"
+    # The deployed lines the launch lookup's reading of RetroDECK's scripts
+    # rests on, as (file under the deploy's files/, line, text the line
+    # holds): ES-DE's --home, the find rules run_game.sh reads, and
+    # run_game.sh's token reading, its line-wise entry read and its two tests.
+    # tests/test_launch_resolution_tripwire.py holds each of these lines
+    # against the deploy; the rest of find_emulator (run_game.sh:369-410,
+    # cited as a span in atlas.launch) is held only through them.
+    LAUNCH_CITATIONS: tuple[tuple[str, int, str], ...] = (
+        ("retrodeck/components/es-de/component_launcher.sh", 10, '--home "${XDG_CONFIG_HOME}"'),
+        (
+            "retrodeck/components/es-de/component_functions.sh",
+            7,
+            'es_find_rules="/app/retrodeck/components/es-de/share/es-de/resources/systems/linux/es_find_rules.xml"',
+        ),
+        (_RUN_GAME_SH, 232, "(%EMULATOR_[A-Z0-9_]+%)"),
+        (_RUN_GAME_SH, 293, '"%EMULATOR_OS-SHELL%"/"/bin/sh"'),
+        (_RUN_GAME_SH, 369, "find_emulator() {"),
+        (_RUN_GAME_SH, 374, "xmllint --xpath \"//emulator[@name='$emulator_name']\" \"$es_find_rules\""),
+        (_RUN_GAME_SH, 383, "sed -n 's/.*<entry>\\(.*\\)<\\/entry>.*/\\1/p'"),
+        (_RUN_GAME_SH, 385, 'if [ -x "$(command -v "$command_path")" ]; then'),
+        (_RUN_GAME_SH, 389, "//rule[@type='systempath']/entry"),
+        (_RUN_GAME_SH, 394, "sed -n 's/.*<entry>\\(.*\\)<\\/entry>.*/\\1/p'"),
+        (_RUN_GAME_SH, 395, 'if [ -x "$command_path" ]; then'),
+        (_RUN_GAME_SH, 399, "//rule[@type='staticpath']/entry"),
+    )
+
+    def _find_rules(self) -> LayeredFindRules:
+        """Both find-rules layers as ES-DE loads them, each file stat'ed (and read where it changed) once.
+
+        The custom file is taken where it exists, and one that exists and
+        cannot be read or parsed is skipped the way ES-DE skips it
+        (SystemData.cpp:97-110). The bundled layer is the resource override
+        where one exists (``exists()`` follows links and answers false on an
+        error, ResourceManager.cpp:34-37, FileSystemUtil.cpp:970-984) and the
+        shipped file otherwise. The shipped file is read either way, because
+        it is what run_game.sh reads.
+        """
+        custom_path = os.path.join(self._esde_config_home(), self._FIND_RULES_CUSTOM_SUFFIX)
+        custom = NO_FIND_RULES
+        custom_unreadable: str | None = None
+        status, parsed = self._parsed_find_rules(custom_path)
+        if status != READ_MISSING:
+            if parsed is None:
+                custom_unreadable = custom_path
+            else:
+                custom = parsed
+        shipped_path = self._sandbox().bundled(self._ESDE_FIND_RULES_SANDBOX)
+        shipped = self._parsed_find_rules(shipped_path)[1] if shipped_path is not None else None
+        shadow_path = os.path.join(self._esde_config_home(), self._FIND_RULES_SHADOW_SUFFIX)
+        bundled = shipped
+        if self._machine.path_kind(shadow_path) in (KIND_FILE, KIND_DIRECTORY):
+            bundled = self._parsed_find_rules(shadow_path)[1]
+        return LayeredFindRules(
+            merge_find_rules((custom, bundled or NO_FIND_RULES)),
+            frozenset(custom.emulators),
+            frozenset(custom.cores),
+            bundled is not None,
+            custom_unreadable,
+            shipped,
+        )
+
+    def _parsed_find_rules(self, path: str) -> tuple[ReadStatus, FindRules | None]:
+        """One find-rules file's read status and parse — ``None`` where it was not read or did not parse.
+
+        The parse is kept on this handle under the file's stat identity (path,
+        ``st_mtime_ns``, ``st_size``, ``st_ino``, ``st_dev`` —
+        :meth:`atlas.machine.RealMachine.file_stamp`) and reused only while the
+        file still carries it: every lookup stats the file, a changed or
+        replaced one — a Flatpak update, whose files all carry mtime 0, swaps
+        the inode — is read and parsed again, and one that is gone, or cannot
+        be stat'ed, is read the ordinary way, so it answers missing or
+        unreadable rather than what it held. A machine that cannot stamp — a
+        fixture's files do not change underneath a handle — reads and parses
+        every time.
+        """
+        stamp = self._machine.file_stamp(path) if isinstance(self._machine, StampingMachine) else None
+        held = self._find_rules_parsed.get(path)
+        if stamp is not None and held is not None and held[0] == stamp:
+            return READ_OK, held[1]
+        result = self._machine.read_text(path)
+        if result.text is None:
+            self._find_rules_parsed.pop(path, None)
+            return result.status, None
+        parsed = parse_find_rules(result.text)
+        if stamp is not None:
+            self._find_rules_parsed[path] = (stamp, parsed)
+        return READ_OK, parsed
+
+    def _launch_view(self) -> _SandboxLaunchView:
+        """The frontend's sandbox as the launch lookup reads it — the deploy resolved once, each file it needs read
+        once.
+
+        The deploy's ``metadata`` names the runtime behind ``/usr`` and grants
+        the filesystem; the overrides files (:func:`_flatpak_override_files_for`,
+        composed over the metadata's own environment the way flatpak layers
+        them) may assign ``PATH``, which ES-DE's ``systempath`` search then
+        runs over, split on every ``:`` the way ``delimitedStringToVector``
+        splits it (``es-core/src/utils/StringUtil.cpp:388-403`` @ v3.4.1 —
+        an unset ``PATH`` is the empty string, one empty directory). The
+        filesystem grant is taken only as the metadata states it: an
+        overrides file that sets ``filesystems`` at all may have revoked or
+        widened it, and atlas does not compose those grants here, so
+        everything outside the app's own trees is then not established.
+        """
+        deploy = _running_deploy(self._machine, self._home, self._APP_ID)
+        layers: list[tuple[str, str | None]] = []
+        if deploy is not None:
+            metadata_path = _flatpak_metadata_path(deploy)
+            layers.append((metadata_path, self._machine.read_text(metadata_path).text))
+        metadata = _keyfile_groups(layers[0][1]) if layers and layers[0][1] is not None else None
+        overrides = tuple(
+            (path, self._machine.read_text(path).text)
+            for path in _flatpak_override_files_for(deploy, self._home, self._APP_ID)
+        )
+        environment = _flatpak_environment_from((*layers, *overrides))
+        search_path = _FLATPAK_DEFAULT_PATH
+        if "PATH" in environment:
+            search_path = tuple((environment["PATH"][0] or "").split(":"))
+        refiled = any(text is not None and _context_filesystems(text) is not None for _, text in overrides)
+        grants = _revocations_read(self._machine, _flatpak_grants(metadata, self._home, refiled=refiled))
+        return _SandboxLaunchView(
+            machine=self._machine,
+            real_home=self._home,
+            app_id=self._APP_ID,
+            home=self._esde_config_home(),
+            search_path=search_path,
+            es_path=self._ESDE_BINARY_DIR,
+            deploy_files=None if deploy is None else deploy.files,
+            runtime_files=_runtime_files(self._machine, self._home, metadata),
+            grants=grants,
+            rom_root=self._launch_rom_directory,
+        )
+
+    def _launch_rom_directory(self) -> str | None:
+        """``%ROMPATH%`` in a find rule: the ROM root with one trailing separator, as ``getROMDirectory`` returns it."""
+        directory = self._rom_root().directory
+        return None if directory is None else directory.rstrip("/") + "/"
+
+    def _launch_for(self) -> Callable[[EmulatorSpec], LaunchResolution]:
+        """Each entry's launch answer, the find rules and the sandbox read once — and only once an entry asks."""
+        lookups: list[LaunchLookup] = []
+
+        def launch_for(spec: EmulatorSpec) -> LaunchResolution:
+            if spec.kind == KIND_RETROARCH_FOREIGN_CORE:
+                return command_unsupported("the entry hands RetroArch a core file this host cannot load")
+            if not lookups:
+                lookups.append(LaunchLookup(self._find_rules(), self._launch_view()))
+            return lookups[0].resolve(spec.command, loads_core=spec.kind == KIND_LIBRETRO)
+
+        return launch_for
+
     def _rom_directory(self) -> tuple[str | None, str | None]:
         """The configured ``ROMDirectory``, and the status that stopped the reading.
 
@@ -17104,6 +18839,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         against are one revision of the file.
         """
         config, marker_issues = self._read_marker()
+        if (finding := _not_set_up(marker_issues)) is not None:
+            return SystemsAnswer(caveats=(finding,)), None
         findings = self._health_from(config, marker_issues).issues
         root = self._config_path(config, "rd_home_path", "")[0]
         by_system, read, exclusive, catalogue_invalid = self._read_catalogue(root)
@@ -17129,6 +18866,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         same read (:meth:`_read_catalogue_full`), never a second one.
         """
         config, marker_issues = self._read_marker()
+        if (finding := _not_set_up(marker_issues)) is not None:
+            return _PlatformView({}, frozenset(), {}, (), (finding,)), None
         findings = self._health_from(config, marker_issues).issues
         root = self._config_path(config, "rd_home_path", "")[0]
         by_system, read, exclusive, catalogue_invalid, disabled = self._read_catalogue_full(root)
@@ -17156,8 +18895,11 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             return GamelistSelections(system_label=None, per_game={})
         return parse_gamelist(text)
 
+    @one_question
     def gamelist_selections(self, system: str) -> GamelistSelections:
-        config, _ = self._read_marker()
+        config, marker_issues = self._read_marker()
+        if _not_set_up(marker_issues) is not None:
+            return GamelistSelections(system_label=None, per_game={})
         return self._gamelist_selections_at(self._config_path(config, "rd_home_path", "")[0], system)
 
     def _catalogue_answer(
@@ -17173,6 +18915,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         The marker's version travels back with the answer for the same reason.
         """
         config, marker_issues = self._read_marker()
+        if (finding := _not_set_up(marker_issues)) is not None:
+            return CatalogueAnswer(caveats=(finding,)), None
         findings = self._health_from(config, marker_issues).issues
         root = self._config_path(config, "rd_home_path", "")[0]
         by_system, read, exclusive, catalogue_invalid = self._read_catalogue(root)
@@ -17200,6 +18944,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
                     self._gamelist_selections_at(root, system),
                     system_roms_dir=anchor.directory,
                     content_path=content_path,
+                    launch_for=self._launch_for(),
                 ),
                 (_CATALOGUE_SOURCE_EXCLUSIVE if exclusive else self._CATALOGUE_SOURCE,),
                 (*findings, *invalid, *status, *anchor.caveats),
@@ -17220,6 +18965,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         """
         extension = esde_extension(content_path)
         config, marker_issues = self._read_marker()
+        if (finding := _not_set_up(marker_issues)) is not None:
+            return LaunchabilityAnswer(verdict=VERDICT_UNKNOWN, extension=extension, caveats=(finding,)), None
         findings = self._health_from(config, marker_issues).issues
         root = self._config_path(config, "rd_home_path", "")[0]
         by_system, read, exclusive, catalogue_invalid = self._read_catalogue(root)
@@ -17242,6 +18989,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             self._gamelist_selections_at(root, system),
             system_roms_dir=anchor.directory,
             content_path=content_path,
+            launch_for=self._launch_for(),
         )
         declaration = by_system.get(system)
         core_reader = _EntryCoreReader(
@@ -17284,6 +19032,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         them would throw away a fact atlas holds.
         """
         config, marker_issues = self._read_marker()
+        if (finding := _not_set_up(marker_issues)) is not None:
+            return RomPlacement(caveats=(finding,)), None
         findings = self._health_from(config, marker_issues).issues
         root = self._config_path(config, "rd_home_path", "")[0]
         by_system, read, exclusive, catalogue_invalid = self._read_catalogue(root)
@@ -17425,6 +19175,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             ),
         )
 
+    @one_question
     def savefile_location(
         self,
         *,
@@ -17442,6 +19193,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         guesses.
         """
         config, marker_issues = self._read_marker()
+        if _not_set_up(marker_issues) is not None:
+            return self._not_set_up_refusal()
         return self._savefile_location_from(
             config,
             marker_issues,
@@ -17450,6 +19203,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             system=system,
         )
 
+    @one_question
     def savestate_location(
         self, *, content_path: str | None = None, core_so: str | None = None
     ) -> SavestatePlacement | Unresolved:
@@ -17460,6 +19214,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         instead of the savefile one.
         """
         config, marker_issues = self._read_marker()
+        if _not_set_up(marker_issues) is not None:
+            return self._not_set_up_refusal()
         return self._savestate_location_from(
             config,
             marker_issues,
@@ -17487,6 +19243,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             ),
         )
 
+    @one_question
     def screenshot_location(
         self, *, content_path: str | None = None, core_so: str | None = None
     ) -> ScreenshotPlacement | Unresolved:
@@ -17497,6 +19254,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         the content-rooted answers keep their hole.
         """
         config, marker_issues = self._read_marker()
+        if _not_set_up(marker_issues) is not None:
+            return self._not_set_up_refusal()
         return self._screenshot_location_from(
             config, marker_issues, content_path=content_path, core_so=core_so
         )
@@ -17521,6 +19280,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             ),
         )
 
+    @one_question
     def texture_pack_location(
         self, *, content_path: str | None = None, core_so: str | None = None
     ) -> TexturePlacement | Unresolved:
@@ -17535,10 +19295,12 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         The link is not what atlas reads the location *from*. The directory
         comes from the root RetroArch hands the core plus the fragment the core
         itself appends; whether an arrangement has redirected that directory is
-        then an observation on top, which is why a machine that never ran
-        RetroDECK's setup still answers.
+        then an observation on top, which is why a machine whose RetroDECK
+        setup never created those links still answers.
         """
         config, marker_issues = self._read_marker()
+        if _not_set_up(marker_issues) is not None:
+            return self._not_set_up_refusal()
         return self._texture_pack_location_from(
             config,
             marker_issues,
@@ -17566,6 +19328,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             ),
         )
 
+    @one_question
     def mod_location(
         self, *, content_path: str | None = None, core_so: str | None = None
     ) -> ModPlacement | Unresolved:
@@ -17577,10 +19340,13 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         because the hub links them one by one.
         """
         config, marker_issues = self._read_marker()
+        if _not_set_up(marker_issues) is not None:
+            return self._not_set_up_refusal()
         return self._mod_location_from(
             config, marker_issues, content_path=content_path, core_so=core_so
         )
 
+    @one_question
     def soft_patch_candidates(
         self, content_path: str, *, core_so: str | None = None
     ) -> SoftPatchAnswer | Unresolved:
@@ -17592,6 +19358,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         when the shipped build moves.
         """
         config, marker_issues = self._read_marker()
+        if _not_set_up(marker_issues) is not None:
+            return self._not_set_up_refusal()
         return _retroarch_soft_patch_candidates(
             self._machine,
             self._query_from(config, marker_issues, content_path=content_path, core_so=core_so),
@@ -17618,7 +19386,15 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         the two uses are the same fact: it is how a standalone emulator's
         configured paths read from this host, and it is how the ``/app`` tree
         RetroDECK copies its own firmware out of does.
+
+        A not-set-up installation gets the rootless context, its finding the
+        statement of why there is no root, so every firmware answer refuses
+        the way a rootless one does.
         """
+        if (finding := _not_set_up(marker_issues)) is not None:
+            return FirmwareContext(
+                root=None, cores=(), hashes=load_hashes(), cores_read=False, caveats=(finding,)
+            )
         sandbox, environment_sources = self._cfg_sandbox()
         deploy = self._sandbox()
         return _retroarch_firmware_context(
@@ -17639,6 +19415,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         config, marker_issues = self._read_marker()
         return self._firmware_context_from(config, marker_issues)
 
+    @one_question
     def firmware_for_system(self, system: str, *, verify: bool = False) -> FirmwareAnswer:
         """Which emulators RetroDECK offers for *system*, and what each of them wants.
 
@@ -17655,6 +19432,9 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         read once here and handed on, never re-read.
         """
         config, marker_issues = self._read_marker()
+        if _not_set_up(marker_issues) is not None:
+            context = self._stated(self._firmware_context_from(config, marker_issues))
+            return _resolve_for_system(self._machine, context, system=system, verify=verify)
         root = self._config_path(config, "rd_home_path", "")[0]
         by_system, read, exclusive, catalogue_invalid = self._read_catalogue(root)
         catalogue = Catalogue(
@@ -17687,6 +19467,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             (*answer.caveats[:index], *status, *answer.caveats[index:]),
         )
 
+    @one_question
     def firmware_inventory(self, *, verify: bool = False) -> FirmwareAnswer:
         """Every installed emulator's firmware here, plus what is lying around unclaimed.
 
@@ -17771,6 +19552,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             return (*status, *anchor.caveats)
         return (*status, *anchor.caveats, _per_game_override_caveat(override_label, spec))
 
+    @one_question
     def entry_savefile_location(
         self,
         spec: EmulatorSpec,
@@ -17788,6 +19570,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         if foreign is not None:
             return _foreign_core_unresolved(spec, foreign, _READS_SAVE_FILES)
         config, marker_issues = self._read_marker()
+        if _not_set_up(marker_issues) is not None:
+            return self._not_set_up_refusal()
         extra = (
             self._entry_caveats_for(config, spec, content_path)
             if content_path is not None
@@ -17823,6 +19607,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         )
         return _entry_savefile_with_caveats(placement, extra)
 
+    @one_question
     def entry_savestate_location(
         self,
         spec: EmulatorSpec,
@@ -17847,6 +19632,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         if foreign is not None:
             return _foreign_core_unresolved(spec, foreign, _READS_SAVESTATES)
         config, marker_issues = self._read_marker()
+        if _not_set_up(marker_issues) is not None:
+            return self._not_set_up_refusal()
         extra = (
             self._entry_caveats_for(config, spec, content_path)
             if content_path is not None
@@ -17911,6 +19698,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             xdg_pinned=True,
         )
 
+    @one_question
     def entry_texture_pack_location(
         self,
         spec: EmulatorSpec,
@@ -17933,6 +19721,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         if foreign is not None:
             return _foreign_core_unresolved(spec, foreign, _READS_TEXTURE_PACKS)
         config, marker_issues = self._read_marker()
+        if _not_set_up(marker_issues) is not None:
+            return self._not_set_up_refusal()
         extra = (
             self._entry_caveats_for(config, spec, content_path)
             if content_path is not None
@@ -17964,6 +19754,7 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         )
         return _entry_texture_with_caveats(placement, extra)
 
+    @one_question
     def entry_mod_location(
         self,
         spec: EmulatorSpec,
@@ -17980,6 +19771,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
         if foreign is not None:
             return _foreign_core_unresolved(spec, foreign, _READS_MODS)
         config, marker_issues = self._read_marker()
+        if _not_set_up(marker_issues) is not None:
+            return self._not_set_up_refusal()
         extra = (
             self._entry_caveats_for(config, spec, content_path)
             if content_path is not None
@@ -18223,18 +20016,22 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         fallback = os.path.join(self._home, "Emulation", fallback_subdir)
         return fallback, f"default: {key} unset → {fallback} (EmuDeck default)"
 
+    @one_question
     def root(self) -> str:
         """The EmuDeck ``Emulation`` tree root (parent of ``romsPath``)."""
         return os.path.dirname(self._setting_path(self._read_marker()[0], "romsPath", "roms")[0])
 
+    @one_question
     def saves_root(self) -> str:
         """EmuDeck's saves root (``savesPath`` or the default)."""
         return self._setting_path(self._read_marker()[0], "savesPath", "saves")[0]
 
+    @one_question
     def bios_dir(self) -> str:
         """EmuDeck's BIOS directory (``biosPath`` or the default)."""
         return self._setting_path(self._read_marker()[0], "biosPath", "bios")[0]
 
+    @one_question
     def roms_dir(self) -> str | None:
         """The ROM root the frontend substitutes for ``%ROMPATH%`` — or ``None``.
 
@@ -18302,6 +20099,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             )
         return Health(tuple(issues))
 
+    @one_question
     def health(self) -> Health:
         """Installation health — marker, roots, companion RetroArch config, catalogue loadable.
 
@@ -18960,6 +20758,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
                     self._gamelist_selections(system),
                     system_roms_dir=anchor.directory,
                     content_path=content_path,
+                    launch_for=_launch_unsupported(self.kind, _EMUDECK_LAUNCH_LATER),
                 ),
                 (self._catalogue_provenance(snapshot.exclusive),),
                 (*snapshot.findings, *snapshot.tail, *anchor.caveats),
@@ -19018,6 +20817,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             self._gamelist_selections(system),
             system_roms_dir=anchor.directory,
             content_path=content_path,
+            launch_for=_launch_unsupported(self.kind, _EMUDECK_LAUNCH_LATER),
         )
         declaration = snapshot.by_system.get(system)
         core_reader = _EntryCoreReader(
@@ -19139,6 +20939,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             return (*status, *relocation, *anchor.caveats)
         return (*status, *relocation, *anchor.caveats, _per_game_override_caveat(override_label, spec))
 
+    @one_question
     def entry_savefile_location(
         self,
         spec: EmulatorSpec,
@@ -19429,6 +21230,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             return _EmuDeckGate(launch, variant, None, self._variant_reason(launch, variant))
         return _EmuDeckGate(launch, variant, homes, None)
 
+    @one_question
     def entry_emulator(self, spec: EmulatorSpec) -> str | None:
         """The catalogue's reading, plus the launcher script EmuDeck launches through.
 
@@ -19455,6 +21257,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         launcher = _emudeck_launcher(spec.command)
         return None if launcher is None else launcher[0]
 
+    @one_question
     def standalone_firmware_token(self, command: str) -> str | None:
         """The command's word, variant-gated — EmuDeck's own reading.
 
@@ -19478,6 +21281,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         homes = self._homes_for_token(variant, launch.token)
         return launch.token if homes is not None else None
 
+    @one_question
     def standalone_firmware_homes(self, command: str) -> _XdgHomes | None:
         """The homes the gated launch reads — per entry, because the variant is.
 
@@ -19491,6 +21295,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             return None
         return self._homes_for_token(self._launch_variant(launch), launch.token)
 
+    @one_question
     def standalone_firmware_sandbox(self, homes: _XdgHomes) -> _Sandbox:
         """The firmware seam's sandbox for one launch — the placement routes' own.
 
@@ -19540,6 +21345,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         """
         return _Sandbox(self._machine, self._home, homes.flatpak, expansion_home=self._home)
 
+    @one_question
     def entry_savestate_location(
         self,
         spec: EmulatorSpec,
@@ -19625,6 +21431,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             content_path=content_path,
         )
 
+    @one_question
     def entry_texture_pack_location(
         self,
         spec: EmulatorSpec,
@@ -19654,6 +21461,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             return placement
         return _entry_texture_with_caveats(placement, self._entry_caveats_for(spec, content_path))
 
+    @one_question
     def entry_mod_location(
         self,
         spec: EmulatorSpec,
@@ -19815,6 +21623,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             revocation=context.revocation,
         )
 
+    @one_question
     def savefile_location(
         self,
         *,
@@ -19838,6 +21647,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             self._query(content_path=content_path, core_so=core_so, system=system),
         )
 
+    @one_question
     def savestate_location(
         self, *, content_path: str | None = None, core_so: str | None = None
     ) -> SavestatePlacement | Unresolved:
@@ -19860,6 +21670,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             self._machine, self._query(content_path=content_path, core_so=core_so)
         )
 
+    @one_question
     def screenshot_location(
         self, *, content_path: str | None = None, core_so: str | None = None
     ) -> ScreenshotPlacement | Unresolved:
@@ -19868,6 +21679,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             self._machine, self._query(content_path=content_path, core_so=core_so)
         )
 
+    @one_question
     def texture_pack_location(
         self, *, content_path: str | None = None, core_so: str | None = None
     ) -> TexturePlacement | Unresolved:
@@ -19889,6 +21701,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             self._machine, self._query(content_path=content_path, core_so=core_so)
         )
 
+    @one_question
     def mod_location(
         self, *, content_path: str | None = None, core_so: str | None = None
     ) -> ModPlacement | Unresolved:
@@ -19904,6 +21717,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             self._machine, self._query(content_path=content_path, core_so=core_so)
         )
 
+    @one_question
     def soft_patch_candidates(
         self, content_path: str, *, core_so: str | None = None
     ) -> SoftPatchAnswer | Unresolved:
@@ -19985,6 +21799,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         cfg = self._machine.read_text(self._companion_cfg_path())
         return self._firmware_context_from(settings, marker_issues, cfg)
 
+    @one_question
     def firmware_for_system(self, system: str, *, verify: bool = False) -> FirmwareAnswer:
         """Which emulators this EmuDeck's ES-DE offers for *system*, and what each wants.
 
@@ -20058,6 +21873,7 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             answer, (*answer.caveats[:index], *inserted, *answer.caveats[index:])
         )
 
+    @one_question
     def firmware_inventory(self, *, verify: bool = False) -> FirmwareAnswer:
         """Every installed emulator's firmware here, plus what is lying around unclaimed.
 
@@ -20134,6 +21950,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
     def _cfg_path(self) -> str:
         return os.path.join(self._home, self._cfg_suffix)
 
+    @one_question
     def root(self) -> str:
         """The RetroArch config directory (the folder holding ``retroarch.cfg``)."""
         return os.path.dirname(self._cfg_path())
@@ -20154,6 +21971,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
             )
         )
 
+    @one_question
     def health(self) -> Health:
         """Bare installs: the cfg is the marker — health is its read status."""
         return self._health_from(self._machine.read_text(self._cfg_path()).status)
@@ -20225,6 +22043,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
             revocation=revocation,
         )
 
+    @one_question
     def savefile_location(
         self,
         *,
@@ -20248,6 +22067,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
             self._query(content_path=content_path, core_so=core_so, system=system),
         )
 
+    @one_question
     def savestate_location(
         self, *, content_path: str | None = None, core_so: str | None = None
     ) -> SavestatePlacement | Unresolved:
@@ -20262,6 +22082,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
             self._machine, self._query(content_path=content_path, core_so=core_so)
         )
 
+    @one_question
     def screenshot_location(
         self, *, content_path: str | None = None, core_so: str | None = None
     ) -> ScreenshotPlacement | Unresolved:
@@ -20276,6 +22097,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
             self._machine, self._query(content_path=content_path, core_so=core_so)
         )
 
+    @one_question
     def texture_pack_location(
         self, *, content_path: str | None = None, core_so: str | None = None
     ) -> TexturePlacement | Unresolved:
@@ -20290,6 +22112,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
             self._machine, self._query(content_path=content_path, core_so=core_so)
         )
 
+    @one_question
     def mod_location(
         self, *, content_path: str | None = None, core_so: str | None = None
     ) -> ModPlacement | Unresolved:
@@ -20304,6 +22127,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
             self._machine, self._query(content_path=content_path, core_so=core_so)
         )
 
+    @one_question
     def soft_patch_candidates(
         self, content_path: str, *, core_so: str | None = None
     ) -> SoftPatchAnswer | Unresolved:
@@ -20479,6 +22303,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
             None,
         )
 
+    @one_question
     def entry_savefile_location(
         self,
         spec: EmulatorSpec,
@@ -20508,6 +22333,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
             ),
         )
 
+    @one_question
     def entry_savestate_location(
         self,
         spec: EmulatorSpec,
@@ -20530,6 +22356,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
             self._query(content_path=content_path, core_so=spec.core_so, extra_caveats=entry_caveats),
         )
 
+    @one_question
     def entry_texture_pack_location(
         self,
         spec: EmulatorSpec,
@@ -20548,6 +22375,7 @@ class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):
             self._query(content_path=content_path, core_so=spec.core_so, extra_caveats=entry_caveats),
         )
 
+    @one_question
     def entry_mod_location(
         self,
         spec: EmulatorSpec,

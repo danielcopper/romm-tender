@@ -4,6 +4,7 @@ import {
   NO_SOURCE_BANNER,
   SOURCES_READING,
   SOURCES_UNREAD,
+  cannotStartNotice,
   cannotStartSentence,
   emulatorDataReasonSentence,
   findingIsBanner,
@@ -57,6 +58,13 @@ describe("findingSentence", () => {
     ["config-unreadable", "EmuDeck: its settings file /h/settings.sh cannot be read."],
   ])("words %s for a source other than RetroDECK", (code, sentence) => {
     expect(findingSentence("emudeck", { code, data: { path: "/h/settings.sh", status: "denied" } })).toBe(sentence);
+  });
+
+  it("says a RetroDECK that is not set up is installed and how to set it up", () => {
+    const finding = { code: "not-set-up", data: { path: "/h/retrodeck.json", app_id: "net.retrodeck.retrodeck" } };
+    expect(findingSentence("retrodeck", finding)).toBe(
+      "RetroDECK is installed but has not been set up yet. Start RetroDECK once and finish its first-run setup.",
+    );
   });
 
   it("adds RetroDECK's repair to a damaged settings file of RetroDECK's", () => {
@@ -159,6 +167,7 @@ describe("emulatorDataReasonSentence", () => {
       RETRODECK,
       "RetroDECK: ES-DE's systems file is broken, so its emulators are not established.",
     ],
+    ["not_set_up", RETRODECK, "RetroDECK has not been set up yet, so its emulators are not established."],
     ["unavailable", RETRODECK, "RetroDECK's emulator list is not established."],
     ["sealed", EMUDECK, "EmuDeck's emulator list cannot be read yet."],
   ] as const)("words %s", (reason, source, sentence) => {
@@ -166,7 +175,14 @@ describe("emulatorDataReasonSentence", () => {
   });
 
   it("never says there is no emulator", () => {
-    for (const reason of ["no_source", "switched_off", "catalogue_invalid", "unavailable", "sealed"] as const) {
+    for (const reason of [
+      "no_source",
+      "switched_off",
+      "catalogue_invalid",
+      "not_set_up",
+      "unavailable",
+      "sealed",
+    ] as const) {
       expect(emulatorDataReasonSentence(reason, RETRODECK)).not.toMatch(/no emulator\b(?! source)/i);
     }
   });
@@ -239,6 +255,12 @@ describe("sourceRowLines", () => {
     ]);
   });
 
+  it("says Tender cannot start games through a switched-off source, on its card (#2265 D6)", () => {
+    expect(
+      sourceRowLines(source({ kind: "emudeck", enabled: false, starts_games: false, catalogue: "sealed" })),
+    ).toContainEqual({ tone: "info", text: "Tender cannot start games through EmuDeck yet." });
+  });
+
   it("says a RetroArch without a frontend cannot start games", () => {
     expect(
       sourceRowLines(source({ kind: "bare_retroarch_native", starts_games: false, catalogue: "unavailable" })),
@@ -288,21 +310,42 @@ describe("mainSourceBanners", () => {
       "RetroDECK: its settings file /rd.json is damaged, so Tender cannot tell where its folders are. " +
         "Repair it with RetroDECK's 'Repair RetroDECK Paths'.",
       "EmuDeck: RetroArch's settings file /ra.cfg cannot be read; EmuDeck's RetroArch may be missing or broken.",
+      "EmuDeck is switched on in Settings → Emulator sources, but Tender cannot start games through it yet.",
     ]);
   });
 
-  it("says Tender cannot start games through the answering source where that is the case", () => {
+  it("says the answering source is switched on but cannot start games where that is the case", () => {
     const listing = { answering: "emudeck", sources: [source({ kind: "emudeck", starts_games: false })] };
-    expect(texts(listing)).toEqual([cannotStartSentence("emudeck")]);
+    expect(texts(listing)).toEqual([cannotStartNotice("emudeck")]);
+    expect(cannotStartNotice("emudeck")).toBe(
+      "EmuDeck is switched on in Settings → Emulator sources, but Tender cannot start games through it yet.",
+    );
+  });
+
+  it("leaves the card's own cannot-start line as it was", () => {
     expect(cannotStartSentence("emudeck")).toBe("Tender cannot start games through EmuDeck yet.");
   });
 
-  it("says nothing about starting games while RetroDECK answers beside EmuDeck", () => {
+  it("says EmuDeck is switched on but cannot start games while RetroDECK answers beside it", () => {
     const listing = {
       answering: "retrodeck",
       sources: [source({}), source({ kind: "emudeck", starts_games: false })],
     };
-    expect(texts(listing)).toEqual([]);
+    expect(texts(listing)).toEqual([
+      "EmuDeck is switched on in Settings → Emulator sources, but Tender cannot start games through it yet.",
+    ]);
+  });
+
+  it("makes the cannot-start notice the one banner without the warning sign", () => {
+    const listing = {
+      answering: "retrodeck",
+      sources: [
+        source({ findings: [{ code: "marker-invalid", data: { path: "/rd.json" } }] }),
+        source({ kind: "emudeck", starts_games: false }),
+      ],
+    };
+    expect(mainSourceBanners(listing).map((banner) => banner.tone)).toEqual(["warning", "info"]);
+    expect(mainSourceBanners({ sources: [], answering: null }).map((banner) => banner.tone)).toEqual(["warning"]);
   });
 
   it("keeps a switched-off source's findings off Main", () => {

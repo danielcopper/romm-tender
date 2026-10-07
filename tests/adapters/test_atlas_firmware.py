@@ -32,6 +32,7 @@ from _vendor.atlas import (
     CAVEAT_FIRMWARE_PATH_OBSTRUCTED,
     CAVEAT_FIRMWARE_SCAN_INCOMPLETE,
     CAVEAT_FIRMWARE_SEARCH_UNVERIFIED,
+    HEALTH_ISSUE_NOT_SET_UP,
 )
 from _vendor.atlas.firmware import (
     CORE_SYSTEM_FIRMWARE_STATES,
@@ -63,8 +64,10 @@ from domain.firmware_wants import (
     DECLARED_DIRECTORY,
     DECLARED_FILE,
     SYSTEM_FIRMWARE_STATES,
+    WANTED_UNKNOWN,
     FirmwareWant,
     MissingConfiguredImage,
+    classify_wanted,
 )
 
 if TYPE_CHECKING:
@@ -1070,6 +1073,27 @@ class TestDegradation:
             assert catalogue.resolved is False
             assert catalogue.placements == ()
             assert CAVEAT_EMULATOR_CATALOGUE_SEALED in catalogue.caveats
+
+    def test_a_retrodeck_that_is_not_set_up_answers_nothing_established(self, tmp_path, monkeypatch, traces):
+        """Its empty answer is not "this platform needs none" (#2265 D2), over the real resolver."""
+        # The deploy alone, with no marker, as before RetroDECK's first run.
+        monkeypatch.setattr(
+            "_vendor.atlas.installations._FLATPAK_DEPLOY_SYSTEM", str(tmp_path / "no_system_flatpak" / "app")
+        )
+        home = tmp_path / "home"
+        (home / ".local" / "share" / "flatpak" / "app" / "net.retrodeck.retrodeck" / "current" / "active").mkdir(
+            parents=True
+        )
+        sources = EmulatorSourcesAdapter(user_home=str(home), settings={}, log_debug=traces.append)
+        adapter = AtlasFirmwareAdapter(sources=sources, log_debug=traces.append)
+        platform = AtlasPlatformFirmwareAdapter(sources=sources, log_debug=traces.append)
+
+        assert sources.read().answering_kind == "retrodeck"
+        for catalogue in (adapter(), platform("psx")):
+            assert catalogue.resolved is False
+            assert catalogue.placements == ()
+            assert HEALTH_ISSUE_NOT_SET_UP in catalogue.caveats
+            assert classify_wanted(None, catalogue.reading_complete_for("mednafen_psx_hw_libretro")) == WANTED_UNKNOWN
 
     def test_an_answer_without_the_sealed_caveat_is_read(self, monkeypatch, traces):
         other = Caveat(code="firmware-path-obstructed", message="a directory is in the way")

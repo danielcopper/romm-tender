@@ -872,8 +872,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   panel's modules `frontend/src/bigpicture/panelState.ts`, `frontend/src/bigpicture/panelEvents.ts` and
   `frontend/src/bigpicture/panelTabContent.tsx` via `RomBinding` (`bindRom`, `bindRomInState`);
   `frontend/src/bigpicture/AchievementsTab.tsx` by its rom-id key. Two answers for the SAME rom are ordered by a
-  sequence taken at issue (`loadSeq`, `takeReadTicket`). Ordered but unbound: the two identity writes (the store's
-  `loadDetail`, the panel's `loadData`) and the panel's lazy SAVES-tab slot load
+  sequence taken at issue (`loadSeq`, `saveStatusSeq`, `takeReadTicket`). Ordered but unbound: the two identity writes
+  (the store's `loadDetail`, the panel's `loadData`) and the panel's lazy SAVES-tab slot load
   (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither bound nor ordered: the store's
   `cached.bios_status` fold. The panel's `handleBiosChange` is bound and ordered (`bios` ticket). The play button is NOT
   covered** — test + prompt-only — the panel's bound sites each carry a version-switch test

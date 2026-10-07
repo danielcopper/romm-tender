@@ -17,9 +17,10 @@
  *
  * What the rule excludes:
  *
- * - **The change-driven handlers.** `core_changed` and `metadata` re-read
- *   BECAUSE the thing changed, so joining a read issued before the change hands
- *   them the pre-change answer. Both keep calling `api/backend` directly.
+ * - **The change-driven handlers.** `core_changed`, `emulator_sources` and
+ *   `metadata` re-read BECAUSE the thing changed, so joining a read issued
+ *   before the change hands them the pre-change answer. All three keep calling
+ *   `api/backend` directly.
  * - **`get_save_slots` / `is_save_tracking_configured`.** Their one refresh path
  *   (`refreshSlotState` in `bigpicture/panelState.ts`) is also the slot lane's
  *   re-read after a slot switch, delete or copy-to-slot — each of which

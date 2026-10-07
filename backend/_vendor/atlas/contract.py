@@ -53,6 +53,7 @@ from .installations import (
     SystemPlatformsAnswer,
     SystemsAnswer,
 )
+from .launch import Launcher
 from .platforms import PlatformIdentities
 from .placement import (
     Caveat,
@@ -150,7 +151,12 @@ def savefile_placement_contract(placement: SavefilePlacement) -> dict[str, Any]:
                 for r in granularity.readings
             ],
             "alternatives": [
-                {"mode": a.mode, "options": dict(a.options), "values": list(a.values)}
+                {
+                    "mode": a.mode,
+                    "options": dict(a.options),
+                    "values": list(a.values),
+                    "caveats": _caveats_contract(a.caveats),
+                }
                 for a in granularity.alternatives
             ],
         },
@@ -496,9 +502,11 @@ def firmware_contract(answer: FirmwareAnswer) -> dict[str, Any]:
       at all (``checked`` ``unknown`` with ``identity`` ``null``). Nothing
       further can ever be established about such a file, so withholding the
       answer would withhold it forever — but "in place under the right name" is
-      all that was checked. On the reference machine that is three requirements
-      across two cores (blueMSX's databases and machine ROMs, Dolphin's
-      ``codehandler.bin``).
+      all that was checked. Several of the names RetroDECK's copy list covers
+      carry no packaged identity, so it is the ordinary shape rather than a
+      corner: blueMSX's ``Databases`` and ``Machines`` trees are entries of
+      ``atlas/data/distribution_supplied.json``, and Dolphin's
+      ``Sys/codehandler.bin`` sits inside the ``dolphin-emu`` tree it lists.
 
     ``emulator`` on a core is the identity the catalogue answer states under
     that same name: a client that asked which emulators launch a system, let
@@ -650,6 +658,11 @@ def emulator_contract(entry: EmulatorEntry) -> dict[str, Any]:
     is ``null`` on a derived entry (``emulator-list-derived``), which no layer
     declared and which therefore has no declared position.
 
+    ``availability``, ``launcher`` and ``core_path`` are the entry's launch
+    answer (#84): whether the frontend's own lookup finds what the entry
+    launches, and where. A verdict other than ``startable`` carries exactly one
+    reason among the entry's ``caveats``.
+
     ``caveats`` serialize ``{code, data}`` like every other caveat in this
     module. Bare codes were this serializer's own dialect and lost what the
     data says (which game's override was not checked), which is exactly the
@@ -663,7 +676,21 @@ def emulator_contract(entry: EmulatorEntry) -> dict[str, Any]:
         "emulator": entry.emulator,
         "declared_index": entry.declared_index,
         "selection": entry.selection,
+        "availability": entry.availability,
+        "launcher": _launcher_contract(entry.launcher) if entry.launcher is not None else None,
+        "core_path": entry.core_path,
         "caveats": _caveats_contract(entry.caveats),
+    }
+
+
+def _launcher_contract(launcher: Launcher) -> dict[str, Any]:
+    """The stable form of what the frontend would run for an entry, and where that path is valid."""
+    return {
+        "path": launcher.path,
+        "replacement_command": launcher.replacement_command,
+        "app_id": launcher.app_id,
+        "rule": launcher.rule,
+        "entry": launcher.entry,
     }
 
 
@@ -711,18 +738,21 @@ def systems_contract(answer: SystemsAnswer) -> dict[str, Any]:
 
 
 def platform_systems_contract(answer: PlatformSystemsAnswer) -> dict[str, Any]:
-    """The stable form of a forward platform answer — resolved platforms, matches, statuses.
+    """The stable form of a forward platform answer — resolved platforms or system, matches, statuses.
 
-    ``platforms`` empty means the id resolved to nothing and the
-    ``platform-unmapped`` caveat says so; an empty ``matches`` under resolved
-    platforms is the different statement that nothing on this machine answers
-    to a real platform. Every match carries its status and where its tags came
-    from — the two fields a consumer branches on.
+    ``systems`` names the one system an id stands for alone (the per-system
+    table, which wins), ``platforms`` what the crosswalk resolved it to
+    otherwise — never both. Both empty means the id resolved to nothing and
+    the ``platform-unmapped`` caveat says so; an empty ``matches`` under
+    resolved platforms is the different statement that nothing on this
+    machine answers to a real platform. Every match carries its status and
+    where its tags came from — the two fields a consumer branches on.
     """
     return {
         "vocabulary": answer.vocabulary,
         "value": answer.value,
         "platforms": list(answer.platforms),
+        "systems": list(answer.systems),
         "matches": [
             {
                 "system": m.system,

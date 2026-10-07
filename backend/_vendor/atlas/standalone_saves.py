@@ -30,6 +30,29 @@ SAVES_SCHEMA = 2
 
 
 @dataclass(frozen=True, slots=True)
+class StandaloneBuild:
+    """The upstream revision a card's citations were read at, as the build stamps it.
+
+    ``revision`` is the short commit hash the deployed binary spells in the
+    version string its ``--version`` prints, so a deployed build can be held
+    against the revision the card was written from
+    (``tests/test_standalone_build_tripwire.py``). Where that string is a
+    constant of the build, as Vita3K's is, it names the commit that build was
+    configured at and the check needs nothing run. A build that moved past the
+    pin fails it rather than letting the card describe source the machine no
+    longer runs.
+
+    A sibling of :class:`atlas.core_firmware.CoreFirmwareBuild` rather than that
+    class: the two pin the same kind of fact and read it through different
+    seams, and one shared class would tie a save card's shape to what a libretro
+    entry happens to need.
+    """
+
+    revision: str
+    citation: str
+
+
+@dataclass(frozen=True, slots=True)
 class StandaloneSaveCard:
     """One standalone emulator's save knowledge: config file, systems, citations.
 
@@ -77,6 +100,14 @@ class StandaloneSaveCard:
     provenance: str
     citations: Mapping[str, str] = field(default_factory=dict)
     citation_installations: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
+    build: StandaloneBuild | None = None
+    """The revision the card's readings were taken at, where the card pins one.
+
+    ``None`` is a card that pins no revision, which is most of them today: the
+    pin is only worth stating where something can read the deployed build's own
+    answer back and compare it, and pinning the rest is open work. The
+    tripwire's ``UNPINNED`` set is what keeps that absence deliberate.
+    """
 
     def cite(self, slot: str, *, flatpak: str | None) -> str:
         """The card's citation for one slot, in the build this launch runs.
@@ -102,6 +133,41 @@ def _expect_str(value: Any, where: str) -> str:
     if not isinstance(value, str) or not value:
         raise ValueError(f"{where}: expected a non-empty string, got {value!r}")
     return value
+
+
+def _stated_pin(value: Any, where: str) -> str:
+    """A string the pin can be held against — the blank one refused too.
+
+    Stricter than the ``_expect_str`` the rest of this file shares, and only
+    here: a revision of spaces is a substring of every version string there
+    is, so a card pinning one would pass the tripwire against any build at
+    all — a pin that reads as checked and checks nothing, which is worse than
+    the absent pin it was meant to replace. A citation of spaces is one nobody
+    can follow, the same reason the core-firmware table refuses it.
+    """
+    stated = _expect_str(value, where)
+    if not stated.strip():
+        raise ValueError(f"{where}: expected a non-blank string, got {value!r}")
+    return stated
+
+
+def _build(where: str, entry: Any) -> StandaloneBuild | None:
+    """The optional build pin — exactly revision and citation, or nothing at all.
+
+    A card that states no block pins nothing, which the tripwire's ``UNPINNED``
+    set is what keeps deliberate. A card that states some other shape is
+    refused by name rather than read for what can be found in it: a misspelled
+    key would otherwise read as a card with no pin, and a pin nobody checks is
+    the one failure this block exists to prevent.
+    """
+    if entry is None:
+        return None
+    if not isinstance(entry, dict) or set(entry) != {"revision", "citation"}:
+        raise ValueError(f"{where}: build must state exactly revision/citation, got {entry!r}")
+    return StandaloneBuild(
+        revision=_stated_pin(entry["revision"], f"{where}: build.revision"),
+        citation=_stated_pin(entry["citation"], f"{where}: build.citation"),
+    )
 
 
 def _card(token: str, entry: Any) -> StandaloneSaveCard:
@@ -167,6 +233,7 @@ def _card(token: str, entry: Any) -> StandaloneSaveCard:
             }
             for app_id, stated in installations.items()
         },
+        build=_build(where, entry.get("build")),
     )
 
 

@@ -3182,14 +3182,103 @@ describe("MainPage", () => {
       ).toBeInTheDocument();
     });
 
-    it("says Tender cannot start games yet where only EmuDeck is installed", async () => {
+    it("says a RetroDECK that is not set up has to be set up", async () => {
+      vi.mocked(backend.getEmulatorSources).mockResolvedValue({
+        sources: [
+          {
+            ...HEALTHY_RETRODECK,
+            root: null,
+            catalogue: "unavailable",
+            findings: [{ code: "not-set-up", data: { path: "/rd.json", app_id: "net.retrodeck.retrodeck" } }],
+          },
+        ],
+        answering: "retrodeck",
+      });
+      const { findByText } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(
+        await findByText(
+          "RetroDECK is installed but has not been set up yet. Start RetroDECK once and finish its first-run setup.",
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it("says EmuDeck is switched on but cannot start games where only EmuDeck is installed", async () => {
       vi.mocked(backend.getEmulatorSources).mockResolvedValue({
         sources: [{ ...HEALTHY_RETRODECK, kind: "emudeck", starts_games: false, catalogue: "sealed" }],
         answering: "emudeck",
       });
       const { findByText } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
-      expect(await findByText("Tender cannot start games through EmuDeck yet.")).toBeInTheDocument();
+      expect(
+        await findByText(
+          "EmuDeck is switched on in Settings → Emulator sources, but Tender cannot start games through it yet.",
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it("says EmuDeck is switched on but cannot start games while RetroDECK answers beside it", async () => {
+      vi.mocked(backend.getEmulatorSources).mockResolvedValue({
+        sources: [
+          HEALTHY_RETRODECK,
+          { ...HEALTHY_RETRODECK, kind: "emudeck", starts_games: false, catalogue: "sealed" },
+        ],
+        answering: "retrodeck",
+      });
+      const { findByText } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(
+        await findByText(
+          "EmuDeck is switched on in Settings → Emulator sources, but Tender cannot start games through it yet.",
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it("draws the cannot-start notice without the warning sign a finding's banner keeps", async () => {
+      vi.mocked(backend.getEmulatorSources).mockResolvedValue({
+        sources: [
+          { ...HEALTHY_RETRODECK, root: null, findings: [{ code: "marker-invalid", data: { path: "/rd.json" } }] },
+          { ...HEALTHY_RETRODECK, kind: "emudeck", starts_games: false, catalogue: "sealed" },
+        ],
+        answering: "retrodeck",
+      });
+      const { findByText } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      const notice = await findByText(/^EmuDeck is switched on in Settings/);
+      const finding = await findByText(/^RetroDECK: its settings file \/rd\.json is damaged/);
+      expect(notice.parentElement?.querySelector("svg")).toBeNull();
+      expect(finding.parentElement?.querySelector("svg")).not.toBeNull();
+    });
+
+    it("draws the cannot-start notice smaller than a finding's banner", async () => {
+      vi.mocked(backend.getEmulatorSources).mockResolvedValue({
+        sources: [
+          { ...HEALTHY_RETRODECK, root: null, findings: [{ code: "marker-invalid", data: { path: "/rd.json" } }] },
+          { ...HEALTHY_RETRODECK, kind: "emudeck", starts_games: false, catalogue: "sealed" },
+        ],
+        answering: "retrodeck",
+      });
+      const { findByText } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      const notice = await findByText(/^EmuDeck is switched on in Settings/);
+      const finding = await findByText(/^RetroDECK: its settings file \/rd\.json is damaged/);
+      expect(notice).toHaveStyle({ fontSize: "12px" });
+      expect(notice.parentElement).toHaveStyle({ padding: "8px 12px" });
+      expect(finding).toHaveStyle({ fontSize: "15px" });
+      expect(finding.parentElement).toHaveStyle({ padding: "24px 16px" });
+    });
+
+    it("leaves a switched-off EmuDeck's cannot-start line to its card", async () => {
+      vi.mocked(backend.getEmulatorSources).mockResolvedValue({
+        sources: [
+          HEALTHY_RETRODECK,
+          { ...HEALTHY_RETRODECK, kind: "emudeck", enabled: false, starts_games: false, catalogue: "sealed" },
+        ],
+        answering: "retrodeck",
+      });
+      const { queryByText } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(queryByText(/cannot start games/)).toBeNull();
     });
 
     it("keeps a switched-off source's finding off Main", async () => {

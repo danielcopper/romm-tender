@@ -2249,6 +2249,68 @@ describe("SettingsPage", () => {
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("unknown_source"));
     });
 
+    /** Every `romm_data_changed` detail dispatched while `run` is awaited. */
+    const dataChangesDuring = async (run: () => Promise<void>) => {
+      const seen: unknown[] = [];
+      const listener = (e: Event) => seen.push((e as CustomEvent).detail);
+      globalThis.addEventListener("romm_data_changed", listener);
+      try {
+        await run();
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", listener);
+      }
+      return seen;
+    };
+
+    it("tells every open game page when a switch is accepted", async () => {
+      vi.mocked(backend.setEmulatorSourceEnabled).mockResolvedValue(TWO_SOURCES);
+      renderPage();
+      await flushAsync();
+
+      const seen = await dataChangesDuring(async () => {
+        act(() => last().onSwitch("emudeck", false));
+        await flushAsync();
+      });
+
+      expect(seen).toEqual([{ type: "emulator_sources" }]);
+    });
+
+    it("tells every open game page when a move is accepted", async () => {
+      vi.mocked(backend.moveEmulatorSource).mockResolvedValue(TWO_SOURCES);
+      renderPage();
+      await flushAsync();
+
+      const seen = await dataChangesDuring(async () => {
+        act(() => last().onMove("emudeck", "up"));
+        await flushAsync();
+      });
+
+      expect(seen).toEqual([{ type: "emulator_sources" }]);
+    });
+
+    it("tells no game page about a change that was refused or failed", async () => {
+      vi.mocked(backend.moveEmulatorSource).mockResolvedValue({
+        success: false,
+        reason: "unknown_source",
+        message: "gone",
+      });
+      vi.mocked(backend.setEmulatorSourceEnabled).mockRejectedValue(new Error("socket closed"));
+      vi.spyOn(backend, "logError").mockImplementation(() => {});
+      renderPage();
+      await flushAsync();
+
+      const seen = await dataChangesDuring(async () => {
+        act(() => last().onMove("emudeck", "up"));
+        await flushAsync();
+        act(() => last().onSwitch("emudeck", false));
+        await flushAsync();
+      });
+
+      expect(backend.moveEmulatorSource).toHaveBeenCalledTimes(1);
+      expect(backend.setEmulatorSourceEnabled).toHaveBeenCalledTimes(1);
+      expect(seen).toEqual([]);
+    });
+
     it("takes no second change while one is in flight", async () => {
       let answer: (value: EmulatorSourcesListing) => void = () => {};
       vi.mocked(backend.setEmulatorSourceEnabled).mockReturnValue(

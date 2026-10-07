@@ -24,7 +24,8 @@ import {
   domListenerCount,
 } from "../test-utils/dom-event-listener-spy";
 import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
-import type { DownloadCompleteEvent, SaveStatus } from "../types";
+import type { AnsweringSource, DownloadCompleteEvent, EmulatorDataReason, SaveStatus } from "../types";
+import { emulatorDataReasonSentence } from "../utils/emulatorSourceWording";
 import { stubAppStore } from "../test-utils/steamStubs";
 import * as cachedStore from "../utils/cachedGameDetailStore";
 import * as connectionState from "../utils/connectionState";
@@ -1624,6 +1625,114 @@ describe("RomMPlaySection", () => {
   });
 
   // ------------------------------------------------------------------
+  // D3. Save verdict after an emulator source change
+  // ------------------------------------------------------------------
+
+  // A switch or a move of an emulator source can change the save's shape, and
+  // the play button learns the conflict verdict only from this section's
+  // save_sync notification.
+  describe("save verdict after an emulator source change", () => {
+    const statusLabelled = (label: string): SaveStatus => ({
+      rom_id: 88,
+      files: [],
+      playtime: {
+        total_seconds: 0,
+        session_count: 0,
+        last_session_start: null,
+        last_session_duration_sec: null,
+        last_played: null,
+      },
+      device_id: "d",
+      last_sync_check_at: null,
+      save_sync_display: { status: "synced", label, last_sync_check_at: null },
+    });
+    const beforeTheSwitch = statusLabelled("before the switch");
+    const afterTheSwitch = statusLabelled("after the switch");
+
+    const dispatchSourcesChanged = () =>
+      globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
+
+    const announcements = (listener: ReturnType<typeof vi.fn>) =>
+      listener.mock.calls.map((c) => (c[0] as CustomEvent).detail).filter((detail) => detail.type === "save_sync");
+
+    beforeEach(() => {
+      vi.mocked(saveStatusUtils.hasAnySaveConflict).mockImplementation((status) => status === afterTheSwitch);
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 88,
+        save_sync_enabled: true,
+        save_sync_display: { status: "synced", label: "ok", last_sync_check_at: null },
+      });
+    });
+
+    it("announces the verdict of a read issued after the change", async () => {
+      vi.mocked(backend.getSaveStatus).mockResolvedValueOnce(beforeTheSwitch).mockResolvedValueOnce(afterTheSwitch);
+      render(<RomMPlaySection appId={testAppId} />);
+      await waitFor(() => {
+        expect(getGameDetail(testAppId).saveStatus).toBe(beforeTheSwitch);
+      });
+      await flushAsync();
+      const listener = vi.fn();
+      globalThis.addEventListener("romm_data_changed", listener);
+      try {
+        await act(async () => {
+          dispatchSourcesChanged();
+          await Promise.resolve();
+        });
+        await flushAsync();
+
+        // One read serves the store's fold and this announcement alike.
+        expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledTimes(2);
+        const announced = announcements(listener);
+        expect(announced[announced.length - 1]).toMatchObject({
+          rom_id: 88,
+          save_status: afterTheSwitch,
+          has_conflict: true,
+        });
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", listener);
+      }
+    });
+
+    it("never announces the verdict of a read the change overtook", async () => {
+      let settleOpening: (status: SaveStatus) => void = () => {};
+      vi.mocked(backend.getSaveStatus)
+        .mockReturnValueOnce(
+          new Promise<SaveStatus>((resolve) => {
+            settleOpening = resolve;
+          }),
+        )
+        .mockResolvedValueOnce(afterTheSwitch);
+      const listener = vi.fn();
+      globalThis.addEventListener("romm_data_changed", listener);
+      try {
+        render(<RomMPlaySection appId={testAppId} />);
+        await flushAsync();
+        expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledTimes(1);
+
+        await act(async () => {
+          dispatchSourcesChanged();
+          await Promise.resolve();
+        });
+        await flushAsync();
+        await act(async () => {
+          settleOpening(beforeTheSwitch);
+          await Promise.resolve();
+        });
+        await flushAsync();
+
+        const announced = announcements(listener);
+        expect(announced.length).toBeGreaterThan(0);
+        expect(announced.map((detail) => detail.save_status)).not.toContain(beforeTheSwitch);
+        expect(announced[announced.length - 1]).toMatchObject({ save_status: afterTheSwitch, has_conflict: true });
+        expect(getGameDetail(testAppId).saveStatus).toBe(afterTheSwitch);
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", listener);
+      }
+    });
+  });
+
+  // ------------------------------------------------------------------
   // E2. Playtime reconcile-on-view (#868) + reactive PLAYTIME display (#869)
   // ------------------------------------------------------------------
 
@@ -1910,10 +2019,11 @@ describe("RomMPlaySection", () => {
       const before = domListenerCount("romm_data_changed");
       const { unmount } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
-      // Two listeners: the game-detail store's, opened by this section's
+      // Three listeners: the game-detail store's, opened by this section's
       // subscription, + the child VersionPicker's (it also refreshes on
-      // version_switched, #1297). Both are removed on unmount.
-      expect(domListenerCount("romm_data_changed")).toBe(before + 2);
+      // version_switched, #1297) + this section's own, which announces the save
+      // verdict after an emulator source change. All are removed on unmount.
+      expect(domListenerCount("romm_data_changed")).toBe(before + 3);
       unmount();
       expect(domListenerCount("romm_data_changed")).toBe(before);
     });
@@ -4291,7 +4401,7 @@ describe("RomMPlaySection", () => {
       expect(container.innerHTML).not.toContain("#d4a72c");
     });
 
-    it("core button only renders when availableCores.length > 1", async () => {
+    it("offers no core button where the established emulator list holds a single emulator", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 42,
@@ -4331,6 +4441,61 @@ describe("RomMPlaySection", () => {
         platformCoreLabel: null,
         hasGameOverride: false,
       });
+      const { queryByTitle } = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      expect(queryByTitle("Emulator Core")).toBeNull();
+    });
+
+    const noList = (
+      reason: EmulatorDataReason,
+      source: AnsweringSource | null,
+    ): ReturnType<typeof playSectionUtils.extractCoreInfo> => ({
+      activeCoreLabel: null,
+      activeCoreIsDefault: true,
+      emulatorDataAvailable: false,
+      emulatorDataReason: reason,
+      emulatorSource: source,
+      emulators: [],
+      platformCoreLabel: null,
+      hasGameOverride: false,
+    });
+
+    it.each<[EmulatorDataReason, AnsweringSource | null]>([
+      ["switched_off", null],
+      ["no_source", null],
+      ["sealed", { kind: "emudeck", starts_games: false }],
+      ["catalogue_invalid", { kind: "retrodeck", starts_games: true }],
+      ["not_set_up", { kind: "retrodeck", starts_games: true }],
+      ["unavailable", { kind: "emudeck", starts_games: false }],
+    ])(
+      "keeps the core button where the emulator list is not established (%s), and its menu says why",
+      async (reason, source) => {
+        vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+          found: true,
+          rom_id: 42,
+          platform_slug: "snes",
+        });
+        vi.mocked(playSectionUtils.extractCoreInfo).mockReturnValue(noList(reason, source));
+        render(<RomMPlaySection appId={testAppId} />);
+        await flushAsync();
+
+        const items = await openCoreMenuAndGetItems(testAppId);
+
+        expect(items.map((item) => [item.props.children, item.props.disabled])).toEqual([
+          [emulatorDataReasonSentence(reason, source), true],
+        ]);
+      },
+    );
+
+    it("offers no core button for a missing file even where the emulator list is not established", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 42,
+        installed: true,
+        platform_slug: "snes",
+        file_missing_at: "/roms/snes/gone.sfc",
+      });
+      vi.mocked(playSectionUtils.extractCoreInfo).mockReturnValue(noList("switched_off", null));
       const { queryByTitle } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       expect(queryByTitle("Emulator Core")).toBeNull();

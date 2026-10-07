@@ -226,8 +226,8 @@ interface FirmwareFile extends FirmwareVerdict {
  * what that call says about it.
  *
  * The overview answers WHICH platforms the page can speak for; what each one's
- * BIOS state IS costs a live per-system reading (64-350 ms on the reference
- * machine), asked for one platform at a time through
+ * BIOS state IS costs a live per-system reading (59-175 ms on the reference
+ * machine at emu-atlas 0.22), asked for one platform at a time through
  * `get_platform_firmware_status`. So there is deliberately no level, no count
  * and no file list here: every field a surface could colour a dot or word a
  * sentence from belongs to the answer that did the reading, and one that leaked

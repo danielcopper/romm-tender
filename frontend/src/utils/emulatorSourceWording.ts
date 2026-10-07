@@ -71,6 +71,8 @@ function wordedFinding(kind: string, { code, data }: SourceHealthFinding): strin
   if (path === null) return null;
   const repair = kind === "retrodeck" ? RETRODECK_REPAIR : "";
   switch (code) {
+    case "not-set-up":
+      return `${name} is installed but has not been set up yet. Start ${name} once and finish its first-run setup.`;
     case "marker-missing":
       return `${name}: its settings file ${path} is missing.`;
     case "marker-unreadable":
@@ -115,9 +117,14 @@ export const SOURCES_READING = "Reading the emulator sources…";
 /** The settings section's line where its listing could not be read. */
 export const SOURCES_UNREAD = "Could not read the emulator sources. Reopen the page to try again.";
 
-/** The card's line, and Main's banner, for a source Tender cannot start games through. */
+/** The card's line for a source Tender cannot start games through, switched on or off. */
 export function cannotStartSentence(kind: string): string {
   return `Tender cannot start games through ${sourceName(kind)} yet.`;
+}
+
+/** Main's notice for a switched-on source Tender cannot start games through. */
+export function cannotStartNotice(kind: string): string {
+  return `${sourceName(kind)} is switched on in Settings → Emulator sources, but Tender cannot start games through it yet.`;
 }
 
 /** A source whose emulator list the resolver cannot read yet (EmuDeck's sealed catalogue). */
@@ -139,6 +146,9 @@ export function emulatorDataReasonSentence(reason: EmulatorDataReason | null, so
   }
   if (reason === "catalogue_invalid") {
     return `${sourceName(source.kind)}: ES-DE's systems file is broken, so its emulators are not established.`;
+  }
+  if (reason === "not_set_up") {
+    return `${sourceName(source.kind)} has not been set up yet, so its emulators are not established.`;
   }
   if (reason === "sealed") return sealedCatalogueSentence(source.kind);
   return `${sourceName(source.kind)}'s emulator list is not established.`;
@@ -175,30 +185,35 @@ export function sourceRowLines(source: EmulatorSource): SourceRowLine[] {
   ];
 }
 
-/** One banner on Main: its sentence, and a key no other banner of the same listing has. */
+/** One banner on Main: its sentence, a key no other banner of the same listing
+ *  has, and its tone — an "info" notice is drawn without the warning sign. */
 export interface SourceBanner {
   key: string;
   text: string;
+  tone: "warning" | "info";
 }
 
 /**
  * Main's banners about the emulator sources, in the sources' order: one where
- * none is detected, one per banner finding of a switched-on source (a
- * switched-off source's findings stay on its card), and one where the source
- * that answers is one Tender cannot start games through.
+ * none is detected, one per banner finding of a switched-on source, and one per
+ * switched-on source Tender cannot start games through, whether or not it is
+ * the one that answers. A switched-off source says either only on its card.
  */
 export function mainSourceBanners(listing: EmulatorSourcesListing): SourceBanner[] {
-  if (listing.sources.length === 0) return [{ key: "no-source", text: NO_SOURCE_BANNER }];
-  const findings = listing.sources
-    .filter((source) => source.enabled)
-    .flatMap((source) =>
-      source.findings
-        .map((finding, index) => ({ finding, key: `${source.kind}:${index}` }))
-        .filter(({ finding }) => findingIsBanner(finding))
-        .map(({ finding, key }) => ({ key, text: findingSentence(source.kind, finding) })),
-    );
-  const answering = listing.sources.find((source) => source.kind === listing.answering);
-  return answering && !answering.starts_games
-    ? [...findings, { key: `cannot-start:${answering.kind}`, text: cannotStartSentence(answering.kind) }]
-    : findings;
+  if (listing.sources.length === 0) return [{ key: "no-source", text: NO_SOURCE_BANNER, tone: "warning" }];
+  const switchedOn = listing.sources.filter((source) => source.enabled);
+  const findings = switchedOn.flatMap((source) =>
+    source.findings
+      .map((finding, index) => ({ finding, key: `${source.kind}:${index}` }))
+      .filter(({ finding }) => findingIsBanner(finding))
+      .map(({ finding, key }) => ({ key, text: findingSentence(source.kind, finding), tone: "warning" as const })),
+  );
+  const cannotStart = switchedOn
+    .filter((source) => !source.starts_games)
+    .map((source) => ({
+      key: `cannot-start:${source.kind}`,
+      text: cannotStartNotice(source.kind),
+      tone: "info" as const,
+    }));
+  return [...findings, ...cannotStart];
 }

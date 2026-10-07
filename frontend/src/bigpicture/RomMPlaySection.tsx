@@ -118,14 +118,15 @@ function resolveLastPlayed(restoredIso: string | null, steamUnixSeconds: number)
  *  status itself, so a bare notification costs one more round-trip per listener
  *  for an answer already in hand (#1758).
  *
- *  Both callers reach the dispatch after an await, and `isCancelled` cannot be
- *  what keeps this page's answer apart from its predecessor's. The reconnect
- *  caller is keyed on the appId alone, so a version switch never tears it down
- *  at all; and where a switch DOES re-run a caller, React commits that teardown
- *  only after the re-render, so an answer arriving before the commit still
- *  passes (#1717). What decides is the answer's own `rom_id` against the rom
- *  bound to this appId NOW — the same gate the store's fold applies, which is
- *  also why the id on the wire is the answer's rather than a captured one. */
+ *  Every caller reaches the dispatch after an await, and `isCancelled` cannot be
+ *  what keeps this page's answer apart from its predecessor's. The reconnect and
+ *  source-change callers are keyed on the appId alone, so a version switch never
+ *  tears them down at all; and where a switch DOES re-run a caller, React
+ *  commits that teardown only after the re-render, so an answer arriving before
+ *  the commit still passes (#1717). What decides is the answer's own `rom_id`
+ *  against the rom bound to this appId NOW — the same gate the store's fold
+ *  applies, which is also why the id on the wire is the answer's rather than a
+ *  captured one. */
 async function readAndBroadcastSaveStatus(appId: number, isCancelled: () => boolean): Promise<void> {
   try {
     const saveStatus = await refreshSaveStatus(appId);
@@ -398,6 +399,25 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     return () => {
       cancelled = true;
       unsubscribe();
+    };
+  }, [appId]);
+
+  // A switch or a move of an emulator source can change the save's shape, and
+  // with it the conflict verdict. The store reads the status again for its own
+  // fold, but the play button learns the verdict only from this section's
+  // notification, so the read the change issued is announced here as well.
+  useEffect(() => {
+    let cancelled = false;
+    const onDataChanged = (e: WindowEventMap["romm_data_changed"]) => {
+      if (e.detail.type !== "emulator_sources") return;
+      const { romId, saveSyncEnabled } = getGameDetail(appId);
+      if (!romId || !saveSyncEnabled) return;
+      detach(readAndBroadcastSaveStatus(appId, () => cancelled));
+    };
+    globalThis.addEventListener("romm_data_changed", onDataChanged);
+    return () => {
+      cancelled = true;
+      globalThis.removeEventListener("romm_data_changed", onDataChanged);
     };
   }, [appId]);
 
@@ -1086,9 +1106,10 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         <DialogButton className="romm-gear-btn" onClick={showRomMMenu} onFocus={scrollToTop} title="RomM Actions">
           <FaGamepad size={18} color="#553e98" />
         </DialogButton>
-        {/* Core selection button (only when multiple emulators to choose between,
-            and not for a download whose file is missing) */}
-        {detail.emulators.length > 1 && !fileMissing ? (
+        {/* Core selection button: where there are emulators to choose between,
+            and where the emulator list could not be established, whose menu
+            then says why. Never for a download whose file is missing. */}
+        {(detail.emulators.length > 1 || !detail.emulatorDataAvailable) && !fileMissing ? (
           <DialogButton
             key="core-btn"
             className="romm-gear-btn"

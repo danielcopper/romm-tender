@@ -42,8 +42,10 @@ from _vendor.atlas import (
     GRANULARITY_SHARED_CARD,
     GRANULARITY_SHARED_FILE,
     HEALTH_ISSUE_CATALOGUE_INVALID,
+    HEALTH_ISSUE_NOT_SET_UP,
     HEALTH_ISSUE_SAVES_ROOT_MISSING,
     ROLE_BATTERY,
+    ROLE_HIGH_SCORE,
     ROLE_NOTES,
     ROLE_SETTINGS,
     ROLE_UNKNOWN,
@@ -55,6 +57,7 @@ from _vendor.atlas import (
     Unresolved,
     detect,
 )
+from _vendor.atlas.installations import Health
 from _vendor.atlas.placement import (
     FILE_SET_DECLARED,
     FILE_SET_OBSERVED,
@@ -170,7 +173,7 @@ class _Catalogue:
 
 
 class _Installation:
-    """An installation that hands back one catalogue, recording how it was asked."""
+    """An installation that hands back one catalogue and its health, recording how it was asked."""
 
     def __init__(
         self,
@@ -179,12 +182,19 @@ class _Installation:
         raises: Exception | None = None,
         caveats: tuple[str, ...] = (),
         kind: str = "retrodeck",
+        health: tuple[str, ...] | Exception = (),
     ) -> None:
         self.kind = kind
         self._entries = entries
         self._raises = raises
         self._caveats = caveats
+        self._health = health
         self.asked: list[tuple[str, str | None]] = []
+
+    def health(self) -> Health:
+        if isinstance(self._health, Exception):
+            raise self._health
+        return Health(tuple(_caveat(code) for code in self._health))
 
     def emulators_for(self, system: str, *, content_path: str | None = None) -> Any:
         self.asked.append((system, content_path))
@@ -348,6 +358,27 @@ class TestTheTwoShapesAnAnswerReaches:
         assert UNESTABLISHED_NOTHING != UNESTABLISHED_DIRECTORY_KNOWN
 
 
+class TestAnArcadeSaveIsSyncedWhole:
+    """FinalBurn Neo's shape: the battery file, the EEPROM and the high-score table, each named after the game."""
+
+    def test_the_eeprom_and_the_high_scores_are_synced_beside_the_battery_file(self, traces):
+        answer = _ask(
+            _placement(
+                files=("sf2.fs", "sf2.nv", "sf2.hi"),
+                groups=(
+                    FileGroup(dir=_SAVES, files=("sf2.fs",), granularity="per-game-file", role=ROLE_BATTERY),
+                    FileGroup(dir=_SAVES, files=("sf2.nv",), granularity="per-game-file", role=ROLE_BATTERY),
+                    FileGroup(dir=_SAVES, files=("sf2.hi",), granularity="per-game-file", role=ROLE_HIGH_SCORE),
+                ),
+            ),
+            traces,
+            label="FinalBurn Neo",
+            emulator="FinalBurn Neo",
+        )
+
+        assert answer.synced_names == ("sf2.fs", "sf2.nv", "sf2.hi")
+
+
 class TestAConfigurationFileIsOfferedAndNeverSynced:
     """The Saturn ``.smpc`` case: visible on the answer, absent from the sync."""
 
@@ -441,6 +472,35 @@ class TestEveryWayTheQuestionCannotBePut:
     def test_detection_is_reported_both_ways(self, traces):
         assert _adapter(None, traces).installation_detected() is False
         assert _adapter(_Installation(()), traces).installation_detected() is True
+
+    def test_a_health_finding_other_than_not_set_up_is_still_detected(self, traces):
+        installation = _Installation((), health=(HEALTH_ISSUE_SAVES_ROOT_MISSING,))
+        assert _adapter(installation, traces).installation_detected() is True
+
+    def test_an_installation_that_is_not_set_up_is_not_detected(self, traces):
+        # It answers, and every answer refuses with its finding: nothing to ask yet.
+        installation = _Installation((), health=(HEALTH_ISSUE_NOT_SET_UP,))
+        assert _adapter(installation, traces).installation_detected() is False
+
+    def test_an_installation_whose_health_cannot_be_read_is_not_detected(self, traces):
+        installation = _Installation((), health=ValueError("invariant"))
+
+        assert _adapter(installation, traces).installation_detected() is False
+        assert any("resolver failed on health" in line for line in traces)
+
+    def test_a_retrodeck_that_is_not_set_up_is_not_detected_by_the_real_resolver(self, tmp_path, monkeypatch, traces):
+        # The deploy alone, with no marker, as before RetroDECK's first run.
+        monkeypatch.setattr(
+            "_vendor.atlas.installations._FLATPAK_DEPLOY_SYSTEM", str(tmp_path / "no_system_flatpak" / "app")
+        )
+        home = tmp_path / "home"
+        (home / ".local" / "share" / "flatpak" / "app" / "net.retrodeck.retrodeck" / "current" / "active").mkdir(
+            parents=True
+        )
+        sources = EmulatorSourcesAdapter(user_home=str(home), settings={}, log_debug=traces.append)
+
+        assert sources.read().answering_kind == "retrodeck"
+        assert AtlasSaveLocationAdapter(sources=sources, log_debug=traces.append).installation_detected() is False
 
     def test_the_catalogue_offers_no_entry_under_that_label(self, traces):
         answer = _ask(_placement(), traces, label="Beetle Saturn", emulator="mGBA")

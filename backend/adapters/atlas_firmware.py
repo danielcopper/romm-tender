@@ -45,10 +45,10 @@ would render as a green "nothing required" over a console that does not boot
 without an image. The same check is what settles a folder declaration, whose
 verdict is a file INSIDE the folder and can never be read off the folder's own
 presence. Its cost is bounded by the system's own scope rather than by the BIOS
-root: 64-318 ms per system on the reference machine, against 248 ms for one
-unverified whole-machine sweep. Nothing is cached in either — a firmware answer
-is about files on disk that the user is actively adding and removing, and a
-cached one would outlive the download that changed it.
+root: 59-173 ms per system on the reference machine at emu-atlas 0.22, against
+172 ms for one unverified whole-machine sweep. Nothing is cached in either — a
+firmware answer is about files on disk that the user is actively adding and
+removing, and a cached one would outlive the download that changed it.
 
 **One emulator is one identity, and a catalogue lists rows.** ES-DE declares one
 ``pcsx2_libretro.so`` under two labels, ``LRPS2`` and ``PCSX2``, so a per-system

@@ -467,6 +467,30 @@ describe("gameDetailStore", () => {
       });
     });
 
+    it("answers a caller whose read a read of another rom overtook with nothing", async () => {
+      const previousRom = deferred<SaveStatus>();
+      vi.mocked(backend.getSaveStatus).mockReturnValueOnce(previousRom.promise);
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
+      subscribe(nextAppId);
+      await flush();
+      const held = refreshSaveStatus(nextAppId);
+
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ rom_id: 43, save_sync_enabled: true }));
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(labelledStatus("new-version", { rom_id: 43 }));
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", {
+            detail: { type: "version_switched", app_id: nextAppId, rom_id: 43 },
+          }),
+        );
+        await Promise.resolve();
+      });
+      await flush();
+      previousRom.resolve(labelledStatus("old-version", { rom_id: 42 }));
+
+      await expect(held).resolves.toBeNull();
+    });
+
     it("leaves the shown display untouched when the backend refuses the read", async () => {
       subscribe(nextAppId);
       await flush();
@@ -921,6 +945,151 @@ describe("gameDetailStore", () => {
       await flush();
 
       expect(getGameDetail(nextAppId)).toMatchObject({ biosNeeded: false, biosRequiredMissing: false, biosLabel: "" });
+    });
+  });
+
+  describe("emulator_sources notifications", () => {
+    const dispatchSourcesChanged = () =>
+      globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
+
+    const switchedOff: CoreInfo = {
+      ...coreInfo,
+      active_core: null,
+      active_core_label: null,
+      emulators: [],
+      emulator_data_available: false,
+      emulator_data_reason: "switched_off",
+      emulator_source: null,
+    };
+
+    it("re-reads the emulators, the BIOS state and the save status of an open entry", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
+      subscribe(nextAppId);
+      await flush();
+      expect(getGameDetail(nextAppId)).toMatchObject({ activeCoreLabel: "Snes9x", emulatorDataAvailable: true });
+      vi.mocked(backend.getPlatformCoreInfo).mockClear();
+      vi.mocked(backend.getBiosStatus).mockClear();
+      vi.mocked(backend.getSaveStatus).mockClear();
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(switchedOff);
+      vi.mocked(backend.getBiosStatus).mockResolvedValue(biosMissing);
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(labelledStatus("After the switch"));
+
+      await act(async () => {
+        dispatchSourcesChanged();
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledWith(42);
+      expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledWith(42);
+      expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledWith(42);
+      expect(getGameDetail(nextAppId)).toMatchObject({
+        activeCoreLabel: null,
+        emulators: [],
+        emulatorDataAvailable: false,
+        emulatorDataReason: "switched_off",
+        emulatorSource: null,
+        biosRequiredMissing: true,
+        saveSyncLabel: "After the switch",
+      });
+    });
+
+    it("leaves the save status unread while save sync is off", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: false }));
+      subscribe(nextAppId);
+      await flush();
+      vi.mocked(backend.getSaveStatus).mockClear();
+
+      await act(async () => {
+        dispatchSourcesChanged();
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenLastCalledWith(42);
+      expect(vi.mocked(backend.getSaveStatus)).not.toHaveBeenCalled();
+    });
+
+    // The page-open core read is shared with the info panel; one still open when
+    // the sources change was asked before the change.
+    it("does not join a core read issued before the change", async () => {
+      const opening = deferred<CoreInfo>();
+      vi.mocked(backend.getPlatformCoreInfo).mockReturnValueOnce(opening.promise);
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found());
+      subscribe(nextAppId);
+      await flush();
+      expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledTimes(1);
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(switchedOff);
+
+      await act(async () => {
+        dispatchSourcesChanged();
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledTimes(2);
+      expect(getGameDetail(nextAppId)).toMatchObject({ emulatorDataAvailable: false });
+    });
+
+    // The page-open save read is shared with every surface's refresh; one still
+    // open when the sources change was asked about the save's previous shape.
+    it("does not join or fold a save-status read issued before the change", async () => {
+      const opening = deferred<SaveStatus>();
+      vi.mocked(backend.getSaveStatus).mockReturnValueOnce(opening.promise);
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
+      subscribe(nextAppId);
+      await flush();
+      expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledTimes(1);
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(labelledStatus("After the switch"));
+
+      await act(async () => {
+        dispatchSourcesChanged();
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledTimes(2);
+      expect(getGameDetail(nextAppId).saveSyncLabel).toBe("After the switch");
+
+      opening.resolve(labelledStatus("Before the switch"));
+      await flush();
+
+      expect(getGameDetail(nextAppId).saveSyncLabel).toBe("After the switch");
+    });
+
+    it("hands a caller arriving after the change the read the change issued", async () => {
+      const opening = deferred<SaveStatus>();
+      vi.mocked(backend.getSaveStatus).mockReturnValueOnce(opening.promise);
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
+      subscribe(nextAppId);
+      await flush();
+      const afterTheSwitch = deferred<SaveStatus>();
+      vi.mocked(backend.getSaveStatus).mockReturnValueOnce(afterTheSwitch.promise);
+      dispatchSourcesChanged();
+
+      const joined = refreshSaveStatus(nextAppId);
+      opening.resolve(labelledStatus("Before the switch"));
+      afterTheSwitch.resolve(labelledStatus("After the switch"));
+
+      await expect(joined).resolves.toMatchObject({ save_sync_display: { label: "After the switch" } });
+      expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledTimes(2);
+    });
+
+    it("answers a caller whose read the change overtook with the read the change issued", async () => {
+      const opening = deferred<SaveStatus>();
+      vi.mocked(backend.getSaveStatus).mockReturnValueOnce(opening.promise);
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
+      subscribe(nextAppId);
+      await flush();
+      const held = refreshSaveStatus(nextAppId);
+      const afterTheSwitch = deferred<SaveStatus>();
+      vi.mocked(backend.getSaveStatus).mockReturnValueOnce(afterTheSwitch.promise);
+      dispatchSourcesChanged();
+
+      opening.resolve(labelledStatus("Before the switch"));
+      afterTheSwitch.resolve(labelledStatus("After the switch"));
+
+      await expect(held).resolves.toMatchObject({ save_sync_display: { label: "After the switch" } });
     });
   });
 

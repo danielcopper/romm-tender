@@ -273,8 +273,9 @@ and the row you focus is the one the right-hand pane describes.
    emulator to choose between — also before the platform's first sync, so you can pick before its games reach Steam —
    and is greyed out otherwise, with the reason shown if you hover it. Where the reason is a problem rather than simply
    nothing to choose — no emulator for the platform, or an emulator list that could not be established (no emulator
-   source found, every source switched off, a broken ES-DE systems file, a list that cannot be read yet, or not
-   established for another reason) — a line under the header says so as well, since a tooltip needs a mouse
+   source found, every source switched off, a broken ES-DE systems file, a RetroDECK that has not been set up yet, a
+   list that cannot be read yet, or not established for another reason) — a line under the header says so as well, since
+   a tooltip needs a mouse
 7. **BIOS files** states how many required files are ready (e.g. "1 / 2 required") when the system needs any, and
    otherwise names the emulator and says it marks none of its BIOS files as required. Under that heading is the same
    sentence the game page shows, with your RomM library's own inventory behind it (e.g. "(3/5 RomM library files)").
@@ -728,8 +729,10 @@ only the download buttons are withdrawn.
 ### Per-Game (Game Detail Page)
 
 On the game detail page, a **CPU button** (microchip icon) appears between the RomM and Steam gear buttons when the
-game's platform offers more than one emulator. The menu lists the same emulators as the platform pane — RetroArch cores
-and **standalone emulators** — and shows the ones Tender can't launch from Steam as **disabled** with a short reason.
+game's platform offers more than one emulator. It is there too when Tender cannot get the emulator list, and its menu
+then says why — the same reasons the platform pane gives. The menu lists the same emulators as the platform pane —
+RetroArch cores and **standalone emulators** — and shows the ones Tender can't launch from Steam as **disabled** with a
+short reason.
 
 1. Open a game's detail page
 2. Tap the **CPU button** (microchip icon)

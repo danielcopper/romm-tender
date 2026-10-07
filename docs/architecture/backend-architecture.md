@@ -2299,10 +2299,10 @@ without reading bytes. A packaged rule card may identify its image by CONTENT, s
 still answering `declaration="packaged"` — DuckStation comes back with an empty requirement list and no system
 recording, which a reader that counts the list renders as a green "nothing required" over a console that does not boot
 without an image. And a folder declaration is satisfied by a file INSIDE the folder, which no stat can settle. Measured
-on the reference machine: 64–318 ms per system verified, against 248 ms for one unverified whole-machine sweep, because
-the per-system read sweeps that system's own scope rather than the whole BIOS root — it performs no unclaimed sweep at
-all. The overview therefore pays one reading per platform it renders; that is the cost of answering for a platform whose
-emulators are all standalone.
+on the reference machine at emu-atlas 0.22, the median of five runs each: 59–173 ms per system verified, against 172 ms
+for one unverified whole-machine sweep, because the per-system read sweeps that system's own scope rather than the whole
+BIOS root — it performs no unclaimed sweep at all. The overview therefore pays one reading per platform it renders; that
+is the cost of answering for a platform whose emulators are all standalone.
 
 **One emulator is one identity.** The resolver states it under `emulator`, in the spelling the launch command uses — a
 libretro entry's core file basename (`dolphin_libretro.so`), a standalone entry's own command name (`DUCKSTATION`,

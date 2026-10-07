@@ -30,6 +30,7 @@ from _vendor.atlas import (
     HEALTH_ISSUE_MARKER_INVALID,
     HEALTH_ISSUE_MARKER_MISSING,
     HEALTH_ISSUE_MARKER_UNREADABLE,
+    HEALTH_ISSUE_NOT_SET_UP,
     detect,
 )
 from _vendor.atlas.machine import RealMachine
@@ -55,11 +56,17 @@ if TYPE_CHECKING:
 
     from domain.emulator_sources import SourcesReading
 
-# While a source's settings file is missing, unreadable or damaged, the root
-# the resolver gives is its default (``~/retrodeck`` for RetroDECK), not where
-# the source lies, so it is not shown.
+# While a source's settings file is missing, unreadable or damaged, or not
+# written yet because the source has not been set up, the root the resolver
+# gives is its default (``~/retrodeck`` for RetroDECK), not where the source
+# lies, so it is not shown.
 _ROOT_IS_A_DEFAULT = frozenset(
-    {HEALTH_ISSUE_MARKER_MISSING, HEALTH_ISSUE_MARKER_UNREADABLE, HEALTH_ISSUE_MARKER_INVALID}
+    {
+        HEALTH_ISSUE_MARKER_MISSING,
+        HEALTH_ISSUE_MARKER_UNREADABLE,
+        HEALTH_ISSUE_MARKER_INVALID,
+        HEALTH_ISSUE_NOT_SET_UP,
+    }
 )
 
 

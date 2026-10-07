@@ -2,7 +2,7 @@
 
 What is under test is the adapter's own work: recovering the DECLARED order from
 an answer stated in effective order, classifying each entry through Tender's
-own bake kernel, telling the five catalogue refusals apart from a frontend that
+own bake kernel, telling the six catalogue refusals apart from a frontend that
 genuinely declares no emulator, and refusing to turn any failure into an empty
 list. The resolver's own decisions are upstream's and are not re-tested here.
 
@@ -26,6 +26,7 @@ from typing import Any, cast
 
 import pytest
 from _vendor.atlas import (
+    AVAILABILITY_UNESTABLISHED,
     CAVEAT_EMULATOR_CATALOGUE_EXCLUSIVE,
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_EMULATOR_CATALOGUE_UNAVAILABLE,
@@ -33,12 +34,14 @@ from _vendor.atlas import (
     CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
     CAVEAT_EMULATOR_LIST_DERIVED,
     HEALTH_ISSUE_CATALOGUE_INVALID,
+    HEALTH_ISSUE_NOT_SET_UP,
     HEALTH_ISSUE_ROOT_MISSING,
     KIND_LIBRETRO,
     KIND_STANDALONE,
 )
 from _vendor.atlas.esde import CatalogueKind, EmulatorSpec
 from _vendor.atlas.installations import CatalogueAnswer, EmulatorEntry, RomPlacement, SystemsAnswer
+from _vendor.atlas.launch import LaunchResolution
 from _vendor.atlas.placement import Caveat
 
 from adapters.atlas_catalogue import AtlasCatalogueAdapter
@@ -83,7 +86,8 @@ def _entry(
 
     The host an entry is bound to answers its identity and its placement
     questions; only the first is asked here, and the adapter reads the spec's
-    other fields directly.
+    other fields directly. Its launch answer is one the adapter does not read,
+    so it is left unestablished.
     """
     return EmulatorEntry(
         cast("Any", _Identifying(emulator)),
@@ -97,6 +101,8 @@ def _entry(
             declared_index=declared_index,
             selection=selection,
         ),
+        caveats=(),
+        launch=LaunchResolution(availability=AVAILABILITY_UNESTABLISHED),
     )
 
 
@@ -295,9 +301,9 @@ class TestDeclaredOrder:
 
 
 class TestCatalogueRefusals:
-    """Six ways to answer nothing, and only one is a statement about the machine.
+    """Seven ways to answer nothing, and only one is a statement about the machine.
 
-    Five refusal codes, plus the catalogue that was read and declares no emulator
+    Six refusal codes, plus the catalogue that was read and declares no emulator
     for this system.
     """
 
@@ -309,11 +315,16 @@ class TestCatalogueRefusals:
             CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
             CAVEAT_EMULATOR_CATALOGUE_SEALED,
             HEALTH_ISSUE_CATALOGUE_INVALID,
+            HEALTH_ISSUE_NOT_SET_UP,
         ],
     )
     def test_a_refusal_answers_unavailable(self, traces, code):
         installation = _Installation(catalogue=_answer(caveats=(_refusal(code),)))
-        reason = {CAVEAT_EMULATOR_CATALOGUE_SEALED: "sealed", HEALTH_ISSUE_CATALOGUE_INVALID: "catalogue_invalid"}
+        reason = {
+            CAVEAT_EMULATOR_CATALOGUE_SEALED: "sealed",
+            HEALTH_ISSUE_CATALOGUE_INVALID: "catalogue_invalid",
+            HEALTH_ISSUE_NOT_SET_UP: "not_set_up",
+        }
         assert _adapter(installation, traces).get_emulator_options("ps3") == {
             "available": False,
             "options": [],
@@ -751,12 +762,13 @@ _VALID_ES_SYSTEMS_XML = """\
 """
 
 
-def _seed_retrodeck(tmp_path, *, catalogue: str) -> str:
-    """Lay down a RetroDECK marker and a bundled catalogue; return the home."""
+def _seed_retrodeck(tmp_path, *, catalogue: str, set_up: bool = True) -> str:
+    """Lay down a RetroDECK deploy with a bundled catalogue, and its marker unless it is not set up; return the home."""
     home = tmp_path / "home"
-    marker = home / ".var" / "app" / "net.retrodeck.retrodeck" / "config" / "retrodeck" / "retrodeck.json"
-    marker.parent.mkdir(parents=True, exist_ok=True)
-    marker.write_text(json.dumps({"paths": {"rd_home_path": str(home / "retrodeck")}}), encoding="utf-8")
+    if set_up:
+        marker = home / ".var" / "app" / "net.retrodeck.retrodeck" / "config" / "retrodeck" / "retrodeck.json"
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(json.dumps({"paths": {"rd_home_path": str(home / "retrodeck")}}), encoding="utf-8")
 
     deploy = home / ".local" / "share" / "flatpak" / "app" / "net.retrodeck.retrodeck" / "current" / "active" / "files"
     bundled = deploy / _LINUX_SYSTEMS_SUFFIX
@@ -845,6 +857,22 @@ class TestTheRealResolverOverARealTree:
             "source": _RETRODECK,
         }
         assert adapter.is_known_system("gba") is False
+
+    def test_a_retrodeck_that_is_not_set_up_answers_not_set_up_and_never_an_empty_list(self, tmp_path, traces):
+        # Deployed with no marker: the resolver answers every question with its
+        # not-set-up finding and an empty enumeration, whatever the deploy ships.
+        home = _seed_retrodeck(tmp_path, catalogue=_VALID_ES_SYSTEMS_XML, set_up=False)
+        adapter = self._adapter(home, traces)
+
+        assert adapter.get_emulator_options("gba") == {
+            "available": False,
+            "options": [],
+            "reason": "not_set_up",
+            "source": _RETRODECK,
+        }
+        assert adapter.get_default_emulator("gba") is None
+        assert adapter.get_active_core("gba") == (None, None)
+        assert adapter.is_known_system("gba") is None
 
     def test_nothing_detected_answers_unavailable(self, tmp_path, traces):
         adapter = self._adapter(str(tmp_path / "empty-home"), traces)

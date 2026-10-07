@@ -122,12 +122,14 @@ def answering_source(sources: Sequence[ArrangedSource]) -> ArrangedSource | None
 
 # Why an emulator list could not be given: no source answers at all (the first
 # two), or the answering source's catalogue was refused — sealed (EmuDeck's,
-# which the resolver cannot read yet), a systems file ES-DE refuses to load, or
-# any other reason nobody could read one.
+# which the resolver cannot read yet), a systems file ES-DE refuses to load, a
+# RetroDECK that is installed but has not been set up yet, or any other reason
+# nobody could read one.
 NO_SOURCE_DETECTED = "no_source"
 ALL_SOURCES_SWITCHED_OFF = "switched_off"
 CATALOGUE_SEALED = "sealed"
 CATALOGUE_INVALID = "catalogue_invalid"
+CATALOGUE_NOT_SET_UP = "not_set_up"
 CATALOGUE_UNAVAILABLE = "unavailable"
 
 # What a source's catalogue is, as the settings row reports it: read, sealed,

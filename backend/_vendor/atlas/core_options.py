@@ -17,13 +17,15 @@ change it.
 
 from __future__ import annotations
 
+import functools
 import os
 from dataclasses import dataclass
 
+from ._question import once
 from .machine import Machine
 from .oddities import RetiredOption
 from .placement import Caveat
-from .retroarch_cfg import parse_cfg_text
+from .retroarch_cfg import parse_cfg_once
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,10 +145,13 @@ def core_options_value(
     )
 
     for path in candidates:
-        text = machine.read_text(path).text
+        # An options file is asked once per option a question needs, so it is
+        # read once per question too (atlas._question).
+        read = once(("read_text", id(machine), path), functools.partial(machine.read_text, path))
+        text = read.text
         if text is None:
             continue
-        parsed = parse_cfg_text(text)
+        parsed = parse_cfg_once(text).values
         retired_found = tuple(
             (option, parsed[option.key]) for option in retired if option.key in parsed
         )

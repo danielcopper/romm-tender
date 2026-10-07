@@ -933,9 +933,12 @@ open across a file operation or a resolver reading.
 none is recorded — subject to the first rule above. The `save_directories_recorded` marker in `kv_config` makes it
 one-time. It is written only once the pass has finished over a detected emulator installation with no ROM failing: a
 pass cut short, one that found no installation to ask, or one in which a ROM's recording failed (logged, and the pass
-goes on to the rest) runs again at the next start. A save-sort migration left pending by an older version cannot be
-followed: nothing records the directory its files are still in. Saves that were synced can be downloaded again at the
-game's next sync; a save that exists only on the device stays in the old folder.
+goes on to the rest) runs again at the next start. A RetroDECK that is installed but has not been set up yet is no
+installation to ask (`AtlasSaveLocationAdapter.installation_detected`): it answers every question with its `not-set-up`
+finding, which says nothing about where saves are, so neither this pass nor the re-record below acts on it. A save-sort
+migration left pending by an older version cannot be followed: nothing records the directory its files are still in.
+Saves that were synced can be downloaded again at the game's next sync; a save that exists only on the device stays in
+the old folder.
 
 ### Relationship to `retrodeck_path_migration`
 

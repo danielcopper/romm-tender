@@ -2212,9 +2212,9 @@ class FirmwareRequirement:
         The unverified cases are the load-bearing ones. Without hashing, "a
         file with the right name is there" is all atlas knows, and calling it
         satisfied would be an all-clear it did not earn. It is affordable to
-        say so: a verified single-core answer costs 0.03 s and the whole tree
-        0.8 s on the reference machine, so a caller who wants the green light
-        can ask for it.
+        ask for the other answer: the identity comparison runs only where the
+        caller asked for it, and it reads only the files this declaration puts
+        in question, so a caller who wants the green light can have it.
 
         A file whose identity the table does not cover stays ``True``: nothing
         further can ever be established about it, so withholding the answer
@@ -5180,9 +5180,8 @@ def _empty_answer_caveat(
     "Nothing is declared" needs **every** emulator in the answer to have been
     read, not merely one: an absence is a claim about all of them, and one
     readable core alongside five unreadable ones establishes nothing about
-    what those five want. The reference machine reads 206 of its 211 cores,
-    so the weaker reading would answer "nothing needed" over five unknowns on
-    every query it touches.
+    what those five want — the weaker reading would answer "nothing needed"
+    over every core that could not be read.
     """
     if not enumerated or not all(core.declaration == DECLARATION_READ for core in cores):
         return _declaration_unknown(subject, data)

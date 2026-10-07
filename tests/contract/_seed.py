@@ -372,6 +372,17 @@ def seed_es_systems(harness: ContractHarness, xml: str | None = None) -> None:
         f.write(xml if xml is not None else _DEFAULT_ES_SYSTEMS_XML)
 
 
+def seed_retrodeck_not_set_up(harness: ContractHarness) -> None:
+    """Deploy RetroDECK under the harness ``user_home`` with no ``retrodeck.json``, as before its first run.
+
+    The deploy carries the default catalogue, so what a test sees is that an
+    installation that has not been set up answers nothing from it, rather than
+    that there was nothing to read.
+    """
+    seed_es_systems(harness)
+    os.remove(_retrodeck_marker_path(harness))
+
+
 def seed_es_find_rules(harness: ContractHarness, xml: str) -> None:
     """Write ``es_find_rules.xml`` beside the seeded ``es_systems.xml``.
 

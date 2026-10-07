@@ -23,14 +23,21 @@ caller can tell "atlas did not read this" from "this is not set":
   line they sit on — an alias can make a key elsewhere mean something this
   reader never saw — so they refuse the whole file, not one key.
 - a **substitution cycle** refuses rather than looping.
+- a key **stated more than once** is read as its first statement, the way a
+  yaml-cpp lookup answers it (``node_data::get``'s ``std::find_if`` over the
+  pairs, include/yaml-cpp/node/detail/impl.h:118-138 at 2f86d137), and named
+  in :attr:`YamlScalars.repeated` so a caller whose program reads the file
+  differently can refuse rather than answer the wrong statement.
 
-One thing more is stated rather than read: a key written with **no value at
-all** is named in :attr:`YamlScalars.null`. Its text is the empty string and
-that is what it reads as here, but ``key:`` and ``key: ""`` are not the same
-line, and the program the file belongs to may make two different values of
-them — yaml-cpp's *string* conversion answers the first with the literal
-``null`` and the second with the empty string — so which one the file holds is
-a fact this reader keeps rather than one it collapses.
+One thing more is stated rather than read: a key whose value is a **null
+node** — the valueless spelling and the four words yaml-cpp folds with it (see
+:data:`_NULL_SPELLINGS`) — is named in :attr:`YamlScalars.null`. Its text is
+the empty string and that is what it reads as here, but ``key:`` and
+``key: ""`` are not the same line, and the program the file belongs to may
+make two different values of them — yaml-cpp's *string* conversion answers a
+null node with the literal ``null`` and an empty quoted scalar with the empty
+string, while its *bool* conversion throws for both — so which one the file
+holds is a fact this reader keeps rather than one it collapses.
 
 What this is not: a YAML parser. It does not build a tree, it does not type
 values (everything is the text as written), and it will refuse or skip a great
@@ -77,17 +84,32 @@ REFUSAL_CODES = (
 # file refuses instead of spinning.
 _MAX_SUBSTITUTION_DEPTH = 8
 
+# Every plain scalar yaml-cpp reads as a null node rather than as text: an
+# empty one, ``~``, ``null``, ``Null`` and ``NULL`` (IsNullString,
+# null.cpp:13-16, asked of every untagged plain scalar at
+# singledocparser.cpp:96-97 — the same lines at both commits the two emulators
+# build, Vita3K's external/yaml-cpp@2f86d137 and RPCS3's fork at 51a5d623).
+# The case is exact, so ``nUll`` is a scalar, and quoting makes a scalar of any
+# of them: ``"null"`` is the four letters it wraps. A trailing comment or
+# trailing whitespace leaves the spelling standing, which is why
+# :func:`_is_null_node` asks its question of the comment-stripped text — and a
+# value that is nothing *but* a comment is the empty spelling, which is the one
+# case where the comment is the whole of what follows the colon.
+_NULL_SPELLINGS = ("", "~", "null", "Null", "NULL")
+
 
 @dataclass(frozen=True, slots=True)
 class YamlScalars:
     """What the reader established, and what it deliberately did not.
 
-    Three statements about the top-level keys, and they answer three different
+    Four statements about the top-level keys, and they answer four different
     questions. ``values`` holds the scalars it read, substitutions resolved.
     ``skipped`` names the keys whose value was a construct this reader does not
     read — the caller decides whether that matters for the key it wants.
-    ``null`` names the keys stated with nothing after the colon and no block
-    under them, in the order the file states them.
+    ``null`` names the keys stated as a null node — the valueless spelling and
+    the four words yaml-cpp folds with it, :data:`_NULL_SPELLINGS`, with no
+    block under them — in the order the file states them. ``repeated`` names
+    the keys the file states more than once, once each and in that same order.
 
     A key in ``null`` is in ``values`` too, holding the empty string, and that
     is deliberate: what the *text* states there is nothing, which is what this
@@ -95,10 +117,18 @@ class YamlScalars:
     question reads exactly what it always read. The third statement is for the
     caller that must ask, because the program reading the file need not treat
     the two spellings alike — yaml-cpp's conversion to ``std::string`` answers
-    ``key:`` with the literal ``null`` where it answers ``key: ""`` with the
+    a null node with the literal ``null`` where it answers ``key: ""`` with the
     empty string, while its conversion to ``bool`` throws for both — and an
     answer built on ``values`` alone would state the one file's value of the
     other.
+
+    The first three statements all describe a repeated key's **first**
+    statement, because that is the one a yaml-cpp lookup answers with
+    (``node_data::get``'s ``std::find_if``, include/yaml-cpp/node/detail/impl.h:118-138
+    at 2f86d137); the later ones are not read. The fourth statement is what
+    lets a caller whose program reads the file another way — RPCS3 iterates
+    every pair and keeps the last it can decode — refuse instead of answering
+    a statement its emulator discards.
 
     ``refusal`` is set exactly when the whole file was refused, and then
     ``values`` is empty: a file carrying an alias may mean something different
@@ -108,6 +138,7 @@ class YamlScalars:
     values: Mapping[str, str] = field(default_factory=dict)
     skipped: tuple[str, ...] = ()
     null: tuple[str, ...] = ()
+    repeated: tuple[str, ...] = ()
     refusal: str | None = None
 
     def get(self, key: str) -> str | None:
@@ -184,6 +215,31 @@ def _scalar(raw: str) -> str:
     return _strip_comment(stripped).strip()
 
 
+def _is_null_node(value: str) -> bool:
+    """Is this value one of the plain scalars yaml-cpp folds into a null node?
+
+    *value* is the text after the colon, stripped. The question is asked of a
+    **plain** scalar only, the way the parser asks it: a quoted value is the
+    text it wraps, so ``"null"`` and ``'~'`` are scalars spelling those
+    characters and neither is this node. The comment comes off first, because
+    ``key: ~ # note`` states the node as surely as ``key: ~`` does.
+
+    A value that is *only* a comment is the empty spelling, and it is answered
+    here rather than by :func:`_strip_comment`, which needs whitespace before
+    the ``#`` and so reads ``key: #note`` as a value spelled ``#note``. A plain
+    scalar cannot open with ``#`` — after ``key: `` the character opens a
+    comment whatever follows it — so the whole line states nothing after the
+    colon, which yaml-cpp reads as a null node at both commits above. Asking it
+    here keeps every other value untouched: a quoted scalar is answered above,
+    and a bare one still loses only a comment that whitespace introduces.
+    """
+    if value[:1] in ("\"", "'"):
+        return False
+    if value.startswith("#"):
+        return True
+    return _strip_comment(value).strip() in _NULL_SPELLINGS
+
+
 def _is_skipping_value(value: str) -> bool:
     """Does this value open a construct the reader records instead of reading?
 
@@ -233,9 +289,21 @@ def _substitute(
     A token the file leaves empty or does not define at all falls to
     *fallbacks*, which is where the caller puts what the emulator itself would
     use — RPCS3 takes its config directory when ``$(EmulatorDir)`` is empty
-    (vfs_config.cpp:32-39). Without a fallback such a token is a refusal
-    rather than an empty string: the emulator would resolve it and atlas
-    cannot, so answering the unexpanded text would state a path nothing uses.
+    (get_emu_dir, system_utils.cpp:146-150, called at System.cpp:395 and passed
+    at :483 into vfs_config.cpp:50 at build 7c6b3dcd). Without a fallback such
+    a token is a refusal rather than an empty string: the emulator would
+    resolve it and atlas cannot, so answering the unexpanded text would state a
+    path nothing uses.
+
+    A token whose defining key the file states more than once resolves against
+    the first statement. That is this reader's own rule rather than an
+    emulator's: ``values`` holds first statements, and resolving against
+    anything else would make one read contradict itself. The one program that
+    writes such tokens does it differently — RPCS3 substitutes the
+    ``emulator_dir`` its iteration last decoded (``fmt::replace_all``,
+    vfs_config.cpp:50 over cfg::decode, Utilities/Config.cpp:477-505 at build
+    7c6b3dcd) — which is why the RPCS3 route refuses wherever that token is
+    stated more than once rather than answering what resolved here.
     """
     resolved: dict[str, str] = {}
     for key, value in values.items():
@@ -299,8 +367,8 @@ class _KeyLine:
     Exactly one of the three says what happened: ``refusal`` stops the whole
     file, ``skip`` records the key as stated-but-unread, and otherwise
     ``value`` is the scalar to keep. ``pending`` marks a key whose meaning the
-    following lines still decide — an empty value is a scalar until an
-    indented line turns it into a block.
+    following lines still decide — a null node is a value until an indented
+    line turns it into something this reader does not read.
     """
 
     key: str = ""
@@ -327,11 +395,19 @@ def _classify(line: str) -> _KeyLine:
         return _KeyLine(refusal=refusal)
     if _is_skipping_value(value):
         return _KeyLine(key=key, skip=True, pending=True)
-    if value == "":
-        # Nothing after the colon: a key stated with no value, or the head of a
-        # nested block — the lines that follow decide, so it is recorded as
-        # stated with none and stays pending. A quoted empty scalar does not
-        # come through here; it is a value, and ``_scalar`` below reads it.
+    if _is_null_node(value):
+        # A null node: nothing after the colon, or one of the words yaml-cpp
+        # folds with it. The text states no value either way, so the empty
+        # string is what it reads as, and the key stays pending because an
+        # indented line below still changes what the file states there. What it
+        # changes depends on the spelling, and no reading of it belongs to this
+        # reader: under the empty spelling the key heads a nested block, under a
+        # word the document does not even load (``~`` then ``  x: 1`` is an
+        # illegal map value at both commits above) or the two lines are one
+        # multi-line plain scalar (``~`` then ``  more`` reads as ``~ more``).
+        # Naming the key unread is the honest answer to all three. A quoted
+        # empty scalar does not come through here; it is a value, and
+        # ``_scalar`` below reads it.
         return _KeyLine(key=key, value="", pending=True)
     return _KeyLine(key=key, value=_scalar(raw_value))
 
@@ -368,21 +444,32 @@ def _first_document(text: str) -> tuple[tuple[str, ...], str | None]:
 
 def _absorb_indent(
     pending_key: str | None,
+    pending_repeat: bool,
     values: dict[str, str],
     skipped: list[str],
     null_keys: dict[str, None],
 ) -> bool:
     """Take an indented line into the key above it — ``False`` if there is none.
 
-    An indented line makes the key above it a nested block after all: it stops
-    being a scalar and becomes one this reader names as unread. Indentation
-    under no key at all is a file this reader cannot attribute lines from.
+    An indented line makes the key above it one this reader does not read —
+    the head of a nested block, or a line the emulator's own parser makes
+    something else of (see :func:`_classify`) — so it stops being a scalar and
+    is named as unread. Indentation under no key at all is a file this reader
+    cannot attribute lines from.
 
-    A block is a value, so the key stops being one stated with none: it leaves
-    ``null_keys`` here for the same reason it leaves ``values``.
+    What follows the colon is then no longer nothing, so the key stops being
+    one stated as a null node: it leaves ``null_keys`` here for the same reason
+    it leaves ``values``.
+
+    Unless the key above it was a *later* statement of a key already recorded,
+    which is what *pending_repeat* carries: the block is then swallowed and
+    nothing is written, because what this reader holds for that key is its
+    first statement and a second statement's block may not take it away.
     """
     if pending_key is None:
         return False
+    if pending_repeat:
+        return True
     if values.pop(pending_key, None) is not None:
         skipped.append(pending_key)
         null_keys.pop(pending_key, None)
@@ -394,28 +481,40 @@ def _absorb_key(
     values: dict[str, str],
     skipped: list[str],
     null_keys: dict[str, None],
-) -> str | None:
-    """Record one key line, and return the key the following lines still decide.
+    repeated: dict[str, None],
+) -> tuple[str | None, bool]:
+    """Record one key line — the pending key it leaves, and whether it repeats one.
 
     The twin of :func:`_absorb_indent`: that one takes a line into the key
     above it, this one takes the key itself. A pending key is one whose
-    meaning is not settled by its own line — an empty value is a scalar until
+    meaning is not settled by its own line — a null node is a value until
     something indented follows it.
 
-    ``null_keys`` is an ordered set carried as a mapping, so a key stated with
-    no value twice is named once. A key stated again *with* a value drops out
-    of it the way it is overwritten in ``values``: the two statements are the
-    reader's account of one key, and they may not contradict each other.
+    Only the **first** statement of a key is recorded, because that is the one
+    a yaml-cpp lookup answers with: a lookup on a const node reaches
+    ``node_data::get`` (``Node::operator[]``, include/yaml-cpp/node/impl.h:327-335)
+    and its ``std::find_if`` returns the first pair whose key equals the one
+    asked for (include/yaml-cpp/node/detail/impl.h:118-138 at 2f86d137), which
+    is the lookup Vita3K makes (``update_members`` takes the node by const
+    reference, config.cpp:41-44 at cb1f592c). A later
+    statement writes nothing at all and only names the key in *repeated*, an
+    ordered set carried as a mapping so a key stated three times is named
+    once. Whether a statement is the first is read off the record itself: a
+    recorded key sits in ``values`` or in ``skipped``, in exactly one of the
+    two, and ``null_keys`` only ever names a key ``values`` holds.
     """
-    if outcome.skip:
+    first = outcome.key not in values and outcome.key not in skipped
+    if not first:
+        repeated[outcome.key] = None
+    elif outcome.skip:
         skipped.append(outcome.key)
     else:
         values[outcome.key] = outcome.value or ""
         if outcome.pending:
             null_keys[outcome.key] = None
-        else:
-            null_keys.pop(outcome.key, None)
-    return outcome.key if outcome.pending else None
+    if not outcome.pending:
+        return None, False
+    return outcome.key, not first
 
 
 def read_scalars(text: str, *, fallbacks: Mapping[str, str] | None = None) -> YamlScalars:
@@ -431,17 +530,27 @@ def read_scalars(text: str, *, fallbacks: Mapping[str, str] | None = None) -> Ya
     values: dict[str, str] = {}
     skipped: list[str] = []
     null_keys: dict[str, None] = {}
+    repeated: dict[str, None] = {}
     pending_key: str | None = None
+    pending_repeat = False
     for raw_line in lines:
         if raw_line[:1].isspace():
-            if not _absorb_indent(pending_key, values, skipped, null_keys):
+            if not _absorb_indent(pending_key, pending_repeat, values, skipped, null_keys):
                 return YamlScalars(refusal=REFUSAL_NOT_A_FLAT_MAPPING)
             continue
         outcome = _classify(raw_line.rstrip())
         if outcome.refusal is not None:
+            # A later statement of a key already recorded refuses here too: an
+            # anchor, an alias or a tag changes meaning beyond its own line,
+            # so the first statement is not safe from it either.
             return YamlScalars(refusal=outcome.refusal)
-        pending_key = _absorb_key(outcome, values, skipped, null_keys)
+        pending_key, pending_repeat = _absorb_key(outcome, values, skipped, null_keys, repeated)
     resolved, refusal = _substitute(values, fallbacks or {})
     if refusal is not None:
         return YamlScalars(refusal=refusal)
-    return YamlScalars(values=resolved, skipped=tuple(skipped), null=tuple(null_keys))
+    return YamlScalars(
+        values=resolved,
+        skipped=tuple(skipped),
+        null=tuple(null_keys),
+        repeated=tuple(repeated),
+    )

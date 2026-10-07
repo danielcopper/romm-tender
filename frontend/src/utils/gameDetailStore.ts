@@ -162,6 +162,11 @@ interface Entry {
    *  see {@link scheduleFailedLoadRetry}. */
   timedRetryUsed: boolean;
   saveStatusInFlight: InFlightSaveStatus | null;
+  /** Bumped by every save-status read issued; only the newest read folds. */
+  saveStatusSeq: number;
+  /** The newest save-status read issued, kept after it settles: a read it
+   *  overtook answers with this one's answer rather than its own. */
+  newestSaveStatusRead: InFlightSaveStatus | null;
   detachListeners: () => void;
 }
 
@@ -210,6 +215,8 @@ function openEntry(appId: number): Entry {
     loadFailed: false,
     timedRetryUsed: false,
     saveStatusInFlight: null,
+    saveStatusSeq: 0,
+    newestSaveStatusRead: null,
     detachListeners: () => {},
   };
   _entries.set(appId, entry);
@@ -221,6 +228,7 @@ function openEntry(appId: number): Entry {
 function closeEntry(appId: number, entry: Entry): void {
   entry.generation++;
   entry.saveStatusInFlight = null;
+  entry.newestSaveStatusRead = null;
   entry.detachListeners();
   _entries.delete(appId);
 }
@@ -390,9 +398,15 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
  * the switch gets a fresh read rather than the answer to a question about
  * another game.
  *
+ * A read that a newer read of the same ROM overtook while it was open answers
+ * with the newer read's answer, never its own: the caller holds a promise taken
+ * before the change that issued the newer read, and its own answer may describe
+ * what that change replaced.
+ *
  * Resolves to `null` — leaving the shown display untouched — when the identity
- * is not resolved yet, or when the backend refuses the read (a prune-active
- * refusal is not a save-status answer). Rejects when the call itself fails, so
+ * is not resolved yet, when the backend refuses the read (a prune-active
+ * refusal is not a save-status answer), or when a read of another ROM overtook
+ * this one. Rejects when the call itself fails, so
  * each caller reports the failure in its own terms. Whether a ROM with save sync
  * switched off is worth reading at all is the caller's call, not this one's.
  */
@@ -403,9 +417,26 @@ export function refreshSaveStatus(appId: number): Promise<SaveStatus | null> {
   if (!romId) return Promise.resolve(null);
   const inFlight = entry.saveStatusInFlight;
   if (inFlight?.romId === romId) return inFlight.promise;
+  return issueSaveStatusRead(entry, romId);
+}
 
-  const request = readSaveStatus(entry, romId, entry.generation);
+/** Read this ROM's save status without joining a read already open, for a
+ *  caller that reads BECAUSE something changed: an open read was asked before
+ *  the change and may answer for the state it changed. Later callers join this
+ *  read instead, and the open one no longer folds: its callers get this read's
+ *  answer. */
+function rereadSaveStatus(appId: number): Promise<SaveStatus | null> {
+  const entry = _entries.get(appId);
+  const romId = entry?.state.romId;
+  if (!entry || !romId) return Promise.resolve(null);
+  return issueSaveStatusRead(entry, romId);
+}
+
+function issueSaveStatusRead(entry: Entry, romId: number): Promise<SaveStatus | null> {
+  entry.saveStatusSeq++;
+  const request = readSaveStatus(entry, romId, entry.generation, entry.saveStatusSeq);
   entry.saveStatusInFlight = { romId, promise: request };
+  entry.newestSaveStatusRead = { romId, promise: request };
   // Free the slot once this request settles, whichever way it settles. Both
   // arms of `then` are the same bookkeeping, and giving it a rejection arm is
   // what keeps this branch from surfacing as an unhandled rejection — the
@@ -420,8 +451,17 @@ export function refreshSaveStatus(appId: number): Promise<SaveStatus | null> {
 /** The read itself, as an async function so a synchronous throw comes back as a
  *  rejection like every other failure — a caller that gets a promise must not
  *  also have to guard the call. */
-async function readSaveStatus(entry: Entry, romId: number, generation: number): Promise<SaveStatus | null> {
+async function readSaveStatus(
+  entry: Entry,
+  romId: number,
+  generation: number,
+  seq: number,
+): Promise<SaveStatus | null> {
   const result = await getSaveStatus(romId);
+  if (seq !== entry.saveStatusSeq) {
+    const newest = entry.newestSaveStatusRead;
+    return newest?.romId === romId ? newest.promise : null;
+  }
   if (isEndpointFailure(result)) {
     detach(debugLog(`gameDetailStore: save status refused: ${result.message}`));
     return null;
@@ -616,6 +656,19 @@ async function handleCoreChange(entry: Entry): Promise<void> {
   }));
 }
 
+/** A switch or a move of an emulator source can change which source answers for
+ *  this game, and with it the emulators, the BIOS requirement and the save's
+ *  shape. Read directly rather than by re-running the load: the load's core and
+ *  BIOS reads are shared (`api/sharedReads.ts`), and one issued before the
+ *  change would hand back the answer it changed — the save status for the same
+ *  reason does not join an open read. */
+async function handleEmulatorSourcesChange(appId: number, entry: Entry): Promise<void> {
+  await Promise.all([
+    handleCoreChange(entry),
+    entry.state.saveSyncEnabled ? rereadSaveStatus(appId).catch(() => null) : null,
+  ]);
+}
+
 /** How long a failed load waits before its one retry. Tender's own
  *  backend-readiness ladders — `RETRY_DELAYS` in index.tsx (#1203) and
  *  `CONNECTION_RETRY_DELAYS` in utils/connectionProbe.ts (#1045) — both go 2000,
@@ -698,6 +751,9 @@ function attachListeners(appId: number, entry: Entry): () => void {
               break;
             case "core_changed":
               await handleCoreChange(entry);
+              break;
+            case "emulator_sources":
+              await handleEmulatorSourcesChange(appId, entry);
               break;
             case "save_sync":
               await handleSaveSyncChange(appId, entry, detail);

@@ -53,6 +53,7 @@ from _vendor.atlas import (
     CAVEAT_EMULATOR_CATALOGUE_UNESTABLISHED,
     CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
     HEALTH_ISSUE_CATALOGUE_INVALID,
+    HEALTH_ISSUE_NOT_SET_UP,
     KIND_LIBRETRO,
 )
 
@@ -64,7 +65,12 @@ from domain.emulator_commands import (
     option_to_invocation,
     select_default_option,
 )
-from domain.emulator_sources import CATALOGUE_INVALID, CATALOGUE_SEALED, CATALOGUE_UNAVAILABLE
+from domain.emulator_sources import (
+    CATALOGUE_INVALID,
+    CATALOGUE_NOT_SET_UP,
+    CATALOGUE_SEALED,
+    CATALOGUE_UNAVAILABLE,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -94,6 +100,13 @@ if TYPE_CHECKING:
 # word for a state a single edit fixes. It is also what the deleted parser
 # answered: an unparsable file and a wrong root tag both yielded "unavailable".
 #
+# ``not-set-up`` is a RetroDECK the resolver found by its Flatpak deploy with no
+# ``retrodeck.json``: it has not been started for this home, or its first-run
+# setup stopped before the end. The resolver answers every question about it
+# with that finding and an empty enumeration, which says nothing about the
+# emulators it will offer once set up — read as a list, it would be "knows no
+# emulator" and the same positive False from ``is_known_system``.
+#
 # ``emulator-catalogue-exclusive`` is deliberately NOT here: it says a custom
 # es_systems.xml declared itself the whole catalogue, so the answer is COMPLETE
 # and merely small.
@@ -104,6 +117,7 @@ _CATALOGUE_REFUSALS = frozenset(
         CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
         CAVEAT_EMULATOR_CATALOGUE_SEALED,
         HEALTH_ISSUE_CATALOGUE_INVALID,
+        HEALTH_ISSUE_NOT_SET_UP,
     }
 )
 
@@ -130,6 +144,8 @@ def _source_payload(reading: SourcesReading) -> dict[str, Any] | None:
 def _refusal_reason(answer: Any) -> str:
     """Which refusal a refused catalogue answer is, as the page words it."""
     codes = set(_caveat_codes(answer))
+    if HEALTH_ISSUE_NOT_SET_UP in codes:
+        return CATALOGUE_NOT_SET_UP
     if HEALTH_ISSUE_CATALOGUE_INVALID in codes:
         return CATALOGUE_INVALID
     if CAVEAT_EMULATOR_CATALOGUE_SEALED in codes:
@@ -157,7 +173,8 @@ def catalogue_refused(answer: Any) -> bool:
     """Whether the answer carries one of the catalogue refusals (:data:`_CATALOGUE_REFUSALS`).
 
     That is, no catalogue could be read, or what was read cannot be taken as the
-    whole list: a sealed one, or a systems file ES-DE refuses to load. Public for
+    whole list: a sealed one, a systems file ES-DE refuses to load, or the empty
+    answer of an installation that has not been set up. Public for
     :mod:`adapters.atlas_saves` and :mod:`adapters.emulator_sources`, which decline
     on the same codes: entries beside a refusal (EmuDeck's overlay beside
     ``emulator-catalogue-sealed``) are an incomplete list, and an incomplete
@@ -276,13 +293,13 @@ class AtlasCatalogueAdapter:
 
         Returns ``{"available", "options", "reason", "source"}``. ``available``
         is ``False`` when no source answers, when the answer carries one of the
-        five catalogue refusals, or when the resolver could not be asked at all —
+        six catalogue refusals, or when the resolver could not be asked at all —
         the caller surfaces that as "emulator list unavailable" rather than
         seeing an empty list it cannot distinguish from a system the frontend
         knows no emulator for. ``reason`` says which, and is ``None`` where the
         list is available: ``no_source`` / ``switched_off`` where no source
-        answers, ``catalogue_invalid`` / ``sealed`` / ``unavailable`` for a
-        refusal. ``source`` is the answering source's ``{"kind",
+        answers, ``not_set_up`` / ``catalogue_invalid`` / ``sealed`` /
+        ``unavailable`` for a refusal. ``source`` is the answering source's ``{"kind",
         "starts_games"}``, ``None`` where none answers.
 
         ``options`` is in DECLARED order, so the first bakeable entry is the
