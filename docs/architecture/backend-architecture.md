@@ -486,7 +486,7 @@ and collection units alike. Apply returns before it classifies such a unit, so i
 never records their launch commands. A built launch command there that differs from the recorded one, a `NULL` recorded
 value included, is therefore counted unchanged: counted as changed, it would show the same updated games on every
 preview until a change on the server or a Force Full Sync ended the skip. An identity difference on such an entry still
-counts as changed. Steam's copy of those commands is kept current by the launch-options reconcile instead
+counts as changed. Steam's copy of an installed game's command is kept current by the launch-options reconcile instead
 ([StartupHealingService notes](#startuphealingservice-notes)). The summary's `changed_count`, `unchanged_count`,
 `changed_names` and `platform_breakdown`, and the `pause_likely` prognosis, all come from that one classification.
 

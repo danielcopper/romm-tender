@@ -58,11 +58,12 @@ def classify_roms(
     apply skip a content-correct shortcut rather than re-touching it: an identity
     match with a launch-options match is genuinely unchanged, while an
     install/uninstall (or core/disc pin change) that leaves identity untouched
-    still flips the item to "changed". A NULL recorded value (``None`` — a
-    pre-migration-015 row, or a freshly created row not yet recorded) never
-    matches a target string, so such a row is always "changed" and re-applied
-    once; the writer sites then record the value and the next sync skips it. No
-    skip is ever taken on unknown recorded state — no data is invented.
+    still flips the item to "changed". Outside *skipped_rom_ids*, no skip is
+    ever taken on unknown recorded state — no data is invented: a NULL recorded
+    value (``None`` — a pre-migration-015 row, or a freshly created row not yet
+    recorded) never matches a target string, so such a row is always "changed"
+    and re-applied once; the writer sites then record the value and the next
+    sync skips it.
 
     *skipped_rom_ids* are the ROMs the preview took from a unit the fetcher
     reported as skipped. Apply returns before it classifies such a unit, so it
@@ -70,9 +71,9 @@ def classify_roms(
     launch command that differs from the recorded one there — NULL included —
     is no change the apply would make, and counting it would show the same
     phantom "changed" on every preview. Such an entry is "changed" only for an
-    identity difference; Steam's copy of its command is kept current by the
-    launch-options reconcile instead. The apply path classifies only units it
-    fetched and passes none.
+    identity difference; Steam's copy of an installed game's command is kept
+    current by the launch-options reconcile instead. The apply path classifies
+    only units it fetched and passes none.
 
     ``platform_name`` is deliberately excluded from the changed comparison:
     it is a derived display field, never persisted on the ``roms`` row. The
