@@ -611,10 +611,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **No file-I/O seam is called while a UoW is open — a Unit of Work wraps database reads and writes, never file or
   server I/O** — check — `scripts/check_uow_seam_nesting.py`, second seam family (`IO_SEAM_METHODS`, which carries each
   `__call__`-only seam's bound attribute); one `# pragma: no uow-check` suppresses the line for both families.
-  Unchecked: a seam that list does not name — `SteamConfigStore.grid_dir()` and `check_retroarch_input_driver()` today —
-  or whose implementation later grows a file read; a seam passed as a bound method (how `read_shortcut_exes` is
-  reached), behind a helper or a local alias, or inside a nested `def`/`lambda`; a UoW opened through a factory
-  attribute not ending in `uow_factory`
+  Unchecked: a seam that list does not name — `SteamConfigStore.grid_dir()` today — or whose implementation later grows
+  a file read; a seam passed as a bound method (how `read_shortcut_exes` is reached), behind a helper or a local alias,
+  or inside a nested `def`/`lambda`; a UoW opened through a factory attribute not ending in `uow_factory`
 - **A shell function whose value is taken with `$(...)` never reaches `exit` — it answers, and its caller aborts** —
   check — `scripts/check_shell_answer_functions.py` over `install.sh`, `scripts/package.sh`, `bin/tender-rom-launcher`
   and every `*.sh` under `scripts/` and `bin/`; its blind spots are listed in its docstring

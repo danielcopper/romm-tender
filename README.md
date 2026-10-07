@@ -61,8 +61,6 @@ _Named after the railway car behind a steam locomotive, or the boat that shuttle
 - **Emulator cores** — Set the core per system, or override it for a single game
 - **Steam Input** — Pick a Steam Input mode (Default / Force On / Force Off) and apply it to every shortcut the plugin
   created
-- **RetroArch input fix** — Spots the `input_driver` value that breaks controller navigation in RetroArch's menus and
-  repairs it in one tap
 - **Follows RetroDECK moves** — Moved RetroDECK to another drive? The ROMs, BIOS files and saves the plugin manages are
   relocated and your shortcuts repointed — nothing needs re-downloading
 - **Cleanup tools** — Remove shortcuts per platform or all at once, uninstall ROMs, and clear orphaned grid images
