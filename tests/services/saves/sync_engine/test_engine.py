@@ -66,10 +66,12 @@ _MIGRATION_MESSAGE = _CONFLICT_REFUSAL_MESSAGES["blocked_by_migration"]
 def _corrupt_zip_bytes() -> bytes:
     """Bytes that ``zipfile.is_zipfile`` accepts but ``ZipFile`` cannot open.
 
-    A real two-member zip with its central-directory signature clobbered — the
-    #1470 poison: an intact End-Of-Central-Directory record makes it sniff as a
-    zip, but reading it raises ``BadZipFile``, the failure that used to escape
-    the sweep and abort every remaining ROM.
+    A real two-member zip with its SECOND central-directory entry's signature
+    clobbered — the #1470 poison: the End-Of-Central-Directory record and the
+    first entry are intact, so it sniffs as a zip on every supported Python
+    (what the sniff reads: the comment on ``_ZIP_READ_ERRORS`` in
+    ``adapters/save_file.py``), but reading it raises ``BadZipFile``, the failure
+    that used to escape the sweep and abort every remaining ROM.
     """
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as zf:
@@ -77,7 +79,8 @@ def _corrupt_zip_bytes() -> bytes:
         zf.writestr("rtc.bin", b"rtc-bytes")
     data = bytearray(buf.getvalue())
     cd_offset = struct.unpack("<I", data[-22:][16:20])[0]  # EOCD → central-dir offset
-    data[cd_offset : cd_offset + 4] = b"\x00\x00\x00\x00"  # kill the PK\x01\x02 magic
+    second = data.find(b"PK\x01\x02", cd_offset + 4)
+    data[second : second + 4] = b"\x00\x00\x00\x00"  # kill the second entry's PK\x01\x02 magic
     return bytes(data)
 
 
@@ -203,7 +206,9 @@ class TestSyncAllSaves:
         )
         _create_save(tmp_path, system="gba", rom_name="game1", content=b"good-save")
         # ROM 2's save is the poison: it sniffs as a zip but cannot be read as one.
-        _create_save(tmp_path, system="snes", rom_name="game2", content=_corrupt_zip_bytes())
+        poison = _corrupt_zip_bytes()
+        assert zipfile.is_zipfile(io.BytesIO(poison)), "a poison that does not sniff as a zip skips the fallback"
+        _create_save(tmp_path, system="snes", rom_name="game2", content=poison)
 
         result = await svc.sync_all_saves()
         assert isinstance(result, dict)
