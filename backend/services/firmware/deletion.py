@@ -114,7 +114,7 @@ class PlatformBiosDeleter:
         over an absence.
 
         Raises RetroDECK's folder refusal while it reports that its folders are
-        defaults: then nothing is removed in them, whatever a record says.
+        defaults, or where a question about them failed: then nothing is removed in them, whatever a record says.
         """
         refused = self._retrodeck_folders.bios_folder()
         if isinstance(refused, FolderRefused):

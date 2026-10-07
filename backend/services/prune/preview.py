@@ -85,7 +85,8 @@ class PreviewBuilder:
         """Measured bytes of a row's installed content, or why they could not be read.
 
         Nothing is measured where RetroDECK names no ROM root to measure inside,
-        or reports that its roots are defaults; a start refuses the latter.
+        or its roots are defaults or could not be established; a start refuses
+        the latter two.
         """
         if install is None or roms_root is None:
             return None, None

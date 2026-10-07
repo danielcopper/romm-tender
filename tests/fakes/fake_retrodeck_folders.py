@@ -16,8 +16,9 @@ class FakeRetroDeckFolders:
     ``system_dirs`` names it, and an empty entry there is a system RetroDECK
     names no folder for — as is a name that is no single path component.
 
-    ``refusal`` stands for RetroDECK reporting that its folders are defaults:
-    every question answers it (a ``FindingRefused``). ``download_refusal``
+    ``refusal`` stands for RetroDECK's folders refused as a whole — reported
+    as defaults, or a question about them raised: every question answers it
+    (an ``EveryFolderRefused``). ``download_refusal``
     stands for RetroDECK being absent or switched off, which only a download
     asks about. ``rom_root`` answers the uninstall's refusal where ``roms`` is
     empty.

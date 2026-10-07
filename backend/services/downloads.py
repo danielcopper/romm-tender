@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from domain.disc_formats import DISC_IMAGE_EXTENSIONS
 from domain.disk_space import disk_space_verdict
 from domain.download_frames import cancelled_frame, failed_frame
-from domain.retrodeck_folders import FindingRefused, FolderRefused
+from domain.retrodeck_folders import EveryFolderRefused, FolderRefused
 from domain.rom_files import (
     TMP_EXT,
     ZIP_TMP_EXT,
@@ -523,7 +523,7 @@ class DownloadService:
         # The removal's bound, which no switch changes: a download that started
         # still extracts after RetroDECK is switched off.
         roms_base = self._retrodeck_folders.rom_root()
-        if isinstance(roms_base, FindingRefused):
+        if isinstance(roms_base, EveryFolderRefused):
             raise roms_base
         if isinstance(roms_base, FolderRefused):
             raise ValueError(f"No ROM root to extract {extract_dir} inside: {roms_base.message}")

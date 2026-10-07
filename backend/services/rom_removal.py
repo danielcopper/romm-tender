@@ -114,8 +114,8 @@ class RomRemovalService:
         """RetroDECK's ROM root every removal is bounded by.
 
         Raises the refusal where there is none to name — RetroDECK not detected,
-        naming no ROM folder, or reporting that its folders are defaults — so a
-        removal never runs against a guessed bound.
+        naming no ROM folder, reporting that its folders are defaults, or failing
+        to answer — so a removal never runs against a guessed bound.
         """
         root = self._retrodeck_folders.rom_root()
         if isinstance(root, FolderRefused):

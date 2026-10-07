@@ -15,10 +15,11 @@ import os
 from pathlib import Path
 
 import pytest
+from _vendor.atlas.installations import RetroDeck
 
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from adapters.retrodeck_folders import RetroDeckFoldersAdapter
-from domain.retrodeck_folders import FindingRefused, FolderRefused, MoveRoots
+from domain.retrodeck_folders import EveryFolderRefused, FindingRefused, FolderRefused, MoveRoots
 
 _MARKER = Path(".var") / "app" / "net.retrodeck.retrodeck" / "config" / "retrodeck" / "retrodeck.json"
 _ES_SETTINGS = Path(".var") / "app" / "net.retrodeck.retrodeck" / "config" / "ES-DE" / "settings" / "es_settings.xml"
@@ -216,7 +217,7 @@ class TestADownloadNeedsRetroDeck:
         assert refused.message == "RetroDECK names no ROM folder for ../../etc, so Tender cannot download this game."
 
     def test_while_retrodeck_s_own_folder_is_missing_a_download_is_refused_for_that_finding(self, tree, tmp_path):
-        # A card that is out: nothing is created where it belongs.
+        # An SD card that is out: nothing is created where it belongs.
         tree.deploy()
         tree.marker({"rd_home_path": str(tmp_path / "card" / "retrodeck")})
         tree.rom_directory(tmp_path / "card" / "retrodeck" / "roms")
@@ -333,6 +334,50 @@ class TestWhileRetroDecksFoldersAreDefaults:
             assert answer.reason == "retrodeck_finding"
             assert answer.details["finding"]["code"] == code
         assert adapter.move_roots() is None
+
+
+_UNANSWERED = "RetroDECK's folders could not be established, so Tender downloads into and removes from none of them."
+_FOLDER_QUESTIONS = ("download_folder", "bios_download_folder", "rom_root", "bios_folder", "saves_root")
+
+
+def _raises(*_args: object) -> None:
+    raise RuntimeError("the resolver failed")
+
+
+def _answer(adapter: RetroDeckFoldersAdapter, question: str) -> object:
+    return adapter.download_folder("gba") if question == "download_folder" else getattr(adapter, question)()
+
+
+class TestWhereAQuestionToTheResolverRaises:
+    """A raise establishes nothing, so the answer it ended refuses every press that needs it — never "not installed"."""
+
+    @pytest.mark.parametrize(
+        ("raising", "refused", "move_seen"),
+        [
+            ("health", _FOLDER_QUESTIONS, False),
+            ("rom_location", ("download_folder",), True),
+            ("roms_dir", ("download_folder", "rom_root"), True),
+            ("bios_dir", ("bios_download_folder", "bios_folder"), False),
+            ("root", ("bios_download_folder",), False),
+            ("saves_root", ("saves_root",), False),
+        ],
+    )
+    def test_the_answer_it_ended_is_that_retrodeck_s_folders_could_not_be_established(
+        self, tree, tmp_path, monkeypatch, raising, refused, move_seen
+    ):
+        tree.set_up(tmp_path / "retrodeck")
+        adapter = tree.adapter()
+        monkeypatch.setattr(RetroDeck, raising, _raises)
+
+        for question in _FOLDER_QUESTIONS:
+            answer = _answer(adapter, question)
+            if question in refused:
+                assert isinstance(answer, EveryFolderRefused), question
+                assert answer.reason == "retrodeck_unanswered", question
+                assert answer.message == _UNANSWERED, question
+            else:
+                assert isinstance(answer, str), question
+        assert (adapter.move_roots() is not None) is move_seen
 
 
 _BACKEND = Path(__file__).resolve().parents[2] / "backend"

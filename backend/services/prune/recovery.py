@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.prune import recovery_bundle_id
-from domain.retrodeck_folders import FindingRefused, FolderRefused
+from domain.retrodeck_folders import EveryFolderRefused, FolderRefused
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -164,7 +164,7 @@ class RecoveryCoordinator:
         artifacts: list[RecoveryArtifact] = list(save_inventory["artifacts"])
         artifacts.extend(self._prune_artifacts.recovery_artifacts(sorted(delete_ids)))
         roms_root = self._retrodeck_folders.rom_root()
-        if isinstance(roms_root, FindingRefused):
+        if isinstance(roms_root, EveryFolderRefused):
             raise roms_root
         raw_installs = snapshot.get("installs")
         installs = raw_installs if isinstance(raw_installs, list) else []

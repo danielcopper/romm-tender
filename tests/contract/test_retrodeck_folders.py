@@ -4,7 +4,8 @@ Driven through the real endpoints and the real ``RetroDeckFoldersAdapter`` over 
 RetroDECK laid down under the harness home — marker, ES-DE's ROM folder setting,
 deploy. The four findings that make RetroDECK's folders defaults are each
 produced the way the resolver meets them, and under every one a press that would
-download, delete or clean up there is refused and leaves the folders as they were.
+download, delete or clean up there is refused and leaves the folders as they were
+— as it is where asking the resolver about RetroDECK's health raised.
 """
 
 from __future__ import annotations
@@ -12,14 +13,18 @@ from __future__ import annotations
 import json
 import os
 import shutil
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
+from _vendor.atlas.installations import RetroDeck
 
 from domain.bios_file import BiosFile
 from domain.rom_install import RomInstall
 
 from ._seed import _retrodeck_marker_path, seed_es_systems, seed_install, seed_retrodeck_not_set_up, seed_rom
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 _ROM_ID = 7
 
@@ -72,10 +77,11 @@ def _assert_refused_for(result: dict[str, Any], code: str) -> None:
     assert result["finding"]["code"] == code
 
 
-@pytest.mark.parametrize(("code", "make"), _FINDINGS)
-async def test_under_the_finding_nothing_is_downloaded_deleted_or_cleaned_up_there(harness, code, make):
-    # What would be touched lies where the resolver's defaults point, so a
-    # refusal here is the rule's, not a missing folder's.
+def _seed_what_a_press_would_touch(harness) -> list[str]:
+    """An installed game, a leftover partial download, a BIOS file and its leftover, and a game and BIOS to download.
+
+    Answers the paths of what lies on disk, which a refused press must leave.
+    """
     installed = _write(seed_install(harness, _ROM_ID))
     leftover = _write(os.path.join(harness.roms_root, "gba", "half.gba.tmp"))
     bios = _write(os.path.join(harness.retrodeck_home, "bios", "dc", "dc_boot.bin"))
@@ -102,26 +108,87 @@ async def test_under_the_finding_nothing_is_downloaded_deleted_or_cleaned_up_the
     harness.romm.firmware_files = [
         {"id": 1, "file_name": "dc_boot.bin", "file_path": "bios/dc/dc_boot.bin", "file_size_bytes": 1, "md5_hash": ""}
     ]
+    return [installed, leftover, bios, bios_leftover]
+
+
+_PRESSES: dict[str, Callable[[Any], Awaitable[dict[str, Any]]]] = {
+    "start_download": lambda harness: harness.endpoints.start_download(8),
+    "adopt_existing_rom": lambda harness: harness.endpoints.adopt_existing_rom(8, None, None),
+    "download_platform_firmware_file": lambda harness: harness.endpoints.download_platform_firmware_file(
+        "dc", "dc_boot.bin"
+    ),
+    "download_all_firmware": lambda harness: harness.endpoints.download_all_firmware("dc"),
+    "remove_rom": lambda harness: harness.endpoints.remove_rom(_ROM_ID),
+    "uninstall_all_roms": lambda harness: harness.endpoints.uninstall_all_roms(),
+    "delete_platform_bios": lambda harness: harness.endpoints.delete_platform_bios("dc"),
+    "start_prune": lambda harness: harness.endpoints.start_prune({"confirmed": True}),
+}
+
+
+@pytest.mark.parametrize(("code", "make"), _FINDINGS)
+async def test_under_the_finding_nothing_is_downloaded_deleted_or_cleaned_up_there(harness, code, make):
+    # What would be touched lies where the resolver's defaults point, so a
+    # refusal here is the rule's, not a missing folder's.
+    on_disk = _seed_what_a_press_would_touch(harness)
     make(harness)
     before = sorted(os.walk(harness.retrodeck_home))
 
-    presses = {
-        "start_download": await harness.endpoints.start_download(8),
-        "adopt_existing_rom": await harness.endpoints.adopt_existing_rom(8, None, None),
-        "download_platform_firmware_file": await harness.endpoints.download_platform_firmware_file("dc", "dc_boot.bin"),
-        "download_all_firmware": await harness.endpoints.download_all_firmware("dc"),
-        "remove_rom": await harness.endpoints.remove_rom(_ROM_ID),
-        "uninstall_all_roms": await harness.endpoints.uninstall_all_roms(),
-        "delete_platform_bios": await harness.endpoints.delete_platform_bios("dc"),
-        "start_prune": await harness.endpoints.start_prune({"confirmed": True}),
-    }
+    presses = {name: await press(harness) for name, press in _PRESSES.items()}
     harness.app.services.leftover_tmp_cleanup_service.cleanup_leftover_tmp_files()
 
     for name, result in presses.items():
         assert result["success"] is False, name
         _assert_refused_for(result, code)
     assert sorted(os.walk(harness.retrodeck_home)) == before
-    assert all(os.path.exists(path) for path in (installed, leftover, bios, bios_leftover))
+    assert all(os.path.exists(path) for path in on_disk)
+
+
+def _health_raises(_self: RetroDeck) -> None:
+    raise RuntimeError("the resolver failed")
+
+
+_UNANSWERED = "RetroDECK's folders could not be established, so Tender downloads into and removes from none of them."
+
+
+@pytest.mark.parametrize("press", list(_PRESSES))
+async def test_where_retrodeck_s_health_could_not_be_asked_the_press_is_refused(harness, monkeypatch, press):
+    # A healthy RetroDECK whose health question fails: nothing says its folders
+    # are not defaults, so every press is refused as under a finding.
+    on_disk = _seed_what_a_press_would_touch(harness)
+    seed_es_systems(harness)
+    monkeypatch.setattr(RetroDeck, "health", _health_raises)
+    before = sorted(os.walk(harness.retrodeck_home))
+
+    result = await _PRESSES[press](harness)
+
+    assert result["success"] is False
+    assert result["reason"] == "retrodeck_unanswered"
+    assert result["message"] == _UNANSWERED
+    assert sorted(os.walk(harness.retrodeck_home)) == before
+    assert all(os.path.exists(path) for path in on_disk)
+
+
+async def test_where_retrodeck_s_health_could_not_be_asked_check_against_server_says_so(harness, monkeypatch):
+    # Its answer is a status rather than a success flag, so it is not one of the presses above.
+    _seed_what_a_press_would_touch(harness)
+    seed_es_systems(harness)
+    monkeypatch.setattr(RetroDeck, "health", _health_raises)
+
+    result = await harness.endpoints.verify_existing_content(8)
+
+    assert result["status"] == "error"
+    assert result["reason"] == "retrodeck_unanswered"
+    assert result["message"] == _UNANSWERED
+
+
+async def test_where_retrodeck_s_health_could_not_be_asked_no_leftover_is_removed(harness, monkeypatch):
+    on_disk = _seed_what_a_press_would_touch(harness)
+    seed_es_systems(harness)
+    monkeypatch.setattr(RetroDeck, "health", _health_raises)
+
+    harness.app.services.leftover_tmp_cleanup_service.cleanup_leftover_tmp_files()
+
+    assert all(os.path.exists(path) for path in on_disk)
 
 
 @pytest.mark.usefixtures("seeded_retrodeck")
@@ -171,7 +238,7 @@ async def test_without_retrodeck_an_uninstall_is_refused_and_says_why(harness):
 
 
 async def test_while_retrodeck_s_folder_is_missing_a_download_is_refused_for_that_finding(harness):
-    # A card that is out: the download refuses with the finding the banner
+    # An SD card that is out: the download refuses with the finding the banner
     # shows, and creates nothing where RetroDECK's folder belongs.
     seed_es_systems(harness)
     shutil.rmtree(harness.retrodeck_home)
@@ -235,6 +302,20 @@ async def test_after_retrodeck_s_home_moves_the_move_code_keeps_its_records_righ
     with harness.uow_factory() as uow:
         assert uow.rom_installs.get(_ROM_ID).file_path == new_rom
         assert uow.kv_config.get("retrodeck_home_path") == new_home
+
+
+async def test_where_retrodeck_s_health_could_not_be_asked_no_move_is_seen(harness, monkeypatch):
+    seed_es_systems(harness)
+    recorded = os.path.realpath(os.path.join(str(harness.tmp_path), "A", "retrodeck"))
+    with harness.uow_factory() as uow:
+        uow.kv_config.set("retrodeck_home_path", recorded)
+    monkeypatch.setattr(RetroDeck, "health", _health_raises)
+
+    harness.app.services.migration_service.detect_retrodeck_path_change()
+
+    with harness.uow_factory() as uow:
+        assert uow.kv_config.get("retrodeck_home_path") == recorded
+        assert uow.kv_config.get("retrodeck_home_path_previous") is None
 
 
 @pytest.mark.parametrize(("code", "make"), _FINDINGS)
