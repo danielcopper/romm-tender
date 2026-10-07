@@ -115,11 +115,11 @@ Because `SetAppLaunchOptions` returns `void` with no success signal, Tender **fi
 `RegisterForAppDetails` until the read-back `strLaunchOptions` matches (`setLaunchOptionsConfirmed`). That report can
 take longer than the 2 s the poll waits — right after a Steam start, Steam has written the new value to `shortcuts.vdf`
 within the same second while the report is still outstanding — so when the wait runs out, Tender reads the shortcut's
-details once more (`getAppDetails`, bounded by the same 2 s) and counts the write as confirmed if they show the value.
-Only a re-read that shows a different value, or does not answer, is a failed confirm; every caller of
-`setLaunchOptionsConfirmed` gets that answer, so a write that did not land is still reported where its caller reports
-one. Setting `""` — the placeholder an uninstalled ROM carries until it is downloaded — is valid and confirms against an
-empty read-back.
+details once more (`getAppDetails`, bounded by the same 2 s) and counts the write as confirmed if they show the value —
+a confirm only the re-read gave is logged at INFO, a first-report confirm is not. Only a re-read that shows a different
+value, or does not answer, is a failed confirm; every caller of `setLaunchOptionsConfirmed` gets that answer, so a write
+that did not land is still reported where its caller reports one. Setting `""` — the placeholder an uninstalled ROM
+carries until it is downloaded — is valid and confirms against an empty read-back.
 
 The real hazard is not the set: heavy removal-churn can corrupt Steam's in-memory shortcut state. A Steam restart clears
 it. The sync engine processes removals before additions to minimise churn.

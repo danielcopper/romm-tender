@@ -125,6 +125,55 @@ describe("setLaunchOptionsConfirmed", () => {
     expect(outcome).toBe(false);
     expect(unregister).toHaveBeenCalledTimes(2);
   });
+
+  describe("the line logged when the re-read confirms", () => {
+    const RESCUE_LINE = "setLaunchOptionsConfirmed: appId 5 confirmed by the re-read after the report missed the wait";
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    function stubReports(reportFor: (registration: number) => SteamAppDetails | undefined) {
+      let registrations = 0;
+      const { fn } = makeRegisterForAppDetails(() => reportFor(++registrations));
+      vi.stubGlobal("SteamClient", {
+        Apps: { SetAppLaunchOptions: vi.fn(), RegisterForAppDetails: fn },
+      });
+    }
+
+    it("is logged once, at info, when the report missed the wait and the re-read shows the value", async () => {
+      vi.useFakeTimers();
+      const logInfoSpy = vi.spyOn(backend, "logInfo").mockImplementation(() => {});
+      stubReports((registration) => ({ strLaunchOptions: registration === 1 ? "old-value" : "new-value" }));
+
+      const promise = setLaunchOptionsConfirmed(5, "new-value", 2000);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      await expect(promise).resolves.toBe(true);
+      expect(logInfoSpy).toHaveBeenCalledTimes(1);
+      expect(logInfoSpy).toHaveBeenCalledWith(RESCUE_LINE);
+    });
+
+    it("is not logged when the first report confirms", async () => {
+      const logInfoSpy = vi.spyOn(backend, "logInfo").mockImplementation(() => {});
+      stubReports(() => ({ strLaunchOptions: "new-value" }));
+
+      await expect(setLaunchOptionsConfirmed(5, "new-value", 2000)).resolves.toBe(true);
+      expect(logInfoSpy).not.toHaveBeenCalled();
+    });
+
+    it("is not logged when the re-read shows a different value too", async () => {
+      vi.useFakeTimers();
+      const logInfoSpy = vi.spyOn(backend, "logInfo").mockImplementation(() => {});
+      stubReports(() => ({ strLaunchOptions: "old-value" }));
+
+      const promise = setLaunchOptionsConfirmed(5, "new-value", 2000);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      await expect(promise).resolves.toBe(false);
+      expect(logInfoSpy).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("removeShortcutConfirmedOutcome", () => {

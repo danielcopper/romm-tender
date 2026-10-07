@@ -66,7 +66,11 @@ export function getAppDetails(appId: number, timeoutMs = 2000): Promise<SteamApp
 export async function setLaunchOptionsConfirmed(appId: number, value: string, timeoutMs = 2000): Promise<boolean> {
   if (await writeAndAwaitReport(appId, value, timeoutMs)) return true;
   const details = await getAppDetails(appId, timeoutMs);
-  return details !== null && launchOptionsOf(details) === value;
+  const confirmed = details !== null && launchOptionsOf(details) === value;
+  if (confirmed) {
+    logInfo(`setLaunchOptionsConfirmed: appId ${appId} confirmed by the re-read after the report missed the wait`);
+  }
+  return confirmed;
 }
 
 function launchOptionsOf(details: SteamAppDetails): string {
