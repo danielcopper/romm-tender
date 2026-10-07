@@ -8,7 +8,6 @@ conflict rollback in tests/services/saves/sync_engine/test_rollback.py.
 
 import asyncio
 import io
-import struct
 import threading
 import time
 import zipfile
@@ -16,6 +15,7 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 from _factories import _CONFLICT_REFUSAL_MESSAGES
+from _zip_poison import corrupt_central_dir_zip_bytes
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
@@ -61,27 +61,6 @@ if TYPE_CHECKING:
 
 _UPDATE_MESSAGE = _CONFLICT_REFUSAL_MESSAGES["blocked_by_update"]
 _MIGRATION_MESSAGE = _CONFLICT_REFUSAL_MESSAGES["blocked_by_migration"]
-
-
-def _corrupt_zip_bytes() -> bytes:
-    """Bytes that ``zipfile.is_zipfile`` accepts but ``ZipFile`` cannot open.
-
-    A real two-member zip with its SECOND central-directory entry's signature
-    clobbered — the #1470 poison: the End-Of-Central-Directory record and the
-    first entry are intact, so it sniffs as a zip on every supported Python
-    (what the sniff reads: the comment on ``_ZIP_READ_ERRORS`` in
-    ``adapters/save_file.py``), but reading it raises ``BadZipFile``, the failure
-    that used to escape the sweep and abort every remaining ROM.
-    """
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as zf:
-        zf.writestr("battery.srm", b"battery-bytes")
-        zf.writestr("rtc.bin", b"rtc-bytes")
-    data = bytearray(buf.getvalue())
-    cd_offset = struct.unpack("<I", data[-22:][16:20])[0]  # EOCD → central-dir offset
-    second = data.find(b"PK\x01\x02", cd_offset + 4)
-    data[second : second + 4] = b"\x00\x00\x00\x00"  # kill the second entry's PK\x01\x02 magic
-    return bytes(data)
 
 
 class TestSyncRomSaves:
@@ -206,7 +185,7 @@ class TestSyncAllSaves:
         )
         _create_save(tmp_path, system="gba", rom_name="game1", content=b"good-save")
         # ROM 2's save is the poison: it sniffs as a zip but cannot be read as one.
-        poison = _corrupt_zip_bytes()
+        poison = corrupt_central_dir_zip_bytes()
         assert zipfile.is_zipfile(io.BytesIO(poison)), "a poison that does not sniff as a zip skips the fallback"
         _create_save(tmp_path, system="snes", rom_name="game2", content=poison)
 
