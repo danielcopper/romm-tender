@@ -93,7 +93,7 @@ run = [
 ]
 
 [tasks.gate]
-description = "Run the CI battery locally in one command — every PR check in ci.yml but the three 'Full CI gate' in docs/contributing/development.md names (slow: full pytest + frontend build)"
+description = "Run the CI battery locally in one command — every PR check in ci.yml but three jobs, named under \"Full CI gate\" in docs/contributing/development.md (slow: full pytest + frontend build)"
 # The CI jobs, as tasks mise runs side by side: `test` is the `test` job,
 # `lint` the architecture-gate half of the `lint` job plus `markdownlint` and the
 # `build` job's tab-glyph check, `gate:python-static` the ruff/basedpyright half of

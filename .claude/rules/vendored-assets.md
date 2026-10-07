@@ -23,11 +23,11 @@ each one is, and both are asserted the same way. Where it is a wheel's manifest 
 `<package>.LICENSE`: the checked file set is an exact equality, so a licence inside the tree would be an extra file the
 gate has to except.
 
-**Vendoring or bumping a package is a device-test trigger**, because the Python CI runs is not the Python a device runs;
+**Vendoring or bumping a package is a device-test trigger**, because no Python CI runs is the Python a device runs;
 [`_vendor/README.md`](../../backend/_vendor/README.md#the-runtime-a-vendored-copy-has-to-load-in) holds why. A green
 `mise run gate` says the copy hashes correctly and imports under the toolchain's Python, and CI's `test-3.14` adds 3.14;
-neither says anything about the system Python on the Deck. How far a load-time failure spreads is a property of the
-wiring, not of vendoring: today `main.py` → `bootstrap/adapters.py` → `adapters/atlas_firmware.py` →
+neither proves the copy loads under the system Python on the Deck. How far a load-time failure spreads is a property of
+the wiring, not of vendoring: today `main.py` → `bootstrap/adapters.py` → `adapters/atlas_firmware.py` →
 `from _vendor.atlas import …` are all module-level imports, so a raise inside the vendored tree takes the whole backend
 down rather than one feature. A package reached only behind a lazy import would cost just the path that reaches it.
 
