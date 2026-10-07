@@ -1086,9 +1086,10 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         <DialogButton className="romm-gear-btn" onClick={showRomMMenu} onFocus={scrollToTop} title="RomM Actions">
           <FaGamepad size={18} color="#553e98" />
         </DialogButton>
-        {/* Core selection button (only when multiple emulators to choose between,
-            and not for a download whose file is missing) */}
-        {detail.emulators.length > 1 && !fileMissing ? (
+        {/* Core selection button: where there are emulators to choose between,
+            and where the emulator list could not be established, whose menu
+            then says why. Never for a download whose file is missing. */}
+        {(detail.emulators.length > 1 || !detail.emulatorDataAvailable) && !fileMissing ? (
           <DialogButton
             key="core-btn"
             className="romm-gear-btn"

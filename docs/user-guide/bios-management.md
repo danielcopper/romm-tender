@@ -729,8 +729,10 @@ only the download buttons are withdrawn.
 ### Per-Game (Game Detail Page)
 
 On the game detail page, a **CPU button** (microchip icon) appears between the RomM and Steam gear buttons when the
-game's platform offers more than one emulator. The menu lists the same emulators as the platform pane — RetroArch cores
-and **standalone emulators** — and shows the ones Tender can't launch from Steam as **disabled** with a short reason.
+game's platform offers more than one emulator. It is there too when Tender cannot get the emulator list, and its menu
+then says why — the same reasons the platform pane gives. The menu lists the same emulators as the platform pane —
+RetroArch cores and **standalone emulators** — and shows the ones Tender can't launch from Steam as **disabled** with a
+short reason.
 
 1. Open a game's detail page
 2. Tap the **CPU button** (microchip icon)

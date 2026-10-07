@@ -24,7 +24,8 @@ import {
   domListenerCount,
 } from "../test-utils/dom-event-listener-spy";
 import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
-import type { DownloadCompleteEvent, SaveStatus } from "../types";
+import type { AnsweringSource, DownloadCompleteEvent, EmulatorDataReason, SaveStatus } from "../types";
+import { emulatorDataReasonSentence } from "../utils/emulatorSourceWording";
 import { stubAppStore } from "../test-utils/steamStubs";
 import * as cachedStore from "../utils/cachedGameDetailStore";
 import * as connectionState from "../utils/connectionState";
@@ -4331,6 +4332,60 @@ describe("RomMPlaySection", () => {
         platformCoreLabel: null,
         hasGameOverride: false,
       });
+      const { queryByTitle } = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      expect(queryByTitle("Emulator Core")).toBeNull();
+    });
+
+    const noList = (
+      reason: EmulatorDataReason,
+      source: AnsweringSource | null,
+    ): ReturnType<typeof playSectionUtils.extractCoreInfo> => ({
+      activeCoreLabel: null,
+      activeCoreIsDefault: true,
+      emulatorDataAvailable: false,
+      emulatorDataReason: reason,
+      emulatorSource: source,
+      emulators: [],
+      platformCoreLabel: null,
+      hasGameOverride: false,
+    });
+
+    it.each<[EmulatorDataReason, AnsweringSource | null]>([
+      ["switched_off", null],
+      ["no_source", null],
+      ["sealed", { kind: "emudeck", starts_games: false }],
+      ["catalogue_invalid", { kind: "retrodeck", starts_games: true }],
+      ["not_set_up", { kind: "retrodeck", starts_games: true }],
+      ["unavailable", { kind: "emudeck", starts_games: false }],
+    ])(
+      "keeps the core button where the emulator list is not established (%s), and its menu says why",
+      async (reason, source) => {
+        vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+          found: true,
+          rom_id: 42,
+          platform_slug: "snes",
+        });
+        vi.mocked(playSectionUtils.extractCoreInfo).mockReturnValue(noList(reason, source));
+        render(<RomMPlaySection appId={testAppId} />);
+        await flushAsync();
+
+        const items = await openCoreMenuAndGetItems(testAppId);
+
+        expect(items.map((item) => item.props.children)).toEqual([emulatorDataReasonSentence(reason, source)]);
+        expect(items[0].props.disabled).toBe(true);
+      },
+    );
+
+    it("offers no core button for a missing file even where the emulator list is not established", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 42,
+        installed: true,
+        platform_slug: "snes",
+        file_missing_at: "/roms/snes/gone.sfc",
+      });
+      vi.mocked(playSectionUtils.extractCoreInfo).mockReturnValue(noList("switched_off", null));
       const { queryByTitle } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       expect(queryByTitle("Emulator Core")).toBeNull();
