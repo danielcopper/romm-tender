@@ -341,8 +341,9 @@ folder could answer — a file in your library no emulator asks for, or one aske
 reads as could not be established. Rows the emulator's own answer covers keep it. While the main panel shows a notice
 for RetroDECK's settings file or for a RetroDECK not set up yet, Tender downloads and deletes no BIOS file at all, and
 the buttons answer with that notice's sentence ([Managing Games](managing-games.md#downloading-roms)). The same holds
-where asking RetroDECK about its folders failed with an error; the buttons then say **RetroDECK's folders could not be
-established, so Tender downloads into and removes from none of them.**
+where finding RetroDECK, or asking it about its folders, failed with an error; the buttons then say **RetroDECK's
+folders could not be established, so Tender downloads into and removes from none of them.**, except that a download
+while RetroDECK is switched off says so.
 
 Some platforms use subdirectories: Dreamcast BIOS goes into `bios/dc/`, because that is the location the Dreamcast core
 declares. Tender handles the correct placement automatically — the location is the one your emulator itself declares, so

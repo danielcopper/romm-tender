@@ -288,13 +288,22 @@ finding, and the panel words it with the sentence the finding's banner shows (`w
 `frontend/src/utils/emulatorSourceWording.ts`, applied to every endpoint answer in `frontend/src/api/host.ts`). A
 download also stops on `root-missing`, because everything it would land in lies below a folder that is not there.
 
-**A question that fails is treated like one of those four findings.** Where asking the resolver about RetroDECK's
-health, or about one of its folders, raises, nothing established that the folders are not defaults, so the answer that
-question was for refuses — a removal's bound as well as a download's — and the move code sees no move. The refusal is
-its own (`retrodeck_unanswered`) and says **RetroDECK's folders could not be established, so Tender downloads into and
-removes from none of them.**; it never reads as RetroDECK not installed, nor as RetroDECK naming no folder, both of
-which would be statements about an installation nobody heard from. Like a finding's refusal it also keeps the
-removed-game cleanup from starting (`EveryFolderRefused`, which both are). From
+**A question that fails is treated like one of those four findings.** RetroDECK's health and its four roots — home, ROM
+root, BIOS folder and saves root — are asked together, up front, for every folder question. Where detecting the emulator
+sources raises, or any one of those five questions does, nothing established that the folders are not defaults, so every
+folder question refuses — a removal's bound as well as a download's — the start-up removal of `.tmp` files removes
+nothing, and the move code sees no move. The one exception is a download while RetroDECK is switched off, which says so
+as it would anyway: the switch is the user's setting, and holds whatever the resolver answered. The refusal is its own
+(`retrodeck_unanswered`) and says **RetroDECK's folders could not be established, so Tender downloads into and removes
+from none of them.**; it never reads as RetroDECK not installed — a detection that raised is not one that found nothing,
+and the reading says which (`DetectedSourcesReading.detection_failed`, read by this adapter alone; every other reader of
+the sources still takes such a reading as one that detected none) — nor as RetroDECK naming no folder, both of which
+would be statements about an installation nobody heard from. Like a finding's refusal it also keeps the removed-game
+cleanup from starting (`EveryFolderRefused`, which both are).
+
+A system's own ROM folder (`rom_location(system)`) is not a root: it is asked only by the question that needs it, the
+download's folder. Its raise refuses that question alone, with the same sentence — a game download, using files already
+on disk and Check Against Server, and the adoption's target — and every other press goes on. From
 [#2244](https://github.com/danielcopper/romm-tender/issues/2244) D13.
 
 **A download creates a folder only below a root that exists.** A system's ROM folder that is not there yet is created by
