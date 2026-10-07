@@ -3250,6 +3250,24 @@ describe("MainPage", () => {
       expect(finding.parentElement?.querySelector("svg")).not.toBeNull();
     });
 
+    it("draws the cannot-start notice smaller than a finding's banner", async () => {
+      vi.mocked(backend.getEmulatorSources).mockResolvedValue({
+        sources: [
+          { ...HEALTHY_RETRODECK, root: null, findings: [{ code: "marker-invalid", data: { path: "/rd.json" } }] },
+          { ...HEALTHY_RETRODECK, kind: "emudeck", starts_games: false, catalogue: "sealed" },
+        ],
+        answering: "retrodeck",
+      });
+      const { findByText } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      const notice = await findByText(/^EmuDeck is switched on in Settings/);
+      const finding = await findByText(/^RetroDECK: its settings file \/rd\.json is damaged/);
+      expect(notice).toHaveStyle({ fontSize: "12px" });
+      expect(notice.parentElement).toHaveStyle({ padding: "8px 12px" });
+      expect(finding).toHaveStyle({ fontSize: "15px" });
+      expect(finding.parentElement).toHaveStyle({ padding: "24px 16px" });
+    });
+
     it("leaves a switched-off EmuDeck's cannot-start line to its card", async () => {
       vi.mocked(backend.getEmulatorSources).mockResolvedValue({
         sources: [

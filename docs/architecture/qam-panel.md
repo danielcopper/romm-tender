@@ -717,7 +717,7 @@ Tender stays a card without a jump, with Dismiss where the condition has a sensi
 | Cross-device playtime needs a fresh sign-in                    | text, **Open Connections**, Dismiss                                                                   | Settings › Connections, where the accounts are                                                                                    |
 | An emulator source reports a health finding                    | a warning card per finding, worded per code, no action                                                | none — the fix is outside Tender; Settings › Emulator sources states the same sentence on the source's card                       |
 | No emulator source is detected                                 | warning card, no action                                                                               | none — the fix is outside Tender; Settings › Emulator sources says the same                                                       |
-| A switched-on source is one Tender cannot start games through  | a card per such source without the warning sign, no action                                            | none — Settings › Emulator sources states it on the source's card                                                                 |
+| A switched-on source is one Tender cannot start games through  | a smaller card per such source, without the warning sign, no action                                   | none — Settings › Emulator sources states it on the source's card                                                                 |
 | Steam answers for no notifications                             | warning card, no action                                                                               | none — the fix is outside Tender                                                                                                  |
 | RetroArch `input_driver` is wrong                              | text, **Open Controller**                                                                             | Settings › Controller, which holds the Fix button                                                                                 |
 | Sync paused on the session budget                              | text, **Open Sync**                                                                                   | Sync, which holds Restart Steam now and Resume                                                                                    |
@@ -728,7 +728,7 @@ Tender stays a card without a jump, with Dismiss where the condition has a sensi
 | Tender was updated, or went back                               | the version, Dismiss — and a toast, once                                                              | none — the card is the whole of it                                                                                                |
 
 **The emulator source notices are Tender's wording, per finding code**, never the resolver's message text
-(`utils/emulatorSourceWording.ts` is the one home of those sentences and of the sources' names): a card per finding of
+(`utils/emulatorSourceWording.ts` is the one home of those sentences and of the sources' names): a notice per finding of
 every switched-on source, except `content-tree-unwired`, which concerns nothing Tender does and is stated only on the
 source's card under Settings › Emulator sources, as is every finding of a switched-off source; a code with no sentence
 yet, or a known code whose finding lacks a fact its sentence needs, reads "Problem with _source_: _code_". Where the
@@ -736,12 +736,12 @@ answering source gives no emulator list, the platform page and the emulator menu
 source detected, every source switched off, a broken ES-DE systems file, a RetroDECK that has not been set up yet,
 EmuDeck's list that cannot be read yet, or any other refusal — and never "no emulator". **_Source_ is switched on in
 Settings → Emulator sources, but Tender cannot start games through it yet.** stands on Main once for every switched-on
-source Tender cannot start games through, whether or not it is the one that answers, and is the one source card drawn
-without the warning sign: it states a fact about Tender rather than something wrong. Its card says **Tender cannot start
-games through _source_ yet.**, switched on or off, and a switched-off source says it only there. Where such a source
-answers, the platform page and the emulator menu keep saying why there is no emulator list — today no such source gives
-one. Showing **Tender cannot start games through _source_ yet.** there beside a list such a source does give is #2222's
-work; no code does it today.
+source Tender cannot start games through, whether or not it is the one that answers, and is the one source notice drawn
+smaller and without the warning sign: it states a fact about Tender rather than something wrong. The source's card under
+Settings › Emulator sources says **Tender cannot start games through _source_ yet.**, switched on or off, and a
+switched-off source says it only there. Where such a source answers, the platform page and the emulator menu keep saying
+why there is no emulator list — today no such source gives one. Showing **Tender cannot start games through _source_
+yet.** there beside a list such a source does give is #2222's work; no code does it today.
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did

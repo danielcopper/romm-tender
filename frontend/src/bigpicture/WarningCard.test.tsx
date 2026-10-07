@@ -36,6 +36,13 @@ describe("WarningCard", () => {
     expect(root).toHaveStyle({ padding: "24px 16px" });
   });
 
+  it("draws a minor card in smaller type with less padding than a compact one", () => {
+    const { container } = render(<WarningCard title="A fact" compact minor />);
+    const root = container.firstChild as HTMLElement;
+    expect(root).toHaveStyle({ padding: "8px 12px" });
+    expect(screen.getByText("A fact")).toHaveStyle({ fontSize: "12px" });
+  });
+
   it("uses spacious padding by default", () => {
     const { container } = render(<WarningCard title="t" message="m" />);
     const root = container.firstChild as HTMLElement;

@@ -7,12 +7,29 @@ interface WarningCardProps {
   message?: string;
   /** Compact mode for narrow contexts (QAM panel). */
   compact?: boolean;
-  /** Left out for a notice that reports a fact rather than something wrong. */
+  /** Whether the warning sign leads the card. False for a notice that reports a
+   *  fact rather than something wrong. */
   showIcon?: boolean;
+  /** Smaller type and less padding than `compact`, for a fact that stands beside
+   *  the warning cards on the narrow page without competing with them. */
+  minor?: boolean;
 }
 
-/** Shared warning card layout: amber-bordered panel with icon, title and message. */
-export const WarningCard: FC<WarningCardProps> = ({ title, message, compact = false, showIcon = true }) => {
+const SPACIOUS = { padding: "40px 32px", titleSize: "19px", titleWeight: 600 };
+const COMPACT = { padding: "24px 16px", titleSize: "15px", titleWeight: 600 };
+const MINOR = { padding: "8px 12px", titleSize: "12px", titleWeight: 400 };
+
+/** Shared warning card layout: amber-bordered panel with the warning sign (unless
+ *  `showIcon` is false), title and message. */
+export const WarningCard: FC<WarningCardProps> = ({
+  title,
+  message,
+  compact = false,
+  showIcon = true,
+  minor = false,
+}) => {
+  let size = compact ? COMPACT : SPACIOUS;
+  if (minor) size = MINOR;
   return (
     <div
       style={{
@@ -20,7 +37,7 @@ export const WarningCard: FC<WarningCardProps> = ({ title, message, compact = fa
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: compact ? "24px 16px" : "40px 32px",
+        padding: size.padding,
         gap: "14px",
         textAlign: "center",
         background: "rgba(14, 20, 27, 0.55)",
@@ -32,8 +49,8 @@ export const WarningCard: FC<WarningCardProps> = ({ title, message, compact = fa
       {showIcon && <FaExclamationTriangle style={{ color: "#ffaa00", fontSize: compact ? "28px" : "42px" }} />}
       <div
         style={{
-          fontSize: compact ? "15px" : "19px",
-          fontWeight: 600,
+          fontSize: size.titleSize,
+          fontWeight: size.titleWeight,
           color: "rgba(255, 255, 255, 0.95)",
         }}
       >

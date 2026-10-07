@@ -299,8 +299,8 @@ while the source is switched on, an empty grey ring and a grey name while it is 
 - **Use this source**, under a thin line at the bottom of the card: a source switched off offers no emulators and is
   never asked about a game. It stays listed, so you can switch it on again.
 
-A game page that is open while you switch or move a source shows the change at once: its emulators, its BIOS state and
-its saves are read again.
+A game page that is open while you switch or move a source shows the change at once: its emulators and its BIOS state
+are read again, and its saves too while save sync is on.
 
 **Which source answers for a game.** While RetroDECK is found and switched on, a game's emulator, BIOS and save answers
 come from RetroDECK, wherever it stands in the order, because every game starts through it — even while it has not been
@@ -309,8 +309,9 @@ found for the first time joins the end of the order, switched on.
 
 **Sources Tender cannot start games through.** The main panel says **_Source_ is switched on in Settings → Emulator
 sources, but Tender cannot start games through it yet.** for every switched-on source but RetroDECK, whether or not it
-is the one that answers, without a warning sign, since nothing is wrong; a source you switched off says it only on its
-card. Where such a source answers, the platform page and the emulator menu keep saying why there is no emulator list.
+is the one that answers, in a smaller card without a warning sign, since nothing is wrong; a source you switched off
+says it only on its card. Where such a source answers, the platform page and the emulator menu keep saying why there is
+no emulator list.
 
 **Problems.** Every problem a switched-on source reports also shows as a card on the main panel, named after the source
 — a RetroDECK that is installed but has not been set up yet (**RetroDECK is installed but has not been set up yet. Start
