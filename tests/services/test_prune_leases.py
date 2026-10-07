@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 import pytest
 from _factories import _make_conflict_rules, _make_prune_conflicts
 
+from lib.errors import Refused
 from services.prune_leases import PruneLeaseService, PruneLeaseServiceConfig
 
 if TYPE_CHECKING:
@@ -49,11 +50,12 @@ async def test_a_live_lease_renews(service, prune_conflicts):
 
 
 async def test_a_lease_that_is_gone_answers_stale(service):
-    assert await service.renew_prune_conflict_lease("sgdb_artwork:99") == {
-        "success": False,
-        "reason": "stale_lease",
-        "message": "Operation lease is no longer active.",
-    }
+    renew = service.renew_prune_conflict_lease("sgdb_artwork:99")
+
+    with pytest.raises(Refused) as refused:
+        await renew
+
+    assert (refused.value.reason, refused.value.message) == ("stale_lease", "Operation lease is no longer active.")
 
 
 async def test_disowning_answers_how_many_leases_it_dropped(service, prune_conflicts):
