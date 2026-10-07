@@ -272,6 +272,7 @@ class SyncOrchestrator:
             platform_rom_ids: set[int] = set()
             collection_memberships: dict[tuple[str, str], CollectionMembership] = {}
             synced_rom_ids: set[int] = set()
+            skipped_rom_ids: set[int] = set()
 
             total_units = len(work_queue)
             for unit_index, unit in enumerate(work_queue, 1):
@@ -290,6 +291,7 @@ class SyncOrchestrator:
                     platform_rom_ids,
                     synced_rom_ids,
                     collection_memberships,
+                    skipped_rom_ids=skipped_rom_ids,
                     progress_step=unit_index,
                     progress_total_steps=total_units,
                 )
@@ -345,6 +347,7 @@ class SyncOrchestrator:
                 emitted,
                 registry,
                 platform_name_set,
+                skipped_rom_ids=frozenset(skipped_rom_ids),
             )
             # Cover-only work (#1386): count the bound fetched ROMs whose server
             # cover fingerprint changed, with the SAME kernel the apply-path
@@ -476,6 +479,7 @@ class SyncOrchestrator:
         synced_rom_ids: set[int],
         collection_memberships: dict[tuple[str, str], CollectionMembership],
         *,
+        skipped_rom_ids: set[int],
         progress_step: int = 0,
         progress_total_steps: int = 0,
     ) -> None:
@@ -485,22 +489,23 @@ class SyncOrchestrator:
         ``synced_rom_ids``; collection units record their full membership
         under a collision-free ``(collection_kind, collection_id)`` key (with the
         name in the value), so same-named collections never overwrite each other
-        (#1503). ``all_roms`` is extended in both cases.
+        (#1503). ``all_roms`` is extended in both cases, and ``skipped_rom_ids``
+        too with the ROMs of a unit the fetcher reports as skipped, platform or
+        collection alike — the units the apply will skip.
         Mutates the passed-in accumulators in place. ``progress_step`` /
         ``progress_total_steps`` thread the unit's coarse position into the
         fetcher's per-page ``fetching`` frames (on top of the per-unit frame
         the preview loop already emits).
         """
         if unit.type == "platform":
-            unit_roms, _skipped = await self._fetcher.fetch_platform_unit(
+            unit_roms, skipped = await self._fetcher.fetch_platform_unit(
                 unit, progress_step=progress_step, progress_total_steps=progress_total_steps
             )
             for rom in unit_roms:
                 platform_rom_ids.add(rom["id"])
                 synced_rom_ids.add(rom["id"])
-            all_roms.extend(unit_roms)
         else:
-            unit_roms, all_collection_rom_ids, _skipped = await self._fetcher.fetch_collection_unit(
+            unit_roms, all_collection_rom_ids, skipped = await self._fetcher.fetch_collection_unit(
                 unit, synced_rom_ids, progress_step=progress_step, progress_total_steps=progress_total_steps
             )
             if all_collection_rom_ids:
@@ -510,7 +515,9 @@ class SyncOrchestrator:
                     kind=str(unit.collection_kind),
                     virtual_type=unit.virtual_type,
                 )
-            all_roms.extend(unit_roms)
+        all_roms.extend(unit_roms)
+        if skipped:
+            skipped_rom_ids.update(rom["id"] for rom in unit_roms)
 
     async def sync_apply_delta(self, preview_id):
         box = self._sync_state

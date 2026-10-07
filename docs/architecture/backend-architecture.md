@@ -480,6 +480,16 @@ writer only ever causes a harmless spurious re-touch, never a wrong skip (the be
 `sync_apply_unit`'s `unit_total` is therefore the delta size, so the progress counter shows net progress and a resume
 converges quickly.
 
+**The preview does not count a skipped unit's launch commands.** `sync_preview` classifies its whole union with the same
+`classify_roms`, and passes as `skipped_rom_ids` the ROMs it took from a unit the fetcher reported as skipped — platform
+and collection units alike. Apply returns before it classifies such a unit, so it never rewrites those shortcuts and
+never records their launch commands. A built launch command there that differs from the recorded one, a `NULL` recorded
+value included, is therefore counted unchanged: counted as changed, it would show the same updated games on every
+preview until a change on the server or a Force Full Sync ended the skip. An identity difference on such an entry still
+counts as changed. Steam's copy of those commands is kept current by the launch-options reconcile instead
+([StartupHealingService notes](#startuphealingservice-notes)). The summary's `changed_count`, `unchanged_count`,
+`changed_names` and `platform_breakdown`, and the `pause_likely` prognosis, all come from that one classification.
+
 **Cover-cache invalidation: the `cover_source` fingerprint (#1386).** The per-ROM cover cache is only valid while the
 server's cover is unchanged, and the delta apply never re-downloads a skipped ROM's cover — so each `roms` row records a
 `cover_source` fingerprint: the full RomM cover source string (`path_cover_large` else `path_cover_small`, the embedded
