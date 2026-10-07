@@ -833,27 +833,29 @@ async def test_a_cancel_after_the_destructive_phase_started_does_not_abort_it(ha
     action = await _wait_action(harness, "repoint_shortcut")
 
     await harness.service.cancel_prune(started["run_id"])
-    with contextlib.suppress(StaleAction):
-        await harness.service.report_prune_action(
-            {
-                "run_id": started["run_id"],
-                "action_token": action["action_token"],
-                "phase": "claim",
-                "action": "repoint_shortcut",
-                "app_id": app_id,
-                "target_rom_id": 2,
-            }
-        )
-    with contextlib.suppress(StaleAction):
-        await harness.service.report_prune_action(
-            {
-                "run_id": started["run_id"],
-                "action_token": action["action_token"],
-                "phase": "complete",
-                "success": True,
-                "message": "done",
-            }
-        )
+    claim = harness.service.report_prune_action(
+        {
+            "run_id": started["run_id"],
+            "action_token": action["action_token"],
+            "phase": "claim",
+            "action": "repoint_shortcut",
+            "app_id": app_id,
+            "target_rom_id": 2,
+        }
+    )
+    with pytest.raises(StaleAction):
+        await claim
+    complete = harness.service.report_prune_action(
+        {
+            "run_id": started["run_id"],
+            "action_token": action["action_token"],
+            "phase": "complete",
+            "success": True,
+            "message": "done",
+        }
+    )
+    with pytest.raises(StaleAction):
+        await complete
     with pytest.raises(asyncio.CancelledError):
         await task
 
