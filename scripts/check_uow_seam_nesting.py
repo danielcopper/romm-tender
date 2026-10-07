@@ -78,10 +78,13 @@ seams are closed the cheap way instead: every consumer in ``services/`` binds
 each to one attribute, and that attribute name is what the list carries. **The
 leading underscore is what marks such an entry**, which makes the count
 derivable rather than remembered: the entries in :data:`IO_SEAM_METHODS`
-beginning with ``_`` are exactly the call-shaped seams — seven today,
+beginning with ``_`` are the call-shaped seams — seven today,
 ``_resolve_system``, ``_sandbox_launcher``, ``_system_extensions``,
 ``_system_known``, ``_platform_firmware_resolver``, ``_firmware_resolver`` and
-``_resolve_path``. Two of those seven are listed a second time under their implementation's own method name,
+``_resolve_path`` — and the services' private wrappers around a RetroDECK folder
+question, listed for the reason ``save_answer`` is: ``_rom_folder``,
+``_rom_folders``, ``_resolve_target``, ``_platform_dir`` and ``_saves_root``.
+Two of those seven are listed a second time under their implementation's own method name,
 for a peer that holds the object rather than the bound method:
 ``RommHttpAdapter.resolve_system`` beside ``_resolve_system``, and
 ``EsFindRulesAdapter.resolve_sandbox_launcher`` beside ``_sandbox_launcher``.
@@ -289,6 +292,23 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         "bios_folder",
         "saves_root",
         "move_roots",
+        "rom_folders",
+        # The services' own wrappers around those questions, listed because they
+        # are what the services call, as ``save_answer`` is for the save seam:
+        # without them the rule would hold only where the question itself is
+        # named. RomRemovalService and RomAdoptionService ask a system's folder
+        # (``_rom_folder``, ``_rom_folders``), the adoption its target
+        # (``_resolve_target``), the candidate search its platform folder
+        # (``_platform_dir``), the cleanup's save step the saves root
+        # (``_saves_root``), and FirmwareDemand where a BIOS download lands and
+        # where the status looks (``download_root``, ``status_root``).
+        "_rom_folder",
+        "_rom_folders",
+        "_resolve_target",
+        "_platform_dir",
+        "_saves_root",
+        "download_root",
+        "status_root",
         # RecoveryBundleInventoryReader (services/protocols/files.py) — lists the
         # recovery root and measures every bundle under it, one descriptor walk
         # per bundle. Object-shaped, so the method name is the whole entry.
