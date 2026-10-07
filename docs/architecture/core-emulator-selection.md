@@ -282,16 +282,20 @@ and renders the invocation:
 - **libretro** invocation → the RetroArch `-e` form:
 
   ```text
-  flatpak run net.retrodeck.retrodeck -e "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/<core>.so %ROM%"
+  flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/<core>.so %ROM%"
   ```
 
 - **standalone** invocation → the emulator's full ES-DE command baked verbatim:
 
   ```text
-  flatpak run net.retrodeck.retrodeck -e "%EMULATOR_RPCS3% --no-gui %ROM%"
+  flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "%EMULATOR_RPCS3% --no-gui %ROM%"
   ```
 
-- `emulator is None` → the plain `flatpak run net.retrodeck.retrodeck`.
+- `emulator is None` → the plain `flatpak run --nosocket=wayland net.retrodeck.retrodeck`.
+
+Every form, the [folder-boot one](#folder-boot-launch-target) included, starts the Flatpak with `--nosocket=wayland`: a
+`flatpak run` option, so it stands before the app id. Why it is there is under
+[RetroDECK runs through XWayland in Desktop Mode](../user-guide/troubleshooting.md#retrodeck-runs-through-xwayland-in-desktop-mode).
 
 `%EMULATOR_*%` and `%ROM%` stay as ES-DE placeholders — RetroDECK's `run_game.sh` resolves and single-quotes them at
 launch, so a ROM path with spaces or parens is handled. For the libretro form, only the in-sandbox cores directory
@@ -423,10 +427,10 @@ and the folder rule applies only when disc resolution returned `file_path`.
 (`game="$game/$(basename "$game")"`, `run_game.sh:63-67`), so the standalone `-e "%EMULATOR_RPCS3% --no-gui %ROM%"` form
 handed a folder points RPCS3 at a nonexistent `…/<Game>/<Game>` and never boots. A folder-boot standalone is therefore
 baked as a **direct sandbox invocation** that bypasses `run_game.sh`:
-`flatpak run --command=<launcher> net.retrodeck.retrodeck <args> "<folder>"`, running the emulator's own launcher inside
-the sandbox. `ActiveCoreResolver.active_emulator_for_rom` makes this rewrite: when the resolved emulator is a standalone
-and the ROM's install is a folder-boot layout (same `folder_boot_root` fact), it resolves the emulator's sandbox
-launcher via the `SandboxLauncherFn` seam (`EsFindRulesAdapter.resolve_sandbox_launcher` → the
+`flatpak run --nosocket=wayland --command=<launcher> net.retrodeck.retrodeck <args> "<folder>"`, running the emulator's
+own launcher inside the sandbox. `ActiveCoreResolver.active_emulator_for_rom` makes this rewrite: when the resolved
+emulator is a standalone and the ROM's install is a folder-boot layout (same `folder_boot_root` fact), it resolves the
+emulator's sandbox launcher via the `SandboxLauncherFn` seam (`EsFindRulesAdapter.resolve_sandbox_launcher` → the
 `/app/retrodeck/components/<x>/…` component path) and returns an `EmulatorInvocation.direct`;
 `resolve_emulator_invocation` renders the `--command=` form, stripping `%EMULATOR_*%` + `%ROM%` down to the middle args
 (`--no-gui`). A libretro emulator, a non-folder install, or an unresolvable launcher leave the standard `run_game` `-e`

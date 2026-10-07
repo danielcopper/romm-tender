@@ -1975,8 +1975,8 @@ Beside Resume sits a chevron whose menu holds one destructive action: **Stop Gam
 progress since the last in-game save may be lost — Tender promises nothing about the save, because it cannot), then
 calls the `stop_running_game(rom_id)` backend endpoint.
 
-**Steam cannot terminate these games.** The shortcut execs `flatpak run net.retrodeck.retrodeck`; flatpak's D-Bus portal
-starts the sandbox from the session helper, so the emulator is not a descendant of Steam's `reaper`.
+**Steam cannot terminate these games.** The shortcut execs `flatpak run … net.retrodeck.retrodeck`; flatpak's D-Bus
+portal starts the sandbox from the session helper, so the emulator is not a descendant of Steam's `reaper`.
 `SteamClient.Apps.TerminateApp(appId, force)` therefore has nothing to signal — a measured on-device no-op even with
 `force: true`. The kill has to happen backend-side, against the host process table.
 
