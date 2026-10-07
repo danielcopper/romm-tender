@@ -236,7 +236,9 @@ function relaunchGameId(start: CancelledStart): string {
  *  ordinary I/O failure is best-effort, timeout stops), then marks the appId as
  *  skipped immediately before this RunGame so it doesn't re-enter the watcher
  *  and re-gate. The re-confirm runs in the already-detached post-cancel portion,
- *  so it only adds a bounded (≤3s) wait to the cancel→relaunch window. */
+ *  so it only adds a bounded wait to the cancel→relaunch window: the command
+ *  fetch, the confirm's report wait and re-read, and the lease release each run
+ *  under a timeout of their own. */
 async function relaunch(start: CancelledStart, romId: number): Promise<void> {
   const reconfirm = await reconfirmLaunchOptions(romId, start.appId, "Watcher");
   if (reconfirm.status === "timeout") {
