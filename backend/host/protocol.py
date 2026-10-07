@@ -70,7 +70,8 @@ TRANSPORT_REASONS = frozenset(
 
 # Close codes of this program's own, from the range RFC 6455 §7.4.2 leaves to
 # applications. An upgrade that carries a token but not this process's is
-# completed and closed at once with one of them: the panel asking was loaded by
+# completed and closed at once with one of them, once this backend knows which
+# is true (``ReloadOutlook``): the panel asking was loaded by
 # another backend process, and the token is minted per process, so no retry can
 # admit it. The code is the whole answer — whether this backend reloads Steam's
 # interface once no game is running, which replaces that panel, or will not, and

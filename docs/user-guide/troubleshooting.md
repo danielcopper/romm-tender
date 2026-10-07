@@ -53,19 +53,20 @@ answers with its own message instead — "Server unreachable", "Sign-in rejected
 - "Tender was restarted — it reloads Steam's interface once no game is running."
 - "Tender was restarted — restart Steam to use it again."
 
-Until then nothing in Tender's panel works, and a press says so at once — **Stop Game** on a game page shows "Couldn't
-stop the game" with the same note.
+Until then nothing in Tender's panel works. **Stop Game** on a game page says so at once: it shows "Couldn't stop the
+game" with the same note.
 
 **Explanation**: Tender's backend restarted while Steam kept running, and the panel in Steam is the one the backend that
 stopped had loaded. The running backend can never accept it, and it told the panel what happens next. The first note
 means the backend replaces the panel by itself once no game is running
 ([below](#steams-screen-reloads-by-itself-after-a-backend-restart)); the second means it will not — it already tried, or
-it has taken Steam's interface down twice in the last ten minutes. In the first seconds after the backend starts it can
-also mean the backend has not looked at Steam yet, which is why opening Tender asks again.
+it has taken Steam's interface down twice in the last ten minutes. In the first seconds after the backend starts the
+panel is told nothing yet, and the notification comes once the backend has looked at Steam.
 
 **Fix**: For the first note, exit the game; Steam's interface reloads a moment later with a working panel. For the
-second, restart Steam. Opening Tender in the Quick Access menu asks the backend again, and a new notification says so
-when its answer has changed. The backend's log carries one line for that panel, however long it stays:
+second, restart Steam. Opening Tender's page in the Quick Access menu asks the backend again, and a new notification
+says so when its answer has changed. The backend's log carries one line for that panel, and one more each time its
+answer changes:
 
 ```bash
 grep "a panel another backend process loaded" ~/.local/state/romm-tender/backend.log | tail -n 5
@@ -82,9 +83,9 @@ talk to the new one, so the new backend asks Steam to reload its interface once 
 a game is running. If Steam cannot reload, or the old panel is still there after the reload, it restarts part of Steam
 once, which takes the interface away for a few more seconds.
 
-**Fix**: If no game is running and a few minutes later Tender's panel is still missing, or its section on a game page
-still says "Loading...", restart Steam to load the new panel. The backend tries only once after each backend restart,
-and it takes Steam's interface away no more than twice in ten minutes. The log says what was tried:
+**Fix**: If no game is running and a few minutes later Tender's panel is still missing, or its section on a game page is
+missing or still says "Loading...", restart Steam to load the new panel. The backend tries only once after each backend
+restart, and it takes Steam's interface away no more than twice in ten minutes. The log says what was tried:
 
 ```bash
 grep "inject:" ~/.local/state/romm-tender/backend.log | tail -n 20
