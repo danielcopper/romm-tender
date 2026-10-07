@@ -449,8 +449,12 @@ When the installer has started, it first runs the new version's pre-install chec
 says **Checking the new version**. Once the check has passed, the installer stops Tender and the block says **Tender is
 restarting**, with **Steam's interface reloads when it is done — usually within a minute, and up to about 5 minutes if
 Tender has to go back to Y.** Tender reports nothing once the installer has started, so the panel tells the two apart by
-whether Tender still answers. From then on the panel loses touch with the old Tender, which is expected; after the
-reload Tender says it was updated, or, if the new version did not answer once started, that the installer
+whether Tender still answers. From then on the panel loses touch with the old Tender, which is expected. Once a Tender
+answers again — the new version, or the one you had if the installer went back to it — the block says **Tender is
+running again**, with **Steam's interface reloads once no game is running, and shows then whether the update went
+through.**, or **Restart Steam to see whether the update went through.** where it will not reload by itself; Tender's
+notification **Tender was restarted** may show for a moment beside it. After the reload Tender says it was updated, or,
+if the new version did not answer once started, that the installer
 [went back to the version you had](troubleshooting.md#an-update-was-rolled-back). The check may take up to two minutes;
 the installer then waits up to a minute for the new version to answer, and up to a minute more for the one you had if it
 goes back; stopping Tender, saving your data and reloading Steam's interface come on top. Where the new version cannot

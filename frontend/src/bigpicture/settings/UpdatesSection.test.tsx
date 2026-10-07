@@ -38,6 +38,7 @@ const NOTHING_OFFERED: UpdateInstall = {
   restarting: false,
   overdue: false,
   readFailed: false,
+  runningAgain: null,
   install: () => undefined,
 };
 
@@ -486,6 +487,30 @@ describe("UpdatesSection", () => {
         "Tender has not come back. Details: journalctl --user -u romm-tender-update — start it again with: systemctl --user start romm-tender",
       );
       expect(utils.queryByTestId("updates-install-unread")).toBeNull();
+    });
+
+    it.each([
+      ["reloads", "Steam's interface reloads once no game is running, and shows then whether the update went through."],
+      ["restart_steam", "Restart Steam to see whether the update went through."],
+    ] as const)(
+      "says Tender is running again once a backend answers and refuses the panel (%s), claiming no outcome",
+      (answer, note) => {
+        const utils = withInstall({ ...INSTALLER_STARTED, readFailed: true, runningAgain: answer });
+
+        expect(text(utils, "updates-caption")).toBe("Tender is running again");
+        expect(text(utils, "updates-note")).toBe(note);
+        expect(utils.queryByTestId("updates-step-install")).toBeNull();
+        expect(utils.queryByTestId("progress-indeterminate")).toBeNull();
+        expect(text(utils, "updates-elapsed")).toBe("");
+      },
+    );
+
+    it("says nothing of Tender not coming back seven minutes on, once a backend answers again", () => {
+      const utils = withInstall({ ...INSTALLER_STARTED, overdue: true, readFailed: true, runningAgain: "reloads" });
+
+      expect(text(utils, "updates-caption")).toBe("Tender is running again");
+      expect(utils.queryByText(NOT_BACK_LINE)).toBeNull();
+      expect(text(utils, "updates-note")).not.toBe(NOT_BACK_LINE);
     });
 
     it("states a failed attempt in one block: nothing changed, the step it stopped at, why, and Try again above it", () => {

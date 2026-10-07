@@ -16,6 +16,7 @@ import {
   installSteps,
   pausedDownloadsHint,
   restartWaitLine,
+  runningAgainLine,
   waitReasonLine,
   type InstallStepId,
   type InstallStepStatus,
@@ -103,7 +104,15 @@ function progressBlock(install: UpdateInstall, attempt: UpdateInstallAttempt, ea
   // The backend reports nothing more, so the phase is the panel's inference:
   // while reads still answer, the installer is running its pre-install check,
   // which it does before it stops this backend; once they fail, Tender is
-  // restarting.
+  // restarting; once one fails as stranded, a backend answers again.
+  if (install.runningAgain) {
+    return {
+      caption: "Tender is running again",
+      at: null,
+      failed: false,
+      note: runningAgainLine(install.runningAgain),
+    };
+  }
   const gone = install.readFailed;
   return {
     caption: gone ? "Tender is restarting" : "Checking the new version",

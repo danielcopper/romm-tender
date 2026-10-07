@@ -1918,23 +1918,32 @@ reads still answer, the installer is running the new version's pre-install check
 anything: the caption says **Checking the new version**, with that step current, and nothing stands under the steps.
 Once a read fails or passes its deadline, the installer has stopped this backend: the caption says **Tender is
 restarting**, with Install current, and the line under the steps says **Steam's interface reloads when it is done —
-usually within a minute, and up to about 5 minutes if Tender has to go back to Y.**, Y being the installed version. The
-phase follows the last read, so a read that fails once during the check shows the restart until the next one answers.
-The seven minutes of the mark below count from the installer's start, so they cover the pre-install check (up to two
-minutes, `CHECK_SECONDS` in `install.sh`, and ten seconds' grace before it is killed), the wait for the new version to
-answer (up to a minute, `UPDATE_WAIT`) and, on a rollback, up to a minute more for the previous one; stopping the
-service, backing up the data and the reload that ends this screen are not bounded, so the mark is where the panel stops
-waiting quietly rather than a sum. The restart line's "about 5 minutes" leaves the check out, since it stands only once
-reads stop answering, after the check. A version the check refuses ends in a failure without a restart at all. **From
-`installer_started` on, a lost connection is the expected outcome** — the installer stops this backend — so a read it
-takes down is not logged, Main's connection row stays at Checking... rather than calling the backend failed, and Check
-now is disabled while an attempt is under way — in its handler too — since a check in flight when the connection goes
-would fail on it and say so. Seven minutes after the panel first saw the installer started (`INSTALLER_OVERDUE_MS`,
-counted from that moment across the section leaving the screen), the line under the steps gives way, in amber: **Tender
-has not come back.** with the journal and the command to start it where reads no longer answer — a call to a backend
-that is gone waits rather than fails, so it is the read deadline that says so — and **The installer is taking unusually
-long.** with the journal where they still do. From then on the connection row is left to its own verdict too: a probe
-that held it at Checking... asks again when the seven minutes are up.
+usually within a minute, and up to about 5 minutes if Tender has to go back to Y.**, Y being the installed version. Once
+a backend answers again, it closes this panel's upgrade as stranded
+([loading-the-panel.md](loading-the-panel.md#what-the-stranded-panel-is-told)), so the panel's reads fail at once with
+`stranded_panel` rather than wait, and the stranded notification and Main's **Backend restarted** come before the
+reload. On such a read the caption says **Tender is running again**, with no bar, no clock and no step line, and the
+line under it says **Steam's interface reloads once no game is running, and shows then whether the update went
+through.** or **Restart Steam to see whether the update went through.**, by that backend's answer (`runningAgainLine`,
+`utils/updateInstallView.ts`). It claims no outcome, because the backend answering may be the earlier version after a
+rollback and the refusal does not say which; the reload shows the outcome on Main. The phase follows the last read, so a
+read that fails once during the check shows the restart until the next one answers. The seven minutes of the mark below
+count from the installer's start, so they cover the pre-install check (up to two minutes, `CHECK_SECONDS` in
+`install.sh`, and ten seconds' grace before it is killed), the wait for the new version to answer (up to a minute,
+`UPDATE_WAIT`) and, on a rollback, up to a minute more for the previous one; stopping the service, backing up the data
+and the reload that ends this screen are not bounded, so the mark is where the panel stops waiting quietly rather than a
+sum. The restart line's "about 5 minutes" leaves the check out, since it stands only once reads stop answering, after
+the check. A version the check refuses ends in a failure without a restart at all. **From `installer_started` on, a lost
+connection is the expected outcome** — the installer stops this backend — so a read it takes down is not logged, Main's
+connection row stays at Checking... rather than calling the backend failed, and Check now is disabled while an attempt
+is under way — in its handler too — since a check in flight when the connection goes would fail on it and say so. Seven
+minutes after the panel first saw the installer started (`INSTALLER_OVERDUE_MS`, counted from that moment across the
+section leaving the screen), the line under the steps gives way, in amber: **Tender has not come back.** with the
+journal and the command to start it where reads no longer answer — a call to a backend that is gone waits rather than
+fails, so it is the read deadline that says so — and **The installer is taking unusually long.** with the journal where
+they still do. Neither replaces **Tender is running again**: a backend answers then, so nothing is overdue. From then on
+the connection row is left to its own verdict too: a probe that held it at Checking... asks again when the seven minutes
+are up.
 
 **A failure is the same block in amber**, drawn in the frame Main's update cards use (`cardFrame`,
 `bigpicture/UpdateCard.tsx`): a title, the step line with the step it stopped at marked failed — where the failure has

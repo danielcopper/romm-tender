@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isStrandedPanelFailure } from "../../api/host";
 import {
   getUpdateInstallState,
   installUpdate,
@@ -10,6 +11,8 @@ import {
 } from "../../api/backend";
 import { detach } from "../../utils/detach";
 import { endStoppedAttempt } from "../../utils/stoppedUpdateStore";
+import { useStrandedAnswer } from "../../utils/strandedPanelStore";
+import type { StrandedAnswer } from "../../utils/strandedPanelWording";
 import {
   endPress,
   getUpdateInstallAttempt,
@@ -56,6 +59,13 @@ export interface UpdateInstall {
   overdue: boolean;
   /** The last read failed, or has not answered within {@link UPDATE_INSTALL_READ_DEADLINE_MS}. */
   readFailed: boolean;
+  /**
+   * While restarting, a read failed because a backend answers again and refuses
+   * this panel as stranded: what that backend answered it. The new version, or
+   * the earlier one after a rollback — the refusal does not say which. `null`
+   * otherwise.
+   */
+  runningAgain: StrandedAnswer | null;
   install: () => void;
 }
 
@@ -80,6 +90,8 @@ export function useUpdateInstall(): UpdateInstall {
   const [pressing, setPressing] = useState(false);
   const [refusal, setRefusal] = useState<InstallRefusal | null>(null);
   const [readFailed, setReadFailed] = useState(false);
+  const [strandedRead, setStrandedRead] = useState(false);
+  const stranded = useStrandedAnswer();
   // The last moment the deadline below was looked at; moved only by its timer.
   const [lookedAt, setLookedAt] = useState(() => Date.now());
   const pushed = useUpdateInstallAttempt();
@@ -114,11 +126,15 @@ export function useUpdateInstall(): UpdateInstall {
         const answer = await getUpdateInstallState();
         if (!mounted.current) return;
         setReadFailed(false);
+        setStrandedRead(false);
         // A read that lands while a press waits for its answer may still carry
         // the attempt the press replaces; the answer decides instead.
         if (issuedIn === generation.current && !pressInFlight.current) take(answer);
       } catch (e) {
-        if (mounted.current) setReadFailed(true);
+        if (mounted.current) {
+          setReadFailed(true);
+          setStrandedRead(isStrandedPanelFailure(e));
+        }
         // Not logged once the installer started: qam-panel.md, Settings.
         const attempt = furtherAttempt(getUpdateInstallAttempt(), lastReading.current?.attempt ?? null);
         if (attempt?.step !== "installer_started") logError(`Failed to read the update install state: ${e}`);
@@ -207,6 +223,7 @@ export function useUpdateInstall(): UpdateInstall {
     restarting,
     overdue,
     readFailed,
+    runningAgain: restarting && strandedRead ? stranded : null,
     install: () => detach(install()),
   };
 }
