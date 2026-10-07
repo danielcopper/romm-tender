@@ -1625,6 +1625,114 @@ describe("RomMPlaySection", () => {
   });
 
   // ------------------------------------------------------------------
+  // D3. Save verdict after an emulator source change
+  // ------------------------------------------------------------------
+
+  // A switch or a move of an emulator source can change the save's shape, and
+  // the play button learns the conflict verdict only from this section's
+  // save_sync notification.
+  describe("save verdict after an emulator source change", () => {
+    const statusLabelled = (label: string): SaveStatus => ({
+      rom_id: 88,
+      files: [],
+      playtime: {
+        total_seconds: 0,
+        session_count: 0,
+        last_session_start: null,
+        last_session_duration_sec: null,
+        last_played: null,
+      },
+      device_id: "d",
+      last_sync_check_at: null,
+      save_sync_display: { status: "synced", label, last_sync_check_at: null },
+    });
+    const beforeTheSwitch = statusLabelled("before the switch");
+    const afterTheSwitch = statusLabelled("after the switch");
+
+    const dispatchSourcesChanged = () =>
+      globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
+
+    const announcements = (listener: ReturnType<typeof vi.fn>) =>
+      listener.mock.calls.map((c) => (c[0] as CustomEvent).detail).filter((detail) => detail.type === "save_sync");
+
+    beforeEach(() => {
+      vi.mocked(saveStatusUtils.hasAnySaveConflict).mockImplementation((status) => status === afterTheSwitch);
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 88,
+        save_sync_enabled: true,
+        save_sync_display: { status: "synced", label: "ok", last_sync_check_at: null },
+      });
+    });
+
+    it("announces the verdict of a read issued after the change", async () => {
+      vi.mocked(backend.getSaveStatus).mockResolvedValueOnce(beforeTheSwitch).mockResolvedValueOnce(afterTheSwitch);
+      render(<RomMPlaySection appId={testAppId} />);
+      await waitFor(() => {
+        expect(getGameDetail(testAppId).saveStatus).toBe(beforeTheSwitch);
+      });
+      await flushAsync();
+      const listener = vi.fn();
+      globalThis.addEventListener("romm_data_changed", listener);
+      try {
+        await act(async () => {
+          dispatchSourcesChanged();
+          await Promise.resolve();
+        });
+        await flushAsync();
+
+        // One read serves the store's fold and this announcement alike.
+        expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledTimes(2);
+        const announced = announcements(listener);
+        expect(announced[announced.length - 1]).toMatchObject({
+          rom_id: 88,
+          save_status: afterTheSwitch,
+          has_conflict: true,
+        });
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", listener);
+      }
+    });
+
+    it("never announces the verdict of a read the change overtook", async () => {
+      let settleOpening: (status: SaveStatus) => void = () => {};
+      vi.mocked(backend.getSaveStatus)
+        .mockReturnValueOnce(
+          new Promise<SaveStatus>((resolve) => {
+            settleOpening = resolve;
+          }),
+        )
+        .mockResolvedValueOnce(afterTheSwitch);
+      const listener = vi.fn();
+      globalThis.addEventListener("romm_data_changed", listener);
+      try {
+        render(<RomMPlaySection appId={testAppId} />);
+        await flushAsync();
+        expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledTimes(1);
+
+        await act(async () => {
+          dispatchSourcesChanged();
+          await Promise.resolve();
+        });
+        await flushAsync();
+        await act(async () => {
+          settleOpening(beforeTheSwitch);
+          await Promise.resolve();
+        });
+        await flushAsync();
+
+        const announced = announcements(listener);
+        expect(announced.length).toBeGreaterThan(0);
+        expect(announced.map((detail) => detail.save_status)).not.toContain(beforeTheSwitch);
+        expect(announced[announced.length - 1]).toMatchObject({ save_status: afterTheSwitch, has_conflict: true });
+        expect(getGameDetail(testAppId).saveStatus).toBe(afterTheSwitch);
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", listener);
+      }
+    });
+  });
+
+  // ------------------------------------------------------------------
   // E2. Playtime reconcile-on-view (#868) + reactive PLAYTIME display (#869)
   // ------------------------------------------------------------------
 
@@ -1911,10 +2019,11 @@ describe("RomMPlaySection", () => {
       const before = domListenerCount("romm_data_changed");
       const { unmount } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
-      // Two listeners: the game-detail store's, opened by this section's
+      // Three listeners: the game-detail store's, opened by this section's
       // subscription, + the child VersionPicker's (it also refreshes on
-      // version_switched, #1297). Both are removed on unmount.
-      expect(domListenerCount("romm_data_changed")).toBe(before + 2);
+      // version_switched, #1297) + this section's own, which announces the save
+      // verdict after an emulator source change. All are removed on unmount.
+      expect(domListenerCount("romm_data_changed")).toBe(before + 3);
       unmount();
       expect(domListenerCount("romm_data_changed")).toBe(before);
     });
