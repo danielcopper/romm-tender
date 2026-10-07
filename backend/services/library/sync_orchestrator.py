@@ -259,9 +259,9 @@ class SyncOrchestrator:
         path, which carry no ``metadatum`` (#738).
 
         Refuses with ``sync_in_progress`` while another run holds the slot, and
-        with ``cancelled`` when the user cancels. Any other failure discards the
-        half-built preview, ends the progress with an error frame, and reaches
-        the caller.
+        with ``cancelled`` when the user cancels. Any other failure drops any
+        staged preview, so none stays appliable, ends the progress with an error
+        frame, and reaches the caller.
         """
         box = self._sync_state
         run_id = self._uuid_gen.uuid4()

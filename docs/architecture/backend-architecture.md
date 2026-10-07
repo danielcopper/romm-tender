@@ -979,11 +979,11 @@ also an answer that is not a list: the adapter's platform listing and its three 
 (`adapters/romm/romm_api.py`) raise that as a plain `RommApiError`, never an empty list and never `RommNotFoundError`,
 which downstream reads as proof that one entity is gone, and a listing is about no single entity. Apply emits a
 `sync_progress` frame at stage `error` carrying the `classify_error` message and returns before it opens a `SyncRun`, so
-no stale removal runs and neither `sync_collections` nor `sync_complete` is emitted. The preview discards its delta,
-emits the same `error` frame and raises the error on: a RomM error is answered with `classify_error`'s reason and
-message, and anything else reaches the panel as a transport error, for which the Sync page shows its own general line.
-Read as an empty listing instead, the run would build no unit for an enabled platform or collection, and once any other
-unit keeps the run from ending as "Nothing to sync", the stale removal would unbind the games only it brings in; a
+no stale removal runs and neither `sync_collections` nor `sync_complete` is emitted. The preview drops any staged
+preview, emits the same `error` frame and raises the error on: a RomM error is answered with `classify_error`'s reason
+and message, and anything else reaches the panel as a transport error, for which the Sync page shows its own general
+line. Read as an empty listing instead, the run would build no unit for an enabled platform or collection, and once any
+other unit keeps the run from ending as "Nothing to sync", the stale removal would unbind the games only it brings in; a
 collection would also lose its stamp (a standard or smart one has one), and the frontend's stale-collection cleanup
 would delete its Steam collection. A collection absent from a list RomM did answer with is a real removal and still goes
 that way. Only a kind with an enabled id is listed, and of the virtual kind only a type an enabled id encodes
@@ -993,7 +993,7 @@ not synced: a foreign collection the owner scope drops from the queue still need
 is always read. The Library page's `get_collections` reads the same collection listings only to display them: a failed
 standard listing fails it, while a failed smart listing or virtual type is left out and the rest is listed. The platform
 listing's other readers — the Library page's `get_platforms` and `set_all_platforms_sync`, and the connection test —
-answer its failure, a non-list answer included, with the failure shape.
+answer a RomM error from it, a non-list answer included, with `classify_error`'s failure shape.
 
 "Force Full Sync" (`clear_sync_cache`) clears every stamp (and resets the recorded `applied_launch_options` to NULL),
 which is the entire full-re-fetch + full-re-apply arm — the stamps are the fetcher's sole skip authority. The

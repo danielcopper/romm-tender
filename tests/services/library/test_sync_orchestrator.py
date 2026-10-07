@@ -1650,8 +1650,8 @@ class TestSyncPreviewErrorHandling:
         ``SyncCancelled`` itself would reach the panel as a ``backend_exception``
         error (``host/dispatch.py``). The cooperative cancel — the dedicated
         ``SyncCancelled``, matching the production signal raised by
-        ``fetcher._check_cancelling`` and the per-unit checkpoint — must leave as
-        the ``cancelled`` refusal and leave sync_state IDLE with no pending delta.
+        ``fetcher._check_cancelling`` and the per-unit checkpoint — must surface as
+        the ``cancelled`` refusal, with sync_state IDLE and no pending delta.
         ``SyncCancelled`` is an ``Exception``; the clause order routes it into
         ``except SyncCancelled``, which sits above the generic ``except Exception``.
         """
