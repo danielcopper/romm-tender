@@ -1379,7 +1379,7 @@ class TestMigrationRelaunchOptions:
             {
                 "app_id": 4242,
                 "launch_options": (
-                    "flatpak run net.retrodeck.retrodeck "
+                    "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
                     '-e "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/pcsx_rearmed_libretro.so %ROM%" '
                     f'"{new_rom}"'
                 ),
@@ -1419,7 +1419,7 @@ class TestMigrationRelaunchOptions:
         assert payload is not None
         # Stale → PLAIN launch at the NEW path, never -e None.so.
         assert payload["items"] == [
-            {"app_id": 4242, "launch_options": f'flatpak run net.retrodeck.retrodeck "{new_rom}"'}
+            {"app_id": 4242, "launch_options": f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{new_rom}"'}
         ]
         assert "-e" not in payload["items"][0]["launch_options"]
         assert "Removed Core" in caplog.text

@@ -175,7 +175,9 @@ class TestShortcutDataFormat:
             {42: "/roms/n64/game.z64"},
             {},
         )
-        assert result[0]["launch_options"] == 'flatpak run net.retrodeck.retrodeck "/roms/n64/game.z64"'
+        assert (
+            result[0]["launch_options"] == 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/n64/game.z64"'
+        )
 
     def test_start_dir_is_parent_of_exe(self, library):
         """Start dir must be the directory containing the launcher."""
@@ -1900,7 +1902,10 @@ class TestDoSyncPerUnit:
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 1
         by_rom = {s["rom_id"]: s for s in unit_events[0]["shortcuts"]}
-        assert by_rom[10]["launch_options"] == 'flatpak run net.retrodeck.retrodeck "/roms/n64/installed.z64"'
+        assert (
+            by_rom[10]["launch_options"]
+            == 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/n64/installed.z64"'
+        )
         assert by_rom[11]["launch_options"] == ""
 
     @pytest.mark.asyncio
@@ -1940,11 +1945,14 @@ class TestDoSyncPerUnit:
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         by_rom = {s["rom_id"]: s for s in unit_events[0]["shortcuts"]}
         assert by_rom[10]["launch_options"] == (
-            "flatpak run net.retrodeck.retrodeck "
+            "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
             '-e "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/pcsx_rearmed_libretro.so %ROM%" '
             '"/roms/psx/pinned.chd"'
         )
-        assert by_rom[11]["launch_options"] == 'flatpak run net.retrodeck.retrodeck "/roms/psx/plain.chd"'
+        assert (
+            by_rom[11]["launch_options"]
+            == 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/psx/plain.chd"'
+        )
         assert "-e" not in by_rom[11]["launch_options"]
 
     @pytest.mark.asyncio
@@ -1982,7 +1990,10 @@ class TestDoSyncPerUnit:
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         by_rom = {s["rom_id"]: s for s in unit_events[0]["shortcuts"]}
         # Stale → PLAIN launch, never -e with a bogus core.
-        assert by_rom[10]["launch_options"] == 'flatpak run net.retrodeck.retrodeck "/roms/psx/stale.chd"'
+        assert (
+            by_rom[10]["launch_options"]
+            == 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/psx/stale.chd"'
+        )
         assert "-e" not in by_rom[10]["launch_options"]
         assert "Removed Core" in caplog.text
         assert "no longer resolves" in caplog.text

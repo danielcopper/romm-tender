@@ -409,7 +409,7 @@ class TestSetGameCore:
         # available-cores map keys on the BARE core name (bsnes_libretro); the
         # bake appends exactly one ".so" for the on-disk RetroArch core path.
         assert result["launch_options"] == (
-            "flatpak run net.retrodeck.retrodeck -e "
+            "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
             '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
             '"/roms/snes/mario.sfc"'
         )
@@ -426,7 +426,8 @@ class TestSetGameCore:
         assert result["success"] is True
         assert result["app_id"] == 99
         assert result["launch_options"] == (
-            'flatpak run net.retrodeck.retrodeck -e "%EMULATOR_PCSX2% -batch %ROM%" "/roms/ps2/gt4.iso"'
+            "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
+            '-e "%EMULATOR_PCSX2% -batch %ROM%" "/roms/ps2/gt4.iso"'
         )
         assert uow.roms.get(42).emulator_override == "PCSX2 (Standalone)"
 
@@ -497,7 +498,7 @@ class TestClearGameCore:
         # resolved core (the per-platform default) with the -e override form.
         assert active_core.emulator_calls == [42]
         assert result["launch_options"] == (
-            "flatpak run net.retrodeck.retrodeck -e "
+            "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
             '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
             '"/roms/snes/mario.sfc"'
         )
@@ -512,7 +513,9 @@ class TestClearGameCore:
         active_core.per_rom[42] = (None, None)
         result = event_loop.run_until_complete(service.clear_game_core(42))
         assert result["success"] is True
-        assert result["launch_options"] == 'flatpak run net.retrodeck.retrodeck "/roms/snes/mario.sfc"'
+        assert (
+            result["launch_options"] == 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/snes/mario.sfc"'
+        )
         assert "-e" not in result["launch_options"]
         assert uow.roms.get(42).emulator_override is None
 
@@ -568,7 +571,7 @@ class TestSetSystemCore:
                 {
                     "app_id": 101,
                     "launch_options": (
-                        "flatpak run net.retrodeck.retrodeck -e "
+                        "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
                         '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
                         '"/roms/snes/a.sfc"'
                     ),
@@ -602,12 +605,12 @@ class TestSetSystemCoreFanOut:
         items = {item["app_id"]: item["launch_options"] for item in result["rebake_items"]}
         assert items == {
             101: (
-                "flatpak run net.retrodeck.retrodeck -e "
+                "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
                 '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
                 '"/roms/snes/a.sfc"'
             ),
             102: (
-                "flatpak run net.retrodeck.retrodeck -e "
+                "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
                 '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
                 '"/roms/snes/b.sfc"'
             ),
@@ -624,7 +627,10 @@ class TestSetSystemCoreFanOut:
         result = event_loop.run_until_complete(service.set_system_core("ps2", "PCSX2 (Standalone)"))
         items = {item["app_id"]: item["launch_options"] for item in result["rebake_items"]}
         assert items == {
-            101: 'flatpak run net.retrodeck.retrodeck -e "%EMULATOR_PCSX2% -batch %ROM%" "/roms/ps2/a.iso"',
+            101: (
+                "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
+                '-e "%EMULATOR_PCSX2% -batch %ROM%" "/roms/ps2/a.iso"'
+            ),
         }
 
     def test_skips_per_game_overridden_rom(self, event_loop, service, uow, active_core):
@@ -673,7 +679,7 @@ class TestSetSystemCoreFanOut:
         assert items == [
             {
                 "app_id": 101,
-                "launch_options": 'flatpak run net.retrodeck.retrodeck "/roms/snes/a.sfc"',
+                "launch_options": 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/snes/a.sfc"',
             }
         ]
 
@@ -776,7 +782,7 @@ class TestCoreChangePreservesPinnedDisc:
         result = event_loop.run_until_complete(service.set_game_core(42, "bsnes"))
         assert result["success"] is True
         assert result["launch_options"] == (
-            "flatpak run net.retrodeck.retrodeck -e "
+            "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
             '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
             '"/roms/snes/mario.sfc"'
         )
