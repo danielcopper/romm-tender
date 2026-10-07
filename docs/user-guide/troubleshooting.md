@@ -8,7 +8,9 @@ Common issues and how to fix them.
 
 **Symptom**: The Tender QAM panel's **Connection** row shows a "Backend error" badge with the note "Tender's backend
 failed to start — check its log", and the Sync buttons are disabled. This state means Tender's own backend process never
-started — it is **not** the same as an unreachable RomM server, which shows **Not connected** instead.
+started — it is **not** the same as an unreachable RomM server, which shows **Not connected** instead, nor a backend
+that restarted while the panel stayed in Steam, which shows **Backend restarted**
+([Tender says it was restarted](#tender-says-it-was-restarted)).
 
 **Fix**: The backend aborted during startup, so the panel can't reach it. Its log says why:
 
@@ -42,6 +44,32 @@ after 60 seconds, so generate a fresh one for the retry.
 
 This message is specific to Tender's backend being unreachable. A RomM server that is merely down or misconfigured
 answers with its own message instead — "Server unreachable", "Sign-in rejected", or the RomM version notice.
+
+## Tender Says It Was Restarted
+
+**Symptom**: A notification says "Tender was restarted", and the **Connection** row on Tender's main page shows
+**Backend restarted** with one of two notes:
+
+- "Tender was restarted — it reloads Steam's interface once no game is running."
+- "Tender was restarted — restart Steam to use it again."
+
+Until then nothing in Tender's panel works, and a press says so at once — **Stop Game** on a game page shows "Couldn't
+stop the game" with the same note.
+
+**Explanation**: Tender's backend restarted while Steam kept running, and the panel in Steam is the one the backend that
+stopped had loaded. The running backend can never accept it, and it told the panel what happens next. The first note
+means the backend replaces the panel by itself once no game is running
+([below](#steams-screen-reloads-by-itself-after-a-backend-restart)); the second means it will not — it already tried, or
+it has taken Steam's interface down twice in the last ten minutes. In the first seconds after the backend starts it can
+also mean the backend has not looked at Steam yet, which is why opening Tender asks again.
+
+**Fix**: For the first note, exit the game; Steam's interface reloads a moment later with a working panel. For the
+second, restart Steam. Opening Tender in the Quick Access menu asks the backend again, and a new notification says so
+when its answer has changed. The backend's log carries one line for that panel, however long it stays:
+
+```bash
+grep "a panel another backend process loaded" ~/.local/state/romm-tender/backend.log | tail -n 5
+```
 
 ## Steam's Screen Reloads by Itself After a Backend Restart
 

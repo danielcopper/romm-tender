@@ -618,7 +618,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **A transport failure and an endpoint's own failure never arrive in the same shape, on either end** — test +
   prompt-only — `hostSocket.test.ts` for the frontend half (`frontend/src/api/hostSocket.ts`); the backend half is
   `.claude/rules/host.md`, the vocabulary `backend/host/protocol.py`. Prompt-only: the Python and TypeScript spellings
-  of `connection_lost` must agree — nothing holds them equal
+  of `connection_lost` and `stranded_panel`, and of the stranded-panel close codes 4001 and 4002, must agree — nothing
+  holds them equal
 - **The standalone panel bundle carries `@decky/ui` and the coexistence one carries none of it** — check —
   `frontend/scripts/check-bundle-shape.mjs`, over the built artifact; which bundle the injector loads
   (`backend/host/inject/bundles.py`) it does not see

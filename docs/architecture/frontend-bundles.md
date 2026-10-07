@@ -307,7 +307,7 @@ Decky's copy carries a name whose value this check never reads.
 `backend/host/protocol.py`. The port and the token are read off the URL this bundle was loaded from: the host mints
 exactly that address, so they arrive with the code that needs them and cannot be stale.
 
-Three properties are worth knowing before changing anything there:
+Four properties are worth knowing before changing anything there:
 
 - **A transport failure is thrown, never returned.** `error.reason` names something that went wrong _carrying_ a call;
   an endpoint's own failure is a perfectly successful transport and arrives inside `result` as
@@ -318,6 +318,11 @@ Three properties are worth knowing before changing anything there:
   change, is stated at the top of `frontend/src/api/hostSocket.ts`.
 - **A dropped connection fails the calls that were already sent, and only those.** A frame still queued never left, so
   re-sending it is safe; one already on the wire may have run, and retrying it would repeat whatever it did.
+- **A stranded panel fails everything, at once and for good.** A backend that refuses the panel as one an earlier
+  process loaded closes its upgrade with a code of its own; the socket then stops reconnecting and fails every queued
+  and later call with `stranded_panel`. `api/host.ts` hands the answer on (`strandedAnswer`, `onStrandedAnswerChange`,
+  `recheckStranded`, `isStrandedPanelFailure`) — what it means and when the panel asks again is
+  [loading-the-panel.md](loading-the-panel.md#what-the-stranded-panel-is-told).
 
 **A fourth opens no socket and is the one the panel reaches the screen through.** `definePanel` answers with the factory
 unchanged; `index.tsx` hands that factory to `frontend/src/qam/installEntry.tsx`, which calls it exactly once and mounts

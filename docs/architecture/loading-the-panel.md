@@ -115,16 +115,16 @@ one reads as an empty instance, which no running process has.
 
 When the backend restarts while Steam keeps running — a reinstall, `systemctl --user restart romm-tender`, or the unit's
 `Restart=always` after a crash — the panel the previous process loaded stays in Steam. It carries the previous process's
-token, so the new server refuses its socket on every retry (`refused GET /ws: wrong token` in the log), and the new
-injector finds the marker and loads nothing over it. The game page's Tender section stays at "Loading...", and a game
-launched from Steam starts without Tender: no save sync around it and no playtime.
+token, so the new server refuses its socket, and the new injector finds the marker and loads nothing over it. The game
+page's Tender section stays at "Loading...", and a game launched from Steam starts without Tender: no save sync around
+it and no playtime.
 
 **How the backend knows.** Whenever the injector finds a marker, it asks whose it is. Its own instance means a panel it
 loaded — the ordinary case after the debugger connection was lost and re-attached — and is left alone. Any other
 instance is a panel no running backend can reach, because the single-instance lock allows one backend at a time. A
 marker whose owner cannot be read is treated as the process's own, so an unanswered question never reloads anything. A
 refused knock on the port is deliberately not a signal: any page can send one, and it says nothing about what is loaded
-in Steam.
+in Steam. The knock is answered, though — the panel is told, below.
 
 **What it does about it** (`backend/host/inject/recovery.py`):
 
@@ -179,6 +179,37 @@ ERROR with its traceback — so a run can be judged from the log alone.
 check that finds such a count moved since its injection closes the record without judging it.
 
 Not measured: SteamOS Game Mode, which is why every step is logged.
+
+### What the stranded panel is told
+
+A browser does not show a page why a WebSocket handshake failed: a refused upgrade reaches it exactly as a port nobody
+listens on would. So the server completes the upgrade of a stranded panel — Host and Origin passed, a token offered that
+is not this process's — and closes it at once with a code of Tender's own
+([ADR-0043](../adr/0043-a-stranded-panel-is-told-so.md); `backend/host/server.py`, the codes in
+`backend/host/protocol.py`):
+
+| Code | The answer                                                     | When                                                                                               |
+| ---- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| 4001 | this backend reloads Steam's interface once no game is running | the recovery above is under way for a panel it has seen, and the limit would let it act now        |
+| 4002 | Steam has to be restarted                                      | everything else: no stranded panel seen (yet), the recovery gave up or ended, or the limit refuses |
+
+Nothing is attached to that socket — no connection, no dispatcher, no events — so it authorises nothing. A request with
+no token, the static route, and the Host and Origin refusals keep their plain HTTP status. The answer is asked of the
+recovery on every knock (`StrandedPanelRecovery.reload_to_come`), and it is strict: a window the limit frees later is a
+later answer, never a promise now. One consequence of that strictness: a stranded panel that knocks before the injector
+has read the attached context is told to restart Steam, and learns otherwise only when it asks again.
+
+The log carries one WARNING per stranded panel — keyed on the session identity its upgrade address carries, which is the
+panel's own and not a secret — naming the answer, and one more only when the answer for that session changes. The memory
+is bounded (`STRANDED_SESSIONS_REMEMBERED`); a forgotten session costs one more line. Every other refusal is logged each
+time, as before.
+
+**What the panel does with it** (`frontend/src/api/hostSocket.ts`): on either code the socket stops reconnecting for
+good, and every queued and later call fails at once with the transport reason `stranded_panel`, whose message is the
+sentence for the answer. One notification says the answer when the panel becomes stranded, and one more each time it
+changes; Main's connection row says it in place of the probe's verdict. The panel asks again — one connection opened
+only to read the close, bounded at two seconds, never two at once — when Tender is opened in Quick Access and when Stop
+fails.
 
 ## The crash watchdog
 

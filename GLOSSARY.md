@@ -233,7 +233,8 @@ bundle reaches Steam only when the context is rebuilt.
 A panel whose marker names a backend process other than the one running. The marker names the process that wrote it by
 its **instance**, a random value each process makes at start-up. A stranded panel was loaded by an earlier backend and
 holds that backend's token, so it can reach no running backend. The backend **replaces** a stranded panel by having
-Steam rebuild its JS context.
+Steam rebuild its JS context. The panel learns that it is stranded from the code the backend closes its connection with,
+which also says whether that replacement is coming.
 
 ### Backend restart / JS-context rebuild / panel load
 

@@ -74,11 +74,12 @@ event  {type, name, payload}
 ```
 
 `error.reason` is the **transport** layer — `method_unknown`, `payload_too_large`, `backend_exception`,
-`malformed_message`, `connection_lost`. An endpoint's own failure is a successful transport and arrives inside `result`
-in the `{success, reason, message}` shape `scripts/check_failure_shape.py` guards; that gate does not see `host/`, so
-keeping the two apart is prose and review. Reachable methods are exactly the endpoints on `Endpoints`: the public
-methods marked `@route`, `def` or `async def` alike. An endpoint's answer is awaited only when it is awaitable. The set
-is the one `scripts/check_endpoint_parity.py` derives, asserted equal by `tests/host/test_dispatch.py`.
+`malformed_message`, `connection_lost`, `stranded_panel`; the last two are answered by the panel's own pending register,
+never sent. An endpoint's own failure is a successful transport and arrives inside `result` in the
+`{success, reason, message}` shape `scripts/check_failure_shape.py` guards; that gate does not see `host/`, so keeping
+the two apart is prose and review. Reachable methods are exactly the endpoints on `Endpoints`: the public methods marked
+`@route`, `def` or `async def` alike. An endpoint's answer is awaited only when it is awaitable. The set is the one
+`scripts/check_endpoint_parity.py` derives, asserted equal by `tests/host/test_dispatch.py`.
 
 **A refusal can be raised, and `Endpoints` answers it.** Every endpoint on `Endpoints` is wrapped once, by a class
 decorator in `main.py`, so no endpoint carries a second decorator and a new one is wrapped without anyone remembering
@@ -100,6 +101,11 @@ socket. Breaking the second rejects every call in flight, which is why one overs
 
 **No reply store.** A call whose answer was in flight when the socket went is not redelivered — its task is cancelled,
 and the caller's own pending register answers it `connection_lost`. A lost answer fails visibly; it never disappears.
+
+**A panel another backend process loaded is told so, and admitted nowhere.** Its upgrade carries that process's token;
+the server completes the handshake and closes it at once with 4001 or 4002 — whether this backend reloads Steam's
+interface once no game is running — and attaches nothing to it. The panel then fails every call with `stranded_panel`.
+Which code, and when: [loading-the-panel.md](loading-the-panel.md#what-the-stranded-panel-is-told).
 
 **Events leave through a seam `build_application` is handed, never a module-level call.** It is the host sink's `emit`,
 an `EventEmitter` — one `emit(name, payload)` that answers **whether anybody heard**. Nothing is buffered: an event with

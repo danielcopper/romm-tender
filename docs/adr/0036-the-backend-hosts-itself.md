@@ -1,8 +1,11 @@
+---
+status: accepted
+decided: 2026-09-16
+updated: 2026-10-07
+amended-by: [0043]
+---
+
 # The backend hosts itself
-
-## Status
-
-Accepted.
 
 ## Context
 
