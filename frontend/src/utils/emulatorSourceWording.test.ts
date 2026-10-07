@@ -254,6 +254,12 @@ describe("sourceRowLines", () => {
     ]);
   });
 
+  it("says Tender cannot start games through a switched-off source, on its card (#2265 D6)", () => {
+    expect(
+      sourceRowLines(source({ kind: "emudeck", enabled: false, starts_games: false, catalogue: "sealed" })),
+    ).toContainEqual({ tone: "info", text: "Tender cannot start games through EmuDeck yet." });
+  });
+
   it("says a RetroArch without a frontend cannot start games", () => {
     expect(
       sourceRowLines(source({ kind: "bare_retroarch_native", starts_games: false, catalogue: "unavailable" })),

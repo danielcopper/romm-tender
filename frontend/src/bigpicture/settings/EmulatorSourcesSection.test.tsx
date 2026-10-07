@@ -156,6 +156,12 @@ describe("EmulatorSourcesSection", () => {
     expect(getAllByTestId("toggle-input").map((input) => (input as HTMLInputElement).checked)).toEqual([true, false]);
   });
 
+  it("says on a switched-off source's card that Tender cannot start games through it (#2265 D6)", () => {
+    const { getByTestId } = renderSection(listed(RETRODECK, { ...EMUDECK, enabled: false }));
+
+    expect(getByTestId("source-lines-emudeck")).toHaveTextContent("Tender cannot start games through EmuDeck yet.");
+  });
+
   it("switches a source through its toggle", () => {
     const { getAllByTestId, onSwitch } = renderSection(BOTH);
     fireEvent.click(getAllByTestId("toggle-input")[1]!);
