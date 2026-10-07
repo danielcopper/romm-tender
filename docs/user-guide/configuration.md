@@ -299,6 +299,9 @@ while the source is switched on, an empty grey ring and a grey name while it is 
 - **Use this source**, under a thin line at the bottom of the card: a source switched off offers no emulators and is
   never asked about a game. It stays listed, so you can switch it on again.
 
+A game page that is open while you switch or move a source shows the change at once: its emulators, its BIOS state and
+its saves are read again.
+
 **Which source answers for a game.** While RetroDECK is found and switched on, a game's emulator, BIOS and save answers
 come from RetroDECK, wherever it stands in the order, because every game starts through it — even while it has not been
 set up yet, when it answers that it has not. Without it, the first source switched on in the order answers. A source

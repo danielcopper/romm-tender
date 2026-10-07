@@ -6,7 +6,7 @@ listed, switched and answered here is what the real holder detects under it.
 
 from __future__ import annotations
 
-from ._seed import _retrodeck_marker_path, seed_es_systems, seed_retrodeck_not_set_up
+from ._seed import _retrodeck_marker_path, seed_es_systems, seed_retrodeck_not_set_up, seed_rom
 
 
 async def test_the_listing_names_a_detected_retrodeck(harness):
@@ -47,6 +47,27 @@ async def test_switching_the_source_off_takes_its_emulators_away_and_on_brings_t
     assert harness.settings["emulator_sources_off"] == []
     assert on["emulator_data_available"] is True
     assert on["emulators"] != []
+
+
+async def test_a_game_s_emulators_follow_the_source_switched_off_and_on(harness):
+    seed_es_systems(harness)
+    seed_rom(harness, 42, platform_slug="gba")
+    before = await harness.endpoints.get_platform_core_info(42)
+
+    await harness.endpoints.set_emulator_source_enabled("retrodeck", False)
+    off = await harness.endpoints.get_platform_core_info(42)
+    await harness.endpoints.set_emulator_source_enabled("retrodeck", True)
+    on = await harness.endpoints.get_platform_core_info(42)
+
+    assert (off["emulator_data_available"], off["emulators"], off["emulator_data_reason"]) == (
+        False,
+        [],
+        "switched_off",
+    )
+    assert off["active_core_label"] is None
+    assert on == before
+    assert on["emulator_data_available"] is True
+    assert on["active_core_label"] == "mGBA"
 
 
 async def test_a_source_that_is_not_detected_is_refused_in_the_failure_shape(harness):

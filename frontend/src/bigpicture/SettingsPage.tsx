@@ -592,9 +592,11 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
       return null;
     });
 
-  /** A switch or a move, whose answer is the listing as it now stands. A refusal
-   *  means the sources changed under the page (a source went away), so the
-   *  page reads them again rather than keep a row that no longer exists. */
+  /** A switch or a move, whose answer is the listing as it now stands. An
+   *  accepted one can change which source answers for a game, so every open game
+   *  page is told to read its answers again. A refusal means the sources changed
+   *  under the page (a source went away), so the page reads them again rather
+   *  than keep a row that no longer exists. */
   const writeEmulatorSources = async (write: () => Promise<EmulatorSourcesListing | EmulatorSourceRefusal>) => {
     if (sourcesBusy) return;
     setSourcesBusy(true);
@@ -605,6 +607,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
         setEmulatorSources(await fetchEmulatorSources());
       } else {
         setEmulatorSources(answer);
+        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
       }
     } catch (e) {
       logError(`Failed to change the emulator sources: ${e}`);

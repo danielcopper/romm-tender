@@ -616,6 +616,18 @@ async function handleCoreChange(entry: Entry): Promise<void> {
   }));
 }
 
+/** A switch or a move of an emulator source can change which source answers for
+ *  this game, and with it the emulators, the BIOS requirement and the save's
+ *  shape. Read directly rather than by re-running the load: the load's core and
+ *  BIOS reads are shared (`api/sharedReads.ts`), and one issued before the
+ *  change would hand back the answer it changed. */
+async function handleEmulatorSourcesChange(appId: number, entry: Entry): Promise<void> {
+  await Promise.all([
+    handleCoreChange(entry),
+    entry.state.saveSyncEnabled ? refreshSaveStatus(appId).catch(() => null) : null,
+  ]);
+}
+
 /** How long a failed load waits before its one retry. Tender's own
  *  backend-readiness ladders — `RETRY_DELAYS` in index.tsx (#1203) and
  *  `CONNECTION_RETRY_DELAYS` in utils/connectionProbe.ts (#1045) — both go 2000,
@@ -698,6 +710,9 @@ function attachListeners(appId: number, entry: Entry): () => void {
               break;
             case "core_changed":
               await handleCoreChange(entry);
+              break;
+            case "emulator_sources":
+              await handleEmulatorSourcesChange(appId, entry);
               break;
             case "save_sync":
               await handleSaveSyncChange(appId, entry, detail);

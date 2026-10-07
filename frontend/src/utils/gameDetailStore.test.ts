@@ -924,6 +924,90 @@ describe("gameDetailStore", () => {
     });
   });
 
+  describe("emulator_sources notifications", () => {
+    const dispatchSourcesChanged = () =>
+      globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "emulator_sources" } }));
+
+    const switchedOff: CoreInfo = {
+      ...coreInfo,
+      active_core: null,
+      active_core_label: null,
+      emulators: [],
+      emulator_data_available: false,
+      emulator_data_reason: "switched_off",
+      emulator_source: null,
+    };
+
+    it("re-reads the emulators, the BIOS state and the save status of an open entry", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
+      subscribe(nextAppId);
+      await flush();
+      expect(getGameDetail(nextAppId)).toMatchObject({ activeCoreLabel: "Snes9x", emulatorDataAvailable: true });
+      vi.mocked(backend.getPlatformCoreInfo).mockClear();
+      vi.mocked(backend.getBiosStatus).mockClear();
+      vi.mocked(backend.getSaveStatus).mockClear();
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(switchedOff);
+      vi.mocked(backend.getBiosStatus).mockResolvedValue(biosMissing);
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(labelledStatus("After the switch"));
+
+      await act(async () => {
+        dispatchSourcesChanged();
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledWith(42);
+      expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledWith(42);
+      expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledWith(42);
+      expect(getGameDetail(nextAppId)).toMatchObject({
+        activeCoreLabel: null,
+        emulators: [],
+        emulatorDataAvailable: false,
+        emulatorDataReason: "switched_off",
+        emulatorSource: null,
+        biosRequiredMissing: true,
+        saveSyncLabel: "After the switch",
+      });
+    });
+
+    it("leaves the save status unread while save sync is off", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: false }));
+      subscribe(nextAppId);
+      await flush();
+      vi.mocked(backend.getSaveStatus).mockClear();
+
+      await act(async () => {
+        dispatchSourcesChanged();
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenLastCalledWith(42);
+      expect(vi.mocked(backend.getSaveStatus)).not.toHaveBeenCalled();
+    });
+
+    // The page-open core read is shared with the info panel; one still open when
+    // the sources change was asked before the change.
+    it("does not join a core read issued before the change", async () => {
+      const opening = deferred<CoreInfo>();
+      vi.mocked(backend.getPlatformCoreInfo).mockReturnValueOnce(opening.promise);
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found());
+      subscribe(nextAppId);
+      await flush();
+      expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledTimes(1);
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue(switchedOff);
+
+      await act(async () => {
+        dispatchSourcesChanged();
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledTimes(2);
+      expect(getGameDetail(nextAppId)).toMatchObject({ emulatorDataAvailable: false });
+    });
+  });
+
   describe("version_switched notifications", () => {
     it("re-derives the entry for this appId", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found());

@@ -114,6 +114,12 @@ async function handleSaveSyncChange(
   detail: Extract<RommDataChangedDetail, { type: "save_sync" }>,
 ): Promise<void> {
   if (detail.rom_id && detail.rom_id !== ctx.romIdRef.current) return;
+  await refreshSaveDetails(ctx, detail.save_status);
+}
+
+/** Fold this ROM's save status — the one `carried` on an event, or a fresh read
+ *  — and re-check its slots. */
+async function refreshSaveDetails(ctx: PanelEventContext, carried: SaveStatus | undefined): Promise<void> {
   const romId = ctx.romIdRef.current;
   if (!romId) return;
   const binding = bindCurrentRom(ctx, romId);
@@ -121,7 +127,7 @@ async function handleSaveSyncChange(
   // is the newer answer, so a read an earlier event left open must not land on
   // top of it.
   const overtaken = takeReadTicket(ctx.readSeqs, "saveStatus");
-  const result = detail.save_status ?? (await getSaveStatus(binding.romId).catch(() => null));
+  const result = carried ?? (await getSaveStatus(binding.romId).catch(() => null));
   if (result && isEndpointFailure(result)) return;
   const updatedStatus: SaveStatus | null = result;
   const conflicts: SyncConflict[] = updatedStatus?.conflicts ?? [];
@@ -166,10 +172,7 @@ async function handleBiosChange(
   binding.write((prev) => ({ ...prev, ...biosFields }));
 }
 
-async function handleCoreChange(
-  ctx: PanelEventContext,
-  _detail: Extract<RommDataChangedDetail, { type: "core_changed" }>,
-): Promise<void> {
+async function handleCoreChange(ctx: PanelEventContext): Promise<void> {
   // Re-fetch cached game detail to pick up the new core-aware BIOS status.
   invalidateCachedGameDetail(ctx.appId);
   const rid = ctx.romIdRef.current;
@@ -204,6 +207,13 @@ async function handleCoreChange(
   // (#1752). Read directly: this handler runs because the requirement may have
   // just changed, so it must not join a read issued before the change.
   await refreshBiosIfStale(cached, binding, ctx.readSeqs, getBiosStatus);
+}
+
+/** A switch or a move of an emulator source can change which source answers for
+ *  this game, and with it everything `handleCoreChange` re-reads and the save's
+ *  shape. */
+async function handleEmulatorSourcesChange(ctx: PanelEventContext): Promise<void> {
+  await Promise.all([handleCoreChange(ctx), refreshSaveDetails(ctx, undefined)]);
 }
 
 async function handleVersionSwitched(
@@ -358,7 +368,9 @@ function dispatchDataChanged(ctx: PanelEventContext, detail: RommDataChangedDeta
     case "bios":
       return handleBiosChange(ctx, detail);
     case "core_changed":
-      return handleCoreChange(ctx, detail);
+      return handleCoreChange(ctx);
+    case "emulator_sources":
+      return handleEmulatorSourcesChange(ctx);
     case "metadata":
       return handleMetadataChange(ctx, detail);
     case "cover_refreshed":
