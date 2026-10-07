@@ -24,10 +24,10 @@ from domain.user_data_location import LAUNCHER_EXE_SUFFIX
 # stop-game path resolves live processes by, so it is public.
 RETRODECK_APP_ID = "net.retrodeck.retrodeck"
 
-# Steam, an X11 client, cannot tie a native Wayland window to the running game and
-# gives it Steam Input's Desktop Layout (ValveSoftware/steam-for-linux#8020);
-# without the Wayland socket RetroDECK's emulators draw through XWayland. It is a
-# ``flatpak run`` option, so it must stand before the app id.
+# Without its Wayland socket RetroDECK draws through XWayland, where Steam Input can
+# follow the game's window; why, and when it goes: docs/user-guide/troubleshooting.md,
+# "RetroDECK runs through XWayland in Desktop Mode". It is a ``flatpak run`` option,
+# so it must stand before the app id.
 _RETRODECK_RUN = "flatpak run --nosocket=wayland"
 RETRODECK_INVOCATION = f"{_RETRODECK_RUN} {RETRODECK_APP_ID}"
 

@@ -324,19 +324,20 @@ In Desktop Mode on a Wayland session, a game started from Tender opens an XWayla
 one, on purpose.
 
 **Why**: Steam is an X11 program and learns which window has focus only through X11, where a native Wayland window is
-invisible. Started on Wayland, RetroArch and RetroDECK's standalone emulators open such a window, Steam cannot tell that
-it belongs to the running game, and it applies Steam Input's Desktop Layout to every controller: the Deck's built-in
-controls act as mouse and keyboard, and the game gets no controller input at all. So Tender starts RetroDECK with
-`flatpak run --nosocket=wayland`, which leaves it no Wayland connection and makes every emulator draw through XWayland,
-where Steam sees the window and applies the game's controller configuration. In Gaming Mode games already draw through
-gamescope's XWayland, so nothing changes there.
+invisible. Started on Wayland, RetroArch opens such a window, and so can a standalone emulator that supports Wayland;
+Steam cannot tell that it belongs to the running game, and it applies Steam Input's Desktop Layout to every controller:
+the Deck's built-in controls act as mouse and keyboard, and the game gets no controller input at all. So Tender starts
+RetroDECK with `flatpak run --nosocket=wayland`, which leaves it no Wayland connection and makes every emulator draw
+through XWayland, where Steam sees the window and applies the game's controller configuration. In Gaming Mode games
+already draw through gamescope's XWayland, so nothing changes there.
 
 This is a workaround for a Steam limitation
 ([ValveSoftware/steam-for-linux#8020](https://github.com/ValveSoftware/steam-for-linux/issues/8020)). It will be removed
 once Steam handles Wayland windows; that is tracked in [#2271](https://github.com/danielcopper/romm-tender/issues/2271).
 
-Shortcuts created before this change need nothing from you: Tender writes each game's launch command again just before
-it starts, so an existing shortcut carries the new command from its next launch on.
+Shortcuts an earlier version of Tender made need nothing from you: Tender writes an installed game's launch command
+again when Tender's panel loads, after every sync, and just before the game starts, so an existing shortcut carries the
+new command by its next launch at the latest.
 
 ### Apply to All Shortcuts says "Not applied"
 
