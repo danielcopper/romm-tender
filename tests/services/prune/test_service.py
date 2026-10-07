@@ -30,6 +30,7 @@ from lib.prune_conflicts import PruneConflicts
 from services.prune import PruneService, PruneServiceConfig
 from services.prune._models import cancellation_state
 from services.prune.results import _COMPLETION_BUDGET_BYTES, GroupOutcome
+from services.prune.service import LocalStateChanged, StaleAction
 
 if TYPE_CHECKING:
     from models.prune import MutationOutcome, RecoveryArtifact, SourceClaim, SteamRecoverySnapshot
@@ -515,10 +516,12 @@ async def test_preview_is_generation_gated_paged_and_tokenized(harness):
     )
     assert count_only["items"] == []
     assert count_only["total"] == 1
-    stale = await harness.service.get_prune_preview(
+    stale = harness.service.get_prune_preview(
         {"scope": "bulk", "rom_id": None, "preview_id": "wrong", "offset": 0, "limit": 50}
     )
-    assert stale["reason"] == "stale_preview"
+    with pytest.raises(Refused) as refused:
+        await stale
+    assert refused.value.reason == "stale_preview"
 
 
 @pytest.mark.asyncio
@@ -547,8 +550,10 @@ async def test_stale_preview_refuses_start_after_local_change(harness):
                 installed_at="now",
             )
         )
-    result = await _start(harness, preview["preview_id"])
-    assert result["reason"] == "stale_preview"
+    start = _start(harness, preview["preview_id"])
+    with pytest.raises(Refused) as refused:
+        await start
+    assert refused.value.reason == "stale_preview"
 
 
 @pytest.mark.asyncio
@@ -828,25 +833,27 @@ async def test_a_cancel_after_the_destructive_phase_started_does_not_abort_it(ha
     action = await _wait_action(harness, "repoint_shortcut")
 
     await harness.service.cancel_prune(started["run_id"])
-    await harness.service.report_prune_action(
-        {
-            "run_id": started["run_id"],
-            "action_token": action["action_token"],
-            "phase": "claim",
-            "action": "repoint_shortcut",
-            "app_id": app_id,
-            "target_rom_id": 2,
-        }
-    )
-    await harness.service.report_prune_action(
-        {
-            "run_id": started["run_id"],
-            "action_token": action["action_token"],
-            "phase": "complete",
-            "success": True,
-            "message": "done",
-        }
-    )
+    with contextlib.suppress(StaleAction):
+        await harness.service.report_prune_action(
+            {
+                "run_id": started["run_id"],
+                "action_token": action["action_token"],
+                "phase": "claim",
+                "action": "repoint_shortcut",
+                "app_id": app_id,
+                "target_rom_id": 2,
+            }
+        )
+    with contextlib.suppress(StaleAction):
+        await harness.service.report_prune_action(
+            {
+                "run_id": started["run_id"],
+                "action_token": action["action_token"],
+                "phase": "complete",
+                "success": True,
+                "message": "done",
+            }
+        )
     with pytest.raises(asyncio.CancelledError):
         await task
 
@@ -955,10 +962,15 @@ async def test_a_start_refused_as_stale_registers_no_run(harness):
     _seed(harness.uow, _rom(1, fetch="old"))
     preview = await _preview(harness)
     _seed(harness.uow, _rom(2, fetch="old"))
+    start = _start(harness, preview["preview_id"])
 
-    started = await _start(harness, preview["preview_id"])
+    with pytest.raises(Refused) as refused:
+        await start
 
-    assert started["reason"] == "stale_preview"
+    assert (refused.value.reason, refused.value.message) == (
+        "stale_preview",
+        "Local game state changed. Review a fresh cleanup preview.",
+    )
     assert harness.conflicts.cleanup_running is False
 
 
@@ -969,13 +981,12 @@ async def test_cancel_refuses_an_id_that_is_not_the_running_one(harness):
     preview = await _preview(harness)
     started = await _start(harness, preview["preview_id"], remove_fully_vanished=True)
 
-    stale = await harness.service.cancel_prune("00000000-0000-4000-8000-00000000dead")
+    cancel = harness.service.cancel_prune("00000000-0000-4000-8000-00000000dead")
 
-    assert stale == {
-        "success": False,
-        "reason": "stale_run",
-        "message": "That cleanup run is not running.",
-    }
+    with pytest.raises(Refused) as refused:
+        await cancel
+
+    assert (refused.value.reason, refused.value.message) == ("stale_run", "That cleanup run is not running.")
     # The real run is untouched by a wrong-id request.
     await _finish(harness)
     assert harness.uow.roms.get(1) is None
@@ -985,12 +996,13 @@ async def test_cancel_refuses_an_id_that_is_not_the_running_one(harness):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("run_id", ["", None, 7])
 async def test_cancel_rejects_a_malformed_run_id(harness, run_id):
-    result = await harness.service.cancel_prune(run_id)
-    assert result == {
-        "success": False,
-        "reason": "invalid_run_id",
-        "message": "Cleanup run id must be a non-empty string.",
-    }
+    cancel = harness.service.cancel_prune(run_id)
+    with pytest.raises(Refused) as refused:
+        await cancel
+    assert (refused.value.reason, refused.value.message) == (
+        "invalid_run_id",
+        "Cleanup run id must be a non-empty string.",
+    )
 
 
 @pytest.mark.asyncio
@@ -1021,10 +1033,12 @@ async def test_cancel_after_the_run_finished_is_refused_not_crashed(harness):
     started = await _start(harness, preview["preview_id"], remove_fully_vanished=True)
     await _finish(harness)
 
-    late = await harness.service.cancel_prune(started["run_id"])
+    late = harness.service.cancel_prune(started["run_id"])
 
-    assert late["success"] is False
-    assert late["reason"] == "stale_run"
+    with pytest.raises(Refused) as refused:
+        await late
+
+    assert refused.value.reason == "stale_run"
 
 
 @pytest.mark.asyncio
@@ -1429,7 +1443,10 @@ async def test_a_completion_that_needs_publication_is_leased_while_the_run_claim
     assert refused.value.reason == "operation_active"
     await harness.conflicts.release_lease(complete["prune_lease_token"])
     assert harness.conflicts.conflicting_operations == 0
-    assert (await _start(harness, "no-such-preview"))["reason"] == "stale_preview"
+    start = _start(harness, "no-such-preview")
+    with pytest.raises(Refused) as stale:
+        await start
+    assert stale.value.reason == "stale_preview"
 
 
 @pytest.mark.asyncio
@@ -1481,14 +1498,15 @@ async def test_fully_dead_shortcut_requires_confirmed_removal_action(harness):
     preview = await _preview(harness)
     await _start(harness, preview["preview_id"], remove_fully_vanished=True)
     action = await _wait_action(harness, "remove_shortcut")
-    stale = await harness.service.report_prune_action(
+    wrong_run = harness.service.report_prune_action(
         {
             "phase": "claim",
             "run_id": "wrong",
             "action_token": action["action_token"],
         }
     )
-    assert stale["reason"] == "stale_action"
+    with pytest.raises(StaleAction):
+        await wrong_run
     await _claim_action(harness, action)
     duplicate_claim = await _claim_action(harness, action)
     assert duplicate_claim["success"] is True
@@ -1564,7 +1582,7 @@ async def test_recovery_snapshot_rejects_wire_base64_before_accepting_bounded_js
     )
     capture = await _wait_action(harness, "capture_shortcut_snapshot")
     await _claim_action(harness, capture)
-    invalid = await harness.service.report_prune_action(
+    invalid = harness.service.report_prune_action(
         {
             "phase": "complete",
             "run_id": capture["run_id"],
@@ -1574,8 +1592,10 @@ async def test_recovery_snapshot_rejects_wire_base64_before_accepting_bounded_js
             "snapshot": {"cover_base64": "AAAA"},
         }
     )
-    assert invalid["reason"] == "invalid_snapshot"
-    wrong_app = await harness.service.report_prune_action(
+    with pytest.raises(Refused) as refused:
+        await invalid
+    assert refused.value.reason == "invalid_snapshot"
+    wrong_app = harness.service.report_prune_action(
         {
             "phase": "complete",
             "run_id": capture["run_id"],
@@ -1585,7 +1605,9 @@ async def test_recovery_snapshot_rejects_wire_base64_before_accepting_bounded_js
             "snapshot": _steam_snapshot(app_id + 1),
         }
     )
-    assert wrong_app["reason"] == "invalid_snapshot"
+    with pytest.raises(Refused) as refused:
+        await wrong_app
+    assert refused.value.reason == "invalid_snapshot"
     await _complete_action(harness, capture, message="captured", snapshot=_steam_snapshot(app_id))
     removal = await _wait_action(harness, "remove_shortcut")
     await _claim_action(harness, removal)
@@ -1612,8 +1634,10 @@ async def test_concurrent_starts_atomically_consume_one_preview(harness, monkeyp
     first = asyncio.create_task(_start(harness, preview["preview_id"]))
     while not entered.is_set():
         await asyncio.sleep(0)
-    second = await _start(harness, preview["preview_id"])
-    assert second["reason"] == "prune_active"
+    second = _start(harness, preview["preview_id"])
+    with pytest.raises(Refused) as refused:
+        await second
+    assert refused.value.reason == "prune_active"
     release.set()
     assert (await first)["success"] is True
     await _finish(harness)
@@ -1622,19 +1646,21 @@ async def test_concurrent_starts_atomically_consume_one_preview(harness, monkeyp
 
 
 @pytest.mark.asyncio
-async def test_preview_and_start_io_failures_use_canonical_shape(harness, monkeypatch):
+async def test_preview_and_start_io_failures_reach_the_caller(harness, monkeypatch):
     monkeypatch.setattr(
         harness.service._preview_builder, "build", lambda *_args: (_ for _ in ()).throw(OSError("disk"))
     )
-    preview = await _preview(harness)
-    assert preview == {"success": False, "reason": "unknown", "message": "disk"}
+    preview = _preview(harness)
+    with pytest.raises(OSError, match="disk"):
+        await preview
 
     _seed(harness.uow, _rom(1, fetch="old"))
     monkeypatch.undo()
     valid = await _preview(harness)
     monkeypatch.setattr(harness.service._preview_builder, "build", lambda *_args: (_ for _ in ()).throw(OSError("db")))
-    started = await _start(harness, valid["preview_id"])
-    assert started == {"success": False, "reason": "unknown", "message": "db"}
+    start = _start(harness, valid["preview_id"])
+    with pytest.raises(OSError, match="db"):
+        await start
     assert harness.service.is_active() is False
     assert harness.conflicts.cleanup_running is False
 
@@ -1713,8 +1739,9 @@ async def test_action_claim_rejects_binding_drift_before_steam_mutation(harness)
     action = await _wait_action(harness, "remove_shortcut")
     with harness.uow:
         harness.uow.roms.save(_rom(1, fetch="old", app_id=app_id + 1))
-    claim = await _claim_action(harness, action)
-    assert claim["reason"] == "local_state_changed"
+    claim = _claim_action(harness, action)
+    with pytest.raises(LocalStateChanged):
+        await claim
     await harness.service.shutdown()
     assert harness.uow.roms.get(1) is not None
 
@@ -1974,8 +2001,9 @@ async def test_unclaimed_action_timeout_makes_late_claim_harmless(harness, monke
     complete = await _finish(harness)
     assert complete["results"][0]["reason"] == "steam_action_failed"
 
-    late = await _claim_action(harness, action)
-    assert late["reason"] == "stale_action"
+    late = _claim_action(harness, action)
+    with pytest.raises(StaleAction):
+        await late
     assert harness.uow.roms.get(1) is not None
 
 
@@ -2002,8 +2030,8 @@ async def test_action_claim_expiring_during_validation_is_rejected(harness, monk
     harness.clock.advance(61)
     release.set()
 
-    claim = await claim_task
-    assert claim["reason"] == "stale_action"
+    with pytest.raises(StaleAction):
+        await claim_task
     await harness.service.shutdown()
     assert harness.uow.roms.get(1) is not None
 
@@ -2268,11 +2296,16 @@ async def test_action_claim_binds_discriminant_app_target_and_single_group_bindi
             "target_rom_id": action["target_rom_id"],
         }
         request[field] = value
-        assert (await harness.service.report_prune_action(request))["reason"] == "action_mismatch"
+        mismatched = harness.service.report_prune_action(request)
+        with pytest.raises(Refused) as refused:
+            await mismatched
+        assert refused.value.reason == "action_mismatch"
 
     with harness.uow:
         harness.uow.roms.save(_rom(3, fetch="new", group="g"))
-    assert (await _claim_action(harness, action))["reason"] == "local_state_changed"
+    widened_group = _claim_action(harness, action)
+    with pytest.raises(LocalStateChanged):
+        await widened_group
 
     with harness.uow:
         harness.uow.roms.delete(3)
@@ -2280,13 +2313,14 @@ async def test_action_claim_binds_discriminant_app_target_and_single_group_bindi
         assert other is not None
         other.bind_shortcut(app_id + 1)
         harness.uow.roms.save(other)
-    claim = await _claim_action(harness, action)
-    assert claim["reason"] == "local_state_changed"
+    rebound = _claim_action(harness, action)
+    with pytest.raises(LocalStateChanged):
+        await rebound
     await harness.service.shutdown()
 
 
 @pytest.mark.asyncio
-async def test_action_claim_adapter_exception_uses_canonical_failure(harness, monkeypatch):
+async def test_action_claim_adapter_exception_reaches_the_caller(harness, monkeypatch):
     app_id = 0x80000001
     _seed(harness.uow, _rom(1, fetch="old", app_id=app_id))
     harness.romm.outcomes[1] = [RommNotFoundError("gone")]
@@ -2299,9 +2333,10 @@ async def test_action_claim_adapter_exception_uses_canonical_failure(harness, mo
         lambda *_args: (_ for _ in ()).throw(OSError("database unavailable")),
     )
 
-    claim = await _claim_action(harness, action)
+    claim = _claim_action(harness, action)
 
-    assert claim == {"success": False, "reason": "unknown", "message": "database unavailable"}
+    with pytest.raises(OSError, match="database unavailable"):
+        await claim
     await harness.service.shutdown()
 
 
@@ -2972,11 +3007,13 @@ async def test_release_wait_times_out_while_a_run_still_holds_the_claim(harness,
     while not harness.installed_remover.entered.is_set():
         await asyncio.sleep(0)
 
-    assert await harness.service.wait_for_prune_release(started["run_id"]) == {
-        "success": False,
-        "reason": "release_timeout",
-        "message": "Cleanup claim release was not observed in time.",
-    }
+    wait = harness.service.wait_for_prune_release(started["run_id"])
+    with pytest.raises(Refused) as refused:
+        await wait
+    assert (refused.value.reason, refused.value.message) == (
+        "release_timeout",
+        "Cleanup claim release was not observed in time.",
+    )
 
     harness.installed_remover.release.set()
     await _finish(harness)
