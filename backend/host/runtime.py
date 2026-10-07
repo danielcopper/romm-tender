@@ -164,6 +164,7 @@ async def run_backend(
             status.steam.attach(
                 running_apps=panel_injector.running_apps, reload_frees_at=panel_injector.reload_frees_at
             )
+            server.answer_stranded_panels_from(panel_injector.reload_to_come)
             injector = asyncio.create_task(panel_injector.run())
 
         await stop.wait()

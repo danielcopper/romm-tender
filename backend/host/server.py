@@ -27,16 +27,19 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+from collections import OrderedDict
 from typing import TYPE_CHECKING
 
 from host.access import SESSION_PARAM, TOKEN_PARAM, AccessPolicy, check_access, new_token
 from host.connection import HostConnection
+from host.protocol import CLOSE_STRANDED_PANEL_RELOADS, CLOSE_STRANDED_PANEL_RESTART_STEAM
 from lib.http_messages import HEAD_TERMINATOR, MAX_HEAD_BYTES, HttpParseError, build_response_head, parse_request_head
 from lib.path_safety import safe_join
-from lib.websocket_frames import accept_key
+from lib.websocket_frames import accept_key, close_frame
 
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Awaitable, Callable
 
     from host.dispatch import CallDispatcher
     from host.events import EventSink
@@ -65,6 +68,27 @@ _CONTENT_TYPES = {
     ".svg": "image/svg+xml",
 }
 _DEFAULT_CONTENT_TYPE = "application/octet-stream"
+
+# How many stranded panels' sessions are remembered for the log-once rule. Steam
+# holds one panel per JS context and replaces a context only by a reload, so a
+# backend meets one or two of them; a forgotten session costs one more line,
+# never a flood, because a stranded panel stops asking once it is told.
+STRANDED_SESSIONS_REMEMBERED = 16
+
+# What each close tells the panel, beside the code that carries it.
+_STRANDED_ANSWERS = {
+    True: (CLOSE_STRANDED_PANEL_RELOADS, "stranded panel: Steam's interface reloads once no game is running"),
+    False: (CLOSE_STRANDED_PANEL_RESTART_STEAM, "stranded panel: restart Steam"),
+}
+_STRANDED_LOG_WORDING = {
+    True: "this backend reloads Steam's interface once no game is running",
+    False: "Steam has to be restarted",
+}
+
+
+async def _no_reload_to_come() -> bool:
+    """Before a recovery is attached, nothing here will reload Steam's interface."""
+    return False
 
 
 class HostServer:
@@ -101,6 +125,8 @@ class HostServer:
         # — which is a NEW connection, so a per-connection count would reset at
         # exactly the moment it had something to report.
         self._dropped_by_closed_connections = 0
+        self._reload_to_come: Callable[[], Awaitable[bool]] = _no_reload_to_come
+        self._stranded_sessions: OrderedDict[str, bool] = OrderedDict()
 
     @property
     def port(self) -> int:
@@ -146,6 +172,18 @@ class HostServer:
     def bundle_url(self) -> str:
         """The complete address the panel bundle is loaded from, token included."""
         return self.asset_url(BUNDLE_FILENAME)
+
+    def answer_stranded_panels_from(self, reload_to_come: Callable[[], Awaitable[bool]]) -> None:
+        """Tell a stranded panel, from now on, what *reload_to_come* answers.
+
+        *reload_to_come* answers whether this backend will reload Steam's
+        interface once no game is running — the recovery's own reading
+        (``host.inject.recovery``). Handed in after :meth:`start`, because what
+        reads it is built with the address this server answers on. Until then,
+        and for a backend that loads no panel at all, the answer is that Steam
+        has to be restarted.
+        """
+        self._reload_to_come = reload_to_come
 
     async def start(self) -> int:
         """Bind a port and begin serving; return the port that was taken.
@@ -208,6 +246,9 @@ class HostServer:
         policy = AccessPolicy(port=self._port, token=self._token)
         verdict = check_access(head, policy)
         if verdict.refused:
+            if verdict.wrong_token and head.method == "GET" and head.path == WS_PATH and _handshake_key(head):
+                await self._tell_stranded_panel(head, writer, verdict.log_line)
+                return
             self._logger.warning(f"host: {verdict.log_line}")
             await self._refuse(writer, verdict.status)
             return
@@ -234,10 +275,61 @@ class HostServer:
 
         The ``Server`` field is the whole of what a refusal reveals: it says
         which program answered and nothing about why, which is the honest answer
-        to a request that brought no token.
+        to a request that brought no token. The one refusal that says more is
+        :meth:`_tell_stranded_panel`'s.
         """
         await self._write_response(writer, status, [("Content-Length", "0"), ("Connection", "close")])
         await self._shutdown(writer)
+
+    async def _tell_stranded_panel(self, head: RequestHead, writer: asyncio.StreamWriter, log_line: str) -> None:
+        """Complete the handshake of a stranded panel's upgrade, and close it at once with a code.
+
+        A browser hides why a handshake failed: a refused upgrade reaches the
+        page exactly as no server at all would (WHATWG WebSockets, "Feedback
+        from the protocol"), so a 401 could not tell a panel that a backend is
+        running and will never admit it. A close after a completed handshake is
+        the one answer a page is shown. Nothing is attached to the socket — no
+        connection, no dispatcher, no events — so completing the handshake
+        authorises nothing; what the code adds to the ``Server`` field is
+        whether this backend will reload Steam's interface.
+        """
+        reloads = await self._reload_to_come()
+        self._log_stranded_panel(head.query.get(SESSION_PARAM, ""), log_line, reloads=reloads)
+        code, reason = _STRANDED_ANSWERS[reloads]
+        await self._write_response(
+            writer,
+            101,
+            [
+                ("Upgrade", "websocket"),
+                ("Connection", "Upgrade"),
+                ("Sec-WebSocket-Accept", accept_key(_handshake_key(head))),
+            ],
+        )
+        with contextlib.suppress(ConnectionError, OSError, RuntimeError):
+            writer.write(close_frame(code, reason))
+            await writer.drain()
+        await self._shutdown(writer)
+
+    def _log_stranded_panel(self, session_id: str, log_line: str, *, reloads: bool) -> None:
+        """Log a stranded panel's refusal once, and again only when what it is told changes.
+
+        Such a panel asked again every few seconds before it could be told, and
+        a line per attempt buried the one line that says what to do about it.
+        The session is the panel's own identity, not a secret, and the
+        remembering is bounded (:data:`STRANDED_SESSIONS_REMEMBERED`).
+        """
+        told_before = self._stranded_sessions.get(session_id)
+        self._stranded_sessions[session_id] = reloads
+        self._stranded_sessions.move_to_end(session_id)
+        while len(self._stranded_sessions) > STRANDED_SESSIONS_REMEMBERED:
+            self._stranded_sessions.popitem(last=False)
+        if told_before == reloads:
+            return
+        changed = "" if told_before is None else "the answer changed: "
+        self._logger.warning(
+            f"host: {log_line} — a panel another backend process loaded (session {session_id!r}); {changed}told it "
+            f"{_STRANDED_LOG_WORDING[reloads]}. Its further refusals are logged only if that answer changes."
+        )
 
     async def _serve_file(self, head: RequestHead, writer: asyncio.StreamWriter, echo_origin: str) -> None:
         """Serve one file from the static root, or 404.
@@ -292,14 +384,10 @@ class HostServer:
         bundle instance, so the log can tell a reconnect of the same panel from a
         leftover of an earlier one.
         """
-        key = head.header("sec-websocket-key")
-        upgrade = head.header("upgrade").lower()
-        version = head.header("sec-websocket-version")
-        # The key is answered with a digest over its ASCII bytes. A header is
-        # decoded latin-1, so a non-ASCII one reaches here intact and would
-        # raise out of this callback — asyncio prints a bare traceback and the
-        # socket is simply left open. Refused as a malformed handshake instead.
-        if upgrade != "websocket" or not key or not key.isascii() or version != "13":
+        key = _handshake_key(head)
+        if not key:
+            upgrade = head.header("upgrade").lower()
+            version = head.header("sec-websocket-version")
             self._logger.warning(f"host: not a WebSocket 13 handshake (upgrade={upgrade!r}, version={version!r})")
             await self._refuse(writer, 426)
             return
@@ -356,6 +444,20 @@ class HostServer:
         with contextlib.suppress(ConnectionError, OSError, RuntimeError):
             writer.close()
             await writer.wait_closed()
+
+
+def _handshake_key(head: RequestHead) -> str:
+    """The key of a WebSocket 13 handshake *head* makes, or ``""`` where it makes none.
+
+    The key is answered with a digest over its ASCII bytes. A header is decoded
+    latin-1, so a non-ASCII one would reach the digest intact and raise out of
+    the connection callback — asyncio prints a bare traceback and the socket is
+    simply left open — so it counts as no handshake.
+    """
+    key = head.header("sec-websocket-key")
+    if head.header("upgrade").lower() != "websocket" or head.header("sec-websocket-version") != "13":
+        return ""
+    return key if key.isascii() else ""
 
 
 def _read_from_root(root: str, requested: str) -> tuple[bytes, str] | None:

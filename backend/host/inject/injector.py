@@ -237,6 +237,10 @@ class PanelInjector:
         """
         return await asyncio.get_running_loop().run_in_executor(None, self._reload_limit.frees_at)
 
+    async def reload_to_come(self) -> bool:
+        """Will Steam's interface be reloaded for a panel an earlier backend left there?"""
+        return await self._recovery.reload_to_come()
+
     async def run(self) -> None:
         """Attach, inject, and stay attached until cancelled or stopped for cause."""
         if self._setup.override == INJECT_OFF:

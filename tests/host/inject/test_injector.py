@@ -1123,6 +1123,55 @@ class TestAcrossBackendStarts:
         await wait_until(lambda: running.page.reloads == 1)
 
 
+class TestWhatAStrandedPanelIsTold:
+    """Whether a reload is to come — what the server's close tells a panel it cannot admit.
+
+    Strict: ``True`` only while the recovery is under way for a panel it has
+    seen and the limit would let it act now.
+    """
+
+    async def test_nothing_is_to_come_where_no_earlier_panel_was_seen(self, injecting):
+        running = await injecting()
+        await wait_until(lambda: running.page.bootstraps)
+
+        assert await running.injector.reload_to_come() is False
+
+    async def test_a_reload_is_to_come_while_the_recovery_waits_for_a_game(self, injecting):
+        page = stranded_page()
+        page.running_apps = ["Celeste"]
+        running = await injecting(page=page)
+        await wait_until(lambda: page.app_checks >= 1)
+
+        assert await running.injector.reload_to_come() is True
+
+    async def test_none_is_to_come_where_the_limit_would_refuse_it_now(self, injecting, tmp_path):
+        TestAcrossBackendStarts.planted(tmp_path, 300, 60)
+        page = stranded_page()
+        page.running_apps = ["Celeste"]
+        running = await injecting(page=page)
+        await wait_until(lambda: page.app_checks >= 1)
+
+        assert await running.injector.reload_to_come() is False
+
+    async def test_none_is_to_come_once_the_recovery_gave_up(self, injecting, caplog):
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=stranded_page())
+            await wait_until(lambda: logged(caplog, "giving up"))
+
+        assert await running.injector.reload_to_come() is False
+
+    async def test_none_is_to_come_once_the_earlier_panel_is_gone(self, injecting, caplog):
+        page = stranded_page()
+        page.running_apps = ["Celeste"]
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=page)
+            await wait_until(lambda: page.app_checks >= 1)
+            await rebuild(running)
+            await wait_until(lambda: logged(caplog, "gone without a reload"))
+
+        assert await running.injector.reload_to_come() is False
+
+
 def _fingerprint_of(running: Running) -> Fingerprint:
     from host.inject.bundles import bundle_digest
 

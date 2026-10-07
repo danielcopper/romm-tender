@@ -42,7 +42,7 @@ MESSAGE_TYPES = frozenset({TYPE_CALL, TYPE_REPLY, TYPE_ERROR, TYPE_EVENT})
 # Transport reasons — the whole vocabulary of ``error.reason``. These name the
 # carriage, never the cargo.
 #
-# ``CONNECTION_LOST`` is the one no backend ever sends: it is what the caller's
+# ``CONNECTION_LOST`` is one no backend ever sends: it is what the caller's
 # own pending register answers with when the socket goes before the reply comes
 # back. It is named here anyway, because the alternative is that the other end
 # invents a second spelling of it and the two vocabularies drift apart from the
@@ -52,6 +52,9 @@ REASON_PAYLOAD_TOO_LARGE = "payload_too_large"
 REASON_BACKEND_EXCEPTION = "backend_exception"
 REASON_MALFORMED_MESSAGE = "malformed_message"
 REASON_CONNECTION_LOST = "connection_lost"
+# The second reason only the caller's own register answers with: every call of a
+# panel this backend told it is stranded (the close codes below).
+REASON_STRANDED_PANEL = "stranded_panel"
 
 TRANSPORT_REASONS = frozenset(
     {
@@ -60,8 +63,21 @@ TRANSPORT_REASONS = frozenset(
         REASON_BACKEND_EXCEPTION,
         REASON_MALFORMED_MESSAGE,
         REASON_CONNECTION_LOST,
+        REASON_STRANDED_PANEL,
     }
 )
+
+# Close codes of this program's own, from the range RFC 6455 §7.4.2 leaves to
+# applications. An upgrade that carries a token but not this process's is
+# completed and closed at once with one of them: the panel asking was loaded by
+# another backend process, and the token is minted per process, so no retry can
+# admit it. The code is the whole answer — whether this backend reloads Steam's
+# interface once no game is running, which replaces that panel, or will not, and
+# Steam has to be restarted. Two codes rather than one code and a reason to
+# parse: a browser hands both to the page, and a number is the half nobody
+# rewords.
+CLOSE_STRANDED_PANEL_RELOADS = 4001
+CLOSE_STRANDED_PANEL_RESTART_STEAM = 4002
 
 
 def decode_message(text: str) -> dict[str, Any]:

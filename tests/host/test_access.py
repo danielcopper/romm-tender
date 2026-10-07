@@ -11,6 +11,7 @@ import pytest
 
 from host.access import STEAM_UI_ORIGIN, AccessPolicy, check_access, new_token
 from lib.http_messages import parse_request_head
+from lib.websocket_frames import OPCODE_CLOSE
 from tests.host.conftest import SERVER_IDENTITY
 from tests.host.ws_client import WsTestClient, http_get
 
@@ -110,6 +111,15 @@ class TestTheTokenCheck:
         assert "no token" in check_access(head(token=None), POLICY).log_line
         assert "wrong token" in check_access(head(token="wrong"), POLICY).log_line
 
+    def test_only_a_wrong_token_is_flagged_as_one(self):
+        """The upgrade answers that one refusal with a close code; every other stays a status."""
+        assert check_access(head(token="wrong"), POLICY).wrong_token
+        assert not check_access(head(token=None), POLICY).wrong_token
+        assert not check_access(head(token=""), POLICY).wrong_token
+        assert not check_access(head(token=TOKEN), POLICY).wrong_token
+        assert not check_access(head(host="evil.example.com", token="wrong"), POLICY).wrong_token
+        assert not check_access(head(origin="https://evil.example.com", token="wrong"), POLICY).wrong_token
+
 
 class TestTheOrder:
     def test_a_bad_host_is_reported_as_a_bad_host_even_with_no_token(self):
@@ -176,8 +186,16 @@ class TestTheChecksOnTheWire:
 
     async def test_an_upgrade_without_a_token_never_becomes_a_connection(self, running_host):
         with pytest.raises(AssertionError, match="refused with 401"):
-            await WsTestClient.connect(running_host.port, "not-the-token")
+            await WsTestClient.connect(running_host.port, "")
+        # A wrong token is answered with a completed handshake and an immediate
+        # close (``test_server_stranded_panel.py``) — still never a connection.
+        refused = await WsTestClient.connect(running_host.port, "not-the-token")
+        try:
+            opcode, _ = await refused.recv_frame()
+        finally:
+            await refused.close()
 
+        assert opcode == OPCODE_CLOSE
         assert not running_host.server.connected
 
     async def test_the_token_is_not_served_by_any_route(self, running_host):

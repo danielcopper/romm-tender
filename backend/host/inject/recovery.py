@@ -178,6 +178,20 @@ class StrandedPanelRecovery:
         """The attached context carries no panel but this backend's, or none at all."""
         self._stranded = None
 
+    async def reload_to_come(self) -> bool:
+        """Will Steam's interface be taken down for a stranded panel this recovery has seen?
+
+        ``True`` only while the recovery for that panel is still under way and
+        the limit would let it act now. Everything else is ``False``: no
+        stranded panel seen yet, a recovery that ended — given up, or done — and
+        a limit that refuses. The limit is read as it stands, so a window that
+        frees later is a later answer rather than a promise now. The limit is a
+        file, so it is read off the loop.
+        """
+        if self._task is None or self._task.done():
+            return False
+        return await asyncio.get_running_loop().run_in_executor(None, self._limit.allows)
+
     async def close(self) -> None:
         """Stop whatever is under way; the backend is going."""
         task, self._task = self._task, None
