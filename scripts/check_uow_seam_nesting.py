@@ -243,8 +243,10 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # nothing today and is here for the call site that writes it plainly.
         # The store's other I/O is unlisted and that is a gap rather than a
         # judgement: grid_dir() is called from services/artwork.py (six sites),
+        # services/shortcut_removal.py and services/library/reporter.py,
+        # set_steam_input_config() from services/settings.py,
         # services/shortcut_removal.py and services/library/reporter.py, and
-        # check_retroarch_input_driver() from services/settings.py.
+        # write_shortcut_icon() from services/steamgrid.py.
         "read_shortcut_exes",
         # FirmwarePlatformResolver (services/protocols/paths.py) — reads what
         # one system's emulators want, with content verification: it opens each

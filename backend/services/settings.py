@@ -1,11 +1,10 @@
 """SettingsService — user-facing settings reads/writes and frontend-log routing.
 
 Owns every use case that reads or mutates the live ``settings`` dict
-from the frontend. Adapter-level I/O (Steam Input config, RetroArch
-input driver) is reached via the ``SteamConfigStore`` Protocol;
-on-disk persistence is fired through the injected
-``save_settings_to_disk`` callable so the service never touches the
-filesystem directly.
+from the frontend. Adapter-level I/O (Steam Input config) is reached
+via the ``SteamConfigStore`` Protocol; on-disk persistence is fired
+through the injected ``save_settings_to_disk`` callable so the service
+never touches the filesystem directly.
 
 Frontend-log routing also lives here — it reads the configured level
 from the live settings dict and records through a child of the injected
@@ -26,7 +25,6 @@ from domain.custom_headers import (
 )
 from domain.sibling_resolution import AUTO_REGION
 from lib.errors import NotConfigured, Refused
-from lib.input_driver_fix import InputDriverFix
 from lib.steam_input_apply import SteamInputApply
 from lib.url_host import is_valid_server_url
 
@@ -225,7 +223,6 @@ class SettingsService:
             "has_token": bool(self._settings.get("romm_api_token")),
             "steam_input_mode": self._settings.get("steam_input_mode", "default"),
             "sgdb_api_key_masked": _MASK_PLACEHOLDER if self._settings.get("steamgriddb_api_key") else "",
-            "retroarch_input_check": self._steam_config.check_retroarch_input_driver(),
             "log_level": self._settings.get("log_level", "warn"),
             "romm_allow_insecure_ssl": self._settings.get("romm_allow_insecure_ssl", False),
             "collection_create_platform_groups": self._settings.get("collection_create_platform_groups", False),
@@ -354,21 +351,6 @@ class SettingsService:
         if outcome is SteamInputApply.WRITE_FAILED:
             raise Refused("steam_config_write_failed", "Not applied — Steam's localconfig.vdf could not be written")
         assert_never(outcome)
-
-    # ── RetroArch input driver ──────────────────────────────────────────
-
-    def fix_retroarch_input_driver(self) -> dict[str, Any]:
-        """Repair a problematic RetroArch ``input_driver`` value (``x`` -> ``sdl2``).
-
-        Raises ``Refused`` with ``nothing_to_fix`` when no config uses ``x``, and
-        with ``unknown`` when the repair failed; the panel shows the message.
-        """
-        outcome = self._steam_config.fix_retroarch_input_driver()
-        if outcome is InputDriverFix.NOTHING_TO_FIX:
-            raise Refused("nothing_to_fix", "No fix needed")
-        if outcome is InputDriverFix.WRITE_FAILED:
-            raise Refused("unknown", "Operation failed")
-        return {"success": True, "message": "Changed input_driver to sdl2"}
 
     # ── Whitelist (non-Steam shortcut removal) ──────────────────────────
 

@@ -12,7 +12,7 @@ right. Move onto a section in the list and the right-hand side changes at once �
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Connections**      | the services Tender talks to: **RomM** (server URL, account, Sign out, Allow Insecure SSL) and **SteamGridDB** (the API key)                                               |
 | **Save Sync**        | the save-sync switch and its settings (device, before launch, after exit, default slot, history limit, Sync All Saves Now) and the list of registered devices              |
-| **Controller**       | Steam Input Mode, Apply to All Shortcuts, and the RetroArch `input_driver` fix                                                                                             |
+| **Controller**       | Steam Input Mode and Apply to All Shortcuts                                                                                                                                |
 | **Steam Library**    | preferred region, collection games in platform groups, collection types in Steam names                                                                                     |
 | **Emulator sources** | every emulator setup Tender found — RetroDECK, EmuDeck, a RetroArch of its own — as a numbered card with its health, **Use this source**, and arrows to move it up or down |
 | **Updates**          | the version you have and the release the last successful check found, an update that was rolled back or refused, the daily update check, and **Check now**                 |
@@ -31,15 +31,14 @@ accounts.
 Four of the notices on Tender's main panel are doors into a section, and the action they are about lives only behind
 that door:
 
-| The notice says               | Its button           | Where it takes you     |
-| ----------------------------- | -------------------- | ---------------------- |
-| RetroArch: input_driver issue | **Open Controller**  | Settings › Controller  |
-| Cross-device playtime         | **Open Connections** | Settings › Connections |
-| Update to X failed            | **Open Updates**     | Settings › Updates     |
-| Tender X is available         | **Open Updates**     | Settings › Updates     |
+| The notice says                                                     | Its button           | Where it takes you     |
+| ------------------------------------------------------------------- | -------------------- | ---------------------- |
+| Cross-device playtime                                               | **Open Connections** | Settings › Connections |
+| Update to X failed (rolled back, refused, or the installer stopped) | **Open Updates**     | Settings › Updates     |
+| Tender X is available                                               | **Open Updates**     | Settings › Updates     |
 
-The main panel only names the condition — it no longer carries a Fix button, so there is one place to do each of these
-and no chance of two of them disagreeing. **B** takes you back to the main panel from anywhere on the page.
+The main panel only names the condition, so there is one place to do each of these and no chance of two of them
+disagreeing. **B** takes you back to the main panel from anywhere on the page.
 
 Where the sections below say "in Connection Settings", read it as **Settings › Connections**.
 
@@ -507,21 +506,6 @@ with no time in its title:
 - **This failed update is no longer on record.** The failure went away between the block showing it and the press — a
   later update went through, or a new install started.
 - **Tender could not read what the installer said.** The journal could not be read, or Tender did not answer.
-
-## RetroArch Input Driver Fix
-
-If Tender detects that RetroArch is using the `x` input driver (which causes controller issues in menus on Wayland
-systems), a notice appears on the main panel with an **Open Controller** button. The fix itself is in **Settings ›
-Controller**: **Fix input_driver to sdl2** modifies your RetroArch config to use `sdl2` instead, which fixes controller
-navigation in RetroArch menus. The result is reported under the button, and the warning goes away once the config has
-been changed.
-
-The button **asks before it acts** — it opens a confirmation naming the change, and only **Apply Fix** writes anything;
-**Cancel** leaves your config exactly as it was. The confirmation is there because the change is written straight into
-your config and Tender keeps no copy of the file it replaces, so if you have hand-edited your `retroarch.cfg` and want a
-copy, take one before confirming.
-
-<!-- Screenshot: RetroArch input_driver warning with fix button -->
 
 ---
 

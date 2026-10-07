@@ -95,7 +95,7 @@ LOGGER = logging.getLogger("test_endpoints_translation")
 ROUTES = sorted(route_names(Endpoints))
 
 # One endpoint of each kind, for the cases that are about the answer rather than the surface.
-_A_SYNC_ROUTE = "fix_retroarch_input_driver"
+_A_SYNC_ROUTE = "get_known_regions"
 _AN_ASYNC_ROUTE = "stop_running_game"
 
 

@@ -25,7 +25,6 @@ if TYPE_CHECKING:
     )
 
     from domain.update_release import LatestRelease
-    from lib.input_driver_fix import InputDriverFix
     from lib.steam_input_apply import SteamInputApply
 
 
@@ -38,8 +37,6 @@ class SteamConfigStore(Protocol):
     def write_shortcuts(self, data: dict[str, Any]) -> None: ...
     def set_steam_input_config(self, app_ids: list[int], mode: str = "default") -> SteamInputApply: ...
     def write_shortcut_icon(self, app_id: int, icon_bytes: bytes) -> str: ...
-    def check_retroarch_input_driver(self) -> dict[str, Any] | None: ...
-    def fix_retroarch_input_driver(self) -> InputDriverFix: ...
 
 
 class RommDeviceApi(Protocol):

@@ -1,10 +1,8 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
-import { createElement, type ReactElement } from "react";
-import { showModal } from "@decky/ui";
+import { createElement } from "react";
 import { ControllerSection } from "./ControllerSection";
-import type { RetroArchInputCheck } from "../../types";
 
 // Local re-mock: ButtonItem must forward `disabled`, DropdownItem must
 // capture rgOptions + onChange so we can drive the dropdown without a real
@@ -44,38 +42,15 @@ vi.mock("@decky/ui", () => ({
     dropdownCaptured.items.push(p);
     return createElement("div", { "data-testid": "dropdown" }, p.label as never);
   },
-  // A no-render stub: showModal captures the element, so the confirmation is
-  // inspected off the mock rather than the DOM. Rendering it would also make
-  // the fix look reachable without a press on OK.
-  ConfirmModal: () => null,
-  showModal: vi.fn(),
 }));
-
-interface ConfirmModalProps {
-  strTitle?: string;
-  strDescription?: string;
-  strOKButtonText?: string;
-  strCancelButtonText?: string;
-  onOK?: () => void;
-}
-
-function lastShownModalProps(): ConfirmModalProps | null {
-  const calls = vi.mocked(showModal).mock.calls;
-  if (calls.length === 0) return null;
-  const el = calls[calls.length - 1]?.[0] as ReactElement<ConfirmModalProps> | undefined;
-  return el?.props ?? null;
-}
 
 function defaultProps(overrides: Partial<React.ComponentProps<typeof ControllerSection>> = {}) {
   return {
     steamInputMode: "default",
     steamInputStatus: "",
-    retroarchWarning: null,
-    retroarchFixStatus: "",
     applying: false,
     onModeChange: vi.fn(),
     onApplyMode: vi.fn(),
-    onFixInputDriver: vi.fn(),
     ...overrides,
   };
 }
@@ -142,96 +117,15 @@ describe("ControllerSection", () => {
     });
   });
 
-  describe("RetroArch warning block", () => {
-    function warning(overrides: Partial<RetroArchInputCheck> = {}): RetroArchInputCheck {
-      return {
-        warning: true,
-        current: "udev",
-        config_path: "/home/deck/.config/retroarch/retroarch.cfg",
-        ...overrides,
-      };
-    }
-
-    it("is hidden when retroarchWarning is null", () => {
-      const { container } = render(<ControllerSection {...defaultProps()} />);
-      expect(container.textContent).not.toContain("RetroArch input_driver");
-      expect(container.textContent).not.toContain("Fix input_driver");
-    });
-
-    it("is hidden when retroarchWarning.warning is false", () => {
+  describe("RetroArch", () => {
+    it("offers no input_driver fix: Apply to All Shortcuts is the section's only button", () => {
       const { container } = render(
-        <ControllerSection {...defaultProps({ retroarchWarning: warning({ warning: false }) })} />,
+        <ControllerSection {...defaultProps({ steamInputStatus: "Applied to 12 shortcuts" })} />,
       );
-      expect(container.textContent).not.toContain("RetroArch input_driver");
-    });
-
-    it("renders the current input_driver in the warning label", () => {
-      const { container } = render(
-        <ControllerSection {...defaultProps({ retroarchWarning: warning({ current: "udev" }) })} />,
-      );
-      expect(container.textContent).toContain('RetroArch input_driver: "udev"');
-    });
-
-    it("asks before it acts — the press opens the confirmation and runs nothing", () => {
-      const onFixInputDriver = vi.fn();
-      const { getByText } = render(
-        <ControllerSection {...defaultProps({ retroarchWarning: warning(), onFixInputDriver })} />,
-      );
-      fireEvent.click(getByText("Fix input_driver to sdl2"));
-      // The rewrite keeps no copy of the config it replaces, so the press must
-      // not be the thing that starts it.
-      expect(onFixInputDriver).not.toHaveBeenCalled();
-      expect(vi.mocked(showModal)).toHaveBeenCalledTimes(1);
-    });
-
-    it("runs the fix on the confirmation's OK, and states what it will change", () => {
-      const onFixInputDriver = vi.fn();
-      const { getByText } = render(
-        <ControllerSection {...defaultProps({ retroarchWarning: warning(), onFixInputDriver })} />,
-      );
-      fireEvent.click(getByText("Fix input_driver to sdl2"));
-
-      const props = lastShownModalProps();
-      expect(props?.strTitle).toBe("Fix RetroArch input_driver?");
-      expect(props?.strDescription).toContain("change input_driver to sdl2 in your RetroArch config");
-      expect(props?.strOKButtonText).toBe("Apply Fix");
-      expect(props?.strCancelButtonText).toBe("Cancel");
-
-      props?.onOK?.();
-      expect(onFixInputDriver).toHaveBeenCalledTimes(1);
-    });
-
-    it("declining does nothing at all", () => {
-      const onFixInputDriver = vi.fn();
-      const { getByText } = render(
-        <ControllerSection {...defaultProps({ retroarchWarning: warning(), onFixInputDriver })} />,
-      );
-      fireEvent.click(getByText("Fix input_driver to sdl2"));
-      // The confirm carries no cancel handler, so declining is the absence of
-      // the OK call and nothing else.
-      expect(lastShownModalProps()).not.toHaveProperty("onCancel");
-      expect(onFixInputDriver).not.toHaveBeenCalled();
-    });
-
-    it("renders the fix-status Field when retroarchFixStatus is non-empty", () => {
-      const { getAllByTestId } = render(
-        <ControllerSection
-          {...defaultProps({
-            retroarchWarning: warning(),
-            retroarchFixStatus: "Updated retroarch.cfg",
-          })}
-        />,
-      );
-      const labels = getAllByTestId("field-label").map((el) => el.textContent);
-      expect(labels).toContain("Updated retroarch.cfg");
-    });
-
-    it("omits the fix-status Field when retroarchFixStatus is empty", () => {
-      const { getAllByTestId } = render(<ControllerSection {...defaultProps({ retroarchWarning: warning() })} />);
-      // Only the warning-label Field, no fix-status Field.
-      const labels = getAllByTestId("field-label").map((el) => el.textContent);
-      expect(labels).toHaveLength(1);
-      expect(labels[0]).toContain("RetroArch input_driver");
+      expect(Array.from(container.querySelectorAll("button"), (b) => b.textContent)).toEqual([
+        "Apply to All Shortcuts",
+      ]);
+      expect(container.textContent).not.toContain("input_driver");
     });
   });
 });

@@ -1,14 +1,7 @@
 import { useState, useEffect, useRef, FC, ReactNode } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, Field, Focusable, ProgressBar, Spinner } from "@decky/ui";
 import { FaCheckCircle, FaTimesCircle, FaExclamationTriangle } from "react-icons/fa";
-import {
-  cancelSync,
-  getSettings,
-  refreshMigrationState,
-  getSyncStatus,
-  getEmulatorSources,
-  logError,
-} from "../api/backend";
+import { cancelSync, refreshMigrationState, getSyncStatus, getEmulatorSources, logError } from "../api/backend";
 import { ENTRY_STOP_ATTR } from "../utils/entryFocus";
 import { formatTimeAgo } from "../utils/formatters";
 import { pluralize } from "../utils/pluralize";
@@ -388,7 +381,6 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   // reach this instance through and once more by the timer below when the
   // deadline passes — never read during render.
   const [previewNowMs, setPreviewNowMs] = useState<number | null>(null);
-  const [retroarchWarning, setRetroarchWarning] = useState<{ warning: boolean; current?: string } | null>(null);
   const [sourceBanners, setSourceBanners] = useState<SourceBanner[]>([]);
   const migration = useMigrationStatus();
   const settingsReset = useSettingsResetState();
@@ -448,14 +440,6 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
       })
       .catch((e) => logError(`Failed to refresh migration state: ${e}`));
     detach(refreshSyncStats());
-
-    getSettings()
-      .then((s) => {
-        if (s.retroarch_input_check) {
-          setRetroarchWarning(s.retroarch_input_check);
-        }
-      })
-      .catch((e) => logError(`Failed to load settings: ${e}`));
 
     getEmulatorSources()
       .then((listing) => setSourceBanners(mainSourceBanners(listing)))
@@ -738,29 +722,6 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
               bottomSeparator="none"
             />
           </PanelSectionRow>
-        )}
-        {/* A notice, not the fix: the button that rewrites the RetroArch config
-            is in Settings › Controller and nowhere else. */}
-        {retroarchWarning?.warning && (
-          <>
-            <PanelSectionRow>
-              <Field
-                label="RetroArch: input_driver issue"
-                description={`Using "${retroarchWarning.current}" \u2014 controller navigation in RetroArch menus may not work.`}
-                focusable={true}
-                bottomSeparator="none"
-              />
-            </PanelSectionRow>
-            <PanelSectionRow>
-              <ButtonItem
-                layout="below"
-                bottomSeparator="none"
-                onClick={() => onNavigate({ page: "settings", section: "controller" })}
-              >
-                Open Controller
-              </ButtonItem>
-            </PanelSectionRow>
-          </>
         )}
         {/* A notice, not the card: Restart Steam now and the resume live on the
             Sync page, and a condition's action exists only at its home. */}

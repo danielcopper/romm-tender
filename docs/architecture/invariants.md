@@ -630,8 +630,9 @@ Format: **invariant** — tier — enforced by.
   changes nothing at its only call site**: the service reaches it through `run_in_executor` as a bound method, which is
   this checker's documented blind spot, so the entry is a statement of the rule rather than an enforcement of it. It is
   also not the store's only real I/O — `grid_dir()` is called from `services/artwork.py` (six sites),
-  `services/shortcut_removal.py` and `services/library/reporter.py`, and `check_retroarch_input_driver()` from
-  `services/settings.py` — those are unlisted, and their being unlisted is a gap, not a judgement),
+  `services/shortcut_removal.py` and `services/library/reporter.py`, `set_steam_input_config()` from
+  `services/settings.py`, `services/shortcut_removal.py` and `services/library/reporter.py`, and `write_shortcut_icon()`
+  from `services/steamgrid.py` — those are unlisted, and their being unlisted is a gap, not a judgement),
   `FirmwarePlatformResolver` (reads what one system's emulators want WITH content verification: it opens each candidate
   in a declared folder and reads it the way the emulator does — 59-173 ms per system on the reference machine at
   emu-atlas 0.22) and its whole-machine sibling `FirmwareResolver`, the save answer — `resolve_save_answer` and the
@@ -1454,8 +1455,8 @@ Format: **invariant** — tier — enforced by.
   here**: happy-dom performs no layout and does not reproduce Steam's focus resolution, so what the suite pins is the
   declaration and the finder, never the press. Only a controller confirms it. **What hid this for a whole review round
   is the shape of the failure, not its size**: Main's notices name sections, and the one naming the FIRST section keeps
-  working, so a reader checking Open Connections sees the feature working while Open Controller lands on Connections. A
-  check that exercises the first row proves nothing about the rule. The mark sits on a `display: contents` wrapper
-  AROUND each row rather than on the row, and that is load-bearing rather than stylistic: `pageEntryStop` calls
-  `firstBodyStop(declared)`, which searches DESCENDANTS — a mark on the row itself finds no candidate inside it, falls
-  back to the first row, and ships the defect under a comment saying it does not
+  working, so a reader checking Open Connections sees the feature working while a jump into any later section lands on
+  Connections. A check that exercises the first row proves nothing about the rule. The mark sits on a
+  `display: contents` wrapper AROUND each row rather than on the row, and that is load-bearing rather than stylistic:
+  `pageEntryStop` calls `firstBodyStop(declared)`, which searches DESCENDANTS — a mark on the row itself finds no
+  candidate inside it, falls back to the first row, and ships the defect under a comment saying it does not

@@ -340,16 +340,18 @@ difference between that save and the server's. **Cancel** starts nothing, and on
 answer in time. If it is the backend, start it with `systemctl --user restart romm-tender`; if the panel still does not
 answer, restart Steam.
 
-### Controller doesn't work in RetroArch menus
+### Controller works in RetroArch's menu but not in the game
 
-**Symptom**: The game plays fine, but the RetroArch Quick Menu (L3+R3) can't be navigated with the controller — only
-mouse/touch works.
+**Symptom**: More than one controller is connected — the Deck's own controls and a paired gamepad, say. The controller
+you hold steers RetroArch's menu, but does nothing in a single-player game.
 
-**Fix**: This is caused by RetroArch using the `x` input driver on a Wayland system. If Tender detects this, a warning
-appears on the main QAM page with a **Change to sdl2** button. Tap it to fix the issue.
+**Why**: RetroArch makes player 1 whichever controller it finds first, and that need not be the one Steam lists first.
+RetroDECK sets RetroArch up so that every connected controller may steer its menu (**All Users Control Menu**), so the
+menu answers to any of them, while a single-player game listens to player 1 alone.
 
-If the warning doesn't appear, you can manually change `input_driver = "x"` to `input_driver = "sdl2"` in your RetroArch
-config file.
+**Fix**: Turn the other controller off and start the game again. Or tell RetroArch which controller is player 1: open
+RetroArch's menu, go to **Settings › Input › RetroPad Binds › Port 1 Controls**, and set **Device Index** to the
+controller you want to play with.
 
 ### RetroDECK runs through XWayland in Desktop Mode
 

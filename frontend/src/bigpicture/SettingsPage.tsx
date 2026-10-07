@@ -33,7 +33,6 @@ import {
   saveCollectionPlatformGroups,
   setCollectionNamingMode,
   getKnownRegions,
-  fixRetroarchInputDriver,
   ensureDeviceRegistered,
   listDevices,
   logError,
@@ -48,7 +47,6 @@ import type {
   CollectionNamingMode,
   CustomHeaderEntry,
   SaveSyncSettings as SaveSyncSettingsType,
-  RetroArchInputCheck,
   SettingsSection,
   EmulatorSourceDirection,
   EmulatorSourcesListing,
@@ -156,8 +154,6 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   const [steamInputMode, setSteamInputMode] = useState("default");
   const [steamInputStatus, setSteamInputStatus] = useState("");
   const [applyingSteamInput, setApplyingSteamInput] = useState(false);
-  const [retroarchWarning, setRetroarchWarning] = useState<RetroArchInputCheck | null>(null);
-  const [retroarchFixStatus, setRetroarchFixStatus] = useState("");
 
   // Advanced state
   const [logLevel, setLogLevel] = useState("warn");
@@ -198,9 +194,6 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
         setPreferredRegion(s.preferred_region ?? AUTO_REGION);
         setPlatformGroups(!!s.collection_create_platform_groups);
         setNamingMode(s.collection_naming_mode ?? "merge");
-        if (s.retroarch_input_check) {
-          setRetroarchWarning(s.retroarch_input_check);
-        }
       })
       .catch((e) => {
         logError(`Failed to load settings: ${e}`);
@@ -493,18 +486,6 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
       setApplyingSteamInput(false);
     }
   };
-  const handleFixInputDriver = async () => {
-    setRetroarchFixStatus("Applying...");
-    try {
-      const result = await fixRetroarchInputDriver();
-      setRetroarchFixStatus(result.message);
-      if (result.success) {
-        setRetroarchWarning(null);
-      }
-    } catch {
-      setRetroarchFixStatus("Failed to apply fix");
-    }
-  };
 
   // --- Advanced handlers ---
   const handleLogLevelChange = (level: string) => {
@@ -680,15 +661,10 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
           <ControllerSection
             steamInputMode={steamInputMode}
             steamInputStatus={steamInputStatus}
-            retroarchWarning={retroarchWarning}
-            retroarchFixStatus={retroarchFixStatus}
             applying={applyingSteamInput}
             onModeChange={handleSteamInputModeChange}
             onApplyMode={() => {
               detach(handleApplySteamInput());
-            }}
-            onFixInputDriver={() => {
-              detach(handleFixInputDriver());
             }}
           />
         );

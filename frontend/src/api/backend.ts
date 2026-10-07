@@ -984,9 +984,6 @@ export const logWarn = (msg: string) => {
 export const logError = (msg: string) => {
   detach(frontendLog("error", msg));
 };
-export const fixRetroarchInputDriver = endpoint<[], { success: boolean; message: string }>(
-  "fix_retroarch_input_driver",
-);
 export const getRomMetadata = endpoint<[number], RomMetadata>("get_rom_metadata");
 export const getMetadataCachePage = endpoint<[number, number], { items: Record<string, RomMetadata>; total: number }>(
   "get_metadata_cache_page",
