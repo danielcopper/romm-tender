@@ -31,6 +31,7 @@
 
 import type { ReactNode } from "react";
 
+import { withFindingSentence } from "../utils/emulatorSourceWording";
 import { steamToaster } from "../utils/steamToaster";
 import { HostSocket, addressFromBundleUrl } from "./hostSocket";
 
@@ -107,11 +108,17 @@ function socket(): HostSocket {
  * Arguments are positional, which is the wire's shape: a named form would have
  * to agree with every endpoint's parameter names, and those are an
  * implementation detail on that side.
+ *
+ * Every answer passes through `withFindingSentence`, so a press refused for one
+ * of RetroDECK's findings reads the way that finding's banner does, whichever
+ * endpoint refused it.
  */
 export const endpoint =
   <Args extends unknown[] = [], Return = void>(route: string) =>
   (...args: Args): Promise<Return> =>
-    socket().call(route, args) as Promise<Return>;
+    socket()
+      .call(route, args)
+      .then((answer) => withFindingSentence(answer as Return));
 
 /**
  * Subscribe to a backend event, and answer with the listener unchanged.
