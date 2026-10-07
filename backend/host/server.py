@@ -313,10 +313,10 @@ class HostServer:
     def _log_stranded_panel(self, session_id: str, log_line: str, *, reloads: bool) -> None:
         """Log a stranded panel's refusal once, and again only when what it is told changes.
 
-        Such a panel asked again every few seconds before it could be told, and
-        a line per attempt buried the one line that says what to do about it.
-        The session is the panel's own identity, not a secret, and the
-        remembering is bounded (:data:`STRANDED_SESSIONS_REMEMBERED`).
+        Such a panel knocks on every reconnection until it is told, and on every
+        re-check after; a line per knock would bury the one line that says what
+        to do about it. The session is the panel's own identity, not a secret,
+        and the remembering is bounded (:data:`STRANDED_SESSIONS_REMEMBERED`).
         """
         told_before = self._stranded_sessions.get(session_id)
         self._stranded_sessions[session_id] = reloads

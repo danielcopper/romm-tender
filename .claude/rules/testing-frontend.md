@@ -38,6 +38,13 @@ the reconnection and the reply-versus-error discrimination are covered in `hostS
 file supplies, and are invisible everywhere else. A test that wants the real module takes the stub off itself
 (`vi.unmock("./host")`, as `host.test.ts` does).
 
+**A stranded panel is arranged through `test-utils/stranded-panel.ts`, never by mocking `api/host` again.** The stub
+wires `strandedAnswer` and `onStrandedAnswerChange` to it: `setStrandedAnswer("reloads" | "restart_steam")` makes the
+panel stranded and tells listeners only on a change, as the socket does, and the global `afterEach` clears it.
+`recheckStranded` is a plain `vi.fn()` there; a test gives it an implementation that calls `setStrandedAnswer` to say
+what a re-check finds. `HostTransportError` and `isStrandedPanelFailure` are the real ones, so a call rejected with
+`new HostTransportError("stranded_panel", …)` is the very failure a stranded socket raises.
+
 **`utils/quickAccessVisible` is the third module stubbed for the whole suite, and its stub answers that the QAM is
 OPEN.** Keep it in `test-setup.ts` rather than per file, for two reasons: a file that re-mocks `@decky/ui` for its own
 components does not disturb a mock of a different module, and the real hook reads Steam's navigation trees through

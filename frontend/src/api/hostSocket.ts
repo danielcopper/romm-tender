@@ -350,11 +350,7 @@ export class HostSocket {
         settled = true;
         socket.onclose = null;
         if (answer) this.setStranded(answer);
-        try {
-          socket.close();
-        } catch {
-          // Already closing or closed; either way nothing more is read from it.
-        }
+        socket.close();
         resolve();
       };
       socket.onclose = (event: CloseEvent) => settle(STRANDED_ANSWERS.get(event.code));
