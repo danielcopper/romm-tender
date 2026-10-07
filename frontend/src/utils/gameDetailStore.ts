@@ -162,6 +162,8 @@ interface Entry {
    *  see {@link scheduleFailedLoadRetry}. */
   timedRetryUsed: boolean;
   saveStatusInFlight: InFlightSaveStatus | null;
+  /** Bumped by every save-status read issued; only the newest read folds. */
+  saveStatusSeq: number;
   detachListeners: () => void;
 }
 
@@ -210,6 +212,7 @@ function openEntry(appId: number): Entry {
     loadFailed: false,
     timedRetryUsed: false,
     saveStatusInFlight: null,
+    saveStatusSeq: 0,
     detachListeners: () => {},
   };
   _entries.set(appId, entry);
@@ -391,8 +394,9 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
  * another game.
  *
  * Resolves to `null` — leaving the shown display untouched — when the identity
- * is not resolved yet, or when the backend refuses the read (a prune-active
- * refusal is not a save-status answer). Rejects when the call itself fails, so
+ * is not resolved yet, when the backend refuses the read (a prune-active
+ * refusal is not a save-status answer), or when a newer read was issued while
+ * this one was open. Rejects when the call itself fails, so
  * each caller reports the failure in its own terms. Whether a ROM with save sync
  * switched off is worth reading at all is the caller's call, not this one's.
  */
@@ -403,8 +407,23 @@ export function refreshSaveStatus(appId: number): Promise<SaveStatus | null> {
   if (!romId) return Promise.resolve(null);
   const inFlight = entry.saveStatusInFlight;
   if (inFlight?.romId === romId) return inFlight.promise;
+  return issueSaveStatusRead(entry, romId);
+}
 
-  const request = readSaveStatus(entry, romId, entry.generation);
+/** Read this ROM's save status without joining a read already open, for a
+ *  caller that reads BECAUSE something changed: an open read was asked before
+ *  the change and may answer for the state it changed. Later callers join this
+ *  read instead, and the open one no longer folds. */
+function rereadSaveStatus(appId: number): Promise<SaveStatus | null> {
+  const entry = _entries.get(appId);
+  const romId = entry?.state.romId;
+  if (!entry || !romId) return Promise.resolve(null);
+  return issueSaveStatusRead(entry, romId);
+}
+
+function issueSaveStatusRead(entry: Entry, romId: number): Promise<SaveStatus | null> {
+  entry.saveStatusSeq++;
+  const request = readSaveStatus(entry, romId, entry.generation, entry.saveStatusSeq);
   entry.saveStatusInFlight = { romId, promise: request };
   // Free the slot once this request settles, whichever way it settles. Both
   // arms of `then` are the same bookkeeping, and giving it a rejection arm is
@@ -420,12 +439,18 @@ export function refreshSaveStatus(appId: number): Promise<SaveStatus | null> {
 /** The read itself, as an async function so a synchronous throw comes back as a
  *  rejection like every other failure — a caller that gets a promise must not
  *  also have to guard the call. */
-async function readSaveStatus(entry: Entry, romId: number, generation: number): Promise<SaveStatus | null> {
+async function readSaveStatus(
+  entry: Entry,
+  romId: number,
+  generation: number,
+  seq: number,
+): Promise<SaveStatus | null> {
   const result = await getSaveStatus(romId);
   if (isEndpointFailure(result)) {
     detach(debugLog(`gameDetailStore: save status refused: ${result.message}`));
     return null;
   }
+  if (seq !== entry.saveStatusSeq) return null;
   applySaveStatus(entry, generation, result);
   return result;
 }
@@ -620,11 +645,12 @@ async function handleCoreChange(entry: Entry): Promise<void> {
  *  this game, and with it the emulators, the BIOS requirement and the save's
  *  shape. Read directly rather than by re-running the load: the load's core and
  *  BIOS reads are shared (`api/sharedReads.ts`), and one issued before the
- *  change would hand back the answer it changed. */
+ *  change would hand back the answer it changed — the save status for the same
+ *  reason does not join an open read. */
 async function handleEmulatorSourcesChange(appId: number, entry: Entry): Promise<void> {
   await Promise.all([
     handleCoreChange(entry),
-    entry.state.saveSyncEnabled ? refreshSaveStatus(appId).catch(() => null) : null,
+    entry.state.saveSyncEnabled ? rereadSaveStatus(appId).catch(() => null) : null,
   ]);
 }
 

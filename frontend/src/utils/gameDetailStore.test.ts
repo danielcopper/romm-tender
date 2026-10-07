@@ -1006,6 +1006,50 @@ describe("gameDetailStore", () => {
       expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledTimes(2);
       expect(getGameDetail(nextAppId)).toMatchObject({ emulatorDataAvailable: false });
     });
+
+    // The page-open save read is shared with every surface's refresh; one still
+    // open when the sources change was asked about the save's previous shape.
+    it("does not join or fold a save-status read issued before the change", async () => {
+      const opening = deferred<SaveStatus>();
+      vi.mocked(backend.getSaveStatus).mockReturnValueOnce(opening.promise);
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
+      subscribe(nextAppId);
+      await flush();
+      expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledTimes(1);
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(labelledStatus("After the switch"));
+
+      await act(async () => {
+        dispatchSourcesChanged();
+        await Promise.resolve();
+      });
+      await flush();
+
+      expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledTimes(2);
+      expect(getGameDetail(nextAppId).saveSyncLabel).toBe("After the switch");
+
+      opening.resolve(labelledStatus("Before the switch"));
+      await flush();
+
+      expect(getGameDetail(nextAppId).saveSyncLabel).toBe("After the switch");
+    });
+
+    it("hands a caller arriving after the change the read the change issued", async () => {
+      const opening = deferred<SaveStatus>();
+      vi.mocked(backend.getSaveStatus).mockReturnValueOnce(opening.promise);
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
+      subscribe(nextAppId);
+      await flush();
+      const afterTheSwitch = deferred<SaveStatus>();
+      vi.mocked(backend.getSaveStatus).mockReturnValueOnce(afterTheSwitch.promise);
+      dispatchSourcesChanged();
+
+      const joined = refreshSaveStatus(nextAppId);
+      opening.resolve(labelledStatus("Before the switch"));
+      afterTheSwitch.resolve(labelledStatus("After the switch"));
+
+      await expect(joined).resolves.toMatchObject({ save_sync_display: { label: "After the switch" } });
+      expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe("version_switched notifications", () => {
