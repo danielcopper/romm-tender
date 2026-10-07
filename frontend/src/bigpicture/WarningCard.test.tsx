@@ -43,6 +43,12 @@ describe("WarningCard", () => {
     expect(screen.getByText("A fact")).toHaveStyle({ fontSize: "12px" });
   });
 
+  it("draws a minor card's warning sign and message smaller than a compact one's", () => {
+    const { container } = render(<WarningCard title="A fact" message="Why it matters" minor />);
+    expect(container.querySelector("svg")).toHaveStyle({ fontSize: "16px" });
+    expect(screen.getByText("Why it matters")).toHaveStyle({ fontSize: "11px" });
+  });
+
   it("uses spacious padding by default", () => {
     const { container } = render(<WarningCard title="t" message="m" />);
     const root = container.firstChild as HTMLElement;

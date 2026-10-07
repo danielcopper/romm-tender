@@ -15,9 +15,9 @@ interface WarningCardProps {
   minor?: boolean;
 }
 
-const SPACIOUS = { padding: "40px 32px", titleSize: "19px", titleWeight: 600 };
-const COMPACT = { padding: "24px 16px", titleSize: "15px", titleWeight: 600 };
-const MINOR = { padding: "8px 12px", titleSize: "12px", titleWeight: 400 };
+const SPACIOUS = { padding: "40px 32px", titleSize: "19px", titleWeight: 600, iconSize: "42px", messageSize: "14px" };
+const COMPACT = { padding: "24px 16px", titleSize: "15px", titleWeight: 600, iconSize: "28px", messageSize: "12px" };
+const MINOR = { padding: "8px 12px", titleSize: "12px", titleWeight: 400, iconSize: "16px", messageSize: "11px" };
 
 /** Shared warning card layout: amber-bordered panel with the warning sign (unless
  *  `showIcon` is false), title and message. */
@@ -46,7 +46,7 @@ export const WarningCard: FC<WarningCardProps> = ({
         margin: compact ? "8px 4px" : "24px 2.8vw",
       }}
     >
-      {showIcon && <FaExclamationTriangle style={{ color: "#ffaa00", fontSize: compact ? "28px" : "42px" }} />}
+      {showIcon && <FaExclamationTriangle style={{ color: "#ffaa00", fontSize: size.iconSize }} />}
       <div
         style={{
           fontSize: size.titleSize,
@@ -59,7 +59,7 @@ export const WarningCard: FC<WarningCardProps> = ({
       {message && (
         <div
           style={{
-            fontSize: compact ? "12px" : "14px",
+            fontSize: size.messageSize,
             color: "rgba(255, 255, 255, 0.75)",
             maxWidth: compact ? "100%" : "680px",
             lineHeight: 1.5,
