@@ -8,15 +8,12 @@ from __future__ import annotations
 
 import contextlib
 import os
-import stat
 from typing import TYPE_CHECKING, Any
 
 from _vendor import vdf
 
 from domain.sgdb_artwork import to_unsigned_app_id
-from domain.shortcut_data import RETRODECK_APP_ID
 from lib.errors import SteamGridDirMissingError
-from lib.input_driver_fix import InputDriverFix
 from lib.steam_input_apply import SteamInputApply
 
 if TYPE_CHECKING:
@@ -242,63 +239,3 @@ class SteamConfigAdapter:
             return SteamInputApply.WRITE_FAILED
         self._logger.info(f"Steam Input mode '{mode}' applied for {count} app(s)")
         return SteamInputApply.APPLIED
-
-    # -- RetroArch input driver check -----------------------------------------
-
-    def check_retroarch_input_driver(self) -> dict[str, Any] | None:
-        """Check if RetroArch input_driver is set to a problematic value."""
-        candidates = [
-            f"~/.var/app/{RETRODECK_APP_ID}/config/retroarch/retroarch.cfg",
-            "~/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg",
-            "~/.config/retroarch/retroarch.cfg",
-        ]
-        for candidate in candidates:
-            cfg_path = os.path.expanduser(candidate)
-            try:
-                with open(cfg_path) as f:
-                    for line in f:
-                        line = line.strip()
-                        if line.startswith("input_driver"):
-                            parts = line.split("=", 1)
-                            if len(parts) == 2:
-                                val = parts[1].strip().strip('"').strip("'")
-                                return {
-                                    "warning": val == "x",
-                                    "current": val,
-                                    "config_path": cfg_path,
-                                }
-            except FileNotFoundError:
-                continue
-        return None
-
-    def fix_retroarch_input_driver(self) -> InputDriverFix:
-        """Change RetroArch input_driver from 'x' to 'sdl2', and say what came of it.
-
-        Only the ``input_driver`` line changes; every other line keeps its
-        bytes and its line ending. The file is written through a temp file and
-        ``os.replace``, so a failure leaves the original untouched; a symlinked
-        config is written at its target, and the file keeps its mode.
-        """
-        check = self.check_retroarch_input_driver()
-        if not check or not check.get("warning"):
-            return InputDriverFix.NOTHING_TO_FIX
-        cfg_path = os.path.realpath(check["config_path"])
-        tmp_path = cfg_path + ".tmp"
-        try:
-            with open(cfg_path, newline="") as f:
-                lines = f.readlines()
-            with open(tmp_path, "w", newline="") as f:
-                for line in lines:
-                    if line.strip().startswith("input_driver"):
-                        ending = line[len(line.rstrip("\r\n")) :]
-                        f.write('input_driver = "sdl2"' + ending)
-                    else:
-                        f.write(line)
-            os.chmod(tmp_path, stat.S_IMODE(os.stat(cfg_path).st_mode))
-            os.replace(tmp_path, cfg_path)
-            return InputDriverFix.FIXED
-        except Exception as e:
-            with contextlib.suppress(FileNotFoundError):
-                os.remove(tmp_path)
-            self._logger.error(f"Failed to fix RetroArch input_driver: {e}")
-            return InputDriverFix.WRITE_FAILED

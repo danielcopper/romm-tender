@@ -284,7 +284,6 @@ describe("SettingsPage", () => {
       sgdb_api_key_masked: "abc",
       steam_input_mode: "force_on",
       log_level: "debug",
-      retroarch_input_check: { warning: true, current: "sdl2" },
     });
 
     it("applies the payload's connection half to ConnectionSection / SteamGridDBSection", async () => {
@@ -309,7 +308,25 @@ describe("SettingsPage", () => {
 
       const ctrl = capturedController[capturedController.length - 1];
       expect(ctrl?.steamInputMode).toBe("force_on");
-      expect(ctrl?.retroarchWarning).toEqual({ warning: true, current: "sdl2" });
+    });
+
+    it("hands ControllerSection no RetroArch fix, even from a payload carrying the field it was read from", async () => {
+      openOn = "controller";
+      vi.mocked(backend.getSettings).mockResolvedValue({
+        ...fullPayload(),
+        retroarch_input_check: { warning: true, current: "x" },
+      } as import("../types").Settings);
+      renderPage();
+      await flushAsync();
+
+      const ctrl = capturedController[capturedController.length - 1];
+      expect(Object.keys(ctrl ?? {}).sort()).toEqual([
+        "applying",
+        "onApplyMode",
+        "onModeChange",
+        "steamInputMode",
+        "steamInputStatus",
+      ]);
     });
 
     it("applies the payload's log level to AdvancedSection", async () => {
@@ -338,13 +355,6 @@ describe("SettingsPage", () => {
       renderPage();
       await flushAsync();
       expect(capturedConnection[capturedConnection.length - 1]?.hasToken).toBe(false);
-    });
-
-    it("does not set retroarchWarning when retroarch_input_check is absent", async () => {
-      openOn = "controller";
-      renderPage();
-      await flushAsync();
-      expect(capturedController[capturedController.length - 1]?.retroarchWarning).toBeNull();
     });
 
     it("logs the failure and surfaces 'Failed to load settings' when getSettings rejects", async () => {
@@ -1537,60 +1547,6 @@ describe("SettingsPage", () => {
       });
       expect(capturedController[capturedController.length - 1]?.steamInputStatus).toBe("Failed to apply");
     });
-
-    it("handleFixInputDriver success=true clears the retroarchWarning + surfaces result.message", async () => {
-      vi.mocked(backend.getSettings).mockResolvedValue({
-        ...defaultSettings(),
-        retroarch_input_check: { warning: true, current: "sdl2" },
-      });
-      vi.mocked(backend.fixRetroarchInputDriver).mockResolvedValue({
-        success: true,
-        message: "Fixed",
-      });
-      renderPage();
-      await flushAsync();
-      // Pre-condition: warning is set
-      expect(capturedController[capturedController.length - 1]?.retroarchWarning).not.toBeNull();
-
-      await act(async () => {
-        capturedController[capturedController.length - 1]?.onFixInputDriver();
-        await Promise.resolve();
-      });
-      const ctrl = capturedController[capturedController.length - 1];
-      expect(ctrl?.retroarchWarning).toBeNull();
-      expect(ctrl?.retroarchFixStatus).toBe("Fixed");
-    });
-
-    it("handleFixInputDriver success=false leaves the warning + surfaces the message", async () => {
-      vi.mocked(backend.getSettings).mockResolvedValue({
-        ...defaultSettings(),
-        retroarch_input_check: { warning: true, current: "sdl2" },
-      });
-      vi.mocked(backend.fixRetroarchInputDriver).mockResolvedValue({
-        success: false,
-        message: "Could not write",
-      });
-      renderPage();
-      await flushAsync();
-      await act(async () => {
-        capturedController[capturedController.length - 1]?.onFixInputDriver();
-        await Promise.resolve();
-      });
-      const ctrl = capturedController[capturedController.length - 1];
-      expect(ctrl?.retroarchWarning).not.toBeNull();
-      expect(ctrl?.retroarchFixStatus).toBe("Could not write");
-    });
-
-    it("handleFixInputDriver throw → retroarchFixStatus='Failed to apply fix'", async () => {
-      vi.mocked(backend.fixRetroarchInputDriver).mockRejectedValue(new Error("perm"));
-      renderPage();
-      await flushAsync();
-      await act(async () => {
-        capturedController[capturedController.length - 1]?.onFixInputDriver();
-        await Promise.resolve();
-      });
-      expect(capturedController[capturedController.length - 1]?.retroarchFixStatus).toBe("Failed to apply fix");
-    });
   });
 
   describe("Advanced handlers", () => {
@@ -1826,8 +1782,8 @@ describe("SettingsPage", () => {
     it("declares that section's row the area entry focus belongs in, so the open is not undone", async () => {
       // Mounting on the section is only half of it: focus selects on this
       // layout, so entry focus landing on row one would select Connections a
-      // moment later — which is what a notice's Open Controller did on the
-      // device. The declaration is what the frame places focus on instead.
+      // moment later — which is what a notice's jump into a later section did
+      // on the device. The declaration is what the frame places focus on instead.
       //
       // **The undoing itself is not reachable here.** It needs Steam's focus
       // resolution after the mount and the frame's timer; happy-dom has no nav

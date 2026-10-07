@@ -203,10 +203,6 @@ class Endpoints:
         return await self._services.settings_service.apply_steam_input_setting()
 
     @route
-    def fix_retroarch_input_driver(self):
-        return self._services.settings_service.fix_retroarch_input_driver()
-
-    @route
     def get_settings(self):
         return self._services.settings_service.get_settings()
 

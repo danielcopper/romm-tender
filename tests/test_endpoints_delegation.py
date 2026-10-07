@@ -92,13 +92,6 @@ class TestSettingsEndpointDelegation:
         assert result == {"ok": True}
 
     @pytest.mark.asyncio
-    async def test_fix_retroarch_input_driver_delegates(self, endpoints, services):
-        services.settings_service.fix_retroarch_input_driver.return_value = {"ok": True}
-        result = endpoints.fix_retroarch_input_driver()
-        services.settings_service.fix_retroarch_input_driver.assert_called_once_with()
-        assert result == {"ok": True}
-
-    @pytest.mark.asyncio
     async def test_get_settings_delegates(self, endpoints, services):
         services.settings_service.get_settings.return_value = {"romm_url": "x"}
         result = endpoints.get_settings()

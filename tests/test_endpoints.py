@@ -202,7 +202,6 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "save_log_level",
     "save_steam_input_setting",
     "apply_steam_input_setting",
-    "fix_retroarch_input_driver",
     # Read-only library / sync state queries.
     "get_cached_game_detail",
     "get_platform_core_info",

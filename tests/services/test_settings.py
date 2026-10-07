@@ -15,7 +15,6 @@ from adapters.steam_config import SteamConfigAdapter
 from domain.rom import Rom
 from host.logging_setup import LOG_FILENAME, configure_logging
 from lib.errors import NotConfigured, Refused
-from lib.input_driver_fix import InputDriverFix
 from lib.steam_input_apply import SteamInputApply
 from services.settings import SettingsService, SettingsServiceConfig
 
@@ -52,8 +51,6 @@ def settings_persister() -> MagicMock:
 @pytest.fixture
 def steam_config() -> MagicMock:
     cfg = MagicMock()
-    cfg.check_retroarch_input_driver = MagicMock(return_value=None)
-    cfg.fix_retroarch_input_driver = MagicMock(return_value=InputDriverFix.FIXED)
     cfg.set_steam_input_config = MagicMock(return_value=SteamInputApply.APPLIED)
     return cfg
 
@@ -305,7 +302,7 @@ class TestSaveCustomHeaders:
 
 
 class TestGetSettings:
-    def test_happy_path(self, service, settings, steam_config):
+    def test_happy_path(self, service, settings):
         settings.update(
             {
                 "romm_url": "http://romm.local",
@@ -321,7 +318,6 @@ class TestGetSettings:
                 "skip_preview": True,
             }
         )
-        steam_config.check_retroarch_input_driver.return_value = {"warning": False}
         result = service.get_settings()
         assert result["romm_url"] == "http://romm.local"
         assert result["has_token"] is True
@@ -334,7 +330,6 @@ class TestGetSettings:
         assert result["collection_naming_mode"] == "by_label"
         assert result["preferred_region"] == "USA"
         assert result["skip_preview"] is True
-        assert result["retroarch_input_check"] == {"warning": False}
 
     def test_never_returns_credentials_or_token(self, service, settings):
         settings["romm_api_token"] = "rmm_secret"
@@ -398,15 +393,10 @@ class TestGetSettings:
         assert "s3cret" not in str(result)
         assert "id-42" not in str(result)
 
-    def test_includes_retroarch_input_check_payload(self, service, steam_config):
-        steam_config.check_retroarch_input_driver.return_value = {
-            "warning": True,
-            "current": "x",
-            "config_path": "/cfg",
-        }
+    def test_says_nothing_about_retroarchs_input_driver(self, service, steam_config):
         result = service.get_settings()
-        assert result["retroarch_input_check"]["warning"] is True
-        assert result["retroarch_input_check"]["current"] == "x"
+        assert "retroarch_input_check" not in result
+        assert steam_config.method_calls == []
 
 
 # ── get_settings and save_server_url together ─────────────────────────
@@ -514,8 +504,7 @@ class TestSavePreferredRegion:
 
 class TestSaveSkipPreview:
     @pytest.mark.parametrize("enabled", [True, False])
-    def test_bool_persists_and_is_reported_back(self, service, settings, settings_persister, steam_config, enabled):
-        steam_config.check_retroarch_input_driver.return_value = None
+    def test_bool_persists_and_is_reported_back(self, service, settings, settings_persister, enabled):
         result = service.save_skip_preview(enabled)
         assert result == {"success": True}
         assert settings["skip_preview"] is enabled
@@ -534,8 +523,7 @@ class TestSaveSkipPreview:
         assert "skip_preview" not in settings
         settings_persister.save_settings.assert_not_called()
 
-    def test_absent_value_reads_as_off(self, service, settings, steam_config):
-        steam_config.check_retroarch_input_driver.return_value = None
+    def test_absent_value_reads_as_off(self, service, settings):
         assert "skip_preview" not in settings
         assert service.get_settings()["skip_preview"] is False
 
@@ -900,29 +888,6 @@ class TestApplySteamInputSetting:
 
         with pytest.raises(OSError, match="boom"):
             await service.apply_steam_input_setting()
-
-
-# ── fix_retroarch_input_driver ────────────────────────────────────────
-
-
-class TestFixRetroarchInputDriver:
-    def test_a_fixed_config_answers_success(self, service, steam_config):
-        steam_config.fix_retroarch_input_driver.return_value = InputDriverFix.FIXED
-        result = service.fix_retroarch_input_driver()
-        assert result == {"success": True, "message": "Changed input_driver to sdl2"}
-        steam_config.fix_retroarch_input_driver.assert_called_once_with()
-
-    def test_nothing_to_fix_is_refused(self, service, steam_config):
-        steam_config.fix_retroarch_input_driver.return_value = InputDriverFix.NOTHING_TO_FIX
-        with pytest.raises(Refused) as refused:
-            service.fix_retroarch_input_driver()
-        assert (refused.value.reason, refused.value.message) == ("nothing_to_fix", "No fix needed")
-
-    def test_a_failed_write_is_refused_as_unknown(self, service, steam_config):
-        steam_config.fix_retroarch_input_driver.return_value = InputDriverFix.WRITE_FAILED
-        with pytest.raises(Refused) as refused:
-            service.fix_retroarch_input_driver()
-        assert (refused.value.reason, refused.value.message) == ("unknown", "Operation failed")
 
 
 # ── whitelist ──────────────────────────────────────────────────────────

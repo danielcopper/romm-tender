@@ -574,22 +574,6 @@ describe("MainPage", () => {
       setVerSpy.mockRestore();
     });
 
-    it("getSettings retroarch_input_check renders the warning section", async () => {
-      vi.mocked(backend.getSettings).mockResolvedValue({
-        ...defaultSettings(),
-        retroarch_input_check: { warning: true, current: "sdl2" },
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      expect(container.textContent).toContain("RetroArch: input_driver issue");
-    });
-
-    it("getSettings without retroarch_input_check does NOT render the warning", async () => {
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      expect(container.textContent).not.toContain("RetroArch: input_driver");
-    });
-
     it("recovers in-flight sync state from getSyncStatus() on mount", async () => {
       // Backend is authoritative: the mount query returns a live run, so the
       // in-flight UI is shown even though the event-fed store was idle.
@@ -638,15 +622,6 @@ describe("MainPage", () => {
       await flushAsync();
       expect(container.textContent).toContain("Checking...");
       expect(container.textContent).not.toContain("Backend error");
-    });
-
-    it("logs the failure when getSettings rejects on mount", async () => {
-      vi.mocked(backend.getSettings).mockRejectedValue(new Error("io"));
-      const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
-      render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to load settings"));
-      logSpy.mockRestore();
     });
   });
 
@@ -2507,30 +2482,15 @@ describe("MainPage", () => {
   // J. handleClearCache — Force Full Sync flow
   // ===========================================================================
   describe("the input_driver notice", () => {
-    async function renderWithWarning(onNavigate = vi.fn()): Promise<HTMLElement> {
+    it("is not shown, even for a settings payload carrying the field it was read from", async () => {
       vi.mocked(backend.getSettings).mockResolvedValue({
         ...defaultSettings(),
-        retroarch_input_check: { warning: true, current: "udev" },
-      });
-      const { container } = render(<MainPage onNavigate={onNavigate} />);
+        retroarch_input_check: { warning: true, current: "x" },
+      } as Settings);
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
-      return container;
-    }
-
-    it("names the condition and carries no fix of its own", async () => {
-      const container = await renderWithWarning();
-      expect(container.textContent).toContain("RetroArch: input_driver issue");
-      // The fix's only home is Settings › Controller: Main offers the door and
-      // never the action, so nothing here can write the RetroArch config.
-      expect(buttonByExactText(container, "Fix")).toBeNull();
-      expect(vi.mocked(backend.fixRetroarchInputDriver)).not.toHaveBeenCalled();
-    });
-
-    it("Open Controller lands on Settings › Controller", async () => {
-      const onNavigate = vi.fn();
-      const container = await renderWithWarning(onNavigate);
-      fireEvent.click(buttonByExactText(container, "Open Controller")!);
-      expect(onNavigate).toHaveBeenCalledWith({ page: "settings", section: "controller" });
+      expect(container.textContent).not.toContain("input_driver");
+      expect(buttonByExactText(container, "Open Controller")).toBeNull();
     });
   });
 

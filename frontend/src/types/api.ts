@@ -56,12 +56,6 @@ export interface InstalledRom {
   launchable: boolean;
 }
 
-export interface RetroArchInputCheck {
-  warning: boolean;
-  current?: string;
-  config_path?: string;
-}
-
 export interface Settings {
   romm_url: string;
   has_token: boolean;
@@ -69,7 +63,6 @@ export interface Settings {
   sgdb_api_key_masked: string;
   log_level: "debug" | "info" | "warn" | "error";
   romm_allow_insecure_ssl: boolean;
-  retroarch_input_check?: RetroArchInputCheck;
   collection_create_platform_groups?: boolean;
   // QAM collection owner-scope (#1532): "all" (default) or "own" (only the
   // signed-in user's own collections). Optional: older payloads may omit it,
