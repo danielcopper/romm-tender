@@ -288,6 +288,15 @@ finding, and the panel words it with the sentence the finding's banner shows (`w
 `frontend/src/utils/emulatorSourceWording.ts`, applied to every endpoint answer in `frontend/src/api/host.ts`). A
 download also stops on `root-missing`, because everything it would land in lies below a folder that is not there.
 
+**A question that fails is treated like one of those four findings.** Where asking the resolver about RetroDECK's
+health, or about one of its folders, raises, nothing established that the folders are not defaults, so the answer that
+question was for refuses — a removal's bound as well as a download's — and the move code sees no move. The refusal is
+its own (`retrodeck_unanswered`) and says **RetroDECK's folders could not be established, so Tender downloads into and
+removes from none of them.**; it never reads as RetroDECK not installed, nor as RetroDECK naming no folder, both of
+which would be statements about an installation nobody heard from. Like a finding's refusal it also keeps the
+removed-game cleanup from starting (`EveryFolderRefused`, which both are). From
+[#2244](https://github.com/danielcopper/romm-tender/issues/2244) D13.
+
 **A download creates a folder only below a root that exists.** A system's ROM folder that is not there yet is created by
 the download, as ES-DE would create it, and so is a BIOS folder inside RetroDECK's own folder. A ROM root, or a BIOS
 folder outside RetroDECK's folder, that does not exist — a drive or SD card that is out — is never created: the folder

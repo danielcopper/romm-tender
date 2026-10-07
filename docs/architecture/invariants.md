@@ -264,14 +264,16 @@ Format: **invariant** — tier — enforced by.
 - **Every RetroDECK folder Tender downloads into, removes from, bounds a removal by or reads for the move code is the
   resolver's answer, asked through `adapters/retrodeck_folders.py`; no module reads RetroDECK's settings or builds such
   a folder from a root, and while RetroDECK reports `marker-missing`, `marker-unreadable`, `marker-invalid` or
-  `not-set-up` none of those folders is used** — test + prompt-only — `tests/adapters/test_retrodeck_folders.py` (the
-  real resolver over tmp homes: every folder its answer, each finding refusing every question, and
+  `not-set-up`, or where a question about them raised, none of those folders is used** — test + prompt-only —
+  `tests/adapters/test_retrodeck_folders.py` (the real resolver over tmp homes: every folder its answer, each finding
+  refusing every question, `TestWhereAQuestionToTheResolverRaises` refusing the answer each raise ended, and
   `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and `tests/contract/test_retrodeck_folders.py`
-  (under each finding no press downloads, deletes or cleans up there). A folder of Tender's own beside the resolver's is
-  the drift this replaced: `retrodeck.json` read twice, a system's ROM folder built as `<roms root>/<system>` in five
-  places while ES-DE may declare another, and a fallback to `~/retrodeck` that pointed downloads, deletes and the move
-  code at internal storage while RetroDECK lay on an SD card. Under the four findings the resolver's own root, BIOS and
-  saves folders are its defaults, so using them would be that guess again. The rules each question answers by are on
+  (under each finding, and where RetroDECK's health could not be asked, no press downloads, deletes or cleans up there).
+  A folder of Tender's own beside the resolver's is the drift this replaced: `retrodeck.json` read twice, a system's ROM
+  folder built as `<roms root>/<system>` in five places while ES-DE may declare another, and a fallback to `~/retrodeck`
+  that pointed downloads, deletes and the move code at internal storage while RetroDECK lay on an SD card. Under the
+  four findings the resolver's own root, BIOS and saves folders are its defaults, so using them would be that guess
+  again. The rules each question answers by are on
   [Config source parsers](config-source-parsers.md#retrodecks-folders-retrodeckjson). A save's folder and a firmware
   file's place take the other route, the save and firmware answers (`adapters/atlas_saves.py`,
   `adapters/atlas_firmware.py`), and this entry does not cover them: under the three `marker-*` findings a save is still

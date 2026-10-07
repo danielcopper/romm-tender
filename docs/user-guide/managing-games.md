@@ -252,6 +252,10 @@ download there; each of those buttons answers with the sentence the notice shows
 with that notice's sentence, while RetroDECK's own folder does not exist (an SD card that is not inserted). Games
 already on your device still start, because RetroDECK starts them itself.
 
+**The same holds where Tender could not ask RetroDECK about its folders at all** — the question failed with an error.
+Every one of those buttons, and **Delete** on a BIOS file, then says **RetroDECK's folders could not be established, so
+Tender downloads into and removes from none of them.**, and no leftover partial download is removed.
+
 **Only one version of a game is kept on disk at a time.** If you tap **Download** on a version while another version of
 the same game (its [sibling group](#versions)) is already on disk, Tender removes the old install first and then
 downloads the new one — no prompt. **Use Existing Files** ([below](#when-the-game-is-already-on-your-device)) removes
@@ -523,8 +527,9 @@ This only removes the ROM file — the Steam shortcut, artwork, and metadata are
 Tender deletes only inside the ROM folder RetroDECK names, whether RetroDECK is switched on or off, so an uninstall
 needs RetroDECK: without it, **Uninstall** says **Uninstalling needs RetroDECK, which is not installed.**, and where
 RetroDECK names no ROM folder, **RetroDECK names no ROM folder, so Tender cannot uninstall this game.** The same holds
-for **Uninstall all ROM files** and for replacing a copy already on your device. A file recorded outside that folder is
-never deleted.
+for **Uninstall all ROM files** and for replacing a copy already on your device. Where asking RetroDECK for that folder
+failed with an error, they say **RetroDECK's folders could not be established, so Tender downloads into and removes from
+none of them.** A file recorded outside that folder is never deleted.
 
 This applies to files you told Tender to [use from your device](#when-the-game-is-already-on-your-device) as well: once
 they are the installed copy, **Uninstall** deletes them exactly as it would a downloaded one. Tender has one kind of
