@@ -802,10 +802,14 @@ is every firmware file the library holds for the platform; **held** (`local_coun
 their destination. Both are counted over the library's files alone, so a row the library does not have — **not on
 server** — is in neither, however required it is. The code calls the pair the **held/offered ratio**.
 
-It is a progress bar over a set the user can finish, not a readiness claim, which is why nothing about it keys off a
-**row verdict**: `held` answers whether something is at the destination, and for a **folder declaration** that is
-precisely what a verdict is not. Both surfaces render it behind the readiness sentence as `(1/20 RomM library files)`,
-naming its set because the sentence in front counts another (`docs/architecture/qam-panel.md`, BIOS files).
+It is a progress bar over a set the user can finish, not a readiness claim, which is why nothing about it keys off
+whether a **row verdict** is met: `held` answers whether something is at the destination, and for a **folder
+declaration** that is precisely what a verdict is not. Both surfaces render it behind the readiness sentence as
+`(1/20 RomM library files)`, naming its set because the sentence in front counts another
+(`docs/architecture/qam-panel.md`, BIOS files). What they render is the pair over the rows whose verdict was established
+(`ratio_server_count` / `ratio_local_count`): a row that reads "could not be established" is no file missing, and where
+no row was established there is no ratio. The level, its label and the download buttons keep counting every row the
+library holds.
 
 ### Firmware store
 

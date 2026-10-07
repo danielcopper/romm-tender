@@ -5,7 +5,7 @@ import type { BiosStatus, FirmwarePlatformExt } from "../types";
 
 describe("biosHeldRatio", () => {
   it("names the set beside the numbers — how much of what the library holds is at its destination", () => {
-    expect(biosHeldRatio({ server_count: 3, local_count: 1 })).toBe(" (1/3 RomM library files)");
+    expect(biosHeldRatio({ ratio_server_count: 3, ratio_local_count: 1 })).toBe(" (1/3 RomM library files)");
   });
 
   it("gives the game page's payload and the platform pane's the same answer", () => {
@@ -13,12 +13,12 @@ describe("biosHeldRatio", () => {
     // the pair optionally. One function over the shape they share is what keeps
     // one platform from being described in two amounts; the types below are the
     // real ones, so a field renamed on either side fails here.
-    const gamePage: BiosStatus = { needs_bios: true, server_count: 20, local_count: 1 };
+    const gamePage: BiosStatus = { needs_bios: true, ratio_server_count: 20, ratio_local_count: 1 };
     const platformPane: FirmwarePlatformExt = {
       platform_slug: "psx",
       files: [],
-      server_count: 20,
-      local_count: 1,
+      ratio_server_count: 20,
+      ratio_local_count: 1,
       emulator_data_reason: null,
       emulator_source: { kind: "retrodeck", starts_games: true },
     };
@@ -46,7 +46,29 @@ describe("biosHeldRatio", () => {
 
   it("gives a library holding nothing for the platform no ratio at all", () => {
     // `(0/0 RomM library files)` is a ratio over a set that does not exist.
-    expect(biosHeldRatio({ server_count: 0, local_count: 0 })).toBe("");
+    expect(biosHeldRatio({ ratio_server_count: 0, ratio_local_count: 0 })).toBe("");
+  });
+
+  it("states only the rows whose verdict was established, and nothing where none was", () => {
+    // A row that reads "could not be established" is no file missing, so the
+    // pair the level counts by — every row the library holds — is not the one stated.
+    const someEstablished: BiosStatus = {
+      needs_bios: true,
+      server_count: 3,
+      local_count: 1,
+      ratio_server_count: 2,
+      ratio_local_count: 1,
+    };
+    const noneEstablished: BiosStatus = {
+      needs_bios: true,
+      server_count: 3,
+      local_count: 0,
+      ratio_server_count: 0,
+      ratio_local_count: 0,
+    };
+
+    expect(biosHeldRatio(someEstablished)).toBe(" (1/2 RomM library files)");
+    expect(biosHeldRatio(noneEstablished)).toBe("");
   });
 });
 

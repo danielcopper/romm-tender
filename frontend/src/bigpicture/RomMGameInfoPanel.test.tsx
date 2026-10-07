@@ -207,6 +207,8 @@ function biosNeedingDetail(overrides: Partial<CachedGameDetail> = {}): CachedGam
       platform_slug: "snes",
       server_count: 2,
       local_count: 1,
+      ratio_server_count: 2,
+      ratio_local_count: 1,
       all_downloaded: false,
     },
     bios_level: "partial",
@@ -528,6 +530,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "snes",
           server_count: 1,
           local_count: 1,
+          ratio_server_count: 1,
+          ratio_local_count: 1,
           all_downloaded: true,
         } as never,
       });
@@ -1366,7 +1370,14 @@ describe("RomMGameInfoPanel", () => {
         stale_fields: [],
       });
       vi.mocked(backend.getBiosStatus).mockResolvedValue({
-        bios_status: { platform_slug: "snes", server_count: 2, local_count: 2, all_downloaded: true },
+        bios_status: {
+          platform_slug: "snes",
+          server_count: 2,
+          local_count: 2,
+          ratio_server_count: 2,
+          ratio_local_count: 2,
+          all_downloaded: true,
+        },
         bios_level: "ok",
       });
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
@@ -1395,7 +1406,14 @@ describe("RomMGameInfoPanel", () => {
         Promise.resolve(
           romId === 60
             ? {
-                bios_status: { platform_slug: "snes", server_count: 4, local_count: 3, all_downloaded: false },
+                bios_status: {
+                  platform_slug: "snes",
+                  server_count: 4,
+                  local_count: 3,
+                  ratio_server_count: 4,
+                  ratio_local_count: 3,
+                  all_downloaded: false,
+                },
                 bios_level: "partial",
               }
             : { bios_status: null, bios_level: null },
@@ -1437,6 +1455,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "snes",
           server_count: 5,
           local_count: 2,
+          ratio_server_count: 5,
+          ratio_local_count: 2,
           all_downloaded: false,
           required_count: 5,
           required_downloaded: 2,
@@ -1595,6 +1615,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "psx",
           server_count: 1,
           local_count: 1,
+          ratio_server_count: 1,
+          ratio_local_count: 1,
           all_downloaded: true,
           files: [
             {
@@ -1642,7 +1664,14 @@ describe("RomMGameInfoPanel", () => {
 
       vi.mocked(backend.getBiosStatus).mockClear();
       vi.mocked(backend.getBiosStatus).mockResolvedValue({
-        bios_status: { platform_slug: "gba", server_count: 1, local_count: 1, all_downloaded: true },
+        bios_status: {
+          platform_slug: "gba",
+          server_count: 1,
+          local_count: 1,
+          ratio_server_count: 1,
+          ratio_local_count: 1,
+          all_downloaded: true,
+        },
         bios_level: "ok",
       });
       await act(async () => {
@@ -1666,7 +1695,14 @@ describe("RomMGameInfoPanel", () => {
         rom_id: 60,
         platform_slug: "snes",
         save_sync_enabled: true,
-        bios_status: { platform_slug: "snes", server_count: 1, local_count: 1, all_downloaded: true } as never,
+        bios_status: {
+          platform_slug: "snes",
+          server_count: 1,
+          local_count: 1,
+          ratio_server_count: 1,
+          ratio_local_count: 1,
+          all_downloaded: true,
+        } as never,
         metadata: makeMetadata(),
         stale_fields: [],
       };
@@ -1779,6 +1815,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "snes",
           server_count: 1,
           local_count: 1,
+          ratio_server_count: 1,
+          ratio_local_count: 1,
           all_downloaded: true,
         } as never,
         metadata: makeMetadata(),
@@ -1893,6 +1931,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "snes",
           server_count: 1,
           local_count: 1,
+          ratio_server_count: 1,
+          ratio_local_count: 1,
           all_downloaded: true,
         } as never,
         metadata: makeMetadata(),
@@ -2135,6 +2175,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "snes",
           server_count: 1,
           local_count: 0,
+          ratio_server_count: 1,
+          ratio_local_count: 0,
           all_downloaded: false,
         } as never,
         metadata: makeMetadata(),
@@ -3022,6 +3064,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "snes",
           server_count: 2,
           local_count: 1,
+          ratio_server_count: 2,
+          ratio_local_count: 1,
           all_downloaded: false,
           required_count: 2,
           required_downloaded: 1,
@@ -3092,6 +3136,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "psx",
           server_count: 1,
           local_count: 0,
+          ratio_server_count: 1,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 1,
           required_downloaded: 0,
@@ -3169,6 +3215,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "psx",
           server_count: 1,
           local_count: 0,
+          ratio_server_count: 1,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 1,
           required_downloaded: 0,
@@ -3244,6 +3292,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "psx",
           server_count: 1,
           local_count: 0,
+          ratio_server_count: 1,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 1,
           required_downloaded: 0,
@@ -3380,6 +3430,8 @@ describe("RomMGameInfoPanel", () => {
         platform_slug: "snes",
         server_count: required_count ?? 1,
         local_count,
+        ratio_server_count: required_count ?? 1,
+        ratio_local_count: local_count,
         all_downloaded,
       };
       if (required_count !== null) bios.required_count = required_count;
@@ -3449,6 +3501,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "psx",
           server_count: 20,
           local_count: 0,
+          ratio_server_count: 20,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 0,
           required_downloaded: 0,
@@ -3500,6 +3554,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "ngc",
           server_count: 0,
           local_count: 0,
+          ratio_server_count: 0,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 2,
           required_downloaded: 1,
@@ -3564,6 +3620,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "ngc",
           server_count: 0,
           local_count: 0,
+          ratio_server_count: 0,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 1,
           required_downloaded: 1,
@@ -3614,6 +3672,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "ps2",
           server_count: 0,
           local_count: 0,
+          ratio_server_count: 0,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 1,
           required_downloaded: 0,
@@ -3677,6 +3737,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "psvita",
           server_count: 2,
           local_count: 0,
+          ratio_server_count: 2,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 0,
           required_downloaded: 0,
@@ -3752,6 +3814,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "snes",
           server_count: 1,
           local_count: 1,
+          ratio_server_count: 1,
+          ratio_local_count: 1,
           all_downloaded: true,
         } as never,
         metadata: makeMetadata(),
@@ -3801,6 +3865,8 @@ describe("RomMGameInfoPanel", () => {
         platform_slug: "snes",
         server_count: 3,
         local_count: localCount,
+        ratio_server_count: 3,
+        ratio_local_count: localCount,
         all_downloaded: localCount === 3,
       },
       bios_level: localCount === 3 ? ("ok" as const) : ("partial" as const),
@@ -4796,7 +4862,14 @@ describe("RomMGameInfoPanel", () => {
         // that is the dead end that has to be caught — a fallback that answers
         // for BIOS first would leave them there.
         const { container, queryByTestId } = await mountOnSavesTab({
-          bios_status: { platform_slug: "snes", server_count: 2, local_count: 1, all_downloaded: false },
+          bios_status: {
+            platform_slug: "snes",
+            server_count: 2,
+            local_count: 1,
+            ratio_server_count: 2,
+            ratio_local_count: 1,
+            all_downloaded: false,
+          },
           bios_level: "partial",
         });
         expect(container.textContent).toContain("BIOS");
@@ -4845,6 +4918,8 @@ describe("RomMGameInfoPanel", () => {
           platform_slug: "snes",
           server_count: 3,
           local_count: localCount,
+          ratio_server_count: 3,
+          ratio_local_count: localCount,
           all_downloaded: localCount === 3,
         } as never,
         bios_level: localCount === 3 ? ("ok" as const) : ("partial" as const),
@@ -5059,7 +5134,14 @@ describe("RomMGameInfoPanel", () => {
        *  Emulator column the core-info reads land in) stays visible across the
        *  switch. */
       const biosNeed: Partial<CachedGameDetail> = {
-        bios_status: { platform_slug: "snes", server_count: 3, local_count: 1, all_downloaded: false },
+        bios_status: {
+          platform_slug: "snes",
+          server_count: 3,
+          local_count: 1,
+          ratio_server_count: 3,
+          ratio_local_count: 1,
+          all_downloaded: false,
+        },
         bios_level: "partial",
       };
 
@@ -5192,7 +5274,14 @@ describe("RomMGameInfoPanel", () => {
         // binding here. Both versions need BIOS, so the tab stays across the
         // switch and the previous version's readiness has somewhere to land.
         const bios = holdReadFor<backend.BiosAnswer>(1, {
-          bios_status: { platform_slug: "snes", server_count: 3, local_count: 3, all_downloaded: true },
+          bios_status: {
+            platform_slug: "snes",
+            server_count: 3,
+            local_count: 3,
+            ratio_server_count: 3,
+            ratio_local_count: 3,
+            all_downloaded: true,
+          },
           bios_level: "ok",
         });
         vi.mocked(backend.getBiosStatus).mockImplementation(bios.impl);
@@ -5210,7 +5299,14 @@ describe("RomMGameInfoPanel", () => {
 
         await act(async () => {
           bios.release({
-            bios_status: { platform_slug: "snes", server_count: 3, local_count: 0, all_downloaded: false },
+            bios_status: {
+              platform_slug: "snes",
+              server_count: 3,
+              local_count: 0,
+              ratio_server_count: 3,
+              ratio_local_count: 0,
+              all_downloaded: false,
+            },
             bios_level: "missing",
           });
         });
@@ -5242,7 +5338,14 @@ describe("RomMGameInfoPanel", () => {
         expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledWith(1);
 
         await switchToRom2({
-          bios_status: { platform_slug: "snes", server_count: 3, local_count: 2, all_downloaded: false },
+          bios_status: {
+            platform_slug: "snes",
+            server_count: 3,
+            local_count: 2,
+            ratio_server_count: 3,
+            ratio_local_count: 2,
+            all_downloaded: false,
+          },
           bios_level: "partial",
         });
         await openBiosTab();
@@ -5250,7 +5353,14 @@ describe("RomMGameInfoPanel", () => {
 
         await act(async () => {
           bios.release({
-            bios_status: { platform_slug: "snes", server_count: 3, local_count: 0, all_downloaded: false },
+            bios_status: {
+              platform_slug: "snes",
+              server_count: 3,
+              local_count: 0,
+              ratio_server_count: 3,
+              ratio_local_count: 0,
+              all_downloaded: false,
+            },
             bios_level: "missing",
           });
         });
@@ -5622,6 +5732,8 @@ describe("RomMGameInfoPanel", () => {
         platform_slug: "snes",
         server_count: 3,
         local_count: localCount,
+        ratio_server_count: 3,
+        ratio_local_count: localCount,
         all_downloaded: localCount === 3,
       },
       bios_level: localCount === 3 ? ("ok" as const) : ("partial" as const),

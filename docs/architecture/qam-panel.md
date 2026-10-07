@@ -1433,16 +1433,19 @@ it, for the focused platform:
   and the third, `downloaded`, would read as a claim about who put the file there, which is more than `local_count`
   counts: `on_server` rows whose file is at its destination, the field itself answering presence and nothing more.
   Neither surface prints the ratio where the library holds nothing for the platform: `(0/0 RomM library files)` counts a
-  set that does not exist. What stops a surface writing one of these sentences back into itself is
-  `frontend/src/utils/biosSummary.test.ts`, which reads the components as SOURCE and fails on any phrase the module
-  builds its answers from, with `biosHeldRatio.test.ts` doing the same over the ratio and `biosGroup.test.ts` over the
-  region names and a file's place in a group. **All three SWEEP the set they search rather than naming it** — every
-  non-test `.tsx` under `frontend/src/bigpicture` or `frontend/src/shared`, via
-  `frontend/src/test-utils/componentSources.ts` — because naming it is what failed: the lists held two while three
-  surfaces rendered these states, and a surface left off a list cannot be told from one that never drifted. Deriving the
-  set from who imports the module would be worse still, since a surface wording a state for itself is precisely one that
-  does not import it. **What the sweep cannot see is a NEW wording** invented for one of these states; no string search
-  can, so a green run is evidence about copied sentences alone.
+  set that does not exist. Nor does it count a row that reads "could not be established", which is no file missing: the
+  ratio is the payload's own pair (`ratio_server_count` / `ratio_local_count`, over the rows whose verdict was
+  established), and where no row was established neither surface prints one. The level, its label and the download
+  buttons read `server_count` / `local_count`, which still count every row the library holds. What stops a surface
+  writing one of these sentences back into itself is `frontend/src/utils/biosSummary.test.ts`, which reads the
+  components as SOURCE and fails on any phrase the module builds its answers from, with `biosHeldRatio.test.ts` doing
+  the same over the ratio and `biosGroup.test.ts` over the region names and a file's place in a group. **All three SWEEP
+  the set they search rather than naming it** — every non-test `.tsx` under `frontend/src/bigpicture` or
+  `frontend/src/shared`, via `frontend/src/test-utils/componentSources.ts` — because naming it is what failed: the lists
+  held two while three surfaces rendered these states, and a surface left off a list cannot be told from one that never
+  drifted. Deriving the set from who imports the module would be worse still, since a surface wording a state for itself
+  is precisely one that does not import it. **What the sweep cannot see is a NEW wording** invented for one of these
+  states; no string search can, so a green run is evidence about copied sentences alone.
 
   **The Platforms list's row tooltip reads the same module too** (`PlatformsTab.tsx`'s `biosTooltip`) and takes the
   `sentence`, so hovering a row and opening its pane give one wording rather than two. It was the last one in, and while

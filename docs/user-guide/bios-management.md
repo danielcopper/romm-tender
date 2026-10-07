@@ -71,9 +71,10 @@ holds it or not — a required file you cannot download is still required. The r
 always your library's: how many of the files it holds for the platform are already in place. So "1 of 2 files mGBA
 requires are in place (3/5 RomM library files)" is one count of each kind, and the two need not agree: a required file
 your library does not hold is counted in the sentence and never in the ratio, and a library file the emulator does not
-require is counted in the ratio and never in the sentence. A file your library does not hold still gets its own row
-wherever it matters — a file this game requires, or one the console itself needs, is listed whether your library holds
-it or not.
+require is counted in the ratio and never in the sentence. A file that reads "could not be established" is left out of
+the ratio, since nothing showed it missing, and where no file could be established there is no ratio at all. A file your
+library does not hold still gets its own row wherever it matters — a file this game requires, or one the console itself
+needs, is listed whether your library holds it or not.
 
 The readiness line is computed against the **active core** for that game — so switching to a core that needs no BIOS (or
 that treats a file as optional) clears the warning, while switching to a core that requires a missing file surfaces it.

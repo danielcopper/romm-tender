@@ -124,6 +124,8 @@ function firmwarePlatform(overrides: Partial<FirmwarePlatformExt> = {}): Firmwar
     required_withheld: 0,
     server_count: 1,
     local_count: 0,
+    ratio_server_count: 1,
+    ratio_local_count: 0,
     deletable_count: 0,
     emulator_data_reason: null,
     emulator_source: { kind: "retrodeck", starts_games: true },
@@ -1291,7 +1293,15 @@ describe("Library › Platforms", () => {
       // words, because what it counts is a third set: the files the RomM library
       // holds for the platform, where the sentence counts what the launching
       // emulator requires.
-      mockFirmware([firmwarePlatform({ active_core_label: "mGBA", server_count: 3, local_count: 1 })]);
+      mockFirmware([
+        firmwarePlatform({
+          active_core_label: "mGBA",
+          server_count: 3,
+          local_count: 1,
+          ratio_server_count: 3,
+          ratio_local_count: 1,
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1306,7 +1316,7 @@ describe("Library › Platforms", () => {
       // nothing — so the amounts agreed only where the backend supplied the
       // pair. It lives in this file because the pane needs the whole page around
       // it and the game page's tab needs three props.
-      const counts = { server_count: 3, local_count: 1 };
+      const counts = { server_count: 3, local_count: 1, ratio_server_count: 3, ratio_local_count: 1 };
       const heldRun = (text: string) => text.match(/\(\d+\/\d+ RomM library files\)/)?.[0] ?? null;
 
       mockFirmware([firmwarePlatform({ active_core_label: "mGBA", ...counts })]);
@@ -1323,6 +1333,31 @@ describe("Library › Platforms", () => {
 
       expect(heldRun(pane.textContent)).toBe("(1/3 RomM library files)");
       expect(heldRun(gamePage.textContent)).toBe(heldRun(pane.textContent));
+    });
+
+    it.each([
+      ["leaves the rows nothing could establish out of it", 2, "(0/2 RomM library files)"],
+      ["states none where no row could be established", 0, null],
+    ])("%s, on the pane and on the game page alike", async (_title, established, expected) => {
+      // Three rows in the library; the ones that read "could not be established"
+      // are no file missing, so the stated ratio counts only the others.
+      const counts = { server_count: 3, local_count: 0, ratio_server_count: established, ratio_local_count: 0 };
+      const heldRun = (text: string) => text.match(/\(\d+\/\d+ RomM library files\)/)?.[0] ?? null;
+
+      mockFirmware([firmwarePlatform({ active_core_label: "mGBA", ...counts })]);
+      const pane = render(<LibraryPage onBack={vi.fn()} />).container;
+      await flushAsync();
+      const gamePage = render(
+        <BiosTab
+          biosStatus={{ needs_bios: true, required_count: 1, required_downloaded: 0, ...counts }}
+          biosLevel="missing"
+          coreInfo={GBA_CORE_INFO}
+          isActive={true}
+        />,
+      ).container;
+
+      expect(heldRun(pane.textContent)).toBe(expected);
+      expect(heldRun(gamePage.textContent)).toBe(expected);
     });
 
     it("tells a failed BIOS read apart from a platform the overview cannot speak for", async () => {
@@ -1900,6 +1935,8 @@ describe("Library › Platforms", () => {
           required_downloaded: 0,
           server_count: 3,
           local_count: 1,
+          ratio_server_count: 3,
+          ratio_local_count: 1,
           active_core_label: "SwanStation",
         }),
       ]);
@@ -1927,6 +1964,8 @@ describe("Library › Platforms", () => {
           required_downloaded: 0,
           server_count: 0,
           local_count: 0,
+          ratio_server_count: 0,
+          ratio_local_count: 0,
         }),
       ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);

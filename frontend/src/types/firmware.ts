@@ -379,6 +379,10 @@ export interface FirmwarePlatformExt extends FirmwarePlatformNamed {
   one_of_groups?: OneOfGroupVerdict[];
   server_count?: number;
   local_count?: number;
+  /** The pair the "n/N RomM library files" ratio states — `server_count` /
+   *  `local_count` over the rows whose verdict was established. */
+  ratio_server_count?: number;
+  ratio_local_count?: number;
   known_count?: number;
   unknown_count?: number;
   /** How many files Delete BIOS would remove: download records Tender
@@ -478,6 +482,9 @@ export interface BiosStatus {
   needs_bios: boolean;
   server_count?: number;
   local_count?: number;
+  /** The pair the "n/N RomM library files" ratio states — see `FirmwarePlatformExt`. */
+  ratio_server_count?: number;
+  ratio_local_count?: number;
   all_downloaded?: boolean;
   required_count?: number;
   required_downloaded?: number;

@@ -63,6 +63,10 @@ _ENTRY_KEYS = {
     # requirement, and how many of them are covered for some regions only.
     "required_partial",
     "one_of_groups",
+    # The pair the "n/N RomM library files" ratio states, over the rows whose
+    # verdict was established.
+    "ratio_server_count",
+    "ratio_local_count",
 }
 
 # And every key a row carried: the server's own fields, the destination and its

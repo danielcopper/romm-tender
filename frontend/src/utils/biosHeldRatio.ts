@@ -7,12 +7,18 @@
  * which is which. What a reader gets out of that, on each of the two surfaces,
  * is `docs/architecture/qam-panel.md` → BIOS files.
  *
- * The pair is the RomM library's inventory for the platform: `server_count` is
- * what the library holds, and `local_count` how many of those Tender found
- * at their destination. The rest of the tree calls that axis the **held/offered
- * ratio** (`domain/bios_status.py`, `types/firmware.ts`, GLOSSARY.md → Library
- * inventory) — the same two numbers under the name the code gives them, which is
- * the name to search for when this wording does not appear.
+ * The pair is the RomM library's inventory for the platform, over the rows
+ * whose verdict was established: `ratio_server_count` is what the library holds
+ * of them, and `ratio_local_count` how many of those Tender found at their
+ * destination. A row that reads "could not be established" is in neither — it
+ * is not a file missing — so where no row was established there is no ratio.
+ * The pair has its own fields because `server_count` / `local_count` beside it
+ * count every row the library holds and keep feeding the level, the label and
+ * the download buttons (`services/firmware/status.py::_bios_aggregates`). The
+ * rest of the tree calls that axis the **held/offered ratio**
+ * (`domain/bios_status.py`, `types/firmware.ts`, GLOSSARY.md → Library
+ * inventory) — the same numbers under the name the code gives them, which is the
+ * name to search for when this wording does not appear.
  *
  * Naming the set is also why the pair need not be folded INTO that sentence. The
  * two are stated next to each other in every one of the seven states because one
@@ -20,13 +26,15 @@
  * same move as folding the meanings: what lives here is how the pair is written,
  * and the two sets stay apart.
  *
- * **A library that holds nothing for the platform gets no ratio at all** —
+ * **A library that holds nothing for the platform gets no ratio at all**, and
+ * neither does one none of whose rows was established —
  * `(0/0 RomM library files)` counts a set that does not exist.
  *
  * **A payload carrying neither count gets none either.** Those two numbers are
  * the only thing on the wire that states what the library holds. The rows can be
- * counted the same way the backend counts them — the `on_server` rows, and the
- * downloaded ones among them (`services/firmware/status.py::_bios_aggregates`) —
+ * counted the same way the backend counts them — the `on_server` rows with a
+ * verdict, and the downloaded ones among them
+ * (`services/firmware/status.py::_bios_aggregates`) —
  * and that is the road not taken: it is a second copy of a counting rule living
  * across the wire from the rule it copies, so a surface would state a number
  * nothing told it and would keep stating it after the backend's rule moved.
@@ -41,8 +49,8 @@
  *  the platform pane's `FirmwarePlatformExt` both satisfy it structurally, which
  *  is what lets one function serve both without either importing the other. */
 export interface HeldRatioSource {
-  server_count?: number;
-  local_count?: number;
+  ratio_server_count?: number;
+  ratio_local_count?: number;
 }
 
 /** The fixed run the drift lock searches the two surfaces for — the same string
@@ -70,7 +78,7 @@ export const HELD_RATIO_PHRASE = "RomM library files";
  * know whether to.
  */
 export function biosHeldRatio(source: HeldRatioSource): string {
-  const total = source.server_count ?? 0;
-  const done = source.local_count ?? 0;
+  const total = source.ratio_server_count ?? 0;
+  const done = source.ratio_local_count ?? 0;
   return total > 0 ? ` (${done}/${total} ${HELD_RATIO_PHRASE})` : "";
 }
