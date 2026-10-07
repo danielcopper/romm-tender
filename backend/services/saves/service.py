@@ -31,7 +31,7 @@ from services.saves.prune_support import PruneSaveSupport, PruneSaveSupportConfi
 from services.saves.rom_info import RomInfoService, RomInfoServiceConfig
 from services.saves.slots import SlotsService, SlotsServiceConfig
 from services.saves.status import StatusService, StatusServiceConfig
-from services.saves.sync_engine import SyncEngine, SyncEngineConfig
+from services.saves.sync_engine import SaveSweepIncomplete, SyncEngine, SyncEngineConfig
 from services.saves.sync_engine.devices import DeviceRegistry
 from services.saves.versions import VersionsService, VersionsServiceConfig
 
@@ -318,7 +318,7 @@ class SaveService:
         async with self._rules.hold("sync_rom_saves", update=True, migration=True, prune=True):
             return await self._sync_engine.sync_rom_saves(rom_id)
 
-    async def sync_all_saves(self) -> dict[str, Any]:
+    async def sync_all_saves(self) -> dict[str, Any] | SaveSweepIncomplete:
         """Manual full sync of all ROMs with shortcuts (both directions)."""
         async with self._rules.hold("sync_all_saves", update=True, migration=True, prune=True):
             return await self._sync_engine.sync_all_saves()

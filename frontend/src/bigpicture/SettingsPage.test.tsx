@@ -400,8 +400,8 @@ describe("SettingsPage", () => {
       });
       vi.mocked(backend.ensureDeviceRegistered).mockResolvedValue({
         success: false,
-        device_id: "",
-        device_name: "",
+        reason: "server_unreachable",
+        message: "Could not register device",
       });
       renderPage();
       await flushAsync();
@@ -468,7 +468,8 @@ describe("SettingsPage", () => {
       });
       vi.mocked(backend.listDevices).mockResolvedValue({
         success: false,
-        devices: [],
+        reason: "sync_disabled",
+        message: "Save sync is disabled",
         disabled: true,
       });
       const { queryByTestId } = renderPage();
@@ -483,35 +484,19 @@ describe("SettingsPage", () => {
       });
       // Canonical failure shape: the routing slug lives on `reason`, the
       // human-readable text on `message`. The UI must render `message`, never
-      // the raw slug (the #972 user-visible bug: "Could not load devices —
-      // list_failed" leaked the slug).
+      // the raw slug.
       vi.mocked(backend.listDevices).mockResolvedValue({
         success: false,
-        devices: [],
         reason: "server_unreachable",
-        message: "Could not load devices",
+        message: "Server unreachable — check your URL and ensure RomM is running",
       });
       renderPage();
       await flushAsync();
       const d = capturedDevices[capturedDevices.length - 1];
-      expect(d?.devicesError).toBe("Could not load devices");
+      expect(d?.devicesError).toBe("Server unreachable — check your URL and ensure RomM is running");
       // The raw slug must NOT surface to the user.
       expect(d?.devicesError).not.toBe("server_unreachable");
       expect(d?.registeredDevices).toEqual([]);
-    });
-
-    it("falls back to a generic message when message is absent on a failed response", async () => {
-      vi.mocked(backend.getSaveSyncSettings).mockResolvedValue({
-        ...defaultSaveSyncSettings(),
-        save_sync_enabled: true,
-      });
-      vi.mocked(backend.listDevices).mockResolvedValue({
-        success: false,
-        devices: [],
-      });
-      renderPage();
-      await flushAsync();
-      expect(capturedDevices[capturedDevices.length - 1]?.devicesError).toBe("Failed to load devices");
     });
 
     it("surfaces a thrown listDevices via devicesError (Error.message)", async () => {

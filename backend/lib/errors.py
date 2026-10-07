@@ -294,6 +294,26 @@ class NotInstalled(NamedRefused):
     reason = "not_installed"
 
 
+class SyncBusy(NamedRefused):
+    """Another save sync still held the device when this one's wait ran out.
+
+    A local scheduling outcome: the skipped run may never have contacted the
+    server, so it is never collapsed onto ``server_unreachable``.
+    """
+
+    reason = "sync_busy"
+
+
+class DeviceSyncDisabled(NamedRefused):
+    """The RomM server has save sync turned off for this device.
+
+    RomM's per-device switch, enforced at ``negotiate``; distinct from the local
+    ``sync_disabled`` toggle.
+    """
+
+    reason = "device_sync_disabled"
+
+
 class OperationAbortedError(Exception):
     """A cooperative worker stopped because its caller asked it to stop.
 

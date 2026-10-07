@@ -15,7 +15,17 @@ from _factories import (
 )
 
 from domain.save_answer import BENIGN_SYNC_SKIP_REASONS
-from lib.errors import Refused
+from lib.errors import (
+    DeviceSyncDisabled,
+    Refused,
+    RommAuthError,
+    RommServerError,
+    RommSSLError,
+    ServerUnreachable,
+    SyncBusy,
+    classify_error,
+)
+from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
 from services.session_lifecycle import (
     SessionFinalizeMigration,
     SessionFinalizeResult,
@@ -281,8 +291,8 @@ class TestFinalizePlaytime:
 
 class TestFinalizeSyncToasts:
     def test_offline_renders_offline_toast_with_dispatch_flag(self, event_loop, logger):
-        """``offline=True`` → offline-body toast, offline flag preserved for dispatch."""
-        post = FakePostExitSync(payload={"offline": True, "success": False})
+        """A raised refusal with the ``offline`` detail → offline-body toast, offline flag kept for dispatch."""
+        post = FakePostExitSync(side_effect=ServerUnreachable("Server offline", synced=0, offline=True))
         service = _make_service(
             playtime_recorder=FakePlaytimeRecorder(),
             post_exit_sync=post,
@@ -295,6 +305,7 @@ class TestFinalizeSyncToasts:
         event_loop.run_until_complete(_drain_background_tasks(service))
 
         assert result.sync.offline is True
+        assert result.sync.synced == 0
         assert result.sync.failure_toast == "Server offline — saves will sync next time"
 
     def test_success_upload_only_carries_upload_counts(self, event_loop, logger):
@@ -395,16 +406,10 @@ class TestFinalizeSyncToasts:
 
         assert result.sync.failure_toast == "Failed to sync saves after exit"
 
-    def test_failure_with_auth_message_names_the_cause(self, event_loop, logger):
-        """#971: a classified auth failure surfaces its own message, not the generic body."""
-        post = FakePostExitSync(
-            payload={
-                "success": False,
-                "reason": "AUTH_FAILED",
-                "message": "Authentication failed — sign in again",
-                "synced": 0,
-            }
-        )
+    def test_failure_with_auth_message_names_the_cause(self, event_loop, logger, caplog):
+        """#971: a RomM auth error the sync raises surfaces ``classify_error``'s message, not the generic body."""
+        failure = RommAuthError("401 Unauthorized")
+        post = FakePostExitSync(side_effect=failure)
         service = _make_service(
             playtime_recorder=FakePlaytimeRecorder(),
             post_exit_sync=post,
@@ -413,23 +418,48 @@ class TestFinalizeSyncToasts:
             logger=logger,
         )
 
-        result = event_loop.run_until_complete(service.finalize(99))
+        with caplog.at_level(logging.WARNING, logger=logger.name):
+            result = event_loop.run_until_complete(service.finalize(99))
         event_loop.run_until_complete(_drain_background_tasks(service))
 
-        assert result.sync.failure_toast == "Authentication failed — sign in again"
+        _reason, message = classify_error(failure)
+        assert result.sync == SessionFinalizeSyncResult(
+            offline=False,
+            success=False,
+            synced=None,
+            uploaded=0,
+            downloaded=0,
+            conflicts=[],
+            failure_toast=message,
+            conflicts_toast=None,
+        )
         # The generic fallback must NOT be used when a classified cause is present.
         assert result.sync.failure_toast != "Failed to sync saves after exit"
+        assert [r.levelno for r in caplog.records if "RommAuthError" in r.getMessage()] == [logging.WARNING]
+
+    def test_a_server_the_sync_could_not_reach_logs_below_warning(self, event_loop, logger, caplog):
+        """A RomM error whose verdict is ``server_unreachable`` is an expected state: it logs at info, not warning."""
+        failure = RommServerError("HTTP 502: Bad Gateway", status_code=502)
+        post = FakePostExitSync(side_effect=failure)
+        service = _make_service(
+            playtime_recorder=FakePlaytimeRecorder(),
+            post_exit_sync=post,
+            achievement_sync=FakeAchievementSync(),
+            migration_reader=FakeMigrationReader(),
+            logger=logger,
+        )
+
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            result = event_loop.run_until_complete(service.finalize(99))
+        event_loop.run_until_complete(_drain_background_tasks(service))
+
+        assert result.sync.failure_toast == classify_error(failure)[1]
+        assert [r.levelno for r in caplog.records if "RommServerError" in r.getMessage()] == [logging.INFO]
 
     def test_failure_with_ssl_message_names_the_cause(self, event_loop, logger):
-        """#971: an SSL/server-classified failure surfaces its specific message."""
-        post = FakePostExitSync(
-            payload={
-                "success": False,
-                "reason": "UNKNOWN",
-                "message": "SSL certificate verification failed",
-                "synced": 0,
-            }
-        )
+        """#971: an SSL error the sync raises surfaces ``classify_error``'s specific message, never offline."""
+        failure = RommSSLError("cert verify failed")
+        post = FakePostExitSync(side_effect=failure)
         service = _make_service(
             playtime_recorder=FakePlaytimeRecorder(),
             post_exit_sync=post,
@@ -441,20 +471,12 @@ class TestFinalizeSyncToasts:
         result = event_loop.run_until_complete(service.finalize(99))
         event_loop.run_until_complete(_drain_background_tasks(service))
 
-        assert result.sync.failure_toast == "SSL certificate verification failed"
+        assert result.sync.failure_toast == classify_error(failure)[1]
+        assert result.sync.offline is False
 
     def test_device_sync_disabled_renders_dedicated_toast(self, event_loop, logger):
         """#1489: RomM's per-device sync-disabled stop gets its own toast copy, keyed on the reason."""
-        post = FakePostExitSync(
-            payload={
-                "success": False,
-                "reason": "device_sync_disabled",
-                "message": "Save sync is disabled for this device on the RomM server",
-                "synced": 0,
-                "errors": [],
-                "conflicts": [],
-            }
-        )
+        post = FakePostExitSync(side_effect=DeviceSyncDisabled("Sync is disabled for this device", synced=0))
         service = _make_service(
             playtime_recorder=FakePlaytimeRecorder(),
             post_exit_sync=post,
@@ -477,14 +499,7 @@ class TestFinalizeSyncToasts:
         The gate wait is local — the post-exit run never contacted the server —
         so the body names the real cause and the offline flag stays down.
         """
-        post = FakePostExitSync(
-            payload={
-                "success": False,
-                "reason": "sync_busy",
-                "message": "Another save sync is still running",
-                "synced": 0,
-            }
-        )
+        post = FakePostExitSync(side_effect=SyncBusy("Another save sync is still running", synced=0))
         service = _make_service(
             playtime_recorder=FakePlaytimeRecorder(),
             post_exit_sync=post,
@@ -509,15 +524,7 @@ class TestFinalizeSyncToasts:
         ``reason=server_unreachable``) keeps the offline copy — the honest
         busy copy is reserved for the local gate wait.
         """
-        post = FakePostExitSync(
-            payload={
-                "success": False,
-                "offline": True,
-                "reason": "server_unreachable",
-                "message": "Server offline",
-                "synced": 0,
-            }
-        )
+        post = FakePostExitSync(side_effect=ServerUnreachable("Server offline", synced=0, offline=True))
         service = _make_service(
             playtime_recorder=FakePlaytimeRecorder(),
             post_exit_sync=post,
@@ -566,8 +573,8 @@ class TestFinalizeSyncToasts:
         assert result.sync.failure_toast == "Failed to sync saves after exit"
 
     def test_offline_message_does_not_override_offline_body(self, event_loop, logger):
-        """Regression guard: the offline branch keeps its body even when a message is present."""
-        post = FakePostExitSync(payload={"success": False, "offline": True, "message": "Server offline", "synced": 0})
+        """Regression guard: the offline branch keeps its body even when the refusal carries a message."""
+        post = FakePostExitSync(side_effect=ServerUnreachable("Server offline", synced=0, offline=True))
         service = _make_service(
             playtime_recorder=FakePlaytimeRecorder(),
             post_exit_sync=post,
@@ -723,16 +730,11 @@ class TestFinalizeContentDirBenignSkip:
     """
 
     def test_content_dir_reason_suppresses_failure_toast(self, event_loop, logger):
-        """benign-skip dict → no toast (title/body None), conflicts empty, no false failure."""
+        """The raised content-dir skip → no toast (title/body None), conflicts empty, no false failure."""
         post = FakePostExitSync(
-            payload={
-                "success": False,
-                "reason": "savefiles_in_content_dir",
-                "message": "Save sync is unavailable: RetroArch is set to write saves to the content directory.",
-                "synced": 0,
-                "errors": [],
-                "conflicts": [],
-            }
+            side_effect=SavefilesInContentDir(
+                "Save sync is unavailable: saves are written to the game's content directory.", synced=0
+            )
         )
         service = _make_service(
             playtime_recorder=FakePlaytimeRecorder(),
@@ -759,14 +761,9 @@ class TestFinalizeContentDirBenignSkip:
     def test_unsupported_save_shape_suppresses_failure_toast(self, event_loop, logger):
         """#1858: the emulator keeps no per-game save set, so the sync correctly did nothing."""
         post = FakePostExitSync(
-            payload={
-                "success": False,
-                "reason": "save_shape_unsupported",
-                "message": "Save sync is unavailable: this emulator keeps one save card that all games share.",
-                "synced": 0,
-                "errors": [],
-                "conflicts": [],
-            }
+            side_effect=SaveShapeUnsupported(
+                "Save sync is unavailable: this emulator keeps one save card that all games share.", synced=0
+            )
         )
         service = _make_service(
             playtime_recorder=FakePlaytimeRecorder(),

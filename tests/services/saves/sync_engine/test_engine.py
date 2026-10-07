@@ -22,6 +22,7 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import SaveAnswer
 from lib.errors import (
+    DeviceSyncDisabled,
     Refused,
     RommApiError,
     RommAuthError,
@@ -31,14 +32,13 @@ from lib.errors import (
     RommSSLError,
     RommSyncDisabledError,
     RommTimeoutError,
+    ServerUnreachable,
+    SyncBusy,
 )
 from lib.list_result import ErrorCode
-from services.saves._messages import (
-    DEVICE_NOT_REGISTERED,
-    DEVICE_NOT_REGISTERED_REASON,
-    DEVICE_SYNC_DISABLED,
-    DEVICE_SYNC_DISABLED_REASON,
-)
+from services.saves._messages import DEVICE_NOT_REGISTERED, DEVICE_SYNC_DISABLED
+from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
+from services.saves.sync_engine import SaveSweepIncomplete
 from services.saves.sync_engine.engine import _first_error_reason, _summarize_sync_result
 from tests.services.saves._helpers import (
     _create_save,
@@ -177,6 +177,7 @@ class TestSyncAllSaves:
         # the sweep.
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["synced"] == 2
         assert result["roms_checked"] == 2
@@ -205,6 +206,7 @@ class TestSyncAllSaves:
         _create_save(tmp_path, system="snes", rom_name="game2", content=_corrupt_zip_bytes())
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         # The run completed (no BadZipFile escaped) and swept both ROMs cleanly.
         assert result["success"] is True
@@ -216,11 +218,16 @@ class TestSyncAllSaves:
         assert uploaded_roms == {1, 2}
 
     @pytest.mark.asyncio
-    async def test_disabled_returns_early(self, tmp_path):
+    async def test_disabled_refuses_early(self, tmp_path):
         svc, _ = make_service(tmp_path)
-        result = await svc.sync_all_saves()
-        assert result["success"] is False
-        assert "disabled" in result["message"].lower()
+        sync = svc.sync_all_saves()
+
+        with pytest.raises(Refused) as refused:
+            await sync
+
+        assert refused.value.reason == "sync_disabled"
+        assert "disabled" in refused.value.message.lower()
+        assert refused.value.details == {"synced": 0, "conflicts": 0}
 
     @pytest.mark.asyncio
     async def test_partial_failure(self, tmp_path):
@@ -249,6 +256,7 @@ class TestSyncAllSaves:
         fake.upload_save = flaky_upload
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
         assert result["synced"] >= 1
         assert len(result["errors"]) >= 1
 
@@ -274,6 +282,7 @@ class TestSyncAllSaves:
         svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["success"] is True
         assert result["conflicts"] >= 1
@@ -297,6 +306,7 @@ class TestSyncAllSaves:
         # Confirmed non-legacy → the matrix POSTs the local-only save.
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["success"] is True
         assert result["synced"] == 1
@@ -318,6 +328,7 @@ class TestSyncAllSaves:
         _create_save(tmp_path, system="gba", rom_name="game1", content=b"save1")
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["synced"] == 0
         assert result["roms_checked"] == 1
@@ -340,6 +351,7 @@ class TestSyncAllSaves:
         # so the single matrix upload is for rom 1 alone.
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["synced"] == 1
         assert result["roms_checked"] == 2
@@ -499,34 +511,32 @@ class TestDeviceSyncDisabled:
             await svc._sync_engine._open_negotiate_session(42, "test-device")
 
     @pytest.mark.asyncio
-    async def test_sync_rom_saves_returns_policy_failure(self, tmp_path):
+    async def test_sync_rom_saves_refuses_with_the_policy_stop(self, tmp_path):
         svc, fake = make_service(tmp_path)
         self._seed_confirmed_rom(svc, tmp_path)
         fake.negotiate_sync_disabled = True
+        sync = svc.sync_rom_saves(42)
 
-        result = await svc.sync_rom_saves(42)
+        with pytest.raises(DeviceSyncDisabled) as refused:
+            await sync
 
-        assert result["success"] is False
-        assert result["reason"] == DEVICE_SYNC_DISABLED_REASON
-        assert result["message"] == DEVICE_SYNC_DISABLED
-        assert result["synced"] == 0
-        assert result["errors"] == []
-        assert result["conflicts"] == []
+        assert refused.value.message == DEVICE_SYNC_DISABLED
+        assert refused.value.details == {"synced": 0}
         # Aborted before the matrix — no upload happened.
         assert not any(c[0] == "upload_save" for c in fake.call_log)
 
     @pytest.mark.asyncio
-    async def test_post_exit_sync_returns_policy_failure(self, tmp_path):
+    async def test_post_exit_sync_refuses_with_the_policy_stop(self, tmp_path):
         svc, fake = make_service(tmp_path)
         self._seed_confirmed_rom(svc, tmp_path)
         fake.negotiate_sync_disabled = True
+        sync = svc.post_exit_sync(42)
 
-        result = await svc.post_exit_sync(42)
+        with pytest.raises(DeviceSyncDisabled) as refused:
+            await sync
 
-        assert result["success"] is False
-        assert result["reason"] == DEVICE_SYNC_DISABLED_REASON
-        assert result["message"] == DEVICE_SYNC_DISABLED
-        assert result["synced"] == 0
+        assert refused.value.message == DEVICE_SYNC_DISABLED
+        assert refused.value.details == {"synced": 0}
         assert not any(c[0] == "upload_save" for c in fake.call_log)
 
     @pytest.mark.asyncio
@@ -547,7 +557,7 @@ class TestDeviceSyncDisabled:
         assert not any(c[0] == "upload_save" for c in fake.call_log)
 
     @pytest.mark.asyncio
-    async def test_sync_all_saves_bulk_abort_returns_policy_failure(self, tmp_path):
+    async def test_sync_all_saves_bulk_abort_refuses_with_the_policy_stop(self, tmp_path):
         """The whole-device bulk pre-negotiate hits the switch → abort before the sweep."""
         svc, fake = make_service(tmp_path)
         self._seed_confirmed_rom(svc, tmp_path, rom_id=1, rom_name="game1", file_name="game1.gba", content=b"s1")
@@ -555,14 +565,13 @@ class TestDeviceSyncDisabled:
             svc, tmp_path, rom_id=2, system="snes", rom_name="game2", file_name="game2.sfc", content=b"s2"
         )
         fake.negotiate_sync_disabled = True
+        sync = svc.sync_all_saves()
 
-        result = await svc.sync_all_saves()
+        with pytest.raises(DeviceSyncDisabled) as refused:
+            await sync
 
-        assert result["success"] is False
-        assert result["reason"] == DEVICE_SYNC_DISABLED_REASON
-        assert result["message"] == DEVICE_SYNC_DISABLED
-        assert result["synced"] == 0
-        assert result["roms_checked"] == 0
+        assert refused.value.message == DEVICE_SYNC_DISABLED
+        assert refused.value.details == {"synced": 0, "conflicts": 0}
         assert not any(c[0] == "upload_save" for c in fake.call_log)
 
     @pytest.mark.asyncio
@@ -593,11 +602,11 @@ class TestDeviceSyncDisabled:
 
         result = await svc.sync_all_saves()
 
-        assert result["success"] is False
-        assert result["reason"] == DEVICE_SYNC_DISABLED_REASON
-        assert result["synced"] == 1
-        assert "after syncing 1 save(s)" in result["message"]
-        assert result["roms_checked"] == 2
+        assert isinstance(result, SaveSweepIncomplete)
+        assert result.reason == "device_sync_disabled"
+        assert result.message == f"{DEVICE_SYNC_DISABLED} — stopped after syncing 1 save(s)"
+        assert (result.synced, result.conflicts, result.conflicts_list) == (1, 0, [])
+        assert (result.roms_checked, result.errors) == (2, [])
         # ROM 1 uploaded before the abort; ROM 2 never did.
         uploaded = {c[1][0] for c in fake.call_log if c[0] == "upload_save"}
         assert uploaded == {1}
@@ -845,46 +854,35 @@ class TestTheEnginesMigrationRefusalIsTheSharedOne:
 
 class TestPostExitServerOfflineGuard:
     """post_exit_sync probes heartbeat first. A genuine reachability failure
-    (connection/timeout) returns offline=True; an auth/SSL failure flows through
-    classify_error so it carries its OWN reason + message instead of masking the
-    reachable server as offline (#971)."""
+    (connection/timeout) refuses as unreachable with ``offline``; any other RomM
+    error propagates, so it is answered with its OWN reason + message instead of
+    masking the reachable server as offline (#971)."""
 
     @pytest.mark.asyncio
-    async def test_post_exit_sync_returns_offline_when_connection_error(self, tmp_path):
+    @pytest.mark.parametrize(
+        "failure",
+        [RommConnectionError("Connection refused"), RommTimeoutError("timed out")],
+        ids=["connection", "timeout"],
+    )
+    async def test_post_exit_sync_refuses_as_offline_when_the_server_cannot_be_reached(self, tmp_path, failure):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
         _create_save(tmp_path, content=b"data")
-        fake.heartbeat_raises = RommConnectionError("Connection refused")
+        fake.heartbeat_raises = failure
+        sync = svc.post_exit_sync(42)
 
-        result = await svc.post_exit_sync(42)
+        with pytest.raises(ServerUnreachable) as refused:
+            await sync
 
-        assert result["success"] is False
-        assert result["offline"] is True
-        assert result["reason"] == ErrorCode.SERVER_UNREACHABLE.value
-        assert result["message"] == "Server offline"
-        assert result["synced"] == 0
+        assert refused.value.message == "Server offline"
+        assert refused.value.details == {"synced": 0, "offline": True}
         # No upload was attempted after heartbeat failed.
         assert not any(c[0] == "upload_save" for c in fake.call_log)
 
     @pytest.mark.asyncio
-    async def test_post_exit_sync_returns_offline_when_timeout(self, tmp_path):
-        svc, fake = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-        _create_save(tmp_path, content=b"data")
-        fake.heartbeat_raises = RommTimeoutError("timed out")
-
-        result = await svc.post_exit_sync(42)
-
-        assert result["offline"] is True
-        assert result["reason"] == ErrorCode.SERVER_UNREACHABLE.value
-        assert result["message"] == "Server offline"
-
-    @pytest.mark.asyncio
-    async def test_post_exit_sync_auth_failure_is_not_offline(self, tmp_path):
+    async def test_post_exit_sync_auth_failure_propagates(self, tmp_path):
         """A revoked token (401) on the heartbeat must NOT read as offline."""
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
@@ -892,96 +890,65 @@ class TestPostExitServerOfflineGuard:
         _install_rom(svc, tmp_path)
         _create_save(tmp_path, content=b"data")
         fake.heartbeat_raises = RommAuthError("401 Unauthorized")
+        sync = svc.post_exit_sync(42)
 
-        result = await svc.post_exit_sync(42)
+        with pytest.raises(RommAuthError):
+            await sync
 
-        assert result["success"] is False
-        assert "offline" not in result
-        assert result["reason"] == ErrorCode.AUTH_FAILED.value
-        assert "uthentication failed" in result["message"]
-        assert result["message"] != "Server offline"
         assert not any(c[0] == "upload_save" for c in fake.call_log)
 
 
 class TestPreLaunchServerOfflineGuard:
     """pre_launch_sync probes heartbeat first (F4). A reachability failure
-    returns the canonical SERVER_UNREACHABLE shape + offline=True; an auth/SSL
-    failure flows through classify_error to its OWN reason + DISTINCT message so
-    the UI stops claiming the server is unreachable (#971)."""
+    refuses as unreachable with ``offline``; any other RomM error propagates to
+    be answered with its OWN reason + DISTINCT message, so the UI stops claiming
+    the server is unreachable (#971); anything else is not caught at all."""
 
     @pytest.mark.asyncio
-    async def test_pre_launch_sync_returns_offline_when_connection_error(self, tmp_path):
+    @pytest.mark.parametrize(
+        "failure",
+        [RommConnectionError("Connection refused"), RommTimeoutError("timed out")],
+        ids=["connection", "timeout"],
+    )
+    async def test_pre_launch_sync_refuses_as_offline_when_the_server_cannot_be_reached(self, tmp_path, failure):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
         fake.saves[100] = _server_save()
-        fake.heartbeat_raises = RommConnectionError("Connection refused")
+        fake.heartbeat_raises = failure
+        sync = svc.pre_launch_sync(42)
 
-        result = await svc.pre_launch_sync(42)
+        with pytest.raises(ServerUnreachable) as refused:
+            await sync
 
-        assert result["success"] is False
-        assert result["offline"] is True
-        assert result["reason"] == ErrorCode.SERVER_UNREACHABLE.value
-        assert result["message"] == "Server offline"
-        assert result["synced"] == 0
+        assert refused.value.message == "Server offline"
+        assert refused.value.details == {"synced": 0, "offline": True}
         # No download/list was attempted after heartbeat failed.
         assert not any(c[0] in ("download_save", "list_saves") for c in fake.call_log)
 
     @pytest.mark.asyncio
-    async def test_pre_launch_sync_returns_offline_when_timeout(self, tmp_path):
+    @pytest.mark.parametrize(
+        "failure",
+        [RommAuthError("401 Unauthorized"), RommSSLError("cert verify failed"), ValueError("a bug")],
+        ids=["auth", "ssl", "not-a-romm-error"],
+    )
+    async def test_pre_launch_sync_any_other_heartbeat_failure_propagates(self, tmp_path, failure):
+        """A 401 or an SSL misconfig is never the misleading "Server offline" +
+        offline flag (#971); it reaches the caller as itself, as does a bug."""
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
         fake.saves[100] = _server_save()
-        fake.heartbeat_raises = RommTimeoutError("timed out")
+        fake.heartbeat_raises = failure
+        sync = svc.pre_launch_sync(42)
 
-        result = await svc.pre_launch_sync(42)
+        with pytest.raises(type(failure)) as raised:
+            await sync
 
-        assert result["offline"] is True
-        assert result["reason"] == ErrorCode.SERVER_UNREACHABLE.value
-        assert result["message"] == "Server offline"
-
-    @pytest.mark.asyncio
-    async def test_pre_launch_sync_auth_failure_is_classified_not_offline(self, tmp_path):
-        """A 401 on the heartbeat surfaces AUTH_FAILED with a distinct message,
-        never the misleading "Server offline" + offline flag (#971)."""
-        svc, fake = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-        fake.saves[100] = _server_save()
-        fake.heartbeat_raises = RommAuthError("401 Unauthorized")
-
-        result = await svc.pre_launch_sync(42)
-
-        assert result["success"] is False
-        assert "offline" not in result
-        assert result["reason"] == ErrorCode.AUTH_FAILED.value
-        assert "uthentication failed" in result["message"]
-        assert result["message"] != "Server offline"
-        assert result["synced"] == 0
+        assert raised.value is failure
         assert not any(c[0] in ("download_save", "list_saves") for c in fake.call_log)
-
-    @pytest.mark.asyncio
-    async def test_pre_launch_sync_ssl_failure_keeps_unreachable_slug_distinct_message(self, tmp_path):
-        """An SSL misconfig classifies to SERVER_UNREACHABLE but with the SSL
-        message — NOT the literal "Server offline" and NO offline flag."""
-        svc, fake = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-        fake.saves[100] = _server_save()
-        fake.heartbeat_raises = RommSSLError("cert verify failed")
-
-        result = await svc.pre_launch_sync(42)
-
-        assert result["success"] is False
-        assert "offline" not in result
-        assert result["reason"] == ErrorCode.SERVER_UNREACHABLE.value
-        assert "SSL" in result["message"]
-        assert result["message"] != "Server offline"
 
     @pytest.mark.asyncio
     async def test_pre_launch_sync_offline_branch_logs_at_debug(self, tmp_path):
@@ -994,8 +961,10 @@ class TestPreLaunchServerOfflineGuard:
         _install_rom(svc, tmp_path)
         fake.saves[100] = _server_save()
         fake.heartbeat_raises = RommConnectionError("Connection refused")
+        sync = svc.pre_launch_sync(42)
 
-        await svc.pre_launch_sync(42)
+        with pytest.raises(ServerUnreachable):
+            await sync
 
         assert any("heartbeat failed" in m and "Connection refused" in m for m in debug_log)
 
@@ -1017,17 +986,20 @@ class TestPreLaunchServerOfflineGuard:
 
 
 class TestSyncRomSavesDisabledGuard:
-    """Public sync_rom_saves returns failure when save sync is disabled."""
+    """Public sync_rom_saves refuses when save sync is disabled."""
 
     @pytest.mark.asyncio
-    async def test_sync_rom_saves_disabled_returns_failure(self, tmp_path):
+    async def test_sync_rom_saves_disabled_refuses(self, tmp_path):
         svc, fake = make_service(tmp_path)
         # save_sync_enabled stays False by default.
-        result = await svc.sync_rom_saves(42)
+        sync = svc.sync_rom_saves(42)
 
-        assert result["success"] is False
-        assert "disabled" in result["message"].lower()
-        assert result["synced"] == 0
+        with pytest.raises(Refused) as refused:
+            await sync
+
+        assert refused.value.reason == "sync_disabled"
+        assert "disabled" in refused.value.message.lower()
+        assert refused.value.details == {"synced": 0}
         # No list_saves issued — the guard fired before sync ran.
         assert not any(c[0] == "list_saves" for c in fake.call_log)
 
@@ -1387,24 +1359,22 @@ class TestResolveCore:
 class TestSaveSyncContentDirGate:
     """Save sync is gated off where the emulator writes a game's save beside its
     content (RetroArch's savefiles_in_content_dir). The gate reads the save
-    answer's root, per ROM. The three single-ROM entry points return the
-    benign-skip shape the frontend treats as "skip, no error, launch proceeds";
+    answer's root, per ROM. The three single-ROM entry points raise the
+    benign skip the frontend treats as "skip, no error, launch proceeds";
     the whole-library sweep passes such a ROM over inside its run."""
 
     _CONTENT_DIR_SKIP_MESSAGE_FRAGMENT = "content directory"
 
-    def _assert_benign_skip(self, result, *, all_saves=False):
-        assert result["success"] is False
-        assert result["reason"] == "savefiles_in_content_dir"
-        assert self._CONTENT_DIR_SKIP_MESSAGE_FRAGMENT in result["message"]
-        assert result["synced"] == 0
-        assert result["errors"] == []
-        if all_saves:
-            assert result["conflicts"] == 0
-            assert result["conflicts_list"] == []
-            assert result["roms_checked"] == 0
+    async def _assert_benign_skip(self, sync, *, roms_checked=None):
+        """Await *sync* and assert it raised the content-directory skip, with the sweep's counts if given."""
+        with pytest.raises(SavefilesInContentDir) as refused:
+            await sync
+
+        assert self._CONTENT_DIR_SKIP_MESSAGE_FRAGMENT in refused.value.message
+        if roms_checked is None:
+            assert refused.value.details == {"synced": 0}
         else:
-            assert result["conflicts"] == []
+            assert refused.value.details == {"synced": 0, "conflicts": 0, "roms_checked": roms_checked}
 
     @pytest.mark.asyncio
     async def test_pre_launch_sync_skips_on_content_dir(self, tmp_path):
@@ -1415,9 +1385,7 @@ class TestSaveSyncContentDirGate:
         ss = _server_save()
         fake.saves[100] = ss
 
-        result = await svc.pre_launch_sync(42)
-
-        self._assert_benign_skip(result)
+        await self._assert_benign_skip(svc.pre_launch_sync(42))
         # No sync ran — the gate fired before any transfer.
         assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
 
@@ -1429,9 +1397,7 @@ class TestSaveSyncContentDirGate:
         _install_rom(svc, tmp_path)
         _create_save(tmp_path, content=b"unsyncable")
 
-        result = await svc.post_exit_sync(42)
-
-        self._assert_benign_skip(result)
+        await self._assert_benign_skip(svc.post_exit_sync(42))
         # The gate fires before the heartbeat probe and before any upload.
         assert not any(c[0] in ("upload_save", "heartbeat") for c in fake.call_log)
 
@@ -1443,9 +1409,7 @@ class TestSaveSyncContentDirGate:
         _install_rom(svc, tmp_path)
         _create_save(tmp_path, content=b"unsyncable")
 
-        result = await svc.sync_rom_saves(42)
-
-        self._assert_benign_skip(result)
+        await self._assert_benign_skip(svc.sync_rom_saves(42))
         assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
 
     @pytest.mark.asyncio
@@ -1458,12 +1422,9 @@ class TestSaveSyncContentDirGate:
 
         _seed_save_state_dict(svc, 1, {"active_slot": "default", "slot_confirmed": True})
 
-        result = await svc.sync_all_saves()
-
         # Every ROM the sweep read saves beside its content: the same skip a
-        # single-ROM sync returns, in the sweep's shape, and no server round-trip.
-        self._assert_benign_skip({**result, "roms_checked": 0}, all_saves=True)
-        assert result["roms_checked"] == 1
+        # single-ROM sync raises, with the sweep's counts, and no server round-trip.
+        await self._assert_benign_skip(svc.sync_all_saves(), roms_checked=1)
         assert not any(c[0] in ("list_saves", "upload_save", "download_save_content") for c in fake.call_log)
 
     @staticmethod
@@ -1501,11 +1462,13 @@ class TestSaveSyncContentDirGate:
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
+        sync = svc.sync_rom_saves(42)
 
-        result = await svc.sync_rom_saves(42)
+        with pytest.raises(SaveShapeUnsupported) as refused:
+            await sync
 
-        assert result["reason"] == "save_shape_unsupported"
-        assert "inside the game file" in result["message"]
+        assert "inside the game file" in refused.value.message
+        assert refused.value.details == {"synced": 0}
         assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
 
     @pytest.mark.asyncio
@@ -1520,6 +1483,7 @@ class TestSaveSyncContentDirGate:
         _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result.get("reason") != "savefiles_in_content_dir"
         assert "skipped" not in result["message"]
@@ -1536,10 +1500,7 @@ class TestSaveSyncContentDirGate:
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
         _install_rom(svc, tmp_path, rom_id=2, system="gba", file_name="game2.gba")
 
-        result = await svc.sync_all_saves()
-
-        self._assert_benign_skip({**result, "roms_checked": 0}, all_saves=True)
-        assert result["roms_checked"] == 2
+        await self._assert_benign_skip(svc.sync_all_saves(), roms_checked=2)
         # One installed game was asked, not every one.
         asked = cast("FakeSaveLocationReader", svc._rom_info._save_locations).calls
         assert len(asked) == 1
@@ -1560,10 +1521,11 @@ class TestSaveSyncContentDirGate:
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
         _install_rom(svc, tmp_path, rom_id=2, system="gba", file_name="game2.gba")
+        sync = svc.sync_all_saves()
 
-        result = await svc.sync_all_saves()
+        with pytest.raises(SavefilesInContentDir):
+            await sync
 
-        assert result["reason"] == "savefiles_in_content_dir"
         asked = cast("FakeSaveLocationReader", svc._rom_info._save_locations).calls
         assert [call[1] for call in asked] == [str(tmp_path / "retrodeck" / "roms" / "gba" / "game2.gba")]
 
@@ -1575,6 +1537,7 @@ class TestSaveSyncContentDirGate:
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert "reason" not in result
         assert result["message"] == "Synced 0 save(s) across 1 ROM(s)"
@@ -1588,6 +1551,7 @@ class TestSaveSyncContentDirGate:
         _create_save(tmp_path, system="gba", rom_name="game1", content=b"save1")
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["success"] is True
         assert "reason" not in result
@@ -1613,6 +1577,7 @@ class TestSaveSyncContentDirGate:
         _seed_save_state_dict(svc, 2, {"active_slot": "default", "slot_confirmed": True}, platform_slug="snes")
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["success"] is True
         assert "reason" not in result
@@ -1647,21 +1612,25 @@ class TestSaveSyncDeviceGate:
     OUTSIDE the per-ROM lock.
     """
 
-    async def _assert_timeout_fallthrough(self, svc, monkeypatch, const_name, trigger, expected):
+    async def _assert_timeout_fallthrough(self, svc, monkeypatch, const_name, trigger, details):
         """Hold the gate + shrink the timeout, then assert the trigger's fallthrough.
 
         Holds the engine's device-gate lock so the trigger cannot acquire it,
         and rebinds the per-trigger timeout constant to a tiny value so the
-        bounded wait expires fast. The trigger must return *expected* verbatim.
+        bounded wait expires fast. The trigger must raise the busy refusal with
+        exactly *details*.
         """
         engine = svc._sync_engine
         monkeypatch.setattr(f"services.saves.sync_engine.engine.{const_name}", 0.01)
         await engine._device_gate._lock.acquire()
         try:
-            result = await trigger()
+            sync = trigger()
+            with pytest.raises(SyncBusy) as refused:
+                await sync
         finally:
             engine._device_gate._lock.release()
-        assert result == expected
+        assert refused.value.message == "Another save sync is still running"
+        assert refused.value.details == details
         # The gate is free again once the external holder released it.
         assert engine._device_gate.is_in_flight() is False
 
@@ -1681,12 +1650,7 @@ class TestSaveSyncDeviceGate:
             monkeypatch,
             "PRE_LAUNCH_GATE_TIMEOUT",
             lambda: svc.pre_launch_sync(42),
-            {
-                "success": False,
-                "reason": "sync_busy",
-                "message": "Another save sync is still running",
-                "synced": 0,
-            },
+            {"synced": 0},
         )
         # The gate fired before any sync work — no transfer was attempted.
         assert not any(c[0] in ("download_save", "list_saves", "heartbeat") for c in fake.call_log)
@@ -1707,12 +1671,7 @@ class TestSaveSyncDeviceGate:
             monkeypatch,
             "POST_EXIT_GATE_TIMEOUT",
             lambda: svc.post_exit_sync(42),
-            {
-                "success": False,
-                "reason": "sync_busy",
-                "message": "Another save sync is still running",
-                "synced": 0,
-            },
+            {"synced": 0},
         )
         assert not any(c[0] in ("upload_save", "heartbeat") for c in fake.call_log)
 
@@ -1732,7 +1691,9 @@ class TestSaveSyncDeviceGate:
         gate = busy_svc._sync_engine._device_gate
         await gate._lock.acquire()
         try:
-            busy = await busy_svc.post_exit_sync(42)
+            busy_sync = busy_svc.post_exit_sync(42)
+            with pytest.raises(Refused) as busy:
+                await busy_sync
         finally:
             gate._lock.release()
 
@@ -1741,13 +1702,15 @@ class TestSaveSyncDeviceGate:
         _set_device_id(offline_svc, "test-device")
         _install_rom(offline_svc, tmp_path / "offline")
         offline_fake.heartbeat_raises = RommConnectionError("Connection refused")
-        offline = await offline_svc.post_exit_sync(42)
+        offline_sync = offline_svc.post_exit_sync(42)
+        with pytest.raises(Refused) as offline:
+            await offline_sync
 
-        assert busy["reason"] != offline["reason"]
-        assert busy["reason"] != ErrorCode.SERVER_UNREACHABLE.value
-        assert "offline" not in busy
-        assert offline["reason"] == ErrorCode.SERVER_UNREACHABLE.value
-        assert offline["offline"] is True
+        assert busy.value.reason != offline.value.reason
+        assert busy.value.reason != ErrorCode.SERVER_UNREACHABLE.value
+        assert "offline" not in busy.value.details
+        assert offline.value.reason == ErrorCode.SERVER_UNREACHABLE.value
+        assert offline.value.details["offline"] is True
 
     @pytest.mark.asyncio
     async def test_sync_rom_saves_times_out_to_busy(self, tmp_path, monkeypatch):
@@ -1762,14 +1725,7 @@ class TestSaveSyncDeviceGate:
             monkeypatch,
             "SYNC_ROM_GATE_TIMEOUT",
             lambda: svc.sync_rom_saves(42),
-            {
-                "success": False,
-                "reason": "sync_busy",
-                "message": "Another save sync is still running",
-                "synced": 0,
-                "errors": [],
-                "conflicts": [],
-            },
+            {"synced": 0},
         )
         assert not any(c[0] in ("upload_save", "list_saves") for c in fake.call_log)
 
@@ -1787,16 +1743,7 @@ class TestSaveSyncDeviceGate:
             monkeypatch,
             "SYNC_ALL_GATE_TIMEOUT",
             svc.sync_all_saves,
-            {
-                "success": False,
-                "reason": "sync_busy",
-                "message": "Another save sync is still running",
-                "synced": 0,
-                "conflicts": 0,
-                "conflicts_list": [],
-                "roms_checked": 0,
-                "errors": [],
-            },
+            {"synced": 0, "conflicts": 0},
         )
         assert not any(c[0] in ("upload_save", "list_saves") for c in fake.call_log)
 
@@ -2050,6 +1997,7 @@ class TestSyncAllSavesNegotiate:
         fake.stage_negotiate([], session_id=55)
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["synced"] == 2
         # Exactly ONE whole-device transport session for both ROMs.
@@ -2085,6 +2033,7 @@ class TestSyncAllSavesNegotiate:
         _create_save(tmp_path, system="snes", rom_name="game2", content=b"s2")
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         # Both ROMs POST via the matrix; one whole-device transport session wraps them.
         assert result["synced"] == 2
@@ -2112,6 +2061,7 @@ class TestSyncAllSavesNegotiate:
         fake.set_server_save_content(900, b"server save for game2")
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         # rom1 upload + rom2 cross-device download, under one transport session.
         assert result["synced"] == 2
@@ -2138,6 +2088,7 @@ class TestSyncAllSavesNegotiate:
         fake.negotiate_sync = always_fail  # type: ignore[method-assign]
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         # No session ever opened → none completed; the matrix still POSTed.
         assert any(c[0] == "list_saves" for c in fake.call_log)
@@ -2165,6 +2116,7 @@ class TestSyncAllSavesNegotiate:
         _create_save(tmp_path, system="gba", rom_name="game1", content=b"s1")
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert not any(c[0] == "negotiate_sync" for c in fake.call_log)
         assert not any(c[0] == "complete_sync_session" for c in fake.call_log)
@@ -2183,6 +2135,7 @@ class TestSyncAllSavesNegotiate:
         fake.complete_raises = RommApiError("complete failed")
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["success"] is True
         assert result["synced"] == 1
@@ -2205,6 +2158,7 @@ class TestSyncAllSavesNegotiate:
         fake.negotiate_sync = malformed  # type: ignore[method-assign]
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         # No session opened/completed; the ROM still synced via the matrix.
         assert not any(c[0] == "complete_sync_session" for c in fake.call_log)
@@ -2234,11 +2188,10 @@ class TestSyncPathsHealDeadDevice:
         # The present id is dead → the update_device liveness touch 404s.
         fake.fail_on_next(RommNotFoundError("Device with ID dead-uuid not found"))
 
-        failure = await svc._sync_engine._ensure_device_live_or_fail()
+        await svc._sync_engine._ensure_device_live_or_fail()
 
-        # Heal succeeded → no failure returned, and get_device_id (what
+        # Heal succeeded → nothing refused, and get_device_id (what
         # _read_sync_inputs reads) now yields the fresh id, not the dead one.
-        assert failure is None
         new_id = svc._sync_engine.get_device_id()
         assert new_id is not None
         assert new_id != "dead-uuid"
@@ -2250,16 +2203,15 @@ class TestSyncPathsHealDeadDevice:
         _enable_sync_with_device(svc, "live-device")
         fake.set_version("4.9.0")
 
-        failure = await svc._sync_engine._ensure_device_live_or_fail()
+        await svc._sync_engine._ensure_device_live_or_fail()
 
         # Live id: the liveness touch fired, no re-registration, id unchanged.
-        assert failure is None
         assert any(c[0] == "update_device" and c[1][0] == "live-device" for c in fake.call_log)
         assert not any(c[0] == "register_device" for c in fake.call_log)
         assert svc._sync_engine.get_device_id() == "live-device"
 
     @pytest.mark.asyncio
-    async def test_helper_reregister_failure_returns_device_not_registered(self, tmp_path):
+    async def test_helper_reregister_failure_refuses_with_device_not_registered(self, tmp_path):
         svc, fake = make_service(tmp_path)
         _enable_sync_with_device(svc, "dead-uuid")
         fake.set_version("4.9.0")
@@ -2272,14 +2224,14 @@ class TestSyncPathsHealDeadDevice:
 
         fake.update_device = _touch_404
         fake.fail_on_next(RommConnectionError("server gone"))
+        ensure = svc._sync_engine._ensure_device_live_or_fail()
 
-        failure = await svc._sync_engine._ensure_device_live_or_fail()
+        with pytest.raises(Refused) as refused:
+            await ensure
 
-        # The caller is handed the canonical DEVICE_NOT_REGISTERED failure...
-        assert failure is not None
-        assert failure["success"] is False
-        assert failure["reason"] == DEVICE_NOT_REGISTERED_REASON
-        assert failure["message"] == DEVICE_NOT_REGISTERED
+        # The caller is refused with device_not_registered, not the RomM error...
+        assert (refused.value.reason, refused.value.message) == ("device_not_registered", DEVICE_NOT_REGISTERED)
+        assert refused.value.details == {}
         # ...and the dead id was cleared (not left to poison the next sync).
         assert _get_device_id(svc) is None
 
@@ -2359,6 +2311,7 @@ class TestSyncPathsHealDeadDevice:
         fake.fail_on_next(RommNotFoundError("Device with ID dead-uuid not found"))
 
         result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
 
         assert result["success"] is True
         new_id = _get_device_id(svc)
@@ -2410,8 +2363,8 @@ def _sync_server_calls(fake) -> list[str]:
 
 class TestSyncPathsAbortWhenDeviceUnregisterable:
     """#1560 (caller-level, failure half): when no live device registration can
-    be established, each of the four sync entry points returns the canonical
-    ``DEVICE_NOT_REGISTERED`` failure and runs no sync at all.
+    be established, each of the four sync entry points refuses with
+    ``device_not_registered`` and runs no sync at all.
 
     The guarantee under test is the *absence*: a sync must never reach the
     server without a live device id, because every save it moved would be
@@ -2435,13 +2388,13 @@ class TestSyncPathsAbortWhenDeviceUnregisterable:
         fake.saves[100] = _server_save()
         fake.arm_register_device_without_id()
 
-        result = await svc.pre_launch_sync(42)
+        sync = svc.pre_launch_sync(42)
 
-        assert result == {
-            "success": False,
-            "reason": DEVICE_NOT_REGISTERED_REASON,
-            "message": DEVICE_NOT_REGISTERED,
-        }
+        with pytest.raises(Refused) as refused:
+            await sync
+
+        assert (refused.value.reason, refused.value.message) == ("device_not_registered", DEVICE_NOT_REGISTERED)
+        assert refused.value.details == {}
         # Registration was attempted and yielded no id — the abort is the device
         # gate's, not an upstream guard's.
         assert any(c[0] == "register_device" for c in fake.call_log)
@@ -2458,13 +2411,13 @@ class TestSyncPathsAbortWhenDeviceUnregisterable:
         fake.set_version("4.9.0")
         fake.arm_register_device_without_id()
 
-        result = await svc.post_exit_sync(42)
+        sync = svc.post_exit_sync(42)
 
-        assert result == {
-            "success": False,
-            "reason": DEVICE_NOT_REGISTERED_REASON,
-            "message": DEVICE_NOT_REGISTERED,
-        }
+        with pytest.raises(Refused) as refused:
+            await sync
+
+        assert (refused.value.reason, refused.value.message) == ("device_not_registered", DEVICE_NOT_REGISTERED)
+        assert refused.value.details == {}
         assert any(c[0] == "register_device" for c in fake.call_log)
         assert _get_device_id(svc) is None
         # The local save the registered twin uploads stays put — nothing is
@@ -2480,13 +2433,13 @@ class TestSyncPathsAbortWhenDeviceUnregisterable:
         fake.saves[100] = _server_save()
         fake.arm_register_device_without_id()
 
-        result = await svc.sync_rom_saves(42)
+        sync = svc.sync_rom_saves(42)
 
-        assert result == {
-            "success": False,
-            "reason": DEVICE_NOT_REGISTERED_REASON,
-            "message": DEVICE_NOT_REGISTERED,
-        }
+        with pytest.raises(Refused) as refused:
+            await sync
+
+        assert (refused.value.reason, refused.value.message) == ("device_not_registered", DEVICE_NOT_REGISTERED)
+        assert refused.value.details == {}
         assert any(c[0] == "register_device" for c in fake.call_log)
         assert _get_device_id(svc) is None
         assert _sync_server_calls(fake) == []
@@ -2501,13 +2454,13 @@ class TestSyncPathsAbortWhenDeviceUnregisterable:
         fake.set_version("4.9.0")
         fake.arm_register_device_without_id()
 
-        result = await svc.sync_all_saves()
+        sync = svc.sync_all_saves()
 
-        assert result == {
-            "success": False,
-            "reason": DEVICE_NOT_REGISTERED_REASON,
-            "message": DEVICE_NOT_REGISTERED,
-        }
+        with pytest.raises(Refused) as refused:
+            await sync
+
+        assert (refused.value.reason, refused.value.message) == ("device_not_registered", DEVICE_NOT_REGISTERED)
+        assert refused.value.details == {}
         assert any(c[0] == "register_device" for c in fake.call_log)
         assert _get_device_id(svc) is None
         # The sweep aborts ahead of the whole-device negotiate — no session is

@@ -20,15 +20,15 @@ the backend-owned message convention.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.save_answer import BENIGN_SYNC_SKIP_REASONS
-from lib.errors import Refused
+from lib.errors import DeviceSyncDisabled, Refused, RommApiError, SyncBusy, classify_error
+from lib.list_result import ErrorCode
 
 if TYPE_CHECKING:
-    import logging
-
     from services.protocols import ConflictRules, UpdateInProgressFn
     from services.protocols.cross_service import (
         SessionAchievementSync,
@@ -43,18 +43,6 @@ _TOAST_BODY_FAILED = "Failed to sync saves after exit"
 _TOAST_BODY_SYNC_DISABLED = "Save sync is disabled for this device on the RomM server"
 _TOAST_BODY_SYNC_BUSY = "Another save sync was still running — saves will sync next time"
 _TOAST_BODY_UPDATING = "Tender is installing an update — saves sync with the next sync that runs"
-
-# Reason slug the saves engine returns when RomM's per-device sync-disabled switch
-# stops the post-exit run (#1489). Mirrored here as a literal — a service must not
-# import another service's module — kept in step with the saves engine's
-# ``DEVICE_SYNC_DISABLED_REASON``.
-_DEVICE_SYNC_DISABLED_REASON = "device_sync_disabled"
-
-# Reason slug the saves engine returns when the device-wide save-sync gate was
-# still held by another run at the end of the bounded wait, so this post-exit run
-# was skipped (#1625). Mirrored as a literal for the same reason as above; kept in
-# step with the saves engine's ``SAVE_SYNC_BUSY_REASON``.
-_SAVE_SYNC_BUSY_REASON = "sync_busy"
 
 
 @dataclass(frozen=True)
@@ -164,9 +152,9 @@ def _render_failure_toast(
         return _TOAST_BODY_OFFLINE
     if success:
         return None
-    if reason == _DEVICE_SYNC_DISABLED_REASON:
+    if reason == DeviceSyncDisabled.reason:
         return _TOAST_BODY_SYNC_DISABLED
-    if reason == _SAVE_SYNC_BUSY_REASON:
+    if reason == SyncBusy.reason:
         return _TOAST_BODY_SYNC_BUSY
     return message or _TOAST_BODY_FAILED
 
@@ -324,6 +312,25 @@ class SessionLifecycleService:
             conflicts_toast=None,
         )
 
+    def _failed_on_romm_error(self, rom_id: int, error: RommApiError) -> SessionFinalizeSyncResult:
+        """The failed-sync verdict for a RomM error the post-exit sync raised, toasted with its classified message."""
+        reason, message = classify_error(error)
+        # An offline handheld is an expected state, so it logs below warning, as the translator does.
+        level = logging.INFO if reason == ErrorCode.SERVER_UNREACHABLE.value else logging.WARNING
+        self._logger.log(
+            level, f"SessionLifecycle post-exit sync failed for rom_id={rom_id}: {type(error).__name__}: {error}"
+        )
+        return SessionFinalizeSyncResult(
+            offline=False,
+            success=False,
+            synced=None,
+            uploaded=0,
+            downloaded=0,
+            conflicts=[],
+            failure_toast=_render_failure_toast(offline=False, success=False, message=message, reason=reason),
+            conflicts_toast=None,
+        )
+
     async def _build_sync_result(self, rom_id: int) -> SessionFinalizeSyncResult:
         """Run post-exit sync and build the frontend's sync verdict.
 
@@ -335,8 +342,9 @@ class SessionLifecycleService:
         the verdict is the failed-sync one; for an update its toast says so.
         The ``finalize_game_session`` use case checks neither rule, so this is
         the first check either meets on the way to that sync. A refusal the
-        sync raises is answered as a returned failure is: toasted from its
-        reason and message, or not shown at all for a benign skip.
+        sync raises is toasted from its reason and message — as offline when
+        its ``offline`` detail says so — or not shown at all for a benign skip;
+        a RomM error it raises is toasted with ``classify_error``'s message.
         """
         if self._update_in_progress():
             return self._skipped_sync(rom_id, "an update is being installed", _TOAST_BODY_UPDATING)
@@ -349,23 +357,26 @@ class SessionLifecycleService:
             if refusal.reason in BENIGN_SYNC_SKIP_REASONS:
                 return _benign_skip()
             raw_synced = refusal.details.get("synced")
+            offline = refusal.details.get("offline") is True
             return SessionFinalizeSyncResult(
-                offline=False,
+                offline=offline,
                 success=False,
                 synced=raw_synced if isinstance(raw_synced, int) else None,
                 uploaded=0,
                 downloaded=0,
                 conflicts=[],
                 failure_toast=_render_failure_toast(
-                    offline=False, success=False, message=refusal.message, reason=refusal.reason
+                    offline=offline, success=False, message=refusal.message, reason=refusal.reason
                 ),
                 conflicts_toast=None,
             )
+        except RommApiError as e:
+            return self._failed_on_romm_error(rom_id, e)
         except Exception as e:
             self._logger.warning(f"SessionLifecycle post-exit sync failed for rom_id={rom_id}: {e}")
             # No classified message on this path: the sync raised something
-            # other than a refusal, so there is no message to surface — fall
-            # back to the generic failure body.
+            # other than a refusal or a RomM error, so there is no message to
+            # surface — fall back to the generic failure body.
             return SessionFinalizeSyncResult(
                 offline=False,
                 success=False,
@@ -377,10 +388,6 @@ class SessionLifecycleService:
                 conflicts_toast=None,
             )
 
-        if result.get("reason") in BENIGN_SYNC_SKIP_REASONS:
-            return _benign_skip()
-
-        offline = bool(result.get("offline"))
         success = bool(result.get("success"))
         raw_synced = result.get("synced")
         synced = raw_synced if isinstance(raw_synced, int) else None
@@ -392,14 +399,12 @@ class SessionLifecycleService:
         conflicts: list[dict[str, Any]] = list(raw_conflicts) if isinstance(raw_conflicts, list) else []
         raw_message = result.get("message")
         message = raw_message if isinstance(raw_message, str) else None
-        raw_reason = result.get("reason")
-        reason = raw_reason if isinstance(raw_reason, str) else None
 
-        failure_toast = _render_failure_toast(offline=offline, success=success, message=message, reason=reason)
+        failure_toast = _render_failure_toast(offline=False, success=success, message=message)
         conflicts_toast = _render_conflicts_toast(conflicts)
 
         return SessionFinalizeSyncResult(
-            offline=offline,
+            offline=False,
             success=success,
             synced=synced,
             uploaded=uploaded,

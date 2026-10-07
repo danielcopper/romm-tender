@@ -6,7 +6,8 @@ carrying ``{success: False, reason, message}``, a bug as the host's
 ``backend_exception`` error. The services are stand-ins that raise or answer
 what a case hands them, which puts the exception exactly where a use case would
 raise it; Stop Game's refusals, the connection's, a partial bulk uninstall, the
-conflict resolution's and a partial save deletion run through the real services.
+conflict resolution's, a partial save deletion and the save syncs' and device
+list's refusals run through the real services.
 """
 
 from __future__ import annotations
@@ -30,12 +31,14 @@ from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcess
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_rom_file_store import FakeRomFileStore
 from fakes.fake_rom_launch_path import FakeRomLaunchPathReader
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
 
 from domain.refusal import DomainRefused, NamedDomainRefused
 from domain.rom import Rom
 from domain.rom_install import RomInstall
+from domain.rom_save_sync_state import RomSaveSyncState
 from host import CallDispatcher, HostStatus
 from host.dispatch import route_names
 from host.protocol import REASON_BACKEND_EXCEPTION, TYPE_ERROR, TYPE_REPLY
@@ -67,6 +70,8 @@ from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
     _install_rom,
+    _seed_save_state,
+    _server_save,
     _server_save_with_syncs,
     make_service,
 )
@@ -842,3 +847,116 @@ class TestThePartialSaveDeletionOnTheWire:
             "deleted_count": 1,
         }
         assert stuck.exists()
+
+
+class TestTheSaveSyncRefusalsOnTheWire:
+    """The save syncs' and the device list's refusals, raised through the real service, keep their details."""
+
+    async def test_an_offline_server_before_a_launch_answers_offline_with_nothing_synced(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        fake.saves[100] = _server_save()
+        fake.heartbeat_raises = RommConnectionError("Connection refused")
+
+        message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, "pre_launch_sync", [42]))
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "server_unreachable",
+            "message": "Server offline",
+            "synced": 0,
+            "offline": True,
+        }
+
+    async def test_a_romm_error_from_the_heartbeat_answers_classify_errors_verdict(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        failure = RommAuthError("401 Unauthorized")
+        fake.heartbeat_raises = failure
+
+        message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, "pre_launch_sync", [42]))
+
+        reason, text = classify_error(failure)
+        assert message["result"] == {"success": False, "reason": reason, "message": text}
+
+    async def test_a_save_beside_the_content_answers_its_benign_skip(self, tmp_path):
+        svc, _fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+
+        message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, "pre_launch_sync", [42]))
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "savefiles_in_content_dir",
+            "message": "Save sync is unavailable: saves are written to the game's content directory.",
+            "synced": 0,
+        }
+
+    async def test_a_sweep_the_server_stops_partway_answers_what_it_synced(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        for rom_id, system, name, ext in ((1, "gba", "game1", "gba"), (2, "snes", "game2", "sfc")):
+            _install_rom(svc, tmp_path, rom_id=rom_id, system=system, file_name=f"{name}.{ext}")
+            _seed_save_state(
+                svc,
+                rom_id,
+                RomSaveSyncState(system=system, slot_confirmed=True, active_slot="default"),
+                platform_slug=system,
+            )
+            _create_save(tmp_path, system=system, rom_name=name, content=name.encode())
+        negotiations = iter(
+            [
+                # The whole-device session does not open, so each ROM opens its own;
+                # the first one's opens, the second one's meets the server's switch.
+                {"session_id": None, "operations": []},
+                {"session_id": 100, "operations": []},
+                RommSyncDisabledError("Sync is disabled for this device"),
+            ]
+        )
+
+        def negotiate(_device_id, _saves):
+            answer = next(negotiations)
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+
+        fake.negotiate_sync = negotiate  # type: ignore[method-assign]
+
+        message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, "sync_all_saves", []))
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "device_sync_disabled",
+            "message": "Save sync is disabled for this device on the RomM server — stopped after syncing 1 save(s)",
+            "synced": 1,
+            "conflicts": 0,
+            "conflicts_list": [],
+            "roms_checked": 2,
+            "errors": [],
+        }
+
+    async def test_the_device_list_with_save_sync_off_answers_disabled(self, tmp_path):
+        svc, _fake = make_service(tmp_path)
+
+        message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, "list_devices", []))
+
+        assert message["result"] == {
+            "success": False,
+            "reason": "sync_disabled",
+            "message": "Save sync is disabled",
+            "disabled": True,
+        }
+
+    async def test_a_romm_error_listing_the_devices_answers_classify_errors_verdict(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        failure = RommNotFoundError("HTTP 404: Not Found")
+        fake.fail_on_next(failure)
+
+        message = json.loads(await _dispatcher_over_saves(svc).dispatch(1, "list_devices", []))
+
+        reason, text = classify_error(failure)
+        assert message["result"] == {"success": False, "reason": reason, "message": text}

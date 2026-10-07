@@ -1,7 +1,7 @@
 /**
  * Device registration types — the registered-device record returned by the
- * RomM server and the wrapper response for the bulk listing. Anything that
- * describes a save-sync device entry from the server lives here.
+ * RomM server. Anything that describes a save-sync device entry from the
+ * server lives here.
  */
 
 export interface RegisteredDevice {
@@ -20,12 +20,4 @@ export interface RegisteredDevice {
   sync_mode?: string | null;
   sync_enabled?: boolean;
   updated_at?: string | null;
-}
-
-export interface ListDevicesResponse {
-  success: boolean;
-  devices: RegisteredDevice[];
-  disabled?: boolean;
-  reason?: string;
-  message?: string;
 }

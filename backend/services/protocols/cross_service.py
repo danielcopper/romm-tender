@@ -561,11 +561,10 @@ class SessionPostExitSync(Protocol):
     """Post-exit save sync consumed by SessionLifecycleService.
 
     The composition root satisfies this with ``SaveService``'s
-    ``post_exit_sync``. Returned shape carries ``offline`` / ``success``
-    / ``synced`` / ``conflicts`` which the lifecycle service maps into
-    toast strings; a raised ``Refused`` is mapped from its reason and
-    message as a returned failure is, and any other raised exception is
-    collapsed to the "failed" toast.
+    ``post_exit_sync``. Returned shape carries ``success`` / ``synced`` /
+    ``uploaded`` / ``downloaded`` / ``conflicts`` / ``message``. A refusal is
+    raised as ``Refused``, with an ``offline`` detail when the server could
+    not be reached, and a RomM error propagates.
     """
 
     async def post_exit_sync(self, rom_id: int) -> dict[str, Any]: ...

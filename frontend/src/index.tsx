@@ -633,7 +633,11 @@ const tender = definePanel(() => {
       try {
         const syncSettings = await getSaveSyncSettings();
         if (syncSettings.save_sync_enabled) {
-          await ensureDeviceRegistered();
+          try {
+            await ensureDeviceRegistered();
+          } catch (e) {
+            logError(`Failed to init save sync: ${e}`);
+          }
         }
         // Always init session manager — it handles playtime tracking too
         await initSessionManager();

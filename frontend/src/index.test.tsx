@@ -29,6 +29,8 @@ import {
   getUpdateInstallState,
   getAllPlaytime,
   getAppIdRomIdMap,
+  ensureDeviceRegistered,
+  getSaveSyncSettings,
   getInstalledRelaunchOptions,
   invalidateCachedGameDetail,
   getMetadataCachePage,
@@ -211,6 +213,7 @@ import {
 } from "./utils/notificationsHealth";
 import { registerRomMAppId, unregisterRomMAppId } from "./utils/rommAppIds";
 import { installQuickAccessEntry } from "./qam/installEntry";
+import { initSessionManager } from "./utils/sessionManager";
 import "./index";
 
 // Importing `./index` runs its last act, which hands the factory to the Quick
@@ -415,6 +418,34 @@ describe("index.tsx — launcher relocation at panel load", () => {
 
     expect(getLauncherState().relocated).toBe(false);
     expect(logError).toHaveBeenCalledWith(expect.stringContaining("shortcut store exploded"));
+  });
+});
+
+describe("index.tsx — the session manager at panel load", () => {
+  beforeEach(() => {
+    vi.mocked(initSessionManager).mockClear();
+    vi.mocked(getSaveSyncSettings).mockResolvedValue({
+      save_sync_enabled: true,
+      sync_before_launch: true,
+      sync_after_exit: true,
+      default_slot: "autosave",
+      autocleanup_limit: 10,
+    });
+  });
+
+  afterEach(() => {
+    vi.mocked(getSaveSyncSettings).mockReset();
+    vi.mocked(ensureDeviceRegistered).mockReset();
+  });
+
+  it("starts the session manager when the device registration rejects", async () => {
+    vi.mocked(ensureDeviceRegistered).mockRejectedValue(new Error("backend_exception"));
+
+    panelFactory();
+    await act(flush);
+
+    expect(initSessionManager).toHaveBeenCalledTimes(1);
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining("backend_exception"));
   });
 });
 

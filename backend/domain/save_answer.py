@@ -108,12 +108,15 @@ ROOT_CONTENT_DIRECTORY = "content_directory"
 
 # Canonical ``reason`` slugs for the two benign-skip outcomes a save answer
 # produces. Both live here, beside the answer that causes them, so every service
-# routes on the SAME value without a service-to-service import.
+# routes on the SAME value without a service-to-service import. The refusal
+# classes in ``services/saves/_refusals.py`` spell the same literals at their
+# raise sites, and ``tests/services/saves/test_refusals.py`` holds them to this
+# set.
 #
 # ``SAVE_SYNC_CONTENT_DIR_REASON`` says the emulator writes this game's save
-# next to its content, outside what Tender syncs; the saves sync-engine gate
-# stamps it on its skip result and the session-lifecycle post-exit branch reads
-# it to suppress the false-failure toast.
+# next to its content, outside what Tender syncs; a save sync refuses with it,
+# and the session-lifecycle post-exit branch reads it to suppress the
+# false-failure toast.
 #
 # ``SAVE_SHAPE_UNSUPPORTED_REASON`` says the SHAPE of this game's save is not one
 # Tender can carry per game, which is a statement about the emulator and
