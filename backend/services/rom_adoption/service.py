@@ -964,7 +964,6 @@ class RomAdoptionService:
         system = self._resolve_system(platform_slug, rom_detail.get("platform_fs_slug"))
         folder = self._retrodeck_folders.download_folder(system)
         if isinstance(folder, FolderRefused):
-            self._logger.error(f"No adoption target for system {system!r}: {folder.reason}")
             return folder
         roms_dir = folder
         fallback = synthetic_rom_name(rom_detail)
