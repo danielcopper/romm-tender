@@ -15,8 +15,9 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
-import { toaster, type PanelDefinition } from "./api/host";
+import { recheckStranded, toaster, type PanelDefinition } from "./api/host";
 import { emitHostEvent, hostEventListenerCount } from "./test-utils/host-event-bus";
+import { setStrandedAnswer } from "./test-utils/stranded-panel";
 import {
   getSettingsResetNotice,
   getUpdateNotice,
@@ -2779,6 +2780,49 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
     // Raw rom_count weights: unit 1 done (60) plus half of unit 2 (10) → 70/80.
     expect(weightedCoarseFraction(1, 0.5, 2)).toBeCloseTo(70 / 80, 10);
     resetEta();
+  });
+});
+
+describe("index.tsx — a stranded panel opened in Quick Access", () => {
+  beforeEach(() => {
+    vi.mocked(recheckStranded).mockClear();
+  });
+
+  afterEach(() => {
+    vi.mocked(recheckStranded).mockReset().mockResolvedValue(undefined);
+  });
+
+  it("asks the backend again on open, and an answer that changed raises one new notification", async () => {
+    const panel = panelFactory();
+    setStrandedAnswer("reloads");
+    vi.mocked(toaster.toast).mockClear();
+    vi.mocked(recheckStranded).mockImplementation(async () => {
+      setStrandedAnswer("restart_steam");
+    });
+
+    await act(async () => {
+      render(panel.content);
+      await flush();
+    });
+
+    expect(recheckStranded).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(toaster.toast).mock.calls.map(([toast]) => toast)).toEqual([
+      { title: "Tender", body: "Tender was restarted", subtext: "Restart Steam to use it again." },
+    ]);
+  });
+
+  it("raises nothing when the answer on open is the one already given", async () => {
+    const panel = panelFactory();
+    setStrandedAnswer("reloads");
+    vi.mocked(toaster.toast).mockClear();
+
+    await act(async () => {
+      render(panel.content);
+      await flush();
+    });
+
+    expect(recheckStranded).toHaveBeenCalledTimes(1);
+    expect(toaster.toast).not.toHaveBeenCalled();
   });
 });
 

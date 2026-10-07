@@ -15,7 +15,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, FC, ReactElement } from "react";
-import { addEventListener, removeEventListener } from "../api/host";
+import { addEventListener, isStrandedPanelFailure, recheckStranded, removeEventListener } from "../api/host";
 import { showToast } from "../utils/toast";
 import { Focusable, DialogButton, Menu, MenuItem, MenuSeparator, Navigation, showContextMenu } from "@decky/ui";
 import { appActionButtonClasses, basicAppDetailsSectionStylerClasses } from "../utils/deckyUiInternals";
@@ -1022,7 +1022,15 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       // The overlay deliberately stays up: the call never reached a verdict, so
       // the game may well still be running and Resume must stay reachable.
       detach(debugLog(`CustomPlayButton: stop_running_game threw for appId=${appId}: ${e}`));
-      showToast("Couldn't stop the game");
+      if (isStrandedPanelFailure(e)) {
+        // The failure's message is the answer the backend gave this panel. It
+        // may have changed since, so the panel asks again; a changed answer
+        // raises its own notification.
+        showToast("Couldn't stop the game", { subtext: e.message });
+        detach(recheckStranded());
+      } else {
+        showToast("Couldn't stop the game");
+      }
     } finally {
       // Released on every path, so a failed stop can be retried deliberately
       // (the backend, not this flag, is what makes a retry safe).

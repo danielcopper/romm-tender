@@ -1,4 +1,4 @@
-import { definePanel, addEventListener, toaster } from "./api/host";
+import { definePanel, addEventListener, recheckStranded, toaster } from "./api/host";
 import { showToast, DISPLAY_NAME } from "./utils/toast";
 import { useState, useRef, useEffect, FC, type ReactNode } from "react";
 import { Focusable } from "@decky/ui";
@@ -15,6 +15,7 @@ import { OWNS_ENTRY_FOCUS_ATTR } from "./bigpicture/layout/WidePage";
 import { installQuickAccessEntry } from "./qam/installEntry";
 import { TabIcon } from "./qam/TabIcon";
 import { initUnitSyncManager, resetSyncCancel } from "./utils/syncManager";
+import { watchStrandedPanel } from "./utils/strandedPanelStore";
 import { setSyncProgress, getSyncProgress, updateSyncProgress } from "./utils/syncProgress";
 import { estimatePlanSeconds } from "./utils/syncEstimate";
 import { beginEtaRun } from "./utils/syncEta";
@@ -125,6 +126,14 @@ const QAMPanel: FC = () => {
     if (typeof target === "string") setPage(target);
     else setPage(target.page, target.section);
   };
+
+  // Tender opened in Quick Access is one of the moments a stranded panel asks
+  // the backend again: what it answered may have changed since — a reload limit
+  // that freed up, or a recovery that gave up. Where the panel is not stranded
+  // this asks nothing.
+  useEffect(() => {
+    detach(recheckStranded());
+  }, []);
 
   useEffect(() => {
     const el = rootRef.current;
@@ -401,6 +410,7 @@ const tender = definePanel(() => {
     console.warn(`[${DISPLAY_NAME}] ${describeSurvivedMiss(startup, copy)} Missing: ${startup.missing.join(", ")}`);
   }
 
+  watchStrandedPanel();
   disownStrandedPruneLeases();
   registerGameDetailPatch();
   registerLaunchInterceptor({

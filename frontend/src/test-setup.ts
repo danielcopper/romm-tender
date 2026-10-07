@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, vi } from "vitest";
 import { createElement, type ReactNode } from "react";
 import { resetHostEventBus } from "./test-utils/host-event-bus";
+import { resetStrandedPanel } from "./test-utils/stranded-panel";
 
 // Vitest evaluates this file anew for every test file, so a second evaluation in
 // the same global means test files are sharing one context. The vm pool does
@@ -72,6 +73,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   resetHostEventBus();
+  resetStrandedPanel();
 
   // Drained before the throw so one emitting test cannot fail its successors.
   // An unmount-time warning counts too: RTL registers its own afterEach(cleanup)
@@ -128,15 +130,25 @@ vi.stubGlobal("collectionStore", { userCollections: [] });
 // Stubbing the module means NO SOCKET IS EVER OPENED in this suite, and no line
 // of `api/hostSocket.ts` runs through it — everything about framing, call ids,
 // reconnection and the outbox is covered by that module's own tests, against an
-// injected socket, and is invisible to every test that goes through here.
+// injected socket, and is invisible to every test that goes through here. The
+// socket's word on a stranded panel goes through `test-utils/stranded-panel.ts`
+// the same way; the error class and its predicate are the real ones, so a test
+// rejects a call with the very failure a stranded socket raises.
 vi.mock("./api/host", async () => {
   const bus = await import("./test-utils/host-event-bus");
+  const stranded = await import("./test-utils/stranded-panel");
+  const transport = await import("./api/hostSocket");
   return {
     endpoint: <T>(_name: string) => vi.fn().mockResolvedValue(undefined) as unknown as T,
     toaster: { toast: vi.fn() },
     definePanel: (fn: unknown) => fn,
     addEventListener: bus.mockAddEventListener,
     removeEventListener: bus.mockRemoveEventListener,
+    HostTransportError: transport.HostTransportError,
+    isStrandedPanelFailure: transport.isStrandedPanelFailure,
+    strandedAnswer: stranded.mockStrandedAnswer,
+    onStrandedAnswerChange: stranded.mockOnStrandedAnswerChange,
+    recheckStranded: vi.fn().mockResolvedValue(undefined),
   };
 });
 

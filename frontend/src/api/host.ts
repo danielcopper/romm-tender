@@ -2,6 +2,10 @@
  * The one module the panel imports for what it gets from its host: `endpoint`,
  * `addEventListener`, `removeEventListener`, `toaster` and `definePanel`.
  * Three of them are the wire — they go over the WebSocket in `hostSocket.ts`.
+ * Beside them, the socket's own word on a stranded panel: what the backend
+ * answered it (`strandedAnswer`, `onStrandedAnswerChange`), asking again
+ * (`recheckStranded`), and telling such a call's failure apart
+ * (`isStrandedPanelFailure`).
  * **Two of them reach no socket at all**, and they live here anyway: `index.tsx`
  * takes both kinds, and splitting the module would give it two imports for a
  * distinction it does not have.
@@ -31,10 +35,11 @@
 
 import type { ReactNode } from "react";
 
+import type { StrandedAnswer } from "../utils/strandedPanelWording";
 import { steamToaster } from "../utils/steamToaster";
 import { HostSocket, addressFromBundleUrl } from "./hostSocket";
 
-export { HostTransportError } from "./hostSocket";
+export { HostTransportError, isStrandedPanelFailure } from "./hostSocket";
 
 // -- the types the call sites name --------------------------------------------
 
@@ -135,6 +140,18 @@ export const removeEventListener = <Payload = unknown>(
 ): void => {
   socket().off(event, listener);
 };
+
+// -- the socket's word on a stranded panel ------------------------------------
+
+/** What the backend answered this panel when it refused it as stranded, or `null` while it has not. */
+export const strandedAnswer = (): StrandedAnswer | null => socket().strandedAnswer;
+
+/** Call *listener* each time that answer changes; answers the unsubscribe. Opens no connection. */
+export const onStrandedAnswerChange = (listener: (answer: StrandedAnswer) => void): (() => void) =>
+  socket().onStrandedChange(listener);
+
+/** Ask the backend once more what it answers this stranded panel; nothing where the panel is not stranded. */
+export const recheckStranded = (): Promise<void> => socket().recheck();
 
 /**
  * Wrap the factory that builds the panel.

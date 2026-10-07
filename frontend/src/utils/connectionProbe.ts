@@ -22,6 +22,7 @@
 import { useEffect, useState } from "react";
 import type { RommErrorCode } from "../types";
 import { getSettings, testConnection } from "../api/backend";
+import { isStrandedPanelFailure } from "../api/host";
 import { setVersionError } from "./connectionState";
 import { detach } from "./detach";
 import { withTimeout } from "./withTimeout";
@@ -74,7 +75,10 @@ export function onConnectionProbeChange(cb: (s: ConnectionProbeState) => void): 
 
 /** Run the ladder to a verdict. A resolved call ends it — "not connected"
  *  (success:false) is an authoritative answer, not a failure — so only an
- *  exhausted budget reaches the liveness ping. */
+ *  exhausted budget reaches the liveness ping. A call refused because the panel
+ *  is stranded ends it too, with nothing published: a backend is running and
+ *  refused this panel, which the row states from the socket's own answer
+ *  (`utils/strandedPanelStore.ts`) rather than from this inference. */
 async function runProbe(): Promise<void> {
   for (let attempt = 0; ; attempt++) {
     try {
@@ -82,7 +86,8 @@ async function runProbe(): Promise<void> {
       publish({ connected: r.success, failure: r.success ? null : { reason: r.reason, message: r.message } });
       setVersionError(r.reason === "version_error" ? r.message : null);
       return;
-    } catch {
+    } catch (e) {
+      if (isStrandedPanelFailure(e)) return;
       if (attempt >= CONNECTION_RETRY_DELAYS.length) {
         await pingAfterExhaustedBudget();
         return;
@@ -104,7 +109,7 @@ async function pingAfterExhaustedBudget(): Promise<void> {
     await withTimeout(getSettings(), CONNECTION_ENDPOINT_TIMEOUT);
     publish({ connected: false, failure: null });
   } catch (pingErr) {
-    if (holdVerdictForInstaller()) return;
+    if (isStrandedPanelFailure(pingErr) || holdVerdictForInstaller()) return;
     publish({ connected: "backend_failed", failure: null });
     // logError itself calls an endpoint and would hang against a dead
     // backend — log to the console instead.

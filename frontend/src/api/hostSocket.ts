@@ -25,16 +25,43 @@
  * start-up and the launch check through `utils/launchGate.ts`'s limits. Adding
  * one here would change what every call does when the socket is down, at once
  * and silently.
+ *
+ * **A stranded panel stops waiting for good.** The token is minted per backend
+ * process, so a panel an earlier process loaded is refused by every later one,
+ * and a refused handshake looks to a page exactly like no server at all. The
+ * backend therefore completes such an upgrade and closes it at once with a code
+ * of its own, which says whether it reloads Steam's interface once no game is
+ * running or Steam has to be restarted. On that code the socket stops
+ * reconnecting, and every queued and later call fails at once with
+ * `stranded_panel`; only a reload of Steam's JS context replaces such a panel.
  */
+
+import { strandedPanelSentence, type StrandedAnswer } from "../utils/strandedPanelWording";
 
 /** The reason a call fails when the socket goes before its reply comes back.
  *
  *  The vocabulary of `error.reason` is owned by `backend/host/protocol.py`, and
- *  this is the one value no backend ever sends: it is what a caller's own
- *  pending register answers with. It is named there too, for exactly this reason
+ *  this is one of the two values no backend ever sends: it is what a caller's
+ *  own pending register answers with. It is named there too, for exactly this reason
  *  — so that the two ends cannot invent two spellings of it. Nothing mechanical
  *  holds the two files together; this is the only place the frontend spells it. */
 const CONNECTION_LOST = "connection_lost";
+
+/** The reason every call of a stranded panel fails with. Spelled in
+ *  `backend/host/protocol.py` too, for the reason above, and held equal by
+ *  nothing mechanical either. */
+const STRANDED_PANEL = "stranded_panel";
+
+/** The two close codes a stranded panel's upgrade is answered with, as
+ *  `backend/host/protocol.py` spells them; nothing mechanical holds the two
+ *  files together. */
+const STRANDED_ANSWERS: ReadonlyMap<number, StrandedAnswer> = new Map([
+  [4001, "reloads"],
+  [4002, "restart_steam"],
+]);
+
+/** How long a re-check waits for the backend's answer before keeping the last one. */
+const RECHECK_BOUND_MS = 2000;
 
 /** A failure of the carriage, never of the thing carried. */
 export class HostTransportError extends Error {
@@ -49,6 +76,11 @@ export class HostTransportError extends Error {
     this.reason = reason;
     this.traceback = traceback;
   }
+}
+
+/** Is *error* the failure of a call a stranded panel made? */
+export function isStrandedPanelFailure(error: unknown): error is HostTransportError {
+  return error instanceof HostTransportError && error.reason === STRANDED_PANEL;
 }
 
 /** Where the backend is, and the credential to reach it with. */
@@ -125,6 +157,10 @@ export class HostSocket {
   private closed = false;
   /** Set when no connection can ever be formed, so every later call says so. */
   private unreachable: Error | null = null;
+  /** What the backend told this panel when it refused it as stranded; `null` while it has not. */
+  private stranded: StrandedAnswer | null = null;
+  private readonly strandedListeners = new Set<(answer: StrandedAnswer) => void>();
+  private recheckInFlight: Promise<void> | null = null;
 
   constructor(config: HostSocketConfig) {
     this.config = config;
@@ -133,6 +169,36 @@ export class HostSocket {
   /** How many calls are on the wire, awaiting a reply. Test-facing. */
   get inFlight(): number {
     return this.pending.size - this.outbox.length;
+  }
+
+  /** What the backend told this panel when it refused it as stranded, or `null` while it has not. */
+  get strandedAnswer(): StrandedAnswer | null {
+    return this.stranded;
+  }
+
+  /** Call *listener* each time the stranded answer changes — first set, or a re-check that answered differently. */
+  onStrandedChange(listener: (answer: StrandedAnswer) => void): () => void {
+    this.strandedListeners.add(listener);
+    return () => {
+      this.strandedListeners.delete(listener);
+    };
+  }
+
+  /**
+   * Ask the backend once more what it answers a stranded panel, and take the
+   * answer when it comes within the bound.
+   *
+   * One connection, opened only to read the code it is closed with; a bound
+   * that passes, or a close without one of the two codes, keeps the last
+   * answer. Never more than one is under way: a second ask joins the first.
+   * Nothing is asked where the panel is not stranded.
+   */
+  recheck(): Promise<void> {
+    if (!this.stranded) return Promise.resolve();
+    this.recheckInFlight ??= this.knock().finally(() => {
+      this.recheckInFlight = null;
+    });
+    return this.recheckInFlight;
   }
 
   /**
@@ -148,6 +214,7 @@ export class HostSocket {
     // leave it pending for the life of the session: there is no timeout here by
     // design, and no reconnection is scheduled for a fault no retry can fix.
     if (this.unreachable) return Promise.reject(this.unreachable);
+    if (this.stranded) return Promise.reject(this.strandedFailure(this.stranded));
     const id = ++this.lastCallId;
     const frame = JSON.stringify({ type: "call", id, method, args });
     const answer = new Promise<unknown>((resolve, reject) => {
@@ -192,8 +259,7 @@ export class HostSocket {
 
     let url: string;
     try {
-      const { origin, token } = this.config.address();
-      url = `${origin.replace(/^http/, "ws")}/ws?token=${encodeURIComponent(token)}&session=${encodeURIComponent(this.config.sessionId)}`;
+      url = this.url();
     } catch (error) {
       // The address is read off the URL this bundle was loaded from, so a
       // failure here is not a connection that went — it is a bundle that was
@@ -215,15 +281,30 @@ export class HostSocket {
       this.flush();
     };
     socket.onmessage = (event: MessageEvent) => this.receive(String(event.data));
-    socket.onclose = () => this.handleClose(socket);
+    socket.onclose = (event: CloseEvent) => this.handleClose(socket, event);
     // An error is always followed by a close, so the reconnection is driven from
     // one place rather than two that could both fire.
     socket.onerror = () => {};
   }
 
-  private handleClose(socket: WebSocket): void {
+  /** The upgrade address; throws where the bundle's own address carries no token. */
+  private url(): string {
+    const { origin, token } = this.config.address();
+    return `${origin.replace(/^http/, "ws")}/ws?token=${encodeURIComponent(token)}&session=${encodeURIComponent(this.config.sessionId)}`;
+  }
+
+  private handleClose(socket: WebSocket, event: CloseEvent): void {
     if (this.socket !== socket) return;
     this.socket = null;
+    const answer = STRANDED_ANSWERS.get(event.code);
+    if (answer) {
+      // No retry can admit this panel, so the outbox is failed rather than kept
+      // for a connection that will never come.
+      this.closed = true;
+      this.setStranded(answer);
+      this.failEveryCall(this.strandedFailure(answer));
+      return;
+    }
     // Only the calls that actually reached the wire fail. A frame still in the
     // outbox never left, so re-sending it on the next connection is safe — while
     // one already sent may have RUN, and silently retrying it would repeat
@@ -234,6 +315,53 @@ export class HostSocket {
     this.attempt += 1;
     const schedule = this.config.schedule ?? ((run, afterMs) => setTimeout(run, afterMs));
     schedule(() => this.connect(), delay);
+  }
+
+  private strandedFailure(answer: StrandedAnswer): HostTransportError {
+    return new HostTransportError(STRANDED_PANEL, strandedPanelSentence(answer));
+  }
+
+  private setStranded(answer: StrandedAnswer): void {
+    if (this.stranded === answer) return;
+    this.stranded = answer;
+    for (const listener of [...this.strandedListeners]) {
+      try {
+        listener(answer);
+      } catch (error) {
+        console.warn("[Tender] a listener for the stranded panel's answer threw", error);
+      }
+    }
+  }
+
+  /** One connection opened only to read what it is closed with. */
+  private knock(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      let url: string;
+      try {
+        url = this.url();
+      } catch {
+        resolve();
+        return;
+      }
+      const socket = this.config.open(url);
+      let settled = false;
+      const settle = (answer: StrandedAnswer | undefined): void => {
+        if (settled) return;
+        settled = true;
+        socket.onclose = null;
+        if (answer) this.setStranded(answer);
+        try {
+          socket.close();
+        } catch {
+          // Already closing or closed; either way nothing more is read from it.
+        }
+        resolve();
+      };
+      socket.onclose = (event: CloseEvent) => settle(STRANDED_ANSWERS.get(event.code));
+      socket.onerror = () => {};
+      const schedule = this.config.schedule ?? ((run, afterMs) => setTimeout(run, afterMs));
+      schedule(() => settle(undefined), RECHECK_BOUND_MS);
+    });
   }
 
   /** Fail every call there is, sent or not, with *error*. */

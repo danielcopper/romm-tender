@@ -16,7 +16,13 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { HostSocket, HostTransportError, addressFromBundleUrl, type HostSocketConfig } from "./hostSocket";
+import {
+  HostSocket,
+  HostTransportError,
+  addressFromBundleUrl,
+  isStrandedPanelFailure,
+  type HostSocketConfig,
+} from "./hostSocket";
 
 /** A socket the test drives: it opens, delivers and dies when told to. */
 class FakeSocket {
@@ -26,7 +32,7 @@ class FakeSocket {
   readonly sent: string[] = [];
   onopen: (() => void) | null = null;
   onmessage: ((event: MessageEvent) => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((event: CloseEvent) => void) | null = null;
   onerror: (() => void) | null = null;
   closed = false;
 
@@ -59,10 +65,16 @@ class FakeSocket {
     this.onmessage?.({ data: text } as MessageEvent);
   }
 
-  /** The connection goes. */
-  drop(): void {
+  /** The connection goes, with the code a browser reports for one that ended without a close frame. */
+  drop(code = 1006): void {
     this.readyState = 3;
-    this.onclose?.();
+    this.onclose?.({ code, reason: "", wasClean: code !== 1006 } as CloseEvent);
+  }
+
+  /** What a backend answers a stranded panel's upgrade with: the handshake completes, then the close comes. */
+  strand(code: number): void {
+    this.open();
+    this.drop(code);
   }
 
   /** Every call frame it was given, decoded. */
@@ -450,5 +462,173 @@ describe("a frame the panel cannot make sense of", () => {
     // deliver the real answer.
     latest().deliver({ type: "reply", id: 1, result: "fine" });
     await expect(answer).resolves.toBe("fine");
+  });
+});
+
+// The two codes and the reason as `backend/host/protocol.py` spells them; the
+// sentences as `utils/strandedPanelWording.ts` words them.
+const RELOADS = 4001;
+const RESTART_STEAM = 4002;
+const RELOADS_SENTENCE = "Tender was restarted — it reloads Steam's interface once no game is running.";
+const RESTART_SENTENCE = "Tender was restarted — restart Steam to use it again.";
+
+/** A socket whose upgrade the backend already answered as stranded with *code*. */
+function stranded(code: number): HostSocket {
+  const socket = build();
+  fireAndForget(socket, "first");
+  latest().strand(code);
+  return socket;
+}
+
+describe("a panel the backend refuses as stranded", () => {
+  it("reads the close code and stops reconnecting for good", () => {
+    const socket = stranded(RESTART_STEAM);
+
+    // Not even the first step of the backoff: no retry can admit this panel.
+    expect(scheduled).toEqual([]);
+    fireAndForget(socket, "later");
+    socket.on("sync_progress", () => {});
+    expect(FakeSocket.opened).toHaveLength(1);
+  });
+
+  it("fails every queued call at once, with a reason of its own and the sentence for the answer", async () => {
+    const socket = build();
+    const first = socket.call("get_sync_stats", []);
+    const second = socket.call("debug_log", ["x"]);
+    latest().strand(RESTART_STEAM);
+
+    for (const answer of [first, second]) {
+      const error = await answer.catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(HostTransportError);
+      expect(error).toMatchObject({ reason: "stranded_panel", message: RESTART_SENTENCE });
+      expect(isStrandedPanelFailure(error)).toBe(true);
+    }
+  });
+
+  it("fails every later call at once too, rather than queuing it for a connection that never comes", async () => {
+    const socket = stranded(RELOADS);
+
+    await expect(socket.call("stop_running_game", [7])).rejects.toMatchObject({
+      reason: "stranded_panel",
+      message: RELOADS_SENTENCE,
+    });
+    expect(FakeSocket.opened).toHaveLength(1);
+  });
+
+  it("answers what it was told, and tells its listeners once", () => {
+    const socket = build();
+    const heard: string[] = [];
+    socket.onStrandedChange((answer) => heard.push(answer));
+    expect(socket.strandedAnswer).toBeNull();
+    fireAndForget(socket, "first");
+
+    latest().strand(RELOADS);
+
+    expect(socket.strandedAnswer).toBe("reloads");
+    expect(heard).toEqual(["reloads"]);
+  });
+
+  it("keeps reconnecting on a close carrying any other code", () => {
+    const socket = build();
+    fireAndForget(socket, "x");
+    latest().open();
+    latest().drop(4999);
+
+    expect(socket.strandedAnswer).toBeNull();
+    expect(scheduled.map((entry) => entry.afterMs)).toEqual([250]);
+  });
+
+  it("is not something any other failure is mistaken for", () => {
+    expect(isStrandedPanelFailure(new HostTransportError("connection_lost", "gone"))).toBe(false);
+    expect(isStrandedPanelFailure(new Error("stranded_panel"))).toBe(false);
+  });
+});
+
+describe("asking a stranded panel's backend again", () => {
+  it("asks nothing where the panel is not stranded", async () => {
+    const socket = build();
+
+    await socket.recheck();
+
+    expect(FakeSocket.opened).toEqual([]);
+  });
+
+  it("opens one connection to the same address, and takes a changed answer from its close", async () => {
+    const socket = stranded(RELOADS);
+    const heard: string[] = [];
+    socket.onStrandedChange((answer) => heard.push(answer));
+
+    const asked = socket.recheck();
+    expect(FakeSocket.opened).toHaveLength(2);
+    expect(latest().url).toBe(FakeSocket.opened[0]!.url);
+    latest().strand(RESTART_STEAM);
+    await asked;
+
+    expect(socket.strandedAnswer).toBe("restart_steam");
+    expect(heard).toEqual(["restart_steam"]);
+    await expect(socket.call("x", [])).rejects.toMatchObject({ message: RESTART_SENTENCE });
+    expect(latest().closed).toBe(true);
+  });
+
+  it("tells nobody when the answer is the same", async () => {
+    const socket = stranded(RELOADS);
+    const heard: string[] = [];
+    socket.onStrandedChange((answer) => heard.push(answer));
+
+    const asked = socket.recheck();
+    latest().strand(RELOADS);
+    await asked;
+
+    expect(heard).toEqual([]);
+  });
+
+  it("keeps the last answer when the bound passes first, and closes what it opened", async () => {
+    const socket = stranded(RELOADS);
+
+    const asked = socket.recheck();
+    expect(scheduled.map((entry) => entry.afterMs)).toEqual([2000]);
+    scheduled[0]!.run();
+    await asked;
+
+    expect(socket.strandedAnswer).toBe("reloads");
+    expect(latest().closed).toBe(true);
+    // A close arriving after the bound is no longer read.
+    latest().drop(RESTART_STEAM);
+    expect(socket.strandedAnswer).toBe("reloads");
+  });
+
+  it("keeps the last answer when the close carries neither code", async () => {
+    const socket = stranded(RELOADS);
+
+    const asked = socket.recheck();
+    latest().drop();
+    await asked;
+
+    expect(socket.strandedAnswer).toBe("reloads");
+  });
+
+  it("never has more than one connection out at once", async () => {
+    const socket = stranded(RELOADS);
+
+    const first = socket.recheck();
+    const second = socket.recheck();
+    expect(FakeSocket.opened).toHaveLength(2);
+    latest().drop(RESTART_STEAM);
+    await Promise.all([first, second]);
+
+    void socket.recheck();
+    expect(FakeSocket.opened).toHaveLength(3);
+  });
+
+  it("sends nothing on the connection it opens", async () => {
+    const socket = stranded(RELOADS);
+    fireAndForget(socket, "queued while stranded");
+
+    const asked = socket.recheck();
+    latest().open();
+    latest().drop(RELOADS);
+    await asked;
+
+    expect(latest().sent).toEqual([]);
   });
 });
