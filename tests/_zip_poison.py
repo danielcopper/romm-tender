@@ -13,9 +13,9 @@ def corrupt_central_dir_zip_bytes() -> bytes:
     """A real two-entry zip with its SECOND central-directory entry's signature clobbered.
 
     The End-Of-Central-Directory record and the first entry stay intact, so ``is_zipfile`` still sniffs it as a zip —
-    from 3.14 (gh-72680) the sniff also checks the first entry's signature, which is why it is the second that is
-    clobbered — but ``ZipFile`` reads every entry on open and raises ``BadZipFile``. The dominant real-world poison: a
-    corrupt / truncated archive.
+    what the sniff reads is the comment on ``_ZIP_READ_ERRORS`` in ``adapters/save_file.py``, and it is why the second
+    entry is the one clobbered — but ``ZipFile`` reads every entry on open and raises ``BadZipFile``. The dominant
+    real-world poison: a corrupt / truncated archive.
     """
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:

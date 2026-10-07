@@ -528,10 +528,15 @@ build beside them — so it is a pre-push check, not something to run on every s
 it: [Dependency management](dependency-management.md)) — and the two that feed Sonar: `pr-metadata`, which needs a pull
 request, and `sonarcloud`, which needs `SONAR_TOKEN` and the CI coverage artifacts.
 
-Outside `ci.yml`, every pull request also runs the `decisions` check (`.github/workflows/decisions.yml`), which the gate
-does not run because it reads the pull request and its linked issues on GitHub. It checks that the pull request links an
-issue whose decisions are settled; the rules, the exemptions and the opt-outs are in the
-[shared workflow's README](https://github.com/danielcopper/.github#the-decisions-check).
+Outside `ci.yml`, a pull request runs more checks, and the gate runs none of them, because each reads the pull request
+itself on GitHub: `decisions` (`.github/workflows/decisions.yml`), which checks that the pull request links an issue
+whose decisions are settled — the rules, the exemptions and the opt-outs are in the
+[shared workflow's README](https://github.com/danielcopper/.github#the-decisions-check); `Docs updated in same PR`
+(`docs-check.yml`), which fails a pull request that changes source without touching `docs/` unless it carries the
+`no-docs-change` label or a `docs: N/A` line; `commitlint` (`pr-title.yml`), which holds the pull request's title to
+Conventional Commits; and `label` (`labeler.yml`), which only sets labels. A pull request that touches `docs/**` or
+`mkdocs.yml` also builds the documentation site (`docs.yml`, `mkdocs build --strict`), which `mise run docs:build` runs
+locally.
 
 ## Code Quality
 
