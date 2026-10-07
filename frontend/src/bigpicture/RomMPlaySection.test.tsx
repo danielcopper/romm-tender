@@ -17,7 +17,8 @@ import { RomMPlaySection } from "./RomMPlaySection";
 import * as backend from "../api/backend";
 import { _resetSharedReadsForTests } from "../api/sharedReads";
 import { showContextMenu, showModal } from "@decky/ui";
-import { toaster } from "../api/host";
+import { HostTransportError, toaster } from "../api/host";
+import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import {
   installDomEventListenerSpy,
   uninstallDomEventListenerSpy,
@@ -4265,6 +4266,40 @@ describe("RomMPlaySection", () => {
         connectionState.setRommConnectionState("connected");
       });
       expect(container.textContent).not.toContain("RomM offline");
+    });
+
+    it("a stranded panel reads 'Tender restarted', and its refused check writes no verdict on RomM", async () => {
+      setStrandedAnswer("reloads");
+      vi.mocked(backend.testConnection).mockRejectedValue(
+        new HostTransportError(
+          "stranded_panel",
+          "Tender was restarted — it reloads Steam's interface once no game is running.",
+        ),
+      );
+      const { container } = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      expect(container.textContent).toContain("Tender restarted");
+      expect(container.textContent).not.toContain("RomM offline");
+      expect(connectionState.getRommConnectionState()).toBe("checking");
+    });
+
+    it("a panel stranded after a real offline verdict reads 'Tender restarted' in its place — no remount", async () => {
+      vi.mocked(backend.testConnection).mockResolvedValue({ success: false, message: "" });
+      const { container } = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      expect(container.textContent).toContain("RomM offline");
+      act(() => setStrandedAnswer("restart_steam"));
+      expect(container.textContent).toContain("Tender restarted");
+      expect(container.textContent).not.toContain("RomM offline");
+    });
+
+    it("a check that failed for any other reason still reads 'RomM offline', never 'Tender restarted'", async () => {
+      vi.mocked(backend.testConnection).mockRejectedValue(new HostTransportError("connection_lost", "socket closed"));
+      const { container } = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      expect(container.textContent).toContain("RomM offline");
+      expect(container.textContent).not.toContain("Tender restarted");
+      expect(connectionState.getRommConnectionState()).toBe("offline");
     });
 
     it("lastPlayed item renders when info.lastPlayed is truthy", async () => {
