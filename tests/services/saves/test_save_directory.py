@@ -23,6 +23,7 @@ from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import SaveAnswer, SaveComponent, unestablished_answer
 from lib.errors import Refused
 from services.saves._refusals import SaveShapeUnsupported
+from services.saves.slots.switching import PendingUploads
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
@@ -459,10 +460,12 @@ class TestTheSecondaryWritePathsFollowFirst:
         _create_save(tmp_path, content=b"played since the last sync")
         _seed_answer(svc, _answer(str(new)))
 
-        result = await svc.switch_slot(_ROM, "other")
+        switching = svc.switch_slot(_ROM, "other")
 
-        assert result["reason"] == "pending_uploads"
-        assert result["files"] == ["pokemon.srm"]
+        with pytest.raises(PendingUploads) as refused:
+            await switching
+
+        assert refused.value.details == {"files": ["pokemon.srm"]}
         assert (new / "pokemon.srm").read_bytes() == b"played since the last sync"
         assert _recorded(svc) == str(new)
 

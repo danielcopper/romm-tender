@@ -44,6 +44,7 @@ if TYPE_CHECKING:
 
     from domain.save_answer import SaveAnswer
     from services.protocols import UnitOfWorkFactory
+    from services.saves.slots.switching import SlotSwitchIncomplete
 
 
 @dataclass(frozen=True)
@@ -398,7 +399,7 @@ class SaveService:
         """Fetch server save files for a specific slot."""
         return await self._slots.get_slot_saves(rom_id, slot)
 
-    async def switch_slot(self, rom_id: int, new_slot: str) -> dict[str, Any]:
+    async def switch_slot(self, rom_id: int, new_slot: str) -> dict[str, Any] | SlotSwitchIncomplete:
         """Switch the active save slot with immediate state sync."""
         async with self._rules.hold("switch_slot", update=True, migration=True, prune=True):
             return await self._slots.switch_slot(rom_id, new_slot)

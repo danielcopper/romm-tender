@@ -365,6 +365,7 @@ class TestASlotSwitchLeavesAnUncarriedFileAlone:
 
         result = await svc.switch_slot(42, "desktop")
 
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert (tmp_path / "saves" / "saturn" / "rally.smpc").read_bytes() == b"local-settings"
 
@@ -549,11 +550,6 @@ class TestAWritePathRefusesWhatASyncWouldNotCarry:
         ("call", "refused"),
         [
             pytest.param(
-                lambda svc: svc.switch_slot(42, "other"),
-                lambda result: result["reason"] == SAVE_SHAPE_UNSUPPORTED_REASON,
-                id="switch-slot",
-            ),
-            pytest.param(
                 lambda svc: svc.copy_save_to_slot(42, 100, "other"),
                 lambda result: (
                     result["status"] == "unsupported"
@@ -579,17 +575,35 @@ class TestAWritePathRefusesWhatASyncWouldNotCarry:
         ],
     )
     async def test_nothing_lands_in_the_roms_folder(self, tmp_path, call, refused):
+        svc = self._inside_the_game_file(tmp_path)
+
+        result = await call(svc)
+
+        assert refused(result), result
+        assert self._rom_folder_saves(tmp_path) == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "call",
+        [pytest.param(lambda svc: svc.switch_slot(42, "other"), id="switch-slot")],
+    )
+    async def test_a_slot_write_refuses_with_the_skip_and_nothing_lands(self, tmp_path, call):
+        svc = self._inside_the_game_file(tmp_path)
+        writing = call(svc)
+
+        with pytest.raises(SaveShapeUnsupported):
+            await writing
+
+        assert self._rom_folder_saves(tmp_path) == []
+
+    def _inside_the_game_file(self, tmp_path) -> Any:
         svc, _store, fake = _service(tmp_path, _anchored_in_the_rom_folder(tmp_path, caveats=("save-inside-content",)))
         _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
         for slot in ("default", "other", None):
             save_id = {"default": 100, "other": 101, None: 102}[slot]
             fake.saves[save_id] = _server_save(save_id=save_id, slot=slot)
             fake.set_server_save_content(save_id, b"server progress")
-
-        result = await call(svc)
-
-        assert refused(result), result
-        assert self._rom_folder_saves(tmp_path) == []
+        return svc
 
     @pytest.mark.asyncio
     async def test_a_conflict_resolution_writes_nothing_into_the_roms_folder(self, tmp_path):
