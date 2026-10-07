@@ -467,6 +467,30 @@ describe("gameDetailStore", () => {
       });
     });
 
+    it("answers a caller whose read a read of another rom overtook with nothing", async () => {
+      const previousRom = deferred<SaveStatus>();
+      vi.mocked(backend.getSaveStatus).mockReturnValueOnce(previousRom.promise);
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
+      subscribe(nextAppId);
+      await flush();
+      const held = refreshSaveStatus(nextAppId);
+
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ rom_id: 43, save_sync_enabled: true }));
+      vi.mocked(backend.getSaveStatus).mockResolvedValue(labelledStatus("new-version", { rom_id: 43 }));
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", {
+            detail: { type: "version_switched", app_id: nextAppId, rom_id: 43 },
+          }),
+        );
+        await Promise.resolve();
+      });
+      await flush();
+      previousRom.resolve(labelledStatus("old-version", { rom_id: 42 }));
+
+      await expect(held).resolves.toBeNull();
+    });
+
     it("leaves the shown display untouched when the backend refuses the read", async () => {
       subscribe(nextAppId);
       await flush();
@@ -1049,6 +1073,23 @@ describe("gameDetailStore", () => {
 
       await expect(joined).resolves.toMatchObject({ save_sync_display: { label: "After the switch" } });
       expect(vi.mocked(backend.getSaveStatus)).toHaveBeenCalledTimes(2);
+    });
+
+    it("answers a caller whose read the change overtook with the read the change issued", async () => {
+      const opening = deferred<SaveStatus>();
+      vi.mocked(backend.getSaveStatus).mockReturnValueOnce(opening.promise);
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ save_sync_enabled: true }));
+      subscribe(nextAppId);
+      await flush();
+      const held = refreshSaveStatus(nextAppId);
+      const afterTheSwitch = deferred<SaveStatus>();
+      vi.mocked(backend.getSaveStatus).mockReturnValueOnce(afterTheSwitch.promise);
+      dispatchSourcesChanged();
+
+      opening.resolve(labelledStatus("Before the switch"));
+      afterTheSwitch.resolve(labelledStatus("After the switch"));
+
+      await expect(held).resolves.toMatchObject({ save_sync_display: { label: "After the switch" } });
     });
   });
 

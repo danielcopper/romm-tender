@@ -164,6 +164,9 @@ interface Entry {
   saveStatusInFlight: InFlightSaveStatus | null;
   /** Bumped by every save-status read issued; only the newest read folds. */
   saveStatusSeq: number;
+  /** The newest save-status read issued, kept after it settles: a read it
+   *  overtook answers with this one's answer rather than its own. */
+  newestSaveStatusRead: InFlightSaveStatus | null;
   detachListeners: () => void;
 }
 
@@ -213,6 +216,7 @@ function openEntry(appId: number): Entry {
     timedRetryUsed: false,
     saveStatusInFlight: null,
     saveStatusSeq: 0,
+    newestSaveStatusRead: null,
     detachListeners: () => {},
   };
   _entries.set(appId, entry);
@@ -224,6 +228,7 @@ function openEntry(appId: number): Entry {
 function closeEntry(appId: number, entry: Entry): void {
   entry.generation++;
   entry.saveStatusInFlight = null;
+  entry.newestSaveStatusRead = null;
   entry.detachListeners();
   _entries.delete(appId);
 }
@@ -393,10 +398,15 @@ async function loadDetail(appId: number, entry: Entry): Promise<void> {
  * the switch gets a fresh read rather than the answer to a question about
  * another game.
  *
+ * A read that a newer read of the same ROM overtook while it was open answers
+ * with the newer read's answer, never its own: the caller holds a promise taken
+ * before the change that issued the newer read, and its own answer may describe
+ * what that change replaced.
+ *
  * Resolves to `null` — leaving the shown display untouched — when the identity
  * is not resolved yet, when the backend refuses the read (a prune-active
- * refusal is not a save-status answer), or when a newer read was issued while
- * this one was open. Rejects when the call itself fails, so
+ * refusal is not a save-status answer), or when a read of another ROM overtook
+ * this one. Rejects when the call itself fails, so
  * each caller reports the failure in its own terms. Whether a ROM with save sync
  * switched off is worth reading at all is the caller's call, not this one's.
  */
@@ -413,7 +423,8 @@ export function refreshSaveStatus(appId: number): Promise<SaveStatus | null> {
 /** Read this ROM's save status without joining a read already open, for a
  *  caller that reads BECAUSE something changed: an open read was asked before
  *  the change and may answer for the state it changed. Later callers join this
- *  read instead, and the open one no longer folds. */
+ *  read instead, and the open one no longer folds: its callers get this read's
+ *  answer. */
 function rereadSaveStatus(appId: number): Promise<SaveStatus | null> {
   const entry = _entries.get(appId);
   const romId = entry?.state.romId;
@@ -425,6 +436,7 @@ function issueSaveStatusRead(entry: Entry, romId: number): Promise<SaveStatus | 
   entry.saveStatusSeq++;
   const request = readSaveStatus(entry, romId, entry.generation, entry.saveStatusSeq);
   entry.saveStatusInFlight = { romId, promise: request };
+  entry.newestSaveStatusRead = { romId, promise: request };
   // Free the slot once this request settles, whichever way it settles. Both
   // arms of `then` are the same bookkeeping, and giving it a rejection arm is
   // what keeps this branch from surfacing as an unhandled rejection — the
@@ -446,11 +458,14 @@ async function readSaveStatus(
   seq: number,
 ): Promise<SaveStatus | null> {
   const result = await getSaveStatus(romId);
+  if (seq !== entry.saveStatusSeq) {
+    const newest = entry.newestSaveStatusRead;
+    return newest?.romId === romId ? newest.promise : null;
+  }
   if (isEndpointFailure(result)) {
     detach(debugLog(`gameDetailStore: save status refused: ${result.message}`));
     return null;
   }
-  if (seq !== entry.saveStatusSeq) return null;
   applySaveStatus(entry, generation, result);
   return result;
 }
