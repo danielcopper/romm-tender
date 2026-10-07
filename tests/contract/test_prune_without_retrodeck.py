@@ -3,8 +3,8 @@
 Its own module because ``test_prune.py`` seeds a RetroDECK for every test in
 it. Here the resolver detects none, so RetroDECK names no saves root and no ROM
 root: the cleanup still removes what needs no folder of RetroDECK's, and a game
-whose files or saves lie where nothing bounds them is reported with nothing
-touched — never as a run that may have moved something.
+with a download record — its files on disk or not — is reported with nothing
+touched, never as a run that may have moved something.
 """
 
 from __future__ import annotations
@@ -120,7 +120,7 @@ async def test_without_retrodeck_a_game_with_nothing_on_disk_is_removed(harness)
     assert "ambiguous_mutations" not in result
 
 
-async def test_without_retrodeck_a_game_with_files_and_saves_is_reported_and_nothing_is_touched(harness):
+async def test_without_retrodeck_a_game_with_files_is_reported_and_nothing_is_touched(harness):
     _seed_removed_game(harness)
     rom_path, save_path = _seed_install_with_a_save(harness)
 
@@ -130,8 +130,30 @@ async def test_without_retrodeck_a_game_with_files_and_saves_is_reported_and_not
         assert uow.roms.get(_ROM_ID) is not None
         assert uow.rom_installs.get(_ROM_ID) is not None
     assert rom_path.read_bytes() == b"installed rom"
+    # The save is a bystander: without RetroDECK no saves root bounds the save
+    # step, which leaves every save it expects untouched, so nothing in this run
+    # reaches this file — these two only show it is still where it was.
     assert save_path.read_bytes() == b"local save"
     assert not (save_path.parent / ".romm-backup").exists()
+    assert complete["removed_rom_ids"] == []
+    result = complete["results"][0]
+    assert result["rom_ids"] == [_ROM_ID]
+    assert result["message"] == "Uninstalling needs RetroDECK, which is not installed."
+    assert "ambiguous_mutations" not in result
+
+
+async def test_without_retrodeck_a_game_whose_download_record_outlived_its_files_is_kept_and_reported(harness):
+    # The record is what tells Tender the files may be there, so it stays
+    # until the files can be looked for — or the user forgets the download.
+    _seed_removed_game(harness)
+    rom_path, _save_path = _seed_install_with_a_save(harness)
+    rom_path.unlink()
+
+    complete = await _run_cleanup(harness, installed=True)
+
+    with harness.uow_factory() as uow:
+        assert uow.roms.get(_ROM_ID) is not None
+        assert uow.rom_installs.get(_ROM_ID) is not None
     assert complete["removed_rom_ids"] == []
     result = complete["results"][0]
     assert result["rom_ids"] == [_ROM_ID]
