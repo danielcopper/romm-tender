@@ -230,7 +230,8 @@ different save states per device).
 `switch_slot` makes the active slot, the local saves directory, and per-file tracking coherent with the chosen slot in
 one locked critical section (the per-rom `asyncio.Lock` — see the "Per-rom asyncio.Lock" section). After the pre-checks
 pass (sync enabled, a real non-empty target slot name, ROM installed, not a content-dir layout, no un-uploaded local
-changes on tracked files, server reachable):
+changes on tracked files, server reachable — the first that fails refuses the switch, and `pending_uploads` names the
+changed files in `files`):
 
 1. The active slot is flipped in memory.
 2. Every local save file the target slot does **not** provide is quarantined into `.romm-backup` (never deleted
@@ -241,9 +242,9 @@ changes on tracked files, server reachable):
    `tracked_save_id` are deterministic, not server-list-order dependent (#1058). The download backs up the file it
    overwrites through the same `.romm-backup` quarantine.
 4. The flipped slot + tracking are persisted once, **regardless of partial download failure**: a failed leg still
-   persists this coherent state and returns `reason="switch_incomplete"` so the caller can retry — the completed targets
-   are already correct, and a failed target re-resolves as `Download` on the next sync. Saves are never carried between
-   slots; the switch only downloads or quarantines, never uploads.
+   persists this coherent state and answers the partial failure `SlotSwitchIncomplete` (`reason="switch_incomplete"`) so
+   the caller can retry — the completed targets are already correct, and a failed target re-resolves as `Download` on
+   the next sync. Saves are never carried between slots; the switch only downloads or quarantines, never uploads.
 
 A **named** target slot with no server saves is just the case where step 3 is a no-op: every local file is quarantined,
 tracking is cleared, and the slot starts fresh — with every prior save recoverable under `.romm-backup`. (An empty /
@@ -340,14 +341,14 @@ target** (`<rom_name>.<ext>`, the same mapping `switch_slot` uses) the migration
    - **No local file** → the content is written locally under the canonical name and copied into the slot.
    - **Byte-identical** local file (same zip-aware content hash the sync kernel uses) → migrated silently.
    - **Differing** local file → the migration **holds** for an informed confirmation: nothing is migrated and the slot
-     is **not** confirmed (`needs_conflict_resolution` + a `conflicts` list on the response), and the wizard shows both
-     sides' size + timestamp — the comparison that stops a newer local save being buried unnoticed. The dialog offers
-     exactly two ways out: _Replace local save_ (the second call, with `use_server_on_conflict`), which quarantines the
-     local file into `.romm-backup` (never deleted, #965) before writing the server content, or _Cancel_, which makes no
-     second call at all — nothing changes, the slot stays unconfirmed, and the wizard's start-fresh route
-     (`Use slot '<default>'`) is still open. There is deliberately **no** "keep my local save" action: it would produce
-     exactly the same end state as that start-fresh button while re-opening a decision the user already made by clicking
-     Track.
+     is **not** confirmed (a `local_conflict` refusal carrying `needs_conflict_resolution` + a `conflicts` list), and
+     the wizard shows both sides' size + timestamp — the comparison that stops a newer local save being buried
+     unnoticed. The dialog offers exactly two ways out: _Replace local save_ (the second call, with
+     `use_server_on_conflict`), which quarantines the local file into `.romm-backup` (never deleted, #965) before
+     writing the server content, or _Cancel_, which makes no second call at all — nothing changes, the slot stays
+     unconfirmed, and the wizard's start-fresh route (`Use slot '<default>'`) is still open. There is deliberately
+     **no** "keep my local save" action: it would produce exactly the same end state as that start-fresh button while
+     re-opening a decision the user already made by clicking Track.
 3. Copies the content into the slot through the normal upload path (`do_upload_save`, `overwrite=false`,
    409-backstopped), adopting the per-file baseline — so the migrated slot is immediately in sync.
 
@@ -358,10 +359,11 @@ web player's bucket head away from a browser session still on the v1 player.
 Failure handling splits on **whether the apply phase began** (#1498 review): the migration first checks its
 preconditions (a registered device — otherwise the #1478 upload guard would only fire _after_ local files were touched —
 and an installed ROM), then downloads every target to a scratch `.tmp` sibling (never the real save files) and
-classifies it. A **wholesale** failure _before_ the apply phase — the device/install precheck, a `list_saves` throw, or
-a phase-1 download throw — returns the **canonical failure** (`{success: false, reason, message}`, the `reason` from
-`classify_error`) and confirms **nothing**: the scratch temps are cleared and the wizard stays open on the message, so
-the user can simply retry Track. Once the apply phase begins, a **per-target** upload failure is **counted, not fatal**
+classifies it. A **wholesale** failure _before_ the apply phase confirms **nothing**: the device/install precheck
+refuses with `device_not_registered` or `not_installed`, a RomM error from `list_saves` or a phase-1 download answers
+`classify_error`'s reason and message, and a save file on this device that cannot be read or written refuses with
+`migration_failed`. The scratch temps are cleared and the wizard stays open on the message, so the user can simply retry
+Track. Once the apply phase begins, a **per-target** upload failure is **counted, not fatal**
 (`Could not migrate N save(s)`): the slot is still confirmed and the failed source is left in place, so no save that
 lives only in the legacy bucket is ever lost. (A migration whose server had no legacy saves is a no-op that confirms the
 slot silently; a requested migration can never return `success: true` with nothing migrated while legacy saves existed.)
@@ -979,7 +981,9 @@ all server saves in the slot.
 ### How it works
 
 1. **Get delete info**: `get_slot_delete_info(rom_id, slot)` returns metadata for the confirmation modal — server save
-   count, tracked file count, slot source (server/local), and whether the slot is active.
+   count, tracked file count, slot source (server/local), and whether the slot is active. A server slot whose saves
+   cannot be listed is never answered as "0 saves": the RomM error answers `classify_error`'s reason and message, and
+   the panel shows that message instead of opening the modal.
 2. **Confirmation modal**: Always shown (both local-only and server-backed slots). Shows exact save count and whether
    saves will be deleted from the server.
 3. **Perform deletion**: `delete_slot(rom_id, slot)` bulk-deletes server saves via `POST /api/saves/delete`, removes the
@@ -990,7 +994,7 @@ all server saves in the slot.
 - **Active slot cannot be deleted.** The user must switch to a different slot first. This implicitly prevents deleting
   the last remaining slot — the last slot is always active (there's nothing to switch to), so it can never be deleted.
 - **Server errors leave state intact.** If `delete_server_saves` fails (network error), the slot is NOT removed from
-  local state. The user can retry.
+  local state, and the toast shows `classify_error`'s message. The user can retry.
 - **Local-only slots** (`source: "local"`) skip server calls entirely — always deletable.
 
 ### Frontend
@@ -1826,7 +1830,7 @@ for the physical column names and constraints.
 | `saves.<id>.slot_confirmed`                         | boolean                 | Whether user has explicitly chosen their slot (see "Slot Setup Wizard")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `saves.<id>.last_synced_core`                       | string / null           | RetroArch core used at last sync (for core change detection, e.g. `"mgba_libretro"`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `saves.<id>.own_upload_ids`                         | array of integer        | Save ids this device originally POSTed. Drives the `uploaded_by_us` indicator on the SAVES tab.                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `saves.<id>.slots`                                  | object                  | Merged slot listing (read-model cache): per slot, its `source` / `count` / latest `updated_at`. A failed `get_save_slots` hands this back beside its empty `slots` in its own `last_known` field (`slots` / `active_slot`), but only once `slot_confirmed` is set — the QAM renders it as the state at the last contact. It carries no timestamp: nothing records when the listing was last refreshed, and `last_sync_check_at` moves independently of it (#1755).                                                                                       |
+| `saves.<id>.slots`                                  | object                  | Merged slot listing (read-model cache): per slot, its `source` / `count` / latest `updated_at`. A `get_save_slots` that could not reach the server hands this back in its own `last_known` field (`slots` / `active_slot`), but only once `slot_confirmed` is set — the QAM renders it as the state at the last contact. It carries no timestamp: nothing records when the listing was last refreshed, and `last_sync_check_at` moves independently of it (#1755).                                                                                       |
 | `saves.<id>.last_sync_check_at`                     | ISO-8601 string / null  | Timestamp of the most recent `do_sync_rom_saves` run for this rom (regardless of whether files transferred).                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `saves.<id>.files`                                  | object                  | Per-file sync state, keyed by filename (e.g. `"game.srm"`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `saves.<id>.files.<fn>.tracked_save_id`             | integer / null          | Most recent RomM save id this device tracked. Used to exclude the active save from the Previous Versions dropdown and as an uploader-attribution hint; **not** consulted by `compute_sync_action` (the algorithm picks newest by `updated_at`).                                                                                                                                                                                                                                                                                                          |
