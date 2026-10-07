@@ -513,7 +513,7 @@ See [Backend Architecture](../architecture/backend-architecture.md) for details.
 ## Full CI gate
 
 ```bash
-mise run gate         # run every PR check from .github/workflows/ci.yml, locally
+mise run gate         # run the PR checks from .github/workflows/ci.yml locally (all but three, below)
 ```
 
 `mise run gate` is the single local battery that mirrors CI. It runs the backend tests (`mise run test`), the
@@ -523,9 +523,10 @@ bundle-size budget, the frontend tests (`pnpm -C frontend test`), and `deno fmt 
 side, except that the frontend tests start only once the backend tests are done (`[tasks."gate:frontend-test"]` in
 `mise.toml` says why). The first step to fail stops the others: its output ends in `ERROR task failed` under the task's
 name, and the gate exits non-zero. It is slow — the two test suites one after the other, with a production frontend
-build beside them — so it is a pre-push check, not something to run on every save. The only CI jobs it can't reproduce
-are the two that feed Sonar — `pr-metadata`, which needs a pull request, and `sonarcloud`, which needs `SONAR_TOKEN` and
-the CI coverage artifacts.
+build beside them — so it is a pre-push check, not something to run on every save. The CI jobs it does not run are
+`test-3.14`, which runs the backend suite under Python 3.14 — an interpreter the toolchain does not install (why CI runs
+it: [Dependency management](dependency-management.md)) — and the two that feed Sonar: `pr-metadata`, which needs a pull
+request, and `sonarcloud`, which needs `SONAR_TOKEN` and the CI coverage artifacts.
 
 Outside `ci.yml`, every pull request also runs the `decisions` check (`.github/workflows/decisions.yml`), which the gate
 does not run because it reads the pull request and its linked issues on GitHub. It checks that the pull request links an

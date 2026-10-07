@@ -285,7 +285,8 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   `mise run test:frontend:coverage`
 - **Lint**: `mise run lint` (import-linter, the `scripts/check_*` gates, markdownlint). Ruff and basedpyright run only
   inside `mise run gate`.
-- **Gate**: `mise run gate` (the full CI battery in one command — mirrors every PR check; slow. Run before pushing.)
+- **Gate**: `mise run gate` (the CI battery in one command — every PR check but `test-3.14` and the Sonar jobs, see
+  `docs/contributing/development.md` "Full CI gate"; slow. Run before pushing.)
 - **Setup**: `mise run setup` (installs JS + Python dependencies)
 - **Package**: `mise run package` (production frontend build, then `scripts/package.sh` → `build/romm-tender-<V>.tar.gz`
   plus its `.sha256`). `bash install.sh --from build/romm-tender-<V>.tar.gz` installs that build the way a release is
