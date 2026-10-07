@@ -236,8 +236,8 @@ class SlotSwitcher:
 
             if switch_errors:
                 return SlotSwitchIncomplete(
-                    "switch_incomplete",
-                    f"Switched to slot but {len(switch_errors)} save(s) failed to download — retry",
+                    reason="switch_incomplete",
+                    message=f"Switched to slot but {len(switch_errors)} save(s) failed to download — retry",
                 )
 
         # 9. Return fresh status. MUST stay outside the lock above —
