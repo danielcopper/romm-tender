@@ -135,11 +135,12 @@ licence, and the update procedure below has to put it back by hand for exactly t
 
 A vendored copy loads under the interpreter the service unit starts — `/usr/bin/python3`, or whatever `TENDER_PYTHON`
 named when `install.sh` wrote the unit — and not under the Python the venv, `mise run test`, basedpyright and the
-linters run, which is the version the toolchain pins (`mise.toml`, and the workflows' `setup-python` beside it).
-`install.sh` refuses an interpreter older than that one, but nothing keeps the two equal: an OS update moves the system
-Python without a commit here. A vendored package's assumptions about the standard library are therefore proven only
-against CI's Python, and surface on a device — when the backend starts, or the first time a question reaches the
-assumption.
+linters run, which is the version the toolchain pins (`mise.toml`, and every workflow's `setup-python` but
+`test-3.14`'s). `install.sh` refuses an interpreter older than that one, but nothing keeps the two equal: an OS update
+moves the system Python without a commit here. A vendored package's assumptions about the standard library are therefore
+proven only against the Pythons CI runs (the pinned one and 3.14,
+[`docs/contributing/dependency-management.md`](../../docs/contributing/dependency-management.md)), and surface on a
+device — when the backend starts, or the first time a question reaches the assumption.
 
 A compiled extension module built for one CPython minor version's ABI does not fit this model — a `cp313-cp313` wheel
 does not load under 3.14, so a copy vendored for today's system Python stops loading when an OS update moves it, the
@@ -150,8 +151,8 @@ decision.
 Neither artifact can see any of this, and each says less than it looks like it does. The checksum gate says the copy is
 the bytes we pinned; it never imports anything. What says the copy imports is the test suite — most directly
 [`tests/test_vendored_atlas.py`](../../tests/test_vendored_atlas.py), whose whole job that is, and alongside it every
-test that reaches the firmware adapter — and all of it only under CI's Python. What that makes of vendoring or bumping a
-package is [`.claude/rules/vendored-assets.md`](../../.claude/rules/vendored-assets.md)'s.
+test that reaches the firmware adapter — and all of it only under the Pythons CI runs. What that makes of vendoring or
+bumping a package is [`.claude/rules/vendored-assets.md`](../../.claude/rules/vendored-assets.md)'s.
 
 ## Formatters and vendored copies
 

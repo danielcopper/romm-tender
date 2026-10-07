@@ -33,16 +33,17 @@ _MD5_CHUNK_SIZE = 8192
 
 # Zip-decode failures a positive ``zipfile.is_zipfile`` sniff can still hit once
 # the archive is actually read (the sniff inspects the End-Of-Central-Directory
-# record and, from 3.14, the signature of the first central-directory entry —
-# nothing past it): a corrupt / truncated central directory or a bad entry CRC
-# (``BadZipFile``), a compressed stream ``zlib`` cannot inflate (``zlib.error``),
-# or an entry this runtime cannot decode — an encrypted member or a compression
-# method the stdlib lacks (``RuntimeError``; the unknown-method
-# ``NotImplementedError`` is a ``RuntimeError`` subclass, e.g. a save zipped with
-# zstd, which ``zipfile`` only learns to read in 3.14). ``OSError`` is
-# deliberately excluded so a genuine I/O fault (a vanished / unreadable file)
-# still surfaces, matching the non-zip branch and ``checksum_md5``;
-# ``LargeZipFile`` is excluded as an unreachable write-time ZIP64 guard.
+# record and, from CPython 3.14 (gh-72680), the signature of the first
+# central-directory entry — nothing past it): a corrupt / truncated central
+# directory or a bad entry CRC (``BadZipFile``), a compressed stream ``zlib``
+# cannot inflate (``zlib.error``), or an entry this runtime cannot decode — an
+# encrypted member or a compression method the stdlib lacks (``RuntimeError``;
+# the unknown-method ``NotImplementedError`` is a ``RuntimeError`` subclass, e.g.
+# a save zipped with zstd, which ``zipfile`` only learns to read in 3.14).
+# ``OSError`` is deliberately excluded so a genuine I/O fault (a vanished /
+# unreadable file) still surfaces, matching the non-zip branch and
+# ``checksum_md5``; ``LargeZipFile`` is excluded as an unreachable write-time
+# ZIP64 guard.
 _ZIP_READ_ERRORS = (zipfile.BadZipFile, zlib.error, RuntimeError)
 
 
