@@ -36,6 +36,7 @@ from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncState
 from domain.work_unit import WorkUnit
+from lib.errors import Refused, RommConnectionError, classify_error
 from lib.romm_paging import LIST_PAGE_SIZE
 from tests.services.library._helpers import (
     _fake_wait_set_event,
@@ -367,11 +368,15 @@ class TestSyncPreview:
         assert summary["new_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_returns_error_when_sync_running(self, library):
+    async def test_refuses_when_sync_running(self, library):
         library.sync._box.sync_state = SyncState.RUNNING
-        result = await library.sync.sync_preview()
-        assert result["success"] is False
-        assert "already in progress" in result["message"]
+        call = library.sync.sync_preview()
+
+        with pytest.raises(Refused) as excinfo:
+            await call
+
+        assert excinfo.value.reason == "sync_in_progress"
+        assert "already in progress" in excinfo.value.message
 
     @pytest.mark.asyncio
     async def test_resets_sync_running_on_completion(self, library, fake_romm_api, emit):
@@ -954,16 +959,22 @@ class TestSyncApplyDelta:
     @pytest.mark.asyncio
     async def test_rejects_wrong_preview_id(self, library):
         self._setup_pending_delta(library, "correct-id")
-        result = await library.sync.sync_apply_delta("wrong-id")
-        assert result["success"] is False
-        assert result["reason"] == "stale_preview"
+        call = library.sync.sync_apply_delta("wrong-id")
+
+        with pytest.raises(Refused) as excinfo:
+            await call
+
+        assert excinfo.value.reason == "stale_preview"
 
     @pytest.mark.asyncio
     async def test_rejects_when_no_pending_delta(self, library):
         assert library.sync._pending_delta is None
-        result = await library.sync.sync_apply_delta("any-id")
-        assert result["success"] is False
-        assert result["reason"] == "stale_preview"
+        call = library.sync.sync_apply_delta("any-id")
+
+        with pytest.raises(Refused) as excinfo:
+            await call
+
+        assert excinfo.value.reason == "stale_preview"
 
     @pytest.mark.asyncio
     async def test_rejected_when_run_in_flight_preserves_delta(self, library):
@@ -974,10 +985,12 @@ class TestSyncApplyDelta:
         self._setup_pending_delta(library, "pv-1")
         box = library.sync._box
         assert box.try_begin_run("active-run", kind=SyncRunKind.APPLY) is True
+        call = library.sync.sync_apply_delta("pv-1")
 
-        result = await library.sync.sync_apply_delta("pv-1")
+        with pytest.raises(Refused) as excinfo:
+            await call
 
-        assert result == {"success": False, "reason": "sync_in_progress", "message": "Sync already in progress"}
+        assert (excinfo.value.reason, excinfo.value.message) == ("sync_in_progress", "Sync already in progress")
         # The active run is untouched and the staged delta survives for the
         # legitimate apply.
         assert box.current_sync_id == "active-run"
@@ -995,12 +1008,13 @@ class TestSyncApplyDelta:
         self._setup_pending_delta(library, "preview-abc")
         # Advance the clock past the 30-minute max age.
         library.sync._orchestrator._clock.advance(1801)
+        call = library.sync.sync_apply_delta("preview-abc")
 
-        result = await library.sync.sync_apply_delta("preview-abc")
+        with pytest.raises(Refused) as excinfo:
+            await call
 
-        assert result["success"] is False
-        assert result["reason"] == "stale_preview"
-        assert "30 minutes" in result["message"]
+        assert excinfo.value.reason == "stale_preview"
+        assert "30 minutes" in excinfo.value.message
         # Stale delta is cleared so a repeat apply can't pick it up.
         assert library.sync._pending_delta is None
 
@@ -1196,10 +1210,12 @@ class TestGetPendingPreview:
             box.request_cancel()
 
         orch._fetch_preview_unit = fetch_then_cancel
+        call = library.sync.sync_preview()
 
-        result = await library.sync.sync_preview()
+        with pytest.raises(Refused) as excinfo:
+            await call
 
-        assert result["success"] is False
+        assert excinfo.value.reason == "cancelled"
         assert library.sync.get_pending_preview() == {"success": True, "preview": None}
 
 
@@ -1216,9 +1232,13 @@ class TestSyncControl:
 
     async def test_start_sync_rejects_when_running(self, library):
         library.sync._box.sync_state = SyncState.RUNNING
-        result = await library.sync.start_sync()
-        assert result["success"] is False
-        assert "already in progress" in result["message"]
+        call = library.sync.start_sync()
+
+        with pytest.raises(Refused) as excinfo:
+            await call
+
+        assert excinfo.value.reason == "sync_in_progress"
+        assert "already in progress" in excinfo.value.message
 
     def test_cancel_sync_when_running(self, library):
         library.sync._box.sync_state = SyncState.RUNNING
@@ -1574,17 +1594,20 @@ class TestSyncPreviewErrorHandling:
     """Tests for sync_preview error paths."""
 
     @pytest.mark.asyncio
-    async def test_general_exception_returns_error(self, library, fake_romm_api):
+    async def test_general_exception_reaches_the_caller(self, library, fake_romm_api):
         _use_fake_romm(library, fake_romm_api)
         # Cause the platforms listing to blow up — exception bubbles up
         # through build_work_queue into sync_preview exactly like a
         # mid-paginate RomM failure would in production.
-        fake_romm_api.list_platforms_side_effect = RuntimeError("Something broke")
+        failure = RuntimeError("Something broke")
+        fake_romm_api.list_platforms_side_effect = failure
         library.settings["enabled_platforms"] = {"1": True}
+        call = library.sync.sync_preview()
 
-        result = await library.sync.sync_preview()
-        assert result["success"] is False
-        assert "reason" in result
+        with pytest.raises(RuntimeError) as excinfo:
+            await call
+
+        assert excinfo.value is failure
         assert library.sync._sync_state == SyncState.IDLE
         # Error path evicts any pending delta.
         assert library.sync._pending_delta is None
@@ -1602,37 +1625,35 @@ class TestSyncPreviewErrorHandling:
         self, library, fake_romm_api, emit, kind, failing_listing
     ):
         """A collection listing that fails fails the preview as a failed platform listing does (#2112)."""
-        from lib.errors import RommConnectionError
-
         _use_fake_romm(library, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
         library.settings["enabled_platforms"] = {"1": True}
         library.settings["enabled_collections"] = {kind: {"7": True}}
         setattr(fake_romm_api, failing_listing, RommConnectionError("Connection refused"))
+        call = library.sync.sync_preview()
 
-        result = await library.sync.sync_preview()
+        with pytest.raises(RommConnectionError) as excinfo:
+            await call
 
         message = "Server unreachable — check your URL and ensure RomM is running"
-        assert result == {"success": False, "reason": "server_unreachable", "message": message}
+        assert classify_error(excinfo.value) == ("server_unreachable", message)
         progress = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_progress"]
         assert (progress[-1]["stage"], progress[-1]["message"], progress[-1]["running"]) == ("error", message, False)
         assert library.sync._pending_delta is None
 
     @pytest.mark.asyncio
-    async def test_cancelled_error_returns_canonical_failure(self, library, fake_romm_api, emit):
-        """A cooperative cancel during sync_preview RETURNS the canonical failure
-        shape — it does NOT re-raise out of the use case (#1035).
+    async def test_cancelled_error_refuses_with_cancelled(self, library, fake_romm_api, emit):
+        """A cooperative cancel during sync_preview refuses with ``cancelled`` rather
+        than letting ``SyncCancelled`` out of the use case (#1035).
 
         A cancel is the use case's own outcome, not a transport failure:
-        re-raising would reach the panel as a ``backend_exception`` error
-        (``host/dispatch.py``) where the canonical failure shape belongs. The
-        cooperative cancel — the dedicated ``SyncCancelled``, matching the
-        production signal raised by ``fetcher._check_cancelling`` and the
-        per-unit checkpoint — must surface as ``{success: False, reason:
-        "cancelled", message: ...}`` and leave sync_state IDLE with no pending
-        delta. ``SyncCancelled`` is an ``Exception``; the clause order routes it
-        into ``except SyncCancelled``, which sits above the generic
-        ``except Exception``.
+        ``SyncCancelled`` itself would reach the panel as a ``backend_exception``
+        error (``host/dispatch.py``). The cooperative cancel — the dedicated
+        ``SyncCancelled``, matching the production signal raised by
+        ``fetcher._check_cancelling`` and the per-unit checkpoint — must leave as
+        the ``cancelled`` refusal and leave sync_state IDLE with no pending delta.
+        ``SyncCancelled`` is an ``Exception``; the clause order routes it into
+        ``except SyncCancelled``, which sits above the generic ``except Exception``.
         """
 
         from domain.sync_state import SyncCancelled
@@ -1644,14 +1665,74 @@ class TestSyncPreviewErrorHandling:
 
         # sync_preview only runs from IDLE — guard against a leaked non-IDLE state.
         assert library.sync._sync_state == SyncState.IDLE
+        call = library.sync.sync_preview()
 
-        result = await library.sync.sync_preview()
+        with pytest.raises(Refused) as excinfo:
+            await call
 
-        assert result == {"success": False, "reason": "cancelled", "message": "Sync cancelled"}
+        assert (excinfo.value.reason, excinfo.value.message) == ("cancelled", "Sync cancelled")
         assert library.sync._sync_state == SyncState.IDLE
         assert library.sync._pending_delta is None
         # The cooperative signal genuinely originated from the fetch.
         fake_romm_api.list_platforms.assert_called()
+
+    @staticmethod
+    def _stage_an_earlier_preview(library):
+        library.sync._box.stage_preview(
+            preview_id="earlier",
+            created_at=library.sync._orchestrator._clock.time(),
+            answer={"success": True, "preview_id": "earlier"},
+        )
+
+    @staticmethod
+    def _progress_frames(emit):
+        return [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_progress"]
+
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            pytest.param(RommConnectionError("Connection refused"), id="romm-error"),
+            pytest.param(RuntimeError("Something broke"), id="other-error"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_a_failed_preview_discards_the_staged_preview_and_ends_with_an_error_frame(
+        self, library, fake_romm_api, emit, failure
+    ):
+        _use_fake_romm(library, fake_romm_api)
+        fake_romm_api.list_platforms_side_effect = failure
+        library.settings["enabled_platforms"] = {"1": True}
+        self._stage_an_earlier_preview(library)
+        call = library.sync.sync_preview()
+
+        with pytest.raises(type(failure)) as excinfo:
+            await call
+
+        assert excinfo.value is failure
+        assert library.sync._pending_delta is None
+        last = self._progress_frames(emit)[-1]
+        assert (last["stage"], last["message"], last["running"]) == ("error", classify_error(failure)[1], False)
+        assert library.sync._sync_state == SyncState.IDLE
+
+    @pytest.mark.asyncio
+    async def test_a_cancelled_preview_discards_the_staged_preview_and_ends_with_a_cancelled_frame(
+        self, library, fake_romm_api, emit
+    ):
+        from domain.sync_state import SyncCancelled
+
+        _use_fake_romm(library, fake_romm_api)
+        fake_romm_api.list_platforms = MagicMock(side_effect=SyncCancelled("Sync cancelled"))
+        library.settings["enabled_platforms"] = {"1": True}
+        self._stage_an_earlier_preview(library)
+        call = library.sync.sync_preview()
+
+        with pytest.raises(Refused) as excinfo:
+            await call
+
+        assert (excinfo.value.reason, excinfo.value.message) == ("cancelled", "Sync cancelled")
+        assert library.sync._pending_delta is None
+        last = self._progress_frames(emit)[-1]
+        assert (last["stage"], last["message"], last["running"]) == ("cancelled", "Sync cancelled", False)
 
 
 # ──────────────────────────────────────────────────────────────

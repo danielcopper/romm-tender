@@ -56,8 +56,7 @@ from domain.sync_diff import (
 from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
-from lib.errors import classify_error
-from lib.list_result import ErrorCode
+from lib.errors import Refused, classify_error
 from services.library._state import CollectionMembership
 from services.library.session_budget import SYNC_PAUSED_BUDGET, SessionBudgetMonitor
 
@@ -210,7 +209,7 @@ class SyncOrchestrator:
         box = self._sync_state
         run_id = self._uuid_gen.uuid4()
         if not box.try_begin_run(run_id, kind=SyncRunKind.APPLY):
-            return {"success": False, "reason": "sync_in_progress", "message": "Sync already in progress"}
+            raise Refused("sync_in_progress", "Sync already in progress")
         box.sync_last_heartbeat = self._clock.monotonic()
         self._loop.create_task(self._do_sync_per_unit())
         return {"success": True, "message": "Sync started"}
@@ -258,11 +257,16 @@ class SyncOrchestrator:
         shortcuts for that unit. Stamping during preview would persist the
         registry-reconstructed thin ROMs from the per-unit incremental-skip
         path, which carry no ``metadatum`` (#738).
+
+        Refuses with ``sync_in_progress`` while another run holds the slot, and
+        with ``cancelled`` when the user cancels. Any other failure discards the
+        half-built preview, ends the progress with an error frame, and reaches
+        the caller.
         """
         box = self._sync_state
         run_id = self._uuid_gen.uuid4()
         if not box.try_begin_run(run_id, kind=SyncRunKind.PREVIEW):
-            return {"success": False, "reason": "sync_in_progress", "message": "Sync already in progress"}
+            raise Refused("sync_in_progress", "Sync already in progress")
         box.sync_last_heartbeat = self._clock.monotonic()
         try:
             await self.emit_progress(SyncStage.DISCOVERING, message="Fetching platforms...")
@@ -449,25 +453,20 @@ class SyncOrchestrator:
             await self.emit_progress(SyncStage.DONE, message="Preview ready", running=False)
 
             return answer
-        except SyncCancelled:
-            # sync_preview is the use case behind an endpoint, and a user's
-            # cancel is its own outcome, not a transport failure: re-raising
-            # would reach the frontend as a ``backend_exception`` error
-            # (host/dispatch.py) where the canonical failure shape belongs. The
-            # clause order is what routes it here — SyncCancelled is an
-            # Exception, so it must stay above the generic ``except Exception``
-            # below.
+        except SyncCancelled as e:
+            # A user's cancel is the use case's own outcome, so it leaves as the
+            # ``cancelled`` refusal: ``SyncCancelled`` itself would reach the
+            # panel as a transport error. The clause order is what routes it
+            # here — SyncCancelled is an Exception, so it must stay above the
+            # generic ``except Exception`` below.
             box.discard_preview()
             await self._finish_sync(_SYNC_CANCELLED)
-            return {"success": False, "reason": "cancelled", "message": _SYNC_CANCELLED}
+            raise Refused("cancelled", _SYNC_CANCELLED) from e
         except Exception as e:
-            import traceback
-
-            self._logger.error(f"Sync preview failed: {e}\n{traceback.format_exc()}")
             box.discard_preview()
             _reason, _msg = classify_error(e)
             await self.emit_progress(SyncStage.ERROR, message=_msg, running=False)
-            return {"success": False, "reason": _reason, "message": _msg}
+            raise
         finally:
             box.finish_run(run_id)
 
@@ -522,26 +521,18 @@ class SyncOrchestrator:
     async def sync_apply_delta(self, preview_id):
         box = self._sync_state
         if not box.matches_preview(preview_id):
-            return {
-                "success": False,
-                "reason": ErrorCode.STALE_PREVIEW.value,
-                "message": "Preview expired, please re-sync",
-            }
+            raise Refused("stale_preview", "Preview expired, please re-sync")
         # The read drops an over-age snapshot on its way out, so a repeat apply
         # can't pick it up.
         if box.read_fresh_preview(self._clock.time()) is None:
-            return {
-                "success": False,
-                "reason": ErrorCode.STALE_PREVIEW.value,
-                "message": "Preview is older than 30 minutes, please re-run sync",
-            }
+            raise Refused("stale_preview", "Preview is older than 30 minutes, please re-run sync")
         # Admission guard: a rapid second apply (or an apply landing while a
         # sync is already in flight) must be rejected without consuming the
         # staged delta, so the still-valid preview survives for the legitimate
         # apply (#1202). Claim the run slot BEFORE discarding the preview.
         run_id = self._uuid_gen.uuid4()
         if not box.try_begin_run(run_id, kind=SyncRunKind.APPLY):
-            return {"success": False, "reason": "sync_in_progress", "message": "Sync already in progress"}
+            raise Refused("sync_in_progress", "Sync already in progress")
         box.discard_preview()
         box.sync_last_heartbeat = self._clock.monotonic()
 
