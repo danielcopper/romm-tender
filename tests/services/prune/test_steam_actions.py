@@ -12,7 +12,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from domain.rom import Rom
 from domain.version_metadata import VersionMetadata
 from lib.errors import Refused, RommConnectionError
-from services.prune._models import RecoveryHandle, cancellation_state
+from services.prune._models import ActionOutcome, RecoveryHandle, cancellation_state
 from services.prune.planning import GroupPlan
 from services.prune.registry import PruneRegistry, PruneRegistryConfig
 from services.prune.results import MutationLedger, PruneResultReporter, PruneResultReporterConfig
@@ -55,7 +55,7 @@ async def _noop_emit(*_args: Any, **_kwargs: Any) -> bool:
 def _runner(
     rows: list[Rom],
     *,
-    action_result: dict[str, Any] | None = None,
+    action_result: ActionOutcome | None = None,
     switch_result: dict[str, Any] | None = None,
     switch_raises: Exception | None = None,
 ) -> tuple[SteamActionRunner, FakeUnitOfWork, list[str]]:
@@ -67,7 +67,7 @@ def _runner(
 
     async def request_action(_run_id, kind, _data, _bound, _target, _group):
         requested.append(kind)
-        return dict(action_result or {"success": True, "message": "ok"})
+        return action_result or ActionOutcome(success=True, message="ok", claimed=True)
 
     async def switch_version(app_id: int, target_rom_id: int, allow_stranded: bool) -> dict[str, Any]:
         del allow_stranded
@@ -101,7 +101,9 @@ def _runner(
 class TestCaptureSnapshot:
     async def test_a_valid_snapshot_rides_through_with_no_terminal_result(self):
         rows = [_rom(1, app_id=APP_ID)]
-        runner, _, requested = _runner(rows, action_result={"success": True, "snapshot": {"app_id": APP_ID}})
+        runner, _, requested = _runner(
+            rows, action_result=ActionOutcome(success=True, message="ok", claimed=True, snapshot={"app_id": APP_ID})
+        )
 
         snapshot, result = await runner.capture_snapshot(
             "run-1", _plan(rows=rows, whole_game=True), MutationLedger(rows)
@@ -113,7 +115,7 @@ class TestCaptureSnapshot:
 
     async def test_a_failed_capture_is_a_terminal_failure(self):
         rows = [_rom(1, app_id=APP_ID)]
-        runner, _, _ = _runner(rows, action_result={"success": False, "message": "Steam is gone"})
+        runner, _, _ = _runner(rows, action_result=ActionOutcome(success=False, message="Steam is gone", claimed=True))
 
         snapshot, result = await runner.capture_snapshot(
             "run-1", _plan(rows=rows, whole_game=True), MutationLedger(rows)
@@ -126,7 +128,7 @@ class TestCaptureSnapshot:
 
     async def test_a_success_without_a_snapshot_is_still_a_failure(self):
         rows = [_rom(1, app_id=APP_ID)]
-        runner, _, _ = _runner(rows, action_result={"success": True})
+        runner, _, _ = _runner(rows, action_result=ActionOutcome(success=True, message="ok", claimed=True))
 
         _, result = await runner.capture_snapshot("run-1", _plan(rows=rows, whole_game=True), MutationLedger(rows))
 
@@ -135,7 +137,9 @@ class TestCaptureSnapshot:
 
     async def test_an_already_absent_shortcut_reconciles_the_binding_instead(self):
         rows = [_rom(1, app_id=APP_ID)]
-        runner, uow, _ = _runner(rows, action_result={"success": True, "shortcut_absent": True})
+        runner, uow, _ = _runner(
+            rows, action_result=ActionOutcome(success=True, message="ok", claimed=True, shortcut_absent=True)
+        )
         ledger = MutationLedger(rows)
 
         snapshot, result = await runner.capture_snapshot("run-1", _plan(rows=rows, whole_game=True), ledger)
@@ -268,7 +272,9 @@ class TestRepoint:
 
     async def test_an_attempted_but_unconfirmed_steam_action_is_ambiguous(self):
         rows = [_rom(1, app_id=APP_ID), _rom(2)]
-        runner, _, _ = _runner(rows, action_result={"success": False, "mutation_attempted": True, "message": "lost"})
+        runner, _, _ = _runner(
+            rows, action_result=ActionOutcome(success=False, message="lost", claimed=True, mutation_attempted=True)
+        )
         ledger = MutationLedger(rows)
 
         _, _, result = await runner.repoint("run-1", _plan(rows=rows, target_id=2), ledger, None, 1, 1)
@@ -280,7 +286,7 @@ class TestRepoint:
 
     async def test_a_cleanly_refused_steam_action_is_a_failure_not_an_ambiguity(self):
         rows = [_rom(1, app_id=APP_ID), _rom(2)]
-        runner, _, _ = _runner(rows, action_result={"success": False, "message": "refused"})
+        runner, _, _ = _runner(rows, action_result=ActionOutcome(success=False, message="refused", claimed=True))
 
         _, _, result = await runner.repoint("run-1", _plan(rows=rows, target_id=2), MutationLedger(rows), None, 1, 1)
 
@@ -309,7 +315,9 @@ class TestRemove:
 
     async def test_a_claimed_but_unconfirmed_removal_retains_source_data(self):
         rows = [_rom(1, app_id=APP_ID)]
-        runner, uow, _ = _runner(rows, action_result={"success": False, "reason": "action_ambiguous"})
+        runner, uow, _ = _runner(
+            rows, action_result=ActionOutcome(success=False, message="lost", claimed=True, reason="action_ambiguous")
+        )
         ledger = MutationLedger(rows)
 
         committed, result = await runner.remove("run-1", _plan(rows=rows, whole_game=True), ledger, None, None, 1, 1)
@@ -324,7 +332,7 @@ class TestRemove:
 
     async def test_a_refused_removal_is_a_plain_failure(self):
         rows = [_rom(1, app_id=APP_ID)]
-        runner, _, _ = _runner(rows, action_result={"success": False, "message": "refused"})
+        runner, _, _ = _runner(rows, action_result=ActionOutcome(success=False, message="refused", claimed=True))
 
         committed, result = await runner.remove(
             "run-1", _plan(rows=rows, whole_game=True), MutationLedger(rows), None, None, 1, 1

@@ -11,9 +11,28 @@ if TYPE_CHECKING:
     from models.prune import SourceClaim, SteamRecoverySnapshot
 
 
+@dataclass(frozen=True)
+class ActionOutcome:
+    """What became of one frontend Steam action: the panel's validated report, or the stand-in when none came in time.
+
+    The stand-in is never a success: its ``reason`` is ``action_timeout`` for an
+    action nobody claimed and ``action_ambiguous`` for one claimed without an
+    outcome, when Steam may already have been changed. ``mutation_attempted``
+    is the panel saying it issued the Steam call before the action failed.
+    """
+
+    success: bool
+    message: str
+    claimed: bool
+    reason: str | None = None
+    snapshot: dict[str, object] | None = None
+    shortcut_absent: bool = False
+    mutation_attempted: bool = False
+
+
 # One frontend Steam action request: run id, kind, payload, expected bound rom,
 # repoint target, and the group the claim must still match.
-ActionRequester = Callable[[str, str, dict[str, object], int | None, int | None, set[int]], Awaitable[dict[str, Any]]]
+ActionRequester = Callable[[str, str, dict[str, object], int | None, int | None, set[int]], Awaitable[ActionOutcome]]
 
 # Rom ids the last complete fetch returned, excluding a set and capped: the
 # control subjects a liveness round falls back on when nothing answered live.
@@ -117,7 +136,7 @@ class BackupControl:
 class PruneCancellationState:
     """Result state captured while propagating one cleanup cancellation."""
 
-    action_result: dict[str, Any] | None = None
+    action_result: ActionOutcome | None = None
     group_result: dict[str, Any] | None = None
     child_result: Any = None
     child_completed: bool = False

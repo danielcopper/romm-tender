@@ -9,7 +9,14 @@ from typing import TYPE_CHECKING, Any, cast
 from domain.retrodeck_folders import EveryFolderRefused
 from lib.errors import NamedRefused, Refused
 from lib.url_host import romm_namespace
-from services.prune._models import InstalledSelection, PendingAction, PruneOptions, PrunePreview, cancellation_state
+from services.prune._models import (
+    ActionOutcome,
+    InstalledSelection,
+    PendingAction,
+    PruneOptions,
+    PrunePreview,
+    cancellation_state,
+)
 from services.prune.executor import PruneExecutor, PruneExecutorConfig
 from services.prune.preview import PreviewBuilder, PreviewBuilderConfig
 from services.prune.recovery import RecoveryCoordinator, RecoveryCoordinatorConfig
@@ -454,12 +461,21 @@ class PruneService:
         if not pending.claimed:
             raise Refused("action_not_claimed", "Claim the action token before reporting its result.")
         _refuse_invalid_action_report(request, pending)
-        future = cast("asyncio.Future[dict[str, Any]]", pending.future)
+        future = cast("asyncio.Future[ActionOutcome]", pending.future)
         if future.done():
             return {"success": True, "ignored": True, "message": "Action result was already received."}
-        result = dict(request)
-        result["claimed"] = pending.claimed
-        future.set_result(result)
+        reason = request.get("reason")
+        future.set_result(
+            ActionOutcome(
+                success=request["success"],
+                message=request["message"],
+                claimed=pending.claimed,
+                reason=reason if isinstance(reason, str) else None,
+                snapshot=request.get("snapshot"),
+                shortcut_absent=request.get("shortcut_absent") is True,
+                mutation_attempted=request.get("mutation_attempted") is True,
+            )
+        )
         self._completed_action_tokens.add(pending.token)
         return {"success": True, "message": "Action result accepted."}
 
@@ -503,7 +519,7 @@ class PruneService:
         finally:
             pending = self._pending_action
             if pending is not None:
-                future = cast("asyncio.Future[dict[str, Any]]", pending.future)
+                future = cast("asyncio.Future[ActionOutcome]", pending.future)
                 if not future.done():
                     future.cancel()
             self._pending_action = None
@@ -520,9 +536,9 @@ class PruneService:
         expected_bound_rom_id: int | None,
         target_rom_id: int | None,
         group_rom_ids: set[int],
-    ) -> dict[str, Any]:
+    ) -> ActionOutcome:
         token = self._uuid_gen.uuid4()
-        future: asyncio.Future[dict[str, Any]] = self._loop.create_future()
+        future: asyncio.Future[ActionOutcome] = self._loop.create_future()
         claim_event = asyncio.Event()
         raw_app_id = data.get("app_id")
         app_id = raw_app_id if type(raw_app_id) is int else None
@@ -568,20 +584,20 @@ class PruneService:
                 self._pending_action = None
 
     @staticmethod
-    def _action_timeout_result(pending: PendingAction) -> dict[str, Any]:
-        return {
-            "success": False,
-            "reason": "action_ambiguous" if pending.claimed else "action_timeout",
-            "message": (
+    def _action_timeout_result(pending: PendingAction) -> ActionOutcome:
+        return ActionOutcome(
+            success=False,
+            message=(
                 "Steam action was claimed but its outcome is unknown."
                 if pending.claimed
                 else "Steam did not claim the action in time."
             ),
-            "claimed": pending.claimed,
-        }
+            claimed=pending.claimed,
+            reason="action_ambiguous" if pending.claimed else "action_timeout",
+        )
 
     @staticmethod
-    def _action_result_or_cancel(result: dict[str, Any]) -> dict[str, Any]:
+    def _action_result_or_cancel(result: ActionOutcome) -> ActionOutcome:
         task = asyncio.current_task()
         if task is not None and task.cancelling():
             cancellation = asyncio.CancelledError()

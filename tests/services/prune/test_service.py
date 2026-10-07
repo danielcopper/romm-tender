@@ -28,7 +28,7 @@ from domain.version_metadata import VersionMetadata
 from lib.errors import OperationAbortedError, Refused, RommConnectionError, RommNotFoundError
 from lib.prune_conflicts import PruneConflicts
 from services.prune import PruneService, PruneServiceConfig
-from services.prune._models import cancellation_state
+from services.prune._models import ActionOutcome, cancellation_state
 from services.prune.results import _COMPLETION_BUDGET_BYTES, GroupOutcome
 from services.prune.service import LocalStateChanged, StaleAction
 
@@ -1799,8 +1799,8 @@ async def test_claimed_action_result_is_attached_before_request_task_reraises_ca
     state = cancellation_state(caught.value)
     assert request_task.cancelled()
     assert state.action_result is not None
-    assert state.action_result["success"] is True
-    assert state.action_result["claimed"] is True
+    assert state.action_result.success is True
+    assert state.action_result.claimed is True
 
 
 @pytest.mark.asyncio
@@ -1987,6 +1987,39 @@ async def test_post_seal_database_drift_after_shortcut_removal_is_explicit_parti
     assert result["committed_action"] == "remove_shortcut"
     assert harness.uow.roms.get(1).shortcut_app_id is None
     assert harness.artifacts.removed == []
+
+
+@pytest.mark.asyncio
+async def test_an_action_nobody_claimed_in_time_is_recorded_as_a_timeout(harness, monkeypatch):
+    monkeypatch.setattr(_ACTION_TIMEOUT_PATH, 0.01)
+
+    outcome = await harness.service._request_action("run", "remove_shortcut", {"app_id": None}, None, None, {1})
+
+    assert outcome == ActionOutcome(
+        success=False,
+        message="Steam did not claim the action in time.",
+        claimed=False,
+        reason="action_timeout",
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_claimed_action_with_no_outcome_in_time_is_recorded_as_ambiguous(harness, monkeypatch):
+    request_task = asyncio.create_task(
+        harness.service._request_action("run", "remove_shortcut", {"app_id": None}, None, None, {1})
+    )
+    action = await _wait_action(harness, "remove_shortcut")
+    assert (await _claim_action(harness, action))["success"] is True
+    _expire_the_claimed_wait(monkeypatch)
+
+    outcome = await request_task
+
+    assert outcome == ActionOutcome(
+        success=False,
+        message="Steam action was claimed but its outcome is unknown.",
+        claimed=True,
+        reason="action_ambiguous",
+    )
 
 
 @pytest.mark.asyncio
