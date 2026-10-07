@@ -1052,25 +1052,7 @@ class TestConfirmSlotChoice:
         assert not (saves_dir / "pokemon.rtc.tmp").exists()
         assert _get_save_state(svc, 42) is None
 
-    def _a_migration_whose_download_raises(self, tmp_path, failure: Exception):
-        svc, fake = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "dev-1")
-        _install_rom(svc, tmp_path)
-        _create_save(tmp_path, content=b"L" * 100)
-        fake.saves[1] = _server_save(save_id=1, filename="pokemon [ts].srm", slot=None)
-
-        def failing_download(save_id, dest_path):
-            raise failure
-
-        fake.download_save = failing_download
-        return svc, fake
-
-    @pytest.mark.asyncio
-    async def test_confirm_migration_over_a_local_save_that_cannot_be_read_refuses_with_migration_failed(
-        self, tmp_path, monkeypatch
-    ):
-        """A local save that cannot be read before the apply phase: nothing confirmed."""
+    def _a_migration_whose_local_save_hash_raises(self, tmp_path, monkeypatch, failure: Exception):
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "dev-1")
@@ -1081,12 +1063,22 @@ class TestConfirmSlotChoice:
         store = svc._save_file_store
         content_hash = store.content_hash
 
-        def unreadable_local_save(path: str) -> str:
+        def failing_on_the_local_save(path: str) -> str:
             if path == str(local_save):
-                raise PermissionError(f"cannot read {path}")
+                raise failure
             return content_hash(path)
 
-        monkeypatch.setattr(store, "content_hash", unreadable_local_save)
+        monkeypatch.setattr(store, "content_hash", failing_on_the_local_save)
+        return svc, fake
+
+    @pytest.mark.asyncio
+    async def test_confirm_migration_over_a_local_save_that_cannot_be_read_refuses_with_migration_failed(
+        self, tmp_path, monkeypatch
+    ):
+        """A local save that cannot be read before the apply phase: nothing confirmed."""
+        svc, fake = self._a_migration_whose_local_save_hash_raises(
+            tmp_path, monkeypatch, PermissionError("cannot read the local save")
+        )
         confirming = svc.confirm_slot_choice(42, "default", True, None)
 
         with pytest.raises(Refused) as refused:
@@ -1102,9 +1094,11 @@ class TestConfirmSlotChoice:
         assert not any(c[0] == "upload_save" for c in fake.call_log)
 
     @pytest.mark.asyncio
-    async def test_confirm_migration_a_fault_that_is_neither_romms_nor_the_devices_files_is_no_refusal(self, tmp_path):
+    async def test_confirm_migration_a_fault_that_is_neither_romms_nor_the_devices_files_is_no_refusal(
+        self, tmp_path, monkeypatch
+    ):
         """Anything but a RomM error or an ``OSError`` propagates as itself, and nothing is confirmed."""
-        svc, _fake = self._a_migration_whose_download_raises(tmp_path, KeyError("id"))
+        svc, _fake = self._a_migration_whose_local_save_hash_raises(tmp_path, monkeypatch, KeyError("id"))
         confirming = svc.confirm_slot_choice(42, "default", True, None)
 
         with pytest.raises(KeyError):

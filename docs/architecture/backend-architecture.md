@@ -80,7 +80,7 @@ keeping the two apart is prose and review. Reachable methods are exactly the end
 methods marked `@route`, `def` or `async def` alike. An endpoint's answer is awaited only when it is awaitable. The set
 is the one `scripts/check_endpoint_parity.py` derives, asserted equal by `tests/host/test_dispatch.py`.
 
-**A refusal can be raised, and the entrypoint answers it.** Every endpoint on `Endpoints` is wrapped once, by a class
+**A refusal can be raised, and `Endpoints` answers it.** Every endpoint on `Endpoints` is wrapped once, by a class
 decorator in `main.py`, so no endpoint carries a second decorator and a new one is wrapped without anyone remembering
 to: a raised `Refused` (`lib/errors.py`) or `DomainRefused` (`domain/refusal.py`) answers
 `{success: False, reason, message}` with the refusal's details beside them; a returned `PartialFailure`
