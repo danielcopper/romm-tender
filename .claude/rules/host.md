@@ -51,10 +51,10 @@ hides why a handshake failed, so a 401 cannot tell a stranded panel that a backe
 ([ADR-0043](../../docs/adr/0043-a-stranded-panel-is-told-so.md)). Until the injector has read Steam's context for the
 first time it still gets the plain 401, because which code is true is not known yet (`host.protocol.ReloadOutlook`).
 Nothing is attached to that socket — no `HostConnection`, no dispatcher, no event sink — and `server.connected` stays as
-it was; the code adds one bit, whether this backend will reload Steam's interface. It is logged once per panel session
-rather than per knock. No token at all, the static route, and the Host and Origin refusals keep their plain status, and
-are logged every time: Host and Origin so they are on record. Widening the exception — another refusal answered with a
-body, a code, or a header — is a decision, not a refactor.
+it was; the code adds one bit, whether this backend will reload Steam's interface. A refusal answered with a code is
+logged once per panel session rather than per knock; the start-up 401, no token at all, the static route, and the Host
+and Origin refusals keep their plain status and are logged every time: Host and Origin so they are on record. Widening
+the exception — another refusal answered with a body, a code, or a header — is a decision, not a refactor.
 
 `AccessPolicy` is built from the port **actually bound**, never from the port that was asked for. After a fallback a
 policy built from the wish refuses every request there is.

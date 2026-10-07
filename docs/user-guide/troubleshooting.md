@@ -64,7 +64,7 @@ it has taken Steam's interface down twice in the last ten minutes. In the first 
 panel is told nothing yet, and the notification comes once the backend has looked at Steam.
 
 **Fix**: For the first note, exit the game; Steam's interface reloads a moment later with a working panel. For the
-second, restart Steam. Opening Tender's page in the Quick Access menu asks the backend again, and a new notification
+second, restart Steam. Opening the Quick Access menu on Tender's page asks the backend again, and a new notification
 says so when its answer has changed. The backend's log carries one line for that panel, and one more each time its
 answer changes:
 

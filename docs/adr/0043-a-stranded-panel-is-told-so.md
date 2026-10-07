@@ -45,16 +45,16 @@ completed handshake is the one answer a page is shown.
   with the plain 401, as before: the backend cannot yet know whether a reload is coming, and a panel told "restart
   Steam" in that moment is told something a reload contradicts a moment later. The panel keeps knocking and is told on
   its first knock after the reading. A backend that never reads the context — its debugger never answers, or loading the
-  panel is switched off — refuses with 401 for good, which is accepted: a panel is stranded only in a context an earlier
-  backend reached over the same debugger.
+  panel is switched off — refuses with 401 for good and logs each knock, which is accepted: a panel is stranded only in
+  a context an earlier backend reached over the same debugger.
 - **Two codes rather than one code and a reason to parse.** The page receives both, and a number is the half nobody
   rewords.
 - **A refusal answered with a code is logged once per panel session,** and again only when the answer for that session
   changes; the memory of sessions is bounded. Every other refusal is logged each time, as before.
 
 On that code the panel stops reconnecting for good, fails every queued and later call at once with the transport reason
-`stranded_panel`, says the answer in one notification and on Main, and asks again — one bounded connection — when
-Tender's Quick Access page is opened and when Stop is pressed.
+`stranded_panel`, says the answer in one notification and on Main, and asks again — one bounded connection — when the
+Quick Access menu is opened on Tender's page and when Stop is pressed.
 
 ## Considered options
 

@@ -1921,7 +1921,7 @@ restarting**, with Install current, and the line under the steps says **Steam's 
 usually within a minute, and up to about 5 minutes if Tender has to go back to Y.**, Y being the installed version. Once
 a backend answers again, it closes this panel's upgrade as stranded
 ([loading-the-panel.md](loading-the-panel.md#what-the-stranded-panel-is-told)), so the panel's reads fail at once with
-`stranded_panel` rather than wait, and the stranded notification and Main's **Backend restarted** come before the
+`stranded_panel` rather than wait, and the stranded notification and Main's **Backend restarted** may come before the
 reload. On such a read the caption says **Tender is running again**, with no bar, no clock and no step line, and the
 line under it says **Steam's interface reloads once no game is running, and shows then whether the update went
 through.** or **Restart Steam to see whether the update went through.**, by that backend's answer (`runningAgainLine`,

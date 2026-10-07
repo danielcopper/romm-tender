@@ -990,6 +990,15 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       return;
     }
 
+    // A panel the backend already refused as stranded cannot stop anything, so
+    // it says so before asking to confirm a stop that cannot happen.
+    const stranded = strandedAnswer();
+    if (stranded) {
+      detach(debugLog(`CustomPlayButton: Stop on appId=${appId} from a stranded panel — not stopping`));
+      tellStrandedStop(strandedPanelSentence(stranded));
+      return;
+    }
+
     // Without the rom id the backend cannot tell this game's instance from any
     // other live one, and stopping "whichever" is exactly the bug this argument
     // exists to fix. The detail lookup that fills `romId` normally lands long
@@ -998,15 +1007,6 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     if (romId == null) {
       detach(debugLog(`CustomPlayButton: Stop on appId=${appId} but the rom id is not resolved yet — not stopping`));
       showToast("Couldn't stop the game — still loading its details");
-      return;
-    }
-
-    // A panel the backend already refused as stranded cannot stop anything, so
-    // it says so before asking to confirm a stop that cannot happen.
-    const stranded = strandedAnswer();
-    if (stranded) {
-      detach(debugLog(`CustomPlayButton: Stop on appId=${appId} from a stranded panel — not stopping`));
-      tellStrandedStop(strandedPanelSentence(stranded));
       return;
     }
 

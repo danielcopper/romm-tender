@@ -41,8 +41,9 @@ export function useStrandedAnswer(): StrandedAnswer | null {
 }
 
 /**
- * Ask the backend again each time Tender's Quick Access page is opened: the
- * menu comes on screen with Tender's tab the active one. What a stranded panel
+ * Ask the backend again each time the Quick Access menu is opened on Tender's
+ * page. A tab switch back to Main with the menu open is not seen: only the wide
+ * pages publish which tab is active. What a stranded panel
  * was told may have changed since — a reload limit that freed up, or a recovery
  * that gave up. Opening is read off the two signals the update dots' dwell uses
  * (`utils/updateDot.ts`), not off a mount: Quick Access keeps the panel mounted
