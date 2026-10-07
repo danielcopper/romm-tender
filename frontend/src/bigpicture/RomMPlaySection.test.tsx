@@ -4292,7 +4292,7 @@ describe("RomMPlaySection", () => {
       expect(container.innerHTML).not.toContain("#d4a72c");
     });
 
-    it("core button only renders when availableCores.length > 1", async () => {
+    it("offers no core button where the established emulator list holds a single emulator", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 42,
