@@ -1158,7 +1158,7 @@ def _dispatcher_over_library(romm_api: FakeRommApi, events: FakeEventSink, home:
             uuid_gen=FakeUuidGen(),
             sleeper=FakeSleeper(),
             settings_persister=FakeSettingsPersister(),
-            log_debug=lambda _msg: None,
+            log_debug=lambda msg: None,
             artwork=FakeArtworkManager(),
             uow_factory=FakeUnitOfWorkFactory(FakeUnitOfWork()),
             active_core=FakeActiveCoreResolver(default=(None, None)),
