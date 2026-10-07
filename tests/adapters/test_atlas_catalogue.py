@@ -2,7 +2,7 @@
 
 What is under test is the adapter's own work: recovering the DECLARED order from
 an answer stated in effective order, classifying each entry through Tender's
-own bake kernel, telling the five catalogue refusals apart from a frontend that
+own bake kernel, telling the six catalogue refusals apart from a frontend that
 genuinely declares no emulator, and refusing to turn any failure into an empty
 list. The resolver's own decisions are upstream's and are not re-tested here.
 

@@ -737,8 +737,8 @@ source detected, every source switched off, a broken ES-DE systems file, a Retro
 EmuDeck's list that cannot be read yet, or any other refusal — and never "no emulator". **Tender cannot start games
 through _source_ yet.** stands on Main once for every switched-on source Tender cannot start games through, whether or
 not it is the one that answers; a switched-off one states it only on its card. Where such a source answers, the platform
-page and the emulator menu keep saying why there is no emulator list — today no such source gives one — and the sentence
-joins them once such a source can give one.
+page and the emulator menu keep saying why there is no emulator list — today no such source gives one. Showing the
+sentence there beside a list such a source does give is #2222's work; no code does it today.
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did

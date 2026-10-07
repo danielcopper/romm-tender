@@ -209,8 +209,10 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # asked where it keeps one game's savestates. The same live reading of
         # the machine as the save answer, taken twice per adoption rename.
         "resolve_savestate_location",
-        # SaveLocationReader's detection question — whether any emulator source
-        # answers. Every call runs the resolver's detection again.
+        # SaveLocationReader's detection question — whether an emulator source
+        # answers that has been set up. Every call runs the resolver's
+        # detection again and reads the answering installation's health, and a
+        # RetroDECK that has not been set up answers no.
         "installation_detected",
         # RomInfoService.save_answer (services/saves/rom_info.py) — the saves
         # package's own wrapper around that seam, listed because it is what the

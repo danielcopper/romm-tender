@@ -307,7 +307,7 @@ found for the first time joins the end of the order, switched on.
 **Sources Tender cannot start games through.** The main panel says **Tender cannot start games through _source_ yet.**
 for every switched-on source but RetroDECK, whether or not it is the one that answers; a source you switched off says it
 only on its card. Where such a source answers, the platform page and the emulator menu keep saying why there is no
-emulator list; the sentence joins them once such a source can give one.
+emulator list.
 
 **Problems.** Every problem a switched-on source reports also shows as a card on the main panel, named after the source
 — a RetroDECK that is installed but has not been set up yet (**RetroDECK is installed but has not been set up yet. Start
