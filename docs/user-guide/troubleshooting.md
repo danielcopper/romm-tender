@@ -336,8 +336,8 @@ This is a workaround for a Steam limitation
 once Steam handles Wayland windows; that is tracked in [#2271](https://github.com/danielcopper/romm-tender/issues/2271).
 
 Shortcuts an earlier version of Tender made need nothing from you: Tender writes an installed game's launch command
-again when Tender's panel loads, after every sync, and just before the game starts, so an existing shortcut carries the
-new command by its next launch at the latest.
+again when Tender's panel loads, after every sync, and just before the game starts, so an existing shortcut normally
+carries the new command by its next launch.
 
 ### Apply to All Shortcuts says "Not applied"
 
