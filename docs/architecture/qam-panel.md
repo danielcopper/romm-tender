@@ -740,7 +740,8 @@ source Tender cannot start games through, whether or not it is the one that answ
 without the warning sign: it states a fact about Tender rather than something wrong. Its card says **Tender cannot start
 games through _source_ yet.**, switched on or off, and a switched-off source says it only there. Where such a source
 answers, the platform page and the emulator menu keep saying why there is no emulator list — today no such source gives
-one. Showing the sentence there beside a list such a source does give is #2222's work; no code does it today.
+one. Showing **Tender cannot start games through _source_ yet.** there beside a list such a source does give is #2222's
+work; no code does it today.
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
