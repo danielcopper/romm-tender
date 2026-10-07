@@ -157,7 +157,7 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   if (state.error === "stranded") {
     return (
       <div data-romm="true">
-        <StrandedPanelCard appId={appId} />
+        <StrandedPanelCard />
       </div>
     );
   }

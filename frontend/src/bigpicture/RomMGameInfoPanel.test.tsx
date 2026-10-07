@@ -21,6 +21,7 @@ import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import * as cachedStore from "../utils/cachedGameDetailStore";
 import { getBiosStatusShared, _resetSharedReadsForTests } from "../api/sharedReads";
 import * as slotState from "../utils/slotState";
+import { readGameRunning } from "../utils/sessionManager";
 import {
   installDomEventListenerSpy,
   uninstallDomEventListenerSpy,
@@ -79,6 +80,11 @@ vi.mock("./VersionErrorCard", () => ({
 vi.mock("../utils/connectionState", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../utils/connectionState")>()),
   useVersionError: vi.fn(() => null),
+}));
+
+vi.mock("../utils/sessionManager", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../utils/sessionManager")>()),
+  readGameRunning: vi.fn(),
 }));
 
 vi.mock("./MigrationBlockedCard", () => ({
@@ -368,10 +374,14 @@ describe("RomMGameInfoPanel", () => {
   describe("a detail read refused because the panel is stranded", () => {
     const RELOADS = "Tender was restarted — it reloads Steam's interface once no game is running.";
     const RESTART_STEAM = "Tender was restarted — restart Steam to use it again.";
-    const EXIT_LINE = "Use Steam's menu to exit the game.";
+    const QUIT_LINE = "Quit the running game yourself — Tender can't stop it right now.";
 
     // The global afterEach unstubs every global, test-setup's SteamClient included.
-    beforeEach(() => {
+    let realReadGameRunning: typeof readGameRunning;
+    beforeEach(async () => {
+      ({ readGameRunning: realReadGameRunning } =
+        await vi.importActual<typeof import("../utils/sessionManager")>("../utils/sessionManager"));
+      vi.mocked(readGameRunning).mockImplementation(realReadGameRunning);
       vi.stubGlobal("SteamClient", {
         GameSessions: { RegisterForAppLifetimeNotifications: vi.fn(() => ({ unregister: vi.fn() })) },
       });
@@ -412,27 +422,63 @@ describe("RomMGameInfoPanel", () => {
       expect(container.textContent).toBe(RESTART_STEAM);
     });
 
-    it("adds how to exit the game while Steam lists this game as running", async () => {
-      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId, display_name: "Game" }] });
-      const { container } = await renderStranded("reloads");
-      expect(container.textContent).toBe(`${RELOADS}${EXIT_LINE}`);
-    });
-
-    it("adds no exit line while only another game runs", async () => {
+    it("adds the quit line on a page whose own game is not running while another game runs", async () => {
       vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(`${RELOADS}${QUIT_LINE}`);
+    });
+
+    it("adds no quit line while nothing runs", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [] });
       const { container } = await renderStranded("restart_steam");
       expect(container.textContent).toBe(RESTART_STEAM);
     });
 
-    it("adds and drops the exit line as Steam reports this game starting and stopping", async () => {
+    it("adds and drops the quit line as any game starts and stops", async () => {
+      const otherAppId = testAppId + 1;
       const { container } = await renderStranded("restart_steam");
       expect(container.textContent).toBe(RESTART_STEAM);
-      act(() => lifetimeListener()({ unAppID: testAppId, nInstanceID: 1, bRunning: true }));
-      expect(container.textContent).toBe(`${RESTART_STEAM}${EXIT_LINE}`);
-      act(() => lifetimeListener()({ unAppID: testAppId + 1, nInstanceID: 2, bRunning: false }));
-      expect(container.textContent).toBe(`${RESTART_STEAM}${EXIT_LINE}`);
-      act(() => lifetimeListener()({ unAppID: testAppId, nInstanceID: 1, bRunning: false }));
+      act(() => lifetimeListener()({ unAppID: otherAppId, nInstanceID: 1, bRunning: true }));
+      expect(container.textContent).toBe(`${RESTART_STEAM}${QUIT_LINE}`);
+      act(() => lifetimeListener()({ unAppID: testAppId, nInstanceID: 2, bRunning: true }));
+      act(() => lifetimeListener()({ unAppID: otherAppId, nInstanceID: 1, bRunning: false }));
+      expect(container.textContent).toBe(`${RESTART_STEAM}${QUIT_LINE}`);
+      act(() => lifetimeListener()({ unAppID: testAppId, nInstanceID: 2, bRunning: false }));
       expect(container.textContent).toBe(RESTART_STEAM);
+    });
+
+    it("drops the quit line on a game's stop while Steam's store still lists that game", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      const { container } = await renderStranded("reloads");
+      act(() => lifetimeListener()({ unAppID: testAppId + 1, nInstanceID: 1, bRunning: false }));
+      expect(container.textContent).toBe(RELOADS);
+    });
+
+    it("keeps the quit line on another game's stop while the store lists a game no notification has named", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      const { container } = await renderStranded("reloads");
+      act(() => lifetimeListener()({ unAppID: testAppId + 2, nInstanceID: 1, bRunning: false }));
+      expect(container.textContent).toBe(`${RELOADS}${QUIT_LINE}`);
+    });
+
+    it("opens without the quit line when the store still lists a game whose stop Tender has seen", async () => {
+      const exitedAppId = testAppId + 1;
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: exitedAppId, display_name: "Other" }] });
+      vi.mocked(readGameRunning).mockImplementation((appId, romId) =>
+        appId === exitedAppId
+          ? { running: false, decidedBy: "stop", diagnostics: "stop observed" }
+          : realReadGameRunning(appId, romId),
+      );
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(RELOADS);
+    });
+
+    it("still shows the card, with the store's reading, when Steam offers no game sessions", async () => {
+      vi.stubGlobal("SteamClient", {});
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      const { container, unmount } = await renderStranded("restart_steam");
+      expect(container.textContent).toBe(`${RESTART_STEAM}${QUIT_LINE}`);
+      unmount();
     });
 
     it("stops listening for Steam's app lifetime notifications on unmount", async () => {

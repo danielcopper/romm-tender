@@ -215,10 +215,10 @@ rebuilt, and the log-once rule keeps that to one line.
 **What the panel does with it**: on either code the socket gives up for good
 ([frontend-bundles.md](frontend-bundles.md#talking-to-the-backend), Talking to the backend). One notification says the
 answer when the panel becomes stranded, and one more each time it changes; Main's connection row says it in place of the
-probe's verdict. On a game's page the play row reads **Tender restarted** in place of **RomM offline** — a connection
-check refused as stranded is no verdict on RomM, so it writes none — and on a page opened since, whose details cannot be
-read, the section below the play row shows the same sentence as Main, adding **Use Steam's menu to exit the game.**
-while Steam reports that game running, since Tender's Stop is not on the page then. The panel asks again — one
+probe's verdict. On a game's page a connection check refused as stranded is no verdict on RomM, so it writes none, and
+the play row's badge says Tender was restarted whatever RomM last answered; a detail read refused as stranded shows a
+card in place of the details. What each of them says, and what the card adds while any game is running:
+[troubleshooting.md](../user-guide/troubleshooting.md#tender-says-it-was-restarted). The panel asks again — one
 connection opened only to read the close, bounded at two seconds, never two at once — when the Quick Access menu is
 opened on Tender's page and when Stop is pressed.
 

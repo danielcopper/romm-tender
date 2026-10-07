@@ -1,35 +1,51 @@
 import { FC, useEffect, useState } from "react";
 import { WarningCard } from "./WarningCard";
+import { readRunningApps } from "../utils/runningApps";
 import { readGameRunning } from "../utils/sessionManager";
 import { useStrandedAnswer } from "../utils/strandedPanelStore";
 import { strandedPanelSentence } from "../utils/strandedPanelWording";
 
-interface StrandedPanelCardProps {
-  appId: number;
+/** Whether any app runs: {@link readGameRunning}'s rule over every app, with the
+ *  card's own last lifetime notification per app answering first. In which order
+ *  Steam calls the card's callback and the session manager's is not known, so
+ *  the card does not count on a stop having reached the session manager yet;
+ *  and a start it saw counts before the store lists the app. */
+function anyAppRunning(observed: ReadonlyMap<number, boolean>): boolean {
+  for (const running of observed.values()) if (running) return true;
+  return readRunningApps().apps.some((app) => observed.get(app.appid) ?? readGameRunning(app.appid, null).running);
 }
 
-/** Whether this page's game runs, as Steam reports it. No ROM is known on a page
- *  whose detail could not be read, so the reading starts from Steam's running
- *  apps alone, and every lifetime notification for the game moves it. */
-function useGameRunning(appId: number): boolean {
-  const [running, setRunning] = useState(() => readGameRunning(appId, null).running);
+/** `SteamClient.GameSessions` is declared present, and this card is the one
+ *  place its absence must not throw: it would take the page down to lose only
+ *  the live update. */
+function gameSessions(): typeof SteamClient.GameSessions | undefined {
+  return SteamClient.GameSessions;
+}
+
+/** Whether any app runs, as Steam reports it, moved by every app's lifetime
+ *  notifications. Without game sessions the reading stays the one the page
+ *  opened with. */
+function useAnyAppRunning(): boolean {
+  const [running, setRunning] = useState(() => anyAppRunning(new Map()));
   useEffect(() => {
-    const registration = SteamClient.GameSessions.RegisterForAppLifetimeNotifications((update) => {
-      if (update.unAppID === appId) setRunning(update.bRunning);
+    const observed = new Map<number, boolean>();
+    const registration = gameSessions()?.RegisterForAppLifetimeNotifications((update) => {
+      observed.set(update.unAppID, update.bRunning);
+      setRunning(anyAppRunning(observed));
     });
-    return () => registration.unregister();
-  }, [appId]);
+    return () => registration?.unregister();
+  }, []);
   return running;
 }
 
 /** Shown on the game detail page in place of the details a stranded panel could
- *  not read. Tender's Stop is not on the page then, so while the game runs the
- *  card says how else to leave it. */
-export const StrandedPanelCard: FC<StrandedPanelCardProps> = ({ appId }) => {
+ *  not read. Tender's Stop cannot reach the backend then, so while any game runs
+ *  the card says to quit it another way. */
+export const StrandedPanelCard: FC = () => {
   const answer = useStrandedAnswer();
-  const running = useGameRunning(appId);
+  const running = useAnyAppRunning();
   if (!answer) return null;
   const sentence = strandedPanelSentence(answer);
   if (!running) return <WarningCard title={sentence} />;
-  return <WarningCard title={sentence} message="Use Steam's menu to exit the game." />;
+  return <WarningCard title={sentence} message="Quit the running game yourself — Tender can't stop it right now." />;
 };
