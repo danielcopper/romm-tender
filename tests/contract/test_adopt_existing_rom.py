@@ -19,7 +19,12 @@ import zlib
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from ._seed import seed_group_member, seed_rom
+
+# Every download, adoption and removal here lands in RetroDECK's folders.
+pytestmark = pytest.mark.usefixtures("seeded_retrodeck")
 
 _ROM_ID = 41
 _GROUP = "igdb:900:gba"
@@ -31,7 +36,7 @@ def _md5(data: bytes) -> str:
 
 def _place_single_file(harness, *, data: bytes = b"user's own dump") -> Path:
     """Put a file exactly where a download of ``rom-41`` would write."""
-    path = Path(harness.retrodeck_paths.roms_path()) / "gba" / "rom-41"
+    path = Path(harness.roms_root) / "gba" / "rom-41"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
     return path
@@ -283,7 +288,7 @@ async def test_verify_reports_a_server_failure_as_error(harness):
 
 def _place_archive(harness, members: dict[str, bytes], *, name: str = "rom-41.zip") -> Path:
     """Write a real ZIP exactly where a download of ``rom-41`` would."""
-    path = Path(harness.retrodeck_paths.roms_path()) / "gba" / name
+    path = Path(harness.roms_root) / "gba" / name
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
         for member, data in members.items():
@@ -417,7 +422,7 @@ def _stage_directory_rom(harness, *, data: bytes, on_disk_subdir: str) -> None:
             }
         ],
     )
-    placed = Path(harness.retrodeck_paths.roms_path()) / "gba" / "rom-41" / on_disk_subdir / "data.bin"
+    placed = Path(harness.roms_root) / "gba" / "rom-41" / on_disk_subdir / "data.bin"
     placed.parent.mkdir(parents=True, exist_ok=True)
     placed.write_bytes(data)
 

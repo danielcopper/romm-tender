@@ -19,7 +19,7 @@ from ._seed import seed_install
 
 def _write_local_save(harness, *, system: str, filename: str) -> str:
     """Materialize one local save file under the harness saves tree."""
-    saves_dir = os.path.join(harness.retrodeck_paths.saves_path(), system)
+    saves_dir = os.path.join(harness.saves_root, system)
     os.makedirs(saves_dir, exist_ok=True)
     path = os.path.join(saves_dir, filename)
     with open(path, "wb") as fh:

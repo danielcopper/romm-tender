@@ -118,18 +118,24 @@ class FirmwareStatusReader:
 
         A server row whose ``file_name`` fails the path-safety check cannot be on
         disk, so it is dropped rather than crashing the query (logged in
-        ``FirmwareDemand.safe_dest_path``).
+        ``FirmwareDemand.safe_dest_path``). Where no BIOS download may land
+        (``FirmwareDemand.status_root``) every row is kept, with no
+        ``local_path``: the resolver's answers stand, and a row only Tender's
+        own probe could answer is left without a verdict.
         """
         catalogue = self._demand.platform_catalogue(system)
         placements = catalogue.by_file_name()
+        bios_base = self._demand.status_root()
         rows: list[dict[str, Any]] = []
         for row in server_rows:
             placement = placements.get(row["file_name"])
-            dest = self._demand.safe_dest_path(row, placement)
-            if dest is None:
+            dest = None if bios_base is None else self._demand.safe_dest_path(row, placement, bios_base)
+            if bios_base is not None and dest is None:
                 continue
             rows.append({**row, "local_path": dest, "downloaded": self._demand.is_downloaded(placement, dest)})
-        rows.extend(_overview_row(item) for item in self._demand.wanted_beyond_server(placements, in_library))
+        rows.extend(
+            _overview_row(item) for item in self._demand.wanted_beyond_server(placements, in_library, bios_base)
+        )
         return catalogue, rows
 
     def _platform_emulator(self, platform_slug: str, options: dict[str, Any]) -> EmulatorOption | None:

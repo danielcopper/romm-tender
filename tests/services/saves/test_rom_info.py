@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import cast
 
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
+from domain.retrodeck_folders import GAME_DOWNLOAD, switched_off
 from domain.save_answer import SaveAnswer
 from tests.services.saves._helpers import (
     _create_save,
@@ -175,6 +177,22 @@ class TestFindSaveFiles:
         # user has not installed.
         assert answer.content_installed is False
         assert svc._rom_info.synced_save_names(80) == ([], None)
+
+    def test_an_uninstalled_rom_with_no_folder_to_land_in_asks_nothing(self, tmp_path):
+        # RetroDECK switched off: no download lands anywhere, so there is no path
+        # the ROM would occupy to put the question about.
+        svc, _ = make_service(tmp_path)
+        _seed_amiga_inside_content(svc)
+        _seed_rom(svc, 80, platform_slug="commodore-amiga", fs_name="Turrican.adf")
+        svc._rom_info._retrodeck_folders = FakeRetroDeckFolders(
+            roms=str(tmp_path / "retrodeck" / "roms"), download_refusal=switched_off(GAME_DOWNLOAD)
+        )
+
+        answer = svc._rom_info.save_answer(80)
+
+        assert _asked(svc) == []
+        assert answer.state == "unestablished"
+        assert answer.syncable is False
 
     def test_a_rom_the_library_does_not_hold_asks_nothing_and_refuses(self, tmp_path):
         # No row, so no name and no extension: there is no question to put, and

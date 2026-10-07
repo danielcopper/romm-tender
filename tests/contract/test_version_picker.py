@@ -311,7 +311,7 @@ def _seed_bound_drift(harness, bound_id: int, *, baseline: str) -> None:
     reproduces a synced state. The save discovery keys the filename off the
     install path stem (``game`` → ``game.srm``), matching ``_DRIFT_CONTENT``.
     """
-    saves_dir = os.path.join(harness.retrodeck_paths.saves_path(), "gba")
+    saves_dir = os.path.join(harness.saves_root, "gba")
     os.makedirs(saves_dir, exist_ok=True)
     with open(os.path.join(saves_dir, "game.srm"), "wb") as fh:
         fh.write(_DRIFT_CONTENT)

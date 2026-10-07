@@ -4,7 +4,8 @@ The only writer of a ``downloaded_bios`` record, which is what later authorises
 a delete: having placed the file is the authority, and this record is the sole
 evidence of it. Every entry point resolves the destination through the machine's
 demand rather than inventing a layout, so a file lands where the emulator will
-open it.
+open it, and takes the BIOS folder first: where none may take a download, the
+press is refused before anything is fetched.
 """
 
 from __future__ import annotations
@@ -144,6 +145,7 @@ class FirmwareDownloader:
         this method — ``FirmwareService.download_firmware``, the use case over
         it, has none — which is the only reason that gap is unreachable.
         """
+        await self._loop.run_in_executor(None, self._demand.download_root)
         placements = await self._loop.run_in_executor(None, self._demand.placement_index)
         return await self._download_one(firmware_id, placements)
 
@@ -222,6 +224,7 @@ class FirmwareDownloader:
 
     async def download_all_firmware(self, platform_slug) -> dict[str, Any]:
         """Download all firmware for a given platform slug."""
+        await self._loop.run_in_executor(None, self._demand.download_root)
         platform_firmware, failure = await self._platform_firmware_rows(platform_slug)
         if failure is not None:
             return failure
@@ -295,6 +298,7 @@ class FirmwareDownloader:
         one file failed, so the single fetch's own failure response is returned
         as it stands rather than collapsed into a name in a list.
         """
+        await self._loop.run_in_executor(None, self._demand.download_root)
         rows, failure = await self._platform_firmware_rows(platform_slug)
         if failure is not None:
             return failure
@@ -344,6 +348,7 @@ class FirmwareDownloader:
         serve a region nothing in place covers yet. A pick the resolver could not
         identify falls back to "any emulator requires it".
         """
+        await self._loop.run_in_executor(None, self._demand.download_root)
         rows, failure = await self._platform_firmware_rows(platform_slug)
         if failure is not None:
             return failure

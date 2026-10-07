@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 from domain.fetch_generation import prune_candidate_ids
+from domain.retrodeck_folders import FolderRefused
 from domain.sibling_resolution import group_rows
 from lib.url_host import romm_namespace
 from services.prune._models import PrunePreview
@@ -13,7 +14,7 @@ from services.prune._models import PrunePreview
 if TYPE_CHECKING:
     from domain.rom import Rom
     from domain.rom_install import RomInstall
-    from services.protocols import RecoveryBundleStore, RetroDeckPaths, UnitOfWork, UnitOfWorkFactory
+    from services.protocols import RecoveryBundleStore, RetroDeckFolders, UnitOfWork, UnitOfWorkFactory
 
 
 @dataclass(frozen=True)
@@ -22,7 +23,7 @@ class PreviewBuilderConfig:
 
     uow_factory: UnitOfWorkFactory
     recovery_store: RecoveryBundleStore
-    retrodeck_paths: RetroDeckPaths
+    retrodeck_folders: RetroDeckFolders
     settings: dict[str, Any]
 
 
@@ -77,12 +78,16 @@ class PreviewBuilder:
     def __init__(self, *, config: PreviewBuilderConfig) -> None:
         self._uow_factory = config.uow_factory
         self._recovery_store = config.recovery_store
-        self._retrodeck_paths = config.retrodeck_paths
+        self._retrodeck_folders = config.retrodeck_folders
         self._settings = config.settings
 
-    def _installed_size(self, install: RomInstall | None, roms_root: str) -> tuple[int | None, str | None]:
-        """Measured bytes of a row's installed content, or why they could not be read."""
-        if install is None:
+    def _installed_size(self, install: RomInstall | None, roms_root: str | None) -> tuple[int | None, str | None]:
+        """Measured bytes of a row's installed content, or why they could not be read.
+
+        Nothing is measured where RetroDECK names no ROM root to measure inside,
+        or reports that its roots are defaults; a start refuses the latter.
+        """
+        if install is None or roms_root is None:
             return None, None
         try:
             return self._recovery_store.measure_path(install.rom_dir or install.file_path, roms_root), None
@@ -102,7 +107,8 @@ class PreviewBuilder:
             ]
             fingerprint = self._fingerprint(relevant_groups, installs)
 
-        roms_root = self._retrodeck_paths.roms_path()
+        root = self._retrodeck_folders.rom_root()
+        roms_root = None if isinstance(root, FolderRefused) else root
         entries: list[dict[str, Any]] = []
         for group in relevant_groups:
             group_id = str(group[0].sibling_group_key or f"rom:{group[0].rom_id}")

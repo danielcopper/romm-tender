@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from models.prune import InstalledContentRemoval
 
+from domain.retrodeck_folders import FolderRefused
 from lib.errors import NotInstalled, Refused
 from lib.partial_failure import PartialFailure
 from lib.path_safety import is_safe_rom_path
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
         ConflictRules,
         DownloadQueueCleanup,
         EventEmitter,
-        RetroDeckPaths,
+        RetroDeckFolders,
         RomFileStore,
         UnitOfWorkFactory,
     )
@@ -59,7 +60,7 @@ class RomRemovalServiceConfig:
     """Frozen wiring bundle handed to ``RomRemovalService.__init__``.
 
     Holds the runtime infrastructure, the Protocol-typed filesystem
-    adapter, the RetroDECK paths bundle, the ``DownloadQueueCleanup``
+    adapter, RetroDECK's folders (whose ROM root bounds every removal), the ``DownloadQueueCleanup``
     eviction seam (``None`` when no download cleanup is wired), the
     SQLite Unit-of-Work factory (the transactional seam over the
     ``rom_installs`` repository), and the ``ConflictRules`` a use case an
@@ -73,7 +74,7 @@ class RomRemovalServiceConfig:
     clock: Clock
     emit: EventEmitter
     rom_file_store: RomFileStore
-    retrodeck_paths: RetroDeckPaths
+    retrodeck_folders: RetroDeckFolders
     download_queue_cleanup: DownloadQueueCleanup | None
     uow_factory: UnitOfWorkFactory
     conflict_rules: ConflictRules
@@ -98,7 +99,7 @@ class RomRemovalService:
         self._clock = config.clock
         self._emit = config.emit
         self._rom_file_store = config.rom_file_store
-        self._retrodeck_paths = config.retrodeck_paths
+        self._retrodeck_folders = config.retrodeck_folders
         self._download_queue_cleanup = config.download_queue_cleanup
         self._uow_factory = config.uow_factory
         self._rules = config.conflict_rules
@@ -109,21 +110,35 @@ class RomRemovalService:
         # (`.importlinter`, no-stdlib-io-in-services).
         self._removals_in_flight: set[int] = set()
 
+    def _rom_root(self) -> str:
+        """RetroDECK's ROM root every removal is bounded by.
+
+        Raises the refusal where there is none to name — RetroDECK not detected,
+        naming no ROM folder, or reporting that its folders are defaults — so a
+        removal never runs against a guessed bound.
+        """
+        root = self._retrodeck_folders.rom_root()
+        if isinstance(root, FolderRefused):
+            raise root
+        return root
+
     def _delete_rom_files(
         self,
         install: RomInstall,
         claims: dict[str, SourceClaim] | None = None,
         *,
+        roms_base: str | None = None,
         on_progress: Callable[[int, int], None] | None = None,
     ) -> MutationOutcome:
         """Delete ROM files for an install record. Handles both single-file and multi-file ROMs.
 
         A multi-file ROM owns a dedicated per-ROM directory (``rom_dir`` is set)
         and is removed whole. A single-file ROM has no ``rom_dir`` (``None``) —
-        it lives as a bare file in the shared ``<roms_base>/<system>/`` dir,
-        which must **never** be removed — so only the launch file itself is
-        deleted. ``is_safe_rom_path`` stays the path-containment guard before
-        any removal.
+        it lives as a bare file in its system's shared folder, which must
+        **never** be removed — so only the launch file itself is deleted.
+        ``is_safe_rom_path`` stays the path-containment guard before any
+        removal, against *roms_base*: the ROM root a caller removing many
+        installs asked for once, or :meth:`_rom_root`'s answer, asked here.
 
         *claims* is the claim map a cleanup run that sealed a recovery bundle
         hands in; its absence marks a caller that has no bundle at all and
@@ -132,7 +147,8 @@ class RomRemovalService:
         rom_dir = install.rom_dir
         file_path = install.file_path
 
-        roms_base = self._retrodeck_paths.roms_path()
+        if roms_base is None:
+            roms_base = self._rom_root()
         if rom_dir:
             if not is_safe_rom_path(rom_dir, roms_base):
                 raise ValueError(f"Refusing to delete path outside roms directory: {rom_dir}")
@@ -220,8 +236,12 @@ class RomRemovalService:
             install = uow.rom_installs.get(int(rom_id))
         if install is None:
             return InstalledContentRemoval(changed=False, ambiguous=False)
+        # No bound, so nothing was touched: a refusal, never an ambiguity.
+        roms_base = self._retrodeck_folders.rom_root()
+        if isinstance(roms_base, FolderRefused):
+            return InstalledContentRemoval(changed=False, ambiguous=False, failure=roms_base.message)
         try:
-            outcome = self._delete_rom_files(install, claims)
+            outcome = self._delete_rom_files(install, claims, roms_base=roms_base)
         except Exception as exc:
             self._logger.error(f"Failed to delete ROM files: {exc}")
             return InstalledContentRemoval(changed=False, ambiguous=True, failure=str(exc))
@@ -448,12 +468,15 @@ class RomRemovalService:
         kept shortcuts' now-stale ``launch_options`` to the uninstalled
         placeholder (#1146).
         """
+        if not installs:
+            return 0, [], []
+        roms_base = self._rom_root()
         count = 0
         errors: list[dict[str, str]] = []
         successfully_deleted: list[int] = []
         for install in installs:
             try:
-                outcome = self._delete_rom_files(install)
+                outcome = self._delete_rom_files(install, roms_base=roms_base)
                 if not outcome["success"]:
                     raise RuntimeError(outcome["message"])
                 count += 1

@@ -35,7 +35,7 @@ if TYPE_CHECKING:
         FirmwarePlatformResolver,
         FirmwareResolver,
         PlatformCoreReader,
-        RetroDeckPaths,
+        RetroDeckFolders,
         RommFirmwareApi,
         SystemResolver,
         UnitOfWorkFactory,
@@ -60,7 +60,7 @@ class FirmwareServiceConfig:
     firmware_file_store: FirmwareFileStore
     firmware_resolver: FirmwareResolver
     platform_firmware_resolver: FirmwarePlatformResolver
-    retrodeck_paths: RetroDeckPaths
+    retrodeck_folders: RetroDeckFolders
     core_info: CoreInfoProvider
     resolve_system: SystemResolver
     platform_core_reader: PlatformCoreReader
@@ -105,7 +105,7 @@ class FirmwareService:
             config=FirmwareDemandConfig(
                 firmware_resolver=config.firmware_resolver,
                 platform_firmware_resolver=config.platform_firmware_resolver,
-                retrodeck_paths=config.retrodeck_paths,
+                retrodeck_folders=config.retrodeck_folders,
                 firmware_file_store=config.firmware_file_store,
                 logger=config.logger,
             )
@@ -145,6 +145,7 @@ class FirmwareService:
             config=PlatformBiosDeleterConfig(
                 listing=self._listing,
                 firmware_file_store=config.firmware_file_store,
+                retrodeck_folders=config.retrodeck_folders,
                 uow_factory=config.uow_factory,
                 loop=config.loop,
                 logger=config.logger,

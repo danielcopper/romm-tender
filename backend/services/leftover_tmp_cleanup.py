@@ -5,7 +5,9 @@ renames it into place once it is whole, and a BIOS download does the same under
 the BIOS directory; a download RomM serves as a ZIP is written to a
 ``.zip.tmp``, which is extracted and then removed. A backend that stopped
 mid-transfer leaves that partial behind; this service removes every one it finds
-under the ROM and BIOS directories when the backend starts.
+under RetroDECK's ROM and BIOS folders when the backend starts — the folders the
+resolver names, and none at all while RetroDECK reports that its roots are
+defaults (``RetroDeckFolders``).
 """
 
 from __future__ import annotations
@@ -13,12 +15,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from domain.retrodeck_folders import FolderRefused
 from domain.rom_files import TMP_EXT, ZIP_TMP_EXT
 
 if TYPE_CHECKING:
     import logging
 
-    from services.protocols import DownloadFileStore, RetroDeckPaths
+    from services.protocols import DownloadFileStore, RetroDeckFolders
 
 
 @dataclass(frozen=True)
@@ -26,12 +29,12 @@ class LeftoverTmpCleanupServiceConfig:
     """Frozen wiring bundle handed to ``LeftoverTmpCleanupService.__init__``.
 
     Holds the logger, the file store the partials are listed and removed
-    through, and the RetroDECK paths that name the ROM and BIOS directories.
+    through, and RetroDECK's folders, which name the ROM and BIOS roots.
     """
 
     logger: logging.Logger
     download_file_store: DownloadFileStore
-    retrodeck_paths: RetroDeckPaths
+    retrodeck_folders: RetroDeckFolders
 
 
 class LeftoverTmpCleanupService:
@@ -40,7 +43,7 @@ class LeftoverTmpCleanupService:
     def __init__(self, *, config: LeftoverTmpCleanupServiceConfig) -> None:
         self._logger = config.logger
         self._download_file_store = config.download_file_store
-        self._retrodeck_paths = config.retrodeck_paths
+        self._retrodeck_folders = config.retrodeck_folders
 
     def _remove_tmp_files(self, paths: list[str]) -> int:
         """Remove each path in *paths*, logging a warning on per-file failure.
@@ -58,21 +61,19 @@ class LeftoverTmpCleanupService:
                 self._logger.warning(f"Failed to remove tmp file {path}: {e}")
         return removed
 
+    def _clean_tmp_files(self, root: str | FolderRefused | None, suffixes: tuple[str, ...]) -> int:
+        """Remove the files ending in *suffixes* under *root*; nothing where it names no folder."""
+        if root is None or isinstance(root, FolderRefused):
+            return 0
+        return self._remove_tmp_files(self._download_file_store.walk_files_matching_suffixes(root, suffixes))
+
     def _clean_rom_tmp_files(self):
         """Remove leftover .tmp and .zip.tmp files from ROM directories."""
-        roms_base = self._retrodeck_paths.roms_path()
-        if not roms_base:
-            return 0
-        paths = self._download_file_store.walk_files_matching_suffixes(roms_base, (TMP_EXT, ZIP_TMP_EXT))
-        return self._remove_tmp_files(paths)
+        return self._clean_tmp_files(self._retrodeck_folders.rom_root(), (TMP_EXT, ZIP_TMP_EXT))
 
     def _clean_bios_tmp_files(self):
         """Remove leftover .tmp files from BIOS directory."""
-        bios_base = self._retrodeck_paths.bios_path()
-        if not bios_base:
-            return 0
-        paths = self._download_file_store.walk_files_matching_suffixes(bios_base, (TMP_EXT,))
-        return self._remove_tmp_files(paths)
+        return self._clean_tmp_files(self._retrodeck_folders.bios_folder(), (TMP_EXT,))
 
     def cleanup_leftover_tmp_files(self):
         """Remove leftover .tmp and .zip.tmp files from ROM and BIOS directories on startup.

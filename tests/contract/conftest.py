@@ -13,6 +13,7 @@ from unittest import mock
 import pytest
 
 from tests.contract._harness import ContractHarness, build_contract_harness
+from tests.contract._seed import seed_es_systems
 
 
 @pytest.fixture(autouse=True)
@@ -63,3 +64,15 @@ async def harness(tmp_path) -> ContractHarness:
     stores), so state never leaks between contract tests.
     """
     return build_contract_harness(tmp_path)
+
+
+@pytest.fixture
+async def seeded_retrodeck(harness: ContractHarness) -> None:
+    """A RetroDECK the real resolver detects, with ES-DE's catalogue declaring ``gba``.
+
+    Every folder a download, an adoption or a removal uses is the resolver's
+    answer, so a module that downloads into or removes from RetroDECK's folders
+    uses this fixture (``pytestmark``). Without it the services are told no
+    folder at all, which is the state the folder refusals are tested in.
+    """
+    seed_es_systems(harness)

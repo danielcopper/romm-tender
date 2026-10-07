@@ -9,7 +9,7 @@ from _factories import _make_conflict_rules, _make_retry
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_hostname_reader import FakeHostnameReader
 from fakes.fake_machine_id_reader import FakeMachineIdReader
-from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_save_api import FakeSaveApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_settings_persister import FakeSettingsPersister
@@ -59,7 +59,7 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
         "loop": running_loop(),
         "logger": logging.getLogger("test"),
         "clock": FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
-        "retrodeck_paths": FakeRetroDeckPaths(
+        "retrodeck_folders": FakeRetroDeckFolders(
             saves=str(tmp_path / "saves"),
             roms=str(tmp_path / "retrodeck" / "roms"),
         ),

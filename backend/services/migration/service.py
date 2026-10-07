@@ -33,7 +33,7 @@ if TYPE_CHECKING:
         FirmwareResolver,
         MigrationFileStore,
         RelaunchOptionsReader,
-        RetroDeckPaths,
+        RetroDeckFolders,
         SaveDirectoriesRecorderProvider,
         SettingsPersister,
         UnitOfWorkFactory,
@@ -77,7 +77,7 @@ class MigrationServiceConfig:
     settings_persister: SettingsPersister
     emit: EventEmitter
     firmware_resolver: FirmwareResolver
-    retrodeck_paths: RetroDeckPaths
+    retrodeck_folders: RetroDeckFolders
     relaunch_options: RelaunchOptionsReader
     save_directories: SaveDirectoriesRecorderProvider
     uow_factory: UnitOfWorkFactory
@@ -100,7 +100,7 @@ class MigrationService:
         self._settings_persister = config.settings_persister
         self._emit = config.emit
         self._firmware_resolver = config.firmware_resolver
-        self._retrodeck_paths = config.retrodeck_paths
+        self._retrodeck_folders = config.retrodeck_folders
         self._relaunch_options = config.relaunch_options
         self._save_directories = config.save_directories
         self._uow_factory = config.uow_factory
@@ -166,9 +166,10 @@ class MigrationService:
         still exist and leaves the missing tail as spelled, so what it answers
         with is a directory, and not the live one.
         """
-        current_home = self._retrodeck_paths.retrodeck_home()
-        if not current_home:
+        roots = self._retrodeck_folders.move_roots()
+        if roots is None:
             return
+        current_home = roots.home
         if not self._migration_file_store.is_dir(current_home):
             self._logger.warning(f"RetroDECK home path does not exist, skipping: {current_home}")
             return
@@ -472,7 +473,10 @@ class MigrationService:
         stays readable in the old home, where a wrongly-moved one would not.
         """
         items = []
-        new_bios = self._retrodeck_paths.bios_path()
+        roots = self._retrodeck_folders.move_roots()
+        if roots is None:
+            return items
+        new_bios = roots.bios
         for placement in self._firmware_resolver().placements:
             if placement.file_name in tracked_file_names:
                 continue
@@ -498,7 +502,10 @@ class MigrationService:
         the freshest copy should survive. Which files a scan is willing to see
         at all is :meth:`_migratable_saves`'s contract, not this one's.
         """
-        new_saves = self._retrodeck_paths.saves_path()
+        roots = self._retrodeck_folders.move_roots()
+        if roots is None:
+            return []
+        new_saves = roots.saves
         # rel path -> (source path, mtime); newest mtime wins across homes.
         best: dict[str, tuple[str, float]] = {}
         for home in pending_homes:

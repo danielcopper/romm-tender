@@ -35,7 +35,7 @@ def _write_local_save(harness, *, system: str, content: bytes, filename: str = "
     the ROM's parent folder name (``seed_install`` lays the ROM under
     ``…/roms/<system>/<file>``), so it equals *system* here.
     """
-    saves_dir = os.path.join(harness.retrodeck_paths.saves_path(), system)
+    saves_dir = os.path.join(harness.saves_root, system)
     os.makedirs(saves_dir, exist_ok=True)
     path = os.path.join(saves_dir, filename)
     with open(path, "wb") as fh:

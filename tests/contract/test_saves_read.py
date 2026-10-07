@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 from domain.rom_save_sync_state import RomSaveSyncState
 from lib.errors import RommConnectionError, RommNotFoundError
 from lib.list_result import ErrorCode
@@ -34,7 +36,7 @@ from ._seed import enable_save_sync, seed_confirmed_slot, seed_install, seed_rom
 
 def _write_local_save(harness, *, system: str, filename: str, content: bytes) -> None:
     """Materialize a local save file under the harness saves tree."""
-    saves_dir = os.path.join(harness.retrodeck_paths.saves_path(), system)
+    saves_dir = os.path.join(harness.saves_root, system)
     os.makedirs(saves_dir, exist_ok=True)
     with open(os.path.join(saves_dir, filename), "wb") as fh:
         fh.write(content)
@@ -160,6 +162,7 @@ async def test_a_configuration_file_is_named_on_the_wire_and_flagged_unsynced(ha
     assert by_name["rally.bkr"]["carried"] is True
 
 
+@pytest.mark.usefixtures("seeded_retrodeck")
 async def test_an_uninstalled_rom_says_its_answer_is_about_a_game_that_is_not_there(harness):
     """The names are a prediction, and the payload says so.
 

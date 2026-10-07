@@ -28,13 +28,14 @@ from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_adoption_move import FakeAdoptionMoveStore
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_download_file_store import FakeDownloadFileStore
-from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_save_quarantine import FakeSaveQuarantine
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
 
+from domain.retrodeck_folders import FolderRefused
 from domain.rom import Rom
 from domain.rom_candidates import CANDIDATE_LIMIT
 from domain.rom_install import RomInstall
@@ -182,7 +183,7 @@ class Harness:
                 disc_resolver=FakeDiscResolver(),
             ),
         )
-        self.paths = FakeRetroDeckPaths(roms=_ROMS, saves=_SAVES)
+        self.paths = FakeRetroDeckFolders(roms=_ROMS, saves=_SAVES)
         self.move = FakeAdoptionMoveStore(self.store)
         self.quarantine = FakeSaveQuarantine(self.store)
         # What a stock RetroDECK install answers: savefiles content-sorted,
@@ -206,7 +207,7 @@ class Harness:
                 adoption_move=self.move,
                 quarantine_save=self.quarantine,
                 resolve_system=lambda platform_slug, platform_fs_slug=None: platform_fs_slug or platform_slug,
-                retrodeck_paths=self.paths,
+                retrodeck_folders=self.paths,
                 install_recorder=self.recorder,
                 m3u_support=lambda system_name: self.m3u_supported,
                 system_extensions=lambda system_name, reading=None: self.system_extensions.get(
@@ -419,14 +420,16 @@ class TestReplace:
         assert result["reason"] == "unsafe_replace_target"
         assert h.store.files["/roms/psx/Game/a.bin"] == b"x"
 
-    async def test_replace_refuses_when_the_roms_path_is_unknown(self, h):
+    async def test_replace_refuses_when_retrodeck_names_no_rom_folder(self, h):
         h.paths.roms = ""
         h.store.files["/roms/psx/Game/a.bin"] = b"x"
 
-        result = await h.service.check_download_target(_multi_file_detail(), "/roms/psx/Game", replace=True)
+        with pytest.raises(FolderRefused) as refused:
+            await h.service.check_download_target(_multi_file_detail(), "/roms/psx/Game", replace=True)
 
-        assert result is not None
-        assert result["reason"] == "unsafe_replace_target"
+        assert refused.value.reason == "no_rom_root"
+        assert refused.value.message == "RetroDECK names no ROM folder, so Tender cannot uninstall this game."
+        assert "/roms/psx/Game/a.bin" in h.store.files
 
     async def test_a_failed_removal_aborts_the_download(self, h):
         h.store.files["/roms/psx/Game/a.bin"] = b"x"
@@ -818,10 +821,27 @@ class TestAdopt:
         assert isinstance(result["message"], str)
 
     async def test_an_unsafe_platform_slug_is_refused(self, h):
+        # A slug that is no ES-DE system has no folder the resolver names.
         h.stage_detail({**_single_file_detail(), "platform_slug": "../../etc"})
+        with pytest.raises(FolderRefused) as refused:
+            await h.service.adopt_existing_rom(_ROM_ID)
+        assert refused.value.reason == "no_rom_folder"
+
+    async def test_a_traversing_server_file_name_stays_inside_the_platform_folder(self, h):
+        # Below the folder the resolver names, a server-supplied name is still
+        # coerced to one component: the copy outside is never what is adopted.
+        h.seed_rom()
+        h.stage_detail(_single_file_detail(name="../../Game.sfc"))
+        h.store.files["/Game.sfc"] = b"not this one"
+        h.store.files["/roms/snes/Game.sfc"] = b"mine"
+
         result = await h.service.adopt_existing_rom(_ROM_ID)
-        assert result["success"] is False
-        assert result["reason"] == "path_traversal"
+
+        assert result["success"] is True
+        install = h.uow.rom_installs.get(_ROM_ID)
+        assert install is not None
+        assert install.file_path == "/roms/snes/Game.sfc"
+        assert h.store.files["/Game.sfc"] == b"not this one"
 
 
 # ── verify ───────────────────────────────────────────────────────────────

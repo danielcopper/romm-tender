@@ -1,9 +1,10 @@
-"""RetroDECK runtime path, system, and core resolution Protocols.
+"""RetroDECK runtime folder, system, and core resolution Protocols.
 
 Services query the host RetroDECK/RetroArch/ES-DE environment through
-these Protocols: filesystem path getters (saves, roms, BIOS,
-RetroDECK home), platform-to-system resolution, where a game's save
-lives, and RetroArch core lookups for ES-DE configured systems.
+these Protocols: RetroDECK's folders (a system's ROM folder, the ROM, BIOS
+and saves roots, the move code's roots), platform-to-system resolution,
+where a game's save lives, and RetroArch core lookups for ES-DE configured
+systems.
 ``PlatformCoreReader`` exposes Tender's own per-platform core
 selection (stored in ``settings.json``, not the ES-DE gamelist) that the
 resolver layers over the es_systems default.
@@ -16,10 +17,10 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     from domain.emulator_sources import SourceReport, SourcesReading
     from domain.firmware_wants import FirmwareCatalogue
+    from domain.retrodeck_folders import FolderRefused, MoveRoots
     from domain.save_answer import SaveAnswer
     from domain.savestate_location import NoSavestates, SavestateLocation
     from domain.shortcut_data import EmulatorInvocation
-    from lib.retrodeck_health import RetroDeckConfigHealth
 
 
 class SystemResolver(Protocol):
@@ -70,30 +71,31 @@ class FirmwarePlatformResolver(Protocol):
     def __call__(self, system: str) -> FirmwareCatalogue: ...
 
 
-class RetroDeckPaths(Protocol):
-    """Bundled accessor for the RetroDECK runtime directory paths plus a
-    health signal for how trustworthy those paths are.
+class RetroDeckFolders(Protocol):
+    """RetroDECK's folders, each the resolver's answer — or the refusal that stands in for one.
 
-    Distinct method names per path are deliberate: a single
-    ``def __call__(self) -> str`` shape would make a saves-for-bios
-    mix-up silently type-check at the call site. Separate names give
-    the type checker enough information to flag it. The path getters are
-    best-effort and never raise; ``config_health`` says when the resolved
-    roots are likely wrong (``retrodeck.json`` unreadable, or its resolved
-    home missing on disk).
+    A download asks :meth:`download_folder` or :meth:`bios_download_folder`,
+    which refuse unless RetroDECK is detected and switched on, its folders are
+    neither defaults nor missing, and the folder can be created below a root
+    that exists. A removal asks for the root it is bounded by: :meth:`rom_root`
+    refuses where it cannot be named, in the words an uninstall says;
+    :meth:`bios_folder` and :meth:`saves_root` answer ``None`` instead. All
+    three refuse while the folders are defaults, and none minds the switch. A
+    refusal comes back as a value; the caller that needed the folder raises it.
+    :meth:`move_roots` is the move code's. Every path is symlink-resolved.
     """
 
-    def saves_path(self) -> str: ...
+    def download_folder(self, system: str) -> str | FolderRefused: ...
 
-    def roms_path(self) -> str: ...
+    def bios_download_folder(self) -> str | FolderRefused: ...
 
-    def bios_path(self) -> str: ...
+    def rom_root(self) -> str | FolderRefused: ...
 
-    def retrodeck_home(self) -> str: ...
+    def bios_folder(self) -> str | FolderRefused | None: ...
 
-    def config_path(self) -> str: ...
+    def saves_root(self) -> str | FolderRefused | None: ...
 
-    def config_health(self) -> RetroDeckConfigHealth: ...
+    def move_roots(self) -> MoveRoots | None: ...
 
 
 class CoreResolverFn(Protocol):

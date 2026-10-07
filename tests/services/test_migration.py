@@ -19,7 +19,7 @@ from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_migration_file_store import FakeMigrationFileStore
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
-from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
@@ -134,7 +134,7 @@ def migration(logger) -> MigrationHarness:
             settings_persister=FakeSettingsPersister(),
             emit=RecordingEmitter(),
             firmware_resolver=FakeFirmwareResolver(),
-            retrodeck_paths=FakeRetroDeckPaths(),
+            retrodeck_folders=FakeRetroDeckFolders(),
             relaunch_options=relaunch_options,
             save_directories=save_directories.provide,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
@@ -241,7 +241,7 @@ class TestPathChangeDetection:
         fake_home = str(tmp_path / "retrodeck")
         os.makedirs(fake_home, exist_ok=True)
 
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=fake_home)
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(home=fake_home)
         migration.service.detect_retrodeck_path_change()
 
         with migration.uow as uow:
@@ -260,7 +260,7 @@ class TestPathChangeDetection:
         loop = _RecordingLoop()
         migration.service._loop = loop
 
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=fake_home)
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(home=fake_home)
         migration.service.detect_retrodeck_path_change()
 
         assert loop.tasks == []
@@ -286,7 +286,7 @@ class TestPathChangeDetection:
             uow.kv_config.set("retrodeck_home_path", stored_home)
         loop = _RecordingLoop()
         migration.service._loop = loop
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=str(real_home))
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(home=str(real_home))
 
         migration.service.detect_retrodeck_path_change()
 
@@ -317,7 +317,7 @@ class TestPathChangeDetection:
             uow.kv_config.set("retrodeck_home_path_previous", linked_home)
         loop = _RecordingLoop()
         migration.service._loop = loop
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=str(real_home))
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(home=str(real_home))
 
         migration.service.detect_retrodeck_path_change()
 
@@ -337,7 +337,7 @@ class TestPathChangeDetection:
             uow.kv_config.set("retrodeck_home_path_previous", home)
             uow.kv_config.set("retrodeck_home_path_hops", json.dumps([str(tmp_path / "sd-card" / "retrodeck")]))
         migration.service._loop = _RecordingLoop()
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=home)
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(home=home)
 
         migration.service.detect_retrodeck_path_change()
 
@@ -369,7 +369,7 @@ class TestPathChangeDetection:
 
         with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", gone_home)
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=new_home)
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(home=new_home)
 
         migration.service.detect_retrodeck_path_change()
         await asyncio.sleep(0)
@@ -394,7 +394,7 @@ class TestPathChangeDetection:
         with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", old_home)
 
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=new_home)
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(home=new_home)
         migration.service.detect_retrodeck_path_change()
 
         # ``create_task`` schedules the emit coroutine on the running loop —
@@ -416,12 +416,12 @@ class TestPathChangeDetection:
         assert "cleared" not in payload
 
     def test_empty_current_home_no_action(self, migration, tmp_path):
-        """If ``retrodeck_paths`` returns empty string, do nothing."""
+        """If ``retrodeck_folders`` returns empty string, do nothing."""
 
         loop = _RecordingLoop()
         migration.service._loop = loop
 
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(home="")
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(home="")
         migration.service.detect_retrodeck_path_change()
 
         assert loop.tasks == []
@@ -440,7 +440,7 @@ class TestPathChangeDetection:
             uow.kv_config.set("retrodeck_home_path", new_home)
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
 
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=old_home)
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(home=old_home)
         migration.service.detect_retrodeck_path_change()
 
         # ``create_task`` schedules the emit coroutine on the running loop —
@@ -472,7 +472,7 @@ class TestPathChangeDetection:
             uow.kv_config.set("retrodeck_home_path", new_home)
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
 
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=old_home)
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(home=old_home)
         migration.service.detect_retrodeck_path_change()
 
         # ``create_task`` schedules the emit coroutine on the running loop —
@@ -952,7 +952,7 @@ class TestMigrateRetroDeckFiles:
             uow.kv_config.set("retrodeck_home_path", new_home)
         _seed_install(migration.uow, 1, file_path=old_rom, system="n64")
         service = migration.service
-        service._retrodeck_paths = FakeRetroDeckPaths(
+        service._retrodeck_folders = FakeRetroDeckFolders(
             home=new_home,
             saves=os.path.join(new_home, "saves"),
             roms=os.path.join(new_home, "roms"),
@@ -1119,7 +1119,7 @@ class TestMigrateSaveFiles:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
 
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(saves=os.path.join(new_home, "saves"))
         result = await migration.service.migrate_retrodeck_files()
 
         assert result["success"] is True
@@ -1149,7 +1149,7 @@ class TestMigrateSaveFiles:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
 
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(saves=os.path.join(new_home, "saves"))
         result = await migration.service.migrate_retrodeck_files()
 
         assert result["needs_confirmation"] is True
@@ -1176,7 +1176,7 @@ class TestMigrateSaveFiles:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
 
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(saves=os.path.join(new_home, "saves"))
         result = await migration.service.migrate_retrodeck_files("overwrite")
 
         assert result["success"] is True
@@ -1204,7 +1204,7 @@ class TestMigrateSaveFiles:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
 
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(saves=os.path.join(new_home, "saves"))
         result = await migration.service.migrate_retrodeck_files("skip")
 
         assert result["success"] is True
@@ -1232,7 +1232,7 @@ class TestMigrateSaveFiles:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
 
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(saves=os.path.join(new_home, "saves"))
         result = await migration.service.migrate_retrodeck_files()
 
         assert result["saves_moved"] == 1  # only the real save, not the backup
@@ -1253,7 +1253,7 @@ class TestMigrateSaveFiles:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
 
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(new_home, "saves"))
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(saves=os.path.join(new_home, "saves"))
         status = await migration.service.get_migration_status()
 
         assert status["pending"] is True
@@ -1610,7 +1610,7 @@ class TestMigrationFailureInjection:
             "settings_persister": FakeSettingsPersister(),
             "emit": RecordingEmitter(),
             "firmware_resolver": FakeFirmwareResolver(),
-            "retrodeck_paths": FakeRetroDeckPaths(),
+            "retrodeck_folders": FakeRetroDeckFolders(),
             "relaunch_options": FakeRelaunchOptionsResolver(),
             "save_directories": RecordingSaveDirectories().provide,
             "uow_factory": FakeUnitOfWorkFactory(uow=uow),
@@ -1709,7 +1709,7 @@ class TestBackgroundTaskTracking:
 
         with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", old_home)
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=new_home)
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(home=new_home)
 
         assert migration.service._background_tasks == set()
 
@@ -1733,7 +1733,7 @@ class TestBackgroundTaskTracking:
 
         with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", old_home)
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=new_home)
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(home=new_home)
 
         migration.service.detect_retrodeck_path_change()
         assert len(migration.service._background_tasks) == 1
@@ -1793,7 +1793,7 @@ class TestChainedPathChangeDetection:
     """
 
     async def _detect_at(self, migration, home: str) -> None:
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(home=home)
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(home=home)
         migration.service.detect_retrodeck_path_change()
         # Drain the spawned ``retrodeck_path_changed`` emit coroutine.
         await asyncio.sleep(0)
@@ -2166,7 +2166,7 @@ class TestChainedMigration:
 
         with migration.uow as uow:
             self._set_pending(uow, previous=a, hops=[b], home=c)
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(c, "saves"))
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(saves=os.path.join(c, "saves"))
 
         result = await migration.service.migrate_retrodeck_files()
 
@@ -2190,7 +2190,7 @@ class TestChainedMigration:
         resolver = FakeFirmwareResolver()
         resolver.declare("scph5501.bin", required_by=["mednafen_psx_libretro"])
         migration.service._firmware_resolver = resolver
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(bios=os.path.join(c, "bios"))
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(bios=os.path.join(c, "bios"))
 
         with migration.uow as uow:
             self._set_pending(uow, previous=a, hops=[b], home=c)
@@ -2218,7 +2218,7 @@ class TestChainedMigration:
         with migration.uow as uow:
             self._set_pending(uow, previous=a, hops=[b], home=c)
         _seed_install(migration.uow, 1, file_path=rom_a, system="n64")
-        migration.service._retrodeck_paths = FakeRetroDeckPaths(saves=os.path.join(c, "saves"))
+        migration.service._retrodeck_folders = FakeRetroDeckFolders(saves=os.path.join(c, "saves"))
 
         status = await migration.service.get_migration_status()
 

@@ -16,6 +16,11 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
+# Every download, adoption and removal here lands in RetroDECK's folders.
+pytestmark = pytest.mark.usefixtures("seeded_retrodeck")
+
 _DC_FIRMWARE = [
     {
         "id": 1,

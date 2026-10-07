@@ -18,7 +18,7 @@ from _factories import (
 )
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_hostname_reader import FakeHostnameReader
-from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_save_api import FakeSaveApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
@@ -60,7 +60,7 @@ def saves(tmp_path) -> SavesHarness:
     service, api = make_service(
         tmp_path,
         settings=settings,
-        retrodeck_paths=FakeRetroDeckPaths(saves=saves_root, roms=str(tmp_path / "retrodeck" / "roms")),
+        retrodeck_folders=FakeRetroDeckFolders(saves=saves_root, roms=str(tmp_path / "retrodeck" / "roms")),
         save_locations=FakeSaveLocationReader(saves_root=saves_root),
     )
     return SavesHarness(service=service, api=api, settings=settings)

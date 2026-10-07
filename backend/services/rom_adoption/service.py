@@ -26,6 +26,7 @@ from dataclasses import dataclass, replace
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
+from domain.retrodeck_folders import FolderRefused
 from domain.rom_adoption import (
     DigestRequest,
     FileDifference,
@@ -70,7 +71,7 @@ if TYPE_CHECKING:
         DebugLogger,
         DownloadFileStore,
         EventEmitter,
-        RetroDeckPaths,
+        RetroDeckFolders,
         RomInstallRecorder,
         RommRomReader,
         SaveLocationReader,
@@ -158,7 +159,7 @@ class RomAdoptionServiceConfig:
     adoption_move: AdoptionMoveStore
     quarantine_save: SaveQuarantineFn
     resolve_system: SystemResolver
-    retrodeck_paths: RetroDeckPaths
+    retrodeck_folders: RetroDeckFolders
     install_recorder: RomInstallRecorder
     m3u_support: SystemM3uSupportFn
     system_extensions: SystemSupportedExtensionsFn
@@ -189,7 +190,7 @@ class RomAdoptionService:
         self._romm_api = config.romm_api
         self._download_file_store = config.download_file_store
         self._resolve_system = config.resolve_system
-        self._retrodeck_paths = config.retrodeck_paths
+        self._retrodeck_folders = config.retrodeck_folders
         self._install_recorder = config.install_recorder
         self._m3u_support = config.m3u_support
         self._system_extensions = config.system_extensions
@@ -210,7 +211,7 @@ class RomAdoptionService:
                 resolve_system=config.resolve_system,
                 system_extensions=config.system_extensions,
                 system_known=config.system_known,
-                retrodeck_paths=config.retrodeck_paths,
+                retrodeck_folders=config.retrodeck_folders,
                 uow_factory=config.uow_factory,
                 logger=config.logger,
                 log_debug=config.log_debug,
@@ -384,9 +385,21 @@ class RomAdoptionService:
         never the thing ``os.replace`` swaps, so leaving it would leave it.
         """
         if not is_dir and not is_multi_file_download(rom_detail):
-            roms_base = self._retrodeck_paths.roms_path()
-            return None if roms_base and is_safe_rom_path(checked_path, roms_base) else _unsafe_replace_refusal()
+            roms_base = self._roms_base()
+            return None if is_safe_rom_path(checked_path, roms_base) else _unsafe_replace_refusal()
         return self._remove_under_roms(checked_path, is_dir=is_dir)
+
+    def _roms_base(self) -> str:
+        """RetroDECK's ROM root a replace is bounded by.
+
+        Raises the refusal where there is none to name, the uninstall's own
+        (``RetroDeckFolders.rom_root``), so nothing is removed under a guessed
+        root.
+        """
+        root = self._retrodeck_folders.rom_root()
+        if isinstance(root, FolderRefused):
+            raise root
+        return root
 
     def _remove_under_roms(self, path: str, *, is_dir: bool) -> dict[str, Any] | None:
         """Delete *path*, refusing anything that is not safely inside the ROMs tree.
@@ -396,8 +409,8 @@ class RomAdoptionService:
         removal instead of letting the download proceed onto ground it could not
         clear.
         """
-        roms_base = self._retrodeck_paths.roms_path()
-        if not roms_base or not is_safe_rom_path(path, roms_base):
+        roms_base = self._roms_base()
+        if not is_safe_rom_path(path, roms_base):
             self._logger.error(f"Refusing to replace content outside the ROMs directory: {path}")
             return _unsafe_replace_refusal()
         try:
@@ -447,12 +460,8 @@ class RomAdoptionService:
         if not candidate_path:
             return None
         target = self._resolve_target(rom_detail)
-        if target is None:
-            return {
-                "success": False,
-                "reason": "path_traversal",
-                "message": "Server sent an unsafe platform path — download aborted",
-            }
+        if isinstance(target, FolderRefused):
+            raise target
         source_path = self._resolve_source(target, candidate_path)
         if source_path is None:
             return {
@@ -523,12 +532,8 @@ class RomAdoptionService:
             self._logger.error(f"Failed to fetch ROM {rom_id} for adoption: {e}")
             return error_response(e)
         target = self._resolve_target(rom_detail)
-        if target is None:
-            return {
-                "success": False,
-                "reason": "path_traversal",
-                "message": "Server sent an unsafe platform path — adoption aborted",
-            }
+        if isinstance(target, FolderRefused):
+            raise target
         source_path = self._resolve_source(target, candidate_path)
         if source_path is None:
             return {
@@ -564,7 +569,7 @@ class RomAdoptionService:
         if not candidate_path:
             return target.path
         path = os.path.normpath(str(candidate_path))
-        roms_base = self._retrodeck_paths.roms_path()
+        roms_base = self._roms_base()
         if os.path.dirname(path) != os.path.dirname(target.path) or not is_safe_rom_path(path, roms_base):
             self._logger.error(f"Rejected adoption candidate outside this game's platform directory: {path}")
             return None
@@ -732,11 +737,13 @@ class RomAdoptionService:
             failure = error_response(e)
             return {"status": "error", "message": failure["message"], "differences": []}
         target = self._resolve_target(rom_detail)
-        if target is None:
+        if isinstance(target, FolderRefused):
             return {
                 "status": "error",
-                "message": "Server sent an unsafe platform path — nothing was checked",
+                "reason": target.reason,
+                "message": target.message,
                 "differences": [],
+                **target.details,
             }
         source_path = self._resolve_source(target, candidate_path)
         if source_path is None:
@@ -944,22 +951,22 @@ class RomAdoptionService:
 
     # ── Target resolution ───────────────────────────────────────────
 
-    def _resolve_target(self, rom_detail: dict[str, Any]) -> _Target | None:
-        """Resolve the path this ROM's content occupies, or ``None`` on an unsafe slug.
+    def _resolve_target(self, rom_detail: dict[str, Any]) -> _Target | FolderRefused:
+        """Resolve the path this ROM's content occupies, or why RetroDECK names no folder for it.
 
-        Mirrors the download's own derivation: the platform directory is joined
-        under containment, the server-supplied name is coerced to a single safe
+        Mirrors the download's own derivation: the platform folder is the one a
+        download lands in, the server-supplied name is coerced to a single safe
         component, and a multi-file ROM is named by its ROM identity rather than
         by ``files[0]``. A multi-file ROM's path is its directory; a single-file
         ROM's is the file itself.
         """
         platform_slug = rom_detail.get("platform_slug", "")
         system = self._resolve_system(platform_slug, rom_detail.get("platform_fs_slug"))
-        try:
-            roms_dir = safe_join(self._retrodeck_paths.roms_path(), system)
-        except (PathTraversalError, TypeError) as e:
-            self._logger.error(f"Rejected adoption target: unsafe platform slug {system!r}: {e}")
-            return None
+        folder = self._retrodeck_folders.download_folder(system)
+        if isinstance(folder, FolderRefused):
+            self._logger.error(f"No adoption target for system {system!r}: {folder.reason}")
+            return folder
+        roms_dir = folder
         fallback = synthetic_rom_name(rom_detail)
         if is_multi_file_download(rom_detail):
             name, _changed = coerce_safe_component(resolve_extract_dir_name(rom_detail), fallback)

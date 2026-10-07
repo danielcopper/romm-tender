@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.retrodeck_folders import FolderRefused
 from lib.path_safety import PathTraversalError, safe_join
 
 if TYPE_CHECKING:
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
         FirmwareFileStore,
         FirmwarePlatformResolver,
         FirmwareResolver,
-        RetroDeckPaths,
+        RetroDeckFolders,
     )
 
 
@@ -36,14 +37,14 @@ class FirmwareDemandConfig:
 
     Holds the two resolver seams — the per-platform reading every status answer
     is built from, and the whole-machine one the two callers with no platform to
-    name fall back to — the RetroDECK path accessor the destinations are built
-    under, the file store Tender's own presence probe goes through, and the
+    name fall back to — RetroDECK's folders, whose BIOS folder the destinations
+    are built under, the file store Tender's own presence probe goes through, and the
     logger a poisoned entry is reported on.
     """
 
     firmware_resolver: FirmwareResolver
     platform_firmware_resolver: FirmwarePlatformResolver
-    retrodeck_paths: RetroDeckPaths
+    retrodeck_folders: RetroDeckFolders
     firmware_file_store: FirmwareFileStore
     logger: logging.Logger
 
@@ -54,7 +55,7 @@ class FirmwareDemand:
     def __init__(self, *, config: FirmwareDemandConfig) -> None:
         self._firmware_resolver = config.firmware_resolver
         self._platform_firmware_resolver = config.platform_firmware_resolver
-        self._retrodeck_paths = config.retrodeck_paths
+        self._retrodeck_folders = config.retrodeck_folders
         self._firmware_file_store = config.firmware_file_store
         self._logger = config.logger
 
@@ -92,7 +93,28 @@ class FirmwareDemand:
 
     # ── Destinations ─────────────────────────────────────────
 
-    def dest_path(self, firmware, placement: FirmwarePlacement | None) -> str:
+    def download_root(self) -> str:
+        """RetroDECK's BIOS folder a download lands under. Blocking.
+
+        Raises the folder's refusal where no BIOS download may land: RetroDECK
+        not installed or switched off, its folders defaults or missing.
+        """
+        root = self._retrodeck_folders.bios_download_folder()
+        if isinstance(root, FolderRefused):
+            raise root
+        return root
+
+    def status_root(self) -> str | None:
+        """The BIOS folder a status row is placed under, or ``None`` where no download may land. Blocking.
+
+        ``None`` leaves every row Tender would have looked at itself without an
+        answer: a folder nobody may download into is not one this service
+        probes. The resolver's own answers stand either way.
+        """
+        root = self._retrodeck_folders.bios_download_folder()
+        return None if isinstance(root, FolderRefused) else root
+
+    def dest_path(self, firmware, placement: FirmwarePlacement | None, bios_base: str | None = None) -> str:
         """Determine the local destination path for a firmware file.
 
         Uses the resolver's own placement for correct subdirectory placement
@@ -116,13 +138,17 @@ class FirmwareDemand:
         name matches a directory declaration — ``bios`` against LRPS2's
         ``pcsx2/bios``, which RetroDECK links onto the root. The read paths want
         exactly that; the write path would place a ``.tmp`` sibling of the root.
+
+        *bios_base* is the BIOS folder to place under; ``None`` asks
+        :meth:`download_root`, which raises where no download may land.
         """
-        bios_base = self._retrodeck_paths.bios_path()
+        if bios_base is None:
+            bios_base = self.download_root()
         if placement is not None:
             return safe_join(bios_base, placement.destination, allow_base=True)
         return safe_join(bios_base, firmware.get("file_name", ""))
 
-    def safe_dest_path(self, firmware, placement: FirmwarePlacement | None) -> str | None:
+    def safe_dest_path(self, firmware, placement: FirmwarePlacement | None, bios_base: str | None = None) -> str | None:
         """Read-path wrapper for ``dest_path`` — ``None`` on a poisoned entry.
 
         The status queries (``check_platform_bios``, the overview)
@@ -133,12 +159,12 @@ class FirmwareDemand:
         ``dest_path`` so a download attempt fails closed.
         """
         try:
-            return self.dest_path(firmware, placement)
+            return self.dest_path(firmware, placement, bios_base)
         except PathTraversalError as e:
             self._logger.warning(f"Skipping firmware with unsafe file name: {e}")
             return None
 
-    def is_downloaded(self, placement: FirmwarePlacement | None, dest: str) -> bool:
+    def is_downloaded(self, placement: FirmwarePlacement | None, dest: str | None) -> bool:
         """Is the file at *dest* there? The resolver answers wherever it has a requirement.
 
         The boundary, and it is drawn rather than incidental: **a row the
@@ -170,13 +196,18 @@ class FirmwareDemand:
         ``BiosFileEntry.satisfied``, and for a folder declaration the two come
         apart: what satisfies the emulator is a file inside the folder, and the
         folder itself is there on every stock RetroDECK.
+
+        A *dest* of ``None`` is a row with no BIOS folder to place it under
+        (:meth:`status_root`): our own probe has nowhere to look, so it answers
+        ``False`` and the row's verdict is withheld
+        (``domain.bios_status.build_file_entry``).
         """
         if placement is None or placement.relative_path is None:
-            return self._firmware_file_store.exists(dest)
+            return dest is not None and self._firmware_file_store.exists(dest)
         return placement.present is True
 
     def wanted_beyond_server(
-        self, placements: Mapping[str, FirmwarePlacement], in_library: set[str]
+        self, placements: Mapping[str, FirmwarePlacement], in_library: set[str], bios_base: str | None
     ) -> list[dict[str, Any]]:
         """Items for files this platform's emulators want that the library lacks.
 
@@ -194,17 +225,21 @@ class FirmwareDemand:
         their library while it sits there under the neighbouring system. It is
         one download either way: the destination comes from the placement, so
         fetching it anywhere satisfies every emulator that asked.
+
+        *bios_base* is :meth:`status_root`; where it is ``None`` no row has a
+        destination.
         """
-        bios_base = self._retrodeck_paths.bios_path()
         items: list[dict[str, Any]] = []
         for placement in sorted(placements.values(), key=lambda entry: entry.file_name):
             if placement.file_name in in_library:
                 continue
-            try:
-                dest = safe_join(bios_base, placement.destination, allow_base=True)
-            except PathTraversalError as e:
-                self._logger.warning(f"Skipping firmware with unsafe placement: {e}")
-                continue
+            dest: str | None = None
+            if bios_base is not None:
+                try:
+                    dest = safe_join(bios_base, placement.destination, allow_base=True)
+                except PathTraversalError as e:
+                    self._logger.warning(f"Skipping firmware with unsafe placement: {e}")
+                    continue
             items.append(
                 {
                     "file_name": placement.file_name,

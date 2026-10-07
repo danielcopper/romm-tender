@@ -137,7 +137,7 @@ def seed_install(
 ) -> str:
     """Seed a ``RomInstall`` (seeds the ``Rom`` FK first). Returns the file path."""
     seed_rom(harness, rom_id, platform_slug=platform_slug)
-    file_path = os.path.join(harness.retrodeck_paths.roms_path(), system, file_name)
+    file_path = os.path.join(harness.roms_root, system, file_name)
     with harness.uow_factory() as uow:
         uow.rom_installs.save(
             RomInstall.mark_installed(
@@ -195,7 +195,7 @@ def seed_group_member(
         )
     if not installed:
         return None
-    file_path = os.path.join(harness.retrodeck_paths.roms_path(), system, file_name)
+    file_path = os.path.join(harness.roms_root, system, file_name)
     with harness.uow_factory() as uow:
         uow.rom_installs.save(
             RomInstall.mark_installed(
@@ -282,6 +282,7 @@ _DEFAULT_ES_SYSTEMS_XML = """\
 <systemList>
   <system>
     <name>gba</name>
+    <path>%ROMPATH%/gba</path>
     <command label="mGBA">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>
     <command label="VBA Next">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/vba_next_libretro.so %ROM%</command>
   </system>
@@ -328,15 +329,25 @@ def _retrodeck_marker_path(harness: ContractHarness) -> str:
 
 
 def seed_retrodeck_marker(harness: ContractHarness) -> None:
-    """Write ``retrodeck.json`` so a RetroDECK installation is detected at all.
+    """Write ``retrodeck.json`` so a RetroDECK installation is detected at all, and ES-DE's ROM folder setting.
 
-    The emulator catalogue is resolved per installation, and an installation is
-    detected by this file's existence. Its paths are written to exactly what
-    Tender's own path adapter falls back to when the file is absent, so seeding
-    it moves the catalogue from "no installation" to "readable" and changes
-    nothing else about where a contract test's roots point.
+    The emulator catalogue and every folder Tender uses are resolved per
+    installation, and an installation is detected by this file's existence. Its
+    paths are the harness roots (``harness.retrodeck_home``, ``roms_root``,
+    ``saves_root``). ES-DE's ``ROMDirectory`` is written as RetroDECK writes it,
+    to its own ROM folder, because the resolver takes a system's ROM folder from
+    ES-DE's setting rather than from this file. The home, ROM and saves folders
+    are created, as RetroDECK's setup creates them: Tender creates no root.
     """
     rd_home = os.path.join(str(harness.tmp_path), "home", "retrodeck")
+    for folder in ("roms", "saves"):
+        os.makedirs(os.path.join(rd_home, folder), exist_ok=True)
+    settings = os.path.join(
+        str(harness.tmp_path), "home", ".var", "app", "net.retrodeck.retrodeck", "config", "ES-DE", "settings"
+    )
+    os.makedirs(settings, exist_ok=True)
+    with open(os.path.join(settings, "es_settings.xml"), "w") as f:
+        f.write(f'<string name="ROMDirectory" value="{os.path.join(rd_home, "roms")}" />\n')
     dest = _retrodeck_marker_path(harness)
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     with open(dest, "w") as f:

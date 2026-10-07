@@ -25,7 +25,12 @@ import stat
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from ._seed import seed_retrodeck_not_set_up, seed_rom
+
+# Every download, adoption and removal here lands in RetroDECK's folders.
+pytestmark = pytest.mark.usefixtures("seeded_retrodeck")
 
 _ROM_ID = 41
 _CANDIDATE = "rom-41 (U).gba"
@@ -33,21 +38,21 @@ _CANONICAL = "rom-41 (USA).gba"
 
 
 def _platform_dir(harness) -> Path:
-    path = Path(harness.retrodeck_paths.roms_path()) / "gba"
+    path = Path(harness.roms_root) / "gba"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def _saves_dir(harness) -> Path:
     # savefiles: content-sorted, so the subdirectory is the folder the ROM sits in.
-    path = Path(harness.retrodeck_paths.saves_path()) / "gba"
+    path = Path(harness.saves_root) / "gba"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def _states_dir(harness) -> Path:
     # savestates: not sorted at all, so they sit directly under the states root.
-    path = Path(harness.retrodeck_paths.retrodeck_home()) / "states"
+    path = Path(harness.retrodeck_home) / "states"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -235,17 +240,24 @@ async def test_the_page_reports_a_candidate_without_the_user_pressing_download(h
     assert detail["target_path_occupied"] is False
 
 
-async def test_a_retrodeck_that_is_not_set_up_does_not_hide_the_candidate(harness):
-    # Its catalogue answers nothing yet, which says nothing about whether the
-    # platform folder is a place this game can live.
+async def test_a_retrodeck_that_is_not_set_up_is_not_searched_and_its_systems_stay_known(harness):
+    # Its folders are only defaults until it is set up, so Tender looks into
+    # none of them: the page shows no candidate and the press says why. Its
+    # catalogue answers nothing yet, which still says nothing against a system.
     seed_retrodeck_not_set_up(harness)
     seed_rom(harness, _ROM_ID, platform_slug="gba")
     _stage(harness)
-    _place_candidate(harness)
+    candidate = _place_candidate(harness)
 
     detail = await harness.endpoints.get_cached_game_detail(_ROM_ID)
+    pressed = await harness.endpoints.start_download(_ROM_ID, False, None, None)
 
-    assert detail["adoption_candidate_present"] is True
+    assert detail["adoption_candidate_present"] is False
+    assert pressed["success"] is False
+    assert pressed["reason"] == "retrodeck_finding"
+    assert pressed["finding"]["code"] == "not-set-up"
+    assert harness.app.services.rom_adoption_service._search._system_known("gba") is not False
+    assert candidate.read_bytes() == b"my own dump"
 
 
 async def test_an_empty_platform_folder_leaves_the_page_offering_a_download(harness):
@@ -267,7 +279,7 @@ async def test_the_page_stays_usable_when_the_roms_folder_cannot_be_read(harness
     # catching this raise, so it says the probe ran AND survived.
     seed_rom(harness, _ROM_ID, platform_slug="gba")
     _stage(harness)
-    harness.app.services.rom_adoption_service._search._retrodeck_paths = _UnreadableRomsPaths()
+    harness.app.services.rom_adoption_service._search._retrodeck_folders = _UnreadableRomsPaths()
 
     with caplog.at_level(logging.WARNING):
         detail = await harness.endpoints.get_cached_game_detail(_ROM_ID)
@@ -278,9 +290,9 @@ async def test_the_page_stays_usable_when_the_roms_folder_cannot_be_read(harness
 
 
 class _UnreadableRomsPaths:
-    """A RetroDECK paths provider whose ROMs root raises, as an ejected SD card does."""
+    """RetroDECK's folders, whose ROM folder question raises, as an ejected SD card's read does."""
 
-    def roms_path(self) -> str:
+    def download_folder(self, system: str) -> str:
         raise OSError("Input/output error")
 
 
@@ -353,7 +365,7 @@ async def test_an_adopted_candidate_is_launchable_like_a_downloaded_one(harness)
 async def test_a_candidate_outside_this_game_s_platform_folder_is_refused(harness):
     seed_rom(harness, _ROM_ID, platform_slug="gba")
     _stage(harness)
-    elsewhere = Path(harness.retrodeck_paths.roms_path()) / "snes"
+    elsewhere = Path(harness.roms_root) / "snes"
     elsewhere.mkdir(parents=True, exist_ok=True)
     intruder = elsewhere / _CANDIDATE
     intruder.write_bytes(b"different platform")

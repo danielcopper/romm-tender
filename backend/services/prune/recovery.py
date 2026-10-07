@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.prune import recovery_bundle_id
+from domain.retrodeck_folders import FindingRefused, FolderRefused
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
         Clock,
         PruneArtifactStore,
         RecoveryBundleStore,
-        RetroDeckPaths,
+        RetroDeckFolders,
         SteamRecoveryStore,
         UnitOfWorkFactory,
         UuidGen,
@@ -33,7 +34,7 @@ class RecoveryCoordinatorConfig:
     recovery_store: RecoveryBundleStore
     prune_artifacts: PruneArtifactStore
     steam_recovery: SteamRecoveryStore
-    retrodeck_paths: RetroDeckPaths
+    retrodeck_folders: RetroDeckFolders
     clock: Clock
     uuid_gen: UuidGen
 
@@ -46,7 +47,7 @@ class RecoveryCoordinator:
         self._recovery_store = config.recovery_store
         self._prune_artifacts = config.prune_artifacts
         self._steam_recovery = config.steam_recovery
-        self._retrodeck_paths = config.retrodeck_paths
+        self._retrodeck_folders = config.retrodeck_folders
         self._clock = config.clock
         self._uuid_gen = config.uuid_gen
 
@@ -162,7 +163,9 @@ class RecoveryCoordinator:
         rom_ids = [row.rom_id for row in rows]
         artifacts: list[RecoveryArtifact] = list(save_inventory["artifacts"])
         artifacts.extend(self._prune_artifacts.recovery_artifacts(sorted(delete_ids)))
-        roms_root = self._retrodeck_paths.roms_path()
+        roms_root = self._retrodeck_folders.rom_root()
+        if isinstance(roms_root, FindingRefused):
+            raise roms_root
         raw_installs = snapshot.get("installs")
         installs = raw_installs if isinstance(raw_installs, list) else []
         installs_by_id = {
@@ -173,7 +176,9 @@ class RecoveryCoordinator:
             if install is None:
                 continue
             source = install.get("rom_dir") or install.get("file_path")
-            if isinstance(source, str) and source:
+            # Without a ROM root to bound it, the removal of this content is
+            # refused too, so the bundle has nothing of it to hold.
+            if isinstance(source, str) and source and not isinstance(roms_root, FolderRefused):
                 artifacts.append(
                     {"source_path": source, "safe_root": roms_root, "kind": "installed_rom", "rom_id": rom_id}
                 )

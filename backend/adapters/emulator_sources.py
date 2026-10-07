@@ -59,8 +59,9 @@ if TYPE_CHECKING:
 # While a source's settings file is missing, unreadable or damaged, or not
 # written yet because the source has not been set up, the root the resolver
 # gives is its default (``~/retrodeck`` for RetroDECK), not where the source
-# lies, so it is not shown.
-_ROOT_IS_A_DEFAULT = frozenset(
+# lies: it is not shown, and none of RetroDECK's folders is used
+# (``adapters/retrodeck_folders.py``).
+ROOTS_ARE_DEFAULTS = frozenset(
     {
         HEALTH_ISSUE_MARKER_MISSING,
         HEALTH_ISSUE_MARKER_UNREADABLE,
@@ -190,7 +191,7 @@ class EmulatorSourcesAdapter:
             kind=source.kind,
             enabled=source.enabled,
             starts_games=source.starts_games,
-            root=None if codes & _ROOT_IS_A_DEFAULT else self._ask(source.kind, "root", installation.root),
+            root=None if codes & ROOTS_ARE_DEFAULTS else self._ask(source.kind, "root", installation.root),
             findings=findings,
             catalogue=self._catalogue_state(source.kind, installation),
         )

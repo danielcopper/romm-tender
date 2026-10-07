@@ -25,6 +25,9 @@ from domain.rom_install import RomInstall
 from ._harness import hold_migration_pending, hold_prune_active, hold_update_in_progress
 from ._seed import seed_install, seed_rom
 
+# Every download, adoption and removal here lands in RetroDECK's folders.
+pytestmark = pytest.mark.usefixtures("seeded_retrodeck")
+
 _ROM_ID = 7
 _STALE_LAUNCH = "flatpak run net.retrodeck.retrodeck /gone/game.gba"
 
@@ -66,7 +69,7 @@ async def test_forget_drops_the_record_through_the_uninstall_writer(harness):
 
 async def test_forget_deletes_no_file(harness):
     file_path = _seed_missing_download(harness)
-    roms_root = harness.retrodeck_paths.roms_path()
+    roms_root = harness.roms_root
     bystander = os.path.join(os.path.dirname(file_path), "other.gba")
     _write(bystander)
     before = _tree(roms_root)
@@ -185,7 +188,7 @@ async def test_download_again_keeps_the_old_record_until_it_completes(harness):
     await _drain_background_tasks()
     new = _recorded(harness)
     assert new is not None
-    assert new.file_path == os.path.join(harness.retrodeck_paths.roms_path(), "gba", "game.gba")
+    assert new.file_path == os.path.join(harness.roms_root, "gba", "game.gba")
     detail = await harness.endpoints.get_cached_game_detail(_ROM_ID)
     assert detail["file_missing_at"] is None
 

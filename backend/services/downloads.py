@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from domain.disc_formats import DISC_IMAGE_EXTENSIONS
 from domain.disk_space import disk_space_verdict
 from domain.download_frames import cancelled_frame, failed_frame
+from domain.retrodeck_folders import FindingRefused, FolderRefused
 from domain.rom_files import (
     TMP_EXT,
     ZIP_TMP_EXT,
@@ -32,7 +33,7 @@ from domain.rom_files import (
     synthetic_rom_name,
 )
 from lib.errors import NotInstalled, Refused
-from lib.path_safety import PathTraversalError, coerce_safe_component, safe_join
+from lib.path_safety import coerce_safe_component
 
 if TYPE_CHECKING:
     import logging
@@ -45,7 +46,7 @@ if TYPE_CHECKING:
         DownloadFileStore,
         DownloadTargetGateFn,
         EventEmitter,
-        RetroDeckPaths,
+        RetroDeckFolders,
         RomInstallRecorder,
         RommRomReader,
         RomRemoverProvider,
@@ -59,9 +60,6 @@ _DOWNLOAD_QUEUE_MAX_TERMINAL = 50
 # One wording for both blocks that refuse a disk that cannot be read or prepared:
 # the user reads the same sentence whichever step raised.
 _START_FAILED_MESSAGE = "Failed to start download"
-# Said twice for a single refusal — once to the frontend as a failure frame,
-# once to the caller as the refusal itself — so the two cannot drift apart.
-_UNSAFE_PATH_MESSAGE = "Server sent an unsafe platform path — download aborted"
 
 # A download in one of these statuses has run to a terminal end — it is no
 # longer active/queued/paused/extracting. The queue prune trims the oldest of
@@ -103,7 +101,7 @@ class DownloadServiceConfig:
     """Frozen wiring bundle handed to ``DownloadService.__init__``.
 
     Holds the Protocol-typed adapters, runtime infrastructure, time/sleep
-    seams, the SQLite Unit-of-Work factory, and path providers
+    seams, the SQLite Unit-of-Work factory, and RetroDECK's folders
     DownloadService needs at construction time. ``install_recorder`` is the
     shared writer of the ``rom_installs`` row and the shortcut bake behind it;
     ``target_gate`` is the pre-flight that refuses to write over content
@@ -120,7 +118,7 @@ class DownloadServiceConfig:
     emit: EventEmitter
     clock: Clock
     sleeper: Sleeper
-    retrodeck_paths: RetroDeckPaths
+    retrodeck_folders: RetroDeckFolders
     install_recorder: RomInstallRecorder
     target_gate: DownloadTargetGateFn
     m3u_support: SystemM3uSupportFn
@@ -149,7 +147,7 @@ class DownloadService:
         self._emit = config.emit
         self._clock = config.clock
         self._sleeper = config.sleeper
-        self._retrodeck_paths = config.retrodeck_paths
+        self._retrodeck_folders = config.retrodeck_folders
         self._install_recorder = config.install_recorder
         self._target_gate = config.target_gate
         self._m3u_support = config.m3u_support
@@ -317,9 +315,9 @@ class DownloadService:
 
         Holds the ROM's in-progress claim from the first step and gives it back on every way out but a started
         download, a cancelled start included, so the ROM is never stuck "Already downloading". Of what the steps
-        raise, an ``OSError`` (a disk that cannot be read or prepared) is refused here with ``download_start_failed``
-        and an unsafe platform slug with ``path_traversal``; a RomM error and a refusal pass on unchanged, and
-        anything else is a bug.
+        raise, an ``OSError`` (a disk that cannot be read or prepared) is refused here with ``download_start_failed``;
+        a RomM error and a refusal — RetroDECK's folder refusal among them — pass on unchanged, and anything else is
+        a bug.
         """
         self._download_in_progress.add(rom_id)
         try:
@@ -338,19 +336,13 @@ class DownloadService:
         platform_fs_slug = rom_detail.get("platform_fs_slug")
         system = self._resolve_system(platform_slug, platform_fs_slug)
 
+        # The folder is taken once, here: a download that started lands where it
+        # started even if RetroDECK is switched off before it ends.
+        folder = self._retrodeck_folders.download_folder(system)
+        if isinstance(folder, FolderRefused):
+            raise folder
+        roms_dir = folder
         try:
-            roms_path = self._retrodeck_paths.roms_path()
-            try:
-                # ``system`` may be an unmapped server slug passed through verbatim
-                # (ADR-0010). Validate it stays under roms_path BEFORE any make_dirs
-                # so a slug like "../../etc" cannot create or write outside roms.
-                roms_dir = safe_join(roms_path, system)
-            except PathTraversalError as e:
-                self._logger.error(f"Rejected download for ROM {rom_id}: unsafe platform slug {system!r}: {e}")
-                name = rom_detail.get("name", "")
-                platform = rom_detail.get("platform_name", platform_slug)
-                await self._emit("download_failed", failed_frame(rom_id, name, platform, _UNSAFE_PATH_MESSAGE))
-                raise Refused("path_traversal", _UNSAFE_PATH_MESSAGE) from e
             file_name = self._safe_local_file_name(rom_detail)
             file_size = rom_detail.get("fs_size_bytes", 0)
             target_path = os.path.join(roms_dir, file_name)
@@ -528,8 +520,14 @@ class DownloadService:
         persisted — otherwise ``None``.
         """
         extract_dir = os.path.join(os.path.dirname(target_path), extract_dir_name)
+        # The removal's bound, which no switch changes: a download that started
+        # still extracts after RetroDECK is switched off.
+        roms_base = self._retrodeck_folders.rom_root()
+        if isinstance(roms_base, FindingRefused):
+            raise roms_base
+        if isinstance(roms_base, FolderRefused):
+            raise ValueError(f"No ROM root to extract {extract_dir} inside: {roms_base.message}")
         self._download_file_store.make_dirs(extract_dir)
-        roms_base = self._retrodeck_paths.roms_path()
         tmp_zip = target_path + ZIP_TMP_EXT
         # ZIP-slip protection: adapter validates members resolve within extract_dir
         # AND that extract_dir itself resolves within roms_base.

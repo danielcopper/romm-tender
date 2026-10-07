@@ -34,7 +34,7 @@ from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcessControlAdapter
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
-from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_rom_file_store import FakeRomFileStore
 from fakes.fake_rom_launch_path import FakeRomLaunchPathReader
 from fakes.fake_romm_api import FakeRommApi
@@ -648,7 +648,7 @@ def _dispatcher_over_rom_removal(uow: FakeUnitOfWork, rom_files: FakeRomFileStor
             clock=FakeClock(),
             emit=FakeEventSink().emit,
             rom_file_store=rom_files,
-            retrodeck_paths=FakeRetroDeckPaths(roms="/retrodeck/roms"),
+            retrodeck_folders=FakeRetroDeckFolders(roms="/retrodeck/roms"),
             download_queue_cleanup=None,
             uow_factory=FakeUnitOfWorkFactory(uow),
             conflict_rules=_make_conflict_rules(),

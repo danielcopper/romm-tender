@@ -19,6 +19,9 @@ from lib.errors import RommNotFoundError
 
 from ._harness import hold_sync_in_flight
 
+# Every download, adoption and removal here lands in RetroDECK's folders.
+pytestmark = pytest.mark.usefixtures("seeded_retrodeck")
+
 CONTROL_ROM_ID = 900041
 
 
@@ -68,7 +71,7 @@ def _seed_bulk_candidate(harness, rom_id: int = 41, *, control: bool = True) -> 
 
 def _seed_installed_bulk_candidate(harness, rom_id: int = 41) -> Path:
     _seed_bulk_candidate(harness, rom_id)
-    rom_path = Path(harness.retrodeck_paths.roms_path()) / "gba" / "Removed Game.gba"
+    rom_path = Path(harness.roms_root) / "gba" / "Removed Game.gba"
     rom_path.parent.mkdir(parents=True, exist_ok=True)
     rom_path.write_bytes(b"installed rom")
     with harness.uow_factory() as uow:
@@ -462,10 +465,10 @@ async def test_recovery_on_repoint_uses_real_save_inventory_filesystem_and_sqlit
         version=VersionMetadata(sibling_group_key="group-41", regions=("USA",)),
     )
     target.record_fetch_generation("completed-fetch")
-    rom_path = Path(harness.retrodeck_paths.roms_path()) / "gba" / source.fs_name
+    rom_path = Path(harness.roms_root) / "gba" / source.fs_name
     rom_path.parent.mkdir(parents=True)
     rom_path.write_bytes(b"installed rom")
-    save_path = Path(harness.retrodeck_paths.saves_path()) / "gba" / "Removed Game.srm"
+    save_path = Path(harness.saves_root) / "gba" / "Removed Game.srm"
     save_path.parent.mkdir(parents=True)
     save_path.write_bytes(b"local save")
     with harness.uow_factory() as uow:
@@ -674,10 +677,10 @@ async def test_release_wait_returns_immediately_for_an_unknown_run(harness):
 
 async def test_full_purge_leaves_save_states_completely_untouched(harness):
     _seed_bulk_candidate(harness)
-    rom_path = Path(harness.retrodeck_paths.roms_path()) / "gba" / "Removed Game.gba"
+    rom_path = Path(harness.roms_root) / "gba" / "Removed Game.gba"
     rom_path.parent.mkdir(parents=True)
     rom_path.write_bytes(b"installed rom")
-    saves_dir = Path(harness.retrodeck_paths.saves_path()) / "gba"
+    saves_dir = Path(harness.saves_root) / "gba"
     saves_dir.mkdir(parents=True)
     save_path = saves_dir / "Removed Game.srm"
     save_path.write_bytes(b"local save")
@@ -734,3 +737,45 @@ async def test_full_purge_leaves_save_states_completely_untouched(harness):
     manifest = json.loads((bundle / "manifest.json").read_text())
     assert not any(str(item["source_path"]).endswith(".state") for item in manifest["artifacts"])
     assert list(bundle.rglob("*.state")) == []
+
+
+async def test_without_a_rom_root_the_cleanup_runs_and_reports_the_files_it_could_not_remove(harness):
+    # ES-DE's ROM folder setting names no folder: nothing bounds the removal of
+    # the game's files, so they stay and the result says so; the rest runs.
+    rom_path = _seed_installed_bulk_candidate(harness)
+    harness.romm.get_rom_once_side_effect_by_id[41] = RommNotFoundError("gone")
+    preview = await harness.endpoints.get_prune_preview(_preview_request())
+    staged = await harness.endpoints.stage_prune_installed_selection(
+        _selection_request(preview["preview_id"], None, [41], True)
+    )
+    settings = (
+        Path(harness.tmp_path) / "home" / ".var/app/net.retrodeck.retrodeck/config/ES-DE/settings/es_settings.xml"
+    )
+    settings.write_text('<string name="ROMDirectory" value="relative/roms" />\n')
+
+    started = await harness.endpoints.start_prune(
+        {
+            "preview_id": preview["preview_id"],
+            "confirmed": True,
+            "repoint_shortcuts": True,
+            "remove_rows": True,
+            "remove_fully_vanished": True,
+            "create_recovery_bundle": True,
+            "installed_selection_id": staged["selection_id"],
+        }
+    )
+    task = harness.app.services.prune_service._task
+    assert task is not None
+    await task
+
+    assert started["success"] is True
+    assert rom_path.exists()
+    complete = [call.args[1] for call in harness.emit.await_args_list if call.args[0] == "prune_complete"][-1]
+    assert complete["removed_rom_ids"] == []
+    result = complete["results"][0]
+    assert result["rom_ids"] == [41]
+    assert result["message"] == "RetroDECK names no ROM folder, so Tender cannot uninstall this game."
+    assert "ambiguous_mutations" not in result
+    # The recovery bundle was still sealed, without the content nothing bounds.
+    manifest = json.loads((Path(result["bundle_path"]) / "manifest.json").read_text())
+    assert "installed_rom" not in {item["kind"] for item in manifest["artifacts"]}

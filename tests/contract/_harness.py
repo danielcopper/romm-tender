@@ -107,11 +107,15 @@ class ContractHarness:
     # to seed relational state (roms / rom_installs / rom_save_sync_states / kv_config)
     # exactly as the services read it — same database, same connection contract.
     uow_factory: Any
-    # The real RetroDECK paths provider the services were wired with. A migration
-    # test swaps a controllable fake onto
-    # ``app.services.migration_service._retrodeck_paths`` to drive RetroDECK-home
-    # changes through detection.
-    retrodeck_paths: Any
+    # Where a RetroDECK seeded through ``_seed.seed_retrodeck_marker`` keeps its
+    # home, ROMs and saves — the folders the real resolver answers once it is
+    # seeded, and nothing before: without a seeded RetroDECK the services are
+    # told no folder at all. A migration test swaps a controllable fake onto
+    # ``app.services.migration_service._retrodeck_folders`` to drive
+    # RetroDECK-home changes through detection.
+    retrodeck_home: str
+    roms_root: str
+    saves_root: str
     # The in-memory process table behind the stop-game ladder. Tests seed ``pids``
     # (and ``survive_stop`` / ``alive``) to stage what the kill should find.
     game_process: FakeGameProcessControlAdapter
@@ -200,6 +204,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
     #    is frozen, so rebuild it with dataclasses.replace. The real
     #    http_adapter is kept (resolve_system is a pure read) but its with_retry
     #    is neutralised so failure-injection tests don't sleep.
+    retrodeck_home = os.path.realpath(tmp_path / "home" / "retrodeck")
     fake_romm = FakeRommApi()
     fake_sgdb = FakeSteamGridDbApi()
     real_http = result.adapters.http_adapter
@@ -237,8 +242,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
         renderer_gc=FakeRendererGc(),
         game_process=fake_game_process,
         save_locations=FakeSaveLocationReader(
-            saves_root=result.callbacks.retrodeck_paths.saves_path(),
-            states_root=os.path.join(result.callbacks.retrodeck_paths.retrodeck_home(), "states"),
+            saves_root=os.path.join(retrodeck_home, "saves"), states_root=os.path.join(retrodeck_home, "states")
         ),
         latest_release=fake_releases,
         download_release_asset=fake_downloads,
@@ -297,7 +301,9 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
         clock=fake_clock,
         tmp_path=tmp_path,
         uow_factory=result.callbacks.uow_factory,
-        retrodeck_paths=result.callbacks.retrodeck_paths,
+        retrodeck_home=retrodeck_home,
+        roms_root=os.path.join(retrodeck_home, "roms"),
+        saves_root=os.path.join(retrodeck_home, "saves"),
         game_process=fake_game_process,
         settings_dir=result.directories.config_dir,
         data_dir=result.directories.data_dir,
