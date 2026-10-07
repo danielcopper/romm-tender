@@ -690,9 +690,10 @@ class TestWhereNoBiosDownloadMayLand:
     )
     async def test_every_download_press_is_refused_with_its_sentence(self, firmware, tmp_path, press, args):
         fw = self._service(firmware, tmp_path, FakeFirmwareResolver(), self._switched_off(tmp_path))
+        download = getattr(fw, press)
 
         with pytest.raises(FolderRefused) as refused:
-            await getattr(fw, press)(*args)
+            await download(*args)
 
         assert refused.value.message == (
             "BIOS downloads need RetroDECK, which is switched off in Settings → Emulator sources."

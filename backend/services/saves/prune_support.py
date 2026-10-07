@@ -250,19 +250,7 @@ class PruneSaveSupport:
         moved: list[str] = []
         try:
             for item in files:
-                backup_dir = os.path.join(item["saves_dir"], BACKUP_DIR_NAME)
-                if (
-                    not self._save_file_store.is_within(item["path"], saves_root)
-                    or not self._save_file_store.is_within(backup_dir, saves_root)
-                    or self._save_file_store.is_symlink(backup_dir)
-                ):
-                    raise ValueError(f"Unsafe save quarantine destination: {backup_dir}")
-                claim = claims.get(item["path"]) if claims is not None else None
-                if claim is None:
-                    claim = self._save_file_store.claim_source(item["path"], saves_root)
-                outcome = self._quarantine_claimed_file(
-                    item["saves_dir"], item["filename"], claim=claim, safe_root=saves_root
-                )
+                outcome = self._quarantine_one(item, claims, saves_root)
                 if outcome["changed"]:
                     moved += [item["path"]]
                 if not outcome["success"]:
@@ -270,6 +258,22 @@ class PruneSaveSupport:
         except Exception as exc:
             return SaveQuarantine(moved=moved, ambiguous=True, failure=str(exc))
         return SaveQuarantine(moved=moved, ambiguous=False)
+
+    def _quarantine_one(
+        self, item: dict[str, str], claims: dict[str, SourceClaim] | None, saves_root: str
+    ) -> MutationOutcome:
+        """Quarantine one projected save under *saves_root*, through its claim when one was sealed."""
+        backup_dir = os.path.join(item["saves_dir"], BACKUP_DIR_NAME)
+        if (
+            not self._save_file_store.is_within(item["path"], saves_root)
+            or not self._save_file_store.is_within(backup_dir, saves_root)
+            or self._save_file_store.is_symlink(backup_dir)
+        ):
+            raise ValueError(f"Unsafe save quarantine destination: {backup_dir}")
+        claim = claims.get(item["path"]) if claims is not None else None
+        if claim is None:
+            claim = self._save_file_store.claim_source(item["path"], saves_root)
+        return self._quarantine_claimed_file(item["saves_dir"], item["filename"], claim=claim, safe_root=saves_root)
 
     def validate_prune_absences(self, claims: dict[str, SourceClaim]) -> bool:
         """Require every quarantined purge-owned path to remain absent before cascade."""

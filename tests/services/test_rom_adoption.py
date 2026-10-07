@@ -423,9 +423,10 @@ class TestReplace:
     async def test_replace_refuses_when_retrodeck_names_no_rom_folder(self, h):
         h.paths.roms = ""
         h.store.files["/roms/psx/Game/a.bin"] = b"x"
+        detail = _multi_file_detail()
 
         with pytest.raises(FolderRefused) as refused:
-            await h.service.check_download_target(_multi_file_detail(), "/roms/psx/Game", replace=True)
+            await h.service.check_download_target(detail, "/roms/psx/Game", replace=True)
 
         assert refused.value.reason == "no_rom_root"
         assert refused.value.message == "RetroDECK names no ROM folder, so Tender cannot uninstall this game."
