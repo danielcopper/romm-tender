@@ -34,7 +34,7 @@ see [How this is built](../index.md). Install it from the URL below.
 
 1. Open the Quick Access Menu (QAM) in Gaming Mode by pressing the **...** button
 2. Go to the Decky Loader tab (the plug icon) and open settings (gear icon)
-3. Under **General → Other**, enable **Developer mode** — a new **Developer** tab appears in the sidebar
+3. Under **General › Other**, enable **Developer mode** — a new **Developer** tab appears in the sidebar
 4. Open the **Developer** tab and select **Install Plugin from URL**
 5. Enter the direct URL to the release zip
 
@@ -58,7 +58,7 @@ see [How this is built](../index.md). Install it from the URL below.
 6. Decky downloads and installs the plugin automatically — no restart needed
 
 **Tip:** You can also open the [releases page](https://github.com/danielcopper/romm-tender/releases) in Steam's built-in
-browser (Gaming Mode → long-press the Steam button → Web Browser), long-press the zip download link, and copy the URL
+browser (Gaming Mode › long-press the Steam button › Web Browser), long-press the zip download link, and copy the URL
 from there.
 
 Any direct URL to the zip file works (GitHub releases, a self-hosted mirror, etc.) as long as it points to a valid

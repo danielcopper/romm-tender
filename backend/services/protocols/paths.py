@@ -84,8 +84,8 @@ class RetroDeckFolders(Protocol):
     at once; it refuses where :meth:`rom_root` cannot be named, in the words an
     uninstall says, and refuses one system alone where RetroDECK names no
     folder for it. :meth:`bios_folder` and :meth:`saves_root` answer ``None``
-    where RetroDECK names none. All of them refuse while the folders are
-    defaults, and none minds the switch.
+    where RetroDECK is not detected or names none. Every removal question
+    refuses while the folders are defaults, and none minds the switch.
     Where detecting the sources, or asking about RetroDECK's health or one of
     its roots, raised, every question refuses — a download only once RetroDECK
     is not switched off, which it says first; a raise on a system's own folder

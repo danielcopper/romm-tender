@@ -111,7 +111,9 @@ class BiosFileEntry:
     for a **folder** declaration the two come apart completely, since what
     satisfies the requirement is a file inside the folder and the folder itself
     is always there on a stock RetroDECK. The library's own held/offered ratio
-    is a third axis and keys off neither (``on_server`` and ``downloaded``).
+    is a third axis and keys off neither (``on_server`` and ``downloaded``);
+    only the ratio a surface states is narrowed to the rows whose ``satisfied``
+    is not ``None``.
 
     ``declared_kind`` is what the emulator opens the destination at, and it is a
     property of the DECLARATION: a folder that is not there is still a folder to

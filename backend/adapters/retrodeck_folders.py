@@ -10,12 +10,13 @@ folder is the handle's ``rom_location(system).dir``, the ROM root ES-DE's
 handle's own ``bios_dir()`` and ``saves_root()``. Tender reads no RetroDECK
 file of its own and builds no folder from a root.
 
-**Every folder is symlink-resolved.** The roots are handed to the path guards
-as safe roots, and a ROM path those guards are asked about is recorded resolved
-wherever ``lib.path_safety.safe_join`` built it — so a root left as the
-resolver spells it makes one directory look like two on any system where
-``/home`` is a link to ``/var/home``, and a ROM recorded inside the root is
-refused as outside it.
+**Every folder is symlink-resolved.** The folders are handed to the path
+guards as safe roots — a system's own ROM folder for a game's files, the BIOS
+folder and saves root for theirs — and a ROM path those guards are asked about
+is recorded resolved wherever ``lib.path_safety.safe_join`` built it — so a
+folder left as the resolver spells it makes one directory look like two on any
+system where ``/home`` is a link to ``/var/home``, and a ROM recorded inside it
+is refused as outside it.
 
 **A download creates a folder only below a root that exists.** A system's ROM
 folder that is not there yet is created by the download, as ES-DE would create
@@ -28,9 +29,10 @@ reads RetroDECK's health and its four roots — home, ROM root, BIOS folder and
 saves root — in one go, so a raise from any of them, or from the detection of
 the sources, establishes none of them: every question then answers that
 RetroDECK's folders could not be established, the removal's bounds as well as a
-download's, and the move code sees no move. Only a download refused for the
-switch keeps saying so. A system's own ROM folder is not a root and is asked
-only by the question that needs it, so its raise refuses that answer alone.
+download's, the move code sees no move, and its migrate press is refused. Only a
+download refused for the switch keeps saying so. A system's own ROM folder is not
+a root and is asked only by the questions that need it, so its raise refuses
+that system's answer alone.
 """
 
 from __future__ import annotations
@@ -212,7 +214,11 @@ class RetroDeckFoldersAdapter:
         return os.path.realpath(saves) if saves else None
 
     def move_roots(self) -> MoveRoots | FolderRefused | None:
-        """RetroDECK's home, BIOS and saves roots; ``None`` without RetroDECK, or the refusal where they are unfit."""
+        """RetroDECK's home, BIOS and saves roots, ``None`` without RetroDECK — or the refusal where they are defaults.
+
+        A refusal also stands where they could not be established; the move
+        code then moves nothing.
+        """
         retrodeck = self._for_removal()
         if retrodeck is None or isinstance(retrodeck, FolderRefused):
             return retrodeck

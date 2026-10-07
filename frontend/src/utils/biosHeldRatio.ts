@@ -17,8 +17,9 @@
  * the download buttons (`services/firmware/status.py::_bios_aggregates`). The
  * rest of the tree calls that axis the **held/offered ratio**
  * (`domain/bios_status.py`, `types/firmware.ts`, GLOSSARY.md → Library
- * inventory) — the same numbers under the name the code gives them, which is the
- * name to search for when this wording does not appear.
+ * inventory); what this states is that ratio narrowed to the rows whose verdict
+ * was established, and the held/offered ratio is the name to search for when
+ * this wording does not appear.
  *
  * Naming the set is also why the pair need not be folded INTO that sentence. The
  * two are stated next to each other in every one of the seven states because one

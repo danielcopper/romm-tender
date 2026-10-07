@@ -702,8 +702,9 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // The library's own progress, read nowhere but `allDone`, which is one of
   // `showAll`'s conditions. Counted over what the LIBRARY holds, not over the
   // rows — the rows include files no library holds, and offering to fetch those
-  // is work the user cannot do. What the pane STATES is a separate reader of the
-  // same pair (`utils/biosHeldRatio`), and the optional-missing breakdown below
+  // is work the user cannot do. What the pane STATES is that pair narrowed to the
+  // rows whose verdict was established (`utils/biosHeldRatio`, over
+  // `ratio_server_count` / `ratio_local_count`), and the optional-missing breakdown below
   // is a local file-level axis the level doesn't model.
   const total = firmware.server_count ?? files.filter((f) => f.on_server).length;
   const done = firmware.local_count ?? files.filter((f) => f.on_server && f.downloaded).length;

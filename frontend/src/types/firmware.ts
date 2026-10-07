@@ -141,7 +141,8 @@ export interface MissingConfiguredImage {
  * `downloaded` — for a folder declaration the two come apart completely, since
  * what satisfies the core is a file *inside* the folder and RetroDECK links
  * LRPS2's `pcsx2/bios` onto the BIOS root, so the folder is always there. The
- * library's held/offered ratio is a third axis and keys off neither.
+ * library's held/offered ratio is a third axis and keys off neither; only the
+ * ratio a surface states is narrowed to the rows whose `satisfied` is not null.
  *
  * `caveats` are the resolver's own stable codes for what it found, and `images`
  * names what a satisfied folder holds, in the resolver's own words. A surface

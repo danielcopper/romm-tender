@@ -500,12 +500,14 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/contract/test_retrodeck_folders.py` (under each finding, and where the detection, RetroDECK's health or one of
   its roots could not be asked, no press downloads, deletes, cleans up or migrates there); the system-folder bound by
   `tests/services/test_downloads.py::TestASystemFolderLinkedToAnotherDrive` and the linked-folder and one-system cases
-  of `tests/contract/test_prune.py`. A save's folder and a firmware file's place take the other route, the save and
-  firmware answers (`adapters/atlas_saves.py`, `adapters/atlas_firmware.py`), and this entry does not cover them: under
-  the three `marker-*` findings a save is still synced where the save answer places it, which is then RetroDECK's
-  default — keeping saves out of it is #2286's. Unseen by them: a folder joined onto a root under another name, and a
-  caller that puts the question to RetroDECK's handle itself. Prompt-only: a new caller that downloads into, removes
-  from or bounds a removal by a RetroDECK folder asks `RetroDeckFolders` and raises the refusal it answers with
+  of `tests/contract/test_prune.py`, with Uninstall all's one-system case in `tests/contract/test_retrodeck_folders.py`
+  (`test_where_one_system_s_folder_question_raises_uninstall_all_goes_on_for_every_other_system`). A save's folder and a
+  firmware file's place take the other route, the save and firmware answers (`adapters/atlas_saves.py`,
+  `adapters/atlas_firmware.py`), and this entry does not cover them: under the three `marker-*` findings a save is still
+  synced where the save answer places it, which is then RetroDECK's default — keeping saves out of it is #2286's. Unseen
+  by them: a folder joined onto a root under another name, and a caller that puts the question to RetroDECK's handle
+  itself. Prompt-only: a new caller that downloads into, removes from or bounds a removal by a RetroDECK folder asks
+  `RetroDeckFolders` and raises the refusal it answers with
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (the file's own calls only: a write behind a helper, a write passed as a
   bound method (`run_in_executor(None, uow.roms.save, …)`), an aliased handle, a `getattr`-reached repository, and a

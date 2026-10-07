@@ -326,11 +326,12 @@ folder outside RetroDECK's folder, that does not exist — a drive or SD card th
 would land on internal storage, and the drive would hide it once it is back. The saves root follows the same rule
 through the save answer ([Save-file sync](save-file-sync-architecture.md)).
 
-Every folder is returned **symlink-resolved**. The roots are handed to the path guards as safe roots, and the ROM paths
-those guards are asked about are recorded resolved wherever `lib/path_safety.safe_join` built them — so a root left as
-the resolver spells it makes one directory look like two on any system where `/home` is a link to `/var/home` (Bazzite,
-Silverblue, and the other image-based distributions), and uninstalling a downloaded ROM fails with
-`Path is outside its safe root` ([#1838](https://github.com/danielcopper/romm-tender/issues/1838)).
+Every folder is returned **symlink-resolved**. The folders are handed to the path guards as safe roots — a system's own
+ROM folder for a game's files, the BIOS folder and saves root for theirs — and the ROM paths those guards are asked
+about are recorded resolved wherever `lib/path_safety.safe_join` built them — so a folder left as the resolver spells it
+makes one directory look like two on any system where `/home` is a link to `/var/home` (Bazzite, Silverblue, and the
+other image-based distributions), and uninstalling a downloaded ROM fails with `Path is outside its safe root`
+([#1838](https://github.com/danielcopper/romm-tender/issues/1838)).
 
 RetroDECK's home is not a safe root, and it is resolved for a different reason: `MigrationService` stores it and diffs
 the stored value against the live one on every startup to decide whether RetroDECK moved. Resolving one side is not

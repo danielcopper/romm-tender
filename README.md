@@ -93,9 +93,9 @@ https://github.com/danielcopper/romm-tender/releases/download/tender-v0.33.0/Ten
 <details open>
 <summary><b>Install from URL</b> — the recommended way</summary>
 
-Needs **Developer mode** in Decky Loader (Decky tab → gear icon → **General → Other** → toggle **Developer mode**).
+Needs **Developer mode** in Decky Loader (Decky tab › gear icon › **General › Other** › toggle **Developer mode**).
 
-1. Decky settings → **Developer** tab → **Install Plugin from URL**
+1. Decky settings › **Developer** tab › **Install Plugin from URL**
 2. Paste the URL above and install
 
 That URL names one fixed release, `tender-v0.33.0` — the last one published with a plugin zip.
@@ -108,7 +108,7 @@ That URL names one fixed release, `tender-v0.33.0` — the last one published wi
 Also needs **Developer mode**.
 
 1. Download the plugin's `.zip` asset from the [releases page](https://github.com/danielcopper/romm-tender/releases)
-2. Decky settings → **Developer** tab → **Install Plugin from ZIP File**
+2. Decky settings › **Developer** tab › **Install Plugin from ZIP File**
 
 </details>
 

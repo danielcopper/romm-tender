@@ -7,7 +7,9 @@ A comment or a docstring that names a settings path is no sentence a reader
 sees and may spell it either way. What it sees is a ``Settings`` step beside an
 arrow (``→``, ``->``, or ``>`` between spaces) on one line; a path broken across
 two lines between its steps, a TS comment that does not open its line, and a
-settings menu under another name pass it.
+path with no ``Settings`` step in it (``Data Management › Gone from RomM``, a
+menu of Decky's or of an emulator's) pass it: those are held to "›" by review
+alone.
 """
 
 from __future__ import annotations

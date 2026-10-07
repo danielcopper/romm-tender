@@ -275,18 +275,19 @@ Format: **invariant** — tier — enforced by.
   `tests/contract/test_retrodeck_folders.py` (under each finding, and where the detection, RetroDECK's health or one of
   its roots could not be asked, no press downloads, deletes, cleans up or migrates there); the system-folder bound by
   `tests/services/test_downloads.py::TestASystemFolderLinkedToAnotherDrive` and the linked-folder and one-system cases
-  of `tests/contract/test_prune.py`. A folder of Tender's own beside the resolver's is the drift this replaced:
-  `retrodeck.json` read twice, a system's ROM folder built as `<roms root>/<system>` in five places while ES-DE may
-  declare another, and a fallback to `~/retrodeck` that pointed downloads, deletes and the move code at internal storage
-  while RetroDECK lay on an SD card. Under the four findings the resolver's own root, BIOS and saves folders are its
-  defaults, so using them would be that guess again. The rules each question answers by are on
-  [Config source parsers](config-source-parsers.md#retrodecks-folders-retrodeckjson). A save's folder and a firmware
-  file's place take the other route, the save and firmware answers (`adapters/atlas_saves.py`,
-  `adapters/atlas_firmware.py`), and this entry does not cover them: under the three `marker-*` findings a save is still
-  synced where the save answer places it, which is then RetroDECK's default — keeping saves out of it is #2286's. Unseen
-  by the tests: a folder joined onto a root under another name, and a caller that puts the question to RetroDECK's
-  handle itself. Prompt-only: a new caller that downloads into, removes from or bounds a removal by a RetroDECK folder
-  asks `RetroDeckFolders` and raises the refusal it answers with
+  of `tests/contract/test_prune.py`, with Uninstall all's one-system case in `tests/contract/test_retrodeck_folders.py`
+  (`test_where_one_system_s_folder_question_raises_uninstall_all_goes_on_for_every_other_system`). A folder of Tender's
+  own beside the resolver's is the drift this replaced: `retrodeck.json` read twice, a system's ROM folder built as
+  `<roms root>/<system>` in five places while ES-DE may declare another, and a fallback to `~/retrodeck` that pointed
+  downloads, deletes and the move code at internal storage while RetroDECK lay on an SD card. Under the four findings
+  the resolver's own root, BIOS and saves folders are its defaults, so using them would be that guess again. The rules
+  each question answers by are on [Config source parsers](config-source-parsers.md#retrodecks-folders-retrodeckjson). A
+  save's folder and a firmware file's place take the other route, the save and firmware answers
+  (`adapters/atlas_saves.py`, `adapters/atlas_firmware.py`), and this entry does not cover them: under the three
+  `marker-*` findings a save is still synced where the save answer places it, which is then RetroDECK's default —
+  keeping saves out of it is #2286's. Unseen by the tests: a folder joined onto a root under another name, and a caller
+  that puts the question to RetroDECK's handle itself. Prompt-only: a new caller that downloads into, removes from or
+  bounds a removal by a RetroDECK folder asks `RetroDeckFolders` and raises the refusal it answers with
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (AST over the declared file's own calls, matching the two-attribute
   `<...>.<repo>.<method>` shape against the twelve repositories the UoW exposes). Read or write is decided **by the

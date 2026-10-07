@@ -108,7 +108,7 @@ switching straight back before the list has caught up).
 ### Cleaning up versions removed from RomM
 
 Normal library sync never deletes retained local rows, installed files, saves, or playtime just because a game
-disappears from RomM. To remove that state explicitly, open **Data Management → Gone from RomM**. The first scan is
+disappears from RomM. To remove that state explicitly, open **Data Management › Gone from RomM**. The first scan is
 local and finds groups containing rows absent from a completed platform fetch.
 
 The dialog opens on the count that matters — how many locally kept versions are no longer on your RomM server. Under
@@ -204,7 +204,7 @@ ambiguous and source data stays retained; the same applies when Steam removal wa
 confirmed. Retrying confirms an already-absent shortcut instead of removing it twice. Save ownership warnings are shown
 in a focusable terminal-detail region even when the group was removed successfully, and a run-level cancellation or
 failure message remains visible after earlier groups committed. At most five warnings are listed for one game; when
-there were more, the detail — and the finished run's line on **Data Management → Gone from RomM** — says how many were
+there were more, the detail — and the finished run's line on **Data Management › Gone from RomM** — says how many were
 left out. Progress is tied to the preview that you confirmed, so a matching run is still shown if only the successful
 start response is delayed or lost; a matching terminal event makes the modal closable immediately. Once that terminal
 result is assembled, delayed frames for the same run cannot replace it. Frames from an older preview are ignored. These

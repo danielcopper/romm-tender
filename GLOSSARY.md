@@ -606,9 +606,8 @@ installation, arrangement, frontend (a RetroArch without a frontend is a source 
 ### Emulator source order
 
 The order in which the emulator sources are used — RetroDECK → EmuDeck → RetroArch (Flatpak) → RetroArch (native) →
-standalone unless the user changes it under Settings › Emulator sources. Every game starts through RetroDECK, so while
-RetroDECK is detected and switched on a game's answers come from it, wherever it stands in the order; only without it
-does the order decide, and then the first switched-on source answers, one Tender cannot start games through yet.
+standalone unless the user changes it under Settings › Emulator sources. Which source answers for a game is the
+**answering source**; the order decides it only where no switched-on source is one Tender starts games through.
 
 ### Answering source
 
@@ -806,10 +805,10 @@ It is a progress bar over a set the user can finish, not a readiness claim, whic
 whether a **row verdict** is met: `held` answers whether something is at the destination, and for a **folder
 declaration** that is precisely what a verdict is not. Both surfaces render it behind the readiness sentence as
 `(1/20 RomM library files)`, naming its set because the sentence in front counts another
-(`docs/architecture/qam-panel.md`, BIOS files). What they render is the pair over the rows whose verdict was established
-(`ratio_server_count` / `ratio_local_count`): a row that reads "could not be established" is no file missing, and where
-no row was established there is no ratio. The level, its label and the download buttons keep counting every row the
-library holds.
+(`docs/architecture/qam-panel.md`, BIOS files). What they render is the held/offered ratio narrowed to the rows whose
+verdict was established (`ratio_server_count` / `ratio_local_count`): a row that reads "could not be established" is no
+file missing, and where no row was established there is no ratio. The level, its label and the download buttons keep
+counting every row the library holds.
 
 ### Firmware store
 
