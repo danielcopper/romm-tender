@@ -112,11 +112,11 @@ recorded and followed when that directory moves, because the files are on the di
 | **saves root missing** | RetroDECK reports its saves folder missing; a sync would create it.           | saves on an SD card that is out     |
 
 **The sixth is about RetroDECK, not the emulator.** While RetroDECK reports `saves-root-missing`, the resolver still
-places a save under a folder that does not exist, and a sync would create it — on internal storage while the card it
-belongs on is out, where the card hides it once it is back. So the answer refuses without asking the emulator anything,
-and its sentence names the folder: **Save sync is unavailable: RetroDECK's saves folder _path_ does not exist.** Only
-RetroDECK's answer is checked for it, because no other source reaches a save answer through a catalogue that is not
-refused. Folders below an existing saves root are still created as today.
+places a save under a folder that does not exist, and a sync would create it — on internal storage while the SD card it
+belongs on is out, where the SD card hides it once it is back. So the answer refuses without asking the emulator
+anything, and its sentence names the folder: **Save sync is unavailable: RetroDECK's saves folder _path_ does not
+exist.** Only RetroDECK's answer is checked for it, because no other source reaches a save answer through a catalogue
+that is not refused. Folders below an existing saves root are still created as today.
 
 **The hole is not always in a file name.** Flycast's Dreamcast cards need the game's `save_id` in the filename;
 Dolphin's GameCube memory cards need the game's `region` in the DIRECTORY. Either way Tender cannot complete the path,

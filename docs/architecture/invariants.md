@@ -261,21 +261,24 @@ Format: **invariant** — tier — enforced by.
   source — the old "first detected" — and would build a fresh machine, so every save question would run its core's probe
   again. Unseen by the scan: a name reached through `getattr` or `importlib`. Prompt-only: no adapter keeps a handle or
   an answer past the reading it came through (a panel call's per question, a run's for the run)
-- **Every folder Tender uses in RetroDECK is the resolver's answer, asked through `adapters/retrodeck_folders.py`; no
-  module reads RetroDECK's settings or builds a folder from a root, and while RetroDECK reports `marker-missing`,
-  `marker-unreadable`, `marker-invalid` or `not-set-up` none of its folders is used** — test + prompt-only —
-  `tests/adapters/test_retrodeck_folders.py` (the real resolver over tmp homes: every folder its answer, each finding
-  refusing every question, and `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and
-  `tests/contract/test_retrodeck_folders.py` (under each finding no press downloads, deletes or cleans up there). A
-  folder of Tender's own beside the resolver's is the drift this replaced: `retrodeck.json` read twice, a system's ROM
-  folder built as `<roms root>/<system>` in five places while ES-DE may declare another, and a fallback to `~/retrodeck`
-  that pointed downloads, deletes and the move code at internal storage while RetroDECK lay on an SD card. Under the
-  four findings the resolver's own root, BIOS and saves folders are its defaults, so using them would be that guess
-  again. The rules each question answers by are on
-  [Config source parsers](config-source-parsers.md#retrodecks-folders-retrodeckjson). Unseen by the tests: a folder
-  joined onto a root under another name, and a caller that puts the question to RetroDECK's handle itself. Prompt-only:
-  a new caller that downloads into, removes from or creates a folder in RetroDECK asks `RetroDeckFolders` and raises the
-  refusal it answers with
+- **Every RetroDECK folder Tender downloads into, removes from, bounds a removal by or reads for the move code is the
+  resolver's answer, asked through `adapters/retrodeck_folders.py`; no module reads RetroDECK's settings or builds such
+  a folder from a root, and while RetroDECK reports `marker-missing`, `marker-unreadable`, `marker-invalid` or
+  `not-set-up` none of those folders is used** — test + prompt-only — `tests/adapters/test_retrodeck_folders.py` (the
+  real resolver over tmp homes: every folder its answer, each finding refusing every question, and
+  `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and `tests/contract/test_retrodeck_folders.py`
+  (under each finding no press downloads, deletes or cleans up there). A folder of Tender's own beside the resolver's is
+  the drift this replaced: `retrodeck.json` read twice, a system's ROM folder built as `<roms root>/<system>` in five
+  places while ES-DE may declare another, and a fallback to `~/retrodeck` that pointed downloads, deletes and the move
+  code at internal storage while RetroDECK lay on an SD card. Under the four findings the resolver's own root, BIOS and
+  saves folders are its defaults, so using them would be that guess again. The rules each question answers by are on
+  [Config source parsers](config-source-parsers.md#retrodecks-folders-retrodeckjson). A save's folder and a firmware
+  file's place take the other route, the save and firmware answers (`adapters/atlas_saves.py`,
+  `adapters/atlas_firmware.py`), and this entry does not cover them: under the three `marker-*` findings a save is still
+  synced where the save answer places it, which is then RetroDECK's default — keeping saves out of it is #2220 D9's and
+  not yet held. Unseen by the tests: a folder joined onto a root under another name, and a caller that puts the question
+  to RetroDECK's handle itself. Prompt-only: a new caller that downloads into, removes from or bounds a removal by a
+  RetroDECK folder asks `RetroDeckFolders` and raises the refusal it answers with
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (AST over the declared file's own calls, matching the two-attribute
   `<...>.<repo>.<method>` shape against the twelve repositories the UoW exposes). Read or write is decided **by the
@@ -923,7 +926,9 @@ Format: **invariant** — tier — enforced by.
   covers only three leftovers** — prompt-only — `services/firmware/demand.py::FirmwareDemand.is_downloaded` is the
   single crossing point and states the boundary: the probe answers for a library file with no placement in the
   platform's catalogue (no emulator the resolver read declares it), for a placement whose location Tender cannot honour,
-  and for the already-there check before a download (the batch and the per-row fetch). Everything else reads the
+  and for the already-there check before a download (the batch and the per-row fetch). Where no BIOS download may land —
+  anything that refuses one, so that `FirmwareDemand.status_root` answers `None` — the probe looks nowhere, and a row
+  only it could answer has its verdict withheld rather than read as absent (#2244 D11). Everything else reads the
   resolver's `present`, which follows symlinks Tender would have to re-implement — the PS2 folder is one directory
   reached through two spellings. `present is None` reads as absent, the safe direction, because the row then shows work
   outstanding rather than a readiness nobody established. **Nothing enforces the crossing point.** A fourth status

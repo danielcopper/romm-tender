@@ -552,7 +552,7 @@ page.
 
 **Fix**: The refusal says why. A download goes only into RetroDECK's folders, so it needs RetroDECK installed and
 switched on in **Settings › Emulator sources**, a ROM folder for the game's system, and RetroDECK's settings in order —
-when the main panel shows a card for RetroDECK, the refusal repeats it; follow what the card says. See
+when the main panel shows a notice for RetroDECK, the refusal repeats it; follow what the notice says. See
 [Managing Games](managing-games.md#downloading-roms) for every case.
 
 ## Data Management

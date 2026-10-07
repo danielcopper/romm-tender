@@ -290,7 +290,7 @@ download also stops on `root-missing`, because everything it would land in lies 
 
 **A download creates a folder only below a root that exists.** A system's ROM folder that is not there yet is created by
 the download, as ES-DE would create it, and so is a BIOS folder inside RetroDECK's own folder. A ROM root, or a BIOS
-folder outside RetroDECK's folder, that does not exist — a drive or card that is out — is never created: the folder
+folder outside RetroDECK's folder, that does not exist — a drive or SD card that is out — is never created: the folder
 would land on internal storage, and the drive would hide it once it is back. The saves root follows the same rule
 through the save answer ([Save-file sync](save-file-sync-architecture.md)).
 
