@@ -696,7 +696,7 @@ class TestWhereNoBiosDownloadMayLand:
             await download(*args)
 
         assert refused.value.message == (
-            "BIOS downloads need RetroDECK, which is switched off in Settings → Emulator sources."
+            "BIOS downloads need RetroDECK, which is switched off in Settings › Emulator sources."
         )
         api = fw._config.romm_api
         assert isinstance(api, MagicMock)

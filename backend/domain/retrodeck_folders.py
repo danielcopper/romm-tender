@@ -75,7 +75,7 @@ def not_installed(purpose: str) -> FolderRefused:
 def switched_off(purpose: str) -> FolderRefused:
     """The refusal of a *purpose* download while RetroDECK is switched off."""
     return FolderRefused(
-        RETRODECK_SWITCHED_OFF, f"{purpose} need RetroDECK, which is switched off in Settings → Emulator sources."
+        RETRODECK_SWITCHED_OFF, f"{purpose} need RetroDECK, which is switched off in Settings › Emulator sources."
     )
 
 

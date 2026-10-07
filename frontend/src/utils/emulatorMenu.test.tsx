@@ -94,7 +94,7 @@ describe("buildEmulatorMenu", () => {
     const menu = buildEmulatorMenu(
       baseConfig({ emulators: [], emulatorDataAvailable: false, emulatorDataReason: "switched_off" }),
     );
-    expect(items(menu)[0]!.text).toBe("Every emulator source is switched off in Settings → Emulator sources.");
+    expect(items(menu)[0]!.text).toBe("Every emulator source is switched off in Settings › Emulator sources.");
   });
 
   it("marks the default emulator and dispatches its label on pick", () => {

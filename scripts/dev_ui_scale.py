@@ -1228,7 +1228,7 @@ def _restore_scale(prior: SteamScaleState | None) -> None:
             _set_scale(None)
             print(
                 "FALLBACK: prior state was unknown, so Steam's AUTOMATIC scaling was restored.\n"
-                "If you had a manual UI Scale set, re-set it in Steam (Settings -> Display -> UI Scale).",
+                "If you had a manual UI Scale set, re-set it in Steam (Settings › Display › UI Scale).",
                 file=sys.stderr,
             )
         elif prior.auto:
@@ -1268,7 +1268,7 @@ def _verify_restore(prior: SteamScaleState | None) -> None:
     if auto_drifted or factor_drifted or dpr_drifted:
         print(
             f"WARNING: that is NOT the state captured before this run ({prior.describe()} at dpr {prior.dpr}).\n"
-            "The restore did not land — check Steam -> Settings -> Display -> UI Scale.",
+            "The restore did not land — check Steam › Settings › Display › UI Scale.",
             file=sys.stderr,
         )
 

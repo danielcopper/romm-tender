@@ -92,7 +92,7 @@ _NO_USABLE_TOKEN_MESSAGE = "RomM did not return a usable token"
 # Sign-out (``sign_out``). Local-forget only — Tender never deletes the
 # token on the server, so the copy tells the user it stays valid in RomM.
 _SIGNED_OUT_MESSAGE = (
-    "Signed out. The token is still valid in RomM — revoke it there (Settings → API Tokens) if you no longer want it."
+    "Signed out. The token is still valid in RomM — revoke it there (Settings › API Tokens) if you no longer want it."
 )
 
 

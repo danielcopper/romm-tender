@@ -733,7 +733,7 @@ yet, or a known code whose finding lacks a fact its sentence needs, reads "Probl
 answering source gives no emulator list, the platform page and the emulator menu say why from the answer's `reason` — no
 source detected, every source switched off, a broken ES-DE systems file, a RetroDECK that has not been set up yet,
 EmuDeck's list that cannot be read yet, or any other refusal — and never "no emulator". **_Source_ is switched on in
-Settings → Emulator sources, but Tender cannot start games through it yet.** stands on Main once for every switched-on
+Settings › Emulator sources, but Tender cannot start games through it yet.** stands on Main once for every switched-on
 source Tender cannot start games through, whether or not it is the one that answers, and is the one source notice drawn
 smaller and without the warning sign: it states a fact about Tender rather than something wrong. The source's card under
 Settings › Emulator sources says **Tender cannot start games through _source_ yet.**, switched on or off, and a

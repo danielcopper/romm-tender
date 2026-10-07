@@ -4578,7 +4578,7 @@ describe("RomMPlaySection", () => {
       expect(container.textContent).toContain(
         "This game's saves are written beside the game file, so they can't be synced.",
       );
-      expect(container.textContent).toContain("RetroArch → Settings → Saving");
+      expect(container.textContent).toContain("RetroArch › Settings › Saving");
     });
 
     it("surfaces the banner even when the RomM server is OFFLINE (flag is local)", async () => {

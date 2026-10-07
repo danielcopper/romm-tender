@@ -129,7 +129,7 @@ setting so you do not have to re-enter them. It asks for confirmation first.
 Signing out **never deletes or revokes the token in RomM** — the token stays valid on the server. A token Tender minted
 from your username and password can only be deleted during a same-server re-sign-in (the stored token deliberately lacks
 the permission to delete itself), and a token you supplied (pasted or paired) is yours to manage. To revoke a token for
-good, delete it in RomM's web UI under **Settings → API Tokens**.
+good, delete it in RomM's web UI under **Settings › API Tokens**.
 
 If you just want to switch accounts or re-authenticate, prefer **Sign in again** over signing out and back in. For
 username/password accounts, re-signing in on the **same** server revokes the token Tender minted before — a path that a
@@ -145,7 +145,7 @@ carry the same warnings (see [Required scopes](#required-scopes) below).
 
 Start the same way for either method:
 
-1. In RomM's web UI, open **Settings → API Tokens** (also called Client API Tokens) and create a new token.
+1. In RomM's web UI, open **Settings › API Tokens** (also called Client API Tokens) and create a new token.
 2. Grant the scopes listed below — make sure the **write** scopes are included. Without them, downloads work but save
    upload, device sync, and playtime tracking fail with a permissions error.
 
@@ -306,7 +306,7 @@ come from RetroDECK, wherever it stands in the order, because every game starts 
 set up yet, when it answers that it has not. Without it, the first source switched on in the order answers. A source
 found for the first time joins the end of the order, switched on.
 
-**Sources Tender cannot start games through.** The main panel says **_Source_ is switched on in Settings → Emulator
+**Sources Tender cannot start games through.** The main panel says **_Source_ is switched on in Settings › Emulator
 sources, but Tender cannot start games through it yet.** for every switched-on source but RetroDECK, whether or not it
 is the one that answers, in a smaller card without a warning sign, since nothing is wrong; a source you switched off
 says it only on its card. Where such a source answers, the platform page and the emulator menu keep saying why there is

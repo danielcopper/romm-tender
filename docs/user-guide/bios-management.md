@@ -336,7 +336,7 @@ folder on the drive you moved RetroDECK to); Tender creates it if it is not ther
 folder, and otherwise says **RetroDECK's BIOS folder _path_ does not exist. If it is on an SD card or another drive,
 insert it.** A BIOS download needs RetroDECK: while it is not installed or switched off in **Settings › Emulator
 sources**, every download button says so (**BIOS downloads need RetroDECK, which is not installed.**, **BIOS downloads
-need RetroDECK, which is switched off in Settings → Emulator sources.**), and a row only Tender's own look into that
+need RetroDECK, which is switched off in Settings › Emulator sources.**), and a row only Tender's own look into that
 folder could answer — a file in your library no emulator asks for, or one asked for somewhere Tender does not put it —
 reads as could not be established. Rows the emulator's own answer covers keep it. While the main panel shows a notice
 for RetroDECK's settings file or for a RetroDECK not set up yet, Tender downloads and deletes no BIOS file at all, and

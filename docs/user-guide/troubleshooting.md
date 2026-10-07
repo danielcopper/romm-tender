@@ -587,7 +587,7 @@ exist while both devices are online.
 
 Tender cannot prevent this. Your options are:
 
-- Disable Remote Play entirely in Steam Settings > Remote Play
+- Disable Remote Play entirely in Steam Settings › Remote Play
 - Ignore them — they show a "Stream" button instead of "Play" so they're distinguishable
 
 For technical details, see [Steam Remote Play and Cross-Device Shortcuts](../architecture/steam-remote-play.md).

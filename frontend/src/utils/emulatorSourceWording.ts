@@ -150,7 +150,7 @@ export function cannotStartSentence(kind: string): string {
 
 /** Main's notice for a switched-on source Tender cannot start games through. */
 export function cannotStartNotice(kind: string): string {
-  return `${sourceName(kind)} is switched on in Settings → Emulator sources, but Tender cannot start games through it yet.`;
+  return `${sourceName(kind)} is switched on in Settings › Emulator sources, but Tender cannot start games through it yet.`;
 }
 
 /** A source whose emulator list the resolver cannot read yet (EmuDeck's sealed catalogue). */
@@ -166,7 +166,7 @@ export function sealedCatalogueSentence(kind: string): string {
  * no source found.
  */
 export function emulatorDataReasonSentence(reason: EmulatorDataReason | null, source: AnsweringSource | null): string {
-  if (reason === "switched_off") return "Every emulator source is switched off in Settings → Emulator sources.";
+  if (reason === "switched_off") return "Every emulator source is switched off in Settings › Emulator sources.";
   if (reason === "no_source" || source === null) {
     return "No emulator source was found, so Tender cannot tell which emulators this platform offers.";
   }

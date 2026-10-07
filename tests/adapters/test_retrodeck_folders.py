@@ -200,9 +200,9 @@ class TestADownloadNeedsRetroDeck:
         game, bios = adapter.download_folder("gba"), adapter.bios_download_folder()
 
         assert isinstance(game, FolderRefused)
-        assert game.message == "Downloads need RetroDECK, which is switched off in Settings → Emulator sources."
+        assert game.message == "Downloads need RetroDECK, which is switched off in Settings › Emulator sources."
         assert isinstance(bios, FolderRefused)
-        assert bios.message == "BIOS downloads need RetroDECK, which is switched off in Settings → Emulator sources."
+        assert bios.message == "BIOS downloads need RetroDECK, which is switched off in Settings › Emulator sources."
         assert adapter.rom_root() == _real(rd_home / "roms")
         assert adapter.bios_folder() == _real(rd_home / "bios")
         assert adapter.saves_root() == _real(rd_home / "saves")
@@ -389,9 +389,9 @@ class TestWhereAQuestionToTheResolverRaises:
         game, bios = adapter.download_folder("gba"), adapter.bios_download_folder()
 
         assert isinstance(game, FolderRefused)
-        assert game.message == "Downloads need RetroDECK, which is switched off in Settings → Emulator sources."
+        assert game.message == "Downloads need RetroDECK, which is switched off in Settings › Emulator sources."
         assert isinstance(bios, FolderRefused)
-        assert bios.message == "BIOS downloads need RetroDECK, which is switched off in Settings → Emulator sources."
+        assert bios.message == "BIOS downloads need RetroDECK, which is switched off in Settings › Emulator sources."
         for question in ("rom_root", "bios_folder", "saves_root"):
             answer = _answer(adapter, question)
             assert isinstance(answer, EveryFolderRefused), question
@@ -430,7 +430,7 @@ class TestWhereDetectingTheSourcesRaises:
         removal = adapter.rom_root()
 
         assert isinstance(game, FolderRefused)
-        assert game.message == "Downloads need RetroDECK, which is switched off in Settings → Emulator sources."
+        assert game.message == "Downloads need RetroDECK, which is switched off in Settings › Emulator sources."
         assert isinstance(removal, EveryFolderRefused)
         assert removal.message == _UNANSWERED
 

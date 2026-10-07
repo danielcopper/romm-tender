@@ -210,7 +210,7 @@ async def test_switched_off_a_download_says_so_where_a_question_raises(harness, 
     removal = await harness.endpoints.remove_rom(_ROM_ID)
 
     assert game["reason"] == "retrodeck_switched_off"
-    assert game["message"] == "Downloads need RetroDECK, which is switched off in Settings → Emulator sources."
+    assert game["message"] == "Downloads need RetroDECK, which is switched off in Settings › Emulator sources."
     assert bios["reason"] == "retrodeck_switched_off"
     assert removal["message"] == _UNANSWERED
 

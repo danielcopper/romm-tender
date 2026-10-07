@@ -292,7 +292,7 @@ saves folder, for one emulator or one game, are still created as the emulator wo
 
 ## RetroArch Save Sorting
 
-RetroArch's two "Sort Saves into Folders" settings (**Settings > Saving**) decide which folder a game's save goes into.
+RetroArch's two "Sort Saves into Folders" settings (**Settings › Saving**) decide which folder a game's save goes into.
 Save sync follows whichever combination you use — none of them is required:
 
 | Content Directory | Core Name | Save path                 |
