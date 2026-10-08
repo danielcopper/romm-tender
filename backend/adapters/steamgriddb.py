@@ -11,12 +11,13 @@ import urllib.request
 from typing import TYPE_CHECKING, Any
 
 from lib.certifi_bundle import ca_bundle as _ca_bundle
-from lib.errors import SgdbApiError
+from lib.errors import SgdbApiError, SgdbRateLimitedError
 
 if TYPE_CHECKING:
     import logging
 
 _SGDB_BASE_URL = "https://www.steamgriddb.com/api/v2"
+_TOO_MANY_REQUESTS = 429
 
 
 class SteamGridDbAdapter:
@@ -55,10 +56,12 @@ class SteamGridDbAdapter:
             with urllib.request.urlopen(req, context=self._ssl_context(), timeout=30) as resp:
                 return json.loads(resp.read().decode())
         except urllib.error.HTTPError as e:
+            if e.code == _TOO_MANY_REQUESTS:
+                raise SgdbRateLimitedError(str(e)) from e
             raise SgdbApiError(status_code=e.code, message=str(e)) from e
 
     def download_image(self, url: str, dest_path: str) -> bool:
-        """Download image from URL to dest_path with atomic write."""
+        """Implements ``services.protocols.SteamGridDbApi.download_image``."""
         tmp_path = dest_path + ".tmp"
         try:
             req = urllib.request.Request(url, method="GET")
@@ -72,6 +75,14 @@ class SteamGridDbAdapter:
                     f.write(chunk)
             os.replace(tmp_path, dest_path)
             return True
+        except urllib.error.HTTPError as e:
+            if os.path.exists(tmp_path):
+                with contextlib.suppress(OSError):
+                    os.remove(tmp_path)
+            if e.code == _TOO_MANY_REQUESTS:
+                raise SgdbRateLimitedError(str(e)) from e
+            self._logger.warning(f"SGDB image download failed: {e}")
+            return False
         except Exception as e:
             self._logger.warning(f"SGDB image download failed: {e}")
             if os.path.exists(tmp_path):

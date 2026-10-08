@@ -6686,3 +6686,40 @@ class TestOneReadingOfTheSourcesPerRun:
         assert all(handed is reading for handed in library.core_info.readings)
         assert len(library.core_info.default_readings) == 3
         assert all(handed is reading for handed in library.core_info.default_readings)
+
+
+class TestTheShortcutIconJobAfterARun:
+    """Every run's end asks for the shortcut icon job."""
+
+    @pytest.mark.asyncio
+    async def test_an_apply_run_asks_for_it_once_steam_has_had_time_to_write_its_file(self, library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_collections"] = {}
+        library.sync._box.sync_state = SyncState.RUNNING
+
+        await library.sync._orchestrator._do_sync_per_unit()
+
+        assert library.icon_job.requests == [True]
+
+    @pytest.mark.asyncio
+    async def test_an_apply_run_that_failed_asks_for_it_too(self, library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+        fake_romm_api.list_platforms_side_effect = RuntimeError("boom")
+        library.settings["enabled_platforms"] = {"1": True}
+        library.sync._box.sync_state = SyncState.RUNNING
+        library.sync._box.current_sync_id = "run-fails"
+
+        await library.sync._orchestrator._do_sync_per_unit()
+
+        assert library.icon_job.requests == [True]
+
+    @pytest.mark.asyncio
+    async def test_a_preview_asks_for_it_without_waiting(self, library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_collections"] = {}
+
+        await library.sync.sync_preview()
+
+        assert library.icon_job.requests == [False]

@@ -833,3 +833,18 @@ class SteamRecoveryStore(Protocol):
         snapshot: SteamRecoverySnapshot,
         claims: dict[str, SourceClaim],
     ) -> MutationOutcome: ...
+
+
+class IconDownscaleFn(Protocol):
+    """Answer an icon's bytes at no more than 64x64.
+
+    Never raises: what it cannot read it answers unchanged.
+    """
+
+    def __call__(self, data: bytes) -> bytes: ...
+
+
+class TenderLogoFn(Protocol):
+    """Read the 64x64 logo that ships in ``defaults/``; ``None`` when it cannot be read."""
+
+    def __call__(self) -> bytes | None: ...

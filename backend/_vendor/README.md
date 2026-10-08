@@ -131,6 +131,33 @@ licence, and the update procedure below has to put it back by hand for exactly t
 4. Regenerate the manifest from the patched tree with the command under [Manifests](#manifests), then re-run the gate:
    `python scripts/check_vendored_trees.py`.
 
+## png
+
+[pypng](https://gitlab.com/drj11/pypng) — a pure-Python PNG reader and writer, used to downscale shortcut icons.
+
+- **Upstream:** <https://gitlab.com/drj11/pypng>
+- **Version:** 0.20220715.0, from PyPI's `pypng-0.20220715.0-py3-none-any.whl`
+  (`sha256:4a43e969b8f5aaafb2a415536c1a8ec7e341cd6a3f957fd5b5f32a4cfeed902c`)
+- **License:** MIT — see [`png/LICENCE`](png/LICENCE), the wheel's `pypng-0.20220715.0.dist-info/LICENCE`
+- **Local patches:** the wheel's single module `png.py` is shipped as `png/__init__.py`, byte for byte. The rename is
+  the whole patch: `scripts/check_vendored_trees.py` pins package directories and does not see a single-module file
+  under `_vendor/`, so a module left as `png.py` would be redistributed unpinned. The module has no self-imports, so it
+  resolves as `_vendor.png` unchanged.
+- **Manifest:** `png.SHA256SUMS`, **generated here** from the tree as we ship it, like `vdf`'s: the wheel's own `RECORD`
+  names `png.py`, not `png/__init__.py`, so no upstream manifest matches the copy.
+
+Only `adapters/icon_image.py` imports it, and lazily, inside the function that reads a PNG — so a copy that will not
+load under the device's Python costs the icon downscale and nothing else.
+
+### How to update png
+
+1. Download the newer wheel from PyPI, check it against the digest PyPI lists for it, and unpack it.
+2. Replace `backend/_vendor/png/` with a fresh directory holding the wheel's `png.py` as `__init__.py` and its
+   `pypng-<version>.dist-info/LICENCE` as `LICENCE`.
+3. Bump the **Version** bullet above.
+4. Regenerate the manifest with the command under [Manifests](#manifests), then re-run the gate:
+   `python scripts/check_vendored_trees.py`.
+
 ## The runtime a vendored copy has to load in
 
 A vendored copy loads under the interpreter the service unit starts — `/usr/bin/python3`, or whatever `TENDER_PYTHON`

@@ -1107,6 +1107,16 @@ and IGDB-collection are both `kind="virtual"`, distinguished by `virtual_type` (
 complete-set reconcile on the next normal sync (no Force Full Sync). Collections whose Steam names come out the same
 still union.
 
+### Shortcut icon job / placeholder icon / logo icon
+
+The **shortcut icon job** is the background run that gives every bound shortcut still waiting for an icon its
+SteamGridDB icon (`services/shortcut_icons.py`); it is never a step of a sync. The **placeholder icon** is the
+transparent 1×1 PNG a sync gives each shortcut it creates, so the icon the job sets later replaces one — a replaced icon
+shows in Steam's list at once, a first one only after a restart. The **logo icon** is Tender's logo, given where
+SteamGridDB has no icon; it means "SteamGridDB has none", never "not loaded yet". A shortcut **waits** while its icon is
+empty or the placeholder; the logo and any icon set by hand are left alone. Detail:
+[Shortcut icons](docs/architecture/steam-non-steam-shortcuts.md#shortcut-icons).
+
 ### Surface (bigpicture / desktop)
 
 One of the two UIs Tender draws, each with its own directory under `frontend/src/`: **bigpicture** is the gamepad

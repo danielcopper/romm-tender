@@ -3,7 +3,8 @@
  * writes them onto the Steam shortcut. Shared by RomMPlaySection (passive
  * auto-apply + Refresh Artwork action) and SgdbGamePickerModal (re-apply
  * after a manual game-id pick), so it lives here rather than on either
- * component to keep their import graph acyclic.
+ * component to keep their import graph acyclic. The shortcut icon job's writes
+ * (`utils/shortcutIcons.ts`) ask it whether an apply is under way.
  */
 
 import { getSgdbArtworkBase64, saveShortcutIcon, debugLog } from "../api/backend";
@@ -27,6 +28,17 @@ import {
  */
 const artworkGenerations = new Map<number, number>();
 
+/** How many `applyArtwork` calls are under way for each appId. */
+const artworkInFlight = new Map<number, number>();
+
+/**
+ * Is the game page applying artwork to *appId* right now? Its icon is then
+ * newer than the one the shortcut icon job fetched, so the job leaves it.
+ */
+export function isArtworkApplyInFlight(appId: number): boolean {
+  return (artworkInFlight.get(appId) ?? 0) > 0;
+}
+
 /**
  * Apply the SGDB icon (type 4): the backend writes the PNG into Steam's grid dir
  * and returns its path; pointing the shortcut at it must go through SteamClient
@@ -48,6 +60,17 @@ async function applyIcon(appId: number, base64: string, signal: AbortSignal): Pr
  *  Returns count of successfully applied images, or -1 when no SGDB API
  *  key is configured. */
 export async function applyArtwork(romId: number, appId: number): Promise<number> {
+  artworkInFlight.set(appId, (artworkInFlight.get(appId) ?? 0) + 1);
+  try {
+    return await applySgdbArtwork(romId, appId);
+  } finally {
+    const left = (artworkInFlight.get(appId) ?? 1) - 1;
+    if (left > 0) artworkInFlight.set(appId, left);
+    else artworkInFlight.delete(appId);
+  }
+}
+
+async function applySgdbArtwork(romId: number, appId: number): Promise<number> {
   const leaseOwner = `artwork:${appId}`;
   mountPruneLeaseOwner(leaseOwner);
   const admission = capturePruneLeaseAdmission(leaseOwner);

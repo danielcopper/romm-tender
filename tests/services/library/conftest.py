@@ -21,6 +21,7 @@ from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_settings_persister import FakeSettingsPersister
+from fakes.fake_shortcut_icon_job import FakeShortcutIconJob
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
@@ -61,6 +62,7 @@ class LibraryHarness:
     prune_conflicts: PruneConflicts
     settings: dict[str, Any]
     emulator_sources: FakeEmulatorSources
+    icon_job: FakeShortcutIconJob
 
 
 @pytest.fixture
@@ -130,6 +132,7 @@ def library(tmp_path, emit, logger, home) -> LibraryHarness:
     renderer_rss = FakeRendererRss()
     renderer_gc = FakeRendererGc()
     emulator_sources = FakeEmulatorSources()
+    icon_job = FakeShortcutIconJob()
 
     sync_service = LibraryService(
         config=LibraryServiceConfig(
@@ -153,6 +156,7 @@ def library(tmp_path, emit, logger, home) -> LibraryHarness:
             renderer_rss=renderer_rss,
             renderer_gc=renderer_gc,
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
+            icon_job=icon_job,
         ),
     )
 
@@ -183,6 +187,7 @@ def library(tmp_path, emit, logger, home) -> LibraryHarness:
         prune_conflicts=prune_conflicts,
         settings=settings,
         emulator_sources=emulator_sources,
+        icon_job=icon_job,
     )
 
 

@@ -47,6 +47,7 @@ from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
 from services.saves import SaveService, SaveServiceConfig
 from services.session_lifecycle import SessionLifecycleService, SessionLifecycleServiceConfig
 from services.settings import SettingsService, SettingsServiceConfig
+from services.shortcut_icons import ShortcutIconService, ShortcutIconServiceConfig
 from services.shortcut_relocation import ShortcutRelocationService, ShortcutRelocationServiceConfig
 from services.shortcut_removal import ShortcutRemovalService, ShortcutRemovalServiceConfig
 from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
@@ -121,6 +122,7 @@ class ServicesBundle:
     data_inventory_service: DataInventoryService
     firmware_service: FirmwareService
     sgdb_service: SteamGridService
+    shortcut_icon_service: ShortcutIconService
     metadata_service: MetadataService
     achievements_service: AchievementsService
     migration_service: MigrationService
@@ -351,6 +353,43 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         ),
     )
 
+    sgdb_service = SteamGridService(
+        config=SteamGridServiceConfig(
+            sgdb_api=cfg.adapters.sgdb_adapter,
+            romm_api=cfg.adapters.romm_api,
+            steam_config=cfg.adapters.steam_config,
+            sgdb_artwork_cache=cfg.adapters.sgdb_artwork_cache,
+            settings=cfg.stores.settings,
+            loop=cfg.runtime.loop,
+            logger=cfg.runtime.logger,
+            settings_persister=cfg.callbacks.settings_persister,
+            get_pending_sync=pending_sync_binding.get,
+            log_debug=cfg.callbacks.log_debug,
+            uow_factory=cfg.callbacks.uow_factory,
+            conflict_rules=conflict_rules,
+            downscale_icon=cfg.adapters.downscale_icon,
+        ),
+    )
+
+    shortcut_icon_service = ShortcutIconService(
+        config=ShortcutIconServiceConfig(
+            steam_config=cfg.adapters.steam_config,
+            icons=sgdb_service,
+            uow_factory=cfg.callbacks.uow_factory,
+            settings=cfg.stores.settings,
+            conflict_rules=conflict_rules,
+            emit=cfg.runtime.emit,
+            sleeper=cfg.runtime.sleeper,
+            sync_in_flight=sync_in_flight_binding.get,
+            cleanup_running=lambda: prune_conflicts.cleanup_running,
+            panel_connected=cfg.runtime.panel_connected,
+            tender_logo=cfg.adapters.tender_logo,
+            loop=cfg.runtime.loop,
+            logger=cfg.runtime.logger,
+            log_debug=cfg.callbacks.log_debug,
+        ),
+    )
+
     sync_service = LibraryService(
         config=LibraryServiceConfig(
             romm_api=cfg.adapters.romm_api,
@@ -373,6 +412,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             renderer_rss=cfg.adapters.renderer_rss,
             renderer_gc=cfg.adapters.renderer_gc,
             conflict_rules=conflict_rules,
+            icon_job=shortcut_icon_service,
         ),
     )
     pending_sync_binding.set(lambda: sync_service.pending_sync)
@@ -473,23 +513,6 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             core_info=cfg.adapters.core_info_provider,
             resolve_system=cfg.adapters.http_adapter.resolve_system,
             platform_core_reader=cfg.callbacks.platform_core_reader,
-            uow_factory=cfg.callbacks.uow_factory,
-            conflict_rules=conflict_rules,
-        ),
-    )
-
-    sgdb_service = SteamGridService(
-        config=SteamGridServiceConfig(
-            sgdb_api=cfg.adapters.sgdb_adapter,
-            romm_api=cfg.adapters.romm_api,
-            steam_config=cfg.adapters.steam_config,
-            sgdb_artwork_cache=cfg.adapters.sgdb_artwork_cache,
-            settings=cfg.stores.settings,
-            loop=cfg.runtime.loop,
-            logger=cfg.runtime.logger,
-            settings_persister=cfg.callbacks.settings_persister,
-            get_pending_sync=pending_sync_binding.get,
-            log_debug=cfg.callbacks.log_debug,
             uow_factory=cfg.callbacks.uow_factory,
             conflict_rules=conflict_rules,
         ),
@@ -696,6 +719,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             settings=cfg.stores.settings,
             run_claim=prune_conflicts,
             conflict_rules=conflict_rules,
+            icon_job=shortcut_icon_service,
         )
     )
 
@@ -788,6 +812,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         data_inventory_service=data_inventory_service,
         firmware_service=firmware_service,
         sgdb_service=sgdb_service,
+        shortcut_icon_service=shortcut_icon_service,
         metadata_service=metadata_service,
         achievements_service=achievements_service,
         migration_service=migration_service,

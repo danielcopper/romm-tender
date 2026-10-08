@@ -29,6 +29,12 @@ class EventEmitter(Protocol):
     async def __call__(self, event: str, payload: object, /) -> bool: ...
 
 
+class PanelConnectedFn(Protocol):
+    """Is a panel connected to hear an event right now? The host's answer, handed in by the entry point."""
+
+    def __call__(self) -> bool: ...
+
+
 class ResolveUploadConflictFn(Protocol):
     """Decide the fallback when an upload POST is rejected by RomM's 409.
 

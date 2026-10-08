@@ -21,6 +21,13 @@ class SgdbApiError(Exception):
         self.status_code = status_code
 
 
+class SgdbRateLimitedError(SgdbApiError):
+    """A 429 from SteamGridDB's API or its image CDN, kept apart from "no image" so a caller can wait and ask again."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(429, message)
+
+
 class SteamGridDirMissingError(Exception):
     """Raised when the Steam grid directory cannot be located.
 

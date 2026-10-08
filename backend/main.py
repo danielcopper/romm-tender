@@ -1132,6 +1132,7 @@ async def build_backend(
         loop=asyncio.get_running_loop(),
         emit=events.emit,
         steam=status.steam,
+        panel_connected=lambda: events.connected,
     )
     app.run_startup_repairs(status.record_failed_step)
     logger.info("Tender backend loaded")

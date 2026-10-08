@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from services.library._state import LibrarySyncStateBox
     from services.library.reporter import SyncReporter
     from services.library.session_budget import SessionBudgetMonitor
-    from services.protocols import Clock, EventEmitter, Sleeper
+    from services.protocols import Clock, EventEmitter, IconPlaceholderPathFn, Sleeper
 
 
 # Per-unit heartbeat-based timeout. If the frontend stops calling
@@ -77,7 +77,8 @@ class ChunkDispatcherConfig:
     Clock/Sleeper seams the heartbeat wait is clocked by, the shared
     :class:`LibrarySyncStateBox` carrying the per-chunk coordination state, the
     :class:`SessionBudgetMonitor` the loop asks its two budget questions of at
-    each chunk boundary, and the reporter every commit runs through. The
+    each chunk boundary, the reporter every commit runs through, and the
+    placeholder icon each frame names for the shortcuts it creates. The
     ``reporter`` field is a :class:`LateBinding` because :class:`LibraryService`
     constructs this dispatcher before the reporter exists; the façade plugs it in
     via ``set()`` once the reporter is built.
@@ -95,6 +96,7 @@ class ChunkDispatcherConfig:
     sync_state_box: LibrarySyncStateBox
     reporter: LateBinding[SyncReporter]
     session_budget: SessionBudgetMonitor
+    icon_placeholder_path: IconPlaceholderPathFn
 
 
 class ChunkDispatcher:
@@ -108,6 +110,7 @@ class ChunkDispatcher:
         self._sync_state = config.sync_state_box
         self._reporter = config.reporter
         self._session_budget = config.session_budget
+        self._icon_placeholder_path = config.icon_placeholder_path
 
     async def apply_unit_in_chunks(
         self,
@@ -225,6 +228,9 @@ class ChunkDispatcher:
                 )
 
             chunk_rows = [roms_by_id[rid] for rid in chunk.rom_ids if rid in roms_by_id]
+            # Awaited here, before the four assignments below that nothing may be
+            # awaited between.
+            icon_placeholder_path = await self._icon_placeholder_path()
 
             # Fresh per-chunk coordination: a new event + identity (run + unit +
             # chunk index) so the reporter validates each chunk's ack. These four
@@ -262,6 +268,9 @@ class ChunkDispatcher:
                     # the frontend re-applies each via SetCustomArtworkForApp so
                     # the tile refreshes in-session. Non-empty only on chunk 0.
                     "cover_refreshes": chunk_cover_refreshes,
+                    # The placeholder icon the frontend gives each shortcut it
+                    # mints; null where there is none to give.
+                    "icon_placeholder_path": icon_placeholder_path,
                 },
             )
             # Count this emit so the session-budget gate exempts only the very

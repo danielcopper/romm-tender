@@ -143,6 +143,7 @@ _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
                 "sgdb_artwork",
                 "refresh_cover_artwork",
                 "save_shortcut_icon",
+                "shortcut_icons",
                 "cleanup_orphaned_grid_images",
                 "apply_steam_input_setting",
                 # The connection's settings and credentials, the sync cache,

@@ -14,6 +14,7 @@ import pytest
 import pytest_asyncio
 from _factories import _make_conflict_rules
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
+from fakes.fake_shortcut_icon_job import FakeShortcutIconJob
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeUuidGen
 from models.prune import InstalledContentRemoval, SaveQuarantine, SealedSourceClaims
@@ -245,6 +246,7 @@ class Harness:
     clock: FakeClock
     switch_calls: list[dict[str, Any]]
     conflicts: PruneConflicts
+    icon_job: FakeShortcutIconJob
 
 
 def _rom(
@@ -338,6 +340,7 @@ async def harness() -> Harness:
 
     clock = FakeClock()
     conflicts = PruneConflicts(logger=logging.getLogger("test-prune-conflicts"), log_debug=lambda _msg: None)
+    icon_job = FakeShortcutIconJob()
     service = PruneService(
         config=PruneServiceConfig(
             loop=loop,
@@ -367,6 +370,7 @@ async def harness() -> Harness:
             settings={"preferred_region": "USA"},
             run_claim=conflicts,
             conflict_rules=_make_conflict_rules(prune_conflicts=conflicts),
+            icon_job=icon_job,
         )
     )
     return Harness(
@@ -384,6 +388,7 @@ async def harness() -> Harness:
         clock,
         switch_calls,
         conflicts,
+        icon_job,
     )
 
 
@@ -3012,3 +3017,65 @@ async def test_release_wait_returns_once_the_run_releases_the_claim(harness):
     assert await waiter == {"success": True, "message": "Cleanup claim is released."}
     assert harness.service.is_active() is False
     await _finish(harness)
+
+
+class TestTheShortcutIconJob:
+    """A cleanup stops the shortcut icon job before it reserves its start, and asks for it again after."""
+
+    @pytest.mark.asyncio
+    async def test_the_job_is_stopped_before_the_start_is_reserved(self, harness):
+        _seed(harness.uow, _rom(1, fetch="old"))
+        preview = await _preview(harness)
+        reserved_at_stop: list[bool] = []
+
+        async def stop_for_cleanup() -> None:
+            reserved_at_stop.append(harness.conflicts.cleanup_running)
+
+        harness.icon_job.stop_for_cleanup = stop_for_cleanup  # type: ignore[method-assign]
+
+        await _start(harness, preview["preview_id"])
+
+        assert reserved_at_stop == [False]
+        await _finish(harness)
+
+    @pytest.mark.asyncio
+    async def test_a_start_that_begins_no_run_asks_for_the_job_again(self, harness):
+        _seed(harness.uow, _rom(1, fetch="old"))
+
+        result = await _start(harness, "not-a-preview")
+
+        assert result["reason"] == "stale_preview"
+        assert harness.icon_job.stops == 1
+        assert harness.icon_job.requests == [False]
+
+    @pytest.mark.asyncio
+    async def test_a_started_run_asks_for_the_job_only_once_it_has_ended(self, harness):
+        _seed(harness.uow, _rom(1, fetch="old"))
+        harness.romm.outcomes[1] = [{"id": 1}]
+        preview = await _preview(harness)
+
+        await _start(harness, preview["preview_id"])
+        assert harness.icon_job.requests == []
+        await _finish(harness)
+
+        assert harness.icon_job.requests == [False]
+
+    @pytest.mark.asyncio
+    async def test_a_run_whose_task_never_started_asks_for_the_job_when_its_claim_is_released(self, harness):
+        _seed(harness.uow, _rom(1, fetch="old"))
+        preview = await _preview(harness)
+
+        async def never_starts(*_args: Any) -> None:
+            await asyncio.Event().wait()
+
+        harness.service._run = never_starts  # type: ignore[method-assign]
+        await _start(harness, preview["preview_id"])
+        task = harness.service._task
+        assert task is not None
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        await asyncio.sleep(0)
+
+        assert harness.conflicts.cleanup_running is False
+        assert harness.icon_job.requests == [False]

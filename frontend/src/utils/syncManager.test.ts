@@ -54,6 +54,7 @@ function unit(launchOptions: string, runId = "run-1"): SyncApplyUnitData {
     chunk_count: 1,
     chunk_offset: 0,
     unit_total: 1,
+    icon_placeholder_path: null,
     shortcuts: [
       {
         rom_id: 42,
@@ -157,6 +158,7 @@ describe("syncManager — group-aware emit: one Steam shortcut per game (ADR-002
       chunk_count: 1,
       chunk_offset: 0,
       unit_total: 1,
+      icon_placeholder_path: null,
       shortcuts: [groupItem({ rom_id: 1, name: "Zelda (USA)", launch_options: jpCmd })],
     };
 
@@ -194,6 +196,7 @@ describe("syncManager — group-aware emit: one Steam shortcut per game (ADR-002
       chunk_count: 1,
       chunk_offset: 0,
       unit_total: 2,
+      icon_placeholder_path: null,
       shortcuts: [groupItem({ rom_id: 10, name: "Zelda" }), groupItem({ rom_id: 20, name: "Mario" })],
     };
 
@@ -265,6 +268,7 @@ describe("syncManager — registers resolved appIds as RomM-owned at ack time (#
       chunk_count: 1,
       chunk_offset: 0,
       unit_total: shortcuts.length,
+      icon_placeholder_path: null,
       shortcuts,
     };
   }
@@ -573,6 +577,7 @@ describe("syncManager — chunked apply (#1025)", () => {
       chunk_count: opts.chunkCount,
       chunk_offset: opts.chunkOffset,
       unit_total: opts.unitTotal,
+      icon_placeholder_path: null,
       shortcuts,
     };
   }
@@ -733,6 +738,7 @@ describe("syncManager — chunked apply (#1025)", () => {
 describe("syncManager — applies cover artwork to created shortcuts via the API (#1391)", () => {
   const EXE = "/home/deck/.local/bin/tender-rom-launcher";
   const setCustomArtwork = vi.fn().mockResolvedValue(undefined);
+  const setShortcutIcon = vi.fn();
   // logError is a plain wrapper (not an endpoint), so spy to observe the fail-soft path.
   let logErrorSpy: ReturnType<typeof vi.spyOn>;
 
@@ -745,6 +751,7 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
     vi.mocked(backend.getArtworkBase64).mockReset();
     setCustomArtwork.mockClear();
     setCustomArtwork.mockResolvedValue(undefined);
+    setShortcutIcon.mockReset();
     logErrorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
     resetSyncDelta();
     resetSyncCancel();
@@ -759,6 +766,7 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
         SetShortcutStartDir: vi.fn(),
         SetAppLaunchOptions: vi.fn(),
         SetCustomArtworkForApp: setCustomArtwork,
+        SetShortcutIcon: setShortcutIcon,
         RemoveShortcut: vi.fn(),
       },
     });
@@ -791,6 +799,7 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
       chunk_count: 1,
       chunk_offset: 0,
       unit_total: shortcuts.length,
+      icon_placeholder_path: null,
       shortcuts,
     };
   }
@@ -824,6 +833,67 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
     expect(addShortcut).not.toHaveBeenCalled();
     expect(vi.mocked(backend.getArtworkBase64)).not.toHaveBeenCalled();
     expect(setCustomArtwork).not.toHaveBeenCalled();
+  });
+
+  describe("the placeholder icon", () => {
+    const PLACEHOLDER = "/grid/tender-icon-placeholder.png";
+
+    it("is set on a created shortcut, after its cover", async () => {
+      getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>());
+      addShortcut.mockResolvedValue(6000);
+      vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: "COVERPNG" });
+
+      const applyUnit = initUnitSyncManager();
+      await act(async () => {
+        await applyUnit({ ...chunkOf([sc(42)], "run-placeholder"), icon_placeholder_path: PLACEHOLDER });
+      });
+
+      expect(setShortcutIcon).toHaveBeenCalledWith(6000, PLACEHOLDER);
+      expect(setShortcutIcon.mock.invocationCallOrder[0]).toBeGreaterThan(
+        setCustomArtwork.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it("is not set on an updated shortcut, which keeps the icon it has", async () => {
+      getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>([[42, 5000]]));
+
+      const applyUnit = initUnitSyncManager();
+      await act(async () => {
+        await applyUnit({ ...chunkOf([sc(42)], "run-placeholder-update"), icon_placeholder_path: PLACEHOLDER });
+      });
+
+      expect(setShortcutIcon).not.toHaveBeenCalled();
+    });
+
+    it("is not set when the chunk names none", async () => {
+      getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>());
+      addShortcut.mockResolvedValue(6000);
+      vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: null });
+
+      const applyUnit = initUnitSyncManager();
+      await act(async () => {
+        await applyUnit(chunkOf([sc(42)], "run-placeholder-none"));
+      });
+
+      expect(setShortcutIcon).not.toHaveBeenCalled();
+    });
+
+    it("that cannot be set is logged and the shortcut still counts as created", async () => {
+      getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>());
+      addShortcut.mockResolvedValue(6000);
+      vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: null });
+      setShortcutIcon.mockImplementation(() => {
+        throw new Error("no such app");
+      });
+
+      const applyUnit = initUnitSyncManager();
+      await act(async () => {
+        await applyUnit({ ...chunkOf([sc(42)], "run-placeholder-throws"), icon_placeholder_path: PLACEHOLDER });
+      });
+
+      expect(logErrorSpy).toHaveBeenCalledWith(expect.stringContaining("placeholder icon for appId 6000"));
+      expect(vi.mocked(backend.reportUnitResults)).toHaveBeenCalledWith({ "42": 6000 }, "run-placeholder-throws", 1, 0);
+    });
   });
 
   it("fetches the cover but applies nothing (no error) when the ROM has no cover (base64: null)", async () => {
@@ -1096,6 +1166,7 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
   const setShortcutExe = vi.fn();
   const setShortcutStartDir = vi.fn();
   const setCustomArtwork = vi.fn().mockResolvedValue(undefined);
+  const setShortcutIcon = vi.fn();
   // The active appStore.GetAppOverviewByAppID spy, re-created by each stubAppStore
   // call so a test can assert the pool build did (or did NOT) resolve any names.
   let getAppOverview: ReturnType<typeof vi.fn>;
@@ -1123,6 +1194,7 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
     setShortcutStartDir.mockClear();
     setCustomArtwork.mockClear();
     setCustomArtwork.mockResolvedValue(undefined);
+    setShortcutIcon.mockClear();
     resetSyncDelta();
     resetSyncCancel();
     // test-setup's afterEach vi.unstubAllGlobals wipes ambient globals after the
@@ -1135,6 +1207,7 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
         SetShortcutStartDir: setShortcutStartDir,
         SetAppLaunchOptions: vi.fn(),
         SetCustomArtworkForApp: setCustomArtwork,
+        SetShortcutIcon: setShortcutIcon,
         RemoveShortcut: vi.fn(),
       },
     });
@@ -1165,6 +1238,7 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
       chunk_count: 1,
       chunk_offset: 0,
       unit_total: shortcuts.length,
+      icon_placeholder_path: null,
       shortcuts,
     };
   }
@@ -1199,6 +1273,32 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
     // Delta decision (#1366): an adoption brings a game under management → counted
     // as "added" in the user-facing toast delta, exactly like a fresh create.
     expect(getSyncDelta()).toEqual({ added: 1, removed: 0 });
+  });
+
+  it("gives an adopted orphan no placeholder icon, and the shortcut minted beside it one", async () => {
+    // The orphan may carry an icon somebody set by hand; the placeholder would
+    // replace it. A fresh create in the same chunk still gets the placeholder.
+    getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>());
+    getLiveRomMShortcutAppIds.mockResolvedValue([9000]);
+    stubAppStore({ 9000: "Adopted" });
+    addShortcut.mockResolvedValue(6000);
+    const placeholder = "/grid/tender-icon-placeholder.png";
+
+    const applyUnit = initUnitSyncManager();
+    await act(async () => {
+      await applyUnit({
+        ...unitOf([item({ rom_id: 42, name: "Adopted" }), item({ rom_id: 43, name: "Minted" })], "run-adopt-icon"),
+        icon_placeholder_path: placeholder,
+      });
+    });
+
+    expect(vi.mocked(backend.reportUnitResults)).toHaveBeenCalledWith(
+      { "42": 9000, "43": 6000 },
+      "run-adopt-icon",
+      1,
+      0,
+    );
+    expect(setShortcutIcon.mock.calls).toEqual([[6000, placeholder]]);
   });
 
   it("creates a fresh shortcut when no orphan name matches", async () => {

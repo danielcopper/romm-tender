@@ -192,23 +192,25 @@ async function rewriteShortcutIdentity(appId: number, item: SyncAddItem): Promis
  * *liveAppIds* is the run's cached live-shortcut scan, threaded in so the orphan
  * pool reuses it (no second scan). ``appId`` is ``undefined`` when a create
  * failed. ``created`` is ``true`` for both a fresh create and an adoption (each
- * brings a game under management for the first time), and drives two caller
- * behaviours: applying cover artwork (creates + adoptions get it, updates keep
- * their grid file) and — via ``recordSyncCreated`` here — the user-facing
- * "added" delta. It is deliberately NOT a proxy for an ``AddShortcut`` call: an
- * adoption sets ``created`` without one, because the renderer-cost of minting a
- * Steam shortcut never happens.
+ * brings a game under management for the first time), and decides what the
+ * caller does next: applying cover artwork (creates + adoptions get it, updates
+ * keep their grid file), the unit's created/updated count, and — via
+ * ``recordSyncCreated`` here — the user-facing "added" delta. It is deliberately
+ * NOT a proxy for an ``AddShortcut`` call: an adoption sets ``created`` without
+ * one, because the renderer-cost of minting a Steam shortcut never happens.
+ * ``adopted`` tells the two apart: an adopted shortcut keeps the icon it has,
+ * which may be one somebody set by hand.
  */
 async function resolveShortcutAppId(
   item: SyncAddItem,
   existing: Map<number, number>,
   runId: string,
   liveAppIds: number[] | null,
-): Promise<{ appId: number | undefined; created: boolean }> {
+): Promise<{ appId: number | undefined; created: boolean; adopted: boolean }> {
   const existingAppId = existing.get(item.rom_id);
   if (existingAppId) {
     await rewriteShortcutIdentity(existingAppId, item);
-    return { appId: existingAppId, created: false };
+    return { appId: existingAppId, created: false, adopted: false };
   }
   // Create path. Before minting a fresh shortcut, try to ADOPT a live RomM-owned
   // orphan of the same name (a shortcut whose exe is ours but which carries no
@@ -224,13 +226,13 @@ async function resolveShortcutAppId(
     // feeds only the terminal toast, never renderer-cost accounting).
     recordSyncCreated(adoptedAppId);
     logInfo(`adopted orphan shortcut ${adoptedAppId} for rom ${item.rom_id} (${item.name})`);
-    return { appId: adoptedAppId, created: true };
+    return { appId: adoptedAppId, created: true, adopted: true };
   }
   // No orphan to adopt → mint a fresh shortcut. Record its appId as a real
   // "added" delta — the update path above is excluded (the shortcut existed).
   const createdAppId = (await addShortcut(item)) ?? undefined;
   if (createdAppId) recordSyncCreated(createdAppId);
-  return { appId: createdAppId, created: createdAppId !== undefined };
+  return { appId: createdAppId, created: createdAppId !== undefined, adopted: false };
 }
 
 /**
@@ -256,6 +258,18 @@ async function applyCoverArtwork(appId: number, romId: number): Promise<void> {
     }
   } catch (e) {
     logError(`Per-unit: failed to apply cover for rom ${romId} (appId ${appId}): ${e}`);
+  }
+}
+
+/**
+ * Give a shortcut this sync minted the placeholder icon; why is
+ * docs/architecture/steam-non-steam-shortcuts.md, "Shortcut icons". Fail-soft.
+ */
+function applyPlaceholderIcon(appId: number, iconPath: string): void {
+  try {
+    SteamClient.Apps.SetShortcutIcon(appId, iconPath);
+  } catch (e) {
+    logError(`Per-unit: failed to set the placeholder icon for appId ${appId}: ${e}`);
   }
 }
 
@@ -350,7 +364,7 @@ async function processUnitShortcuts(
           totalSteps: data.total_units,
           runId: data.run_id,
         });
-        const { appId, created } = await resolveShortcutAppId(item, existing, data.run_id, liveAppIds);
+        const { appId, created, adopted } = await resolveShortcutAppId(item, existing, data.run_id, liveAppIds);
         if (appId) {
           romIdToAppId[String(item.rom_id)] = appId;
           // What this unit produced, against the unit itself. The run-wide delta
@@ -373,8 +387,11 @@ async function processUnitShortcuts(
           // adopted orphan (#1366; ``created`` covers both). An updated/rebound
           // shortcut keeps its existing grid file (cover refresh on change is
           // #1386). Awaited so covers stay one-per-item under the 50ms pacing;
-          // fail-soft.
-          if (created) await applyCoverArtwork(appId, item.rom_id);
+          // fail-soft. The placeholder icon goes only on a minted shortcut.
+          if (created) {
+            await applyCoverArtwork(appId, item.rom_id);
+            if (!adopted && data.icon_placeholder_path) applyPlaceholderIcon(appId, data.icon_placeholder_path);
+          }
         }
       } catch (e) {
         logError(`Per-unit: failed to process shortcut for rom ${item.rom_id}: ${e}`);

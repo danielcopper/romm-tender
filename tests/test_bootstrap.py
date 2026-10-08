@@ -80,6 +80,7 @@ from services.playtime import PlaytimeService
 from services.prune import PruneService
 from services.prune_leases import PruneLeaseService
 from services.saves import SaveService
+from services.shortcut_icons import ShortcutIconService
 from services.steamgrid import SteamGridService
 from services.update_check import UpdateCheckService
 from services.update_outcome import UpdateOutcomeService
@@ -280,6 +281,7 @@ class TestTheCacheRootAndTheDataRootStayApart:
                     hostname_provider=result.runtime_adapters.hostname_provider,
                     machine_id_provider=result.runtime_adapters.machine_id_provider,
                     steam=FakeSteamInterface(),
+                    panel_connected=lambda: False,
                 ),
                 callbacks=result.callbacks,
                 min_required_version=MIN_ROMM_VERSION,
@@ -659,6 +661,8 @@ class TestWireServices:
                 update_staging=deps["update_staging"],
                 transient_units=FakeTransientUnits(),
                 journal=FakeJournal(),
+                downscale_icon=lambda data: data,
+                tender_logo=lambda: None,
             ),
             stores=StateBundle(
                 settings=deps["settings"],
@@ -673,6 +677,7 @@ class TestWireServices:
                 hostname_provider=deps["hostname_provider"],
                 machine_id_provider=deps["machine_id_provider"],
                 steam=FakeSteamInterface(),
+                panel_connected=lambda: False,
             ),
             callbacks=CallbackBundle(
                 retrodeck_folders=deps["retrodeck_folders"],
@@ -744,7 +749,7 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(fields(result)) == 35
+        assert len(fields(result)) == 36
         assert all(getattr(result, field.name) is not None for field in fields(result))
         assert isinstance(result.prune_conflicts, PruneConflicts)
         assert isinstance(result.core_service, CoreService)
@@ -759,6 +764,7 @@ class TestWireServices:
         assert isinstance(result.leftover_tmp_cleanup_service, LeftoverTmpCleanupService)
         assert isinstance(result.update_outcome_service, UpdateOutcomeService)
         assert isinstance(result.update_output_service, UpdateOutputService)
+        assert isinstance(result.shortcut_icon_service, ShortcutIconService)
         deps["loop"].close()
 
     def test_pending_sync_binding_observes_library_rebinds(self, tmp_path):

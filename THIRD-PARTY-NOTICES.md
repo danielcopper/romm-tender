@@ -16,13 +16,14 @@ Tender also ships, and this file does not describe:
 | ----------------------------------------- | ------- | -------------------------------------------------------------------- |
 | `backend/_vendor/atlas` (emu-atlas)       | MIT     | `backend/_vendor/atlas.LICENSE`, beside the tree                     |
 | `backend/_vendor/vdf` (ValvePython/vdf)   | MIT     | `backend/_vendor/vdf/LICENSE`, inside the tree                       |
+| `backend/_vendor/png` (pypng)             | MIT     | `backend/_vendor/png/LICENCE`, inside the tree                       |
 | `backend/native/libgavel-x86_64-linux.so` | MIT     | `backend/native/libgavel-x86_64-linux.so.LICENSE`, beside the binary |
 
-The two vendored trees are not held the same way, and the difference is deliberate rather than an inconsistency:
+The vendored trees are not all held the same way, and the difference is deliberate rather than an inconsistency:
 `scripts/check_vendored_trees.py` asserts the sibling `atlas.LICENSE` because upstream's own wheel manifest names a
-licence file to hold it against, while `vdf`'s manifest is generated here (the copy carries a local patch, so no
-upstream manifest can ever match it) and its `LICENSE` is covered instead by the tree digests, which the same gate
-requires to match the vendored file set exactly. Provenance for both is in
+licence file to hold it against, while the manifests of `vdf` and `png` are generated here (each copy carries a local
+patch, so no upstream manifest can ever match it) and their licence files are covered instead by the tree digests, which
+the same gate requires to match the vendored file set exactly. Provenance for each is in
 [`backend/_vendor/README.md`](backend/_vendor/README.md).
 
 **`backend/native/` is pinned differently from the two vendored trees.** The `.so` is a compiled build of

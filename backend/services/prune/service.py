@@ -32,6 +32,7 @@ if TYPE_CHECKING:
         RetroDeckFolders,
         RommLivenessApi,
         SaveDriftProbeFn,
+        ShortcutIconJob,
         SteamRecoveryStore,
         UnitOfWorkFactory,
         UuidGen,
@@ -50,7 +51,8 @@ class PruneServiceConfig:
     ``conflict_rules`` are what the preview and the start check at their entry
     — the start through its exclusive reservation — and what the final
     completion frame is leased through; ``run_claim`` is where a started run
-    holds its claim.
+    holds its claim. The ``icon_job`` is stopped before a start reserves it and
+    asked for again once no run holds a claim.
     """
 
     loop: asyncio.AbstractEventLoop
@@ -72,6 +74,7 @@ class PruneServiceConfig:
     settings: dict[str, Any]
     run_claim: PruneRunClaim
     conflict_rules: ConflictRules
+    icon_job: ShortcutIconJob
 
 
 def _invalid_action_report(request: dict[str, Any], pending: PendingAction) -> tuple[str, str] | None:
@@ -119,6 +122,7 @@ class PruneService:
         self._settings = config.settings
         self._run_claim = config.run_claim
         self._rules = config.conflict_rules
+        self._icon_job = config.icon_job
         self._recovery_store = config.recovery_store
         self._retrodeck_folders = config.retrodeck_folders
         self._preview_builder = PreviewBuilder(
@@ -270,8 +274,16 @@ class PruneService:
         conflicts). A run that starts registers its run claim before the
         reservation is given back, so the two overlap.
         """
-        async with self._rules.hold_start("start_prune", update=True, migration=True, sync=True):
-            return await self._start_prune(request)
+        # The icon job is stopped first, so no icon it writes or hands over
+        # lands after this start reserves; a start that begins no run asks for
+        # it again.
+        await self._icon_job.stop_for_cleanup()
+        try:
+            async with self._rules.hold_start("start_prune", update=True, migration=True, sync=True):
+                return await self._start_prune(request)
+        finally:
+            if self._run_id is None:
+                self._icon_job.request_run()
 
     async def _start_prune(self, request: object) -> dict[str, Any]:
         if not isinstance(request, dict) or request.get("confirmed") is not True:
@@ -516,6 +528,7 @@ class PruneService:
         self._run_id = None
         self._run_preview_id = None
         self._release_event.set()
+        self._icon_job.request_run()
 
     async def _run(self, run_id: str, preview: PrunePreview, options: PruneOptions) -> None:
         try:
@@ -531,6 +544,7 @@ class PruneService:
             self._run_id = None
             self._run_preview_id = None
             self._release_event.set()
+            self._icon_job.request_run()
 
     async def _request_action(
         self,

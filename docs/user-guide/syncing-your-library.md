@@ -455,6 +455,13 @@ Cover art is always applied from RomM. The other four types require a
 [SteamGridDB API key](configuration.md#steamgriddb-api-key). Games without a SteamGridDB match will show Steam's default
 placeholders for those slots.
 
+Icons arrive in the background, without opening each game: after every sync and when Tender starts, every game Tender
+manages that has no icon yet gets one, a few at a time. While a game waits for its icon, Steam's list shows an empty
+spot beside it. A game SteamGridDB has no icon for shows Tender's logo instead. The background job does not ask again
+for it; the game's page does, the first time you open it after Steam starts, and so does **Refresh Artwork**. An icon
+you set yourself in Steam is left alone. A game that had no icon at all before shows its first one after Steam restarts,
+which switching between Game Mode and Desktop Mode does.
+
 You can refresh artwork for any individual game from its
 [game detail page](managing-games.md#refreshing-artwork-and-metadata).
 

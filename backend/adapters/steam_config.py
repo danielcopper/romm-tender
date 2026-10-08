@@ -94,14 +94,32 @@ class SteamConfigAdapter:
         would find zero of the 828, not half.
 
         And every app id is stored **signed**: 828 of 828 negative, e.g.
-        ``-1875952762``. The conversion below is what every record needs, not an
-        edge case, because every ``SteamClient`` API takes the unsigned form.
+        ``-1875952762``. The conversion in :meth:`_read_shortcut_field` is what
+        every record needs, not an edge case, because every ``SteamClient`` API
+        takes the unsigned form.
 
         This is a read of the file, not of Steam's memory: while Steam runs the
         file is a snapshot it rewrites from memory mid-session and on exit (see
         docs/architecture/steam-non-steam-shortcuts.md), so a shortcut created
         in this session may not be in it yet. Every caller here is asking about
         shortcuts written by earlier sessions.
+        """
+        return self._read_shortcut_field("exe", missing=None)
+
+    def read_shortcut_icons(self) -> dict[int, str] | None:
+        """Every non-Steam shortcut's app ID and the ``icon`` it points at, ``""`` for none.
+
+        Read like :meth:`read_shortcut_exes`, whose docstring holds the file's
+        shapes and what ``None`` means. A record with no ``icon`` key answers
+        ``""``. How soon the file shows a shortcut's new icon is measured in
+        docs/architecture/steam-non-steam-shortcuts.md, "Shortcut icons".
+        """
+        return self._read_shortcut_field("icon", missing="")
+
+    def _read_shortcut_field(self, name: str, *, missing: str | None) -> dict[int, str] | None:
+        """Each shortcut's app ID and its string field *name*; *missing* stands in where it is absent.
+
+        A record without the field is left out when *missing* is ``None``.
         """
         path = self.shortcuts_vdf_path()
         if not path:
@@ -121,15 +139,15 @@ class SteamConfigAdapter:
         if not isinstance(entries, dict):
             self._logger.warning(f"{path} holds no shortcut list")
             return None
-        exes: dict[int, str] = {}
+        values: dict[int, str] = {}
         for entry in entries.values():
             if not isinstance(entry, dict):
                 continue
             fields = {key.lower(): value for key, value in entry.items()}
-            app_id, exe = fields.get("appid"), fields.get("exe")
-            if isinstance(app_id, int) and isinstance(exe, str):
-                exes[to_unsigned_app_id(app_id)] = exe
-        return exes
+            app_id, value = fields.get("appid"), fields.get(name, missing)
+            if isinstance(app_id, int) and isinstance(value, str):
+                values[to_unsigned_app_id(app_id)] = value
+        return values
 
     def write_shortcuts(self, data: dict[str, Any]) -> None:
         path = self.shortcuts_vdf_path()
@@ -164,6 +182,32 @@ class SteamConfigAdapter:
                 os.remove(tmp_path)
             raise
         return icon_path
+
+    def ensure_grid_file(self, name: str, content: bytes) -> str:
+        """Make Steam's grid dir hold *content* under *name*, and return its path.
+
+        Writes only when the file is missing or holds other bytes, atomically
+        as :meth:`write_shortcut_icon` does. Raises
+        ``lib.errors.SteamGridDirMissingError`` when the Steam grid directory
+        cannot be located.
+        """
+        grid_dir = self.grid_dir()
+        if not grid_dir:
+            raise SteamGridDirMissingError("Cannot find Steam grid directory")
+        path = os.path.join(grid_dir, name)
+        with contextlib.suppress(OSError), open(path, "rb") as existing:
+            if existing.read() == content:
+                return path
+        tmp_path = path + ".tmp"
+        try:
+            with open(tmp_path, "wb") as f:
+                f.write(content)
+            os.replace(tmp_path, path)
+        except Exception:
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(tmp_path)
+            raise
+        return path
 
     # -- Steam Input config ---------------------------------------------------
 

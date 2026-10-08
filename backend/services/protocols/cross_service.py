@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from contextlib import AbstractAsyncContextManager
 
     from models.prune import InstalledContentRemoval, SaveQuarantine, SourceClaim
+    from models.shortcut_icon import IconFetch
     from models.state import ShortcutRegistryEntry
     from models.sync import ClientSaveState
 
@@ -765,3 +766,41 @@ class PlaytimeScopeNoticeClearFn(Protocol):
     """
 
     def __call__(self) -> None: ...
+
+
+class ShortcutIconSource(Protocol):
+    """What the shortcut icon job asks of the SteamGridDB service: the icon, and a write the game page can overrule."""
+
+    def icon_generation(self, app_id: int) -> int:
+        """How many icons the game page has saved for *app_id* in this process."""
+        ...
+
+    def fetch_shortcut_icon_io(self, rom_id: int) -> IconFetch:
+        """Fetch *rom_id*'s icon and say what came of it. Synchronous."""
+        ...
+
+    async def write_job_icon(self, app_id: int, icon_bytes: bytes, generation: int) -> str | None:
+        """Write the icon unless the game page saved one since *generation*; answer its path or ``None``."""
+        ...
+
+
+class ShortcutIconJob(Protocol):
+    """What a sync and a removed-game cleanup ask of the shortcut icon job."""
+
+    def request_run(self, *, settle: bool = False) -> None:
+        """Run the job, or run it again once the run under way ends; *settle* waits for Steam's file to catch up."""
+        ...
+
+    async def stop_for_cleanup(self) -> None:
+        """Stop the job and wait for a write or hand-over under way, so none lands once a cleanup has reserved."""
+        ...
+
+    async def placeholder_path(self) -> str | None:
+        """The placeholder icon's path, written if missing; ``None`` where it cannot be written."""
+        ...
+
+
+class IconPlaceholderPathFn(Protocol):
+    """The placeholder icon a sync gives each shortcut it creates; ``None`` where there is none to give."""
+
+    async def __call__(self) -> str | None: ...

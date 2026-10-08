@@ -287,6 +287,83 @@ class TestWriteShortcutIcon:
         assert not (grid_dir / "12345_icon.png").exists()
 
 
+class TestReadShortcutIcons:
+    """The reading the shortcut icon job's worklist is derived from."""
+
+    def test_reads_every_shortcut_icon_with_none_as_an_empty_path(self, tmp_path):
+        TestReadShortcutExes._write(
+            tmp_path,
+            {
+                "0": {"appid": -949288395, "AppName": "One", "icon": "/grid/3345678901_icon.png"},
+                "1": {"AppId": 2, "AppName": "Two", "Icon": ""},
+                "2": {"appid": 3, "AppName": "Three"},
+                "3": "not a dict",
+            },
+        )
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_icons() == {3345678901: "/grid/3345678901_icon.png", 2: "", 3: ""}
+
+    def test_an_unlocatable_steam_directory_reads_as_nothing_established(self, tmp_path):
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_icons() is None
+
+
+class TestEnsureGridFile:
+    @staticmethod
+    def _grid(tmp_path):
+        (tmp_path / ".local" / "share" / "Steam" / "userdata" / "123").mkdir(parents=True)
+        return tmp_path / ".local" / "share" / "Steam" / "userdata" / "123" / "config" / "grid"
+
+    def test_writes_a_missing_file_and_answers_its_path(self, tmp_path):
+        grid = self._grid(tmp_path)
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        path = adapter.ensure_grid_file("tender-icon-placeholder.png", b"pixel")
+
+        assert path == str(grid / "tender-icon-placeholder.png")
+        assert (grid / "tender-icon-placeholder.png").read_bytes() == b"pixel"
+        assert not (grid / "tender-icon-placeholder.png.tmp").exists()
+
+    def test_leaves_a_file_that_already_holds_the_bytes_alone(self, tmp_path):
+        grid = self._grid(tmp_path)
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+        adapter.ensure_grid_file("tender-icon-placeholder.png", b"pixel")
+
+        with patch("adapters.steam_config.os.replace") as replace:
+            adapter.ensure_grid_file("tender-icon-placeholder.png", b"pixel")
+
+        replace.assert_not_called()
+        assert (grid / "tender-icon-placeholder.png").read_bytes() == b"pixel"
+
+    def test_rewrites_a_file_that_holds_other_bytes(self, tmp_path):
+        grid = self._grid(tmp_path)
+        grid.mkdir(parents=True)
+        (grid / "tender-icon.png").write_bytes(b"old logo")
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        adapter.ensure_grid_file("tender-icon.png", b"new logo")
+
+        assert (grid / "tender-icon.png").read_bytes() == b"new logo"
+
+    def test_raises_when_no_grid_dir(self, tmp_path):
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+        with pytest.raises(SteamGridDirMissingError, match="grid directory"):
+            adapter.ensure_grid_file("tender-icon.png", b"data")
+
+    def test_cleans_tmp_on_failure(self, tmp_path):
+        grid = self._grid(tmp_path)
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+        with (
+            patch("adapters.steam_config.os.replace", side_effect=OSError("boom")),
+            pytest.raises(OSError, match="boom"),
+        ):
+            adapter.ensure_grid_file("tender-icon.png", b"data")
+        assert not (grid / "tender-icon.png.tmp").exists()
+        assert not (grid / "tender-icon.png").exists()
+
+
 # ── set_steam_input_config ──────────────────────────────────
 
 

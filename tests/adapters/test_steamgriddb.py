@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from adapters.steamgriddb import SteamGridDbAdapter
-from lib.errors import SgdbApiError
+from lib.errors import SgdbApiError, SgdbRateLimitedError
 
 
 @pytest.fixture
@@ -172,3 +172,34 @@ class TestRequestHttpErrorWrapping:
             with pytest.raises(SgdbApiError) as exc_info:
                 adapter.request("/games/igdb/123")
             assert exc_info.value.status_code == 403
+
+
+def _http_error(code, reason):
+    return urllib.error.HTTPError("https://steamgriddb.com", code, reason, http.client.HTTPMessage(), None)
+
+
+class TestTooManyRequests:
+    def test_the_api_answers_rate_limited_not_a_plain_api_error(self, adapter):
+        with (
+            patch("urllib.request.urlopen", side_effect=_http_error(429, "Too Many Requests")),
+            pytest.raises(SgdbRateLimitedError) as exc_info,
+        ):
+            adapter.request("/icons/game/1")
+        assert exc_info.value.status_code == 429
+        assert isinstance(exc_info.value, SgdbApiError)
+
+    def test_the_image_cdn_answers_rate_limited_and_leaves_no_file(self, adapter, tmp_path):
+        dest = tmp_path / "icon.png"
+        with (
+            patch("urllib.request.urlopen", side_effect=_http_error(429, "Too Many Requests")),
+            pytest.raises(SgdbRateLimitedError),
+        ):
+            adapter.download_image("https://cdn2.steamgriddb.com/icon/x.png", str(dest))
+        assert not dest.exists()
+        assert not (tmp_path / "icon.png.tmp").exists()
+
+    def test_any_other_http_error_from_the_image_cdn_still_answers_false(self, adapter, tmp_path):
+        dest = tmp_path / "icon.png"
+        with patch("urllib.request.urlopen", side_effect=_http_error(404, "Not Found")):
+            assert adapter.download_image("https://cdn2.steamgriddb.com/icon/x.png", str(dest)) is False
+        assert not dest.exists()

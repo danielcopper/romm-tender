@@ -79,12 +79,14 @@ import type {
   SyncStaleData,
   SyncCollectionsData,
   ServerRetryProgressEvent,
+  ShortcutIconsData,
   Page,
   NavTarget,
   SettingsSection,
 } from "./types";
 import { setLaunchOptionsConfirmed } from "./utils/steamShortcuts";
 import { removeShortcutsPaced } from "./utils/shortcutRemoval";
+import { applyShortcutIcons } from "./utils/shortcutIcons";
 import { batchConfirmLaunchOptions } from "./utils/launchOptionsReconcile";
 import {
   disownStrandedPruneLeases,
@@ -924,6 +926,16 @@ const tender = definePanel(() => {
   // terminal "done" toast.
   addEventListener<SyncCollectionsData>("sync_collections", (data: SyncCollectionsData) => {
     logInfo(`sync_collections received: ${Object.keys(data.platform_app_ids).length} platforms`);
+  });
+
+  // The shortcut icon job's batches: icons the backend has written, to point
+  // each shortcut at under the batch's lease.
+  addEventListener<ShortcutIconsData>("shortcut_icons", (data: ShortcutIconsData) => {
+    detach(
+      applyShortcutIcons(data).catch((e: unknown) => {
+        logError(`shortcut_icons: ${e}`);
+      }),
+    );
   });
 
   // Backend emits sync_progress events throughout the sync run — update the

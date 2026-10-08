@@ -677,3 +677,42 @@ class TestInterChunkCancelGuard:
         apply_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(apply_events) == 1
         assert apply_events[0]["chunk_index"] == 0
+
+
+class TestThePlaceholderIcon:
+    """Each chunk names the placeholder icon the frontend gives the shortcuts it creates."""
+
+    async def _apply_one_unit(self, library, fake_romm_api) -> None:
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "G1"}])
+        library.sync._reporter.commit_unit_results = AsyncMock()  # type: ignore[method-assign]
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.sync._box.sync_state = SyncState.RUNNING
+        library.sync._box.current_sync_id = "run-placeholder"
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+        await library.sync._orchestrator._sync_one_unit(
+            unit,
+            sources=library.emulator_sources.read(),
+            unit_index=0,
+            total_units=1,
+            synced_rom_ids=set(),
+            collection_memberships={},
+            platform_rom_ids=set(),
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_chunk_names_the_shortcut_icon_jobs_placeholder(self, library, fake_romm_api, emit):
+        await self._apply_one_unit(library, fake_romm_api)
+
+        (event,) = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        assert event["icon_placeholder_path"] == "/grid/tender-icon-placeholder.png"
+
+    @pytest.mark.asyncio
+    async def test_a_chunk_names_none_where_there_is_no_placeholder(self, library, fake_romm_api, emit):
+        library.icon_job.placeholder = None
+
+        await self._apply_one_unit(library, fake_romm_api)
+
+        (event,) = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        assert event["icon_placeholder_path"] is None

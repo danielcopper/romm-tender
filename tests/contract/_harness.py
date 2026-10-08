@@ -276,6 +276,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
             hostname_provider=result.runtime_adapters.hostname_provider,
             machine_id_provider=result.runtime_adapters.machine_id_provider,
             steam=fake_steam,
+            panel_connected=lambda: False,
         ),
         callbacks=result.callbacks,
         min_required_version=MIN_ROMM_VERSION,

@@ -87,6 +87,7 @@ class TestBuildBackend:
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ):
         _built, _app, status, events, asked = await self._build(tmp_path, monkeypatch)
+        panel_connected = asked[0].pop("panel_connected")
 
         assert asked == [
             {
@@ -100,6 +101,13 @@ class TestBuildBackend:
                 "steam": status.steam,
             }
         ]
+        assert panel_connected() is False
+
+        async def send(text: str) -> bool:
+            return True
+
+        events.attach(send)
+        assert panel_connected() is True
 
     async def test_a_failing_repair_is_recorded_on_the_host_status(self, tmp_path, monkeypatch: pytest.MonkeyPatch):
         _built, app, status, _events, _asked = await self._build(tmp_path, monkeypatch)
