@@ -75,24 +75,31 @@ open — the ``has_adoption_candidate`` entry guards only call sites that name
 the method, which is the owning service's own and any peer holding the object
 rather than the bound method. Rule 2's call-shaped
 seams are closed the cheap way instead: every consumer in ``services/`` binds
-each to one attribute, and that attribute name is what the list carries. **The
-leading underscore is what marks such an entry**, which makes the count
-derivable rather than remembered: the entries in :data:`IO_SEAM_METHODS`
-beginning with ``_`` are exactly the call-shaped seams — seven today,
-``_resolve_system``, ``_sandbox_launcher``, ``_system_extensions``,
-``_system_known``, ``_platform_firmware_resolver``, ``_firmware_resolver`` and
-``_resolve_path``. Two of those seven are listed a second time under their implementation's own method name,
-for a peer that holds the object rather than the bound method:
+each to one attribute, and that attribute name is what the list carries. A
+leading underscore marks an attribute a service binds rather than a method a
+Protocol names, and the list carries two kinds of them. The call-shaped seams
+are seven today: ``_resolve_system``, ``_sandbox_launcher``,
+``_system_extensions``, ``_system_known``, ``_platform_firmware_resolver``,
+``_firmware_resolver`` and ``_resolve_path``. Two of those seven are listed a
+second time under their implementation's own method name, for a peer that
+holds the object rather than the bound method:
 ``RommHttpAdapter.resolve_system`` beside ``_resolve_system``, and
 ``EsFindRulesAdapter.resolve_sandbox_launcher`` beside ``_sandbox_launcher``.
 The first pair happens to be the attribute minus its underscore and the second
 plainly is not, which is the point: a twin exists when the implementation has a
 method name a peer could write, and it has to be read off the implementation
-rather than derived from the attribute. The other five have no such twin.
+rather than derived from the attribute. The other five seams have no such twin.
 That is a convention, not a guarantee — a
 consumer binding one under a different attribute slips past, and it only works
 while the attribute name means one thing. Doing the same for rule 1 means a
 second list of holding attributes to keep in step, and is not built.
+
+The other kind is a service's own private wrapper around a RetroDECK folder
+question — ``_rom_folder``, ``_rom_folders``, ``_resolve_target``,
+``_platform_dir`` and ``_saves_root`` — listed for the reason ``save_answer``
+is: it is what the services call, so without it the rule would hold only where
+the question itself is named. Nothing tells the two kinds apart but these two
+paragraphs.
 
 Conversely, matching only *attribute* calls is what keeps the ``enumerate_discs``
 entry safe: the pure ``domain.disc_selection.enumerate_discs`` does no I/O of
@@ -289,6 +296,23 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         "bios_folder",
         "saves_root",
         "move_roots",
+        "rom_folders",
+        # The services' own wrappers around those questions, listed because they
+        # are what the services call, as ``save_answer`` is for the save seam:
+        # without them the rule would hold only where the question itself is
+        # named. RomRemovalService and RomAdoptionService ask a system's folder
+        # (``_rom_folder``, ``_rom_folders``), the adoption its target
+        # (``_resolve_target``), the candidate search its platform folder
+        # (``_platform_dir``), the cleanup's save step the saves root
+        # (``_saves_root``), and FirmwareDemand where a BIOS download lands and
+        # where the status looks (``download_root``, ``status_root``).
+        "_rom_folder",
+        "_rom_folders",
+        "_resolve_target",
+        "_platform_dir",
+        "_saves_root",
+        "download_root",
+        "status_root",
         # RecoveryBundleInventoryReader (services/protocols/files.py) — lists the
         # recovery root and measures every bundle under it, one descriptor walk
         # per bundle. Object-shaped, so the method name is the whole entry.

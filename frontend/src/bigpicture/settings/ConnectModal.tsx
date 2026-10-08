@@ -330,7 +330,7 @@ export const ConnectModal: FC<ConnectModalProps> = ({ closeModal, onConnect, onC
       {mode === "token" && (
         <>
           <div style={helperTextStyle}>
-            Create a token in RomM&apos;s web UI (Settings → API Tokens) and paste it here. Make sure it has the scopes
+            Create a token in RomM&apos;s web UI (Settings › API Tokens) and paste it here. Make sure it has the scopes
             listed in Tender&apos;s configuration guide so downloads, saves, and device sync work. Tender never deletes
             a pasted token; you manage it in RomM.
           </div>

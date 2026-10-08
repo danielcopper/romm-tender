@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 from domain.fetch_generation import prune_candidate_ids
-from domain.retrodeck_folders import FolderRefused
+from domain.retrodeck_folders import FolderRefused, folder_of
 from domain.sibling_resolution import group_rows
 from lib.url_host import romm_namespace
 from services.prune._models import PrunePreview
@@ -81,17 +81,22 @@ class PreviewBuilder:
         self._retrodeck_folders = config.retrodeck_folders
         self._settings = config.settings
 
-    def _installed_size(self, install: RomInstall | None, roms_root: str | None) -> tuple[int | None, str | None]:
+    def _installed_size(
+        self, install: RomInstall | None, folders: dict[str, str | FolderRefused] | FolderRefused
+    ) -> tuple[int | None, str | None]:
         """Measured bytes of a row's installed content, or why they could not be read.
 
-        Nothing is measured where RetroDECK names no ROM root to measure inside,
-        or its roots are defaults or could not be established; a start refuses
-        the latter two.
+        Measured inside the install's system's own ROM folder, and nothing is
+        measured where RetroDECK names none, or its roots are defaults or could
+        not be established; a start refuses the latter two.
         """
-        if install is None or roms_root is None:
+        if install is None:
+            return None, None
+        folder = folder_of(folders, install.system)
+        if isinstance(folder, FolderRefused):
             return None, None
         try:
-            return self._recovery_store.measure_path(install.rom_dir or install.file_path, roms_root), None
+            return self._recovery_store.measure_path(install.rom_dir or install.file_path, folder), None
         except (OSError, ValueError) as exc:
             return None, str(exc)
 
@@ -108,15 +113,14 @@ class PreviewBuilder:
             ]
             fingerprint = self._fingerprint(relevant_groups, installs)
 
-        root = self._retrodeck_folders.rom_root()
-        roms_root = None if isinstance(root, FolderRefused) else root
+        folders = self._retrodeck_folders.rom_folders(install.system for install in installs.values())
         entries: list[dict[str, Any]] = []
         for group in relevant_groups:
             group_id = str(group[0].sibling_group_key or f"rom:{group[0].rom_id}")
             bound_count = sum(row.shortcut_app_id is not None for row in group)
             for row in group:
                 install = installs.get(row.rom_id)
-                size, warning = self._installed_size(install, roms_root)
+                size, warning = self._installed_size(install, folders)
                 entries.append(
                     _preview_entry(
                         row,

@@ -108,7 +108,7 @@ switching straight back before the list has caught up).
 ### Cleaning up versions removed from RomM
 
 Normal library sync never deletes retained local rows, installed files, saves, or playtime just because a game
-disappears from RomM. To remove that state explicitly, open **Data Management → Gone from RomM**. The first scan is
+disappears from RomM. To remove that state explicitly, open **Data Management › Gone from RomM**. The first scan is
 local and finds groups containing rows absent from a completed platform fetch.
 
 The dialog opens on the count that matters — how many locally kept versions are no longer on your RomM server. Under
@@ -187,13 +187,15 @@ the run winds down the button says **Stopping** so a second press is never neede
 stopping is not an undo, and the report afterwards lists exactly what was committed. If a game's backup finished before
 the run stopped, the report says so and names the folder, so a recovery bundle that removed nothing is never a mystery.
 
-A version's downloaded files are deleted only inside the ROM folder RetroDECK names, the bound an
+A version's downloaded files are deleted only inside the ROM folder RetroDECK names for the game's system, the bound an
 [uninstall](#uninstalling-roms) keeps. Where there is none — RetroDECK not installed, or naming no ROM folder — the run
 still goes ahead: it removes shortcuts, and the records of games without a download record. A game with one keeps it,
 its files on disk or not, so Tender still knows its files may be there, and the report names it with the uninstall's
-sentence; [**Forget this download**](#when-a-downloaded-games-file-is-missing) removes such a record. While RetroDECK's
-settings are in doubt, or Tender could not ask about its folders ([below](#downloading-roms)), **Confirm Cleanup**
-starts nothing and answers with the sentence that says why.
+sentence. The record stays until RetroDECK is back; the next cleanup then removes it with its files. Where only the
+question about one system's folder failed, the games of that system are kept and reported the same way, with the
+sentence below, and every other system's games are removed. While RetroDECK's settings are in doubt, or Tender could not
+ask about its folders ([below](#downloading-roms)), **Confirm Cleanup** starts nothing and answers with the sentence
+that says why.
 
 If Steam changes before local cleanup can finish, the report can show a **partial** group with the concrete committed
 action and failure message. A confirmed shortcut removal is reconciled to an unbound retained row; a committed repoint
@@ -202,7 +204,7 @@ ambiguous and source data stays retained; the same applies when Steam removal wa
 confirmed. Retrying confirms an already-absent shortcut instead of removing it twice. Save ownership warnings are shown
 in a focusable terminal-detail region even when the group was removed successfully, and a run-level cancellation or
 failure message remains visible after earlier groups committed. At most five warnings are listed for one game; when
-there were more, the detail — and the finished run's line on **Data Management → Gone from RomM** — says how many were
+there were more, the detail — and the finished run's line on **Data Management › Gone from RomM** — says how many were
 left out. Progress is tied to the preview that you confirmed, so a matching run is still shown if only the successful
 start response is delayed or lost; a matching terminal event makes the modal closable immediately. Once that terminal
 result is assembled, delayed frames for the same run cannot replace it. Frames from an older preview are ignored. These
@@ -238,7 +240,7 @@ folder if it is not there yet, as ES-DE would; it never creates the ROM folder a
 
 **A download needs RetroDECK.** **Download** is refused, saying why, while RetroDECK is not installed (**Downloads need
 RetroDECK, which is not installed.**), while it is switched off in **Settings › Emulator sources** (**Downloads need
-RetroDECK, which is switched off in Settings → Emulator sources.**), or where it names no ROM folder for the game's
+RetroDECK, which is switched off in Settings › Emulator sources.**), or where it names no ROM folder for the game's
 system (**RetroDECK names no ROM folder for _system_, so Tender cannot download this game.**). **Use Existing Files**
 and **Check Against Server** answer the same way. A download already running when you switch RetroDECK off finishes in
 the folder it started in. Where the ROM folder ES-DE uses lies on a drive or SD card that is not there, Tender creates
@@ -529,12 +531,15 @@ To remove a downloaded ROM file:
 
 This only removes the ROM file — the Steam shortcut, artwork, and metadata are preserved.
 
-Tender deletes only inside the ROM folder RetroDECK names, whether RetroDECK is switched on or off, so an uninstall
-needs RetroDECK: without it, **Uninstall** says **Uninstalling needs RetroDECK, which is not installed.**, and where
-RetroDECK names no ROM folder, **RetroDECK names no ROM folder, so Tender cannot uninstall this game.** The same holds
-for **Uninstall all ROM files** and for replacing a copy already on your device. Where finding RetroDECK, or asking it
-about its folders, failed with an error, they say **RetroDECK's folders could not be established, so Tender downloads
-into and removes from none of them.** A file recorded outside that folder is never deleted.
+Tender deletes only inside the ROM folder RetroDECK names for the game's system, whether RetroDECK is switched on or off
+— where that folder is a link to another drive, on that drive — so an uninstall needs RetroDECK: without it,
+**Uninstall** says **Uninstalling needs RetroDECK, which is not installed.**, and where RetroDECK names no ROM folder,
+**RetroDECK names no ROM folder, so Tender cannot uninstall this game.** The same holds for **Uninstall all ROM files**
+and for replacing a copy already on your device. Where finding RetroDECK, or asking it about its folders, failed with an
+error, they say **RetroDECK's folders could not be established, so Tender downloads into and removes from none of
+them.** Where only the question about one system's folder failed, that sentence stops the uninstall of that system's
+games alone; **Uninstall all ROM files** removes every other system's. A file recorded outside its system's folder is
+never deleted.
 
 This applies to files you told Tender to [use from your device](#when-the-game-is-already-on-your-device) as well: once
 they are the installed copy, **Uninstall** deletes them exactly as it would a downloaded one. Tender has one kind of

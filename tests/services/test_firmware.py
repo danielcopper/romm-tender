@@ -668,6 +668,32 @@ class TestWhereNoBiosDownloadMayLand:
         assert row["local_path"] is None
 
     @pytest.mark.asyncio
+    async def test_a_row_that_could_not_be_established_is_left_out_of_the_stated_ratio(self, firmware, tmp_path):
+        # The ratio's own pair counts only established rows; the level's pair
+        # still counts the row, as the level, the label and the buttons did.
+        fw = self._service(firmware, tmp_path, FakeFirmwareResolver(), self._switched_off(tmp_path))
+
+        result = await fw.check_platform_bios("dc")
+
+        assert (result["ratio_server_count"], result["ratio_local_count"]) == (0, 0)
+        assert (result["server_count"], result["local_count"]) == (1, 0)
+
+    @pytest.mark.asyncio
+    async def test_the_stated_ratio_counts_the_rows_that_were_established(self, firmware, tmp_path):
+        resolver = FakeFirmwareResolver()
+        resolver.declare("dc_boot.bin", required_by=[_id(self._CORE)], present=True)
+        fw = self._service(firmware, tmp_path, resolver, self._switched_off(tmp_path))
+        _stub_listing(
+            fw,
+            [dict(self._ROW), {**self._ROW, "id": 2, "file_name": "dc_flash.bin", "file_path": "bios/dc/dc_flash.bin"}],
+        )
+
+        result = await fw.check_platform_bios("dc")
+
+        assert (result["ratio_server_count"], result["ratio_local_count"]) == (1, 1)
+        assert (result["server_count"], result["local_count"]) == (2, 1)
+
+    @pytest.mark.asyncio
     async def test_a_row_the_resolver_answers_keeps_its_answer(self, firmware, tmp_path):
         resolver = FakeFirmwareResolver()
         resolver.declare("dc_boot.bin", required_by=[_id(self._CORE)], present=True)
@@ -696,7 +722,7 @@ class TestWhereNoBiosDownloadMayLand:
             await download(*args)
 
         assert refused.value.message == (
-            "BIOS downloads need RetroDECK, which is switched off in Settings → Emulator sources."
+            "BIOS downloads need RetroDECK, which is switched off in Settings › Emulator sources."
         )
         api = fw._config.romm_api
         assert isinstance(api, MagicMock)

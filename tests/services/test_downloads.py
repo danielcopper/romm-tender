@@ -5,6 +5,7 @@ import os
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -1681,6 +1682,98 @@ class TestDoDownloadSingleFile:
             rom = uow.roms.get(7)
         assert rom is not None
         assert rom.applied_launch_options is None
+
+
+class TestASystemFolderLinkedToAnotherDrive:
+    """A system folder linked out of RetroDECK's ROM folder is the bound its games land in and are removed from."""
+
+    @staticmethod
+    def _link(downloads, tmp_path, system: str) -> Path:
+        roms = tmp_path / "retrodeck" / "roms"
+        drive = tmp_path / "sdcard" / system
+        drive.mkdir(parents=True)
+        roms.mkdir(parents=True)
+        (roms / system).symlink_to(drive)
+        # The resolver answers the system's folder resolved, as the adapter does.
+        folders = FakeRetroDeckFolders(roms=str(roms), system_dirs={system: os.path.realpath(drive)})
+        downloads.service._retrodeck_folders = folders
+        downloads.removal._retrodeck_folders = folders
+        downloads.service._loop = asyncio.get_running_loop()
+        return Path(os.path.realpath(drive))
+
+    @pytest.mark.asyncio
+    async def test_a_single_file_download_lands_there_and_its_uninstall_removes_it_there(self, downloads, tmp_path):
+        from unittest.mock import patch
+
+        drive = self._link(downloads, tmp_path, "n64")
+        target_path = str(drive / "zelda.z64")
+        rom_detail = {
+            "id": 42,
+            "name": "Zelda",
+            "fs_name": "zelda.z64",
+            "platform_slug": "n64",
+            "platform_name": "Nintendo 64",
+            "has_multiple_files": False,
+        }
+
+        def fake_download(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
+            with open(dest, "wb") as f:
+                f.write(b"\x00" * 512)
+
+        _seed_rom(downloads.uow, 42)
+        downloads.service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
+
+        assert os.path.exists(target_path)
+        result = await downloads.removal.remove_rom(42)
+
+        assert result["success"] is True
+        assert not os.path.exists(target_path)
+        assert drive.is_dir()
+
+    @pytest.mark.asyncio
+    async def test_a_multi_file_download_extracts_there_and_its_uninstall_removes_it_there(self, downloads, tmp_path):
+        import zipfile as zf
+        from unittest.mock import patch
+
+        drive = self._link(downloads, tmp_path, "psx")
+        target_path = str(drive / "FF7.zip")
+        archive = tmp_path / "source.zip"
+        with zf.ZipFile(str(archive), "w") as z:
+            z.writestr("disc1.cue", "FILE disc1.bin BINARY")
+            z.writestr("disc1.bin", b"\x00" * 100)
+            z.writestr("disc2.cue", "FILE disc2.bin BINARY")
+            z.writestr("disc2.bin", b"\x00" * 100)
+        zip_bytes = archive.read_bytes()
+        rom_detail = {
+            "id": 55,
+            "name": "Final Fantasy VII",
+            "fs_name": "FF7.zip",
+            "fs_name_no_ext": "FF7",
+            "platform_slug": "psx",
+            "platform_name": "PlayStation",
+            "has_multiple_files": True,
+        }
+
+        def fake_download(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
+            with open(dest, "wb") as f:
+                f.write(zip_bytes)
+
+        _seed_rom(downloads.uow, 55, platform_slug="psx")
+        downloads.service._download_queue[55] = {"rom_id": 55, "status": "downloading", "progress": 0}
+        with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
+            await downloads.service._do_download(55, rom_detail, target_path, "psx", "FF7.zip")
+
+        installed = downloads.uow.rom_installs.get(55)
+        assert installed is not None
+        assert installed.rom_dir == str(drive / "FF7.m3u")
+        assert (drive / "FF7.m3u" / "disc1.cue").exists()
+        result = await downloads.removal.remove_rom(55)
+
+        assert result["success"] is True
+        assert not (drive / "FF7.m3u").exists()
+        assert drive.is_dir()
 
 
 class TestDoDownloadOverrideRebake:

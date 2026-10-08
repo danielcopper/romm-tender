@@ -25,6 +25,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 
 from adapters.migration_file import MigrationFileAdapter
+from domain.retrodeck_folders import MoveRoots
 from lib.prune_conflicts import PruneConflicts
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.migration import MigrationService, MigrationServiceConfig
@@ -71,6 +72,10 @@ class RecordingSaveDirectories:
             self.pending_while_recording.append(self._gate())
         if self._error is not None:
             raise self._error
+
+
+# The home a detected RetroDECK answers where a test does not name one of its own.
+_DETECTED_HOME = "/retrodeck"
 
 
 @dataclass
@@ -134,7 +139,8 @@ def migration(logger) -> MigrationHarness:
             settings_persister=FakeSettingsPersister(),
             emit=RecordingEmitter(),
             firmware_resolver=FakeFirmwareResolver(),
-            retrodeck_folders=FakeRetroDeckFolders(),
+            # A RetroDECK is detected: without one the migrate press is refused.
+            retrodeck_folders=FakeRetroDeckFolders(home=_DETECTED_HOME),
             relaunch_options=relaunch_options,
             save_directories=save_directories.provide,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
@@ -1610,7 +1616,7 @@ class TestMigrationFailureInjection:
             "settings_persister": FakeSettingsPersister(),
             "emit": RecordingEmitter(),
             "firmware_resolver": FakeFirmwareResolver(),
-            "retrodeck_folders": FakeRetroDeckFolders(),
+            "retrodeck_folders": FakeRetroDeckFolders(home=_DETECTED_HOME),
             "relaunch_options": FakeRelaunchOptionsResolver(),
             "save_directories": RecordingSaveDirectories().provide,
             "uow_factory": FakeUnitOfWorkFactory(uow=uow),
@@ -1642,7 +1648,8 @@ class TestMigrationFailureInjection:
 
         service = self._make_service(fake, uow=uow)
 
-        result = service._migrate_retrodeck_files_io([old_home], new_home, None)
+        roots = MoveRoots(home=new_home, bios=f"{new_home}/bios", saves=f"{new_home}/saves")
+        result = service._migrate_retrodeck_files_io([old_home], new_home, None, roots)
 
         assert result["success"] is False
         assert len(result["errors"]) == 1

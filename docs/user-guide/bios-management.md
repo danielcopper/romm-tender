@@ -71,9 +71,10 @@ holds it or not — a required file you cannot download is still required. The r
 always your library's: how many of the files it holds for the platform are already in place. So "1 of 2 files mGBA
 requires are in place (3/5 RomM library files)" is one count of each kind, and the two need not agree: a required file
 your library does not hold is counted in the sentence and never in the ratio, and a library file the emulator does not
-require is counted in the ratio and never in the sentence. A file your library does not hold still gets its own row
-wherever it matters — a file this game requires, or one the console itself needs, is listed whether your library holds
-it or not.
+require is counted in the ratio and never in the sentence. A file that reads "could not be established" is left out of
+the ratio, since nothing showed it missing, and where no file could be established there is no ratio at all. A file your
+library does not hold still gets its own row wherever it matters — a file this game requires, or one the console itself
+needs, is listed whether your library holds it or not.
 
 The readiness line is computed against the **active core** for that game — so switching to a core that needs no BIOS (or
 that treats a file as optional) clears the warning, while switching to a core that requires a missing file surfaces it.
@@ -332,16 +333,18 @@ and the row you focus is the one the right-hand pane describes.
 <!-- Screenshot: Library › Platforms with a platform selected, its core button above the BIOS table -->
 
 BIOS files are downloaded to RetroDECK's BIOS folder (with RetroDECK's own settings `~/retrodeck/bios/`, or the same
-folder on the drive you moved RetroDECK to); Tender creates it if it is not there yet and lies inside RetroDECK's own
-folder, and otherwise says **RetroDECK's BIOS folder _path_ does not exist. If it is on an SD card or another drive,
-insert it.** A BIOS download needs RetroDECK: while it is not installed or switched off in **Settings › Emulator
-sources**, every download button says so (**BIOS downloads need RetroDECK, which is not installed.**, **BIOS downloads
-need RetroDECK, which is switched off in Settings → Emulator sources.**), and a row only Tender's own look into that
-folder could answer — a file in your library no emulator asks for, or one asked for somewhere Tender does not put it —
-reads as could not be established. Rows the emulator's own answer covers keep it. While the main panel shows a notice
-for RetroDECK's settings file or for a RetroDECK not set up yet, Tender downloads and deletes no BIOS file at all, and
-the buttons answer with that notice's sentence ([Managing Games](managing-games.md#downloading-roms)). The same holds
-where finding RetroDECK, or asking it about its folders, failed with an error; the buttons then say **RetroDECK's
+folder on the drive you moved RetroDECK to). Tender creates that folder if it is not there yet and it lies inside
+RetroDECK's own folder. While RetroDECK's own folder is missing, a BIOS download answers with the main panel's notice
+for it (**RetroDECK: its folder _path_ does not exist. If it is on an SD card or another drive, insert it.**); a BIOS
+folder outside it that is missing makes it say **RetroDECK's BIOS folder _path_ does not exist. If it is on an SD card
+or another drive, insert it.** A BIOS download needs RetroDECK: while it is not installed or switched off in **Settings
+› Emulator sources**, every download button says so (**BIOS downloads need RetroDECK, which is not installed.**, **BIOS
+downloads need RetroDECK, which is switched off in Settings › Emulator sources.**), and a row only Tender's own look
+into that folder could answer — a file in your library no emulator asks for, or one asked for somewhere Tender does not
+put it — reads as could not be established. Rows the emulator's own answer covers keep it. While the main panel shows a
+notice for RetroDECK's settings file or for a RetroDECK not set up yet, Tender downloads and deletes no BIOS file at
+all, and the buttons answer with that notice's sentence ([Managing Games](managing-games.md#downloading-roms)). The same
+holds where finding RetroDECK, or asking it about its folders, failed with an error; the buttons then say **RetroDECK's
 folders could not be established, so Tender downloads into and removes from none of them.**, except that a download
 while RetroDECK is switched off says so.
 
@@ -492,6 +495,10 @@ _Nothing could be established about what the launching emulator needs_. Your gam
 names no emulator, it hands the launch to RetroDECK and RetroDECK picks one. Either way the sentence is about **one**
 emulator. Others you have installed may have answered perfectly well, and where they did, their answers are in the rows
 below.
+
+Where Tender could not get the system's emulator list at all, the platform page says why under the platform's name (see
+**Library › Platforms** above), and a game's **BIOS** tab says it in the same words, on the line above its readiness
+sentence.
 
 This is informational, not an error: your files may be perfectly fine, Tender simply can't confirm what is needed.
 Genuinely BIOS-free systems (such as the NES) are unaffected — the emulator answers, it wants nothing, and the system

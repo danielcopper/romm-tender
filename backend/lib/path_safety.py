@@ -163,3 +163,15 @@ def is_safe_rom_path(path: str, roms_base: str) -> bool:
     rel = os.path.relpath(resolved, real_base)
     parts = rel.split(os.sep)
     return len(parts) >= 2
+
+
+def is_inside_folder(path: str, folder: str) -> bool:
+    """Return True when ``path`` resolves strictly inside ``folder``.
+
+    The guard for a bound that is ONE system's ROM folder rather than the ROM
+    root: anything below it may go, and the folder itself never does, which is
+    what the second segment :func:`is_safe_rom_path` demands stands for under
+    the root. Symlinks are resolved on both sides, as there.
+    """
+    resolved = os.path.realpath(path)
+    return resolved.startswith(os.path.realpath(folder).rstrip(os.sep) + os.sep)

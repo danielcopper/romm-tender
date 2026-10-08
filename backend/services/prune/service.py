@@ -289,7 +289,8 @@ class PruneService:
         # While RetroDECK's folders are defaults, or could not be established,
         # the cleanup does not start at all, whatever it would remove, so
         # nothing of it is half done. Any other missing ROM root refuses only
-        # the removal of each game's files.
+        # the removal of each game's files, and a system whose own folder could
+        # not be asked only the removal of that system's games.
         root = await self._loop.run_in_executor(None, self._retrodeck_folders.rom_root)
         if isinstance(root, EveryFolderRefused):
             raise root

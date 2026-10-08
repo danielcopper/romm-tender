@@ -202,6 +202,13 @@ class FirmwareStatusReader:
         ``reading_complete`` alone, and ``unknown_count`` has no reader on either
         side of the wire (:func:`count_wanted`).
 
+        ``ratio_server_count`` / ``ratio_local_count`` are the library's pair
+        again, over only the rows whose verdict was established: the pair the
+        surfaces STATE as "n/N RomM library files", where a row that reads
+        "could not be established" would otherwise stand as a file missing.
+        The pair above stays as it was, because the level, the label and the
+        download buttons read it.
+
         *system_image* is a fourth axis beside those three counted sets, and the
         only one of the four that is not a count at all
         (:func:`classify_system_image`): the console's own demand on the
@@ -219,6 +226,7 @@ class FirmwareStatusReader:
         on_server = [f for f in files if f.on_server]
         server_count = len(on_server)
         local_count = sum(1 for f in on_server if f.downloaded)
+        established = [f for f in on_server if f.satisfied is not None]
         required_count, required_downloaded = count_required(files, groups)
         known_count, unknown_count = count_wanted(files)
 
@@ -227,6 +235,8 @@ class FirmwareStatusReader:
             "server_count": server_count,
             "local_count": local_count,
             "all_downloaded": local_count >= server_count,
+            "ratio_server_count": len(established),
+            "ratio_local_count": sum(1 for f in established if f.downloaded),
             "required_count": required_count,
             "required_downloaded": required_downloaded,
             "required_withheld": count_required_withheld(files, groups),
@@ -552,6 +562,8 @@ class FirmwareStatusReader:
         payload = self._bios_aggregates(files, slug, complete, system_image, groups)
         plat["server_count"] = payload["server_count"]
         plat["local_count"] = payload["local_count"]
+        plat["ratio_server_count"] = payload["ratio_server_count"]
+        plat["ratio_local_count"] = payload["ratio_local_count"]
         plat["required_count"] = payload["required_count"]
         plat["required_downloaded"] = payload["required_downloaded"]
         plat["required_withheld"] = payload["required_withheld"]

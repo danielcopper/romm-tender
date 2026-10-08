@@ -7,7 +7,8 @@ which rule decides it, is the adapter's (``adapters/retrodeck_folders.py``);
 what each refusal says is decided here, once.
 
 A download (a game, or a BIOS file) needs RetroDECK detected and switched on,
-because RetroDECK is the one source Tender downloads into. Removing what Tender
+because until Tender keeps downloads in a library of its own, RetroDECK is the
+one source Tender downloads into. Removing what Tender
 put there — an uninstall, the removed-game cleanup, the start-up removal of
 leftover ``.tmp`` files — needs it only detected, whatever its switch. Both
 need its settings file in order: while RetroDECK reports one of the findings
@@ -33,7 +34,7 @@ ROM_ROOT_MISSING = "rom_root_missing"
 BIOS_FOLDER_MISSING = "bios_folder_missing"
 RETRODECK_UNANSWERED = "retrodeck_unanswered"
 # The panel words this one from the finding it carries, with the sentence the
-# finding's banner shows, so the press and the banner say the same thing.
+# finding's notice shows, so the press and the notice say the same thing.
 RETRODECK_FINDING = "retrodeck_finding"
 
 # What a refused download is for, which names it in the sentence.
@@ -75,7 +76,7 @@ def not_installed(purpose: str) -> FolderRefused:
 def switched_off(purpose: str) -> FolderRefused:
     """The refusal of a *purpose* download while RetroDECK is switched off."""
     return FolderRefused(
-        RETRODECK_SWITCHED_OFF, f"{purpose} need RetroDECK, which is switched off in Settings → Emulator sources."
+        RETRODECK_SWITCHED_OFF, f"{purpose} need RetroDECK, which is switched off in Settings › Emulator sources."
     )
 
 
@@ -111,6 +112,11 @@ def uninstall_not_installed() -> FolderRefused:
     return FolderRefused(RETRODECK_NOT_INSTALLED, "Uninstalling needs RetroDECK, which is not installed.")
 
 
+def moving_not_installed() -> FolderRefused:
+    """The refusal of the move code's migrate press where no RetroDECK is detected."""
+    return FolderRefused(RETRODECK_NOT_INSTALLED, "Moving needs RetroDECK, which is not installed.")
+
+
 def no_rom_root() -> FolderRefused:
     """The refusal of a removal of installed content where RetroDECK names no ROM folder to bound it."""
     return FolderRefused(NO_ROM_ROOT, "RetroDECK names no ROM folder, so Tender cannot uninstall this game.")
@@ -122,6 +128,19 @@ def unanswered_refusal() -> EveryFolderRefused:
         RETRODECK_UNANSWERED,
         "RetroDECK's folders could not be established, so Tender downloads into and removes from none of them.",
     )
+
+
+def system_unanswered_refusal() -> FolderRefused:
+    """The refusal where the question about one system's own ROM folder failed, which stops only what needs that folder.
+
+    Its sentence is the one every folder refused for a failed question answers with.
+    """
+    return FolderRefused(RETRODECK_UNANSWERED, unanswered_refusal().message)
+
+
+def folder_of(folders: dict[str, str | FolderRefused] | FolderRefused, system: str) -> str | FolderRefused:
+    """*system*'s folder out of an answer about several systems' folders, or the refusal that stands for it."""
+    return folders if isinstance(folders, FolderRefused) else folders[system]
 
 
 def finding_refusal(code: str, data: dict[str, Any]) -> FindingRefused:

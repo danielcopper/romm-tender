@@ -202,7 +202,7 @@ a lie that looks like a measurement. The window has to be the Deck panel's **128
 
 The 1.5 is **Steam's own per-display "GamepadUI display scale"** — not gamescope, and not a Chromium flag (Chromium is
 pinned to `--force-device-scale-factor=1` by `steamclient.so`). Steam derives it from the display's resolution and
-physical size and pushes it into each CEF browser view; it is the same value the user sees under **Settings → Display →
+physical size and pushes it into each CEF browser view; it is the same value the user sees under **Settings › Display ›
 UI Scale**. Steam's default is **automatic**, which on a 1280x800 window comes out as 1.
 
 ### `mise run dev:ui-scale`
@@ -318,7 +318,7 @@ read). A stranded forced scale is the damaging outcome; a window left at 1280x80
 `mise run dev:ui-scale auto` is different on purpose: it **unconditionally** forces automatic scaling back on. It is the
 rescue path for when a previous run was hard-killed and the state it captured died with it — it has nothing to restore,
 so it cannot honour a manual scale, and it does not touch the window (resize it by hand). If you are a manual-UI-Scale
-user and ever have to use it, re-set your scale in Steam → Settings → Display afterwards.
+user and ever have to use it, re-set your scale in Steam › Settings › Display afterwards.
 
 !!! warning "A hard kill leaves the forced scale behind"
 
@@ -398,7 +398,7 @@ the state directory, and on stderr in the terminal `mise run dev` is running in.
   output, and whether the move fired. The window stays a normal desktop window, so you can always drag it over yourself.
 - **A "screen sharing" portal dialog pops up when Big Picture opens** — that's Steam's own desktop capture (Game
   Recording / Remote Play) asking through the xdg-desktop-portal, because there is no gamescope to capture in desktop
-  mode. It is unrelated to this tooling. **Turn Steam's Game Recording off** (Steam → Settings → Game Recording) — you
+  mode. It is unrelated to this tooling. **Turn Steam's Game Recording off** (Steam › Settings › Game Recording) — you
   don't want Steam capturing your desktop mid-development anyway, and this removes the dialog for good. Ticking the
   portal's _"enable restore"_ box instead only hides the dialog: it pins whichever source you picked, so if you pick a
   single monitor the capture stays on it even after `dev:bpm <other-display>` opens Big Picture elsewhere.

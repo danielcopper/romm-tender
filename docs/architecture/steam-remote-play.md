@@ -82,7 +82,7 @@ Steam advertises **all** non-Steam shortcuts to remote clients. There is no:
 
 The only options are:
 
-- Disable Remote Play entirely (Settings > Remote Play > uncheck "Enable Remote Play")
+- Disable Remote Play entirely (Settings › Remote Play › uncheck "Enable Remote Play")
 - Disable it per-device in Remote Play settings
 
 ## Detection APIs

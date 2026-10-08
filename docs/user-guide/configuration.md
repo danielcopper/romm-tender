@@ -129,7 +129,7 @@ setting so you do not have to re-enter them. It asks for confirmation first.
 Signing out **never deletes or revokes the token in RomM** — the token stays valid on the server. A token Tender minted
 from your username and password can only be deleted during a same-server re-sign-in (the stored token deliberately lacks
 the permission to delete itself), and a token you supplied (pasted or paired) is yours to manage. To revoke a token for
-good, delete it in RomM's web UI under **Settings → API Tokens**.
+good, delete it in RomM's web UI under **Settings › API Tokens**.
 
 If you just want to switch accounts or re-authenticate, prefer **Sign in again** over signing out and back in. For
 username/password accounts, re-signing in on the **same** server revokes the token Tender minted before — a path that a
@@ -145,7 +145,7 @@ carry the same warnings (see [Required scopes](#required-scopes) below).
 
 Start the same way for either method:
 
-1. In RomM's web UI, open **Settings → API Tokens** (also called Client API Tokens) and create a new token.
+1. In RomM's web UI, open **Settings › API Tokens** (also called Client API Tokens) and create a new token.
 2. Grant the scopes listed below — make sure the **write** scopes are included. Without them, downloads work but save
    upload, device sync, and playtime tracking fail with a permissions error.
 
@@ -289,8 +289,9 @@ while the source is switched on, an empty grey ring and a grey name while it is 
 - the folder it lives in — left out while the source's own settings file is missing or broken, or while the source has
   not been set up yet, because the folder Tender would show is then only a default;
 - what its health says, one line per problem, each led by a warning sign; with none, a green check and **No problems
-  found.** — or, where Tender could not read the source's emulator list, **_Source_'s emulator list is not
-  established.**, with a warning sign, unless one of the two lines below already says why;
+  found.** where Tender read the source's emulator list;
+- where it could not, **_Source_'s emulator list is not established.**, with a warning sign, unless a line already says
+  why — a problem with ES-DE's systems file, a source not set up yet, or one of the two lines below;
 - **EmuDeck's emulator list cannot be read yet.**, with a warning sign, for EmuDeck, whose list Tender cannot read yet;
 - **Tender cannot start games through _source_ yet.**, with an information sign, for every source but RetroDECK — every
   game still starts through RetroDECK. A RetroArch without a frontend has no emulator list at all, so for it this line
@@ -306,7 +307,7 @@ come from RetroDECK, wherever it stands in the order, because every game starts 
 set up yet, when it answers that it has not. Without it, the first source switched on in the order answers. A source
 found for the first time joins the end of the order, switched on.
 
-**Sources Tender cannot start games through.** The main panel says **_Source_ is switched on in Settings → Emulator
+**Sources Tender cannot start games through.** The main panel says **_Source_ is switched on in Settings › Emulator
 sources, but Tender cannot start games through it yet.** for every switched-on source but RetroDECK, whether or not it
 is the one that answers, in a smaller card without a warning sign, since nothing is wrong; a source you switched off
 says it only on its card. Where such a source answers, the platform page and the emulator menu keep saying why there is
@@ -317,11 +318,11 @@ no emulator list.
 RetroDECK once and finish its first-run setup.**), a settings file that is missing, unreadable or damaged, a folder that
 does not exist (an SD card that is not inserted), a saves folder that does not exist, ES-DE's systems file that does not
 load (ES-DE then shows no systems, and Tender cannot tell which emulators the source offers), or EmuDeck's RetroArch
-settings that cannot be read. Two kinds stay in the source's line here only: texture packs or mods that do not reach an
+settings that cannot be read. Two kinds stay on the source's card here only: texture packs or mods that do not reach an
 emulator, which concern nothing Tender does, and every problem of a source you switched off. Where Tender cannot get an
-emulator list, the platform page and the emulator menu say why — no source found, every source switched off, a broken
-systems file, a RetroDECK that has not been set up yet, a list that cannot be read yet — rather than showing an empty
-list.
+emulator list, the platform page, the emulator menu and a game's BIOS tab say why — no source found, every source
+switched off, a broken systems file, a RetroDECK that has not been set up yet, a list that cannot be read yet — rather
+than showing an empty list.
 
 ## Log Level
 

@@ -272,7 +272,7 @@ class TestDeleteRomFiles:
         bundle = recovery.seal_bundle(
             "Game_2026-07-24_romfile",
             {"roms": [{"rom_id": 1}]},
-            [{"source_path": str(rom_path), "safe_root": str(roms), "kind": "installed_rom", "rom_id": 1}],
+            [{"source_path": str(rom_path), "safe_root": str(rom_path.parent), "kind": "installed_rom", "rom_id": 1}],
             BundleReadmeContext(
                 bundle_id="Game_2026-07-24_romfile",
                 created_at="2026-07-24T12:00:00+00:00",
@@ -346,7 +346,7 @@ class TestDeleteRomFiles:
         bundle = recovery.seal_bundle(
             "Game_2026-07-24_romdir",
             {"roms": [{"rom_id": 1}]},
-            [{"source_path": str(rom_dir), "safe_root": str(roms), "kind": "installed_rom", "rom_id": 1}],
+            [{"source_path": str(rom_dir), "safe_root": str(rom_dir.parent), "kind": "installed_rom", "rom_id": 1}],
             BundleReadmeContext(
                 bundle_id="Game_2026-07-24_romdir",
                 created_at="2026-07-24T12:00:00+00:00",

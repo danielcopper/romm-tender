@@ -27,8 +27,12 @@ const SOURCE_NAMES: ReadonlyMap<string, string> = new Map([
 ]);
 
 // A RetroArch without a frontend has no emulator list, and its "cannot start
-// games" line stands in place of the "not established" one (#2188 D33).
+// games" line stands in place of the "not established" one.
 const NO_CATALOGUE_KINDS: ReadonlySet<string> = new Set(["bare_retroarch_flatpak", "bare_retroarch_native"]);
+
+// The findings whose sentence says why a source's emulator list is missing. Any
+// other finding leaves the "not established" line standing beside it.
+const LIST_EXPLAINING_CODES: ReadonlySet<string> = new Set(["catalogue-invalid", "not-set-up"]);
 
 const RETRODECK_REPAIR = " Repair it with RetroDECK's 'Repair RetroDECK Paths'.";
 
@@ -37,7 +41,7 @@ export function sourceName(kind: string): string {
   return SOURCE_NAMES.get(kind) ?? kind;
 }
 
-/** Whether a finding shows as a banner. `content-tree-unwired` concerns nothing
+/** Whether a finding shows as a notice on Main. `content-tree-unwired` concerns nothing
  *  Tender does, so it shows only on the source's own card. */
 export function findingIsBanner(finding: SourceHealthFinding): boolean {
   return finding.code !== "content-tree-unwired";
@@ -119,8 +123,8 @@ function isFinding(value: unknown): value is SourceHealthFinding {
 
 /**
  * An endpoint's answer, with the message of a refusal for one of RetroDECK's
- * findings replaced by the sentence Main's banner shows for that finding, so a
- * refused press and the banner say the same thing. Every other answer comes
+ * findings replaced by the sentence Main's notice shows for that finding, so a
+ * refused press and the notice say the same thing. Every other answer comes
  * back as it is.
  */
 export function withFindingSentence<T>(answer: T): T {
@@ -130,7 +134,7 @@ export function withFindingSentence<T>(answer: T): T {
   return { ...answer, message: findingSentence("retrodeck", finding) };
 }
 
-/** Main's banner, and the settings section's line, while no emulator source is detected. */
+/** Main's notice, and the settings section's line, while no emulator source is detected. */
 export const NO_SOURCE_BANNER = "No emulator source was found.";
 
 /** The settings section's line while its listing has not answered yet. */
@@ -146,7 +150,7 @@ export function cannotStartSentence(kind: string): string {
 
 /** Main's notice for a switched-on source Tender cannot start games through. */
 export function cannotStartNotice(kind: string): string {
-  return `${sourceName(kind)} is switched on in Settings → Emulator sources, but Tender cannot start games through it yet.`;
+  return `${sourceName(kind)} is switched on in Settings › Emulator sources, but Tender cannot start games through it yet.`;
 }
 
 /** A source whose emulator list the resolver cannot read yet (EmuDeck's sealed catalogue). */
@@ -162,7 +166,7 @@ export function sealedCatalogueSentence(kind: string): string {
  * no source found.
  */
 export function emulatorDataReasonSentence(reason: EmulatorDataReason | null, source: AnsweringSource | null): string {
-  if (reason === "switched_off") return "Every emulator source is switched off in Settings → Emulator sources.";
+  if (reason === "switched_off") return "Every emulator source is switched off in Settings › Emulator sources.";
   if (reason === "no_source" || source === null) {
     return "No emulator source was found, so Tender cannot tell which emulators this platform offers.";
   }
@@ -193,21 +197,20 @@ export function sourceRowLines(source: EmulatorSource): SourceRowLine[] {
   const health = source.findings.map((finding) => warning(findingSentence(source.kind, finding)));
   // A sealed catalogue, and a source with no catalogue at all, each have a
   // sentence of their own below that stands in for the "not established" line.
-  const quiet: Record<EmulatorSource["catalogue"], SourceRowLine[]> = {
-    read: [{ tone: "ok", text: "No problems found." }],
-    sealed: [],
-    unavailable: NO_CATALOGUE_KINDS.has(source.kind)
-      ? []
-      : [warning(`${sourceName(source.kind)}'s emulator list is not established.`)],
-  };
+  const unexplained =
+    source.catalogue === "unavailable" &&
+    !NO_CATALOGUE_KINDS.has(source.kind) &&
+    !source.findings.some((finding) => LIST_EXPLAINING_CODES.has(finding.code));
+  const quiet = source.catalogue === "read" ? [{ tone: "ok" as const, text: "No problems found." }] : [];
   return [
-    ...(health.length > 0 ? health : quiet[source.catalogue]),
+    ...(health.length > 0 ? health : quiet),
+    ...(unexplained ? [warning(`${sourceName(source.kind)}'s emulator list is not established.`)] : []),
     ...(source.catalogue === "sealed" ? [warning(sealedCatalogueSentence(source.kind))] : []),
     ...(source.starts_games ? [] : [{ tone: "info" as const, text: cannotStartSentence(source.kind) }]),
   ];
 }
 
-/** One banner on Main: its sentence, a key no other banner of the same listing
+/** One notice on Main: its sentence, a key no other notice of the same listing
  *  has, and its tone — an "info" notice is drawn without the warning sign. */
 export interface SourceBanner {
   key: string;
@@ -216,8 +219,8 @@ export interface SourceBanner {
 }
 
 /**
- * Main's banners about the emulator sources, in the sources' order: one where
- * none is detected, one per banner finding of a switched-on source, and one per
+ * Main's notices about the emulator sources, in the sources' order: one where
+ * none is detected, one per finding of a switched-on source that shows on Main, and one per
  * switched-on source Tender cannot start games through, whether or not it is
  * the one that answers. A switched-off source says either only on its card.
  */

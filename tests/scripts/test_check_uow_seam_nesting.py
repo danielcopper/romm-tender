@@ -275,7 +275,16 @@ class TestIoSeamsViolations:
         assert "enumerate_discs" in findings[0]
 
     @pytest.mark.parametrize(
-        "getter", ["download_folder", "bios_download_folder", "rom_root", "bios_folder", "saves_root", "move_roots"]
+        "getter",
+        [
+            "download_folder",
+            "bios_download_folder",
+            "rom_root",
+            "bios_folder",
+            "saves_root",
+            "move_roots",
+            "rom_folders",
+        ],
     )
     def test_every_retrodeck_folder_question_inside_uow_is_flagged(self, getter: str):
         # Each question reads the resolver live and resolves its answer.
@@ -289,6 +298,34 @@ class TestIoSeamsViolations:
         )
         assert len(findings) == 1
         assert getter in findings[0]
+        assert "file-I/O seam" in findings[0]
+
+    @pytest.mark.parametrize(
+        ("holder", "wrapper"),
+        [
+            ("self", "_rom_folder"),
+            ("self", "_rom_folders"),
+            ("self", "_resolve_target"),
+            ("self", "_platform_dir"),
+            ("self", "_saves_root"),
+            ("self._demand", "download_root"),
+            ("self._demand", "status_root"),
+        ],
+    )
+    def test_every_service_wrapper_around_a_retrodeck_folder_question_inside_uow_is_flagged(
+        self, holder: str, wrapper: str
+    ):
+        # What the services call is the wrapper, so the rule has to see it there.
+        findings = check.scan_source(
+            "class S:\n"
+            "    def go(self):\n"
+            "        with self._uow_factory() as uow:\n"
+            f"            folder = {holder}.{wrapper}()\n"
+            "        return folder\n",
+            "svc.py",
+        )
+        assert len(findings) == 1
+        assert wrapper in findings[0]
         assert "file-I/O seam" in findings[0]
 
     def test_realpath_inside_uow_is_flagged(self):

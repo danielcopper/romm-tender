@@ -3224,7 +3224,7 @@ describe("MainPage", () => {
       await flushAsync();
       expect(
         await findByText(
-          "EmuDeck is switched on in Settings → Emulator sources, but Tender cannot start games through it yet.",
+          "EmuDeck is switched on in Settings › Emulator sources, but Tender cannot start games through it yet.",
         ),
       ).toBeInTheDocument();
     });
@@ -3241,7 +3241,7 @@ describe("MainPage", () => {
       await flushAsync();
       expect(
         await findByText(
-          "EmuDeck is switched on in Settings → Emulator sources, but Tender cannot start games through it yet.",
+          "EmuDeck is switched on in Settings › Emulator sources, but Tender cannot start games through it yet.",
         ),
       ).toBeInTheDocument();
     });

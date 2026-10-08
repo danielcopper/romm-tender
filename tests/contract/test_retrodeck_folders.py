@@ -210,7 +210,7 @@ async def test_switched_off_a_download_says_so_where_a_question_raises(harness, 
     removal = await harness.endpoints.remove_rom(_ROM_ID)
 
     assert game["reason"] == "retrodeck_switched_off"
-    assert game["message"] == "Downloads need RetroDECK, which is switched off in Settings → Emulator sources."
+    assert game["message"] == "Downloads need RetroDECK, which is switched off in Settings › Emulator sources."
     assert bios["reason"] == "retrodeck_switched_off"
     assert removal["message"] == _UNANSWERED
 
@@ -245,20 +245,71 @@ async def test_where_a_question_about_retrodeck_s_roots_raises_no_leftover_is_re
 
 async def test_where_a_system_s_folder_question_raises_only_the_presses_that_ask_it_are_refused(harness, monkeypatch):
     # A system's own ROM folder is not one of the roots asked up front: its
-    # raise refuses the presses that need that folder, and nothing else.
+    # raise refuses the presses that need that folder — an uninstall among
+    # them, since that folder bounds the removal — and nothing else.
     on_disk = _seed_what_a_press_would_touch(harness)
     seed_es_systems(harness)
     monkeypatch.setattr(RetroDeck, "rom_location", _raises)
 
-    asking = [await harness.endpoints.start_download(8), await harness.endpoints.adopt_existing_rom(8, None, None)]
-    removal = await harness.endpoints.remove_rom(_ROM_ID)
+    asking = [
+        await harness.endpoints.start_download(8),
+        await harness.endpoints.adopt_existing_rom(8, None, None),
+        await harness.endpoints.remove_rom(_ROM_ID),
+    ]
 
     for result in asking:
         assert result["success"] is False
         assert result["reason"] == "retrodeck_unanswered"
         assert result["message"] == _UNANSWERED
-    assert removal["success"] is True
-    assert not os.path.exists(on_disk[0])
+    assert os.path.exists(on_disk[0])
+
+
+_TWO_SYSTEMS_XML = """\
+<?xml version="1.0"?>
+<systemList>
+  <system>
+    <name>gba</name>
+    <path>%ROMPATH%/gba</path>
+    <command label="mGBA">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>
+  </system>
+  <system>
+    <name>snes</name>
+    <path>%ROMPATH%/snes</path>
+    <command label="Snes9x">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>
+  </system>
+</systemList>
+"""
+
+
+def _only_gba_raises(monkeypatch) -> None:
+    asked = RetroDeck.rom_location
+
+    def rom_location(self, system: str):
+        if system == "gba":
+            raise RuntimeError("the resolver failed")
+        return asked(self, system)
+
+    monkeypatch.setattr(RetroDeck, "rom_location", rom_location)
+
+
+async def test_where_one_system_s_folder_question_raises_uninstall_all_goes_on_for_every_other_system(
+    harness, monkeypatch
+):
+    seed_es_systems(harness, _TWO_SYSTEMS_XML)
+    gba = _write(seed_install(harness, _ROM_ID))
+    snes = _write(seed_install(harness, _ROM_ID + 1, system="snes", platform_slug="snes", file_name="game.sfc"))
+    _only_gba_raises(monkeypatch)
+
+    result = await harness.endpoints.uninstall_all_roms()
+
+    assert result["success"] is False
+    assert result["removed_count"] == 1
+    assert result["errors"] == [{"rom_id": str(_ROM_ID), "error": _UNANSWERED}]
+    assert os.path.exists(gba)
+    assert not os.path.exists(snes)
+    with harness.uow_factory() as uow:
+        assert uow.rom_installs.get(_ROM_ID) is not None
+        assert uow.rom_installs.get(_ROM_ID + 1) is None
 
 
 @pytest.mark.usefixtures("seeded_retrodeck")
@@ -408,3 +459,76 @@ async def test_under_the_finding_no_move_is_seen(harness, code, make):
     with harness.uow_factory() as uow:
         assert uow.kv_config.get("retrodeck_home_path") == recorded
         assert uow.kv_config.get("retrodeck_home_path_previous") is None
+
+
+def _seed_pending_move(harness) -> tuple[str, list[str]]:
+    """A move RetroDECK made and nobody migrated yet: a game and a save left under the old home.
+
+    Answers the old home, and the paths of what lies under it, which a refused press must leave.
+    """
+    old_home = os.path.realpath(os.path.join(str(harness.tmp_path), "A", "retrodeck"))
+    old_rom = _write(os.path.join(old_home, "roms", "gba", "game.gba"))
+    old_save = _write(os.path.join(old_home, "saves", "gba", "game.srm"))
+    seed_rom(harness, _ROM_ID, platform_slug="gba")
+    with harness.uow_factory() as uow:
+        uow.rom_installs.save(
+            RomInstall.mark_installed(
+                rom_id=_ROM_ID,
+                file_path=old_rom,
+                rom_dir=None,
+                platform_slug="gba",
+                system="gba",
+                installed_at="2026-01-01T00:00:00",
+            )
+        )
+        uow.kv_config.set("retrodeck_home_path", harness.retrodeck_home)
+        uow.kv_config.set("retrodeck_home_path_previous", old_home)
+    return old_home, [old_rom, old_save]
+
+
+def _assert_nothing_moved(harness, old_home: str, left: list[str]) -> None:
+    assert all(os.path.exists(path) for path in left)
+    with harness.uow_factory() as uow:
+        assert uow.rom_installs.get(_ROM_ID).file_path == left[0]
+        assert uow.kv_config.get("retrodeck_home_path_previous") == old_home
+
+
+@pytest.mark.parametrize(("code", "make"), _FINDINGS)
+async def test_under_the_finding_the_migrate_press_is_refused_before_anything_moves(harness, code, make):
+    old_home, left = _seed_pending_move(harness)
+    make(harness)
+
+    result = await harness.endpoints.migrate_retrodeck_files(None)
+
+    _assert_refused_for(result, code)
+    _assert_nothing_moved(harness, old_home, left)
+
+
+@pytest.mark.parametrize("raising", [*_ROOT_QUESTIONS, "detection"])
+async def test_where_a_question_about_retrodeck_s_roots_raises_the_migrate_press_is_refused(
+    harness, monkeypatch, raising
+):
+    old_home, left = _seed_pending_move(harness)
+    seed_es_systems(harness)
+    if raising == "detection":
+        _detection_raises(harness)
+    else:
+        monkeypatch.setattr(RetroDeck, raising, _raises)
+
+    result = await harness.endpoints.migrate_retrodeck_files(None)
+
+    assert result["success"] is False
+    assert result["reason"] == "retrodeck_unanswered"
+    assert result["message"] == _UNANSWERED
+    _assert_nothing_moved(harness, old_home, left)
+
+
+async def test_without_retrodeck_the_migrate_press_is_refused_and_says_why(harness):
+    old_home, left = _seed_pending_move(harness)
+
+    result = await harness.endpoints.migrate_retrodeck_files(None)
+
+    assert result["success"] is False
+    assert result["reason"] == "retrodeck_not_installed"
+    assert result["message"] == "Moving needs RetroDECK, which is not installed."
+    _assert_nothing_moved(harness, old_home, left)

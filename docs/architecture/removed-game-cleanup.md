@@ -237,6 +237,30 @@ link to `/var/home` on image-based distributions — still contains the paths re
 walked exactly as spelled, because resolving those components would resolve away the very symlinks the no-follow walk
 exists to refuse.
 
+### Which folder bounds a game's files, and when RetroDECK cannot say
+
+An installed game's safe root is its **system's own ROM folder** as the resolver names it, resolved
+(`RetroDeckFolders.rom_folders`), and never RetroDECK's whole ROM root: a system folder linked to another drive is where
+that system's downloads land, and the ROM root would put them outside the bound. The preview measures, the recovery
+bundle seals and the removal consumes a claim against that same folder
+([#2285](https://github.com/danielcopper/romm-tender/issues/2285) D1).
+
+What RetroDECK's state does to a run:
+
+- **Its settings in doubt, or a question about its roots failed** — a `marker-*` or `not-set-up` finding, or detecting
+  the sources or asking about its health or one of its roots raised: the cleanup does not start at all — the start is
+  refused, raising the folder refusal, with the finding's sentence or **RetroDECK's folders could not be established, so
+  Tender downloads into and removes from none of them.** Nothing is half done
+  ([#2244](https://github.com/danielcopper/romm-tender/issues/2244) D3, D5, D13).
+- **Not installed, or naming no ROM folder** — the run goes ahead: it removes shortcuts, and the records of games
+  without a download record. A game with one keeps it, its files on disk or not, and is reported with the uninstall's
+  sentence. The record stays until RetroDECK is back; the next cleanup then removes it with its files — "Forget this
+  download" is no way out, since the game has no page once its shortcut is gone (#2244 D9,
+  [#2285](https://github.com/danielcopper/romm-tender/issues/2285) D2).
+- **The question about one system's folder failed** — the start is not refused; within the run that system's games are
+  kept and reported in their results the same way, with the sentence above, and every other system's games are removed
+  (#2244 D13, #2285 D7).
+
 ### What the hashes are for, and where they stop
 
 Why the disciplines are split this way, and what was rejected on the way there, is

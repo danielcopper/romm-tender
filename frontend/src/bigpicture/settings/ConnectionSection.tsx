@@ -31,7 +31,7 @@ import type { CustomHeaderEntry } from "../../types";
 // Sign-out only forgets the token on this device; it never revokes it in RomM.
 const SIGN_OUT_CONFIRM_DESCRIPTION =
   "This only forgets the RomM token on this device. The token itself stays valid in RomM — " +
-  "revoke it there (Settings → API Tokens) if you no longer want it.";
+  "revoke it there (Settings › API Tokens) if you no longer want it.";
 
 interface ConnectionSectionProps {
   url: string;

@@ -207,7 +207,7 @@ const EMUDECK = { kind: "emudeck", starts_games: false };
 describe("emulatorDataReasonSentence", () => {
   it.each([
     ["no_source", null, "No emulator source was found, so Tender cannot tell which emulators this platform offers."],
-    ["switched_off", null, "Every emulator source is switched off in Settings → Emulator sources."],
+    ["switched_off", null, "Every emulator source is switched off in Settings › Emulator sources."],
     [
       "catalogue_invalid",
       RETRODECK,
@@ -279,6 +279,28 @@ describe("sourceRowLines", () => {
   it("says a list it could not read is not established instead of no problems", () => {
     expect(sourceRowLines(source({ catalogue: "unavailable" }))).toEqual([
       { tone: "warning", text: "RetroDECK's emulator list is not established." },
+    ]);
+  });
+
+  it.each([
+    ["content-tree-unwired", { hub: "/rd/mods", path: "/emu/mods", problem: "missing" }],
+    ["saves-root-missing", { path: "/rd/saves" }],
+    ["root-missing", { path: "/sd" }],
+  ])("keeps the not-established line beside %s, which does not say why the list is missing", (code, data) => {
+    const finding = { code, data };
+    expect(sourceRowLines(source({ findings: [finding], catalogue: "unavailable" }))).toEqual([
+      { tone: "warning", text: findingSentence("retrodeck", finding) },
+      { tone: "warning", text: "RetroDECK's emulator list is not established." },
+    ]);
+  });
+
+  it.each([
+    ["catalogue-invalid", { path: "/rd/es_systems.xml", problem: "parse-error" }],
+    ["not-set-up", { path: "/rd" }],
+  ])("leaves the not-established line to %s, which says why the list is missing", (code, data) => {
+    const finding = { code, data };
+    expect(sourceRowLines(source({ findings: [finding], catalogue: "unavailable" }))).toEqual([
+      { tone: "warning", text: findingSentence("retrodeck", finding) },
     ]);
   });
 
@@ -356,7 +378,7 @@ describe("mainSourceBanners", () => {
       "RetroDECK: its settings file /rd.json is damaged, so Tender cannot tell where its folders are. " +
         "Repair it with RetroDECK's 'Repair RetroDECK Paths'.",
       "EmuDeck: RetroArch's settings file /ra.cfg cannot be read; EmuDeck's RetroArch may be missing or broken.",
-      "EmuDeck is switched on in Settings → Emulator sources, but Tender cannot start games through it yet.",
+      "EmuDeck is switched on in Settings › Emulator sources, but Tender cannot start games through it yet.",
     ]);
   });
 
@@ -364,7 +386,7 @@ describe("mainSourceBanners", () => {
     const listing = { answering: "emudeck", sources: [source({ kind: "emudeck", starts_games: false })] };
     expect(texts(listing)).toEqual([cannotStartNotice("emudeck")]);
     expect(cannotStartNotice("emudeck")).toBe(
-      "EmuDeck is switched on in Settings → Emulator sources, but Tender cannot start games through it yet.",
+      "EmuDeck is switched on in Settings › Emulator sources, but Tender cannot start games through it yet.",
     );
   });
 
@@ -378,7 +400,7 @@ describe("mainSourceBanners", () => {
       sources: [source({}), source({ kind: "emudeck", starts_games: false })],
     };
     expect(texts(listing)).toEqual([
-      "EmuDeck is switched on in Settings → Emulator sources, but Tender cannot start games through it yet.",
+      "EmuDeck is switched on in Settings › Emulator sources, but Tender cannot start games through it yet.",
     ]);
   });
 

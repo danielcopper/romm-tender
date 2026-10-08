@@ -7,6 +7,7 @@ import pytest
 from lib.path_safety import (
     PathTraversalError,
     coerce_safe_component,
+    is_inside_folder,
     is_safe_rom_path,
     safe_join,
     safe_path_component,
@@ -167,6 +168,32 @@ class TestSafeJoin:
         os.makedirs(base)
         with pytest.raises(PathTraversalError):
             safe_join(base, "../evil.desktop", allow_base=True)
+
+
+class TestIsInsideFolder:
+    """The bound a system's own ROM folder is: strictly inside it, symlinks resolved on both sides."""
+
+    def test_a_file_in_the_folder_is_inside(self, tmp_path):
+        assert is_inside_folder(str(tmp_path / "psx" / "game.chd"), str(tmp_path / "psx")) is True
+
+    def test_the_folder_itself_is_not(self, tmp_path):
+        assert is_inside_folder(str(tmp_path / "psx"), str(tmp_path / "psx")) is False
+
+    def test_a_neighbouring_folder_with_the_same_prefix_is_not(self, tmp_path):
+        assert is_inside_folder(str(tmp_path / "psx2" / "game.iso"), str(tmp_path / "psx")) is False
+
+    def test_a_link_inside_that_points_out_is_not(self, tmp_path):
+        folder = tmp_path / "psx"
+        folder.mkdir()
+        (tmp_path / "elsewhere").mkdir()
+        (folder / "escape").symlink_to(tmp_path / "elsewhere")
+        assert is_inside_folder(str(folder / "escape" / "game.chd"), str(folder)) is False
+
+    def test_a_folder_reached_through_a_link_holds_what_lies_at_its_target(self, tmp_path):
+        drive = tmp_path / "sdcard" / "psx"
+        drive.mkdir(parents=True)
+        (tmp_path / "psx").symlink_to(drive)
+        assert is_inside_folder(str(drive / "game.chd"), str(tmp_path / "psx")) is True
 
 
 class TestIsSafeRomPath:

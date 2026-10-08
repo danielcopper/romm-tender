@@ -181,6 +181,18 @@ class TestEveryFolderIsTheResolversAnswer:
         assert adapter.rom_root() == _real(real / "roms")
         assert adapter.download_folder("gba") == _real(real / "roms" / "gba")
 
+    def test_a_system_folder_linked_to_another_drive_is_where_its_games_land_and_are_removed(self, tree, tmp_path):
+        # The removal is bounded by the system's own folder, resolved, so a game
+        # downloaded onto the other drive is removed there too.
+        rd_home = tree.set_up(tmp_path / "retrodeck")
+        drive = tmp_path / "run" / "media" / "sdcard" / "gba"
+        drive.mkdir(parents=True)
+        (rd_home / "roms" / "gba").symlink_to(drive)
+        adapter = tree.adapter()
+
+        assert adapter.download_folder("gba") == _real(drive)
+        assert adapter.rom_folders(["gba"]) == {"gba": _real(drive)}
+
 
 class TestADownloadNeedsRetroDeck:
     def test_without_retrodeck_a_download_is_refused_with_its_sentence(self, tree):
@@ -200,9 +212,9 @@ class TestADownloadNeedsRetroDeck:
         game, bios = adapter.download_folder("gba"), adapter.bios_download_folder()
 
         assert isinstance(game, FolderRefused)
-        assert game.message == "Downloads need RetroDECK, which is switched off in Settings → Emulator sources."
+        assert game.message == "Downloads need RetroDECK, which is switched off in Settings › Emulator sources."
         assert isinstance(bios, FolderRefused)
-        assert bios.message == "BIOS downloads need RetroDECK, which is switched off in Settings → Emulator sources."
+        assert bios.message == "BIOS downloads need RetroDECK, which is switched off in Settings › Emulator sources."
         assert adapter.rom_root() == _real(rd_home / "roms")
         assert adapter.bios_folder() == _real(rd_home / "bios")
         assert adapter.saves_root() == _real(rd_home / "saves")
@@ -265,6 +277,32 @@ class TestARemovalNeedsARomRoot:
         assert isinstance(refused, FolderRefused)
         assert refused.message == "RetroDECK names no ROM folder, so Tender cannot uninstall this game."
 
+    def test_without_retrodeck_a_system_s_folder_is_refused_with_the_uninstall_s_sentence(self, tree):
+        refused = tree.adapter().rom_folders(["gba"])
+
+        assert isinstance(refused, FolderRefused)
+        assert refused.message == "Uninstalling needs RetroDECK, which is not installed."
+
+    def test_where_es_de_names_no_rom_folder_no_system_s_folder_is_named(self, tree, tmp_path):
+        tree.set_up(tmp_path / "retrodeck")
+        (tree.home / _ES_SETTINGS).write_text('<string name="ROMDirectory" value="relative/roms" />\n')
+
+        refused = tree.adapter().rom_folders(["gba"])
+
+        assert isinstance(refused, FolderRefused)
+        assert refused.message == "RetroDECK names no ROM folder, so Tender cannot uninstall this game."
+
+    def test_a_system_es_de_does_not_declare_is_refused_on_its_own(self, tree, tmp_path):
+        rd_home = tree.set_up(tmp_path / "retrodeck")
+
+        folders = tree.adapter().rom_folders(["gba", "unknown"])
+
+        assert isinstance(folders, dict)
+        assert folders["gba"] == _real(rd_home / "roms" / "gba")
+        refused = folders["unknown"]
+        assert isinstance(refused, FolderRefused)
+        assert refused.message == "RetroDECK names no ROM folder, so Tender cannot uninstall this game."
+
     def test_without_retrodeck_the_other_roots_are_none(self, tree):
         adapter = tree.adapter()
 
@@ -313,7 +351,7 @@ class TestWhileRetroDecksFoldersAreDefaults:
             ("not-set-up", _not_set_up),
         ],
     )
-    def test_every_folder_is_refused_for_the_finding_and_no_move_is_seen(self, tree, tmp_path, code, make):
+    def test_every_folder_is_refused_for_the_finding_the_move_code_s_too(self, tree, tmp_path, code, make):
         # The defaults exist, so a refusal is the rule's and not a missing folder's.
         for folder in ("roms", "saves", "bios"):
             (tree.home / "retrodeck" / folder).mkdir(parents=True, exist_ok=True)
@@ -327,17 +365,26 @@ class TestWhileRetroDecksFoldersAreDefaults:
             adapter.rom_root(),
             adapter.bios_folder(),
             adapter.saves_root(),
+            adapter.rom_folders(["gba"]),
+            adapter.move_roots(),
         ]
 
         for answer in answers:
             assert isinstance(answer, FindingRefused)
             assert answer.reason == "retrodeck_finding"
             assert answer.details["finding"]["code"] == code
-        assert adapter.move_roots() is None
 
 
 _UNANSWERED = "RetroDECK's folders could not be established, so Tender downloads into and removes from none of them."
-_FOLDER_QUESTIONS = ("download_folder", "bios_download_folder", "rom_root", "bios_folder", "saves_root")
+_FOLDER_QUESTIONS = (
+    "download_folder",
+    "bios_download_folder",
+    "rom_root",
+    "bios_folder",
+    "saves_root",
+    "rom_folders",
+    "move_roots",
+)
 
 
 def _raises(*_args: object) -> None:
@@ -345,14 +392,18 @@ def _raises(*_args: object) -> None:
 
 
 def _answer(adapter: RetroDeckFoldersAdapter, question: str) -> object:
-    return adapter.download_folder("gba") if question == "download_folder" else getattr(adapter, question)()
+    if question == "download_folder":
+        return adapter.download_folder("gba")
+    if question == "rom_folders":
+        return adapter.rom_folders(["gba"])
+    return getattr(adapter, question)()
 
 
 class TestWhereAQuestionToTheResolverRaises:
     """A raise establishes nothing — never "not installed" — and a root's raise refuses every folder."""
 
     @pytest.mark.parametrize("raising", ["health", "root", "roms_dir", "bios_dir", "saves_root"])
-    def test_a_raise_on_any_root_refuses_every_folder_and_no_move_is_seen(self, tree, tmp_path, monkeypatch, raising):
+    def test_a_raise_on_any_root_refuses_every_folder_the_move_code_s_too(self, tree, tmp_path, monkeypatch, raising):
         # The roots are asked together up front, so one that raised leaves none
         # of them established — a removal's bound no more than a download's.
         tree.set_up(tmp_path / "retrodeck")
@@ -364,7 +415,6 @@ class TestWhereAQuestionToTheResolverRaises:
             assert isinstance(answer, EveryFolderRefused), question
             assert answer.reason == "retrodeck_unanswered", question
             assert answer.message == _UNANSWERED, question
-        assert adapter.move_roots() is None
 
     def test_a_raise_on_a_system_s_folder_refuses_only_the_question_that_asked_it(self, tree, tmp_path, monkeypatch):
         tree.set_up(tmp_path / "retrodeck")
@@ -376,9 +426,19 @@ class TestWhereAQuestionToTheResolverRaises:
             if question == "download_folder":
                 assert isinstance(answer, EveryFolderRefused)
                 assert answer.message == _UNANSWERED
+            elif question == "rom_folders":
+                # The removal's bound for that system alone: refused with the
+                # same sentence, but not as every folder refused.
+                assert isinstance(answer, dict)
+                refused = answer["gba"]
+                assert isinstance(refused, FolderRefused)
+                assert not isinstance(refused, EveryFolderRefused)
+                assert refused.reason == "retrodeck_unanswered"
+                assert refused.message == _UNANSWERED
+            elif question == "move_roots":
+                assert isinstance(answer, MoveRoots)
             else:
                 assert isinstance(answer, str), question
-        assert adapter.move_roots() is not None
 
     @pytest.mark.parametrize("raising", ["health", "root", "roms_dir", "bios_dir", "saves_root"])
     def test_switched_off_a_download_still_says_so(self, tree, tmp_path, monkeypatch, raising):
@@ -389,9 +449,9 @@ class TestWhereAQuestionToTheResolverRaises:
         game, bios = adapter.download_folder("gba"), adapter.bios_download_folder()
 
         assert isinstance(game, FolderRefused)
-        assert game.message == "Downloads need RetroDECK, which is switched off in Settings → Emulator sources."
+        assert game.message == "Downloads need RetroDECK, which is switched off in Settings › Emulator sources."
         assert isinstance(bios, FolderRefused)
-        assert bios.message == "BIOS downloads need RetroDECK, which is switched off in Settings → Emulator sources."
+        assert bios.message == "BIOS downloads need RetroDECK, which is switched off in Settings › Emulator sources."
         for question in ("rom_root", "bios_folder", "saves_root"):
             answer = _answer(adapter, question)
             assert isinstance(answer, EveryFolderRefused), question
@@ -420,7 +480,6 @@ class TestWhereDetectingTheSourcesRaises:
             answer = _answer(adapter, question)
             assert isinstance(answer, EveryFolderRefused), question
             assert answer.message == _UNANSWERED, question
-        assert adapter.move_roots() is None
 
     def test_switched_off_a_download_still_says_so(self, tree, tmp_path):
         tree.set_up(tmp_path / "retrodeck")
@@ -430,7 +489,7 @@ class TestWhereDetectingTheSourcesRaises:
         removal = adapter.rom_root()
 
         assert isinstance(game, FolderRefused)
-        assert game.message == "Downloads need RetroDECK, which is switched off in Settings → Emulator sources."
+        assert game.message == "Downloads need RetroDECK, which is switched off in Settings › Emulator sources."
         assert isinstance(removal, EveryFolderRefused)
         assert removal.message == _UNANSWERED
 

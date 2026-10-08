@@ -1160,7 +1160,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         <WarningCard
           key="savefiles-content-dir-warning"
           title="Save sync off"
-          message="This game's saves are written beside the game file, so they can't be synced. The usual cause is RetroArch's 'Write Saves to Content Directory' (RetroArch → Settings → Saving); if it is on, turning it off lets save sync work again."
+          message="This game's saves are written beside the game file, so they can't be synced. The usual cause is RetroArch's 'Write Saves to Content Directory' (RetroArch › Settings › Saving); if it is on, turning it off lets save sync work again."
         />
       ) : null}
       {playSectionRow}

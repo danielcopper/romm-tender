@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from domain.disc_formats import DISC_IMAGE_EXTENSIONS
 from domain.disk_space import disk_space_verdict
 from domain.download_frames import cancelled_frame, failed_frame
-from domain.retrodeck_folders import EveryFolderRefused, FolderRefused
+from domain.retrodeck_folders import EveryFolderRefused, FolderRefused, folder_of
 from domain.rom_files import (
     TMP_EXT,
     ZIP_TMP_EXT,
@@ -520,21 +520,22 @@ class DownloadService:
         persisted — otherwise ``None``.
         """
         extract_dir = os.path.join(os.path.dirname(target_path), extract_dir_name)
-        # The removal's bound, which no switch changes: a download that started
-        # still extracts after RetroDECK is switched off.
-        roms_base = self._retrodeck_folders.rom_root()
-        if isinstance(roms_base, EveryFolderRefused):
-            raise roms_base
-        if isinstance(roms_base, FolderRefused):
-            raise ValueError(f"No ROM root to extract {extract_dir} inside: {roms_base.message}")
+        # The removal's bound, the system's own folder, which no switch changes:
+        # a download that started still extracts after RetroDECK is switched off.
+        folders = self._retrodeck_folders.rom_folders([system])
+        if isinstance(folders, EveryFolderRefused):
+            raise folders
+        folder = folder_of(folders, system)
+        if isinstance(folder, FolderRefused):
+            raise ValueError(f"No ROM folder to extract {extract_dir} inside: {folder.message}")
         self._download_file_store.make_dirs(extract_dir)
         tmp_zip = target_path + ZIP_TMP_EXT
         # ZIP-slip protection: adapter validates members resolve within extract_dir
-        # AND that extract_dir itself resolves within roms_base.
+        # AND that extract_dir itself resolves within the system's folder.
         rom_name = rom_detail.get("name", file_name)
         platform_name = rom_detail.get("platform_name", rom_detail.get("platform_slug", ""))
         extract_cb = self._make_progress_callback(rom_id, rom_name, platform_name, file_name, phase="extracting")
-        self._download_file_store.extract_zip(tmp_zip, extract_dir, roms_base, progress_callback=extract_cb)
+        self._download_file_store.extract_zip(tmp_zip, extract_dir, folder, progress_callback=extract_cb)
         self._download_file_store.remove_file(tmp_zip)
         self._download_file_store.decode_url_encoded_names(extract_dir)
         # Heal a folder-boot disc dump whose PS3_DISC.SFB ships .txt-suffixed,

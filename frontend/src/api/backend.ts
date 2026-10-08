@@ -162,6 +162,8 @@ export interface BiosAnswer {
     platform_slug: string;
     server_count: number;
     local_count: number;
+    ratio_server_count?: number;
+    ratio_local_count?: number;
     all_downloaded: boolean;
     required_count?: number;
     required_downloaded?: number;

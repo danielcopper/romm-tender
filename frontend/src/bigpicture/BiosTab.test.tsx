@@ -1,8 +1,7 @@
-// The pane's content is asserted through the panel that owns every field it
-// renders (RomMGameInfoPanel.test.tsx). What this file exists for is the
-// mounting contract: the panel mounts this tab for every ROM and leaves it
-// mounted, so rendering has to be gated on `isActive` — a panel test cannot
-// tell "the pane rendered nothing" apart from "the pane was never mounted".
+// Besides the pane's rendering, this file pins the mounting contract: the panel
+// mounts this tab for every ROM and leaves it mounted, so rendering has to be
+// gated on `isActive` — a panel test cannot tell "the pane rendered nothing"
+// apart from "the pane was never mounted".
 
 import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/react";
@@ -39,6 +38,8 @@ const biosStatus: BiosStatus = {
   needs_bios: true,
   server_count: 1,
   local_count: 0,
+  ratio_server_count: 1,
+  ratio_local_count: 0,
   all_downloaded: false,
   required_count: 1,
   required_downloaded: 0,
@@ -85,6 +86,40 @@ describe("BiosTab", () => {
     expect(container.innerHTML).toContain("#8f98a0");
   });
 
+  it("gives no reason line where the answering source gives an emulator list", () => {
+    const { container } = render(
+      <BiosTab
+        biosStatus={{ needs_bios: false, bios_status_unknown: true }}
+        biosLevel="unknown"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+    expect(container.querySelector('[data-testid="bios-reason"]')).toBeNull();
+  });
+
+  it("puts the reason line between the BIOS heading and the state", () => {
+    const { container } = render(
+      <BiosTab
+        biosStatus={{ needs_bios: false, bios_status_unknown: true }}
+        biosLevel="unknown"
+        coreInfo={{
+          ...coreInfo,
+          emulator_data_available: false,
+          emulator_data_reason: "switched_off",
+          emulator_source: null,
+        }}
+        isActive={true}
+      />,
+    );
+    const reason = container.querySelector('[data-testid="bios-reason"]');
+    expect(reason?.textContent).toBe("Every emulator source is switched off in Settings › Emulator sources.");
+    expect(reason?.previousElementSibling?.textContent).toBe("BIOS");
+    expect(reason?.nextElementSibling?.textContent).toContain(
+      "Nothing could be established about what the launching emulator needs",
+    );
+  });
+
   it.each([
     [2, "All 2 files the launching emulator requires are in place (5/20 RomM library files)"],
     [1, "The one file the launching emulator requires is in place (5/20 RomM library files)"],
@@ -95,6 +130,8 @@ describe("BiosTab", () => {
           needs_bios: true,
           server_count: 20,
           local_count: 5,
+          ratio_server_count: 20,
+          ratio_local_count: 5,
           all_downloaded: false,
           required_count: required,
           required_downloaded: required,
@@ -111,7 +148,15 @@ describe("BiosTab", () => {
     // A "(0/0 RomM library files)" beside the sentence counts a set that does not exist.
     const { container } = render(
       <BiosTab
-        biosStatus={{ needs_bios: true, server_count: 0, local_count: 0, all_downloaded: false, required_count: 0 }}
+        biosStatus={{
+          needs_bios: true,
+          server_count: 0,
+          local_count: 0,
+          ratio_server_count: 0,
+          ratio_local_count: 0,
+          all_downloaded: false,
+          required_count: 0,
+        }}
         biosLevel="ok"
         coreInfo={coreInfo}
         isActive={true}
@@ -136,6 +181,8 @@ describe("BiosTab", () => {
           needs_bios: true,
           server_count: 20,
           local_count: 0,
+          ratio_server_count: 20,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 0,
           required_downloaded: 0,
@@ -167,6 +214,8 @@ describe("BiosTab", () => {
           needs_bios: true,
           server_count: 20,
           local_count: 0,
+          ratio_server_count: 20,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 0,
           required_downloaded: 0,
@@ -198,6 +247,8 @@ describe("BiosTab", () => {
           needs_bios: true,
           server_count: 20,
           local_count: 0,
+          ratio_server_count: 20,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 0,
           required_downloaded: 0,
@@ -228,6 +279,8 @@ describe("BiosTab", () => {
             needs_bios: true,
             server_count: 20,
             local_count: 1,
+            ratio_server_count: 20,
+            ratio_local_count: 1,
             all_downloaded: false,
             required_count: 0,
             required_downloaded: 0,
@@ -258,6 +311,8 @@ describe("BiosTab", () => {
           needs_bios: true,
           server_count: 3,
           local_count: 1,
+          ratio_server_count: 3,
+          ratio_local_count: 1,
           all_downloaded: false,
           required_count: 0,
           required_downloaded: 0,
@@ -289,6 +344,8 @@ describe("BiosTab", () => {
           needs_bios: true,
           server_count: 20,
           local_count: 1,
+          ratio_server_count: 20,
+          ratio_local_count: 1,
           all_downloaded: false,
           required_count: 0,
           required_downloaded: 0,
@@ -314,6 +371,8 @@ describe("BiosTab", () => {
           needs_bios: true,
           server_count: 20,
           local_count: 1,
+          ratio_server_count: 20,
+          ratio_local_count: 1,
           all_downloaded: false,
           required_count: 0,
           required_downloaded: 0,
@@ -341,6 +400,8 @@ describe("BiosTab", () => {
           needs_bios: true,
           server_count: 1,
           local_count: 0,
+          ratio_server_count: 1,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 1,
           required_downloaded: 0,
@@ -387,6 +448,8 @@ describe("BiosTab", () => {
           needs_bios: true,
           server_count: 2,
           local_count: 0,
+          ratio_server_count: 2,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 2,
           required_downloaded: 0,
@@ -450,6 +513,8 @@ describe("BiosTab", () => {
           needs_bios: true,
           server_count: 1,
           local_count: 0,
+          ratio_server_count: 1,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 1,
           required_downloaded: 0,
@@ -504,6 +569,8 @@ describe("BiosTab", () => {
           needs_bios: true,
           server_count: 0,
           local_count: 0,
+          ratio_server_count: 0,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 1,
           required_downloaded: 1,
@@ -557,6 +624,8 @@ describe("BiosTab", () => {
           needs_bios: true,
           server_count: 1,
           local_count: 0,
+          ratio_server_count: 1,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 1,
           required_downloaded: 0,
@@ -604,6 +673,8 @@ describe("BiosTab", () => {
           needs_bios: true,
           server_count: 0,
           local_count: 0,
+          ratio_server_count: 0,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 1,
           required_downloaded: 0,
@@ -650,6 +721,8 @@ describe("BiosTab", () => {
           needs_bios: true,
           server_count: 0,
           local_count: 0,
+          ratio_server_count: 0,
+          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 1,
           required_downloaded: satisfied ? 1 : 0,
@@ -735,6 +808,8 @@ describe("BiosTab", () => {
       needs_bios: true,
       server_count: 1,
       local_count: 0,
+      ratio_server_count: 1,
+      ratio_local_count: 0,
       all_downloaded: false,
       required_count: 0,
       required_downloaded: 0,
@@ -834,6 +909,8 @@ describe("BiosTab", () => {
       needs_bios: true,
       server_count: 1,
       local_count: 0,
+      ratio_server_count: 1,
+      ratio_local_count: 0,
       all_downloaded: false,
       required_count: 1,
       required_downloaded: 0,
@@ -983,6 +1060,8 @@ describe("BiosTab", () => {
       needs_bios: true,
       server_count: 20,
       local_count: 1,
+      ratio_server_count: 20,
+      ratio_local_count: 1,
       all_downloaded: false,
       required_count: 0,
       required_downloaded: 0,
@@ -1144,6 +1223,8 @@ describe("BiosTab", () => {
       needs_bios: true,
       server_count: 3,
       local_count: 1,
+      ratio_server_count: 3,
+      ratio_local_count: 1,
       all_downloaded: false,
       required_count: 1,
       required_downloaded: state === "met" ? 1 : 0,
@@ -1359,6 +1440,8 @@ describe("BiosTab", () => {
       needs_bios: true,
       server_count: 0,
       local_count: 0,
+      ratio_server_count: 0,
+      ratio_local_count: 0,
       all_downloaded: true,
       required_count: 1,
       required_downloaded: 1,

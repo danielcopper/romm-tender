@@ -606,9 +606,16 @@ installation, arrangement, frontend (a RetroArch without a frontend is a source 
 ### Emulator source order
 
 The order in which the emulator sources are used — RetroDECK → EmuDeck → RetroArch (Flatpak) → RetroArch (native) →
-standalone unless the user changes it under Settings › Emulator sources. Every game starts through RetroDECK, so while
-RetroDECK is detected and switched on a game's answers come from it, wherever it stands in the order; only without it
-does the order decide, and then the first switched-on source answers, one Tender cannot start games through yet.
+standalone unless the user changes it under Settings › Emulator sources. Which source answers for a game is the
+**answering source**; the order decides it only where no switched-on source is one Tender starts games through.
+
+### Answering source
+
+The one emulator source a game's emulator, firmware and save answers come from: the first switched-on source Tender
+starts games through — RetroDECK, wherever it stands in the order — or, without one, the first switched-on source in the
+**emulator source order**, which answers for a start through that source's own frontend. There is none where no source
+is detected or every detected one is switched off, and the pages say which of the two
+(`domain/emulator_sources.py::answering_source`).
 
 ### Not supported vs not established
 
@@ -794,10 +801,14 @@ is every firmware file the library holds for the platform; **held** (`local_coun
 their destination. Both are counted over the library's files alone, so a row the library does not have — **not on
 server** — is in neither, however required it is. The code calls the pair the **held/offered ratio**.
 
-It is a progress bar over a set the user can finish, not a readiness claim, which is why nothing about it keys off a
-**row verdict**: `held` answers whether something is at the destination, and for a **folder declaration** that is
-precisely what a verdict is not. Both surfaces render it behind the readiness sentence as `(1/20 RomM library files)`,
-naming its set because the sentence in front counts another (`docs/architecture/qam-panel.md`, BIOS files).
+It is a progress bar over a set the user can finish, not a readiness claim, which is why nothing about it keys off
+whether a **row verdict** is met: `held` answers whether something is at the destination, and for a **folder
+declaration** that is precisely what a verdict is not. Both surfaces render it behind the readiness sentence as
+`(1/20 RomM library files)`, naming its set because the sentence in front counts another
+(`docs/architecture/qam-panel.md`, BIOS files). What they render is the held/offered ratio narrowed to the rows whose
+verdict was established (`ratio_server_count` / `ratio_local_count`): a row that reads "could not be established" is no
+file missing, and where no row was established there is no ratio. The level, its label and the download buttons keep
+counting every row the library holds.
 
 ### Firmware store
 
@@ -1215,14 +1226,14 @@ card, banner (a **notice** names a condition that needs the user; this states wh
 ### Notice / home
 
 A **notice** is Main's standing statement of a condition that needs the user (settings were reset, a sync paused on the
-session budget, an update was rolled back). They do not all sit at the top: four lead the panel above the status rows —
-two sections of their own, then two warnings at the head of the status block — and five more sit inside the status
-block, below the conditional slot. `docs/architecture/qam-panel.md`'s Main section has the order. The **home** of a
-condition is the one page where it is acted on. A notice names the condition and jumps to its home; the action exists
-only there, never on the notice. A condition answered **once and for all** — the user picks between named outcomes, and
-answering ends the condition for good — has no page to return to, so its home is a modal opened from the notice; that
-modal _is_ the home, not an exception to the rule. A condition with no home in the panel stays a notice without a jump,
-with Dismiss where there is a sensible end to it. _Avoid_: banner (component names only), warning, alert.
+session budget, an update was rolled back). They do not all sit at the top: some lead the panel above the status rows,
+and others sit inside the status block, below the conditional slot. `docs/architecture/qam-panel.md`'s Main section has
+which and the order. The **home** of a condition is the one page where it is acted on. A notice names the condition and
+jumps to its home; the action exists only there, never on the notice. A condition answered **once and for all** — the
+user picks between named outcomes, and answering ends the condition for good — has no page to return to, so its home is
+a modal opened from the notice; that modal _is_ the home, not an exception to the rule. A condition with no home in the
+panel stays a notice without a jump, with Dismiss where there is a sensible end to it. _Avoid_: banner (component names
+only), warning, alert.
 
 ### Available release / installed program
 

@@ -74,6 +74,8 @@ select = [
     "TC",   # flake8-type-checking
     "TID251", # banned-api — the table below is the whole of what this enables
 ]
+# "›" separates the steps of a settings path in a user-facing sentence ("Settings › Emulator sources").
+allowed-confusables = ["›"]
 
 [tool.ruff.lint.per-file-ignores]
 "backend/main.py" = ["E402"]

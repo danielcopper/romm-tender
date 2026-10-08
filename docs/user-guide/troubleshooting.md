@@ -317,7 +317,7 @@ Rather than write a launch command that cannot work, Tender leaves the shortcut 
 is not deleted** — the files are on disk exactly where the ROM would normally live.
 
 **Fix**: Install the content in the emulator yourself. For a PS3 `.pkg`, that is RetroDECK's documented procedure — open
-**RetroDECK → Configurator → Open Emulator → RPCS3**, use **File → Install Packages (PKG)**, point it at the downloaded
+**RetroDECK › Configurator › Open Emulator › RPCS3**, use **File › Install Packages (PKG)**, point it at the downloaded
 `.pkg`, and install the `.rap` licence the same way. Launching from Steam once a package is installed is not supported
 yet; start it from RPCS3 in the meantime.
 
@@ -587,7 +587,7 @@ exist while both devices are online.
 
 Tender cannot prevent this. Your options are:
 
-- Disable Remote Play entirely in Steam Settings > Remote Play
+- Disable Remote Play entirely in Steam Settings › Remote Play
 - Ignore them — they show a "Stream" button instead of "Play" so they're distinguishable
 
 For technical details, see [Steam Remote Play and Cross-Device Shortcuts](../architecture/steam-remote-play.md).
