@@ -82,10 +82,11 @@ vi.mock("../utils/connectionState", async (importOriginal) => ({
   useVersionError: vi.fn(() => null),
 }));
 
-vi.mock("../utils/sessionManager", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../utils/sessionManager")>()),
-  readGameRunning: vi.fn(),
-}));
+vi.mock("../utils/sessionManager", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../utils/sessionManager")>();
+  // The real reading by default; resetAllMocks restores it rather than wiping it.
+  return { ...actual, readGameRunning: vi.fn(actual.readGameRunning) };
+});
 
 vi.mock("./MigrationBlockedCard", () => ({
   MigrationBlockedCard: (props: MigrationBlockedCardProps) => {
@@ -377,11 +378,7 @@ describe("RomMGameInfoPanel", () => {
     const QUIT_LINE = "Quit the running game yourself — Tender can't stop it right now.";
 
     // The global afterEach unstubs every global, test-setup's SteamClient included.
-    let realReadGameRunning: typeof readGameRunning;
-    beforeEach(async () => {
-      ({ readGameRunning: realReadGameRunning } =
-        await vi.importActual<typeof import("../utils/sessionManager")>("../utils/sessionManager"));
-      vi.mocked(readGameRunning).mockImplementation(realReadGameRunning);
+    beforeEach(() => {
       vi.stubGlobal("SteamClient", {
         GameSessions: { RegisterForAppLifetimeNotifications: vi.fn(() => ({ unregister: vi.fn() })) },
       });
@@ -464,11 +461,8 @@ describe("RomMGameInfoPanel", () => {
     it("opens without the quit line when the store still lists a game whose stop Tender has seen", async () => {
       const exitedAppId = testAppId + 1;
       vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: exitedAppId, display_name: "Other" }] });
-      vi.mocked(readGameRunning).mockImplementation((appId, romId) =>
-        appId === exitedAppId
-          ? { running: false, decidedBy: "stop", diagnostics: "stop observed" }
-          : realReadGameRunning(appId, romId),
-      );
+      // The store lists only the exited game, so only it is asked about.
+      vi.mocked(readGameRunning).mockReturnValue({ running: false, decidedBy: "stop", diagnostics: "stop observed" });
       const { container } = await renderStranded("reloads");
       expect(container.textContent).toBe(RELOADS);
     });

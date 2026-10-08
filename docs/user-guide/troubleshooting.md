@@ -53,11 +53,11 @@ answers with its own message instead — "Server unreachable", "Sign-in rejected
 - "Tender was restarted — it reloads Steam's interface once no game is running."
 - "Tender was restarted — restart Steam to use it again."
 
-Until then nothing in Tender's panel works. On a game's page the play row shows **Tender restarted** in the badge's
-place; it says nothing about RomM then. A game page opened since the restart cannot load the game's details, and the
-section below the play row shows the same note instead; while any game is running it adds "Quit the running game
-yourself — Tender can't stop it right now.", since Tender's **Stop Game** cannot reach the backend then. On a page that
-had loaded before the restart, **Stop Game** says so at once: it shows "Couldn't stop the game" with the same note.
+Until then nothing in Tender's panel works. On a game's page the play row shows a **Tender restarted** badge; it says
+nothing about RomM then. A game page opened since the restart cannot load the game's details, and the section below the
+play row shows the same note instead; while any game is running it adds "Quit the running game yourself — Tender can't
+stop it right now.", since Tender's **Stop Game** cannot reach the backend then. On a page that had loaded before the
+restart, **Stop Game** says so at once: it shows "Couldn't stop the game" with the same note.
 
 **Explanation**: Tender's backend restarted while Steam kept running, and the panel in Steam is the one the backend that
 stopped had loaded. The running backend can never accept it, and it told the panel what happens next. The first note
@@ -66,8 +66,8 @@ means the backend replaces the panel by itself once no game is running
 it has taken Steam's interface down twice in the last ten minutes. In the first seconds after the backend starts the
 panel is told nothing yet, and the notification comes once the backend has looked at Steam.
 
-**Fix**: For the first note, exit the game; Steam's interface reloads a moment later with a working panel. For the
-second, restart Steam. Opening the Quick Access menu on Tender's page asks the backend again, and a new notification
+**Fix**: For the first note, quit every running game; Steam's interface reloads a moment later with a working panel. For
+the second, restart Steam. Opening the Quick Access menu on Tender's page asks the backend again, and a new notification
 says so when its answer has changed. The backend's log carries one line for that panel, and one more each time its
 answer changes:
 

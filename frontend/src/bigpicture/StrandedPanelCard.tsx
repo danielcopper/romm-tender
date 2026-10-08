@@ -5,8 +5,10 @@ import { readGameRunning } from "../utils/sessionManager";
 import { useStrandedAnswer } from "../utils/strandedPanelStore";
 import { strandedPanelSentence } from "../utils/strandedPanelWording";
 
-/** Whether any app runs: {@link readGameRunning}'s rule over every app, with the
- *  card's own last lifetime notification per app answering first. In which order
+/** Whether any app runs: the store-and-stop part of {@link readGameRunning}'s
+ *  rule over every app the store lists — no ROM is known here, so an open session
+ *  does not count — with the card's own last lifetime notification per app
+ *  answering first. In which order
  *  Steam calls the card's callback and the session manager's is not known, so
  *  the card does not count on a stop having reached the session manager yet;
  *  and a start it saw counts before the store lists the app. */
