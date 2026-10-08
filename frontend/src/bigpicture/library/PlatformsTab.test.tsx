@@ -985,8 +985,8 @@ describe("Library › Platforms", () => {
       });
       vi.mocked(backend.downloadRequiredFirmware).mockResolvedValue({
         success: false,
+        reason: "server_unreachable",
         message: "RomM is unreachable",
-        downloaded: 0,
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -1023,7 +1023,7 @@ describe("Library › Platforms", () => {
           { slug: "n64", name: "N64", count: 4, reachable_count: 4 },
         ],
       });
-      let finish: (v: { success: boolean; message: string; downloaded: number }) => void = () => {};
+      let finish: (v: { success: true; message: string; downloaded: number }) => void = () => {};
       vi.mocked(backend.downloadRequiredFirmware).mockReturnValue(
         new Promise((resolve) => {
           finish = resolve;
@@ -2769,6 +2769,7 @@ describe("Library › Platforms", () => {
       ]);
       vi.mocked(backend.deleteBiosFile).mockResolvedValue({
         success: false,
+        reason: "delete_incomplete",
         deleted_count: 0,
         message: "Could not delete gc-pal-12.bin: permission denied",
       });
@@ -2895,7 +2896,7 @@ describe("Library › Platforms", () => {
           { slug: "n64", name: "N64", count: 4, reachable_count: 4 },
         ],
       });
-      let finish: (v: { success: boolean; message: string; downloaded: number }) => void = () => {};
+      let finish: (v: { success: true; message: string; downloaded: number }) => void = () => {};
       vi.mocked(backend.downloadRequiredFirmware).mockReturnValue(
         new Promise((resolve) => {
           finish = resolve;
@@ -2926,8 +2927,8 @@ describe("Library › Platforms", () => {
       try {
         vi.mocked(backend.downloadRequiredFirmware).mockResolvedValue({
           success: false,
+          reason: "server_unreachable",
           message: "RomM is unreachable",
-          downloaded: 0,
         });
         const { container } = render(<LibraryPage onBack={vi.fn()} />);
         await act(async () => {
@@ -2960,7 +2961,7 @@ describe("Library › Platforms", () => {
     it("spins the pressed download button and disables the others", async () => {
       // The notice under the row is gone; the button that was pressed IS the
       // progress, and nothing else on the pane can be pressed while it runs.
-      let finish: (v: { success: boolean; message: string; downloaded: number }) => void = () => {};
+      let finish: (v: { success: true; message: string; downloaded: number }) => void = () => {};
       vi.mocked(backend.downloadPlatformFirmwareFile).mockReturnValue(
         new Promise((resolve) => {
           finish = resolve;
@@ -3162,6 +3163,7 @@ describe("Library › Platforms", () => {
       mockFirmware([firmwarePlatform({ deletable_count: 2 })]);
       vi.mocked(backend.deletePlatformBios).mockResolvedValue({
         success: false,
+        reason: "delete_incomplete",
         deleted_count: 0,
         message: "Nothing to delete",
       });

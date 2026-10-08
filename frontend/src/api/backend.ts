@@ -584,12 +584,16 @@ export const applySteamInputSetting = endpoint<[], { success: boolean; message: 
 // platform at a time below, in the order the page's own list is in.
 export const getFirmwareStatus = endpoint<[], FirmwareStatus>("get_firmware_status");
 export const getPlatformFirmwareStatus = endpoint<[string], PlatformFirmwareStatus>("get_platform_firmware_status");
-export const downloadAllFirmware = endpoint<[string], FirmwareDownloadResult>("download_all_firmware");
-export const downloadRequiredFirmware = endpoint<[string], FirmwareDownloadResult>("download_required_firmware");
+export const downloadAllFirmware = endpoint<[string], FirmwareDownloadResult | EndpointFailure>(
+  "download_all_firmware",
+);
+export const downloadRequiredFirmware = endpoint<[string], FirmwareDownloadResult | EndpointFailure>(
+  "download_required_firmware",
+);
 // One row's Download button (#164). Addressed by file name within the platform,
 // like the two bulk buttons beside it — never by RomM's firmware id, which the
 // status row may have been holding since before the listing moved on.
-export const downloadPlatformFirmwareFile = endpoint<[string, string], FirmwareDownloadResult>(
+export const downloadPlatformFirmwareFile = endpoint<[string, string], FirmwareDownloadResult | EndpointFailure>(
   "download_platform_firmware_file",
 );
 export const checkPlatformBios = endpoint<[string], BiosStatus>("check_platform_bios");
@@ -1495,25 +1499,22 @@ export const deletePlatformSaves = endpoint<[string], { success: boolean; delete
  *  `deletePlatformSaves`, walking the same path without deleting. The Library
  *  page's platform detail asks it once per selection, beside the core read. */
 export const countPlatformSaves = endpoint<[string], { count: number }>("count_platform_saves");
-export const deletePlatformBios = endpoint<[string], { success: boolean; deleted_count: number; message: string }>(
-  "delete_platform_bios",
-);
+// A delete that removed only part fails with `delete_incomplete` and carries how
+// many files it did remove; every other failure carries no count.
+export type BiosDeleteResult =
+  { success: true; deleted_count: number; message: string } | (EndpointFailure & { deleted_count?: number });
+export const deletePlatformBios = endpoint<[string], BiosDeleteResult>("delete_platform_bios");
 /** One row's Delete button — the per-file twin of `deletePlatformBios`, sharing
  *  its authorisation rather than restating it. Addressed by file name, and a
  *  name Tender holds no download record for removes nothing: the record is
  *  the only evidence we placed the file, and it is the record's own path that is
  *  unlinked. Offer it only where the row says `deletable`. */
-export const deleteBiosFile = endpoint<[string, string], { success: boolean; deleted_count: number; message: string }>(
-  "delete_bios_file",
-);
+export const deleteBiosFile = endpoint<[string, string], BiosDeleteResult>("delete_bios_file");
 /** A declared folder's Delete button. The folder has no name a download record
  *  could carry, so the files inside it are matched by being written underneath
  *  it — a filter over the platform's own records, which narrows and can never
  *  widen. The folder itself is never removed; the emulator lists it. */
-export const deleteBiosFolder = endpoint<
-  [string, string],
-  { success: boolean; deleted_count: number; message: string }
->("delete_bios_folder");
+export const deleteBiosFolder = endpoint<[string, string], BiosDeleteResult>("delete_bios_folder");
 
 // Save version history endpoints
 export const savesListFileVersions = endpoint<[number, string, string], ListFileVersionsResult>(
