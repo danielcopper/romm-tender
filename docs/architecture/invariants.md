@@ -722,10 +722,11 @@ Format: **invariant** — tier — enforced by.
   prompt-only — `backend/host/protocol.py` states the vocabulary and `.claude/rules/host.md` holds the backend half; the
   frontend half is `frontend/src/api/hostSocket.ts`, which THROWS `HostTransportError` for an `error` message and
   resolves only a `reply`, so a transport reason cannot reach a reader of `{success, reason, message}`.
-  `hostSocket.test.ts` pins both directions. **Nothing joins the two ends**: `connection_lost` is the one reason no
-  backend ever sends — the caller's own register answers with it — and it is spelled once in Python and once in
-  TypeScript with no check that the two agree. A frontend that spelled it differently would go green, and the divergence
-  would surface only to whoever eventually matched on it
+  `hostSocket.test.ts` pins both directions. **Nothing joins the two ends**: `connection_lost` and `stranded_panel` are
+  the two reasons no backend ever sends — the caller's own socket answers with them — and each is spelled once in Python
+  and once in TypeScript with no check that the two agree; so are the close codes 4001 and 4002 a stranded panel's
+  upgrade is answered with. A frontend that spelled one differently would go green, and the divergence would surface
+  only to whoever eventually matched on it — for a close code, on a device, as a stranded panel that keeps reconnecting
 - **The standalone panel bundle carries `@decky/ui` and the coexistence one carries none of it** — check —
   `frontend/scripts/check-bundle-shape.mjs`, over the built artifact rather than a bundler setting (nine strings that
   exist only in the package's implementation, plus the `DFL.` read count, in both directions; the licence file the

@@ -115,16 +115,17 @@ one reads as an empty instance, which no running process has.
 
 When the backend restarts while Steam keeps running — a reinstall, `systemctl --user restart romm-tender`, or the unit's
 `Restart=always` after a crash — the panel the previous process loaded stays in Steam. It carries the previous process's
-token, so the new server refuses its socket on every retry (`refused GET /ws: wrong token` in the log), and the new
-injector finds the marker and loads nothing over it. The game page's Tender section stays at "Loading...", and a game
-launched from Steam starts without Tender: no save sync around it and no playtime.
+token, so the new server refuses its socket, and the new injector finds the marker and loads nothing over it. The game
+page's Tender section stays at "Loading..." in a panel built before panels read the close codes below, and says that
+Tender was restarted in one that reads them — and a game launched from Steam starts without Tender: no save sync around
+it and no playtime.
 
 **How the backend knows.** Whenever the injector finds a marker, it asks whose it is. Its own instance means a panel it
 loaded — the ordinary case after the debugger connection was lost and re-attached — and is left alone. Any other
 instance is a panel no running backend can reach, because the single-instance lock allows one backend at a time. A
 marker whose owner cannot be read is treated as the process's own, so an unanswered question never reloads anything. A
 refused knock on the port is deliberately not a signal: any page can send one, and it says nothing about what is loaded
-in Steam.
+in Steam. The knock is answered, though — the panel is told, below.
 
 **What it does about it** (`backend/host/inject/recovery.py`):
 
@@ -179,6 +180,47 @@ ERROR with its traceback — so a run can be judged from the log alone.
 check that finds such a count moved since its injection closes the record without judging it.
 
 Not measured: SteamOS Game Mode, which is why every step is logged.
+
+### What the stranded panel is told
+
+A browser does not show a page why a WebSocket handshake failed: a refused upgrade reaches it exactly as a port nobody
+listens on would. So the server completes the upgrade of a stranded panel — Host and Origin passed, a token offered that
+is not this process's — and closes it with a code of Tender's own once it knows which is true
+([ADR-0043](../adr/0043-a-stranded-panel-is-told-so.md); `backend/host/server.py`, the codes in
+`backend/host/protocol.py`):
+
+| Answered with | What it says                                                   | When                                                                                          |
+| ------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| plain 401     | none yet — the panel keeps knocking                            | the injector has not yet read the attached context's marker since this backend started        |
+| 4001          | this backend reloads Steam's interface once no game is running | the recovery above is under way for a panel it has seen, and the limit would let it act now   |
+| 4002          | Steam has to be restarted                                      | everything else: no stranded panel there, the recovery gave up or ended, or the limit refuses |
+
+Nothing is attached to that socket — no connection, no dispatcher, no events — so it authorises nothing. A request with
+no token, the static route, and the Host and Origin refusals keep their plain HTTP status. The answer is asked of the
+recovery on every knock (`StrandedPanelRecovery.reload_outlook`), and it is strict: a window the limit frees later is a
+later answer, never a promise now.
+
+**Before the first reading there is no answer.** Until the injector has read the marker of the context it attached to —
+the first reading after the backend starts, whether it found a stranded panel there or not — the backend does not know
+whether a reload is coming, so it refuses the upgrade with the plain 401, as it refuses any other wrong token. The panel
+reads that as no backend and keeps knocking, and its next knock after the reading gets a code. A backend that never
+reads the context — Steam's debugger never answers, or loading the panel is switched off — refuses with 401 for good,
+and logs each knock. That is accepted: a panel is stranded only in a context an earlier backend reached over the same
+debugger.
+
+Once there is an answer, the log carries one WARNING per stranded panel, and one more when its answer changes. A panel
+built before panels read these codes does not stop: it reconnects several times a second until Steam's context is
+rebuilt, and the log-once rule keeps that to one line.
+
+**What the panel does with it**: on either code the socket gives up for good
+([frontend-bundles.md](frontend-bundles.md#talking-to-the-backend), Talking to the backend). One notification says the
+answer when the panel becomes stranded, and one more each time it changes; Main's connection row says it in place of the
+probe's verdict. On a game's page a connection check refused as stranded is no verdict on RomM, so it writes none, and
+the play row's badge says Tender was restarted whatever RomM last answered; a detail read refused as stranded shows a
+card in place of the details. What each of them says, and what the card adds while any game is running:
+[troubleshooting.md](../user-guide/troubleshooting.md#tender-says-it-was-restarted). The panel asks again — one
+connection opened only to read the close, bounded at two seconds, never two at once — when the Quick Access menu is
+opened on Tender's page and when Stop is pressed.
 
 ## The crash watchdog
 

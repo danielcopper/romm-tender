@@ -49,6 +49,7 @@ import {
   reconcilePlaytime,
   debugLog,
 } from "../api/backend";
+import { isStrandedPanelFailure } from "../api/host";
 import { setLaunchOptionsConfirmed } from "../utils/steamShortcuts";
 import {
   capturePruneLeaseAdmission,
@@ -174,6 +175,7 @@ import {
 } from "../utils/connectionState";
 import { registerConnectionHeartbeat } from "../utils/connectionHeartbeat";
 import { useMigrationStatus } from "../utils/migrationStore";
+import { useStrandedAnswer } from "../utils/strandedPanelStore";
 import { detach } from "../utils/detach";
 
 // S3776 is raised on the declaration line, so its NOSONAR must stay there. prettier-ignore stops
@@ -204,6 +206,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // reachability signal (mount check, a failed/succeeded call, or the offline
   // recovery probe), not just at this mount's check (#1345).
   const connectionState = useRommConnectionState();
+  const stranded = useStrandedAnswer() !== null;
   const [actionPending, setActionPending] = useState<string | null>(null);
 
   // Drive the reachability heartbeat while this game page is mounted (#1345) —
@@ -302,8 +305,11 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
      *  out of the endpoint call arrives here as a rejection instead of
      *  escaping into the fire-and-forget `check()` unlogged — an endpoint that
      *  cannot be called at all is as much a reachability signal as a rejected
-     *  promise. Only the CALL is guarded: a throw out of applyVerdict is a
-     *  subscriber's defect, not a verdict, and must not be reported as one. */
+     *  promise. Except a call refused because the panel is stranded: a backend
+     *  runs and refused this panel, which says nothing about RomM, so it writes
+     *  no verdict and the badge says Tender was restarted instead. Only
+     *  the CALL is guarded: a throw out of applyVerdict is a subscriber's
+     *  defect, not a verdict, and must not be reported as one. */
     const runVerdict = async () => {
       let result: Awaited<ReturnType<typeof testConnection>>;
       try {
@@ -312,6 +318,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         if (superseded()) return;
         settled = true;
         detach(debugLog(`RomMPlaySection(${appId}): connection check failed: ${e}`));
+        if (isStrandedPanelFailure(e)) return;
         settleWith("offline", "check failed");
         return;
       }
@@ -933,15 +940,19 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // Build info items array
   const infoItems: ReactElement[] = [];
 
-  // Offline indicator (first — most prominent)
-  if (connectionState === "offline") {
+  // Connection indicator (first — most prominent). A stranded panel cannot
+  // reach the backend, so it holds no word on RomM either way.
+  let connectionLabel: string | null = null;
+  if (stranded) connectionLabel = "Tender restarted";
+  else if (connectionState === "offline") connectionLabel = "RomM offline";
+  if (connectionLabel) {
     infoItems.push(
-      <div key="offline-indicator" className="romm-info-item">
+      <div key="connection-indicator" className="romm-info-item">
         <div className="romm-info-header">
           <FaExclamationTriangle size={12} color="#ff8800" />
         </div>
         <div className="romm-info-value" style={{ color: "#ff8800" }}>
-          RomM offline
+          {connectionLabel}
         </div>
       </div>,
     );

@@ -8,7 +8,9 @@ Common issues and how to fix them.
 
 **Symptom**: The Tender QAM panel's **Connection** row shows a "Backend error" badge with the note "Tender's backend
 failed to start — check its log", and the Sync buttons are disabled. This state means Tender's own backend process never
-started — it is **not** the same as an unreachable RomM server, which shows **Not connected** instead.
+started — it is **not** the same as an unreachable RomM server, which shows **Not connected** instead, nor a backend
+that restarted while the panel stayed in Steam, which shows **Backend restarted**
+([Tender says it was restarted](#tender-says-it-was-restarted)).
 
 **Fix**: The backend aborted during startup, so the panel can't reach it. Its log says why:
 
@@ -43,6 +45,36 @@ after 60 seconds, so generate a fresh one for the retry.
 This message is specific to Tender's backend being unreachable. A RomM server that is merely down or misconfigured
 answers with its own message instead — "Server unreachable", "Sign-in rejected", or the RomM version notice.
 
+## Tender Says It Was Restarted
+
+**Symptom**: A notification says "Tender was restarted", and the **Connection** row on Tender's main page shows
+**Backend restarted** with one of two notes:
+
+- "Tender was restarted — it reloads Steam's interface once no game is running."
+- "Tender was restarted — restart Steam to use it again."
+
+Until then nothing in Tender's panel works. On a game's page the play row shows a **Tender restarted** badge; it says
+nothing about RomM then. A game page opened since the restart cannot load the game's details, and the section below the
+play row shows the same note instead; while any game is running it adds "Quit the running game yourself — Tender can't
+stop it right now.", since Tender's **Stop Game** cannot reach the backend then. On a page that had loaded before the
+restart, **Stop Game** says so at once: it shows "Couldn't stop the game" with the same note.
+
+**Explanation**: Tender's backend restarted while Steam kept running, and the panel in Steam is the one the backend that
+stopped had loaded. The running backend can never accept it, and it told the panel what happens next. The first note
+means the backend replaces the panel by itself once no game is running
+([below](#steams-screen-reloads-by-itself-after-a-backend-restart)); the second means it will not — it already tried, or
+it has taken Steam's interface down twice in the last ten minutes. In the first seconds after the backend starts the
+panel is told nothing yet, and the notification comes once the backend has looked at Steam.
+
+**Fix**: For the first note, quit every running game; Steam's interface reloads a moment later with a working panel. For
+the second, restart Steam. Opening the Quick Access menu on Tender's page asks the backend again, and a new notification
+says so when its answer has changed. The backend's log carries one line for that panel, and one more each time its
+answer changes:
+
+```bash
+grep "a panel another backend process loaded" ~/.local/state/romm-tender/backend.log | tail -n 5
+```
+
 ## Steam's Screen Reloads by Itself After a Backend Restart
 
 **Symptom**: Shortly after Tender's backend restarts — after `systemctl --user restart romm-tender`, a reinstall, or the
@@ -55,8 +87,9 @@ a game is running. If Steam cannot reload, or the old panel is still there after
 once, which takes the interface away for a few more seconds.
 
 **Fix**: If no game is running and a few minutes later Tender's panel is still missing, or its section on a game page
-still says "Loading...", restart Steam to load the new panel. The backend tries only once after each backend restart,
-and it takes Steam's interface away no more than twice in ten minutes. The log says what was tried:
+still says "Loading..." or that Tender was restarted, restart Steam to load the new panel. The backend tries only once
+after each backend restart, and it takes Steam's interface away no more than twice in ten minutes. The log says what was
+tried:
 
 ```bash
 grep "inject:" ~/.local/state/romm-tender/backend.log | tail -n 20

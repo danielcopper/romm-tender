@@ -27,16 +27,26 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+from collections import OrderedDict
 from typing import TYPE_CHECKING
 
 from host.access import SESSION_PARAM, TOKEN_PARAM, AccessPolicy, check_access, new_token
 from host.connection import HostConnection
+from host.protocol import CLOSE_STRANDED_PANEL_RELOADS, CLOSE_STRANDED_PANEL_RESTART_STEAM, ReloadOutlook
 from lib.http_messages import HEAD_TERMINATOR, MAX_HEAD_BYTES, HttpParseError, build_response_head, parse_request_head
 from lib.path_safety import safe_join
-from lib.websocket_frames import accept_key
+from lib.websocket_frames import (
+    OPCODE_CLOSE,
+    WebSocketProtocolError,
+    accept_key,
+    close_frame,
+    header_length,
+    parse_frame_header,
+)
 
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Awaitable, Callable
 
     from host.dispatch import CallDispatcher
     from host.events import EventSink
@@ -65,6 +75,39 @@ _CONTENT_TYPES = {
     ".svg": "image/svg+xml",
 }
 _DEFAULT_CONTENT_TYPE = "application/octet-stream"
+
+# How many stranded panels' sessions are remembered for the log-once rule. Steam
+# holds one panel per JS context and replaces a context only by a reload, so a
+# backend meets one or two of them; a forgotten session costs one more line,
+# never a flood: a panel that reads the close stops reconnecting once told, and
+# one built before panels read it keeps knocking under one session, which stays
+# remembered.
+STRANDED_SESSIONS_REMEMBERED = 16
+
+# How much of a stranded panel's session its log line shows. The session is the
+# caller's own text, and nothing but the head limit bounds it.
+STRANDED_SESSION_SHOWN = 64
+
+# How long a stranded panel's socket is read after the close, before it is shut.
+# A panel flushes its queued calls the moment the upgrade completes, and closing
+# a socket over data it has not read ends the connection with a reset rather
+# than in order; a client's stack may then discard what it had received but not
+# yet read, the close frame included (RFC 9112 §9.6, Tear-down).
+STRANDED_DRAIN_SECONDS = 1.0
+_DRAIN_CHUNK = 65536
+
+# What each close tells the panel, beside the code that carries it.
+_STRANDED_ANSWERS = {
+    ReloadOutlook.RELOAD_TO_COME: (
+        CLOSE_STRANDED_PANEL_RELOADS,
+        "stranded panel: Steam's interface reloads once no game is running",
+    ),
+    ReloadOutlook.NO_RELOAD: (CLOSE_STRANDED_PANEL_RESTART_STEAM, "stranded panel: restart Steam"),
+}
+_STRANDED_LOG_WORDING = {
+    ReloadOutlook.RELOAD_TO_COME: "this backend reloads Steam's interface once no game is running",
+    ReloadOutlook.NO_RELOAD: "Steam has to be restarted",
+}
 
 
 class HostServer:
@@ -101,6 +144,9 @@ class HostServer:
         # — which is a NEW connection, so a per-connection count would reset at
         # exactly the moment it had something to report.
         self._dropped_by_closed_connections = 0
+        # None until the injector is wired: nothing has looked at Steam's context then.
+        self._reload_outlook: Callable[[], Awaitable[ReloadOutlook]] | None = None
+        self._stranded_sessions: OrderedDict[str, ReloadOutlook] = OrderedDict()
 
     @property
     def port(self) -> int:
@@ -146,6 +192,25 @@ class HostServer:
     def bundle_url(self) -> str:
         """The complete address the panel bundle is loaded from, token included."""
         return self.asset_url(BUNDLE_FILENAME)
+
+    def answer_stranded_panels_from(self, reload_outlook: Callable[[], Awaitable[ReloadOutlook]]) -> None:
+        """Tell a stranded panel, from now on, what *reload_outlook* answers.
+
+        *reload_outlook* answers whether this backend will reload Steam's
+        interface once no game is running — the recovery's own reading
+        (``host.inject.recovery``). Handed in after :meth:`start`, because what
+        reads it is built with the address this server answers on.
+
+        Until then, and for as long as it answers ``NOT_YET_LOOKED``, a stranded
+        panel's upgrade is refused with the plain 401. A backend that never
+        reads Steam's context — its debugger never answers, or loading the panel
+        is switched off — therefore refuses it with 401 for good, logged on
+        every knock. That is accepted rather than answered with "restart Steam":
+        a panel is stranded only in a context an earlier backend reached over
+        the same debugger, so the case needs that debugger gone under a running
+        Steam, or loading switched off by hand between two backend starts.
+        """
+        self._reload_outlook = reload_outlook
 
     async def start(self) -> int:
         """Bind a port and begin serving; return the port that was taken.
@@ -208,6 +273,11 @@ class HostServer:
         policy = AccessPolicy(port=self._port, token=self._token)
         verdict = check_access(head, policy)
         if verdict.refused:
+            if verdict.wrong_token and head.method == "GET" and head.path == WS_PATH and _handshake_key(head):
+                outlook = ReloadOutlook.NOT_YET_LOOKED if self._reload_outlook is None else await self._reload_outlook()
+                if outlook is not ReloadOutlook.NOT_YET_LOOKED:
+                    await self._tell_stranded_panel(head, reader, writer, verdict.log_line, outlook)
+                    return
             self._logger.warning(f"host: {verdict.log_line}")
             await self._refuse(writer, verdict.status)
             return
@@ -232,12 +302,73 @@ class HostServer:
     async def _refuse(self, writer: asyncio.StreamWriter, status: int) -> None:
         """Answer *status* with nothing in the body, and close.
 
-        The ``Server`` field is the whole of what a refusal reveals: it says
-        which program answered and nothing about why, which is the honest answer
-        to a request that brought no token.
+        The ``Server`` field is the whole of what a refusal answered here
+        reveals: it says which program answered and nothing about why, which is
+        the honest answer to a request that brought no token. The one refusal
+        that says more is :meth:`_tell_stranded_panel`'s.
         """
         await self._write_response(writer, status, [("Content-Length", "0"), ("Connection", "close")])
         await self._shutdown(writer)
+
+    async def _tell_stranded_panel(
+        self,
+        head: RequestHead,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+        log_line: str,
+        outlook: ReloadOutlook,
+    ) -> None:
+        """Complete the handshake of a stranded panel's upgrade, and close it at once with a code.
+
+        A browser hides why a handshake failed: a refused upgrade reaches the
+        page exactly as no server at all would (WHATWG WebSockets, "Feedback
+        from the protocol"), so a 401 could not tell a panel that a backend is
+        running and will never admit it. A close after a completed handshake is
+        the one answer a page is shown. Nothing is attached to the socket — no
+        connection, no dispatcher, no events — so completing the handshake
+        authorises nothing; what the code adds to the ``Server`` field is
+        whether this backend will reload Steam's interface.
+        """
+        self._log_stranded_panel(head.query.get(SESSION_PARAM, ""), log_line, outlook)
+        code, reason = _STRANDED_ANSWERS[outlook]
+        await self._write_response(
+            writer,
+            101,
+            [
+                ("Upgrade", "websocket"),
+                ("Connection", "Upgrade"),
+                ("Sec-WebSocket-Accept", accept_key(_handshake_key(head))),
+            ],
+        )
+        with contextlib.suppress(ConnectionError, OSError, RuntimeError):
+            writer.write(close_frame(code, reason))
+            await writer.drain()
+        await _read_until_the_peer_closes(reader)
+        await self._shutdown(writer)
+
+    def _log_stranded_panel(self, session_id: str, log_line: str, outlook: ReloadOutlook) -> None:
+        """Log a stranded panel's refusal once, and again only when what it is told changes.
+
+        Such a panel knocks again on every re-check, and one built before panels
+        read the close code knocks on every reconnection, several times a
+        second, for as long as it stays; a line per knock would bury the one
+        line that says what to do about it. The session is the panel's own
+        identity, not a secret, and the remembering is bounded
+        (:data:`STRANDED_SESSIONS_REMEMBERED`).
+        """
+        told_before = self._stranded_sessions.get(session_id)
+        self._stranded_sessions[session_id] = outlook
+        self._stranded_sessions.move_to_end(session_id)
+        while len(self._stranded_sessions) > STRANDED_SESSIONS_REMEMBERED:
+            self._stranded_sessions.popitem(last=False)
+        if told_before == outlook:
+            return
+        changed = "" if told_before is None else "the answer changed: "
+        self._logger.warning(
+            f"host: {log_line} — the shape of a panel another backend process loaded (session "
+            f"{_session_for_log(session_id)}); {changed}told it {_STRANDED_LOG_WORDING[outlook]}. Its further "
+            f"refusals are logged only if that answer changes."
+        )
 
     async def _serve_file(self, head: RequestHead, writer: asyncio.StreamWriter, echo_origin: str) -> None:
         """Serve one file from the static root, or 404.
@@ -292,14 +423,10 @@ class HostServer:
         bundle instance, so the log can tell a reconnect of the same panel from a
         leftover of an earlier one.
         """
-        key = head.header("sec-websocket-key")
-        upgrade = head.header("upgrade").lower()
-        version = head.header("sec-websocket-version")
-        # The key is answered with a digest over its ASCII bytes. A header is
-        # decoded latin-1, so a non-ASCII one reaches here intact and would
-        # raise out of this callback — asyncio prints a bare traceback and the
-        # socket is simply left open. Refused as a malformed handshake instead.
-        if upgrade != "websocket" or not key or not key.isascii() or version != "13":
+        key = _handshake_key(head)
+        if not key:
+            upgrade = head.header("upgrade").lower()
+            version = head.header("sec-websocket-version")
             self._logger.warning(f"host: not a WebSocket 13 handshake (upgrade={upgrade!r}, version={version!r})")
             await self._refuse(writer, 426)
             return
@@ -356,6 +483,53 @@ class HostServer:
         with contextlib.suppress(ConnectionError, OSError, RuntimeError):
             writer.close()
             await writer.wait_closed()
+
+
+def _handshake_key(head: RequestHead) -> str:
+    """The key of a WebSocket 13 handshake *head* makes, or ``""`` where it makes none.
+
+    The key is answered with a digest over its ASCII bytes. A header is decoded
+    latin-1, so a non-ASCII one would reach the digest intact and raise out of
+    the connection callback — asyncio prints a bare traceback and the socket is
+    simply left open — so it counts as no handshake.
+    """
+    key = head.header("sec-websocket-key")
+    if head.header("upgrade").lower() != "websocket" or head.header("sec-websocket-version") != "13":
+        return ""
+    return key if key.isascii() else ""
+
+
+def _session_for_log(session_id: str) -> str:
+    """*session_id* as a log line shows it: quoted, cut at :data:`STRANDED_SESSION_SHOWN` with the cut marked."""
+    if len(session_id) <= STRANDED_SESSION_SHOWN:
+        return repr(session_id)
+    return f"{session_id[:STRANDED_SESSION_SHOWN]!r}… ({len(session_id)} characters)"
+
+
+async def _read_until_the_peer_closes(reader: asyncio.StreamReader) -> None:
+    """Read and discard frames until the peer's close frame, its end of the stream, or the bound.
+
+    The peer answers a close with a close of its own, so a browser is done in a
+    round trip; :data:`STRANDED_DRAIN_SECONDS` bounds a peer that never says so.
+    Payloads are discarded in chunks rather than read whole, so an announced
+    length costs no memory.
+    """
+    with contextlib.suppress(
+        TimeoutError, asyncio.IncompleteReadError, WebSocketProtocolError, ConnectionError, OSError
+    ):
+        async with asyncio.timeout(STRANDED_DRAIN_SECONDS):
+            while True:
+                first_two = await reader.readexactly(2)
+                rest = header_length(first_two) - 2
+                header = parse_frame_header(first_two + (await reader.readexactly(rest) if rest else b""))
+                remaining = header.payload_length
+                while remaining:
+                    chunk = await reader.read(min(remaining, _DRAIN_CHUNK))
+                    if not chunk:
+                        return
+                    remaining -= len(chunk)
+                if header.opcode == OPCODE_CLOSE:
+                    return
 
 
 def _read_from_root(root: str, requested: str) -> tuple[bytes, str] | None:

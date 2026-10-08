@@ -29,6 +29,7 @@ programming error stands.
 from __future__ import annotations
 
 import json
+from enum import Enum
 from typing import Any
 
 # Message kinds, both directions.
@@ -42,7 +43,7 @@ MESSAGE_TYPES = frozenset({TYPE_CALL, TYPE_REPLY, TYPE_ERROR, TYPE_EVENT})
 # Transport reasons — the whole vocabulary of ``error.reason``. These name the
 # carriage, never the cargo.
 #
-# ``CONNECTION_LOST`` is the one no backend ever sends: it is what the caller's
+# ``CONNECTION_LOST`` is one no backend ever sends: it is what the caller's
 # own pending register answers with when the socket goes before the reply comes
 # back. It is named here anyway, because the alternative is that the other end
 # invents a second spelling of it and the two vocabularies drift apart from the
@@ -52,6 +53,9 @@ REASON_PAYLOAD_TOO_LARGE = "payload_too_large"
 REASON_BACKEND_EXCEPTION = "backend_exception"
 REASON_MALFORMED_MESSAGE = "malformed_message"
 REASON_CONNECTION_LOST = "connection_lost"
+# The second reason only the caller's own socket answers with: every queued and
+# later call of a panel this backend told it is stranded (the close codes below).
+REASON_STRANDED_PANEL = "stranded_panel"
 
 TRANSPORT_REASONS = frozenset(
     {
@@ -60,8 +64,38 @@ TRANSPORT_REASONS = frozenset(
         REASON_BACKEND_EXCEPTION,
         REASON_MALFORMED_MESSAGE,
         REASON_CONNECTION_LOST,
+        REASON_STRANDED_PANEL,
     }
 )
+
+# Close codes of this program's own, from the range RFC 6455 §7.4.2 leaves to
+# applications. An upgrade that carries a token but not this process's is
+# completed and closed at once with one of them, once this backend knows which
+# is true (``ReloadOutlook``): the panel asking was loaded by
+# another backend process, and the token is minted per process, so no retry can
+# admit it. The code is the whole answer — whether this backend reloads Steam's
+# interface once no game is running, which replaces that panel, or will not, and
+# Steam has to be restarted. Two codes rather than one code and a reason to
+# parse: a browser hands both to the page, and a number is the half nobody
+# rewords.
+CLOSE_STRANDED_PANEL_RELOADS = 4001
+CLOSE_STRANDED_PANEL_RESTART_STEAM = 4002
+
+
+class ReloadOutlook(Enum):
+    """What this backend can say about reloading Steam's interface for a stranded panel.
+
+    Three answers, because the third is not "no": until the backend has read
+    Steam's JS context for the first time, it does not know whether a stranded
+    panel is there, and a panel told "restart Steam" in that moment is told
+    something a reload may contradict a second later. Such an upgrade is refused
+    with the plain 401 instead, so the panel keeps knocking until the backend
+    knows. The other two are the two close codes.
+    """
+
+    NOT_YET_LOOKED = "not_yet_looked"
+    RELOAD_TO_COME = "reload_to_come"
+    NO_RELOAD = "no_reload"
 
 
 def decode_message(text: str) -> dict[str, Any]:

@@ -16,9 +16,12 @@ import { createElement, useSyncExternalStore, type ComponentProps } from "react"
 import { RomMGameInfoPanel } from "./RomMGameInfoPanel";
 import * as backend from "../api/backend";
 import type { CachedGameDetail } from "../api/backend";
+import { HostTransportError } from "../api/host";
+import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import * as cachedStore from "../utils/cachedGameDetailStore";
 import { getBiosStatusShared, _resetSharedReadsForTests } from "../api/sharedReads";
 import * as slotState from "../utils/slotState";
+import { readGameRunning } from "../utils/sessionManager";
 import {
   installDomEventListenerSpy,
   uninstallDomEventListenerSpy,
@@ -78,6 +81,12 @@ vi.mock("../utils/connectionState", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../utils/connectionState")>()),
   useVersionError: vi.fn(() => null),
 }));
+
+vi.mock("../utils/sessionManager", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../utils/sessionManager")>();
+  // The real reading by default; resetAllMocks restores it rather than wiping it.
+  return { ...actual, readGameRunning: vi.fn(actual.readGameRunning) };
+});
 
 vi.mock("./MigrationBlockedCard", () => ({
   MigrationBlockedCard: (props: MigrationBlockedCardProps) => {
@@ -348,13 +357,140 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
     });
 
-    it("returns null when cached.found=false → state.error=true and romId=null", async () => {
+    it("returns null when cached.found=false → state.error='failed' and romId=null", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: false,
       });
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
       // The component returns null in the error path (after loading).
+      expect(container.firstChild).toBeNull();
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // A2. A stranded panel's refused detail read
+  // ------------------------------------------------------------------
+
+  describe("a detail read refused because the panel is stranded", () => {
+    const RELOADS = "Tender was restarted — it reloads Steam's interface once no game is running.";
+    const RESTART_STEAM = "Tender was restarted — restart Steam to use it again.";
+    const QUIT_LINE = "Quit the running game yourself — Tender can't stop it right now.";
+
+    // The global afterEach unstubs every global, test-setup's SteamClient included.
+    beforeEach(() => {
+      vi.stubGlobal("SteamClient", {
+        GameSessions: { RegisterForAppLifetimeNotifications: vi.fn(() => ({ unregister: vi.fn() })) },
+      });
+    });
+
+    /** The panel stranded with *answer*, its detail read refused as a stranded socket refuses it. */
+    async function renderStranded(answer: "reloads" | "restart_steam") {
+      setStrandedAnswer(answer);
+      vi.mocked(cachedStore.getCachedGameDetail).mockRejectedValue(
+        new HostTransportError("stranded_panel", answer === "reloads" ? RELOADS : RESTART_STEAM),
+      );
+      const view = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      return view;
+    }
+
+    /** The callback the card registered for Steam's app lifetime notifications. */
+    function lifetimeListener(): (update: { unAppID: number; nInstanceID: number; bRunning: boolean }) => void {
+      const calls = vi.mocked(SteamClient.GameSessions.RegisterForAppLifetimeNotifications).mock.calls;
+      const listener = calls[calls.length - 1]?.[0];
+      if (!listener) throw new Error("RegisterForAppLifetimeNotifications was not called");
+      return listener;
+    }
+
+    it("states that Tender reloads Steam's interface once no game is running", async () => {
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(RELOADS);
+    });
+
+    it("states that Steam has to be restarted", async () => {
+      const { container } = await renderStranded("restart_steam");
+      expect(container.textContent).toBe(RESTART_STEAM);
+    });
+
+    it("follows a re-check that changed the answer, without a remount", async () => {
+      const { container } = await renderStranded("reloads");
+      act(() => setStrandedAnswer("restart_steam"));
+      expect(container.textContent).toBe(RESTART_STEAM);
+    });
+
+    it("adds the quit line on a page whose own game is not running while another game runs", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(`${RELOADS}${QUIT_LINE}`);
+    });
+
+    it("adds no quit line while nothing runs", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [] });
+      const { container } = await renderStranded("restart_steam");
+      expect(container.textContent).toBe(RESTART_STEAM);
+    });
+
+    it("adds and drops the quit line as any game starts and stops", async () => {
+      const otherAppId = testAppId + 1;
+      const { container } = await renderStranded("restart_steam");
+      expect(container.textContent).toBe(RESTART_STEAM);
+      act(() => lifetimeListener()({ unAppID: otherAppId, nInstanceID: 1, bRunning: true }));
+      expect(container.textContent).toBe(`${RESTART_STEAM}${QUIT_LINE}`);
+      act(() => lifetimeListener()({ unAppID: testAppId, nInstanceID: 2, bRunning: true }));
+      act(() => lifetimeListener()({ unAppID: otherAppId, nInstanceID: 1, bRunning: false }));
+      expect(container.textContent).toBe(`${RESTART_STEAM}${QUIT_LINE}`);
+      act(() => lifetimeListener()({ unAppID: testAppId, nInstanceID: 2, bRunning: false }));
+      expect(container.textContent).toBe(RESTART_STEAM);
+    });
+
+    it("drops the quit line on a game's stop while Steam's store still lists that game", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      const { container } = await renderStranded("reloads");
+      act(() => lifetimeListener()({ unAppID: testAppId + 1, nInstanceID: 1, bRunning: false }));
+      expect(container.textContent).toBe(RELOADS);
+    });
+
+    it("keeps the quit line on another game's stop while the store lists a game no notification has named", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      const { container } = await renderStranded("reloads");
+      act(() => lifetimeListener()({ unAppID: testAppId + 2, nInstanceID: 1, bRunning: false }));
+      expect(container.textContent).toBe(`${RELOADS}${QUIT_LINE}`);
+    });
+
+    it("opens without the quit line when the store still lists a game whose stop Tender has seen", async () => {
+      const exitedAppId = testAppId + 1;
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: exitedAppId, display_name: "Other" }] });
+      // The store lists only the exited game, so only it is asked about.
+      vi.mocked(readGameRunning).mockReturnValue({ running: false, decidedBy: "stop", diagnostics: "stop observed" });
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(RELOADS);
+    });
+
+    it("still shows the card, with the store's reading, when Steam offers no game sessions", async () => {
+      vi.stubGlobal("SteamClient", {});
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      const { container, unmount } = await renderStranded("restart_steam");
+      expect(container.textContent).toBe(`${RESTART_STEAM}${QUIT_LINE}`);
+      unmount();
+    });
+
+    it("stops listening for Steam's app lifetime notifications on unmount", async () => {
+      const unregister = vi.fn();
+      vi.mocked(SteamClient.GameSessions.RegisterForAppLifetimeNotifications).mockReturnValue({ unregister });
+      const { unmount } = await renderStranded("reloads");
+      unmount();
+      expect(unregister).toHaveBeenCalledTimes(1);
+    });
+
+    it("a detail read that failed for any other reason still renders nothing, the panel stranded or not", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockRejectedValue(
+        new HostTransportError("connection_lost", "socket closed"),
+      );
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      expect(container.firstChild).toBeNull();
+      act(() => setStrandedAnswer("reloads"));
       expect(container.firstChild).toBeNull();
     });
   });

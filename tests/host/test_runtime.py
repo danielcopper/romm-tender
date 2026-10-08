@@ -13,6 +13,7 @@ import contextlib
 import logging
 import os
 import signal
+import struct
 
 import pytest
 
@@ -21,12 +22,14 @@ from host.events import EventSink
 from host.inject import InjectionSetup
 from host.inject.bootstrap import MARKER, marker_present_expression
 from host.inject.bundles import COEXISTENCE_PANEL, GLOBALS_BUNDLE, STANDALONE_PANEL, choose_bundles
+from host.protocol import CLOSE_STRANDED_PANEL_RELOADS
 from host.runtime import AlreadyRunningError, BackendBuild, _where_the_running_one_is, run_backend
 from host.single_instance import PortFile, SingleInstanceLock
 from host.status import HostStatus
+from lib.websocket_frames import OPCODE_CLOSE
 from tests.host.conftest import FakeEndpoints, close_listener, free_port
 from tests.host.inject.fake_debugger import FakeDebugger, FakePage, FakeTarget
-from tests.host.ws_client import http_get
+from tests.host.ws_client import WsTestClient, http_get
 
 LOGGER = logging.getLogger("test_runtime")
 
@@ -377,6 +380,58 @@ class TestLoadingThePanelIntoSteam:
             )
             assert read_during_the_build == [None]
             assert read_while_running == [("Celeste",)]
+        finally:
+            await debugger.stop()
+
+    async def test_a_stranded_panel_is_told_what_the_injectors_recovery_holds(
+        self, tmp_path, recorder, default_sigterm
+    ):
+        page = FakePage(
+            marker_expression=marker_present_expression(MARKER),
+            ready_expression=choose_bundles(decky_is_serving=False).ready_when,
+            running_apps=["Celeste"],
+        )
+        page.marker = True
+        page.marker_instance = "an-earlier-backend"
+        debugger = FakeDebugger(page)
+        await debugger.start()
+        debugger.targets = [FakeTarget(id="renderer", title="SharedJSContext")]
+        debugger.handlers["Page.enable"] = lambda _params: {}
+        told: list[int] = []
+
+        async def while_running() -> None:
+            async with asyncio.timeout(10):
+                while (port := recorder.port_file.read()) is None or page.app_checks < 1:
+                    await asyncio.sleep(0.01)
+            client = await WsTestClient.connect(port, "an-earlier-backends-token", session="stranded")
+            try:
+                opcode, payload = await client.recv_frame()
+            finally:
+                await client.close()
+            assert opcode == OPCODE_CLOSE
+            told.append(struct.unpack("!H", payload[:2])[0])
+            os.kill(os.getpid(), signal.SIGTERM)
+
+        recorder.while_running = while_running  # type: ignore[method-assign]
+        try:
+            await asyncio.wait_for(
+                _run(
+                    tmp_path,
+                    recorder,
+                    HostStatus(),
+                    free_port(),
+                    injection=InjectionSetup(
+                        static_root=str(tmp_path / "dist"),
+                        state_dir=str(tmp_path / "state"),
+                        user_home=str(tmp_path / "home"),
+                        version="0.0.0-test",
+                        debugger_port=debugger.port,
+                        decky_port=free_port(),
+                    ),
+                ),
+                20,
+            )
+            assert told == [CLOSE_STRANDED_PANEL_RELOADS]
         finally:
             await debugger.stop()
 

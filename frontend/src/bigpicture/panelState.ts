@@ -17,6 +17,7 @@ import {
   debugLog,
 } from "../api/backend";
 import type { BiosAnswer } from "../api/backend";
+import { isStrandedPanelFailure } from "../api/host";
 import { getBiosStatusShared, getPlatformCoreInfoShared, getRomMetadataShared } from "../api/sharedReads";
 import type {
   RomMetadata,
@@ -60,7 +61,10 @@ export interface PanelState {
   saveSyncEnabled: boolean;
   saveStatus: SaveStatus | null;
   conflicts: SyncConflict[];
-  error: boolean;
+  // Why there is no detail to show: `stranded` when its read was refused because
+  // this panel is stranded, which the panel then says; `failed` for every other
+  // miss, the game not being found included.
+  error: false | "failed" | "stranded";
   activeTab: string;
   raId: number | null;
   slotConfirmed: boolean;
@@ -416,7 +420,7 @@ export async function loadData(
     const cached = await getCachedGameDetail(appId);
     if (cancelled() || overtaken()) return;
     if (!cached.found) {
-      setter((prev) => ({ ...prev, loading: false, error: true }));
+      setter((prev) => ({ ...prev, loading: false, error: "failed" }));
       return;
     }
 
@@ -478,6 +482,9 @@ export async function loadData(
     await startBackgroundRefreshes(cached, binding, readSeqs);
   } catch (e) {
     detach(debugLog(`RomMGameInfoPanel: loadData error: ${e}`));
-    if (!cancelled() && !overtaken()) setter((prev) => ({ ...prev, loading: false, error: true }));
+    if (!cancelled() && !overtaken()) {
+      const error = isStrandedPanelFailure(e) ? "stranded" : "failed";
+      setter((prev) => ({ ...prev, loading: false, error }));
+    }
   }
 }

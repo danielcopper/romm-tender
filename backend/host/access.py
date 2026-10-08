@@ -17,8 +17,9 @@ Two of the three are defence in depth rather than the gate:
 - The **Host** check closes DNS rebinding. An attacker who resolves their own
   name to 127.0.0.1 makes the request same-origin, so no CORS check fires, and a
   plain ``GET`` carries no ``Origin`` at all. Followed through, the attack buys
-  nothing here anyway because every route demands the token — the check is in
-  place so nobody has to reconstruct that reasoning again.
+  nothing here anyway because nothing is served and no call is carried without
+  the token — the check is in place so nobody has to reconstruct that reasoning
+  again.
 - The **Origin** check is protection against a foreign web page, **not a
   login**. An absent origin is allowed through: a browser never omits it on a
   WebSocket handshake, so whoever omitted it is not a browser, and they still
@@ -100,12 +101,20 @@ class AccessVerdict:
     ``echo_origin`` is the origin a CORS header must name when the request is
     allowed and carried one. It is empty for a request with no origin, which is
     a request no CORS header belongs on.
+
+    ``wrong_token`` is set only where Host and Origin passed and a token was
+    offered that is not this process's. It is the one refusal the upgrade answers
+    differently (``host.server``): a panel carries the token of the backend that
+    loaded it, so such a request is the shape of a panel another backend
+    process left in Steam. A request with no token at all is not — a panel never
+    opens a connection without one (``frontend/src/api/hostSocket.ts``).
     """
 
     allowed: bool
     status: int
     log_line: str
     echo_origin: str
+    wrong_token: bool = False
 
     @property
     def refused(self) -> bool:
@@ -146,6 +155,7 @@ def check_access(head: RequestHead, policy: AccessPolicy) -> AccessVerdict:
             status=_TOKEN_REFUSED,
             log_line=f"refused {head.method} {head.path}: {'no token' if not offered else 'wrong token'}",
             echo_origin="",
+            wrong_token=bool(offered),
         )
 
     return AccessVerdict(allowed=True, status=0, log_line="", echo_origin=origin)

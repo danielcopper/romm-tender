@@ -1,5 +1,5 @@
 /**
- * The five things the panel takes from `api/host`, against the real module.
+ * What the panel takes from `api/host`, against the real module.
  *
  * `test-setup.ts` replaces `api/host` for the whole suite, so this file has to
  * take the stub off again — otherwise it would assert that a `vi.fn()` behaves
@@ -10,13 +10,26 @@
  * What this file holds is what the delegation itself does — the handle a toast
  * answers with, the listener handed straight back, a call made from a bundle
  * served without a token, and the wording an answer is given on its way back.
+ * The socket's word on a stranded panel is driven against a socket of
+ * `hostSocket.test.ts`'s own; here, only that the delegation asks nothing of a
+ * panel nobody refused.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.unmock("./host");
 
-import { addEventListener, definePanel, endpoint, removeEventListener, toaster, type PanelDefinition } from "./host";
+import {
+  addEventListener,
+  definePanel,
+  endpoint,
+  onStrandedAnswerChange,
+  recheckStranded,
+  removeEventListener,
+  strandedAnswer,
+  toaster,
+  type PanelDefinition,
+} from "./host";
 import { HostSocket } from "./hostSocket";
 
 afterEach(() => {
@@ -103,6 +116,23 @@ describe("a bundle served without a token", () => {
 
     expect(threw).toBe(false);
     await expect(answer).rejects.toThrow(/no token/);
+  });
+});
+
+describe("the socket's word on a stranded panel", () => {
+  it("holds no answer and asks nothing before any backend refused the panel", async () => {
+    const open = vi.fn();
+    vi.stubGlobal("WebSocket", open);
+    const heard: string[] = [];
+    const stop = onStrandedAnswerChange((answer) => heard.push(answer));
+
+    await recheckStranded();
+    stop();
+
+    expect(strandedAnswer()).toBeNull();
+    expect(heard).toEqual([]);
+    expect(open).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });
 

@@ -16,11 +16,11 @@ None of the seven below has a mechanical check. Each of them fails green.
 
 ## 1. A transport error is not an endpoint's failure shape
 
-`error.reason` (`method_unknown`, `payload_too_large`, `backend_exception`, `malformed_message`, `connection_lost`)
-names something that went wrong **carrying** a call. An endpoint's own failure is a perfectly successful transport and
-arrives inside `result`, in the `{success, reason, message}` shape `scripts/check_failure_shape.py` guards — **and that
-gate does not see `host/` at all.** Collapse the two and a user is shown a sentence about their game where a programming
-error stands.
+`error.reason` (`method_unknown`, `payload_too_large`, `backend_exception`, `malformed_message`, `connection_lost`,
+`stranded_panel`) names something that went wrong **carrying** a call. An endpoint's own failure is a perfectly
+successful transport and arrives inside `result`, in the `{success, reason, message}` shape
+`scripts/check_failure_shape.py` guards — **and that gate does not see `host/` at all.** Collapse the two and a user is
+shown a sentence about their game where a programming error stands.
 
 ## 2. An address with a token in it never reaches the log file
 
@@ -44,6 +44,17 @@ The static route and the WebSocket upgrade each call `check_access`, and it runs
 a rebinding attempt is logged as one instead of as a bad credential; Origin second so the asking origin is on record
 before the credential decides anything; Token last because it is the only one that authorises. A third entry point runs
 the same function or it is not an entry point.
+
+**One refusal is answered with more than a status, and it is the only one.** An upgrade that passes Host and Origin and
+offers a token that is not this process's is completed and closed at once with 4001 or 4002 (`host.protocol`): a browser
+hides why a handshake failed, so a 401 cannot tell a stranded panel that a backend is running
+([ADR-0043](../../docs/adr/0043-a-stranded-panel-is-told-so.md)). Until the injector has read Steam's context for the
+first time it still gets the plain 401, because which code is true is not known yet (`host.protocol.ReloadOutlook`).
+Nothing is attached to that socket — no `HostConnection`, no dispatcher, no event sink — and `server.connected` stays as
+it was; the code adds one bit, whether this backend will reload Steam's interface. A refusal answered with a code is
+logged once per panel session rather than per knock; the start-up 401, no token at all, the static route, and the Host
+and Origin refusals keep their plain status and are logged every time: Host and Origin so they are on record. Widening
+the exception — another refusal answered with a body, a code, or a header — is a decision, not a refactor.
 
 `AccessPolicy` is built from the port **actually bound**, never from the port that was asked for. After a fallback a
 policy built from the wish refuses every request there is.

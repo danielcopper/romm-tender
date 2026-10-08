@@ -16,6 +16,7 @@ import {
   installSteps,
   pausedDownloadsHint,
   restartWaitLine,
+  runningAgainLine,
   waitReasonLine,
   type InstallStepId,
   type InstallStepStatus,
@@ -85,6 +86,35 @@ interface Block {
   output?: { rolledBackAt: string | null; version: string };
 }
 
+/** The installer has started: what the panel can infer of the restart. */
+function restartBlock(install: UpdateInstall, earlier: string, elapsed: string): Block {
+  // The backend reports nothing more, so the phase is the panel's inference:
+  // while reads still answer, the installer is running its pre-install check,
+  // which it does before it stops this backend; once they fail, Tender is
+  // restarting; once one fails as stranded, a backend answers again.
+  if (install.runningAgain) {
+    return {
+      caption: "Tender is running again",
+      at: null,
+      failed: false,
+      note: runningAgainLine(install.runningAgain),
+    };
+  }
+  const gone = install.readFailed;
+  return {
+    caption: gone ? "Tender is restarting" : "Checking the new version",
+    aside: elapsed,
+    percent: null,
+    at: gone ? "install" : "check",
+    failed: false,
+    note: install.overdue ? (
+      <span style={{ color: AMBER }}>{gone ? NOT_BACK_LINE : TAKING_LONG_LINE}</span>
+    ) : (
+      gone && restartWaitLine(earlier)
+    ),
+  };
+}
+
 /** An attempt under way. */
 function progressBlock(install: UpdateInstall, attempt: UpdateInstallAttempt, earlier: string): Block {
   const elapsed = clock(Date.now() - (attemptSeenAt() ?? Date.now()));
@@ -100,23 +130,7 @@ function progressBlock(install: UpdateInstall, attempt: UpdateInstallAttempt, ea
       note: GAME_STARTS_CANCEL,
     };
   }
-  // The backend reports nothing more, so the phase is the panel's inference:
-  // while reads still answer, the installer is running its pre-install check,
-  // which it does before it stops this backend; once they fail, Tender is
-  // restarting.
-  const gone = install.readFailed;
-  return {
-    caption: gone ? "Tender is restarting" : "Checking the new version",
-    aside: elapsed,
-    percent: null,
-    at: gone ? "install" : "check",
-    failed: false,
-    note: install.overdue ? (
-      <span style={{ color: AMBER }}>{gone ? NOT_BACK_LINE : TAKING_LONG_LINE}</span>
-    ) : (
-      gone && restartWaitLine(earlier)
-    ),
-  };
+  return restartBlock(install, earlier, elapsed);
 }
 
 /** The button under a failed block where the installer ran. */

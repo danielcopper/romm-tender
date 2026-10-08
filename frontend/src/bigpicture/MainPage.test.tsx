@@ -54,6 +54,7 @@ import { beginEtaRun, resetEta } from "../utils/syncEta";
 import * as syncEta from "../utils/syncEta";
 import { setDownloads } from "../utils/downloadStore";
 import { resetConnectionProbeForTests } from "../utils/connectionProbe";
+import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import { resetSyncStatsStoreForTests } from "../utils/syncStatsStore";
 import { setPlaytimeScopeState } from "../utils/playtimeScopeStore";
 import { resetUpdateNoticeStoreForTests, setUpdateNoticeState } from "../utils/updateNoticeStore";
@@ -652,7 +653,7 @@ describe("MainPage", () => {
   });
 
   // ===========================================================================
-  // D. ConnectionIndicator — 4 states (covered via top-level rendering)
+  // D. ConnectionIndicator — 5 states (covered via top-level rendering)
   // ===========================================================================
   describe("ConnectionIndicator", () => {
     it("connected=null (testConnection never resolves) renders 'Checking...' + Spinner", async () => {
@@ -811,6 +812,57 @@ describe("MainPage", () => {
         });
         expect(container.textContent).toContain("Connected");
         expect(container.textContent).not.toContain("Backend error");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  // ===========================================================================
+  // D3. A stranded panel — the backend refused it, and said what comes next
+  // ===========================================================================
+  describe("a stranded panel", () => {
+    it.each([
+      ["reloads", "Tender was restarted — it reloads Steam's interface once no game is running."],
+      ["restart_steam", "Tender was restarted — restart Steam to use it again."],
+    ] as const)("says the backend's answer (%s) on the connection row", async (answer, sentence) => {
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await act(async () => {});
+
+      act(() => setStrandedAnswer(answer));
+
+      expect(container.textContent).toContain("Backend restarted");
+      expect(container.textContent).toContain(sentence);
+    });
+
+    it("shows the new answer once it changes", async () => {
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await act(async () => {});
+      act(() => setStrandedAnswer("reloads"));
+
+      act(() => setStrandedAnswer("restart_steam"));
+
+      expect(container.textContent).toContain("Tender was restarted — restart Steam to use it again.");
+      expect(container.textContent).not.toContain("once no game is running");
+    });
+
+    it("outranks the probe's inference that the backend never came up", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      try {
+        vi.mocked(backend.testConnection).mockRejectedValue(new Error("backend down"));
+        vi.mocked(backend.getSettings).mockRejectedValue(new Error("backend down"));
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        const { container } = render(<MainPage onNavigate={vi.fn()} />);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(60_000);
+        });
+        expect(container.textContent).toContain("Backend error");
+
+        act(() => setStrandedAnswer("restart_steam"));
+
+        expect(container.textContent).toContain("Tender was restarted — restart Steam to use it again.");
+        expect(container.textContent).not.toContain("Backend error");
+        expect(container.textContent).not.toContain("Tender's backend failed to start");
       } finally {
         vi.useRealTimers();
       }

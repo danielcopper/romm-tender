@@ -155,6 +155,10 @@ class WsTestClient:
                 self._writer.write(build_frame(OPCODE_PONG, payload, mask=_mask()))
                 await self._writer.drain()
 
+    async def read_until_shut(self, timeout: float = RECEIVE_TIMEOUT) -> bytes:
+        """Read until the server shuts the socket; answer what arrived before it did."""
+        return await asyncio.wait_for(self._reader.read(), timeout)
+
     async def close(self) -> None:
         """Drop the connection without a close frame — what a page going away does."""
         self._writer.close()

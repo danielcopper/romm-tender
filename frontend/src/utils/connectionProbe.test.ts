@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getSettings, testConnection } from "../api/backend";
+import { HostTransportError } from "../api/host";
 import {
   ensureConnectionProbe,
   getConnectionProbeState,
@@ -31,6 +32,38 @@ afterEach(() => {
 });
 
 describe("connectionProbe", () => {
+  describe("a call refused because the panel is stranded", () => {
+    const strandedFailure = () =>
+      new HostTransportError("stranded_panel", "Tender was restarted — restart Steam to use it again.");
+
+    it("ends the ladder at once and publishes no verdict", async () => {
+      vi.mocked(testConnection).mockRejectedValue(strandedFailure());
+      ensureConnectionProbe();
+
+      await vi.advanceTimersByTimeAsync(FULL_LADDER_MS);
+
+      // A backend is running and refused this panel; the row states that from
+      // the socket's own answer, never as a backend that failed to start.
+      expect(testConnection).toHaveBeenCalledTimes(1);
+      expect(getSettings).not.toHaveBeenCalled();
+      expect(getConnectionProbeState().connected).toBeNull();
+    });
+
+    it("publishes no backend failure when it is the liveness ping that is refused", async () => {
+      vi.mocked(testConnection).mockImplementation(() => new Promise(() => {}));
+      vi.mocked(getSettings).mockRejectedValue(strandedFailure());
+      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+      ensureConnectionProbe();
+
+      await vi.advanceTimersByTimeAsync(FULL_LADDER_MS);
+
+      expect(getSettings).toHaveBeenCalledTimes(1);
+      expect(getConnectionProbeState().connected).toBeNull();
+      expect(consoleError).not.toHaveBeenCalled();
+      consoleError.mockRestore();
+    });
+  });
+
   it("publishes the verdict of a resolved probe", async () => {
     vi.mocked(testConnection).mockResolvedValue({ success: true, message: "" });
     ensureConnectionProbe();

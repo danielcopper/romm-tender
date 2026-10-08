@@ -31,6 +31,7 @@ import { VersionErrorCard } from "./VersionErrorCard";
 import { useVersionError } from "../utils/connectionState";
 import { MigrationBlockedCard } from "./MigrationBlockedCard";
 import { SettingsResetCard } from "./SettingsResetCard";
+import { StrandedPanelCard } from "./StrandedPanelCard";
 import { detach } from "../utils/detach";
 
 interface RomMGameInfoPanelProps {
@@ -153,6 +154,13 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   }
 
   // --- Error / not found state ---
+  if (state.error === "stranded") {
+    return (
+      <div data-romm="true">
+        <StrandedPanelCard />
+      </div>
+    );
+  }
   if (state.error || !state.romId) {
     return null;
   }

@@ -15,6 +15,7 @@ import { OWNS_ENTRY_FOCUS_ATTR } from "./bigpicture/layout/WidePage";
 import { installQuickAccessEntry } from "./qam/installEntry";
 import { TabIcon } from "./qam/TabIcon";
 import { initUnitSyncManager, resetSyncCancel } from "./utils/syncManager";
+import { useRecheckStrandedWhenOpened, watchStrandedPanel } from "./utils/strandedPanelStore";
 import { setSyncProgress, getSyncProgress, updateSyncProgress } from "./utils/syncProgress";
 import { estimatePlanSeconds } from "./utils/syncEstimate";
 import { beginEtaRun } from "./utils/syncEta";
@@ -108,6 +109,13 @@ let currentPage: Page = "main";
 // section rather than the one the reader was sent to.
 let currentSection: SettingsSection | null = null;
 
+// A component of its own so that the menu opening and closing re-renders it
+// rather than the page under it.
+const StrandedRecheck: FC = () => {
+  useRecheckStrandedWhenOpened();
+  return null;
+};
+
 const QAMPanel: FC = () => {
   const [page, setPageState] = useState<Page>(currentPage); // NOSONAR(typescript:S6754) — setter intentionally renamed; setPage wraps it below to provide custom navigation behavior.
   const [settingsSection, setSettingsSectionState] = useState<SettingsSection | null>(currentSection); // NOSONAR(typescript:S6754) — set through setPage, which owns both halves of a navigation.
@@ -197,6 +205,7 @@ const QAMPanel: FC = () => {
   // legend, which this makes true.
   return (
     <div ref={rootRef}>
+      <StrandedRecheck />
       {page === "main" ? content : <Focusable onCancelButton={() => setPage("main")}>{content}</Focusable>}
     </div>
   );
@@ -401,6 +410,7 @@ const tender = definePanel(() => {
     console.warn(`[${DISPLAY_NAME}] ${describeSurvivedMiss(startup, copy)} Missing: ${startup.missing.join(", ")}`);
   }
 
+  watchStrandedPanel();
   disownStrandedPruneLeases();
   registerGameDetailPatch();
   registerLaunchInterceptor({

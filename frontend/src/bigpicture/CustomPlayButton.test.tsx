@@ -18,12 +18,13 @@
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { cleanup, render, waitFor, act, within } from "@testing-library/react";
-import { toaster } from "../api/host";
+import { recheckStranded, toaster } from "../api/host";
 import { showContextMenu, showModal, Navigation } from "@decky/ui";
 import * as deckyUi from "@decky/ui";
 import type { ReactElement } from "react";
 import { CustomPlayButton } from "./CustomPlayButton";
 import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
+import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import * as backend from "../api/backend";
 import type { CachedGameDetail } from "../api/backend";
 import type { DownloadCompleteEvent, DownloadFailedEvent, DownloadProgressEvent } from "../types";
@@ -3737,6 +3738,75 @@ describe("CustomPlayButton — Stop Game", () => {
       expect.stringContaining("stop_running_game threw for appId=100"),
     );
     expect(await utils.findByText("Resume")).toBeInTheDocument();
+  });
+
+  it("says at once that a stranded panel cannot stop the game, asks again, and leaves no Stopping... behind", async () => {
+    // What a stranded socket answers every call with: at once, carrying the
+    // sentence for the backend's answer (api/hostSocket.ts).
+    vi.mocked(backend.stopRunningGame).mockRejectedValue(
+      new HostTransportError("stranded_panel", "Tender was restarted — restart Steam to use it again."),
+    );
+    vi.mocked(recheckStranded).mockClear();
+    const { utils, menu } = await renderRunningWithMenu();
+    const stopItem = await menu.findByText("Stop Game");
+
+    await act(async () => {
+      stopItem.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith({
+      title: "Tender",
+      body: "Couldn't stop the game",
+      subtext: "Tender was restarted — restart Steam to use it again.",
+    });
+    expect(recheckStranded).toHaveBeenCalledTimes(1);
+    const chevron = await utils.findByLabelText("Game actions");
+    const reopened = openRunningMenu(chevron);
+    expect(await reopened.findByText("Stop Game")).toBeInTheDocument();
+    expect(reopened.queryByText("Stopping...")).toBeNull();
+    expect(utils.getByText("Resume")).toBeInTheDocument();
+  });
+
+  it("says so before the confirm on a panel already known to be stranded, and calls nothing", async () => {
+    vi.mocked(recheckStranded).mockClear();
+    vi.mocked(showStopGameModal).mockClear();
+    vi.mocked(backend.stopRunningGame).mockClear();
+    const { utils, menu } = await renderRunningWithMenu();
+    act(() => setStrandedAnswer("reloads"));
+    const stopItem = await menu.findByText("Stop Game");
+
+    await act(async () => {
+      stopItem.click();
+      await Promise.resolve();
+    });
+
+    expect(showStopGameModal).not.toHaveBeenCalled();
+    expect(backend.stopRunningGame).not.toHaveBeenCalled();
+    expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith({
+      title: "Tender",
+      body: "Couldn't stop the game",
+      subtext: "Tender was restarted — it reloads Steam's interface once no game is running.",
+    });
+    expect(recheckStranded).toHaveBeenCalledTimes(1);
+    expect(utils.getByText("Resume")).toBeInTheDocument();
+  });
+
+  it("asks nothing again for a stop that failed for any other reason", async () => {
+    vi.mocked(backend.stopRunningGame).mockRejectedValue(new HostTransportError("connection_lost", "socket closed"));
+    vi.mocked(recheckStranded).mockClear();
+    const { menu } = await renderRunningWithMenu();
+    const stopItem = await menu.findByText("Stop Game");
+
+    await act(async () => {
+      stopItem.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith({ title: "Tender", body: "Couldn't stop the game" });
+    expect(recheckStranded).not.toHaveBeenCalled();
   });
 
   it("disables Stop Game and reads Stopping... while the call is outstanding", async () => {

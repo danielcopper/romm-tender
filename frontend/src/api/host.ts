@@ -6,6 +6,11 @@
  * takes both kinds, and splitting the module would give it two imports for a
  * distinction it does not have.
  *
+ * Beside the five, the socket's own word on a stranded panel: what the backend
+ * answered it (`strandedAnswer`, `onStrandedAnswerChange`), asking again
+ * (`recheckStranded`, which opens a socket of its own for one knock), and
+ * telling such a call's failure apart (`isStrandedPanelFailure`).
+ *
  * ## The two that are not the wire
  *
  * `definePanel` answers with the factory unchanged and calls nothing, so it
@@ -31,11 +36,12 @@
 
 import type { ReactNode } from "react";
 
+import type { StrandedAnswer } from "../utils/strandedPanelWording";
 import { withFindingSentence } from "../utils/emulatorSourceWording";
 import { steamToaster } from "../utils/steamToaster";
 import { HostSocket, addressFromBundleUrl } from "./hostSocket";
 
-export { HostTransportError } from "./hostSocket";
+export { HostTransportError, isStrandedPanelFailure } from "./hostSocket";
 
 // -- the types the call sites name --------------------------------------------
 
@@ -142,6 +148,18 @@ export const removeEventListener = <Payload = unknown>(
 ): void => {
   socket().off(event, listener);
 };
+
+// -- the socket's word on a stranded panel ------------------------------------
+
+/** What the backend answered this panel when it refused it as stranded, or `null` while it has not. */
+export const strandedAnswer = (): StrandedAnswer | null => socket().strandedAnswer;
+
+/** Call *listener* each time that answer changes; answers the unsubscribe. Opens no connection. */
+export const onStrandedAnswerChange = (listener: (answer: StrandedAnswer) => void): (() => void) =>
+  socket().onStrandedChange(listener);
+
+/** Ask the backend once more what it answers this stranded panel; nothing where the panel is not stranded. */
+export const recheckStranded = (): Promise<void> => socket().recheck();
 
 /**
  * Wrap the factory that builds the panel.

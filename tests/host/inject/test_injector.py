@@ -20,6 +20,7 @@ from host.inject.bundles import COEXISTENCE_PANEL, GLOBALS_BUNDLE, STANDALONE_PA
 from host.inject.injector import InjectionSetup, PanelInjector
 from host.inject.reload_limit import RELOAD_LIMIT_FILENAME, RELOAD_WINDOW_SECONDS
 from host.inject.watchdog import INJECT_FORCE, INJECT_OFF, WATCHDOG_FILENAME, CrashWatchdog, Fingerprint
+from host.protocol import ReloadOutlook
 from tests.host.conftest import close_listener, free_port
 from tests.host.inject.fake_debugger import FakeDebugger, FakePage, FakeTarget, refuse
 
@@ -1121,6 +1122,74 @@ class TestAcrossBackendStarts:
         self.planted(tmp_path, 3600, 1800)
         running = await injecting(page=stranded_page())
         await wait_until(lambda: running.page.reloads == 1)
+
+
+class TestWhatAStrandedPanelIsTold:
+    """Whether a reload is to come — what the server's close tells a panel it cannot admit.
+
+    Nothing until the injector has read the context's marker for the first
+    time; after that, strict: ``RELOAD_TO_COME`` only while the recovery is
+    under way for a panel it has seen and the limit would let it act now.
+    """
+
+    async def test_nothing_is_said_before_the_injector_has_read_the_context(self, injecting):
+        page = stranded_page()
+        page.running_apps = ["Celeste"]
+        running = await injecting(page=page, hold="Runtime.evaluate")
+        await wait_until(lambda: any(method == "Runtime.evaluate" for method, _ in running.debugger.calls))
+
+        assert await running.injector.reload_outlook() is ReloadOutlook.NOT_YET_LOOKED
+
+        running.debugger.held.set()
+        await wait_until(lambda: page.app_checks >= 1)
+
+        assert await running.injector.reload_outlook() is ReloadOutlook.RELOAD_TO_COME
+
+    async def test_nothing_is_said_before_the_injector_has_attached(self, injecting):
+        running = await injecting(targets=[])
+
+        assert await running.injector.reload_outlook() is ReloadOutlook.NOT_YET_LOOKED
+
+    async def test_none_is_to_come_where_no_earlier_panel_was_seen(self, injecting):
+        running = await injecting()
+        await wait_until(lambda: running.page.bootstraps)
+
+        assert await running.injector.reload_outlook() is ReloadOutlook.NO_RELOAD
+
+    async def test_a_reload_is_to_come_while_the_recovery_waits_for_a_game(self, injecting):
+        page = stranded_page()
+        page.running_apps = ["Celeste"]
+        running = await injecting(page=page)
+        await wait_until(lambda: page.app_checks >= 1)
+
+        assert await running.injector.reload_outlook() is ReloadOutlook.RELOAD_TO_COME
+
+    async def test_none_is_to_come_where_the_limit_would_refuse_it_now(self, injecting, tmp_path):
+        TestAcrossBackendStarts.planted(tmp_path, 300, 60)
+        page = stranded_page()
+        page.running_apps = ["Celeste"]
+        running = await injecting(page=page)
+        await wait_until(lambda: page.app_checks >= 1)
+
+        assert await running.injector.reload_outlook() is ReloadOutlook.NO_RELOAD
+
+    async def test_none_is_to_come_once_the_recovery_gave_up(self, injecting, caplog):
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=stranded_page())
+            await wait_until(lambda: logged(caplog, "giving up"))
+
+        assert await running.injector.reload_outlook() is ReloadOutlook.NO_RELOAD
+
+    async def test_none_is_to_come_once_the_earlier_panel_is_gone(self, injecting, caplog):
+        page = stranded_page()
+        page.running_apps = ["Celeste"]
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            running = await injecting(page=page)
+            await wait_until(lambda: page.app_checks >= 1)
+            await rebuild(running)
+            await wait_until(lambda: logged(caplog, "gone without a reload"))
+
+        assert await running.injector.reload_outlook() is ReloadOutlook.NO_RELOAD
 
 
 def _fingerprint_of(running: Running) -> Fingerprint:

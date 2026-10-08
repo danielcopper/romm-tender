@@ -300,14 +300,15 @@ Decky's copy carries a name whose value this check never reads.
 ## Talking to the backend
 
 `frontend/src/api/host.ts` is the one module the panel imports for what it gets from its host: `endpoint`,
-`addEventListener`, `removeEventListener`, `definePanel`, `toaster`.
+`addEventListener`, `removeEventListener`, `definePanel`, `toaster` — beside the socket's word on a stranded panel,
+below.
 
 **Three of them are the wire.** `endpoint`, `addEventListener` and `removeEventListener` go through
 `frontend/src/api/hostSocket.ts`, one WebSocket per bundle instance, on the protocol defined once on the other side in
 `backend/host/protocol.py`. The port and the token are read off the URL this bundle was loaded from: the host mints
 exactly that address, so they arrive with the code that needs them and cannot be stale.
 
-Three properties are worth knowing before changing anything there:
+Five properties are worth knowing before changing anything there:
 
 - **A transport failure is thrown, never returned.** `error.reason` names something that went wrong _carrying_ a call;
   an endpoint's own failure is a perfectly successful transport and arrives inside `result` as
@@ -318,18 +319,23 @@ Three properties are worth knowing before changing anything there:
   change, is stated at the top of `frontend/src/api/hostSocket.ts`.
 - **A dropped connection fails the calls that were already sent, and only those.** A frame still queued never left, so
   re-sending it is safe; one already on the wire may have run, and retrying it would repeat whatever it did.
+- **A stranded panel fails everything, at once and for good.** A backend that refuses the panel as one an earlier
+  process loaded closes its upgrade with a code of its own; the socket then stops reconnecting and fails every queued
+  and later call with `stranded_panel`. `api/host.ts` hands the answer on (`strandedAnswer`, `onStrandedAnswerChange`,
+  `recheckStranded`, `isStrandedPanelFailure`) — what it means and when the panel asks again is
+  [loading-the-panel.md](loading-the-panel.md#what-the-stranded-panel-is-told).
 - **One endpoint answer is reworded on its way back.** A refusal for one of RetroDECK's findings
   (`reason: "retrodeck_finding"`, the finding beside it) gets the message Main's banner shows for that finding
   (`withFindingSentence` in `frontend/src/utils/emulatorSourceWording.ts`), so every press that refuses for it reads the
   same as the banner whichever endpoint refused. Every other answer comes back as it was sent. The suite stubs this
   module, so `api/host.test.ts` is where the rewording is pinned.
 
-**A fourth opens no socket and is the one the panel reaches the screen through.** `definePanel` answers with the factory
-unchanged; `index.tsx` hands that factory to `frontend/src/qam/installEntry.tsx`, which calls it exactly once and mounts
-what it answers with behind Tender's own Quick Access entry ([qam-panel.md](qam-panel.md) → The entry). The seam is
-arranged that way so this module stays the wire and reaches no view — the declaration is all of it that belongs here.
-Under Decky Loader the call was Decky's; nothing else in the tree makes it, so without that line the panel is built for
-nobody.
+**The fourth thing `host.ts` hands out opens no socket and is the one the panel reaches the screen through.**
+`definePanel` answers with the factory unchanged; `index.tsx` hands that factory to `frontend/src/qam/installEntry.tsx`,
+which calls it exactly once and mounts what it answers with behind Tender's own Quick Access entry
+([qam-panel.md](qam-panel.md) → The entry). The seam is arranged that way so this module stays the wire and reaches no
+view — the declaration is all of it that belongs here. Under Decky Loader the call was Decky's; nothing else in the tree
+makes it, so without that line the panel is built for nobody.
 
 **The fifth reaches Steam instead.** `toaster` has no host answer, so it is Tender's own rather than a backend route:
 `utils/steamToaster.tsx` pushes a notification into Steam's own `NotificationStore`, which then owns the popup window

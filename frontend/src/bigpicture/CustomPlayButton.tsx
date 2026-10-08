@@ -15,8 +15,15 @@
  */
 
 import { useState, useEffect, useRef, useCallback, FC, ReactElement } from "react";
-import { addEventListener, removeEventListener } from "../api/host";
+import {
+  addEventListener,
+  isStrandedPanelFailure,
+  recheckStranded,
+  removeEventListener,
+  strandedAnswer,
+} from "../api/host";
 import { showToast } from "../utils/toast";
+import { strandedPanelSentence } from "../utils/strandedPanelWording";
 import { Focusable, DialogButton, Menu, MenuItem, MenuSeparator, Navigation, showContextMenu } from "@decky/ui";
 import { appActionButtonClasses, basicAppDetailsSectionStylerClasses } from "../utils/deckyUiInternals";
 import { hideNativePlaySection, showNativePlaySection } from "../utils/styleInjector";
@@ -141,6 +148,16 @@ const BLUE_RIGHT: [number, number, number] = [0, 120, 212]; // #0078d4
 // Play button visible green (computed from gradient + backgroundSize 330% + backgroundPosition 25%)
 const GREEN_LEFT: [number, number, number] = [80, 200, 47]; // #50c82f
 const GREEN_RIGHT: [number, number, number] = [24, 177, 78]; // #18b14e
+
+/**
+ * Say that Stop cannot reach the backend of a stranded panel, *sentence* being
+ * the answer that backend gave it. The answer may have changed since, so the
+ * panel asks again; a changed answer raises its own notification.
+ */
+function tellStrandedStop(sentence: string): void {
+  showToast("Couldn't stop the game", { subtext: sentence });
+  detach(recheckStranded());
+}
 
 function formatProgress(downloaded: number, total: number): string {
   // Show "x / y MB" with unit only on the total
@@ -973,6 +990,15 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       return;
     }
 
+    // A panel the backend already refused as stranded cannot stop anything, so
+    // it says so before asking to confirm a stop that cannot happen.
+    const stranded = strandedAnswer();
+    if (stranded) {
+      detach(debugLog(`CustomPlayButton: Stop on appId=${appId} from a stranded panel — not stopping`));
+      tellStrandedStop(strandedPanelSentence(stranded));
+      return;
+    }
+
     // Without the rom id the backend cannot tell this game's instance from any
     // other live one, and stopping "whichever" is exactly the bug this argument
     // exists to fix. The detail lookup that fills `romId` normally lands long
@@ -1022,7 +1048,12 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       // The overlay deliberately stays up: the call never reached a verdict, so
       // the game may well still be running and Resume must stay reachable.
       detach(debugLog(`CustomPlayButton: stop_running_game threw for appId=${appId}: ${e}`));
-      showToast("Couldn't stop the game");
+      if (isStrandedPanelFailure(e)) {
+        // The failure's message is the answer the backend gave this panel.
+        tellStrandedStop(e.message);
+      } else {
+        showToast("Couldn't stop the game");
+      }
     } finally {
       // Released on every path, so a failed stop can be retried deliberately
       // (the backend, not this flag, is what makes a retry safe).
