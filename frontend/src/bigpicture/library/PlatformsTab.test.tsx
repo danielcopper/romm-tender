@@ -3163,9 +3163,8 @@ describe("Library › Platforms", () => {
       mockFirmware([firmwarePlatform({ deletable_count: 2 })]);
       vi.mocked(backend.deletePlatformBios).mockResolvedValue({
         success: false,
-        reason: "delete_incomplete",
-        deleted_count: 0,
-        message: "Nothing to delete",
+        reason: "blocked_by_update",
+        message: "Tender is installing an update and will restart in a moment.",
       });
       const events: CustomEvent[] = [];
       const listener = ((e: Event) => events.push(e as CustomEvent)) as EventListener;
@@ -3179,7 +3178,9 @@ describe("Library › Platforms", () => {
         });
         await confirmLastModal();
 
-        expect(within(container).getByTestId("status-bios").textContent).toBe("Nothing to delete");
+        expect(within(container).getByTestId("status-bios").textContent).toBe(
+          "Tender is installing an update and will restart in a moment.",
+        );
         expect(events).toHaveLength(0);
       } finally {
         globalThis.removeEventListener("romm_data_changed", listener);
