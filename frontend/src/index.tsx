@@ -1,7 +1,7 @@
 import { definePanel, addEventListener, toaster } from "./api/host";
 import { showToast, DISPLAY_NAME } from "./utils/toast";
 import { useState, useRef, useEffect, FC, type ReactNode } from "react";
-import { Focusable } from "@decky/ui";
+import { Focusable, PanelSection, PanelSectionRow } from "@decky/ui";
 import { StartupFailurePanel } from "./boot/StartupFailurePanel";
 import { readSearchingCopy } from "./boot/searchingCopy";
 import { checkSteamModules, describeFailure, describeSurvivedMiss, notificationsMissing } from "./boot/steamModules";
@@ -12,10 +12,11 @@ import { SyncPage } from "./bigpicture/SyncPage";
 import { DataManagementPage } from "./bigpicture/DataManagementPage";
 import { DownloadQueue } from "./bigpicture/DownloadQueue";
 import { OWNS_ENTRY_FOCUS_ATTR } from "./bigpicture/layout/WidePage";
+import { StrandedPanelCard } from "./bigpicture/StrandedPanelCard";
 import { installQuickAccessEntry } from "./qam/installEntry";
 import { TabIcon } from "./qam/TabIcon";
 import { initUnitSyncManager, resetSyncCancel } from "./utils/syncManager";
-import { useRecheckStrandedWhenOpened, watchStrandedPanel } from "./utils/strandedPanelStore";
+import { useRecheckStrandedWhenOpened, useStrandedAnswer, watchStrandedPanel } from "./utils/strandedPanelStore";
 import { setSyncProgress, getSyncProgress, updateSyncProgress } from "./utils/syncProgress";
 import { estimatePlanSeconds } from "./utils/syncEstimate";
 import { beginEtaRun } from "./utils/syncEta";
@@ -116,7 +117,20 @@ const StrandedRecheck: FC = () => {
   return null;
 };
 
+/** The whole panel while it is stranded: no page it holds could reach the backend. */
+const StrandedQuickAccess: FC = () => (
+  <PanelSection>
+    <PanelSectionRow>
+      {/* A stop of its own, so focus-driven scrolling reaches the card. */}
+      <Focusable onActivate={() => {}}>
+        <StrandedPanelCard compact />
+      </Focusable>
+    </PanelSectionRow>
+  </PanelSection>
+);
+
 const QAMPanel: FC = () => {
+  const stranded = useStrandedAnswer() !== null;
   const [page, setPageState] = useState<Page>(currentPage); // NOSONAR(typescript:S6754) — setter intentionally renamed; setPage wraps it below to provide custom navigation behavior.
   const [settingsSection, setSettingsSectionState] = useState<SettingsSection | null>(currentSection); // NOSONAR(typescript:S6754) — set through setPage, which owns both halves of a navigation.
   const rootRef = useRef<HTMLDivElement>(null);
@@ -169,6 +183,17 @@ const QAMPanel: FC = () => {
       clearTimeout(focusTimer);
     };
   }, [page]);
+
+  // Decided here rather than per page, so a page added later is covered too. The
+  // re-check stays mounted: what the card says may change on the next open.
+  if (stranded) {
+    return (
+      <div ref={rootRef}>
+        <StrandedRecheck />
+        <StrandedQuickAccess />
+      </div>
+    );
+  }
 
   let content: ReactNode;
   switch (page) {

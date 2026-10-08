@@ -22,6 +22,8 @@
  *   - utils/updateAvailableToast.ts, which holds the "is available" toast
  *     while an attempt is under way or a press stands for one
  *     ({@link installUnderWay})
+ *   - bigpicture/StrandedPanelCard.tsx, which says where the update's result
+ *     shows while the installer has been started ({@link useInstallerStarted})
  *
  * Holds only what the event carries and that one moment: whether an install
  * is offered and what it waits for is a read (`getUpdateInstallState`), not a
@@ -120,6 +122,20 @@ export function noteAttempt(attempt: UpdateInstallAttempt | null, now: number = 
 /** When this panel first saw the attempt under way, or `null`: what the install's clock counts from. */
 export function attemptSeenAt(): number | null {
   return _attemptSeenAt;
+}
+
+/**
+ * Whether the latest attempt this panel knows of has started its installer and
+ * has not failed since. Read without a backend call: a stranded panel, which
+ * asks it, can make none.
+ */
+export function installerStarted(): boolean {
+  return _installerSeenAt !== null && _attempt?.step !== "failed";
+}
+
+/** {@link installerStarted} from a component. */
+export function useInstallerStarted(): boolean {
+  return useSyncExternalStore(onUpdateInstallAttemptChange, installerStarted);
 }
 
 /** When this panel first saw the installer started, or `null`. */
