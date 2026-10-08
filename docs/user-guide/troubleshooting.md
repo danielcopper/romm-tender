@@ -341,6 +341,25 @@ Shortcuts an earlier version of Tender made need nothing from you: Tender writes
 again when Tender's panel loads, after every sync, and just before the game starts, so an existing shortcut normally
 carries the new command by its next launch.
 
+### The Steam button opens no overlay in Desktop Mode
+
+**Symptom**: In Desktop Mode, pressing the Steam button while a RetroDECK game is running shows no in-game overlay, so
+there is no Exit to press. Big Picture's own menu opens instead, behind the game's window.
+
+**Why**: Outside Gaming Mode, Steam draws its overlay inside the game's own process, and that does not work for a game
+running in a Flatpak sandbox, which is how RetroDECK runs. This is a known limitation of Steam with Flatpak games
+([flatpak/flatpak#1756](https://github.com/flatpak/flatpak/issues/1756),
+[ValveSoftware/steam-for-linux#8952](https://github.com/ValveSoftware/steam-for-linux/issues/8952)), not something
+Tender can change.
+
+**Fix**: Leave the game through the emulator's own menu. RetroDECK sets RetroArch's menu to open when you press L3 and
+R3 together (both sticks pressed in); there, choose **Quit** in the **Main Menu**. A standalone emulator has a menu or
+hotkeys of its own. With a keyboard you can also switch to Big Picture with Alt+Tab and end the game from its game page:
+the chevron beside **Resume** holds **Stop Game**, described under
+[Stopping a running game](managing-games.md#stopping-a-running-game).
+
+In Gaming Mode the Steam button works as usual: Steam's interface is drawn over the game there.
+
 ### Apply to All Shortcuts says "Not applied"
 
 **Symptom**: Under **Settings › Controller**, tapping **Apply to All Shortcuts** shows a line starting with "Not
