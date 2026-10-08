@@ -4,8 +4,8 @@
  *
  * The shell around the GAME INFO / ACHIEVEMENTS / SAVES / BIOS panes: it owns
  * the panel's ROM identity, its event lane, the tab selection, and the
- * whole-panel replacements (version mismatch, corrupt-settings reset, pending
- * RetroDECK migration) that pre-empt all of them.
+ * whole-panel replacements (stranded panel, version mismatch, corrupt-settings
+ * reset, pending RetroDECK migration) that pre-empt all of them.
  *
  * The panel body itself takes no ROM-level actions — download, play, uninstall,
  * version and core selection live in the RomMPlaySection gear menu. The panes
@@ -32,6 +32,7 @@ import { useVersionError } from "../utils/connectionState";
 import { MigrationBlockedCard } from "./MigrationBlockedCard";
 import { SettingsResetCard } from "./SettingsResetCard";
 import { StrandedPanelCard } from "./StrandedPanelCard";
+import { useStrandedAnswer } from "../utils/strandedPanelStore";
 import { detach } from "../utils/detach";
 
 interface RomMGameInfoPanelProps {
@@ -83,6 +84,7 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   const readSeqs = useRef<PanelReadSeqs>({ detail: 0, saveStatus: 0, slots: 0, slotTracking: 0, bios: 0 });
   const migration = useMigrationStatus();
   const settingsReset = useSettingsResetState();
+  const stranded = useStrandedAnswer() !== null;
 
   useEffect(() => {
     refreshMigrationState()
@@ -114,6 +116,17 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   }, [appId]);
 
   useSaveSlotsLoad(state, slotsLoadedRef, readSeqs, setState);
+
+  // --- Stranded panel — nothing below the play row can reach the backend, so
+  // nothing is offered: this outranks every other card, and a page loaded before
+  // the strand turns to it as soon as the answer arrives ---
+  if (stranded) {
+    return (
+      <div data-romm="true">
+        <StrandedPanelCard />
+      </div>
+    );
+  }
 
   // --- Version mismatch — replace entire panel with polished error card ---
   if (versionError) {
@@ -154,13 +167,6 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   }
 
   // --- Error / not found state ---
-  if (state.error === "stranded") {
-    return (
-      <div data-romm="true">
-        <StrandedPanelCard />
-      </div>
-    );
-  }
   if (state.error || !state.romId) {
     return null;
   }

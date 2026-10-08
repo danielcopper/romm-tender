@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import * as backend from "../../api/backend";
-import { HostTransportError } from "../../api/host";
-import { setStrandedAnswer } from "../../test-utils/stranded-panel";
 import {
   getUpdateInstallState,
   installUpdate,
@@ -546,54 +544,6 @@ describe("useUpdateInstall", () => {
 
       expect(result.current.readFailed).toBe(false);
       expect(result.current.offered).toBe(true);
-    });
-  });
-
-  describe("a backend answering again after the installer stopped this one", () => {
-    const INSTALLER_STARTED: UpdateInstallAttempt = { ...DOWNLOADING, step: "installer_started" };
-    const strandedFailure = () =>
-      new HostTransportError("stranded_panel", "Tender was restarted — restart Steam to use it again.");
-
-    it("is the answer the stranded panel holds, once a read fails as stranded while restarting", async () => {
-      const { result } = renderHook(() => useUpdateInstall());
-      await flush();
-      act(() => setUpdateInstallAttempt(INSTALLER_STARTED));
-      act(() => setStrandedAnswer("restart_steam"));
-      vi.mocked(getUpdateInstallState).mockRejectedValue(strandedFailure());
-
-      await tick();
-
-      expect(result.current.runningAgain).toBe("restart_steam");
-      expect(result.current.readFailed).toBe(true);
-
-      act(() => setStrandedAnswer("reloads"));
-
-      expect(result.current.runningAgain).toBe("reloads");
-    });
-
-    it("is nothing for any other failed read while restarting", async () => {
-      const { result } = renderHook(() => useUpdateInstall());
-      await flush();
-      act(() => setUpdateInstallAttempt(INSTALLER_STARTED));
-      act(() => setStrandedAnswer("reloads"));
-      vi.mocked(getUpdateInstallState).mockRejectedValue(new HostTransportError("connection_lost", "socket closed"));
-
-      await tick();
-
-      expect(result.current.runningAgain).toBeNull();
-      expect(result.current.readFailed).toBe(true);
-    });
-
-    it("is nothing for a stranded read while no installer has started", async () => {
-      const { result } = renderHook(() => useUpdateInstall());
-      await flush();
-      act(() => setStrandedAnswer("reloads"));
-      vi.mocked(getUpdateInstallState).mockRejectedValue(strandedFailure());
-
-      await tick();
-
-      expect(result.current.runningAgain).toBeNull();
-      expect(result.current.readFailed).toBe(true);
     });
   });
 

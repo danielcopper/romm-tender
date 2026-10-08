@@ -17,8 +17,6 @@ import { fetchPlaytimeScopeState, usePlaytimeScopeState } from "../utils/playtim
 import { requestSyncCancel } from "../utils/syncManager";
 import { useConnectionProbe } from "../utils/connectionProbe";
 import type { BackendFailed, ConnectionFailure } from "../utils/connectionProbe";
-import { useStrandedAnswer } from "../utils/strandedPanelStore";
-import { strandedPanelSentence, type StrandedAnswer } from "../utils/strandedPanelWording";
 import { mainSourceBanners, type SourceBanner } from "../utils/emulatorSourceWording";
 import { NOTIFICATIONS_UNAVAILABLE_NOTICE, notificationsUnavailable } from "../utils/notificationsHealth";
 import { VersionErrorCard } from "./VersionErrorCard";
@@ -65,12 +63,8 @@ function connectionFailureLabel(failure: ConnectionFailure | null | undefined): 
   }
 }
 
-/** The line under the connection row: the stranded answer where there is one, then a backend that never answered. */
-function connectionDescription(
-  stranded: StrandedAnswer | null,
-  connected: boolean | null | BackendFailed,
-): string | undefined {
-  if (stranded) return strandedPanelSentence(stranded);
+/** The line under the connection row: a backend that never answered. */
+function connectionDescription(connected: boolean | null | BackendFailed): string | undefined {
   if (connected === "backend_failed") return "Tender's backend failed to start — check its log.";
   return undefined;
 }
@@ -78,17 +72,7 @@ function connectionDescription(
 export const ConnectionIndicator: FC<{
   connected: boolean | null | BackendFailed;
   failure?: ConnectionFailure | null;
-  /** The backend refused this panel as stranded, which outranks whatever the probe concluded. */
-  stranded?: boolean;
-}> = ({ connected, failure, stranded = false }) => {
-  if (stranded) {
-    return (
-      <>
-        <FaExclamationTriangle style={{ color: "#d4a72c", fontSize: "14px" }} />
-        <span style={{ fontSize: "12px" }}>Backend restarted</span>
-      </>
-    );
-  }
+}> = ({ connected, failure }) => {
   if (connected === "backend_failed") {
     return (
       <>
@@ -362,9 +346,6 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   // resolved. The probe itself lives outside this component so a QAM close does
   // not abandon a run that has not reached a verdict yet.
   const { connected, failure: connectionFailure } = useConnectionProbe();
-  // A backend that refused this panel as stranded is running: the probe, which
-  // infers "backend dead" from calls that got no answer, is outranked by it.
-  const stranded = useStrandedAnswer();
   const versionError = useVersionError();
   // Disarmed "Cancelling…" state during the backend's RUNNING→CANCELLING→IDLE
   // drain. The Cancel button stays disabled until the terminal sync_progress
@@ -621,10 +602,10 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
             label="Connection"
             focusable={true}
             bottomSeparator="none"
-            description={connectionDescription(stranded, connected)}
+            description={connectionDescription(connected)}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <ConnectionIndicator connected={connected} failure={connectionFailure} stranded={stranded !== null} />
+              <ConnectionIndicator connected={connected} failure={connectionFailure} />
             </div>
           </Field>
         </PanelSectionRow>

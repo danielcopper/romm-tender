@@ -3378,6 +3378,85 @@ describe("CustomPlayButton — state-aware Resume (#1313)", () => {
     expect(vi.mocked(Navigation.Navigate)).not.toHaveBeenCalled();
   });
 
+  describe("on a stranded panel", () => {
+    it("keeps only Resume while the game runs, and Resume still foregrounds it", async () => {
+      vi.mocked(readGameRunning).mockReturnValue(SESSION_RUNNING);
+      const { container, findByText, getByLabelText, queryByLabelText, queryByText } = render(
+        <CustomPlayButton appId={100} />,
+      );
+      await findByText("Resume");
+      expect(getByLabelText("Game actions")).toBeInTheDocument();
+
+      act(() => setStrandedAnswer("reloads"));
+
+      expect(queryByText("Resume")).toBeInTheDocument();
+      expect(queryByLabelText("Game actions")).toBeNull();
+      expect(container.querySelectorAll("button")).toHaveLength(1);
+      await act(async () => {
+        queryByText("Resume")!.click();
+      });
+      expect(setRunningApp).toHaveBeenCalledWith(100);
+      expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["installed", { found: true, rom_id: 42, rom_name: "Test ROM", installed: true }, "Play"],
+      ["not downloaded", { found: true, rom_id: 42, rom_name: "Test ROM", installed: false }, "Download"],
+    ] as const)("offers no button for a game that does not run (%s)", async (_label, detail, offered) => {
+      vi.mocked(getCachedGameDetail).mockResolvedValue(detail);
+      const { container, findByText } = render(<CustomPlayButton appId={100} />);
+      await findByText(offered);
+
+      act(() => setStrandedAnswer("restart_steam"));
+
+      expect(container.querySelectorAll("button")).toHaveLength(0);
+      expect(container.textContent).toBe("");
+    });
+
+    it("offers nothing on a page opened after the strand, even while its game runs", async () => {
+      // The page's own detail read fails as stranded, so the button never learns its ROM.
+      setStrandedAnswer("reloads");
+      vi.mocked(readGameRunning).mockReturnValue(SESSION_RUNNING);
+      vi.mocked(getCachedGameDetail).mockRejectedValue(
+        new HostTransportError(
+          "stranded_panel",
+          "Tender was restarted — it reloads Steam's interface once no game is running.",
+        ),
+      );
+      const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+      const { container } = render(<CustomPlayButton appId={100} />);
+
+      await waitFor(() => expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("CustomPlayButton init error")));
+      logSpy.mockRestore();
+
+      expect(container.querySelectorAll("button")).toHaveLength(0);
+      expect(container.textContent).toBe("");
+    });
+
+    it("drops a stale overlay on Resume instead of starting the game", async () => {
+      const { container, findByText } = render(<CustomPlayButton appId={100} />);
+      await findByText("Play");
+      act(() => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_session_changed", { detail: { running: true, appId: 100, romId: 42 } }),
+        );
+      });
+      const resumeBtn = await findByText("Resume");
+      act(() => setStrandedAnswer("reloads"));
+
+      await act(async () => {
+        resumeBtn.click();
+        await Promise.resolve();
+      });
+
+      expect(container.querySelectorAll("button")).toHaveLength(0);
+      expect(vi.mocked(backend.isSaveTrackingConfigured)).not.toHaveBeenCalled();
+      expect(vi.mocked(backend.preLaunchSync)).not.toHaveBeenCalled();
+      expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
+      expect(setRunningApp).not.toHaveBeenCalled();
+    });
+  });
+
   it("falls back to Navigation.Navigate('/apprunning') when NavigateToRunningApp is missing (API drift)", async () => {
     vi.mocked(readGameRunning).mockReturnValue(SESSION_RUNNING);
     // Older SteamUI: SetRunningApp present, NavigateToRunningApp absent.

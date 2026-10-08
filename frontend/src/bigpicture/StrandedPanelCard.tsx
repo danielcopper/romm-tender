@@ -4,6 +4,10 @@ import { readRunningApps } from "../utils/runningApps";
 import { readGameRunning } from "../utils/sessionManager";
 import { useStrandedAnswer } from "../utils/strandedPanelStore";
 import { strandedPanelSentence } from "../utils/strandedPanelWording";
+import { useInstallerStarted } from "../utils/updateInstallStore";
+
+const UPDATE_LINE = "The update's result shows after that.";
+const QUIT_LINE = "Quit the running game yourself — Tender can't stop it right now.";
 
 /** Whether any app runs: the store-and-stop part of {@link readGameRunning}'s
  *  rule over every app the store lists — no ROM is known here, so an open session
@@ -40,14 +44,16 @@ function useAnyAppRunning(): boolean {
   return running;
 }
 
-/** Shown on the game detail page in place of the details a stranded panel could
- *  not read. Tender's Stop cannot reach the backend then, so while any game runs
- *  the card says to quit it another way. */
-export const StrandedPanelCard: FC = () => {
+/** Shown on a stranded panel in place of Tender's Quick Access pages and of the
+ *  game page's section below the play row. Where an update attempt has started
+ *  the installer, the reload or restart the sentence names is what shows its
+ *  result. Tender's Stop cannot reach the backend, so while any game runs the
+ *  card says to quit it another way. */
+export const StrandedPanelCard: FC<{ compact?: boolean }> = ({ compact = false }) => {
   const answer = useStrandedAnswer();
   const running = useAnyAppRunning();
+  const installerStarted = useInstallerStarted();
   if (!answer) return null;
-  const sentence = strandedPanelSentence(answer);
-  if (!running) return <WarningCard title={sentence} />;
-  return <WarningCard title={sentence} message="Quit the running game yourself — Tender can't stop it right now." />;
+  const message = [installerStarted ? UPDATE_LINE : "", running ? QUIT_LINE : ""].filter(Boolean).join(" ");
+  return <WarningCard title={strandedPanelSentence(answer)} message={message} compact={compact} />;
 };

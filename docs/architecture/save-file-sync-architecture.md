@@ -1917,10 +1917,10 @@ it can also keep an app listed that has already exited: [Is the game running](#i
 
 Six places ask whether a game is running, and all of them ask one predicate in the session manager,
 `readGameRunning(appId, romId)`: the launch watcher's already-running guard, and the Play button's launch guard, its
-Resume overlay at mount, Resume and Stop. The sixth asks it differently: the stranded panel's card on a game page
-(`StrandedPanelCard.tsx`) asks it for every app the store lists, with no ROM and so without rule 1, and lets its own
-last lifetime notification per app answer first, to tell whether ANY game runs. At the two launch guards a wrong
-"running" skips the whole launch gate — the migration block, the launch target, tracking setup, the core-change
+Resume overlay at mount, Resume and Stop. The sixth asks it differently: the stranded panel's card, in Quick Access and
+on a game page (`StrandedPanelCard.tsx`), asks it for every app the store lists, with no ROM and so without rule 1, and
+lets its own last lifetime notification per app answer first, to tell whether ANY game runs. At the two launch guards a
+wrong "running" skips the whole launch gate — the migration block, the launch target, tracking setup, the core-change
 confirmation, the offline drift check, the pre-launch sync and conflict resolution.
 
 1. **An active session answers "running"**, whatever the store says: the store has been measured reporting nothing with

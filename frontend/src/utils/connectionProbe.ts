@@ -77,8 +77,8 @@ export function onConnectionProbeChange(cb: (s: ConnectionProbeState) => void): 
  *  (success:false) is an authoritative answer, not a failure — so only an
  *  exhausted budget reaches the liveness ping. A call refused because the panel
  *  is stranded ends it too, with nothing published: a backend is running and
- *  refused this panel, which the row states from the socket's own answer
- *  (`utils/strandedPanelStore.ts`) rather than from this inference. */
+ *  refused this panel, so "backend dead" would be false, and the stranded card
+ *  stands in place of the row anyway. */
 async function runProbe(): Promise<void> {
   for (let attempt = 0; ; attempt++) {
     try {

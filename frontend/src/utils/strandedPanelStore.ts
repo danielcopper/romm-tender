@@ -1,6 +1,7 @@
 /**
  * What the views make of a stranded panel: the answer the backend gave it, for
- * a component to render, and the one notification per answer.
+ * a component to render, the one notification per answer, and what a press made
+ * on a stranded panel says ({@link tellStrandedPress}).
  *
  * The answer itself is the socket's (`api/hostSocket.ts`), which hears it in the
  * code the backend closes a stranded panel's upgrade with, and tells its
@@ -33,6 +34,17 @@ export function watchStrandedPanel(): () => void {
   const now = strandedAnswer();
   if (now) raise(now);
   return onStrandedAnswerChange(raise);
+}
+
+/**
+ * Say that a press made while the panel is stranded did nothing, *headline*
+ * saying what did not happen and *sentence* being the answer the backend gave
+ * the panel. The answer may have changed since, so the panel asks again; a
+ * changed answer raises its own notification.
+ */
+export function tellStrandedPress(headline: string, sentence: string): void {
+  showToast(headline, { subtext: sentence });
+  detach(recheckStranded());
 }
 
 /** The stranded answer from a component, or `null` while the panel is not stranded. Re-renders on a change. */

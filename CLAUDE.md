@@ -607,6 +607,15 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   (`installGamePagePatch.ts`) is device-only. Prompt-only: the install patches every memo export whose `type` is a
   function, and the start-up check's `AppDetailsRoute` and `appDetailsClasses` cost `feature`, never `panel`, and no
   panel name moves to `feature` beside them (that renders a hole)
+- **While the panel is stranded it offers no press that cannot work: the stranded card stands in place of Tender's whole
+  Quick Access panel and of a game page's section, the play row keeps only Resume for its game while that game runs, and
+  Steam's own Play on a RomM shortcut that is not running is refused** — test + prompt-only —
+  `frontend/src/index.test.tsx`, `frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`,
+  `frontend/src/bigpicture/RomMPlaySection.test.tsx`, `frontend/src/bigpicture/CustomPlayButton.test.tsx` and
+  `frontend/src/utils/launchInterceptor.test.ts`, each in its stranded-panel `describe` block. Prompt-only: a new
+  surface outside these shells — another element injected into Steam's game page, another hook on Steam's launch — gates
+  itself on `useStrandedAnswer()` / `strandedAnswer()`; a Tender dialog or menu already open at the strand stays open
+  and fails as before (#2275 D6)
 - **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
   `scripts/check_aggregate_field_assignment.py`
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, uow_factory) is called while a UoW is open on the

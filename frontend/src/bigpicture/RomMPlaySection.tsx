@@ -927,12 +927,14 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     );
   };
 
-  // Version mismatch — render nothing (VersionErrorCard is shown in RomMGameInfoPanel instead)
+  // Version mismatch — render nothing (RomMGameInfoPanel shows the VersionErrorCard instead, or the stranded card on a
+  // stranded panel)
   if (versionError) {
     return null;
   }
 
-  // Pending RetroDECK migration — render nothing (MigrationBlockedCard is shown in RomMGameInfoPanel instead)
+  // Pending RetroDECK migration — render nothing (RomMGameInfoPanel shows the MigrationBlockedCard instead, or the
+  // stranded card on a stranded panel)
   if (migration.pending) {
     return null;
   }
@@ -978,8 +980,9 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     infoItems.push(infoItem("playtime", "PLAYTIME", playtimeInfo.playtime));
   }
 
-  // Achievements badge (only when RA data available)
-  if (detail.raId) {
+  // Achievements badge (only when RA data available). Not on a stranded panel:
+  // the tab it opens has given way to the stranded card.
+  if (detail.raId && !stranded) {
     const hasEarned = detail.achievementEarned > 0;
     const countLabel =
       detail.achievementTotal > 0 ? `${detail.achievementEarned}/${detail.achievementTotal}` : `${detail.achievementEarned}`;
@@ -1048,7 +1051,9 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // does not soften that. The console's own demand is the same kind of state —
   // the game does not start — which is why it earns the same red badge rather
   // than a softer one of its own.
-  if (detail.biosRequiredMissing) {
+  //
+  // Not on a stranded panel: the BIOS tab has given way to the stranded card.
+  if (detail.biosRequiredMissing && !stranded) {
     infoItems.push(
       // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- pointer-only shortcut into the BIOS tab, which the tab bar's DialogButton already reaches from the focus ring; a role/tabIndex here would add a gamepad focus stop to the play row.
       <div
@@ -1087,9 +1092,9 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       <CustomPlayButton appId={appId} />
       {/* Disc picker for multi-disc ROMs — renders nothing otherwise (#865), and
           nothing for a download whose discs are missing */}
-      {fileMissing ? null : <DiscSelector appId={appId} />}
+      {fileMissing || stranded ? null : <DiscSelector appId={appId} />}
       {/* Version picker for multi-version sibling groups — renders nothing otherwise (#1297) */}
-      <VersionPicker appId={appId} />
+      {stranded ? null : <VersionPicker appId={appId} />}
       {/* Info items row */}
       <div
         className="romm-info-items"
@@ -1103,39 +1108,41 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       >
         {infoItems}
       </div>
-      {/* Gear icon buttons pushed to the far right */}
-      <div
-        style={{
-          marginLeft: "auto",
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          flexShrink: 0,
-        }}
-      >
-        {/* RomM actions button */}
-        <DialogButton className="romm-gear-btn" onClick={showRomMMenu} onFocus={scrollToTop} title="RomM Actions">
-          <FaGamepad size={18} color="#553e98" />
-        </DialogButton>
-        {/* Core selection button: where there are emulators to choose between,
-            and where the emulator list could not be established, whose menu
-            then says why. Never for a download whose file is missing. */}
-        {(detail.emulators.length > 1 || !detail.emulatorDataAvailable) && !fileMissing ? (
-          <DialogButton
-            key="core-btn"
-            className="romm-gear-btn"
-            onClick={showCoreMenu}
-            onFocus={scrollToTop}
-            title="Emulator Core"
-          >
-            <FaMicrochip size={18} color={detail.activeCoreIsDefault ? "#8f98a0" : "#d4a72c"} />
+      {/* Gear icon buttons pushed to the far right; a stranded panel offers none */}
+      {stranded ? null : (
+        <div
+          style={{
+            marginLeft: "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            flexShrink: 0,
+          }}
+        >
+          {/* RomM actions button */}
+          <DialogButton className="romm-gear-btn" onClick={showRomMMenu} onFocus={scrollToTop} title="RomM Actions">
+            <FaGamepad size={18} color="#553e98" />
           </DialogButton>
-        ) : null}
-        {/* Steam properties button */}
-        <DialogButton className="romm-gear-btn" onClick={showSteamMenu} onFocus={scrollToTop} title="Steam Properties">
-          <FaCog size={18} color="#8f98a0" />
-        </DialogButton>
-      </div>
+          {/* Core selection button: where there are emulators to choose between,
+              and where the emulator list could not be established, whose menu
+              then says why. Never for a download whose file is missing. */}
+          {(detail.emulators.length > 1 || !detail.emulatorDataAvailable) && !fileMissing ? (
+            <DialogButton
+              key="core-btn"
+              className="romm-gear-btn"
+              onClick={showCoreMenu}
+              onFocus={scrollToTop}
+              title="Emulator Core"
+            >
+              <FaMicrochip size={18} color={detail.activeCoreIsDefault ? "#8f98a0" : "#d4a72c"} />
+            </DialogButton>
+          ) : null}
+          {/* Steam properties button */}
+          <DialogButton className="romm-gear-btn" onClick={showSteamMenu} onFocus={scrollToTop} title="Steam Properties">
+            <FaCog size={18} color="#8f98a0" />
+          </DialogButton>
+        </div>
+      )}
     </Focusable>
   );
 

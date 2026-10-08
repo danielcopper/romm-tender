@@ -17,7 +17,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { createElement } from "react";
 import { recheckStranded, toaster, type PanelDefinition } from "./api/host";
 import { emitHostEvent, hostEventListenerCount } from "./test-utils/host-event-bus";
-import { setStrandedAnswer } from "./test-utils/stranded-panel";
+import { resetStrandedPanel, setStrandedAnswer } from "./test-utils/stranded-panel";
 import {
   getSettingsResetNotice,
   getUpdateNotice,
@@ -184,9 +184,12 @@ vi.mock("./api/backend", async () => {
 // renders only in its own case.
 let mainPageOwnsEntryFocus = false;
 let mainPageDeclaresEntryStop = false;
+// Every render of a page component, whichever page it is.
+let pageRenders = 0;
 vi.mock("./bigpicture/MainPage", () => ({
-  MainPage: ({ onNavigate }: { onNavigate: (page: string) => void }) =>
-    createElement(
+  MainPage: ({ onNavigate }: { onNavigate: (page: string) => void }) => {
+    pageRenders++;
+    return createElement(
       "div",
       { "data-romm-owns-entry-focus": mainPageOwnsEntryFocus ? "" : undefined },
       createElement("button", null, "first button"),
@@ -195,10 +198,14 @@ vi.mock("./bigpicture/MainPage", () => ({
         { "data-romm-entry-stop": mainPageDeclaresEntryStop ? "" : undefined },
         createElement("button", { onClick: () => onNavigate("downloads") }, "go to downloads"),
       ),
-    ),
+    );
+  },
 }));
 vi.mock("./bigpicture/DownloadQueue", () => ({
-  DownloadQueue: () => createElement("div", null, "downloads page"),
+  DownloadQueue: () => {
+    pageRenders++;
+    return createElement("div", null, "downloads page");
+  },
 }));
 const relocateShortcutsToLauncher = vi.fn().mockResolvedValue({ status: "relocated" });
 vi.mock("./utils/launcherRelocation", () => ({
@@ -2823,6 +2830,121 @@ describe("index.tsx — a stranded panel opened in Quick Access", () => {
 
     expect(recheckStranded).toHaveBeenCalledTimes(1);
     expect(toaster.toast).not.toHaveBeenCalled();
+  });
+});
+
+describe("index.tsx — the Quick Access panel of a stranded panel", () => {
+  const RELOADS = "Tender was restarted — it reloads Steam's interface once no game is running.";
+  const RESTART_STEAM = "Tender was restarted — restart Steam to use it again.";
+  const UPDATE_LINE = "The update's result shows after that.";
+  const attemptAt = (step: "downloading" | "installer_started" | "failed") => ({
+    version: "1.0.0",
+    step,
+    bytes_done: 0,
+    bytes_total: null,
+    failure: step === "failed" ? ("installer_stopped" as const) : null,
+  });
+
+  beforeEach(() => {
+    resetUpdateInstallStoreForTests();
+    pageRenders = 0;
+  });
+
+  // The card listens to the store, and is still mounted here.
+  afterEach(() => {
+    act(() => resetUpdateInstallStoreForTests());
+  });
+
+  /** The panel mounted, with the reads its factory starts settled. */
+  async function mountPanel(): Promise<ReturnType<typeof render>> {
+    const panel = panelFactory();
+    let view!: ReturnType<typeof render>;
+    await act(async () => {
+      view = render(panel.content);
+      await flush();
+    });
+    return view;
+  }
+
+  it.each([
+    ["reloads", RELOADS],
+    ["restart_steam", RESTART_STEAM],
+  ] as const)("turns Main into the card alone once the answer (%s) arrives", async (answer, sentence) => {
+    const { container } = await mountPanel();
+    expect(screen.getByRole("button", { name: "first button" })).toBeInTheDocument();
+
+    act(() => setStrandedAnswer(answer));
+
+    expect(container.textContent).toBe(sentence);
+    expect(screen.queryAllByRole("button")).toEqual([]);
+  });
+
+  it("turns a page below Main into the card alone, and follows a changed answer", async () => {
+    const first = await mountPanel();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "go to downloads" }));
+      await Promise.resolve();
+    });
+    expect(screen.getByText("downloads page")).toBeInTheDocument();
+
+    try {
+      act(() => setStrandedAnswer("reloads"));
+      expect(first.container.textContent).toBe(RELOADS);
+
+      act(() => setStrandedAnswer("restart_steam"));
+      expect(first.container.textContent).toBe(RESTART_STEAM);
+    } finally {
+      // The page the panel was on is module state: put it back on Main for the
+      // tests after this one, on a panel nobody refused.
+      first.unmount();
+      resetStrandedPanel();
+      await mountPanel();
+      fireEvent(
+        screen.getByText("downloads page"),
+        new CustomEvent("decky-button-down", { detail: { button: 2 }, bubbles: true }),
+      );
+    }
+    expect(await screen.findByRole("button", { name: "first button" })).toBeInTheDocument();
+  });
+
+  it("renders no page at all, so it does not depend on which pages there are", async () => {
+    setStrandedAnswer("reloads");
+
+    const { container } = await mountPanel();
+
+    expect(container.textContent).toBe(RELOADS);
+    expect(pageRenders).toBe(0);
+  });
+
+  it("adds where the update's result shows while an attempt has started the installer", async () => {
+    act(() => setUpdateInstallAttempt(attemptAt("installer_started")));
+    const { container } = await mountPanel();
+
+    act(() => setStrandedAnswer("restart_steam"));
+
+    expect(container.textContent).toBe(`${RESTART_STEAM}${UPDATE_LINE}`);
+  });
+
+  it.each([
+    ["no attempt", null],
+    ["an attempt still downloading", attemptAt("downloading")],
+  ] as const)("adds no update line for %s", async (_label, attempt) => {
+    act(() => setUpdateInstallAttempt(attempt));
+    setStrandedAnswer("reloads");
+
+    const { container } = await mountPanel();
+
+    expect(container.textContent).toBe(RELOADS);
+  });
+
+  it("adds no update line once the attempt whose installer started has failed", async () => {
+    act(() => setUpdateInstallAttempt(attemptAt("installer_started")));
+    act(() => setUpdateInstallAttempt(attemptAt("failed")));
+    setStrandedAnswer("reloads");
+
+    const { container } = await mountPanel();
+
+    expect(container.textContent).toBe(RELOADS);
   });
 });
 

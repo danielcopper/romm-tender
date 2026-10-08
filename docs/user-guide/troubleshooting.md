@@ -9,7 +9,7 @@ Common issues and how to fix them.
 **Symptom**: The Tender QAM panel's **Connection** row shows a "Backend error" badge with the note "Tender's backend
 failed to start — check its log", and the Sync buttons are disabled. This state means Tender's own backend process never
 started — it is **not** the same as an unreachable RomM server, which shows **Not connected** instead, nor a backend
-that restarted while the panel stayed in Steam, which shows **Backend restarted**
+that restarted while the panel stayed in Steam, after which the panel shows only a note that Tender was restarted
 ([Tender says it was restarted](#tender-says-it-was-restarted)).
 
 **Fix**: The backend aborted during startup, so the panel can't reach it. Its log says why:
@@ -47,17 +47,19 @@ answers with its own message instead — "Server unreachable", "Sign-in rejected
 
 ## Tender Says It Was Restarted
 
-**Symptom**: A notification says "Tender was restarted", and the **Connection** row on Tender's main page shows
-**Backend restarted** with one of two notes:
+**Symptom**: A notification says "Tender was restarted", and Tender's panel shows only one of two notes, on every page:
 
 - "Tender was restarted — it reloads Steam's interface once no game is running."
 - "Tender was restarted — restart Steam to use it again."
 
-Until then nothing in Tender's panel works. On a game's page the play row shows a **Tender restarted** badge; it says
-nothing about RomM then. A game page opened since the restart cannot load the game's details, and the section below the
-play row shows the same note instead; while any game is running it adds "Quit the running game yourself — Tender can't
-stop it right now.", since Tender's **Stop Game** cannot reach the backend then. On a page that had loaded before the
-restart, **Stop Game** says so at once: it shows "Couldn't stop the game" with the same note.
+Until then nothing in Tender's panel can work, so it offers nothing to press. If an update you started was installing —
+Settings › Updates said **Tender is restarting** — the note adds "The update's result shows after that." While any game
+is running, it adds "Quit the running game yourself — Tender can't stop it right now." On a game's page the section
+below the play row shows the same note. The play row keeps a **Tender restarted** badge, which says nothing about RomM
+then, and Steam's own **LAST PLAYED** and **PLAYTIME**, and **SPACE REQUIRED** for a game not downloaded; while that
+page's game runs it keeps **Resume** on a page you opened before the restart, and otherwise nothing to press. Starting a
+RomM game from elsewhere in Steam — the library, the home screen, the game's menu — does not start it, and shows
+"Couldn't start the game" with the same note, since the game would run without its saves synced.
 
 **Explanation**: Tender's backend restarted while Steam kept running, and the panel in Steam is the one the backend that
 stopped had loaded. The running backend can never accept it, and it told the panel what happens next. The first note
@@ -67,9 +69,9 @@ it has taken Steam's interface down twice in the last ten minutes. In the first 
 panel is told nothing yet, and the notification comes once the backend has looked at Steam.
 
 **Fix**: For the first note, quit every running game; Steam's interface reloads a moment later with a working panel. For
-the second, restart Steam. Opening the Quick Access menu on Tender's page asks the backend again, and a new notification
-says so when its answer has changed. The backend's log carries one line for that panel, and one more each time its
-answer changes:
+the second, restart Steam. Opening the Quick Access menu on Tender's page or starting a RomM game from Steam asks the
+backend again, and a new notification says so when its answer has changed. The backend's log carries one line for that
+panel, and one more each time its answer changes:
 
 ```bash
 grep "a panel another backend process loaded" ~/.local/state/romm-tender/backend.log | tail -n 5
@@ -246,7 +248,7 @@ An installer that stops without updating after it has stopped Tender cannot say 
 the version you had, the main panel says **Update to X failed — you are still on Y.** with the same line about the
 installer, and **Settings › Updates** says the same in its block, with **Install** marked, and offers **Try again**. If
 it did not start Tender again, the block says after seven minutes **Tender has not come back** and how to start it; once
-it is running again, the main panel says the same as above.
+it is running again and Steam's interface has reloaded, the main panel says the same as above.
 
 **Could not read the update state.** under the button means the section asked Tender how the install stands and got no
 answer; it asks again every few seconds, and the line goes once an answer comes.

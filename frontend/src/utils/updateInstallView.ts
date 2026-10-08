@@ -9,7 +9,6 @@
  */
 
 import type { UpdateInstallAttempt, UpdateInstallFailure, UpdateWaitReason } from "../api/backend";
-import type { StrandedAnswer } from "./strandedPanelWording";
 
 export const WAITING_FOR = "Waiting for:";
 
@@ -20,17 +19,6 @@ export const WAITING_FOR = "Waiting for:";
  */
 export function restartWaitLine(installed: string): string {
   return `Steam's interface reloads when it is done — usually within a minute, and up to about 5 minutes if Tender has to go back to ${installed}.`;
-}
-
-/**
- * What stands under the block once a backend answers again after the installer
- * stopped this one, by what it answered this panel. It may be the earlier
- * version after a rollback, so neither line says the update went through.
- */
-export function runningAgainLine(answer: StrandedAnswer): string {
-  return answer === "reloads"
-    ? "Steam's interface reloads once no game is running, and shows then whether the update went through."
-    : "Restart Steam to see whether the update went through.";
 }
 
 /** A press the connection failed to carry; the log names the error. */

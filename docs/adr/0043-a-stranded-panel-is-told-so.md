@@ -1,7 +1,7 @@
 ---
 status: accepted
 decided: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-08
 amends: [0036]
 ---
 
@@ -66,3 +66,30 @@ Quick Access menu is opened on Tender's page and when Stop is pressed.
 - **A notice the new backend writes into Steam over the debugger.** It reaches only a panel whose code listens for it —
   never one built before the change, such as the panel an update leaves behind — and only while the debugger is
   attached.
+
+## Amendment — the panel offers no press that cannot work
+
+Recorded for [#2275](https://github.com/danielcopper/romm-tender/issues/2275), whose `## Decisions` D1–D6, D8 and D10
+carry it, D4 as changed on 2026-10-08; it changes what the panel does with the answer, and nothing about the close codes
+above.
+
+**While the panel is stranded, it offers no press that cannot work, rather than having each press say that it failed.**
+Such a panel is never admitted again, so every press that reaches the backend could only fail. The stranded card stands
+in place of Tender's whole Quick Access panel, Main included, and of the game page's section below the play row, on a
+page loaded before the strand as well as after; while an update attempt has started the installer it adds that the
+update's result shows after the reload or restart it names. The play row keeps Resume for its game while that game runs,
+and nothing else: starting a game would put the reload off and would run without the pre-launch save sync, and Stop
+could only say that it cannot stop the game, which the card already says. Under a version error or a pending RetroDECK
+migration the play row stays hidden, as it is otherwise, and the section shows only the card. Steam's own Play on a RomM
+shortcut that is not already running is refused before the launch gate asks anything, with "Couldn't start the game" and
+the answer, and asks the backend again, as Stop Game does. Main's connection row no longer states the answer, and the
+update section's own state for a backend that answers again is gone: the card replaces both.
+
+On a page opened after the strand the play row offers nothing, a running game included: its play button never learns
+which ROM it belongs to, and reading "running" from Steam's running apps alone would be a second answer beside the
+session manager's. A Tender dialog already open when the panel is stranded stays open and its buttons fail as before;
+closing every dialog would need one opener in place of `showModal` everywhere one is opened.
+
+Rejected: **a message per press through one shared helper.** It would word about 88 failure paths behind a panel that
+still looks as if it works, and each failure path added later would have to remember the rule; a gate at the page shells
+covers presses added later without a change of their own.

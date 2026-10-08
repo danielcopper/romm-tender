@@ -16,7 +16,6 @@ import {
   installSteps,
   pausedDownloadsHint,
   restartWaitLine,
-  runningAgainLine,
   waitReasonLine,
   type InstallStepId,
   type InstallStepStatus,
@@ -91,15 +90,8 @@ function restartBlock(install: UpdateInstall, earlier: string, elapsed: string):
   // The backend reports nothing more, so the phase is the panel's inference:
   // while reads still answer, the installer is running its pre-install check,
   // which it does before it stops this backend; once they fail, Tender is
-  // restarting; once one fails as stranded, a backend answers again.
-  if (install.runningAgain) {
-    return {
-      caption: "Tender is running again",
-      at: null,
-      failed: false,
-      note: runningAgainLine(install.runningAgain),
-    };
-  }
+  // restarting. A backend that answers again refuses this panel as stranded,
+  // and the stranded card then stands in place of the whole panel.
   const gone = install.readFailed;
   return {
     caption: gone ? "Tender is restarting" : "Checking the new version",
