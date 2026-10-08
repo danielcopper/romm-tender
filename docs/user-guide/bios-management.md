@@ -743,8 +743,9 @@ file is broken, the source's list cannot be read yet (EmuDeck's today), or it is
 Tender stores the choice in its own settings and **immediately re-applies it** to every installed game on that platform
 — the change takes effect right away, with no sync needed (games that already have a per-game core keep their own
 choice). If the switch cannot be made, the pane says so under the button and the header keeps naming the core that is
-actually in effect. The page works even when your RomM server is offline — core switching and BIOS status are available,
-only the download buttons are withdrawn.
+actually in effect. Once a sync has run, the page works even when your RomM server is offline — core switching and BIOS
+status are available, only the download buttons are withdrawn. Before the first sync after an update, a platform needs
+RomM once to learn its system; offline, it says so instead.
 
 !!! note "A RetroDECK default-core change needs a Force Full Sync"
 
