@@ -1499,8 +1499,8 @@ export const deletePlatformSaves = endpoint<[string], { success: boolean; delete
  *  `deletePlatformSaves`, walking the same path without deleting. The Library
  *  page's platform detail asks it once per selection, beside the core read. */
 export const countPlatformSaves = endpoint<[string], { count: number }>("count_platform_saves");
-// A delete that removed only part fails with `delete_incomplete` and carries how
-// many files it did remove; every other failure carries no count.
+// A delete that could not remove every file fails with `delete_incomplete` and
+// carries how many it did remove; every other failure carries no count.
 export type BiosDeleteResult =
   { success: true; deleted_count: number; message: string } | (EndpointFailure & { deleted_count?: number });
 export const deletePlatformBios = endpoint<[string], BiosDeleteResult>("delete_platform_bios");

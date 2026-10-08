@@ -125,8 +125,8 @@ class FirmwareDemand:
         Both branches go through ``safe_join`` so neither a server-supplied
         ``file_name`` nor a declared placement can escape the BIOS directory via
         ``..`` or an absolute path. Raises :class:`PathTraversalError` on an
-        escape attempt — the write path (``download_firmware``) turns that into a
-        canonical failure; the read paths skip the poisoned entry.
+        escape attempt — the write path (``FirmwareDownloader._download_one``)
+        refuses with ``path_traversal``; the read paths skip the poisoned entry.
 
         Only the placement branch accepts the BIOS root itself as a
         destination, because only a declared location can legitimately resolve

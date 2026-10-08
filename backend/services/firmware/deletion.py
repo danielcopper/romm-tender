@@ -51,7 +51,7 @@ class PlatformBiosDeleterConfig:
 
 @dataclass(frozen=True)
 class FirmwareDeletionIncomplete(PartialFailure):
-    """A BIOS delete that removed only part of the files its records name."""
+    """A BIOS delete that did not remove every file its records name."""
 
     deleted_count: int
 
