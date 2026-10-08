@@ -205,19 +205,35 @@ class TestAnAnswerNamingSeveralPlatforms:
 
         assert pick_system([several, one], "nintendo-entertainment-system").system == "nes"
 
-    def test_where_no_id_gives_one_the_first_platform_of_the_first_matching_id(self):
-        unmatched = _answer(_off("satellaview"), platforms=("satellaview", "sufami"))
-        several = _answer(_on("famicom"), _on("nes"), platforms=("famicom", "nes"))
-        later = _answer(_on("amiga"), _on("amigacd32"), platforms=("amiga", "amigacd32"))
+    def test_another_platform_is_never_taken_in_its_place(self):
+        # The slug's platform names no system here, and the answer's other
+        # platforms are passed over rather than taken instead.
+        several = _answer(_on("famicom"), _on("satellaview"), platforms=("famicom", "satellaview"))
 
-        assert pick_system([unmatched, several, later], "nintendo").system == "famicom"
+        assert pick_system([several], "nintendo-entertainment-system") == SystemPick(NO_SYSTEM)
+
+    def test_a_switched_off_slug_platform_is_named_beside_a_switched_on_other(self):
+        answer = _answer(_off("satellaview"), _on("snes"), _on("sufami"), platforms=("satellaview", "snes", "sufami"))
+
+        assert pick_system([answer], "satellaview") == SystemPick(SWITCHED_OFF, "satellaview")
+
+    def test_a_slug_platform_with_no_system_here_has_no_system(self):
+        answer = _answer(_on("amiga"), platforms=("amiga", "amigacd32"))
+
+        assert pick_system([answer], "amiga-cd32") == SystemPick(NO_SYSTEM)
 
     def test_rom_ms_slug_is_never_a_system_of_its_own(self):
-        # The slug names a platform with nothing switched on here, so it chooses
-        # nothing, and the first platform that has a system is taken.
-        pick = pick_system([_answer(_on("famicom"), platforms=("famicom", "nes"))], "nes")
+        # The slug's platform is there with its only system switched off: that
+        # one is named, and famicom, switched on, is not taken instead.
+        answer = _answer(_on("famicom"), _off("nes"), platforms=("famicom", "nes"))
 
-        assert pick == SystemPick(FOUND, "famicom")
+        assert pick_system([answer], "nes") == SystemPick(SWITCHED_OFF, "nes")
+
+    def test_a_later_id_naming_the_slug_platform_still_decides(self):
+        several = _answer(_on("famicom"), platforms=("famicom", "nes"))
+        later = _answer(_on("nes"), platforms=("famicom", "nes"))
+
+        assert pick_system([several, later], "nes") == SystemPick(FOUND, "nes")
 
 
 class TestNothingSwitchedOn:

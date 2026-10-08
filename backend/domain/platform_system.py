@@ -167,11 +167,10 @@ def pick_system(answers: Iterable[IdAnswer], platform_slug: str) -> SystemPick:
     """The system a platform is in the source, from its ids' answers in the order they are asked.
 
     The first id that gives a switched-on system decides. An answer naming
-    several platforms gives one only where one of them is RomM's slug with its
-    hyphens dropped and has a switched-on system; otherwise the next id is
-    asked, and where none gives one, the first platform with a switched-on
-    system of the first answer that has one is taken. Among several systems of
-    one platform, the one named like a platform the id was resolved to is
+    several platforms speaks only for the one that is RomM's slug with its
+    hyphens dropped, and an answer naming several without that one is passed
+    over: another platform is never taken in its place. Among several systems
+    of one platform, the one named like a platform the id was resolved to is
     taken, else the first in the resolver's order. Where no id gives a
     switched-on system, the first switched-off one is named; where none gives
     any, there is no system.
@@ -179,19 +178,15 @@ def pick_system(answers: Iterable[IdAnswer], platform_slug: str) -> SystemPick:
     *answers* is consumed lazily, so an id after the deciding one is never asked.
     """
     wanted = platform_slug.replace("-", "")
-    fallback: str | None = None
     first_off: str | None = None
     for answer in answers:
         platform = _platform_of(answer, wanted)
-        if platform is not None or not answer.platforms:
-            on = _choose(answer, platform, STATUS_DECLARED)
-            if on is not None:
-                return SystemPick(FOUND, on)
-            first_off = first_off or _choose(answer, platform, STATUS_DISABLED)
-        fallback = fallback or _first_of_platforms(answer, STATUS_DECLARED)
-        first_off = first_off or _first_of_platforms(answer, STATUS_DISABLED)
-    if fallback is not None:
-        return SystemPick(FOUND, fallback)
+        if platform is None and answer.platforms:
+            continue
+        on = _choose(answer, platform, STATUS_DECLARED)
+        if on is not None:
+            return SystemPick(FOUND, on)
+        first_off = first_off or _choose(answer, platform, STATUS_DISABLED)
     if first_off is not None:
         return SystemPick(SWITCHED_OFF, first_off)
     return SystemPick(NO_SYSTEM)
@@ -202,13 +197,6 @@ def _platform_of(answer: IdAnswer, wanted: str) -> str | None:
     if len(answer.platforms) == 1:
         return answer.platforms[0]
     return wanted if wanted in answer.platforms else None
-
-
-def _first_of_platforms(answer: IdAnswer, status: str) -> str | None:
-    """The system with *status* of the first of *answer*'s platforms that has one."""
-    return next(
-        (system for platform in answer.platforms if (system := _choose(answer, platform, status)) is not None), None
-    )
 
 
 def _choose(answer: IdAnswer, platform: str | None, status: str) -> str | None:
