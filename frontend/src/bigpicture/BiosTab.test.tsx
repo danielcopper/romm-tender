@@ -1,8 +1,7 @@
-// The pane's content is asserted through the panel that owns every field it
-// renders (RomMGameInfoPanel.test.tsx). What this file exists for is the
-// mounting contract: the panel mounts this tab for every ROM and leaves it
-// mounted, so rendering has to be gated on `isActive` — a panel test cannot
-// tell "the pane rendered nothing" apart from "the pane was never mounted".
+// Besides the pane's rendering, this file pins the mounting contract: the panel
+// mounts this tab for every ROM and leaves it mounted, so rendering has to be
+// gated on `isActive` — a panel test cannot tell "the pane rendered nothing"
+// apart from "the pane was never mounted".
 
 import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/react";
