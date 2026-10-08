@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from domain.achievements import AchievementSummary
 from domain.bios_status import BIOS_LABEL_UNKNOWN, BIOS_LEVEL_UNKNOWN
+from domain.emulator_sources import RETRODECK
 from domain.platform_names import decode_platform_names
 from domain.retrodeck_folders import FolderRefused
 from domain.save_status import compute_save_sync_display
@@ -38,8 +39,8 @@ if TYPE_CHECKING:
         BiosChecker,
         Clock,
         PathExistsReader,
+        PlatformSystems,
         RetroDeckFolders,
-        SystemResolver,
         UnitOfWorkFactory,
     )
 
@@ -65,8 +66,9 @@ class GameDetailServiceConfig:
     ``BiosChecker`` and ``ActiveCoreReader`` answer the page's separate BIOS
     question, the latter naming the emulator this ROM launches with so the BIOS
     filter keys off the per-game pin, not a platform default. ``path_exists`` /
-    ``retrodeck_folders`` / ``resolve_system`` are the single ``stat`` the page
-    runs on an uninstalled ROM's target path; ``candidate_probe`` is the one
+    ``retrodeck_folders`` / ``platform_systems`` are the single ``stat`` the page
+    runs on an uninstalled ROM's target path, the last asked never to read RomM;
+    ``candidate_probe`` is the one
     ``readdir`` beside it, answering whether the same game is in the folder under
     another name. For an installed ROM ``path_exists`` instead answers whether
     the recorded file or folder is still there. All are bounded and
@@ -83,7 +85,7 @@ class GameDetailServiceConfig:
     active_core: ActiveCoreReader
     path_exists: PathExistsReader
     retrodeck_folders: RetroDeckFolders
-    resolve_system: SystemResolver
+    platform_systems: PlatformSystems
     candidate_probe: AdoptionCandidateProbeFn
 
 
@@ -101,7 +103,7 @@ class GameDetailService:
         self._active_core = config.active_core
         self._path_exists = config.path_exists
         self._retrodeck_folders = config.retrodeck_folders
-        self._resolve_system = config.resolve_system
+        self._platform_systems = config.platform_systems
         self._candidate_probe = config.candidate_probe
 
     @staticmethod
@@ -389,11 +391,14 @@ class GameDetailService:
         the computed path simply misses and this stays false. That degradation is
         intended: it goes quiet rather than claiming something it cannot know,
         and so does a page where RetroDECK names no folder a download could land
-        in.
+        in, or no system for the platform.
         """
         if not rom.fs_name or not rom.platform_slug:
             return False
-        folder = self._retrodeck_folders.download_folder(self._resolve_system(rom.platform_slug))
+        platform = self._platform_systems.platform_system(rom.platform_slug, source=RETRODECK, ask_romm=False)
+        if platform.taken is None:
+            return False
+        folder = self._retrodeck_folders.download_folder(platform.taken)
         if isinstance(folder, FolderRefused):
             return False
         try:
@@ -426,6 +431,7 @@ class GameDetailService:
         # the transaction (ADR-0006 — no network I/O in the UoW).
         with self._uow_factory() as uow:
             rom = uow.roms.get(rom_id)
+            install = uow.rom_installs.get(rom_id)
 
         if rom is None:
             return self._bios_answer()
@@ -446,7 +452,7 @@ class GameDetailService:
 
         try:
             bios = await self._bios_checker.check_platform_bios(
-                platform_slug, launching_emulator=emulator, rom_regions=rom.regions
+                platform_slug, launching_emulator=emulator, rom_regions=rom.regions, install=install
             )
             if bios.get("needs_bios"):
                 # The checker's payload IS the wire shape, plus the slug it was

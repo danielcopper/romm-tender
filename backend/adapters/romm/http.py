@@ -46,8 +46,6 @@ class RommHttpAdapter:
     ----------
     settings:
         Shared settings dict (held by reference — mutations are visible here).
-    code_dir:
-        Absolute path to the directory this program is installed in.
     logger:
         Logger instance.
     user_agent:
@@ -76,7 +74,6 @@ class RommHttpAdapter:
     def __init__(
         self,
         settings: dict[str, Any],
-        code_dir: str,
         logger: logging.Logger,
         user_agent: str,
         on_retry: RetryListener | None = None,
@@ -84,7 +81,6 @@ class RommHttpAdapter:
         log_debug: Callable[[str], None],
     ) -> None:
         self._settings = settings
-        self._code_dir = code_dir
         self._logger = logger
         self._user_agent = user_agent
         self._retry = RetryLadder(logger, on_retry=on_retry)
@@ -103,41 +99,6 @@ class RommHttpAdapter:
     @on_retry.setter
     def on_retry(self, listener: RetryListener | None) -> None:
         self._retry.on_retry = listener
-
-    # ------------------------------------------------------------------
-    # Platform map
-    # ------------------------------------------------------------------
-
-    def load_platform_map(self) -> dict[str, str]:
-        """Load the platform slug -> RetroDECK system mapping from ``defaults/config.json``.
-
-        Degrades to an empty map on a missing or corrupt config.json, so
-        ``resolve_system`` falls back to its verbatim pass-through (ADR-0010 §5)
-        instead of raising into callers such as the synchronous game-detail
-        builder, which guards that call against a path-traversal refusal only.
-        """
-        config_path = os.path.join(self._code_dir, "defaults", "config.json")
-        try:
-            with open(config_path) as f:
-                config = json.load(f)
-        except (OSError, json.JSONDecodeError) as e:
-            self._logger.warning("Failed to load platform_map from config.json: %s", e)
-            return {}
-        return config.get("platform_map", {})
-
-    def resolve_system(self, platform_slug: str, platform_fs_slug: str | None = None) -> str:
-        """Resolve a RomM platform slug to a RetroDECK system name.
-
-        Lazy-loads and caches ``_platform_map`` on first call.
-        """
-        if not hasattr(self, "_platform_map"):
-            self._platform_map = self.load_platform_map()
-        platform_map = self._platform_map
-        if platform_slug in platform_map:
-            return platform_map[platform_slug]
-        if platform_fs_slug and platform_fs_slug in platform_map:
-            return platform_map[platform_fs_slug]
-        return platform_slug
 
     # ------------------------------------------------------------------
     # SSL / Auth helpers

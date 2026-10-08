@@ -171,7 +171,7 @@ class TestItBuildsOnCopies:
     def test_it_writes_nothing_into_the_tree_it_checks(self, machine, tmp_path):
         """The installer puts that tree in place as it is: a byte the build left there is one no tarball brought."""
         tree = tmp_path / "staged"
-        for part in ("backend", "bin", "defaults"):
+        for part in ("backend", "bin"):
             shutil.copytree(machine.code / part, tree / part, ignore=shutil.ignore_patterns("__pycache__"))
         before = _snapshot(tree)
 

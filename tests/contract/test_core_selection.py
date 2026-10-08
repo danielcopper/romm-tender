@@ -166,6 +166,7 @@ async def test_get_platform_core_info_payload_shape(harness):
         "emulator_data_available",
         "emulator_data_reason",
         "emulator_source",
+        "platform_system",
         "active_core",
         "active_core_label",
         "platform_core_label",
@@ -206,6 +207,7 @@ async def test_get_system_core_info_payload_shape(harness):
         "emulator_data_available",
         "emulator_data_reason",
         "emulator_source",
+        "platform_system",
         "active_core_label",
     }
     assert result["emulator_data_available"] is True

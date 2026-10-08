@@ -19,16 +19,59 @@ if TYPE_CHECKING:
 
     from domain.emulator_sources import SourceReport, SourcesReading
     from domain.firmware_wants import FirmwareCatalogue
+    from domain.platform_system import PlatformIds, PlatformSystem
     from domain.retrodeck_folders import FolderRefused, MoveRoots
+    from domain.rom_install import RomInstall
     from domain.save_answer import SaveAnswer
     from domain.savestate_location import NoSavestates, SavestateLocation
     from domain.shortcut_data import EmulatorInvocation
 
 
-class SystemResolver(Protocol):
-    """Resolve a RomM platform slug to a RetroDECK system path."""
+class SourcePlatformSystems(Protocol):
+    """Which system a platform is in one emulator source, asked of the resolver with the platform's ids."""
 
-    def __call__(self, platform_slug: str, platform_fs_slug: str | None = None) -> str: ...
+    def platform_system(
+        self,
+        ids: PlatformIds,
+        *,
+        platform_slug: str,
+        platform_name: str,
+        source: str | None = None,
+        reading: SourcesReading | None = None,
+    ) -> PlatformSystem:
+        """The system in *source*, the answering source where it is ``None``."""
+        ...
+
+
+class PlatformSystems(Protocol):
+    """The system a RomM platform is in an emulator source, and the system an installed game keeps.
+
+    Every call reads the platform's kept ids and asks the resolver, so none is
+    made while a Unit of Work is open.
+    """
+
+    def platform_system(
+        self,
+        platform_slug: str,
+        *,
+        source: str | None = None,
+        reading: SourcesReading | None = None,
+        ask_romm: bool = True,
+    ) -> PlatformSystem:
+        """The system *platform_slug* is in *source*, the answering source where it is ``None``.
+
+        A download names the source it lands in; every other question asks the
+        answering source. Where no ids are kept for the platform they are read
+        from RomM, unless *ask_romm* is false — a caller that must not reach the
+        network then gets the answer for a platform with no ids.
+        """
+        ...
+
+    def rom_system(
+        self, platform_slug: str, install: RomInstall | None, *, reading: SourcesReading | None = None
+    ) -> PlatformSystem:
+        """The system a game is asked about: its install record's where it is installed, else the platform's."""
+        ...
 
 
 class FirmwareResolver(Protocol):

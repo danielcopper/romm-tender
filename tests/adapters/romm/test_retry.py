@@ -34,7 +34,6 @@ def adapter():
     """A real adapter over its own settings dict, pointed at a configured RomM URL."""
     return RommHttpAdapter(
         {"romm_url": "http://romm.local"},
-        "/tmp",
         logging.getLogger("test"),
         "romm-tender/9.9.9",
         log_debug=lambda _msg: None,
@@ -76,7 +75,6 @@ class TestWithRetryOnRetryListener:
     def _adapter(self, on_retry=None):
         return RommHttpAdapter(
             {"romm_url": ""},
-            "/tmp",
             logging.getLogger("test"),
             "romm-tender/9.9.9",
             on_retry=on_retry,

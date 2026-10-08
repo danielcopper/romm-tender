@@ -984,8 +984,6 @@ class TestTheVocabularyIsTheResolversOwn:
 
 # --- The real resolver, over whatever this machine has ------------------------
 
-_PLATFORM_MAP = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "defaults", "config.json")
-
 # What each system answers TODAY, so an emu-atlas bump that changes one is loud
 # instead of silently changing what Tender syncs. The key carries the
 # CONTENT EXTENSION the answer was measured with, because the answer turns on it
@@ -1027,11 +1025,6 @@ _PINNED_SHAPES: dict[tuple[str, str], str] = {
     ("amiga", ".hdf"): UNESTABLISHED_NOTHING,
     ("amigacd32", ".bin"): UNESTABLISHED_NOTHING,
 }
-
-# No ES-DE system declares either of these, so the catalogue offers no entry to
-# ask and the platform map produces a system nothing can answer for. Tracked
-# separately; listed here so the coverage assertion below stays exact.
-_UNDECLARED_SYSTEMS = frozenset({"atarijaguarcd", "xbox360"})
 
 
 @pytest.fixture(scope="module")
@@ -1098,14 +1091,6 @@ class TestTheRealMachineAnswers:
         assert answers[".lha"].state == SAVE_STATE_UNESTABLISHED
         assert answers[".hdf"].state == SAVE_STATE_UNESTABLISHED
         assert len({(a.state, a.unestablished) for a in answers.values()}) == 3
-
-    def test_the_platform_map_produces_only_systems_the_resolver_knows(self, machine, traces):
-        with open(_PLATFORM_MAP, encoding="utf-8") as handle:
-            systems = sorted(set(json.load(handle)["platform_map"].values()))
-
-        offers_nothing = {system for system in systems if not machine.emulators_for(system).entries}
-
-        assert offers_nothing == _UNDECLARED_SYSTEMS
 
     def test_a_configuration_file_the_machine_states_is_still_excluded(self, machine, traces):
         # The Saturn ``.smpc`` on a real reading, not a constructed one.

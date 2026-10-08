@@ -642,6 +642,7 @@ class TestWireServices:
                 resolve_path=deps["resolve_path"],
                 core_info_provider=deps["core_info_provider"],
                 save_locations=FakeSaveLocationReader(),
+                source_platform_systems=MagicMock(),
                 emulator_sources=FakeEmulatorSources(),
                 renderer_rss=deps["renderer_rss"],
                 renderer_gc=deps["renderer_gc"],

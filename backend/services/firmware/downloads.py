@@ -19,6 +19,7 @@ from domain import firmware_paths
 from domain.bios_file import BiosFile
 from domain.emulator_commands import resolve_platform_option
 from domain.firmware_groups import fetched_as_required
+from domain.retrodeck_folders import BIOS_DOWNLOAD
 from domain.rom_files import TMP_EXT
 from lib.errors import Refused, RommApiError
 from lib.path_safety import PathTraversalError
@@ -36,8 +37,8 @@ if TYPE_CHECKING:
         CoreInfoProvider,
         FirmwareFileStore,
         PlatformCoreReader,
+        PlatformSystems,
         RommFirmwareApi,
-        SystemResolver,
         UnitOfWorkFactory,
     )
 
@@ -58,7 +59,7 @@ class FirmwareDownloaderConfig:
     listing: FirmwareListing
     demand: FirmwareDemand
     core_info: CoreInfoProvider
-    resolve_system: SystemResolver
+    platform_systems: PlatformSystems
     platform_core_reader: PlatformCoreReader
     firmware_file_store: FirmwareFileStore
     clock: Clock
@@ -75,7 +76,7 @@ class FirmwareDownloader:
         self._listing = config.listing
         self._demand = config.demand
         self._core_info = config.core_info
-        self._resolve_system = config.resolve_system
+        self._platform_systems = config.platform_systems
         self._platform_core_reader = config.platform_core_reader
         self._firmware_file_store = config.firmware_file_store
         self._clock = config.clock
@@ -221,7 +222,7 @@ class FirmwareDownloader:
         await self._loop.run_in_executor(None, self._demand.download_root)
         platform_firmware = await self._platform_firmware_rows(platform_slug)
 
-        placements = await self._platform_placements(self._resolve_system(platform_slug))
+        placements = await self._platform_placements(await self._platform_system(platform_slug))
         downloaded, errors = await self._download_firmware_batch(platform_firmware, placements)
 
         msg = f"Downloaded {downloaded} firmware files"
@@ -305,7 +306,7 @@ class FirmwareDownloader:
         if not wanted:
             raise Refused("not_in_library", f"{file_name} is not in your RomM library for {platform_slug}")
 
-        placements = await self._platform_placements(self._resolve_system(platform_slug))
+        placements = await self._platform_placements(await self._platform_system(platform_slug))
         fw = wanted[0]
         placement = placements.get(file_name)
         if placement is not None and placement.declares_directory:
@@ -336,7 +337,7 @@ class FirmwareDownloader:
         await self._loop.run_in_executor(None, self._demand.download_root)
         rows = await self._platform_firmware_rows(platform_slug)
 
-        system = self._resolve_system(platform_slug)
+        system = await self._platform_system(platform_slug)
         identity = await self._loop.run_in_executor(None, self._platform_emulator_identity, system, platform_slug)
         catalogue = await self._platform_catalogue(system)
         placements = catalogue.by_file_name()
@@ -370,6 +371,13 @@ class FirmwareDownloader:
             options["options"], self._platform_core_reader.get_platform_core(platform_slug)
         )
         return emulator.emulator if emulator is not None else None
+
+    async def _platform_system(self, platform_slug: str) -> str:
+        """The system *platform_slug* is in the answering source; refused like a download where it has none."""
+        platform = await self._loop.run_in_executor(None, self._platform_systems.platform_system, platform_slug)
+        if platform.taken is None:
+            raise platform.refusal(BIOS_DOWNLOAD)
+        return platform.taken
 
     async def _platform_placements(self, system: str) -> Mapping[str, FirmwarePlacement]:
         """Where *system*'s firmware files go, read off that platform's own demand."""

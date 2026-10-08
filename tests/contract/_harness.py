@@ -24,8 +24,11 @@ a pytest ``tmp_path`` and wires the **real** services via the real
 * ``http_adapter.with_retry`` → a single-attempt pass-through so a
   failure-injection test does not pay the real exponential backoff
   ``time.sleep`` (1s, 3s …). Everything else on the real
-  ``RommHttpAdapter`` (``resolve_system``, settings binding) stays real —
-  it is a pure settings/file read with no network on the read paths.
+  ``RommHttpAdapter`` (settings binding) stays real.
+* ``source_platform_systems`` → :class:`FakeSourcePlatformSystems`, so a
+  platform is its own system unless a test says otherwise: the seeded
+  RetroDECK carries no catalogue whose platform tags a RomM id could reach.
+  The kept ids and their live read in ``PlatformSystemService`` stay real.
 * ``emit`` → an ``AsyncMock`` so tests assert emissions.
 
 The SQLite database, the file stores, and the settings file all write
@@ -58,6 +61,7 @@ from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
+from fakes.fake_source_platform_systems import FakeSourcePlatformSystems
 from fakes.fake_steam_interface import FakeSteamInterface
 from fakes.fake_steamgrid_db_api import FakeSteamGridDbApi
 from fakes.fake_transient_units import FakeTransientUnits
@@ -141,6 +145,8 @@ class ContractHarness:
     downloads: FakeReleaseDownload
     units: FakeTransientUnits
     journal: FakeJournal
+    # What a platform's system answers; a test sets ``answers`` on it.
+    platform_systems: FakeSourcePlatformSystems
 
 
 def _single_attempt_pass_through(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
@@ -202,8 +208,8 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
 
     # 2. Swap only the network edges in the returned AdapterBundle. The bundle
     #    is frozen, so rebuild it with dataclasses.replace. The real
-    #    http_adapter is kept (resolve_system is a pure read) but its with_retry
-    #    is neutralised so failure-injection tests don't sleep.
+    #    http_adapter is kept but its with_retry is neutralised so
+    #    failure-injection tests don't sleep.
     retrodeck_home = os.path.realpath(tmp_path / "home" / "retrodeck")
     fake_romm = FakeRommApi()
     fake_sgdb = FakeSteamGridDbApi()
@@ -230,6 +236,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
     # real, every test that opens the update check would reach github.com and
     # spend a share of an IP-wide hourly budget.
     fake_releases = FakeLatestRelease()
+    fake_platform_systems = FakeSourcePlatformSystems()
     fake_downloads = FakeReleaseDownload()
     fake_units = FakeTransientUnits()
     fake_journal = FakeJournal()
@@ -244,6 +251,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
         save_locations=FakeSaveLocationReader(
             saves_root=os.path.join(retrodeck_home, "saves"), states_root=os.path.join(retrodeck_home, "states")
         ),
+        source_platform_systems=fake_platform_systems,
         latest_release=fake_releases,
         download_release_asset=fake_downloads,
         transient_units=fake_units,
@@ -314,6 +322,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
         downloads=fake_downloads,
         units=fake_units,
         journal=fake_journal,
+        platform_systems=fake_platform_systems,
     )
 
 

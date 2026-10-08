@@ -28,6 +28,7 @@ from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_adoption_move import FakeAdoptionMoveStore
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_download_file_store import FakeDownloadFileStore
+from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
@@ -35,6 +36,7 @@ from fakes.fake_save_quarantine import FakeSaveQuarantine
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
 
+from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.retrodeck_folders import FolderRefused
 from domain.rom import Rom
 from domain.rom_candidates import CANDIDATE_LIMIT
@@ -206,7 +208,7 @@ class Harness:
                 download_file_store=self.store,
                 adoption_move=self.move,
                 quarantine_save=self.quarantine,
-                resolve_system=lambda platform_slug, platform_fs_slug=None: platform_fs_slug or platform_slug,
+                platform_systems=FakePlatformSystems(),
                 retrodeck_folders=self.paths,
                 install_recorder=self.recorder,
                 m3u_support=lambda system_name: self.m3u_supported,
@@ -1888,6 +1890,35 @@ class TestSearchableDirectory:
         h.store.files["/roms/not-a-system/Game (U).sfc"] = b"x"
 
         assert h.service.has_adoption_candidate("not-a-system", "Game (USA).sfc") is False
+
+
+class TestAPlatformWithNoSystem:
+    """No system in RetroDECK, so no folder a download would land in to search."""
+
+    @pytest.mark.parametrize("state", [NO_SYSTEM, SWITCHED_OFF])
+    async def test_the_page_finds_no_copy(self, h, state):
+        h.system_extensions = {"snes": frozenset({".sfc"})}
+        h.store.files["/roms/snes/Game (U).sfc"] = b"x"
+        platform = PlatformSystem(state, "snes", "SNES", system="snes", source=RETRODECK_SOURCE)
+        h.service._search._platform_systems = FakePlatformSystems(answers={"snes": platform})
+
+        assert h.service.has_adoption_candidate("snes", "Game (USA).sfc") is False
+
+    async def test_the_page_never_reads_rom_m_for_the_ids(self, h):
+        platform_systems = FakePlatformSystems()
+        asked: list[bool] = []
+        original = platform_systems.platform_system
+
+        def recording(platform_slug, *, source=None, reading=None, ask_romm=True):
+            asked.append(ask_romm)
+            return original(platform_slug, source=source, reading=reading, ask_romm=ask_romm)
+
+        platform_systems.platform_system = recording
+        h.service._search._platform_systems = platform_systems
+
+        h.service.has_adoption_candidate("snes", "Game (USA).sfc")
+
+        assert asked == [False]
 
 
 class TestVanishedBackstop:

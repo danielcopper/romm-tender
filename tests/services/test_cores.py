@@ -16,33 +16,18 @@ from _factories import (
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, libretro_option, standalone_option
 from fakes.fake_disc_resolver import FakeDiscResolver
+from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.uow_open_probe import record_uow_open
 
 from domain.disc_selection import Disc
 from domain.emulator_commands import options_to_payload
+from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.shortcut_data import EmulatorInvocation
 from services.cores import CoreService, CoreServiceConfig
-
-
-class FakeSystemResolver:
-    """In-memory ``SystemResolver`` for tests.
-
-    Maps known RomM platform slugs to RetroDECK systems and records each
-    call so tests can assert resolution happened. Unknown slugs fall
-    through unchanged, mirroring the real resolver's pass-through.
-    """
-
-    def __init__(self, mapping: dict[str, str] | None = None) -> None:
-        self.mapping = mapping if mapping is not None else {}
-        self.calls: list[tuple[str, str | None]] = []
-
-    def __call__(self, platform_slug: str, platform_fs_slug: str | None = None) -> str:
-        self.calls.append((platform_slug, platform_fs_slug))
-        return self.mapping.get(platform_slug, platform_slug)
 
 
 def _seed_rom(
@@ -75,6 +60,7 @@ def _seed_install(
     file_path: str,
     platform_slug: str = "snes",
     rom_dir: str | None = None,
+    system: str | None = None,
 ) -> None:
     uow.rom_installs.save(
         RomInstall(
@@ -82,7 +68,7 @@ def _seed_install(
             file_path=file_path,
             rom_dir=rom_dir,
             platform_slug=platform_slug,
-            system=platform_slug,
+            system=system or platform_slug,
             installed_at="2026-01-01T00:00:00+00:00",
         )
     )
@@ -112,8 +98,8 @@ def core_info() -> FakeCoreInfoProvider:
 
 
 @pytest.fixture
-def resolve_system() -> FakeSystemResolver:
-    return FakeSystemResolver(
+def platform_systems() -> FakePlatformSystems:
+    return FakePlatformSystems(
         mapping={
             "dc": "dreamcast",
             "sms": "mastersystem",
@@ -163,7 +149,7 @@ def service(
     prune_conflicts,
     logger,
     core_info,
-    resolve_system,
+    platform_systems,
     settings,
     settings_persister,
     uow_factory,
@@ -175,7 +161,7 @@ def service(
             loop=event_loop,
             logger=logger,
             core_info=core_info,
-            resolve_system=resolve_system,
+            platform_systems=platform_systems,
             settings=settings,
             settings_persister=settings_persister,
             uow_factory=uow_factory,
@@ -198,6 +184,7 @@ class TestGetPlatformCoreInfo:
             "emulator_data_available": True,
             "emulator_data_reason": None,
             "emulator_source": {"kind": "retrodeck", "starts_games": True},
+            "platform_system": {"state": "found", "source": "retrodeck", "system": "snes", "platform": "snes"},
             "active_core": "snes9x_libretro.so",
             "active_core_label": "Snes9x",
             "platform_core_label": None,
@@ -213,6 +200,7 @@ class TestGetPlatformCoreInfo:
             "emulator_data_available": True,
             "emulator_data_reason": None,
             "emulator_source": None,
+            "platform_system": None,
             "active_core": None,
             "active_core_label": None,
             "platform_core_label": None,
@@ -323,13 +311,13 @@ class TestGetPlatformCoreInfo:
         ],
     )
     def test_resolves_system_for_emulator_options(
-        self, event_loop, service, core_info, resolve_system, uow, slug, system
+        self, event_loop, service, core_info, platform_systems, uow, slug, system
     ):
         _seed_rom(uow, rom_id=42, platform_slug=slug)
         event_loop.run_until_complete(service.get_platform_core_info(42))
         # The platform-wide enumeration receives the NORMALIZED system.
         assert core_info.emulator_options_calls == [system]
-        assert resolve_system.calls == [(slug, None)]
+        assert platform_systems.calls == [(slug, None)]
 
 
 # ── get_system_core_info (platform-slug-keyed emulator menu) ───────────
@@ -343,6 +331,7 @@ class TestGetSystemCoreInfo:
             "emulator_data_available": True,
             "emulator_data_reason": None,
             "emulator_source": {"kind": "retrodeck", "starts_games": True},
+            "platform_system": {"state": "found", "source": "retrodeck", "system": "snes", "platform": "snes"},
             "active_core_label": "Snes9x",
         }
 
@@ -382,10 +371,10 @@ class TestGetSystemCoreInfo:
         result = event_loop.run_until_complete(service.get_system_core_info("snes"))
         assert result["emulator_data_available"] is False
 
-    def test_reads_the_options_for_the_normalized_system(self, event_loop, service, core_info, resolve_system):
+    def test_reads_the_options_for_the_normalized_system(self, event_loop, service, core_info, platform_systems):
         event_loop.run_until_complete(service.get_system_core_info("dc"))
         assert core_info.emulator_options_calls == ["dreamcast"]
-        assert resolve_system.calls == [("dc", None)]
+        assert platform_systems.calls == [("dc", None)]
 
     def test_reads_the_emulator_options_outside_any_unit_of_work(self, event_loop, service, uow, core_info):
         # get_emulator_options re-probes the ES-DE files on every call; inside a
@@ -396,6 +385,69 @@ class TestGetSystemCoreInfo:
 
 
 # ── set_game_core (per-game pin; B4 hard-fail-before-write) ─────────────
+
+
+class TestAPlatformWithNoSystem:
+    """Where the answering source has no switched-on system, the list says why and no emulator is read."""
+
+    @pytest.mark.parametrize(
+        ("state", "system", "reason"),
+        [(NO_SYSTEM, None, "no_platform_system"), (SWITCHED_OFF, "xbox360", "platform_system_off")],
+    )
+    def test_the_platform_page_says_why(self, event_loop, service, core_info, platform_systems, state, system, reason):
+        platform_systems.answers["xbox-360"] = PlatformSystem(
+            state, "xbox-360", "Xbox 360", system=system, source=RETRODECK_SOURCE
+        )
+
+        result = event_loop.run_until_complete(service.get_system_core_info("xbox-360"))
+
+        assert result["emulator_data_available"] is False
+        assert result["emulator_data_reason"] == reason
+        assert result["emulators"] == []
+        assert result["platform_system"] == {
+            "state": state,
+            "source": "retrodeck",
+            "system": system,
+            "platform": "Xbox 360",
+        }
+        assert core_info.emulator_options_calls == []
+
+    def test_a_game_page_says_why(self, event_loop, service, core_info, platform_systems, uow):
+        _seed_rom(uow, rom_id=42, platform_slug="vic-20")
+        platform_systems.answers["vic-20"] = PlatformSystem(NO_SYSTEM, "vic-20", "VIC-20", source=RETRODECK_SOURCE)
+
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert result["emulator_data_reason"] == "no_platform_system"
+        assert result["platform_system"]["platform"] == "VIC-20"
+        assert core_info.emulator_options_calls == []
+
+    def test_the_page_shows_the_system_taken(self, event_loop, service, platform_systems):
+        result = event_loop.run_until_complete(service.get_system_core_info("dc"))
+
+        assert result["platform_system"] == {
+            "state": "found",
+            "source": "retrodeck",
+            "system": "dreamcast",
+            "platform": "dc",
+        }
+
+
+class TestAnInstalledGameKeepsItsRecordedSystem:
+    def test_its_emulator_list_is_its_install_records_system(self, event_loop, service, core_info, uow):
+        _seed_rom(uow, rom_id=42, platform_slug="dc")
+        _seed_install(uow, rom_id=42, file_path="/roms/dc/sonic.gdi", platform_slug="dc", system="naomi")
+
+        event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert core_info.emulator_options_calls == ["naomi"]
+
+    def test_a_game_not_installed_follows_the_platforms_system(self, event_loop, service, core_info, uow):
+        _seed_rom(uow, rom_id=42, platform_slug="dc")
+
+        event_loop.run_until_complete(service.get_platform_core_info(42))
+
+        assert core_info.emulator_options_calls == ["dreamcast"]
 
 
 class TestSetGameCore:
@@ -468,15 +520,15 @@ class TestSetGameCore:
         assert result["reason"] == "not_found"
         assert "7" in result["message"]
 
-    def test_resolves_system_before_label_lookup(self, event_loop, service, uow, core_info, resolve_system):
-        # The slug→system normalization runs before the emulator-options read so
-        # label resolution keys off the RetroDECK system, not the raw slug.
+    def test_resolves_system_before_label_lookup(self, event_loop, service, uow, core_info, platform_systems):
+        # The installed game's system — its install record's — is read before the
+        # emulator options, so label resolution keys off it and not the raw slug.
         _seed_rom(uow, rom_id=42, platform_slug="dc", shortcut_app_id=99)
-        _seed_install(uow, rom_id=42, file_path="/roms/dc/sonic.gdi", platform_slug="dc")
+        _seed_install(uow, rom_id=42, file_path="/roms/dc/sonic.gdi", platform_slug="dc", system="dreamcast")
         core_info.options = [libretro_option("flycast_libretro", "Flycast")]
         result = event_loop.run_until_complete(service.set_game_core(42, "Flycast"))
         assert result["success"] is True
-        assert ("dc", None) in resolve_system.calls
+        assert ("dc", None) in platform_systems.calls
         assert core_info.emulator_options_calls == ["dreamcast"]
 
 
@@ -840,10 +892,10 @@ class TestSetGameCoreTransactionBoundary:
     ordering.
     """
 
-    def test_label_is_resolved_outside_the_uow(self, event_loop, service, uow, core_info):
+    def test_label_is_resolved_outside_the_uow(self, event_loop, service, uow, core_info, platform_systems):
         _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99)
         _seed_install(uow, rom_id=42, file_path="/roms/snes/mario.sfc")
-        open_at_system = record_uow_open(uow, service, "_resolve_system")
+        open_at_system = record_uow_open(uow, platform_systems, "rom_system")
         open_at_options = record_uow_open(uow, core_info, "get_emulator_options")
 
         result = event_loop.run_until_complete(service.set_game_core(42, "bsnes"))

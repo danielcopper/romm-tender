@@ -26,7 +26,8 @@ from dataclasses import dataclass, replace
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
-from domain.retrodeck_folders import FolderRefused, folder_of
+from domain.emulator_sources import RETRODECK
+from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused, folder_of
 from domain.rom_adoption import (
     DigestRequest,
     FileDifference,
@@ -71,6 +72,7 @@ if TYPE_CHECKING:
         DebugLogger,
         DownloadFileStore,
         EventEmitter,
+        PlatformSystems,
         RetroDeckFolders,
         RomInstallRecorder,
         RommRomReader,
@@ -79,7 +81,6 @@ if TYPE_CHECKING:
         SiblingSupersedeProvider,
         SystemKnownFn,
         SystemM3uSupportFn,
-        SystemResolver,
         SystemSupportedExtensionsFn,
         UnitOfWorkFactory,
     )
@@ -158,7 +159,7 @@ class RomAdoptionServiceConfig:
     download_file_store: DownloadFileStore
     adoption_move: AdoptionMoveStore
     quarantine_save: SaveQuarantineFn
-    resolve_system: SystemResolver
+    platform_systems: PlatformSystems
     retrodeck_folders: RetroDeckFolders
     install_recorder: RomInstallRecorder
     m3u_support: SystemM3uSupportFn
@@ -189,7 +190,7 @@ class RomAdoptionService:
     def __init__(self, *, config: RomAdoptionServiceConfig) -> None:
         self._romm_api = config.romm_api
         self._download_file_store = config.download_file_store
-        self._resolve_system = config.resolve_system
+        self._platform_systems = config.platform_systems
         self._retrodeck_folders = config.retrodeck_folders
         self._install_recorder = config.install_recorder
         self._m3u_support = config.m3u_support
@@ -208,7 +209,7 @@ class RomAdoptionService:
         self._search = CandidateSearch(
             config=CandidateSearchConfig(
                 download_file_store=config.download_file_store,
-                resolve_system=config.resolve_system,
+                platform_systems=config.platform_systems,
                 system_extensions=config.system_extensions,
                 system_known=config.system_known,
                 retrodeck_folders=config.retrodeck_folders,
@@ -384,7 +385,9 @@ class RomAdoptionService:
         :meth:`_remove_under_roms` directly: a candidate under a different name is
         never the thing ``os.replace`` swaps, so leaving it would leave it.
         """
-        system = self._resolve_system(rom_detail.get("platform_slug", ""), rom_detail.get("platform_fs_slug"))
+        system = self._download_system(rom_detail)
+        if isinstance(system, FolderRefused):
+            raise system
         if not is_dir and not is_multi_file_download(rom_detail):
             folder = self._rom_folder(system)
             return None if is_inside_folder(checked_path, folder) else _unsafe_replace_refusal()
@@ -739,6 +742,7 @@ class RomAdoptionService:
         target = self._resolve_target(rom_detail)
         if isinstance(target, FolderRefused):
             return {
+                **target.details,
                 "status": "error",
                 "reason": target.reason,
                 "message": target.message,
@@ -951,6 +955,11 @@ class RomAdoptionService:
 
     # ── Target resolution ───────────────────────────────────────────
 
+    def _download_system(self, rom_detail: dict[str, Any]) -> str | FolderRefused:
+        """The system a download of this ROM lands under in RetroDECK, or the download's refusal where it has none."""
+        platform = self._platform_systems.platform_system(rom_detail.get("platform_slug", ""), source=RETRODECK)
+        return platform.taken or platform.refusal(GAME_DOWNLOAD)
+
     def _resolve_target(self, rom_detail: dict[str, Any]) -> _Target | FolderRefused:
         """Resolve the path this ROM's content occupies, or why RetroDECK names no folder for it.
 
@@ -960,8 +969,9 @@ class RomAdoptionService:
         by ``files[0]``. A multi-file ROM's path is its directory; a single-file
         ROM's is the file itself.
         """
-        platform_slug = rom_detail.get("platform_slug", "")
-        system = self._resolve_system(platform_slug, rom_detail.get("platform_fs_slug"))
+        system = self._download_system(rom_detail)
+        if isinstance(system, FolderRefused):
+            return system
         folder = self._retrodeck_folders.download_folder(system)
         if isinstance(folder, FolderRefused):
             return folder

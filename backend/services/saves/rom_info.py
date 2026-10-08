@@ -13,6 +13,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.emulator_sources import RETRODECK
 from domain.retrodeck_folders import FolderRefused
 from domain.save_answer import UNESTABLISHED_NOT_ASKED, unestablished_answer
 
@@ -22,10 +23,10 @@ if TYPE_CHECKING:
     from domain.save_answer import SaveAnswer
     from services.protocols import (
         ActiveCoreReader,
+        PlatformSystems,
         RetroDeckFolders,
         SaveFileStore,
         SaveLocationReader,
-        SystemResolver,
         UnitOfWorkFactory,
     )
 
@@ -38,7 +39,7 @@ class RomInfoServiceConfig:
     source of truth for installed-ROM file records — WS3), the Protocol-typed
     filesystem adapter, RetroDECK's folders, the per-ROM active-core resolver,
     the save-location reader that answers what a game's save consists of, the
-    platform-slug-to-system resolver (which, with the folder a download of it
+    platform's system in RetroDECK (which, with the folder a download of it
     would land in and ``roms.fs_name``, builds the path a ROM the library knows
     but has not installed WOULD occupy — a save
     answer turns on the content file's extension, so omitting the path asks a
@@ -50,7 +51,7 @@ class RomInfoServiceConfig:
     retrodeck_folders: RetroDeckFolders
     active_core: ActiveCoreReader
     save_locations: SaveLocationReader
-    resolve_system: SystemResolver
+    platform_systems: PlatformSystems
     logger: logging.Logger
 
 
@@ -64,7 +65,7 @@ class RomInfoService:
         self._retrodeck_folders = config.retrodeck_folders
         self._active_core = config.active_core
         self._save_locations = config.save_locations
-        self._resolve_system = config.resolve_system
+        self._platform_systems = config.platform_systems
         self._logger = config.logger
 
     def get_rom_save_info(self, rom_id: int, *, save_answer: SaveAnswer | None = None) -> dict[str, Any] | None:
@@ -155,7 +156,11 @@ class RomInfoService:
             # No name, so no extension, so no question — not a statement about
             # any emulator.
             return unestablished_answer(shape=UNESTABLISHED_NOT_ASKED)
-        system = self._resolve_system(rom.platform_slug)
+        platform = self._platform_systems.platform_system(rom.platform_slug, source=RETRODECK)
+        system = platform.taken
+        if system is None:
+            # No system to download it as, so no path to ask about.
+            return unestablished_answer(shape=UNESTABLISHED_NOT_ASKED)
         folder = self._retrodeck_folders.download_folder(system)
         if isinstance(folder, FolderRefused):
             # No folder a download could land in, so no path to ask about.

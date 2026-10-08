@@ -12,12 +12,14 @@ from fakes.fake_core_info_provider import FakeCoreInfoProvider
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
+from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock
 
 from adapters.firmware_file import FirmwareFileAdapter
+from domain.platform_system import NO_SYSTEM, PlatformSystem
 from domain.retrodeck_folders import GAME_DOWNLOAD, switched_off
 from domain.rom_save_sync_state import FileSyncState
 from services.achievements import AchievementsService, AchievementsServiceConfig
@@ -112,7 +114,7 @@ def game_detail(clock, active_core_resolver, path_probe) -> GameDetailHarness:
             platform_firmware_resolver=FakeFirmwareResolver(),
             retrodeck_folders=FakeRetroDeckFolders(),
             core_info=FakeCoreInfoProvider(),
-            resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
+            platform_systems=FakePlatformSystems(),
             platform_core_reader=FakePlatformCoreReader(),
             uow_factory=FakeUnitOfWorkFactory(),
             conflict_rules=_make_conflict_rules(),
@@ -135,7 +137,7 @@ def game_detail(clock, active_core_resolver, path_probe) -> GameDetailHarness:
             active_core=active_core_resolver,
             path_exists=path_probe,
             retrodeck_folders=FakeRetroDeckFolders(roms=_ROMS_BASE),
-            resolve_system=lambda platform_slug, platform_fs_slug=None: platform_fs_slug or platform_slug,
+            platform_systems=FakePlatformSystems(),
             candidate_probe=candidate_probe,
         ),
     )
@@ -618,6 +620,33 @@ class TestTargetPathOccupied:
         assert result["target_path_occupied"] is False
 
     @pytest.mark.asyncio
+    async def test_false_where_the_platform_has_no_system_in_retrodeck(self, game_detail, path_probe):
+        platform = PlatformSystem(NO_SYSTEM, "snes", "SNES", source=RETRODECK_SOURCE)
+        game_detail.service._platform_systems = FakePlatformSystems(answers={"snes": platform})
+        path_probe.exists = lambda _path: True
+        _seed_rom(game_detail, 10, app_id=50000, platform_slug="snes", fs_name="game_10.sfc")
+        result = await game_detail.service.get_cached_game_detail(50000)
+        assert result["target_path_occupied"] is False
+
+    @pytest.mark.asyncio
+    async def test_the_page_asks_retrodeck_and_never_reads_rom_m(self, game_detail):
+        platform_systems = FakePlatformSystems()
+        asked: list[tuple[str | None, bool]] = []
+        original = platform_systems.platform_system
+
+        def recording(platform_slug, *, source=None, reading=None, ask_romm=True):
+            asked.append((source, ask_romm))
+            return original(platform_slug, source=source, reading=reading, ask_romm=ask_romm)
+
+        platform_systems.platform_system = recording
+        game_detail.service._platform_systems = platform_systems
+        _seed_rom(game_detail, 10, app_id=50000, platform_slug="snes", fs_name="game_10.sfc")
+
+        await game_detail.service.get_cached_game_detail(50000)
+
+        assert asked == [("retrodeck", False)]
+
+    @pytest.mark.asyncio
     async def test_false_when_the_rom_has_no_fs_name(self, game_detail, path_probe):
         # A pre-migration row: nothing to compute a path from, so the field goes
         # quiet rather than probing the bare platform directory.
@@ -876,7 +905,7 @@ class TestGetBiosStatusFound:
 
         captured = {}
 
-        async def capture_check(slug, launching_emulator=None, rom_regions=()):
+        async def capture_check(slug, launching_emulator=None, rom_regions=(), install=None):
             captured["slug"] = slug
             captured["launching_emulator"] = launching_emulator
             return {"needs_bios": False}
@@ -895,7 +924,7 @@ class TestGetBiosStatusFound:
         _seed_rom(game_detail, 42, app_id=50000, name="Game", platform_slug="psx", regions=("Japan", "Asia"))
         captured = {}
 
-        async def capture_check(slug, launching_emulator=None, rom_regions=()):
+        async def capture_check(slug, launching_emulator=None, rom_regions=(), install=None):
             captured["rom_regions"] = rom_regions
             return {"needs_bios": False}
 
@@ -903,6 +932,33 @@ class TestGetBiosStatusFound:
 
         await game_detail.service.get_bios_status(42)
         assert captured["rom_regions"] == ("Japan", "Asia")
+
+    @pytest.mark.asyncio
+    async def test_an_installed_game_hands_its_install_record_to_the_bios_check(self, game_detail):
+        """An installed game's BIOS answer is about the system its record holds, not the platform's current one."""
+        from domain.rom_install import RomInstall
+
+        _seed_rom(game_detail, 42, app_id=50000, name="Game", platform_slug="dc")
+        install = RomInstall(
+            rom_id=42,
+            file_path="/roms/naomi/game.zip",
+            rom_dir=None,
+            platform_slug="dc",
+            system="naomi",
+            installed_at="2026-01-01T00:00:00+00:00",
+        )
+        with game_detail.uow:
+            game_detail.uow.rom_installs.save(install)
+        captured = {}
+
+        async def capture_check(slug, launching_emulator=None, rom_regions=(), install=None):
+            captured["install"] = install
+            return {"needs_bios": False}
+
+        game_detail.service._bios_checker.check_platform_bios = capture_check
+
+        await game_detail.service.get_bios_status(42)
+        assert captured["install"].system == "naomi"
 
     @pytest.mark.asyncio
     async def test_bios_check_differs_by_per_game_override(self, game_detail, active_core_resolver):
@@ -917,7 +973,7 @@ class TestGetBiosStatusFound:
         active_core_resolver.per_rom[42] = ("gpsp_libretro", "gpSP")
         # rom 43 falls through to the default (None, None) → system default.
 
-        async def fake_check(slug, launching_emulator=None, rom_regions=()):
+        async def fake_check(slug, launching_emulator=None, rom_regions=(), install=None):
             if launching_emulator is not None and launching_emulator.emulator == "gpsp_libretro.so":
                 return {
                     "needs_bios": True,

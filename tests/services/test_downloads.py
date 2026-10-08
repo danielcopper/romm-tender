@@ -19,6 +19,7 @@ from _factories import (
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
+from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -28,6 +29,7 @@ from fakes.system_time import FakeClock, FakeSleeper
 from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.download_file import DownloadFileAdapter
 from adapters.rom_files import RomFileAdapter
+from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused, finding_refusal, switched_off
 from domain.rom import Rom
 from domain.rom_files import TMP_EXT, ZIP_TMP_EXT
@@ -145,7 +147,7 @@ class DownloadsHarness:
 @pytest.fixture
 def downloads(emit, logger) -> DownloadsHarness:
     romm_api = MagicMock()
-    resolve_system = MagicMock(side_effect=lambda slug, fs_slug=None: fs_slug or slug)
+    platform_systems = FakePlatformSystems()
     prune_conflicts = _make_prune_conflicts()
     uow = FakeUnitOfWork()
     # The real ActiveCoreResolver folds the DB override over this fake's
@@ -159,7 +161,7 @@ def downloads(emit, logger) -> DownloadsHarness:
             core_info=core_info,
             sandbox_launcher=FakeSandboxLauncher(),
             platform_core_reader=FakePlatformCoreReader(),
-            resolve_system=resolve_system,
+            platform_systems=platform_systems,
             logger=logger,
         ),
     )
@@ -185,7 +187,7 @@ def downloads(emit, logger) -> DownloadsHarness:
         config=RomAdoptionServiceConfig(
             romm_api=romm_api,
             download_file_store=download_file_store,
-            resolve_system=resolve_system,
+            platform_systems=platform_systems,
             retrodeck_folders=retrodeck_folders,
             install_recorder=install_recorder,
             adoption_move=AdoptionMoveAdapter(),
@@ -212,7 +214,7 @@ def downloads(emit, logger) -> DownloadsHarness:
         config=DownloadServiceConfig(
             romm_api=romm_api,
             download_file_store=download_file_store,
-            resolve_system=resolve_system,
+            platform_systems=platform_systems,
             loop=running_loop(),
             logger=logger,
             emit=emit,
@@ -3216,7 +3218,8 @@ class TestPathTraversalPlatformSlug:
             "name": "Evil ROM",
             "fs_name": "game.z64",
             "fs_size_bytes": 1024,
-            # Unmapped slug passes through resolve_system verbatim (ADR-0010).
+            # The fake answers a platform as its own system, so the slug reaches
+            # the folder question as a system name.
             "platform_slug": "../../etc",
             "platform_name": "Nintendo 64",
         }
@@ -3245,6 +3248,57 @@ class TestPathTraversalPlatformSlug:
         assert not escape_dir.exists()
         # The rom is no longer marked in-progress (cleaned up on rejection).
         assert 77 not in downloads.service._download_in_progress
+
+
+class TestAPlatformWithNoSystemDownloadsNothing:
+    """A platform RetroDECK has no switched-on system for is refused before anything is fetched."""
+
+    @pytest.mark.parametrize(
+        ("state", "system", "reason"),
+        [(NO_SYSTEM, None, "no_platform_system"), (SWITCHED_OFF, "xbox360", "platform_system_off")],
+    )
+    @pytest.mark.asyncio
+    async def test_it_is_refused_naming_why(self, downloads, tmp_path, state, system, reason):
+        platform = PlatformSystem(state, "xbox-360", "Xbox 360", system=system, source=RETRODECK_SOURCE)
+        downloads.service._platform_systems = FakePlatformSystems(answers={"xbox-360": platform})
+        downloads.service._loop = asyncio.get_running_loop()
+        made_dirs: list[str] = []
+        downloads.service._download_file_store.make_dirs = lambda p: made_dirs.append(p)
+        rom_detail = {
+            "id": 78,
+            "name": "Halo",
+            "fs_name": "halo.iso",
+            "fs_size_bytes": 1024,
+            "platform_slug": "xbox-360",
+        }
+
+        from unittest.mock import patch
+
+        with (
+            patch.object(downloads.romm_api, "get_rom", return_value=rom_detail),
+            pytest.raises(FolderRefused) as refused,
+        ):
+            await downloads.service.start_download(78)
+
+        assert refused.value.reason == reason
+        assert refused.value.details == {"source": "retrodeck", "platform": "Xbox 360", "system": system}
+        assert made_dirs == []
+        assert 78 not in downloads.service._download_queue
+        assert 78 not in downloads.service._download_in_progress
+
+    @pytest.mark.asyncio
+    async def test_the_system_is_asked_of_retrodeck_which_a_download_lands_in(self, downloads):
+        platform_systems = FakePlatformSystems()
+        downloads.service._platform_systems = platform_systems
+        downloads.service._loop = asyncio.get_running_loop()
+        rom_detail = {"id": 79, "name": "Mario", "fs_name": "mario.sfc", "fs_size_bytes": 1024, "platform_slug": "snes"}
+
+        from unittest.mock import patch
+
+        with patch.object(downloads.romm_api, "get_rom", return_value=rom_detail):
+            await downloads.service.start_download(79)
+
+        assert platform_systems.calls[0] == ("snes", "retrodeck")
 
 
 class TestCleanupPartialDownload:

@@ -17,6 +17,7 @@ from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLaunc
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
+from fakes.fake_platform_systems import FakePlatformSystems
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_romm_api import FakeRommApi
@@ -118,7 +119,7 @@ def library(tmp_path, emit, logger, home) -> LibraryHarness:
             core_info=core_info,
             sandbox_launcher=FakeSandboxLauncher(),
             platform_core_reader=platform_core_reader,
-            resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
+            platform_systems=FakePlatformSystems(),
             logger=logger,
         ),
     )

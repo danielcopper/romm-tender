@@ -18,7 +18,8 @@ from typing import TYPE_CHECKING, Any, Literal
 from domain.disc_formats import DISC_IMAGE_EXTENSIONS
 from domain.disk_space import disk_space_verdict
 from domain.download_frames import cancelled_frame, failed_frame
-from domain.retrodeck_folders import EveryFolderRefused, FolderRefused, folder_of
+from domain.emulator_sources import RETRODECK
+from domain.retrodeck_folders import GAME_DOWNLOAD, EveryFolderRefused, FolderRefused, folder_of
 from domain.rom_files import (
     TMP_EXT,
     ZIP_TMP_EXT,
@@ -46,13 +47,13 @@ if TYPE_CHECKING:
         DownloadFileStore,
         DownloadTargetGateFn,
         EventEmitter,
+        PlatformSystems,
         RetroDeckFolders,
         RomInstallRecorder,
         RommRomReader,
         RomRemoverProvider,
         Sleeper,
         SystemM3uSupportFn,
-        SystemResolver,
         UnitOfWorkFactory,
     )
 
@@ -112,7 +113,7 @@ class DownloadServiceConfig:
 
     romm_api: RommRomReader
     download_file_store: DownloadFileStore
-    resolve_system: SystemResolver
+    platform_systems: PlatformSystems
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
     emit: EventEmitter
@@ -141,7 +142,7 @@ class DownloadService:
     def __init__(self, *, config: DownloadServiceConfig) -> None:
         self._romm_api = config.romm_api
         self._download_file_store = config.download_file_store
-        self._resolve_system = config.resolve_system
+        self._platform_systems = config.platform_systems
         self._loop = config.loop
         self._logger = config.logger
         self._emit = config.emit
@@ -333,8 +334,10 @@ class DownloadService:
         rom_detail = await self._loop.run_in_executor(None, self._romm_api.get_rom, rom_id)
 
         platform_slug = rom_detail.get("platform_slug", "")
-        platform_fs_slug = rom_detail.get("platform_fs_slug")
-        system = self._resolve_system(platform_slug, platform_fs_slug)
+        platform = self._platform_systems.platform_system(platform_slug, source=RETRODECK)
+        system = platform.taken
+        if system is None:
+            raise platform.refusal(GAME_DOWNLOAD)
 
         # The folder is taken once, here: a download that started lands where it
         # started even if RetroDECK is switched off before it ends.

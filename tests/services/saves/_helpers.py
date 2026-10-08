@@ -9,6 +9,7 @@ from _factories import _make_conflict_rules, _make_retry
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_hostname_reader import FakeHostnameReader
 from fakes.fake_machine_id_reader import FakeMachineIdReader
+from fakes.fake_platform_systems import FakePlatformSystems
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_save_api import FakeSaveApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
@@ -68,8 +69,8 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
         "save_locations": FakeSaveLocationReader(saves_root=str(tmp_path / "saves")),
         # A slug that DIFFERS from its system for the two the tests use, so a
         # site that leaks the raw RomM slug is caught rather than hidden behind
-        # an identity map. The real mapping is the RomM adapter's own.
-        "resolve_system": lambda platform_slug, platform_fs_slug=None: _TEST_SYSTEMS.get(platform_slug, platform_slug),
+        # an identity map.
+        "platform_systems": FakePlatformSystems(_TEST_SYSTEMS),
         "hostname_provider": FakeHostnameReader(),
         "machine_id_provider": FakeMachineIdReader(),
         "log_debug": lambda _msg: None,

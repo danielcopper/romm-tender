@@ -24,6 +24,7 @@ if TYPE_CHECKING:
         HostnameReader,
         MachineIdReader,
         MigrationPendingFn,
+        PlatformSystems,
         ResolveUploadConflictFn,
         RetroDeckFolders,
         RetryStrategy,
@@ -31,7 +32,6 @@ if TYPE_CHECKING:
         SaveFileStore,
         SaveLocationReader,
         SettingsPersister,
-        SystemResolver,
         UnitOfWorkFactory,
         UpdateInProgressFn,
     )
@@ -134,7 +134,7 @@ class SaveServiceConfig:
     retrodeck_folders: RetroDeckFolders
     active_core: ActiveCoreReader
     save_locations: SaveLocationReader
-    resolve_system: SystemResolver
+    platform_systems: PlatformSystems
     hostname_provider: HostnameReader
     machine_id_provider: MachineIdReader
     log_debug: DebugLogger

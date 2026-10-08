@@ -51,6 +51,7 @@ _ENTRY_KEYS = {
     "emulator_data_available",
     "emulator_data_reason",
     "emulator_source",
+    "platform_system",
     "deletable_count",
     "server_count",
     "local_count",

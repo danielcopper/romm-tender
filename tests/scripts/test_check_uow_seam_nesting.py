@@ -81,6 +81,35 @@ class TestScanSourceViolations:
         assert len(findings) == 1
         assert "installed_relaunch_items" in findings[0]
 
+    def test_a_platforms_system_asked_inside_uow_is_flagged(self):
+        # PlatformSystems reads the kept ids in a UoW of its own, so a call
+        # inside an open one re-enters the write lock.
+        findings = check.scan_source(
+            "class S:\n"
+            "    def go(self, rom_id):\n"
+            "        with self._uow_factory() as uow:\n"
+            "            rom = uow.roms.get(rom_id)\n"
+            "            platform = self._platform_systems.platform_system(rom.platform_slug)\n"
+            "        return platform\n",
+            "svc.py",
+        )
+        assert len(findings) == 1
+        assert "platform_system" in findings[0]
+
+    def test_a_games_system_asked_inside_uow_is_flagged(self):
+        findings = check.scan_source(
+            "class S:\n"
+            "    def go(self, rom_id):\n"
+            "        with self._uow_factory() as uow:\n"
+            "            rom = uow.roms.get(rom_id)\n"
+            "            install = uow.rom_installs.get(rom_id)\n"
+            "            platform = self._platform_systems.rom_system(rom.platform_slug, install)\n"
+            "        return platform\n",
+            "svc.py",
+        )
+        assert len(findings) == 1
+        assert "rom_system" in findings[0]
+
     def test_relaunch_item_for_rom_inside_uow_is_flagged(self):
         findings = check.scan_source(
             "class S:\n"
@@ -387,7 +416,6 @@ class TestIoSeamsViolations:
     @pytest.mark.parametrize(
         "attribute",
         [
-            "_resolve_system",
             "_sandbox_launcher",
             "_system_extensions",
             "_system_known",
@@ -411,34 +439,6 @@ class TestIoSeamsViolations:
         assert len(findings) == 1
         assert attribute in findings[0]
         assert "file-I/O seam" in findings[0]
-
-    def test_private_resolve_system_attribute_inside_uow_is_flagged(self):
-        # SystemResolver is call-shaped, so no consumer ever writes the Protocol's
-        # own name — the attribute they all bind it to is what must be matched.
-        findings = check.scan_source(
-            "class S:\n"
-            "    def go(self, rom_id):\n"
-            "        with self._uow_factory() as uow:\n"
-            "            rom = uow.roms.get(rom_id)\n"
-            "            system = self._resolve_system(rom.platform_slug)\n"
-            "        return system\n",
-            "svc.py",
-        )
-        assert len(findings) == 1
-        assert "_resolve_system" in findings[0]
-
-    def test_public_resolve_system_attribute_inside_uow_is_flagged(self):
-        # A peer holding the resolver object rather than the bound method.
-        findings = check.scan_source(
-            "class S:\n"
-            "    def go(self, slug):\n"
-            "        with self._uow_factory() as uow:\n"
-            "            system = self._paths.resolve_system(slug)\n"
-            "        return system\n",
-            "svc.py",
-        )
-        assert len(findings) == 1
-        assert "resolve_system" in findings[0]
 
     def test_io_seam_inside_try_within_uow_is_flagged(self):
         findings = check.scan_source(
@@ -547,7 +547,7 @@ class TestIoSeamsClean:
         # The pragma suppresses the line, so it silences both — there is no
         # second spelling to get wrong. The un-pragma'd twin proves the line
         # really carries two.
-        line = "            o = self._core_info.get_emulator_options(self._resolve_system(slug))"
+        line = "            o = self._core_info.get_emulator_options(self._system_known(slug))"
         source = "class S:\n    def go(self, slug):\n        with self._uow_factory() as uow:\n{}\n        return o\n"
 
         assert len(check.scan_source(source.format(line), "svc.py")) == 2
