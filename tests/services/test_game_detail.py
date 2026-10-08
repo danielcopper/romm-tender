@@ -623,10 +623,15 @@ class TestTargetPathOccupied:
     async def test_false_where_the_platform_has_no_system_in_retrodeck(self, game_detail, path_probe):
         platform = PlatformSystem(NO_SYSTEM, "snes", "SNES", source=RETRODECK_SOURCE)
         game_detail.service._platform_systems = FakePlatformSystems(answers={"snes": platform})
+        folders = game_detail.service._retrodeck_folders
+        asked_folders: list[object] = []
+        original = folders.download_folder
+        folders.download_folder = lambda system: asked_folders.append(system) or original(system)
         path_probe.exists = lambda _path: True
         _seed_rom(game_detail, 10, app_id=50000, platform_slug="snes", fs_name="game_10.sfc")
         result = await game_detail.service.get_cached_game_detail(50000)
         assert result["target_path_occupied"] is False
+        assert asked_folders == []
 
     @pytest.mark.asyncio
     async def test_the_page_asks_retrodeck_and_never_reads_rom_m(self, game_detail):

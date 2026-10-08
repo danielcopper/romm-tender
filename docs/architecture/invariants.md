@@ -699,9 +699,7 @@ Format: **invariant** — tier — enforced by.
   family closes it: for each `__call__`-only seam the list carries the attribute it is bound to — by convention rather
   than by construction, and only while such a name means one thing, which is exactly what keeps `_list_files` out. Which
   entries are call-shaped, and which of those also carry a twin under their implementation's own method name, is in the
-  script's module docstring. The deadlock rule's own call-shaped seams stay open. `SystemResolver` is the odd one out
-  for a second reason: the adapter memoises its map for the life of the process, so exactly one call ever opens the
-  file, and the entry earns its place because that one call can land inside a UoW. One `# pragma: no uow-check` covers
+  script's module docstring. The deadlock rule's own call-shaped seams stay open. One `# pragma: no uow-check` covers
   both families — it suppresses the line, and no seam is in both lists, so where a line does name two seams it silences
   both
 - **A shell function whose value is taken with `$(...)` never reaches `exit` — it answers, and its caller aborts** —

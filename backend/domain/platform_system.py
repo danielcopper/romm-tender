@@ -1,7 +1,8 @@
 """Which system a RomM platform is in one emulator source, decided from the resolver's answers.
 
-RomM names a platform by its own slug, which no emulator source declares, and
-by the ids it holds for the platform in four public vocabularies. The source
+RomM names a platform by its own slug, which only sometimes equals a system a
+source declares, and by the ids it holds for the platform in four public
+vocabularies. The source
 answers per id which of its systems belong to that platform
 (``systems_for_platform``); this module asks nothing itself and decides from
 those answers which system the platform is there, or why it is none. RomM's
@@ -169,10 +170,11 @@ def pick_system(answers: Iterable[IdAnswer], platform_slug: str) -> SystemPick:
     several platforms gives one only where one of them is RomM's slug with its
     hyphens dropped and has a switched-on system; otherwise the next id is
     asked, and where none gives one, the first platform with a switched-on
-    system of the first answer that has one is taken. Among several systems of one platform, the one named like a
-    platform the id was resolved to is taken, else the first in the resolver's
-    order. Where no id gives a switched-on system, the first switched-off one
-    is named; where none gives any, there is no system.
+    system of the first answer that has one is taken. Among several systems of
+    one platform, the one named like a platform the id was resolved to is
+    taken, else the first in the resolver's order. Where no id gives a
+    switched-on system, the first switched-off one is named; where none gives
+    any, there is no system.
 
     *answers* is consumed lazily, so an id after the deciding one is never asked.
     """

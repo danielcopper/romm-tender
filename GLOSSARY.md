@@ -564,10 +564,10 @@ standalone-emulator roadmap), not speculatively.
 ### Platform system
 
 The system a RomM platform's games belong to in one emulator source — `snes`, `psx` — as that source answers it for the
-ids RomM holds for the platform (IGDB, libretro, ScreenScraper, TheGamesDB). Never RomM's slug, which no source
-declares, and never Tender's own table; a platform can be one system in RetroDECK and another in EmuDeck. Only a
-switched-on system is taken; where there is none, the platform has **no system** or only a **switched-off** one, and
-nothing of it is downloaded. An installed game keeps the system its install record holds. Rules:
+ids RomM holds for the platform (IGDB, libretro, ScreenScraper, TheGamesDB). Never RomM's slug, which only sometimes
+equals a system's name, and never Tender's own table; a platform can be one system in RetroDECK and another in EmuDeck.
+Only a switched-on system is taken; where there is none, the platform has **no system** or only a **switched-off** one,
+and nothing of it is downloaded. An installed game keeps the system its install record holds. Rules:
 [core-emulator-selection.md](docs/architecture/core-emulator-selection.md#a-platforms-system). _Avoid_: platform map,
 mapped system — there is no map.
 

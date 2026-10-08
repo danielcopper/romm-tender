@@ -46,8 +46,9 @@ class SourcePlatformSystems(Protocol):
 class PlatformSystems(Protocol):
     """The system a RomM platform is in an emulator source, and the system an installed game keeps.
 
-    Every call reads the platform's kept ids and asks the resolver, so none is
-    made while a Unit of Work is open.
+    A platform's system reads its kept ids and may read RomM's listing and ask
+    the resolver, so no call is made while a Unit of Work is open or on the
+    event loop. An installed game's system comes from its record alone.
     """
 
     def platform_system(
@@ -320,14 +321,12 @@ class SystemKnownFn(Protocol):
     not name it, and ``None`` when the file could not be read, which is a
     different thing from a denial and must not be treated as one.
 
-    The candidate search asks before it searches a platform directory: the
-    game-detail page resolves that directory from a RomM slug alone, and an
-    unmapped slug is taken verbatim as a directory name. A directory that is not
-    an ES-DE system is not a place a game can live, so a namesake inside it is
-    content the emulator will never look at. The same answer also protects the
-    accept-list's default-safe branch, which reads an empty extension set as
-    "cannot tell" and would otherwise let every entry through for a directory
-    that was never a system.
+    The candidate search asks before it searches a system's directory: a
+    directory that is not an ES-DE system is not a place a game can live, so a
+    namesake inside it is content the emulator will never look at. The same
+    answer also protects the accept-list's default-safe branch, which reads an
+    empty extension set as "cannot tell" and would otherwise let every entry
+    through for a directory that was never a system.
     """
 
     def __call__(self, system_name: str) -> bool | None: ...

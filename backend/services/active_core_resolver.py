@@ -52,7 +52,8 @@ class ActiveCoreResolverConfig:
     classified emulator options + the system-layer default), the sandbox-launcher
     seam the folder-boot rewrite resolves through, the per-platform core reader
     (the ``settings.json`` ``platform_cores`` map), the platform's system — the
-    install record's for an installed ROM — and the logger used to warn on a stale label.
+    install record's for an installed ROM — and the logger used to warn on a
+    stale label.
     """
 
     uow_factory: UnitOfWorkFactory

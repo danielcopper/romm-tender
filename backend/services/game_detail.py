@@ -68,9 +68,8 @@ class GameDetailServiceConfig:
     filter keys off the per-game pin, not a platform default. ``path_exists`` /
     ``retrodeck_folders`` / ``platform_systems`` are the single ``stat`` the page
     runs on an uninstalled ROM's target path, the last asked never to read RomM;
-    ``candidate_probe`` is the one
-    ``readdir`` beside it, answering whether the same game is in the folder under
-    another name. For an installed ROM ``path_exists`` instead answers whether
+    ``candidate_probe`` is the one ``readdir`` beside it, answering whether the
+    same game is in the folder under another name. For an installed ROM ``path_exists`` instead answers whether
     the recorded file or folder is still there. All are bounded and
     network-free, which is the whole constraint on this page.
     """
@@ -280,12 +279,6 @@ class GameDetailService:
         # An occupied target and a candidate elsewhere are different states, and
         # the occupied one wins: it is the exact path this ROM would claim, so
         # there is nothing to search for. An installed ROM does neither.
-        #
-        # The slug goes in alone because the row holds no `platform_fs_slug`.
-        # For a platform the resolver's map misses, the RomM slug is then taken
-        # verbatim as a directory name — which is why the probe refuses to search
-        # a directory ES-DE does not list as a system rather than trusting that
-        # such a directory cannot exist.
         candidate_present = (
             False if installed or target_occupied else self._candidate_probe(rom.platform_slug, rom.fs_name)
         )

@@ -204,10 +204,15 @@ class TestFindSaveFiles:
         _seed_rom(svc, 80, platform_slug="commodore-amiga", fs_name="Turrican.adf")
         platform = PlatformSystem(state, "commodore-amiga", "Amiga", system="amiga", source=RETRODECK_SOURCE)
         svc._rom_info._platform_systems = FakePlatformSystems(answers={"commodore-amiga": platform})
+        folders = svc._rom_info._retrodeck_folders
+        asked_folders: list[object] = []
+        original = folders.download_folder
+        folders.download_folder = lambda system: asked_folders.append(system) or original(system)
 
         answer = svc._rom_info.save_answer(80)
 
         assert _asked(svc) == []
+        assert asked_folders == []
         assert answer.state == "unestablished"
         assert answer.syncable is False
 

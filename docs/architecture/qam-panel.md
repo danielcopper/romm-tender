@@ -738,14 +738,16 @@ source's card under Settings › Emulator sources, as is every finding of a swit
 yet, or a known code whose finding lacks a fact its sentence needs, reads "Problem with _source_: _code_". Where the
 answering source gives no emulator list, the platform page, the emulator menu and a game's BIOS tab say why from the
 answer's `reason` — no source detected, every source switched off, a broken ES-DE systems file, a RetroDECK that has not
-been set up yet, EmuDeck's list that cannot be read yet, or any other refusal — and never "no emulator". **_Source_ is
-switched on in Settings › Emulator sources, but Tender cannot start games through it yet.** stands on Main once for
-every switched-on source Tender cannot start games through, whether or not it is the one that answers, and is the one
-source notice drawn smaller and without the warning sign: it states a fact about Tender rather than something wrong. The
-source's card under Settings › Emulator sources says **Tender cannot start games through _source_ yet.**, switched on or
-off, and a switched-off source says it only there. Where such a source answers, the platform page, the emulator menu and
-a game's BIOS tab keep saying why there is no emulator list — today no such source gives one. Showing **Tender cannot
-start games through _source_ yet.** there beside a list such a source does give is #2222's work; no code does it today.
+been set up yet, EmuDeck's list that cannot be read yet, a platform the source has no system for (`no_platform_system`),
+a platform whose systems are all switched off there (`platform_system_off`), or any other refusal — and never "no
+emulator". **_Source_ is switched on in Settings › Emulator sources, but Tender cannot start games through it yet.**
+stands on Main once for every switched-on source Tender cannot start games through, whether or not it is the one that
+answers, and is the one source notice drawn smaller and without the warning sign: it states a fact about Tender rather
+than something wrong. The source's card under Settings › Emulator sources says **Tender cannot start games through
+_source_ yet.**, switched on or off, and a switched-off source says it only there. Where such a source answers, the
+platform page, the emulator menu and a game's BIOS tab keep saying why there is no emulator list — today no such source
+gives one. Showing **Tender cannot start games through _source_ yet.** there beside a list such a source does give is
+#2222's work; no code does it today.
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
@@ -1263,7 +1265,11 @@ listing they need fails.
 
 The detail offers no sync control of its own — the row already is one, focus is already there and A works the toggle,
 and the list's two header buttons act on every row at once — so it opens with one header line instead of a Sync section:
-the platform's name, `N on RomM · M in Steam · <core name>`, and the core picker's icon button, right-aligned.
+the platform's name, `N on RomM · M in Steam · <source> system <system> · <core name>`, and the core picker's icon
+button, right-aligned. The system clause, muted like the counts, names the system the platform is in the answering
+source and its source (`RetroDECK system psx`, worded by `platformSystemClause`); it is absent where no system was
+taken, which is when the line under the header says why
+([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)).
 
 **Both counts on that line are ROM files.** `N` is RomM's own `rom_count` for the platform; `M` is `reachable_count` —
 the platform's reachable ROMs (every member of a sibling group that holds a binding, because one shortcut serves the

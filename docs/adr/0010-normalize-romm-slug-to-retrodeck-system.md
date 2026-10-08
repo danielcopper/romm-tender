@@ -108,10 +108,13 @@ See also: [ADR-0003](0003-json-sqlite-persistence-boundary.md) (persistence boun
 Recorded for [#1806](https://github.com/danielcopper/romm-tender/issues/1806). `platform_map` and §5's verbatim fallback
 are gone. A platform's `system` is the emulator source's own answer, asked through the vendored resolver
 (`systems_for_platform`) with the ids RomM holds for the platform — IGDB, libretro, ScreenScraper, TheGamesDB, in that
-order — and it is asked of each source for itself: a download of RetroDECK, every other question of the answering
-source. Where no id gives a switched-on system, the platform has **no system**, not its raw slug: nothing is downloaded,
-and the platform's pages say so. The raw slug named a folder no catalogue declares, so ES-DE never scanned what landed
-there; the robustness §5 bought was that folder. An installed game keeps the `system` its install record holds. §1–§4
-stand: the resolved `system` is still the identity every local resolution keys by, and the BIOS-folder vocabulary is
-still kept apart from it. How the answer is chosen is
+order — and it is asked of each source for itself: a download, and every question about where one would land, of
+RetroDECK, every other question of the answering source. Where no id gives a switched-on system, the platform has **no
+system**, not its raw slug: nothing is downloaded, and the platform's pages say so. The raw slug named a folder no
+catalogue declares, so ES-DE never scanned what landed there; the robustness §5 bought was that folder. An installed
+game keeps the `system` its install record holds. §1 changes its place: RomM's identity is still input only, but what it
+is turned into a `system` with is its ids rather than `slug` / `fs_slug`, through `PlatformSystems` rather than
+`resolve_system` / `platform_map`, and once per source asked rather than once at the RomM seam; the `system` an install
+records is still the one carried downstream. §2–§4 stand: the resolved `system` is still the identity every local
+resolution keys by, and the BIOS-folder vocabulary is still kept apart from it. How the answer is chosen is
 [core-emulator-selection.md](../architecture/core-emulator-selection.md#a-platforms-system)'s.

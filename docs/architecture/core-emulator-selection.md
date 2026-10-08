@@ -180,14 +180,14 @@ every answer stays live.
 
 ### A platform's system
 
-RomM names a platform by a slug of its own (`psx`, `new-nintendo-3ds`), which no emulator source declares, so the system
-a platform's games belong to is the **source's own answer**: `systems_for_platform`, asked through the resolver with the
-ids RomM holds for the platform — `igdb_id`, `libretro_slug`, `ss_id` and `tgdb_id`, the four vocabularies the resolver
-has a crosswalk for (a numeric id as its decimal string), in that order. RomM's other ids (MobyGames, LaunchBox,
-RetroAchievements, Hasheous, Flashpoint) have none and are not asked. The resolver reads the catalogue's own
-`<platform>` tags, so a system the user added to a catalogue by hand is answered as readily as a shipped one, and
-nothing in Tender holds a table of platforms. `adapters/atlas_platforms.py` asks;
-`domain/platform_system.py::pick_system` decides.
+RomM names a platform by a slug of its own, which only sometimes equals a system a source declares (`psx` does,
+`new-nintendo-3ds` does not), so the system a platform's games belong to is the **source's own answer**:
+`systems_for_platform`, asked through the resolver with the ids RomM holds for the platform — `igdb_id`,
+`libretro_slug`, `ss_id` and `tgdb_id`, the four vocabularies the resolver has a crosswalk for (a numeric id as its
+decimal string), in that order. RomM's other ids (MobyGames, LaunchBox, RetroAchievements, Hasheous, Flashpoint) have
+none and are not asked. The resolver reads the catalogue's own `<platform>` tags, so a system the user added to a
+catalogue by hand is answered as readily as a shipped one, and nothing in Tender holds a table of platforms.
+`adapters/atlas_platforms.py` asks; `domain/platform_system.py::pick_system` decides.
 
 **Which answer is taken.** Only a **switched-on** system matches — one the catalogue declares; a system present only in
 the catalogue's comments is switched off, and one the source does not have at all is no match. The first id whose answer
@@ -207,22 +207,23 @@ adoption's replace are refused the same way. Every other use keeps a state it al
 answer is not established, the search for a copy already on disk finds nothing, and the launch falls back to the plain
 one.
 
-**Each source is asked for itself.** A download asks **RetroDECK**, the one source Tender downloads into, whatever its
-switch — the switch is the folder's question (`adapters/retrodeck_folders.py`). Every other question — the emulator
-choice, the BIOS answers, the platform page — asks the answering source (above), so a platform can be one system in
-RetroDECK and another in EmuDeck. **An installed game keeps the system its install record holds** for its saves, its
-emulator choice, its BIOS answer and its launch (`PlatformSystems.rom_system`); only a new download follows the source's
-current answer. A source that renames, moves or drops a system is not followed yet.
+**Each source is asked for itself.** A download, and every question about where one would land — an uninstalled game's
+save answer, whether the target is taken, the search for a copy already there, an adoption's target — asks
+**RetroDECK**, the one source Tender downloads into, whatever its switch: the switch is the folder's question
+(`adapters/retrodeck_folders.py`). Every other question — the emulator choice, the BIOS answers, the platform page —
+asks the answering source (above), so a platform can be one system in RetroDECK and another in EmuDeck. **An installed
+game keeps the system its install record holds** for its saves, its emulator choice, its BIOS answer and its launch
+(`PlatformSystems.rom_system`); only a new download follows the source's current answer. A source that renames, moves or
+drops a system is not followed yet.
 
 **The ids are kept.** `kv_config`'s `platform_ids` holds every listed platform's four ids and display name, replaced at
 the start of every sync from RomM's listing (a failed write is logged and leaves the run alone). Where none are kept for
 a platform — the first start after an update — `PlatformSystemService` reads the listing once and keeps it. The game
 page's two looks at the disk — whether a download's target is already taken, and whether the game is there under another
-name — reach no network and do not: for them a platform with no kept ids has no system, and they go quiet rather than
-asking.
+name — must reach no network, so they never read the listing: for them a platform with no kept ids has no system, and
+they go quiet.
 
-The platform page names the system taken with its source in its header line — "78 on RomM · 78 in Steam · RetroDECK
-system psx".
+The platform page names the system taken with its source in its header line ([qam-panel.md](qam-panel.md#library)).
 
 ### Standalone-emulator selection: first safely-bakeable
 

@@ -238,14 +238,15 @@ Downloaded ROMs are stored in the folder RetroDECK's frontend, ES-DE, uses for t
 settings `~/retrodeck/roms/gba/`, or the same folder on the drive you moved RetroDECK to. Tender creates that system's
 folder if it is not there yet, as ES-DE would; it never creates the ROM folder above it.
 
-**A game's system is RetroDECK's answer.** Which system — and so which folder — a platform's games belong to is asked of
-RetroDECK, with the ids RomM holds for the platform; Tender keeps no table of platforms of its own. Where RetroDECK has
-no system for the platform, **Download** is refused and the game's page and the platform's page say **"RetroDECK has no
-system for _platform_, so Tender cannot download its games."**; where the platform's only systems are switched off in
-RetroDECK's ES-DE, they say **"System _system_ is switched off in RetroDECK."** The platform's **Download BIOS** is
-refused the same way. A game you already installed keeps the system it was downloaded under. Where several systems fit
-one platform — SNES is `sfc`, `snes` and `snesna` in RetroDECK — the main one (`snes`) is taken; the platform's page
-names it.
+**A game's system is your emulator source's answer.** Which system — and so which folder — a platform's games belong to
+is asked of the emulator source, with the ids RomM holds for the platform; Tender keeps no table of platforms of its
+own. A download, and everything about where one would land, asks RetroDECK; the game's page and the platform's page ask
+the source that answers, which is RetroDECK while it is switched on. Where _source_ has no system for the platform,
+**Download** is refused and the pages say **"_Source_ has no system for _platform_, so Tender cannot download its
+games."**; where the platform's only systems are switched off in _source_, they say **"System _system_ is switched off
+in _source_."** The platform's **Download BIOS** is refused the same way. A game you already installed keeps the system
+it was downloaded under. Where several systems fit one platform — SNES is `sfc`, `snes` and `snesna` in RetroDECK — the
+main one (`snes`) is taken; the platform's page names it.
 
 **A download needs RetroDECK.** **Download** is refused, saying why, while RetroDECK is not installed (**Downloads need
 RetroDECK, which is not installed.**), while it is switched off in **Settings › Emulator sources** (**Downloads need

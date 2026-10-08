@@ -277,9 +277,10 @@ and the row you focus is the one the right-hand pane describes.
    nothing to choose — no emulator for the platform, or an emulator list that could not be established (no emulator
    source found, every source switched off, a broken ES-DE systems file, a RetroDECK that has not been set up yet, a
    list that cannot be read yet, or not established for another reason) — a line under the header says so as well, since
-   a tooltip needs a mouse. A platform your emulator source has no system for says **"RetroDECK has no system for
+   a tooltip needs a mouse. A platform your emulator source has no system for says **"_Source_ has no system for
    _platform_, so Tender cannot download its games."**, and one whose only systems are switched off there says **"System
-   _system_ is switched off in RetroDECK."** — see [Managing Games](managing-games.md#downloading-roms)
+   _system_ is switched off in _source_."**, naming the source that answers — see
+   [Managing Games](managing-games.md#downloading-roms)
 7. **BIOS files** states how many required files are ready (e.g. "1 / 2 required") when the system needs any, and
    otherwise names the emulator and says it marks none of its BIOS files as required. Under that heading is the same
    sentence the game page shows, with your RomM library's own inventory behind it (e.g. "(3/5 RomM library files)").
