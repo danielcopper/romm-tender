@@ -69,9 +69,10 @@ class GameDetailServiceConfig:
     ``retrodeck_folders`` / ``platform_systems`` are the single ``stat`` the page
     runs on an uninstalled ROM's target path, the last asked never to read RomM;
     ``candidate_probe`` is the one ``readdir`` beside it, answering whether the
-    same game is in the folder under another name. For an installed ROM ``path_exists`` instead answers whether
-    the recorded file or folder is still there. All are bounded and
-    network-free, which is the whole constraint on this page.
+    same game is in the folder under another name. For an installed ROM
+    ``path_exists`` instead answers whether the recorded file or folder is still
+    there. All are bounded and network-free, which is the whole constraint on
+    this page.
     """
 
     settings: dict[str, Any]

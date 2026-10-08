@@ -125,6 +125,7 @@ async def test_with_rom_m_unreachable_and_no_ids_kept_the_pages_show_the_offline
     seed_rom(harness, 5, platform_slug=_SLUG)
     enable_save_sync(harness)
     harness.romm.list_platforms_side_effect = RommConnectionError("connection refused")
+    harness.romm.list_saves_side_effect = RommConnectionError("connection refused")
 
     status = await harness.endpoints.get_save_status(5)
     bios = await harness.endpoints.get_bios_status(5)
@@ -132,7 +133,10 @@ async def test_with_rom_m_unreachable_and_no_ids_kept_the_pages_show_the_offline
     core = await harness.endpoints.get_system_core_info(_SLUG)
     started = await harness.endpoints.start_download(5)
 
-    assert status["rom_id"] == 5
+    assert status["server_query_failed"] is True
+    assert status["server_query_reason"] == "server_unreachable"
+    assert status["save_resolution"]["state"] == "unestablished"
+    assert status["save_resolution"]["unestablished"] == "not_asked"
     assert bios["bios_level"] == "unknown"
     assert bios["bios_status_unknown"] is True
     for answer in (game_core, core):

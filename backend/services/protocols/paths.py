@@ -70,7 +70,10 @@ class PlatformSystems(Protocol):
         A download names the source it lands in; every other question asks the
         answering source. Where no ids are kept for the platform they are read
         from RomM, unless *ask_romm* is false — a caller that must not reach the
-        network then gets the answer for a platform with no ids.
+        network then gets the answer for a platform with no ids. A read that
+        fails raises nothing: it answers ``UNASKED`` with the reason and message
+        ``classify_error`` gives the failure and the source that would have been
+        asked, and keeps nothing.
         """
         ...
 

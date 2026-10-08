@@ -215,9 +215,10 @@ class PlatformSystem:
     """The system one platform is in one source, or why there is none to use.
 
     ``system`` is the system taken under :data:`FOUND`, and the switched-off one
-    named under :data:`SWITCHED_OFF`. ``source`` is the source asked, ``None``
-    where none was — and for a system an install record holds, which no source
-    was asked for. ``unasked`` says why none was asked, in the vocabulary of
+    named under :data:`SWITCHED_OFF`. ``source`` is the source asked — or, where
+    RomM's listing could not be read, the source that would have been — and
+    ``None`` where there is none, and for a system an install record holds,
+    which no source was asked for. ``unasked`` says why none was asked, in the vocabulary of
     :mod:`domain.emulator_sources` — or, where RomM's listing could not be read
     for the platform's ids, the reason that read failed with, and
     ``unasked_message`` its message.
