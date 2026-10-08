@@ -185,6 +185,9 @@ export function sealedCatalogueSentence(kind: string): string {
   return `${sourceName(kind)}'s emulator list cannot be read yet.`;
 }
 
+/** Why a platform has no system yet: its ids are not kept, and RomM, which gives them, cannot be reached. */
+const ROMM_UNREACHABLE_SENTENCE = "RomM cannot be reached, so Tender does not know this platform's system yet.";
+
 /** Why a platform's games cannot be downloaded: the source asked has no system for it. */
 export function noPlatformSystemSentence(kind: string, platform: string): string {
   return `${sourceName(kind)} has no system for ${platform}, so Tender cannot download its games.`;
@@ -217,7 +220,8 @@ function platformSystemSentence(reason: EmulatorDataReason | null, answer: Platf
  * the answer's `reason`, its answering `source` and the platform's system
  * there. Never "no emulator": every one of these is a list that could not be
  * established. An answer with no source is one no source answered, whatever
- * its reason says, so it reads as no source found.
+ * its reason says, so it reads as no source found — except RomM being
+ * unreachable, which stands whether or not a source answers.
  */
 export function emulatorDataReasonSentence(
   reason: EmulatorDataReason | null,
@@ -225,6 +229,7 @@ export function emulatorDataReasonSentence(
   platformSystem: PlatformSystemAnswer | null = null,
 ): string {
   if (reason === "switched_off") return "Every emulator source is switched off in Settings › Emulator sources.";
+  if (reason === "server_unreachable") return ROMM_UNREACHABLE_SENTENCE;
   if (reason === "no_source" || source === null) {
     return "No emulator source was found, so Tender cannot tell which emulators this platform offers.";
   }

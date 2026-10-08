@@ -1099,6 +1099,24 @@ describe("Library › Platforms", () => {
       expect(container.textContent).not.toContain("RetroDECK system");
     });
 
+    it("says RomM cannot be reached where it could not give the platform's system", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [],
+          emulator_data_available: false,
+          emulator_data_reason: "server_unreachable",
+          platform_system: null,
+          active_core_label: null,
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "RomM cannot be reached, so Tender does not know this platform's system yet.",
+      );
+    });
+
     it("says which system is switched off", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({

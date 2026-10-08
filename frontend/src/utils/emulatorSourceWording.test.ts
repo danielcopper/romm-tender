@@ -237,10 +237,10 @@ describe("emulatorDataReasonSentence", () => {
     }
   });
 
-  it("reads a platform whose ids RomM could not give as a list not established", () => {
-    expect(emulatorDataReasonSentence("server_unreachable", RETRODECK, null)).toBe(
-      "RetroDECK's emulator list is not established.",
-    );
+  it("says RomM cannot be reached where it could not give the platform's ids", () => {
+    const sentence = "RomM cannot be reached, so Tender does not know this platform's system yet.";
+    expect(emulatorDataReasonSentence("server_unreachable", RETRODECK, null)).toBe(sentence);
+    expect(emulatorDataReasonSentence("server_unreachable", null, null)).toBe(sentence);
   });
 
   it("names a source of a kind it does not know by its kind", () => {
