@@ -1696,15 +1696,16 @@ signing out first would strand the old minted token on RomM (which caps tokens p
 gone. Signing out (like re-signing-in) while a sync or download is in flight needs no guard: once the token is gone the
 in-flight operation simply fails authentication and surfaces its normal error — deliberate, not a race to defend.
 
-**Server-supplied paths are validated, fail-stop on traversal**: every server-supplied path component — the firmware
-`file_name`, the ROM platform slug, and post-extraction URL-decoded ZIP member names — is checked through
-`lib/path_safety` (`safe_join` for realpath containment, `safe_path_component` for single-component names) before any
-write. A traversal attempt (`../`, an absolute path, or a `%2e%2e%2f`-encoded ZIP member that decodes to `../` after the
-pre-decode ZIP-slip check passes) **aborts the whole download** rather than skipping the offending entry:
-already-extracted members are cleaned up (no half-installed ROM), a canonical
-`{"success": false, "reason": "path_traversal", "message": ...}` failure is returned, and the `download_failed` event
-fires so the UI doesn't hang on "downloading". Firmware downloads surface the same canonical failure from
-`download_firmware`.
+**Server-supplied paths are validated before any write**: the firmware `file_name` and the post-extraction URL-decoded
+ZIP member names are checked through `lib/path_safety` (`safe_join` for realpath containment, `safe_path_component` for
+single-component names) and fail stop on a traversal (`../`, an absolute path, or a `%2e%2e%2f`-encoded ZIP member that
+decodes to `../` after the pre-decode ZIP-slip check passes). A ROM's local file name is not refused but coerced to one
+safe component (`coerce_safe_component`), falling back to the ROM's synthetic name; the ROM's folder is the resolver's
+answer, so no platform slug is joined onto a root. A ZIP member that decodes to a traversal **aborts the whole
+extraction** rather than skipping the offending entry: already-extracted members are cleaned up (no half-installed ROM)
+and the `download_failed` event fires with the error's message, so the UI doesn't hang on "downloading". A firmware
+download refuses with `path_traversal`, raised by the single download (`FirmwareDownloader._download_one`) and answered
+by `Endpoints`; a batch download names that file among its failures and carries on.
 
 #### StartupHealingService notes
 

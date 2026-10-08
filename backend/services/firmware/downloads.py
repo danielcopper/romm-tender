@@ -20,7 +20,7 @@ from domain.bios_file import BiosFile
 from domain.emulator_commands import resolve_platform_option
 from domain.firmware_groups import fetched_as_required
 from domain.rom_files import TMP_EXT
-from lib.errors import error_response
+from lib.errors import Refused, RommApiError
 from lib.path_safety import PathTraversalError
 
 if TYPE_CHECKING:
@@ -106,10 +106,10 @@ class FirmwareDownloader:
         outside any transaction; only the ``BiosFile`` upsert is wrapped in a
         short write UoW (ADR-0006).
 
-        Returns ``(md5_match, error)``. ``error`` is a string when the firmware is
-        malformed — RomM data that fails the ``BiosFile`` invariants (empty
-        slug/file_name) — in which case the renamed file is removed and nothing
-        is persisted; otherwise ``None``.
+        Returns ``md5_match``. Firmware RomM describes in a way the
+        ``BiosFile`` invariants reject (empty slug/file_name) refuses with
+        ``invalid_firmware``, once the renamed file is removed and with nothing
+        persisted.
         """
         file_name = fw.get("file_name", "")
         self._firmware_file_store.rename(tmp_path, dest)
@@ -129,14 +129,15 @@ class FirmwareDownloader:
         except ValueError as e:
             # Malformed RomM firmware (e.g. file_path with no parseable slug):
             # the aggregate's invariant rejects it. Drop the renamed file so we
-            # don't leave it untracked, and signal a download failure.
+            # don't leave it untracked.
             self._firmware_file_store.remove_file(dest)
-            return md5_match, f"Invalid firmware metadata: {e}"
+            self._logger.error(f"Failed to persist firmware {file_name}: Invalid firmware metadata: {e}")
+            raise Refused("invalid_firmware", f"Invalid firmware metadata: {e}") from e
 
         with self._uow_factory() as uow:
             uow.bios_files.save(bios_file)
 
-        return md5_match, None
+        return md5_match
 
     async def download_firmware(self, firmware_id) -> dict[str, Any]:
         """Download one firmware file — with none of the batch's eligibility checks.
@@ -154,24 +155,22 @@ class FirmwareDownloader:
 
         The index is a parameter rather than a per-call read so a batch pays for
         the machine-wide question once instead of once per file.
+
+        A RomM error propagates. Where this device cannot create the folder, the
+        ``.tmp`` is removed and the download refuses with
+        ``bios_download_failed``. The adapter answers everything in the transfer
+        as a RomM error, including a ``.tmp`` it could not open or write, so an
+        ``OSError`` here is this device's.
         """
         firmware_id = int(firmware_id)
-        try:
-            fw = await self._loop.run_in_executor(None, self._romm_api.get_firmware, firmware_id)
-        except Exception as e:
-            self._logger.error(f"Failed to fetch firmware {firmware_id}: {e}")
-            return error_response(e)
+        fw = await self._loop.run_in_executor(None, self._romm_api.get_firmware, firmware_id)
 
         file_name = fw.get("file_name", "")
         try:
             dest = self._demand.dest_path(fw, placements.get(file_name))
         except PathTraversalError as e:
             self._logger.error(f"Rejected firmware with unsafe file name {file_name!r}: {e}")
-            return {
-                "success": False,
-                "reason": "path_traversal",
-                "message": "Server sent an unsafe firmware file name — download aborted",
-            }
+            raise Refused("path_traversal", "Server sent an unsafe firmware file name — download aborted") from e
         tmp_path = dest + TMP_EXT
 
         try:
@@ -180,21 +179,23 @@ class FirmwareDownloader:
         except Exception as e:
             await self._loop.run_in_executor(None, self._firmware_file_store.remove_file, tmp_path)
             self._logger.error(f"Failed to download firmware {file_name}: {e}")
-            return error_response(e)
+            if isinstance(e, OSError):
+                raise Refused(
+                    "bios_download_failed",
+                    f"{file_name} could not be downloaded: its folder could not be created on this device",
+                ) from e
+            raise
 
-        md5_match, post_io_error = await self._loop.run_in_executor(
+        md5_match = await self._loop.run_in_executor(
             None, self._download_firmware_post_io, fw, firmware_id, dest, tmp_path
         )
-        if post_io_error is not None:
-            self._logger.error(f"Failed to persist firmware {file_name}: {post_io_error}")
-            return error_response(ValueError(post_io_error))
 
         self._listing.invalidate()
         self._logger.info(f"Firmware downloaded: {file_name} -> {dest}")
         return {"success": True, "file_path": dest, "md5_match": md5_match}
 
-    async def _platform_firmware_rows(self, platform_slug) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-        """The library rows filed under *platform_slug*, or the failure to return instead.
+    async def _platform_firmware_rows(self, platform_slug) -> list[dict[str, Any]]:
+        """The library rows filed under *platform_slug*.
 
         The three download entry points ask the same two questions first — what
         does the library hold, and which of it is this platform's — and the
@@ -202,16 +203,9 @@ class FirmwareDownloader:
         ``ps`` both. Answering it in one place is what keeps a button from
         fetching a set the button beside it would not.
 
-        The second element is a ready-made failure response when the listing
-        could not be read; a caller returns it as it stands.
+        A listing that could not be read propagates as it was raised.
         """
-        try:
-            firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
-        except Exception as e:
-            self._logger.error(f"Failed to fetch firmware: {e}")
-            resp = error_response(e)
-            resp["downloaded"] = 0
-            return [], resp
+        firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
 
         fw_slugs = firmware_paths.resolve_firmware_slugs(platform_slug)
         # One row per name, the first listed: RomM may list a name in both of a
@@ -220,14 +214,12 @@ class FirmwareDownloader:
         for fw in firmware_list:
             if firmware_paths.parse_firmware_slug(fw.get("file_path", "")) in fw_slugs:
                 rows.setdefault(fw.get("file_name", ""), fw)
-        return list(rows.values()), None
+        return list(rows.values())
 
     async def download_all_firmware(self, platform_slug) -> dict[str, Any]:
         """Download all firmware for a given platform slug."""
         await self._loop.run_in_executor(None, self._demand.download_root)
-        platform_firmware, failure = await self._platform_firmware_rows(platform_slug)
-        if failure is not None:
-            return failure
+        platform_firmware = await self._platform_firmware_rows(platform_slug)
 
         placements = await self._platform_placements(self._resolve_system(platform_slug))
         downloaded, errors = await self._download_firmware_batch(platform_firmware, placements)
@@ -254,6 +246,11 @@ class FirmwareDownloader:
 
         A folder declaration is skipped whatever is at its destination: the
         emulator lists that name, so there is no file to fetch into it.
+
+        A file whose download this service refuses (``Refused``) or that meets a
+        RomM error is logged, named in the errors and passed over; anything else
+        ends the batch, RetroDECK's folder refusal included — no later file could
+        land either.
         """
         downloaded = 0
         errors = []
@@ -264,11 +261,14 @@ class FirmwareDownloader:
             dest = self._demand.safe_dest_path(fw, placement)
             if dest is not None and self._firmware_file_store.exists(dest):
                 continue
-            result = await self._download_one(fw["id"], placements)
-            if result.get("success"):
-                downloaded += 1
-            else:
-                errors.append(fw.get("file_name", str(fw["id"])))
+            name = fw.get("file_name", str(fw["id"]))
+            try:
+                await self._download_one(fw["id"], placements)
+            except (Refused, RommApiError) as e:
+                self._logger.error(f"Failed to download firmware {name}: {e}")
+                errors.append(name)
+                continue
+            downloaded += 1
         return downloaded, errors
 
     async def download_platform_firmware_file(self, platform_slug, file_name) -> dict[str, Any]:
@@ -295,33 +295,21 @@ class FirmwareDownloader:
         already be at its destination, which the batch skips — the same outcome
         as pressing Download all with nothing left to fetch. What it does not
         borrow from the batch is the error fold: one press wants the reason the
-        one file failed, so the single fetch's own failure response is returned
-        as it stands rather than collapsed into a name in a list.
+        one file failed, so the single fetch's refusal or RomM error reaches the
+        caller as it stands rather than collapsed into a name in a list.
         """
         await self._loop.run_in_executor(None, self._demand.download_root)
-        rows, failure = await self._platform_firmware_rows(platform_slug)
-        if failure is not None:
-            return failure
+        rows = await self._platform_firmware_rows(platform_slug)
 
         wanted = [fw for fw in rows if fw.get("file_name") == file_name]
         if not wanted:
-            return {
-                "success": False,
-                "reason": "not_in_library",
-                "message": f"{file_name} is not in your RomM library for {platform_slug}",
-                "downloaded": 0,
-            }
+            raise Refused("not_in_library", f"{file_name} is not in your RomM library for {platform_slug}")
 
         placements = await self._platform_placements(self._resolve_system(platform_slug))
         fw = wanted[0]
         placement = placements.get(file_name)
         if placement is not None and placement.declares_directory:
-            return {
-                "success": False,
-                "reason": "declares_directory",
-                "message": f"{file_name} is a folder the emulator opens, not a file to download",
-                "downloaded": 0,
-            }
+            raise Refused("declares_directory", f"{file_name} is a folder the emulator opens, not a file to download")
 
         # The already-there skip probes the disk rather than reading the
         # catalogue, for the reason the batch states: the catalogue's answer
@@ -331,9 +319,6 @@ class FirmwareDownloader:
             return {"success": True, "message": f"{file_name} is already here", "downloaded": 0}
 
         result = await self._download_one(fw["id"], placements)
-        if not result.get("success"):
-            result["downloaded"] = 0
-            return result
         return {**result, "message": f"Downloaded {file_name}", "downloaded": 1}
 
     async def download_required_firmware(self, platform_slug) -> dict[str, Any]:
@@ -349,9 +334,7 @@ class FirmwareDownloader:
         identify falls back to "any emulator requires it".
         """
         await self._loop.run_in_executor(None, self._demand.download_root)
-        rows, failure = await self._platform_firmware_rows(platform_slug)
-        if failure is not None:
-            return failure
+        rows = await self._platform_firmware_rows(platform_slug)
 
         system = self._resolve_system(platform_slug)
         identity = await self._loop.run_in_executor(None, self._platform_emulator_identity, system, platform_slug)

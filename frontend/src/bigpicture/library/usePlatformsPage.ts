@@ -47,6 +47,7 @@ import {
   setAllPlatformsSync,
   setSystemCore,
 } from "../../api/backend";
+import type { BiosDeleteResult } from "../../api/backend";
 import type { FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo } from "../../types";
 import { detach } from "../../utils/detach";
 import { batchConfirmLaunchOptions } from "../../utils/launchOptionsReconcile";
@@ -867,7 +868,7 @@ export function usePlatformsPage(): PlatformsPageState {
    *  handling for a file and for a folder's recorded contents. A success is
    *  said by the rows coming back re-read; only a failure gets a line. */
   const runRowDelete = useCallback(
-    (slug: string, work: () => Promise<{ success: boolean; message: string; deleted_count: number }>, what: string) => {
+    (slug: string, work: () => Promise<BiosDeleteResult>, what: string) => {
       setBusySlug(slug);
       setStatus(null);
       detach(
