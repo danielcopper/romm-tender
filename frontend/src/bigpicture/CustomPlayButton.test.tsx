@@ -3450,11 +3450,9 @@ describe("CustomPlayButton — state-aware Resume (#1313)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Stop Game — the running overlay's chevron action. Steam cannot terminate these
-// games (the shortcut execs `flatpak run`, whose portal-started sandbox is not
-// under Steam's reaper, so TerminateApp is a proven on-device no-op), so the
-// kill is a backend endpoint. It is destructive and unconfirmable after the
-// fact, hence the confirm modal in front of it.
+// Stop Game — the running overlay's chevron action. The kill is a backend
+// endpoint. It is destructive and unconfirmable after the fact, hence the
+// confirm modal in front of it.
 // ---------------------------------------------------------------------------
 describe("CustomPlayButton — Stop Game", () => {
   beforeEach(() => {

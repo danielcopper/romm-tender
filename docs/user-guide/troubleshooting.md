@@ -392,8 +392,9 @@ pressed in), and choose **Quit** in the **Main Menu**. A standalone emulator has
 keyboard you can also switch to Big Picture with Alt+Tab and end the game from its game page: the chevron beside
 **Resume** holds **Stop Game**, described under [Stopping a running game](managing-games.md#stopping-a-running-game).
 
-In Gaming Mode the Steam button opens Steam's overlay as usual, because Steam's interface is drawn over the game there.
-How a running game is ended is under [Stopping a running game](managing-games.md#stopping-a-running-game).
+In Gaming Mode the Steam button opens Steam's overlay as usual, because Steam's interface is drawn over the game there,
+and its **Exit Game** ends the game. Every way of ending a running game is under
+[Stopping a running game](managing-games.md#stopping-a-running-game).
 
 ### Apply to All Shortcuts says "Not applied"
 
