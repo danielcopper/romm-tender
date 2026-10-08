@@ -424,7 +424,7 @@ The two path fields on `RomInstall` (`domain/rom_install.py`) answer different q
 
 - **`file_path`** — the **launch file**: the single file that is the ROM's launch identity. Present for every ROM;
   save-path resolution, ES-DE core resolution, and the displayed filename all derive from it. It is the **default**
-  launch target baked into the Steam shortcut's `launch_options` (`flatpak run … "<file_path>"`, run by the
+  launch target baked into the Steam shortcut's `launch_options` (`flatpak run … '<file_path>'`, run by the
   `tender-rom-launcher` exec wrapper per [ADR-0009](docs/adr/0009-launcher-pure-exec-wrapper-baked-launch-options.md),
   which superseded the dynamic SQLite read of [ADR-0005](docs/adr/0005-launcher-resolves-path-from-sqlite.md)) — but the
   baked launch **target** may be **overridden at bake time** without rewriting `file_path`: a multi-disc pin bakes the

@@ -163,7 +163,7 @@ def build_launch_options(invocation: str, path: str) -> str:
     """Compose the Steam shortcut launch command from *invocation* and ROM *path*.
 
     An empty *path* means the ROM has **no launch target**, and yields the empty
-    launch command. Composing one anyway would hand the emulator a bare ``""``
+    launch command. Composing one anyway would hand the emulator an empty
     argument — the silent failure this rule exists to prevent.
 
     **An empty launch command means two different things, and nothing may infer
@@ -182,17 +182,18 @@ def build_launch_options(invocation: str, path: str) -> str:
     in ``frontend/src/utils/syncManager.ts``), and an uninstall records ``""``
     as the ROM's ``applied_launch_options`` (``services/rom_removal.py``).
 
-    The path is double-quoted so paths with spaces survive the launcher's
-    ``exec "$@"``. Embedded ``\\`` and ``"`` in the path are backslash-escaped
-    (backslash first, then quote) so a server-controlled ROM filename cannot
-    break out of the quoted token and inject extra argv elements into the
-    emulator invocation. Only the path is escaped — *invocation* is trusted
-    build-time text whose own ``-e "..."`` quoting must survive verbatim.
+    Steam hands the launch options to a shell, and double quotes would not keep
+    the path literal there (``docs/architecture/steam-non-steam-shortcuts.md``,
+    "Launch options pass through a shell"). So the path is single-quoted, and a
+    ``'`` inside it is written ``'\\''`` — close the quote, an escaped quote,
+    reopen. The program receives the path as one argument, exactly as the file
+    is named. Only the path is quoted — *invocation* is trusted build-time text
+    whose own ``-e "..."`` quoting must survive verbatim.
     """
     if not path:
         return ""
-    escaped = path.replace("\\", "\\\\").replace('"', '\\"')
-    return f'{invocation} "{escaped}"'
+    quoted = path.replace("'", "'\\''")
+    return f"{invocation} '{quoted}'"
 
 
 def extract_version_metadata(rom: dict[str, Any]) -> dict[str, Any]:

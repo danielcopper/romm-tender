@@ -1208,7 +1208,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
    * once the backend has answered success, reset the shortcut's now-stale launch
    * command to the uninstalled "" placeholder under the removal's lease and
    * announce the ROM as not installed. The reset keeps a raced-past
-   * not_installed launch from exec'ing a stale `flatpak run … "<path>"`
+   * not_installed launch from exec'ing a stale `flatpak run … '<path>'`
    * (#1051); it is best-effort, so a launch-options hiccup never turns a
    * removal that happened into an error.
    */
