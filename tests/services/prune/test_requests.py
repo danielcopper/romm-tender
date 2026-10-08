@@ -122,3 +122,81 @@ def test_snapshot_cap_is_judged_on_compact_json() -> None:
     assert valid_snapshot(snapshot, 9001) is True
     snapshot["launch_options"] += "x"
     assert valid_snapshot(snapshot, 9001) is False
+
+
+@pytest.mark.parametrize(
+    ("payload", "reason", "message"),
+    [
+        (None, "invalid_request", "Preview request must be an object."),
+        (["bulk"], "invalid_request", "Preview request must be an object."),
+        ({}, "invalid_scope", "Preview scope must be bulk or rom."),
+        ({"scope": "all"}, "invalid_scope", "Preview scope must be bulk or rom."),
+        ({"scope": "rom"}, "invalid_rom_id", "A positive ROM id is required."),
+        ({"scope": "rom", "rom_id": 0}, "invalid_rom_id", "A positive ROM id is required."),
+        ({"scope": "rom", "rom_id": -3}, "invalid_rom_id", "A positive ROM id is required."),
+        ({"scope": "rom", "rom_id": True}, "invalid_rom_id", "A positive ROM id is required."),
+        ({"scope": "rom", "rom_id": "7"}, "invalid_rom_id", "A positive ROM id is required."),
+        ({"scope": "bulk", "preview_id": 7}, "invalid_preview_id", "Preview id must be a string or null."),
+        ({"scope": "bulk", "limit": 101}, "invalid_page", "Offset must be non-negative and limit 0-100."),
+    ],
+)
+def test_a_preview_request_is_refused_with_the_reason_of_its_first_fault(payload, reason, message) -> None:
+    with pytest.raises(Refused) as caught:
+        parse_preview_request(payload)
+
+    assert (caught.value.reason, caught.value.message) == (reason, message)
+
+
+_OPTION_KEYS = ("repoint_shortcuts", "remove_rows", "remove_fully_vanished", "create_recovery_bundle")
+_MISSING = object()
+
+
+@pytest.mark.parametrize("key", _OPTION_KEYS)
+@pytest.mark.parametrize("value", [_MISSING, None, 1, "true"])
+def test_every_cleanup_option_must_be_an_explicit_boolean(key, value) -> None:
+    request: dict[str, object] = dict.fromkeys(_OPTION_KEYS, True)
+    if value is _MISSING:
+        del request[key]
+    else:
+        request[key] = value
+    none_selected = frozenset[int]()
+
+    with pytest.raises(Refused) as caught:
+        parse_options(request, none_selected)
+
+    assert (caught.value.reason, caught.value.message) == (
+        "invalid_options",
+        "Every cleanup option must be explicitly true or false.",
+    )
+
+
+def _selection_page(**overrides: object) -> dict[str, object]:
+    return {"preview_id": "preview", "selection_id": None, "rom_ids": [1], "final": False, **overrides}
+
+
+_PAGE_MESSAGE = "Each selection page may contain 0-100 positive ROM ids."
+
+
+@pytest.mark.parametrize(
+    ("payload", "reason", "message"),
+    [
+        (None, "invalid_request", "Installed-content selection must be an object."),
+        ([1], "invalid_request", "Installed-content selection must be an object."),
+        (_selection_page(preview_id=None), "invalid_preview_id", "Preview id must be a non-empty string."),
+        (_selection_page(preview_id=""), "invalid_preview_id", "Preview id must be a non-empty string."),
+        (_selection_page(preview_id=7), "invalid_preview_id", "Preview id must be a non-empty string."),
+        (_selection_page(selection_id=""), "invalid_selection_id", "Selection id must be a non-empty string or null."),
+        (_selection_page(selection_id=7), "invalid_selection_id", "Selection id must be a non-empty string or null."),
+        (_selection_page(rom_ids=None), "invalid_selection", _PAGE_MESSAGE),
+        (_selection_page(rom_ids=[0]), "invalid_selection", _PAGE_MESSAGE),
+        (_selection_page(rom_ids=[True]), "invalid_selection", _PAGE_MESSAGE),
+        (_selection_page(final=None), "invalid_selection", "Selection final must be explicitly true or false."),
+        (_selection_page(final=1), "invalid_selection", "Selection final must be explicitly true or false."),
+        (_selection_page(final="true"), "invalid_selection", "Selection final must be explicitly true or false."),
+    ],
+)
+def test_a_selection_page_is_refused_with_the_reason_of_its_first_fault(payload, reason, message) -> None:
+    with pytest.raises(Refused) as caught:
+        parse_selection_page(payload)
+
+    assert (caught.value.reason, caught.value.message) == (reason, message)
