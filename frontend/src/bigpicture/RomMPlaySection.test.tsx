@@ -3003,7 +3003,9 @@ describe("RomMPlaySection", () => {
         await act(async () => {
           await items[3]!.props.onClick?.();
         });
-        expect(vi.mocked(backend.downloadAllFirmware)).toHaveBeenCalledWith("ps1");
+        // The ROM goes along: a downloaded game's files are placed for the
+        // system its install record holds.
+        expect(vi.mocked(backend.downloadAllFirmware)).toHaveBeenCalledWith("ps1", 42);
         expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
           expect.objectContaining({ body: "BIOS downloaded (3 files)" }),
         );

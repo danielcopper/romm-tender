@@ -651,7 +651,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     if (actionPending || !detail.platformSlug) return;
     setActionPending("bios");
     try {
-      const result = await downloadAllFirmware(detail.platformSlug);
+      const result = await downloadAllFirmware(detail.platformSlug, detail.romId);
       if (result.success) {
         showToast(`BIOS downloaded (${result.downloaded} files)`);
         globalThis.dispatchEvent(

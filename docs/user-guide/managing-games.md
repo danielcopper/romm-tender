@@ -245,8 +245,9 @@ the source that answers, which is RetroDECK while it is switched on. Where _sour
 **Download** is refused and the pages say **"_Source_ has no system for _platform_, so Tender cannot download its
 games."**; where the platform's only systems are switched off in _source_, they say **"System _system_ is switched off
 in _source_."** The platform's **Download BIOS** is refused the same way. A game you already installed keeps the system
-it was downloaded under. Where several systems fit one platform — SNES is `sfc`, `snes` and `snesna` in RetroDECK — the
-main one (`snes`) is taken; the platform's page names it.
+it was downloaded under, and **Download BIOS** on its page places the files for that system. Where several systems fit
+one platform — SNES is `sfc`, `snes` and `snesna` in RetroDECK — the main one (`snes`) is taken; the platform's page
+names it.
 
 **A download needs RetroDECK.** **Download** is refused, saying why, while RetroDECK is not installed (**Downloads need
 RetroDECK, which is not installed.**), while it is switched off in **Settings › Emulator sources** (**Downloads need

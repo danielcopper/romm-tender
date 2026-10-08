@@ -3128,6 +3128,22 @@ describe("Library › Platforms", () => {
       expect(since).toEqual(["gba"]);
     });
 
+    it("downloads for the platform's current system, with no game named", async () => {
+      vi.mocked(backend.downloadAllFirmware).mockResolvedValue({
+        success: true,
+        message: "Downloaded 0 firmware files",
+        downloaded: 0,
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Download all")!);
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
+
+      expect(vi.mocked(backend.downloadAllFirmware)).toHaveBeenCalledWith("gba", null);
+    });
+
     it("stays silent towards the game page when a run moved no file", async () => {
       vi.mocked(backend.downloadAllFirmware).mockResolvedValue({
         success: true,

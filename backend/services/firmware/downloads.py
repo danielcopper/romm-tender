@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
 
     from domain.firmware_wants import FirmwareCatalogue, FirmwarePlacement
+    from domain.platform_system import PlatformSystem
     from services.firmware.demand import FirmwareDemand
     from services.firmware.listing import FirmwareListing
     from services.protocols import (
@@ -217,12 +218,16 @@ class FirmwareDownloader:
                 rows.setdefault(fw.get("file_name", ""), fw)
         return list(rows.values())
 
-    async def download_all_firmware(self, platform_slug) -> dict[str, Any]:
-        """Download all firmware for a given platform slug."""
+    async def download_all_firmware(self, platform_slug, rom_id: int | None = None) -> dict[str, Any]:
+        """Download all firmware for a given platform slug.
+
+        With *rom_id*, a downloaded game's files are placed for the system its
+        install record holds; without one, for the platform's current system.
+        """
         await self._loop.run_in_executor(None, self._demand.download_root)
         platform_firmware = await self._platform_firmware_rows(platform_slug)
 
-        placements = await self._platform_placements(await self._platform_system(platform_slug))
+        placements = await self._platform_placements(await self._platform_system(platform_slug, rom_id))
         downloaded, errors = await self._download_firmware_batch(platform_firmware, placements)
 
         msg = f"Downloaded {downloaded} firmware files"
@@ -372,12 +377,22 @@ class FirmwareDownloader:
         )
         return emulator.emulator if emulator is not None else None
 
-    async def _platform_system(self, platform_slug: str) -> str:
-        """The system *platform_slug* is in the answering source; refused like a download where it has none."""
-        platform = await self._loop.run_in_executor(None, self._platform_systems.platform_system, platform_slug)
+    async def _platform_system(self, platform_slug: str, rom_id: int | None = None) -> str:
+        """The system *platform_slug* is in the answering source — or the one *rom_id*'s install record holds.
+
+        Refused like a download where there is none.
+        """
+        platform = await self._loop.run_in_executor(None, self._platform_system_io, platform_slug, rom_id)
         if platform.taken is None:
             raise platform.refusal(BIOS_DOWNLOAD)
         return platform.taken
+
+    def _platform_system_io(self, platform_slug: str, rom_id: int | None) -> PlatformSystem:
+        if rom_id is None:
+            return self._platform_systems.platform_system(platform_slug)
+        with self._uow_factory() as uow:
+            install = uow.rom_installs.get(int(rom_id))
+        return self._platform_systems.rom_system(platform_slug, install)
 
     async def _platform_placements(self, system: str) -> Mapping[str, FirmwarePlacement]:
         """Where *system*'s firmware files go, read off that platform's own demand."""

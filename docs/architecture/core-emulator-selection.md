@@ -214,9 +214,9 @@ save answer, whether the target is taken, the search for a copy already there, a
 **RetroDECK**, the one source Tender downloads into, whatever its switch: the switch is the folder's question
 (`adapters/retrodeck_folders.py`). Every other question — the emulator choice, the BIOS answers, the platform page —
 asks the answering source (above), so a platform can be one system in RetroDECK and another in EmuDeck. **An installed
-game keeps the system its install record holds** for its saves, its emulator choice, its BIOS answer and its launch
-(`PlatformSystems.rom_system`); only a new download follows the source's current answer. A source that renames, moves or
-drops a system is not followed yet.
+game keeps the system its install record holds** for its saves, its emulator choice, its BIOS answer, the BIOS download
+started from its page and its launch (`PlatformSystems.rom_system`); only a new download, and the platform page's BIOS
+download, follow the source's current answer. A source that renames, moves or drops a system is not followed yet.
 
 **The ids are kept.** `kv_config`'s `platform_ids` holds every listed platform's four ids and display name, replaced at
 the start of every sync from RomM's listing (a failed write is logged and leaves the run alone). Where none are kept for

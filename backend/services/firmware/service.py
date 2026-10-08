@@ -188,11 +188,11 @@ class FirmwareService:
         with self._downloads.downloading():
             return await self._downloads.download_firmware(firmware_id)
 
-    async def download_all_firmware(self, platform_slug) -> dict[str, Any]:
-        """Download all firmware the library holds for a platform."""
+    async def download_all_firmware(self, platform_slug, rom_id: int | None = None) -> dict[str, Any]:
+        """Download all firmware the library holds for a platform; for *rom_id*'s recorded system where it is given."""
         async with self._rules.hold("download_all_firmware", update=True, migration=True):
             with self._downloads.downloading():
-                return await self._downloads.download_all_firmware(platform_slug)
+                return await self._downloads.download_all_firmware(platform_slug, rom_id)
 
     async def download_platform_firmware_file(self, platform_slug, file_name) -> dict[str, Any]:
         """Download the one firmware file the library holds for a platform under that name."""

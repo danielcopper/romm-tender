@@ -118,7 +118,7 @@ _PRESSES: dict[str, Callable[[Any], Awaitable[dict[str, Any]]]] = {
     "download_platform_firmware_file": lambda harness: harness.endpoints.download_platform_firmware_file(
         "dc", "dc_boot.bin"
     ),
-    "download_all_firmware": lambda harness: harness.endpoints.download_all_firmware("dc"),
+    "download_all_firmware": lambda harness: harness.endpoints.download_all_firmware("dc", None),
     "remove_rom": lambda harness: harness.endpoints.remove_rom(_ROM_ID),
     "uninstall_all_roms": lambda harness: harness.endpoints.uninstall_all_roms(),
     "delete_platform_bios": lambda harness: harness.endpoints.delete_platform_bios("dc"),

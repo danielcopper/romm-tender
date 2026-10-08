@@ -6326,6 +6326,55 @@ class TestThePlatformsSystem:
             "platform": "Dreamcast",
         }
 
+    @pytest.mark.asyncio
+    async def test_a_downloaded_games_bios_download_places_for_its_recorded_system(self, firmware, tmp_path):
+        resolver = FakeFirmwareResolver()
+        fw, _ = self._service(firmware, FakePlatformSystems({"dc": "dreamcast"}), resolver)
+        _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "file_path": "bios/dc/dc_boot.bin"}])
+        with firmware.uow:
+            firmware.uow.roms.save(
+                Rom(
+                    rom_id=7,
+                    platform_slug="dc",
+                    name="Game",
+                    fs_name="g.zip",
+                    shortcut_app_id=None,
+                    last_synced_at="2026-01-01T00:00:00",
+                )
+            )
+            firmware.uow.rom_installs.save(
+                RomInstall(
+                    rom_id=7,
+                    file_path="/roms/naomi/g.zip",
+                    rom_dir=None,
+                    platform_slug="dc",
+                    system="naomi",
+                    installed_at="2026-01-01T00:00:00+00:00",
+                )
+            )
+
+        with (
+            patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(tmp_path / "bios"))),
+            patch.object(fw._downloads, "_download_firmware_batch", AsyncMock(return_value=(0, []))),
+        ):
+            await fw.download_all_firmware("dc", 7)
+
+        assert resolver.calls == ["naomi"]
+
+    @pytest.mark.asyncio
+    async def test_the_platform_pages_bios_download_follows_the_current_system(self, firmware, tmp_path):
+        resolver = FakeFirmwareResolver()
+        fw, _ = self._service(firmware, FakePlatformSystems({"dc": "dreamcast"}), resolver)
+        _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "file_path": "bios/dc/dc_boot.bin"}])
+
+        with (
+            patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(tmp_path / "bios"))),
+            patch.object(fw._downloads, "_download_firmware_batch", AsyncMock(return_value=(0, []))),
+        ):
+            await fw.download_all_firmware("dc", None)
+
+        assert resolver.calls == ["dreamcast"]
+
     @pytest.mark.parametrize(
         ("state", "reason"), [(NO_SYSTEM, "no_platform_system"), (SWITCHED_OFF, "platform_system_off")]
     )

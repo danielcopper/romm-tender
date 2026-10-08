@@ -584,7 +584,9 @@ export const applySteamInputSetting = endpoint<[], { success: boolean; message: 
 // platform at a time below, in the order the page's own list is in.
 export const getFirmwareStatus = endpoint<[], FirmwareStatus>("get_firmware_status");
 export const getPlatformFirmwareStatus = endpoint<[string], PlatformFirmwareStatus>("get_platform_firmware_status");
-export const downloadAllFirmware = endpoint<[string], FirmwareDownloadResult | EndpointFailure>(
+// The ROM is the game whose page started the download, whose install record names
+// the system its files are placed for; `null` from the platform page.
+export const downloadAllFirmware = endpoint<[string, number | null], FirmwareDownloadResult | EndpointFailure>(
   "download_all_firmware",
 );
 export const downloadRequiredFirmware = endpoint<[string], FirmwareDownloadResult | EndpointFailure>(
