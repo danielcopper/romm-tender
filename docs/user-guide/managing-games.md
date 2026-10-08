@@ -646,9 +646,11 @@ While a game is running, its detail panel shows **Resume** instead of Play, with
 chevron's menu holds one action: **Stop Game**. It asks you to confirm first, because any progress since your last
 in-game save may be lost.
 
-Steam's own "Stop Game" cannot end these games. Your shortcut starts RetroDECK through Flatpak, and Flatpak launches the
-emulator outside the process tree Steam watches — so Steam has nothing to stop, and pressing its button does nothing at
-all. Tender's Stop Game finds the emulator itself and ends it.
+In Gaming Mode, Steam can end these games itself: **Exit Game** in Steam's overlay ends a RetroDECK game the way it ends
+any other. Tender's Stop Game is the way where that overlay does not reach — in Desktop Mode it does not open over a
+RetroDECK game at all (see
+[The Steam button opens no overlay in Desktop Mode](troubleshooting.md#the-steam-button-opens-no-overlay-in-desktop-mode))
+— and whenever Steam's Exit Game ends nothing on your setup. Tender's Stop Game finds the emulator itself and ends it.
 
 It ends **only the game you pressed it for**. RetroDECK can be running more than one thing at a time — a second game
 launched from another shortcut, or ES-DE opened on its own — so Tender identifies the session by the ROM the button

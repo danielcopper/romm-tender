@@ -962,13 +962,11 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // state value — the ref is updated synchronously.
   const stopInFlightRef = useRef(false);
 
-  // Stop the running game. Steam cannot do this itself: the shortcut execs
-  // `flatpak run … net.retrodeck.retrodeck` and flatpak's portal starts the
-  // sandbox outside Steam's `reaper` ancestry, so `SteamClient.Apps.TerminateApp`
-  // has nothing to signal (measured on-device: a no-op even with force=true).
-  // The backend owns the kill instead — it resolves the flatpak instance's host
-  // processes and runs a single-stop-request → grace → force ladder
-  // (`services/game_process.py`). The `romId` is what tells it WHICH instance:
+  // Stop the running game. Steam's overlay ends it in Gaming Mode, but in
+  // Desktop Mode that overlay does not open over a Flatpak game, so this is the
+  // way out there. The backend owns the kill — it resolves the flatpak
+  // instance's host processes and runs a single-stop-request → grace → force
+  // ladder (`services/game_process.py`). The `romId` is what tells it WHICH instance:
   // RetroDECK can have several live at once (a second game, ES-DE opened on its
   // own), and only the one running this ROM may be signalled.
   const handleStopGame = async () => {

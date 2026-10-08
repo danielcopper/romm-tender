@@ -6,12 +6,10 @@ those processes were started with, and the signals sent to them. Direct file
 reads and ``os.kill`` only — no ``subprocess``, no shelling out to
 ``flatpak kill``.
 
-Why the host process table at all — Steam cannot terminate these games.
-A RomM shortcut execs ``flatpak run … <app>``; flatpak's D-Bus portal starts the
-sandbox from the session helper, so the emulator is **not** a descendant of
-Steam's ``reaper`` and ``SteamClient.Apps.TerminateApp`` has nothing to signal
-(measured on-device: a proven no-op). The flatpak instance registry is the only
-handle that survives that detach.
+Why the host process table at all — Stop Game must end exactly one game.
+RetroDECK can run several instances of its flatpak at once (a second game,
+ES-DE opened on its own), and only the one running the pressed ROM may be
+signalled. The flatpak instance registry is what tells those instances apart.
 
 Every read is guarded and fail-soft, like ``renderer_rss``: a process or
 instance directory that vanishes mid-scan is a normal race and is skipped, so
