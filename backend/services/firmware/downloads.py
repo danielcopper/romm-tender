@@ -19,7 +19,6 @@ from domain import firmware_paths
 from domain.bios_file import BiosFile
 from domain.emulator_commands import resolve_platform_option
 from domain.firmware_groups import fetched_as_required
-from domain.refusal import DomainRefused
 from domain.rom_files import TMP_EXT
 from lib.errors import Refused, RommApiError
 from lib.path_safety import PathTraversalError
@@ -249,7 +248,8 @@ class FirmwareDownloader:
         emulator lists that name, so there is no file to fetch into it.
 
         A file whose download refuses or meets a RomM error is logged, named in
-        the errors and passed over; anything else ends the batch.
+        the errors and passed over; anything else ends the batch, RetroDECK's
+        folder refusal included — no later file could land either.
         """
         downloaded = 0
         errors = []
@@ -263,7 +263,7 @@ class FirmwareDownloader:
             name = fw.get("file_name", str(fw["id"]))
             try:
                 await self._download_one(fw["id"], placements)
-            except (Refused, DomainRefused, RommApiError) as e:
+            except (Refused, RommApiError) as e:
                 self._logger.error(f"Failed to download firmware {name}: {e}")
                 errors.append(name)
                 continue

@@ -39,7 +39,6 @@ from domain.firmware_wants import (
     SYSTEM_FIRMWARE_RUNS_WITHOUT,
     FolderVerdict,
 )
-from domain.refusal import DomainRefused
 from domain.retrodeck_folders import BIOS_DOWNLOAD, FolderRefused, finding_refusal, switched_off
 from domain.rom import Rom
 from domain.shortcut_data import EmulatorInvocation
@@ -5747,9 +5746,12 @@ class TestASingleDownloadThatFails:
 
 
 class TestABatchDownloadCarriesOnPastAFailedFile:
-    """A file whose download refuses or meets a RomM error is named and passed over; anything else ends the batch."""
+    """A file whose download refuses or meets a RomM error is named and passed over; anything else ends the batch.
 
-    _NAMES = ("refused", "romm_error", "folder_refused", "fetched")
+    RetroDECK's folder refusal is among the "anything else": it is a domain refusal, and no later file could land.
+    """
+
+    _NAMES = ("refused", "romm_error", "fetched")
 
     def _service(self, tmp_path) -> FirmwareService:
         fw = _make_firmware_service(
@@ -5780,8 +5782,6 @@ class TestABatchDownloadCarriesOnPastAFailedFile:
                 raise Refused("bios_download_failed", "refused.bin could not be downloaded")
             if fw_id == 2:
                 raise RommConnectionError("connection refused")
-            if fw_id == 3:
-                raise DomainRefused("retrodeck_off", "RetroDECK is switched off")
             return {"success": True, "file_path": "/bios/fetched.bin", "md5_match": None}
 
         with (
@@ -5790,14 +5790,33 @@ class TestABatchDownloadCarriesOnPastAFailedFile:
         ):
             result = await getattr(fw, entry)("dc")
 
-        assert attempted == [1, 2, 3, 4]
+        assert attempted == [1, 2, 3]
         assert result["success"] is True
         assert result["downloaded"] == 1
-        assert result["message"].endswith("(3 failed: refused.bin, romm_error.bin, folder_refused.bin)")
+        assert result["message"].endswith("(2 failed: refused.bin, romm_error.bin)")
         logged = [record.getMessage() for record in caplog.records]
         assert "Failed to download firmware refused.bin: refused.bin could not be downloaded" in logged
         assert "Failed to download firmware romm_error.bin: connection refused" in logged
-        assert "Failed to download firmware folder_refused.bin: RetroDECK is switched off" in logged
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("entry", ["download_all_firmware", "download_required_firmware"])
+    async def test_a_retrodeck_folder_refusal_ends_the_batch(self, tmp_path, entry):
+        fw = self._service(tmp_path)
+        attempted = []
+
+        async def fake_download_one(fw_id, _placements):
+            attempted.append(fw_id)
+            if fw_id == 2:
+                raise switched_off(BIOS_DOWNLOAD)
+            return {"success": True, "file_path": f"/bios/{fw_id}.bin", "md5_match": None}
+
+        with patch.object(fw._downloads, "_download_one", side_effect=fake_download_one):
+            download = getattr(fw, entry)("dc")
+            with pytest.raises(FolderRefused) as refused:
+                await download
+
+        assert refused.value.reason == switched_off(BIOS_DOWNLOAD).reason
+        assert attempted == [1, 2]
 
     @pytest.mark.asyncio
     async def test_an_unexpected_exception_ends_the_batch(self, tmp_path):
