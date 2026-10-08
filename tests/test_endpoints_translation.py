@@ -41,6 +41,7 @@ from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcessControlAdapter
 from fakes.fake_journal import FakeJournal
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
+from fakes.fake_platform_systems import FakePlatformSystems
 from fakes.fake_release_download import FakeReleaseDownload
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
@@ -1360,7 +1361,7 @@ def _dispatcher_over_firmware(
             platform_firmware_resolver=FakeFirmwareResolver(),
             retrodeck_folders=FakeRetroDeckFolders(bios="/retrodeck/bios"),
             core_info=FakeCoreInfoProvider(),
-            resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
+            platform_systems=FakePlatformSystems(),
             platform_core_reader=FakePlatformCoreReader(),
             uow_factory=FakeUnitOfWorkFactory(uow),
             conflict_rules=_make_conflict_rules(),
@@ -1424,7 +1425,7 @@ class TestTheFirmwareAnswersOnTheWire:
         romm_api.list_firmware_side_effect = RommConnectionError("connection refused")
         dispatcher = _dispatcher_over_firmware(romm_api, FakeFirmwareFileStore(), FakeUnitOfWork())
 
-        message = json.loads(await dispatcher.dispatch(1, "download_all_firmware", ["dc"]))
+        message = json.loads(await dispatcher.dispatch(1, "download_all_firmware", ["dc", None]))
 
         reason, text = classify_error(RommConnectionError("connection refused"))
         assert message["type"] == TYPE_REPLY
