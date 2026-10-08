@@ -1364,7 +1364,7 @@ def _dispatcher_over_firmware(
 
 
 class TestTheFirmwareAnswersOnTheWire:
-    """A BIOS delete that removed only part answers ``delete_incomplete`` with how many files it removed."""
+    """The firmware downloads' and deletes' refusals and partial results, as the wire carries them."""
 
     async def test_a_partial_delete_answers_its_count(self):
         uow = FakeUnitOfWork()
@@ -1395,3 +1395,19 @@ class TestTheFirmwareAnswersOnTheWire:
             "deleted_count": 1,
         }
         assert list(store.files) == ["/retrodeck/bios/dc_flash.bin"]
+
+    async def test_a_name_the_library_does_not_hold_answers_without_a_count(self):
+        romm_api = FakeRommApi()
+        romm_api.firmware_files = [
+            {"id": 1, "file_name": "dc_boot.bin", "file_path": "bios/dc/dc_boot.bin", "md5_hash": ""}
+        ]
+        dispatcher = _dispatcher_over_firmware(romm_api, FakeFirmwareFileStore(), FakeUnitOfWork())
+
+        message = json.loads(await dispatcher.dispatch(1, "download_platform_firmware_file", ["n64", "dc_boot.bin"]))
+
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {
+            "success": False,
+            "reason": "not_in_library",
+            "message": "dc_boot.bin is not in your RomM library for n64",
+        }
