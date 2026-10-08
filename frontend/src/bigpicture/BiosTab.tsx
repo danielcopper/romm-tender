@@ -43,6 +43,7 @@ import { biosFileDescription, biosFileNote } from "../utils/biosFileNote";
 import { oneOfWords, type GroupLineTone } from "../utils/biosGroup";
 import { biosHeldRatio } from "../utils/biosHeldRatio";
 import { biosSummary, groupBlocks } from "../utils/biosSummary";
+import { emulatorDataReasonSentence } from "../utils/emulatorSourceWording";
 import { section } from "./panelSection";
 
 interface BiosTabProps {
@@ -142,17 +143,39 @@ function buildBiosCoreLines(
  *
  * The dot's colour is the backend's verdict through the shared helper and is
  * never re-derived here.
+ *
+ * Where the answering source gives no emulator list, the line above the state
+ * says why, in the sentence the platform pane shows for the same answer.
  */
-function buildBiosHeader(bios: BiosStatus, biosLevel: BiosTabProps["biosLevel"]): ReactElement[] {
+function buildBiosHeader(
+  bios: BiosStatus,
+  biosLevel: BiosTabProps["biosLevel"],
+  coreInfo: CoreInfo | null,
+): ReactElement[] {
   const heldRatio = biosHeldRatio(bios);
 
   const biosColor = biosColorForLevel(biosLevel);
   const biosLabel = `${biosSummary(bios, bios.files ?? [], biosLevel).sentence}${heldRatio}`;
+  const listReason =
+    coreInfo !== null && !coreInfo.emulator_data_available
+      ? emulatorDataReasonSentence(coreInfo.emulator_data_reason, coreInfo.emulator_source)
+      : null;
 
   return [
     <div key="bios-title" className="romm-panel-section-title" style={{ marginBottom: "8px" }}>
       BIOS
     </div>,
+    ...(listReason === null
+      ? []
+      : [
+          <div
+            key="bios-reason"
+            data-testid="bios-reason"
+            style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "12px", marginBottom: "4px" }}
+          >
+            {listReason}
+          </div>,
+        ]),
     <div key="bios-row" className="romm-panel-status-inline">
       <span className="romm-status-dot" style={{ backgroundColor: biosColor }} />
       <span className="romm-panel-value">{biosLabel}</span>
@@ -459,7 +482,7 @@ export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isA
   if (!isActive || !biosStatus) return null;
 
   // Left column: BIOS status, the launching emulator's group, then the file list
-  const biosColumn = buildBiosHeader(biosStatus, biosLevel);
+  const biosColumn = buildBiosHeader(biosStatus, biosLevel, coreInfo);
   const groupBlockElement = buildGroupBlock(biosStatus);
   if (groupBlockElement) biosColumn.push(groupBlockElement);
 

@@ -87,6 +87,40 @@ describe("BiosTab", () => {
     expect(container.innerHTML).toContain("#8f98a0");
   });
 
+  it("gives no reason line where the answering source gives an emulator list", () => {
+    const { container } = render(
+      <BiosTab
+        biosStatus={{ needs_bios: false, bios_status_unknown: true }}
+        biosLevel="unknown"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+    expect(container.querySelector('[data-testid="bios-reason"]')).toBeNull();
+  });
+
+  it("puts the reason line between the BIOS heading and the state", () => {
+    const { container } = render(
+      <BiosTab
+        biosStatus={{ needs_bios: false, bios_status_unknown: true }}
+        biosLevel="unknown"
+        coreInfo={{
+          ...coreInfo,
+          emulator_data_available: false,
+          emulator_data_reason: "switched_off",
+          emulator_source: null,
+        }}
+        isActive={true}
+      />,
+    );
+    const reason = container.querySelector('[data-testid="bios-reason"]');
+    expect(reason?.textContent).toBe("Every emulator source is switched off in Settings › Emulator sources.");
+    expect(reason?.previousElementSibling?.textContent).toBe("BIOS");
+    expect(reason?.nextElementSibling?.textContent).toContain(
+      "Nothing could be established about what the launching emulator needs",
+    );
+  });
+
   it.each([
     [2, "All 2 files the launching emulator requires are in place (5/20 RomM library files)"],
     [1, "The one file the launching emulator requires is in place (5/20 RomM library files)"],

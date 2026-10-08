@@ -730,16 +730,16 @@ Tender stays a card without a jump, with Dismiss where the condition has a sensi
 every switched-on source, except `content-tree-unwired`, which concerns nothing Tender does and is stated only on the
 source's card under Settings › Emulator sources, as is every finding of a switched-off source; a code with no sentence
 yet, or a known code whose finding lacks a fact its sentence needs, reads "Problem with _source_: _code_". Where the
-answering source gives no emulator list, the platform page and the emulator menu say why from the answer's `reason` — no
-source detected, every source switched off, a broken ES-DE systems file, a RetroDECK that has not been set up yet,
-EmuDeck's list that cannot be read yet, or any other refusal — and never "no emulator". **_Source_ is switched on in
-Settings › Emulator sources, but Tender cannot start games through it yet.** stands on Main once for every switched-on
-source Tender cannot start games through, whether or not it is the one that answers, and is the one source notice drawn
-smaller and without the warning sign: it states a fact about Tender rather than something wrong. The source's card under
-Settings › Emulator sources says **Tender cannot start games through _source_ yet.**, switched on or off, and a
-switched-off source says it only there. Where such a source answers, the platform page and the emulator menu keep saying
-why there is no emulator list — today no such source gives one. Showing **Tender cannot start games through _source_
-yet.** there beside a list such a source does give is #2222's work; no code does it today.
+answering source gives no emulator list, the platform page, the emulator menu and a game's BIOS tab say why from the
+answer's `reason` — no source detected, every source switched off, a broken ES-DE systems file, a RetroDECK that has not
+been set up yet, EmuDeck's list that cannot be read yet, or any other refusal — and never "no emulator". **_Source_ is
+switched on in Settings › Emulator sources, but Tender cannot start games through it yet.** stands on Main once for
+every switched-on source Tender cannot start games through, whether or not it is the one that answers, and is the one
+source notice drawn smaller and without the warning sign: it states a fact about Tender rather than something wrong. The
+source's card under Settings › Emulator sources says **Tender cannot start games through _source_ yet.**, switched on or
+off, and a switched-off source says it only there. Where such a source answers, the platform page, the emulator menu and
+a game's BIOS tab keep saying why there is no emulator list — today no such source gives one. Showing **Tender cannot
+start games through _source_ yet.** there beside a list such a source does give is #2222's work; no code does it today.
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
@@ -1416,8 +1416,10 @@ it, for the focused platform:
   core, and the whole answer is keyed on the emulator's identity for that reason.
 
   **The game page's BIOS tab reads the same module** and shows the `sentence` alone, with the same ratio appended in the
-  same words. Where the launching emulator states a one-of group, the tab lists it between that sentence and the file
-  list — under a subheading "`<emulator>` · one image per disc region" in the section label's class
+  same words. Where the answering source gives no emulator list, a line between the `BIOS` heading and that sentence
+  says why, in the platform page's words (`emulatorDataReasonSentence`, over the `get_platform_core_info` answer the tab
+  already holds). Where the launching emulator states a one-of group, the tab lists it between that sentence and the
+  file list — under a subheading "`<emulator>` · one image per disc region" in the section label's class
   (`romm-panel-section-title`, which upper-cases it), one indented line per option with its regions, file and state,
   always in the group's own order, the game's own region marked "← this game's region" where it stands (`groupBlock` in
   `frontend/src/utils/biosGroup.ts`) — and the file list below it stays whole, under a "Files" subheading of the same

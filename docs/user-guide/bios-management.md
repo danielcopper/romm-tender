@@ -496,6 +496,10 @@ names no emulator, it hands the launch to RetroDECK and RetroDECK picks one. Eit
 emulator. Others you have installed may have answered perfectly well, and where they did, their answers are in the rows
 below.
 
+Where the cause is that Tender could not get the system's emulator list at all — no emulator source found, every source
+switched off, or a list that cannot be read yet (EmuDeck's today) — the platform page says why under the platform's
+name, and a game's **BIOS** tab says it in the same words, on the line above its readiness sentence.
+
 This is informational, not an error: your files may be perfectly fine, Tender simply can't confirm what is needed.
 Genuinely BIOS-free systems (such as the NES) are unaffected — the emulator answers, it wants nothing, and the system
 reads as ready.

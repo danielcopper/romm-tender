@@ -3789,6 +3789,61 @@ describe("RomMGameInfoPanel", () => {
       expect(container.textContent).not.toContain("marks none of its BIOS files as required");
       // Swallowed-note fix: the note renders even though no file has a row.
     });
+
+    it("unknown: says why, in the platform pane's sentence, where the answering source gives no emulator list", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 1,
+        bios_status: {
+          needs_bios: true,
+          platform_slug: "psx",
+          server_count: 1,
+          local_count: 0,
+          ratio_server_count: 1,
+          ratio_local_count: 0,
+          all_downloaded: false,
+          required_count: 0,
+          required_downloaded: 0,
+          unknown_count: 1,
+          known_count: 0,
+          files: [
+            {
+              file_name: "scph5501.bin",
+              downloaded: false,
+              local_path: "",
+              description: "",
+              wanted: "unknown",
+              required_by_active: false,
+              cores: {},
+              used_by_active: true,
+            },
+          ],
+        } as never,
+        bios_level: "unknown",
+        metadata: makeMetadata(),
+        stale_fields: [],
+      });
+      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
+        emulator_data_available: false,
+        emulator_data_reason: "sealed",
+        emulator_source: { kind: "emudeck", starts_games: false },
+        emulators: [],
+        active_core: null,
+        active_core_label: null,
+        platform_core_label: null,
+        has_game_override: false,
+      });
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+        await Promise.resolve();
+      });
+      const text = container.textContent;
+      const reason = text.indexOf("EmuDeck's emulator list cannot be read yet.");
+      expect(reason).toBeGreaterThan(-1);
+      expect(reason).toBeLessThan(text.indexOf("Nothing could be established about what the launching emulator needs"));
+    });
   });
 
   describe("biosStatusFromCache + saveStatusFromCache (cache-first rendering)", () => {
