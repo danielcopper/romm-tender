@@ -4051,16 +4051,17 @@ describe("RomMPlaySection", () => {
       expect(container.textContent).toContain("SPACE REQUIRED");
     });
 
-    it("stays on screen in place of a version error or a pending migration, so Resume and Stop stay reachable", async () => {
-      vi.mocked(useVersionError).mockReturnValue("server too old");
-      vi.mocked(useMigrationStatus).mockReturnValue({ pending: true });
+    it.each([
+      ["a version error", () => vi.mocked(useVersionError).mockReturnValue("server too old")],
+      ["a pending migration", () => vi.mocked(useMigrationStatus).mockReturnValue({ pending: true })],
+    ])("stays hidden under %s, as it is otherwise", async (_label, arrange) => {
+      arrange();
       setStrandedAnswer("restart_steam");
 
       const { container } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
 
-      expect(container.querySelector('[data-testid="play-button"]')).not.toBeNull();
-      expect(container.textContent).toContain("Tender restarted");
+      expect(container.firstChild).toBeNull();
     });
   });
 

@@ -927,15 +927,13 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     );
   };
 
-  // Version mismatch — render nothing (VersionErrorCard is shown in RomMGameInfoPanel instead).
-  // Not on a stranded panel: its row stays, and the stranded card takes the place
-  // of this card and of the migration one.
-  if (versionError && !stranded) {
+  // Version mismatch — render nothing (VersionErrorCard is shown in RomMGameInfoPanel instead)
+  if (versionError) {
     return null;
   }
 
   // Pending RetroDECK migration — render nothing (MigrationBlockedCard is shown in RomMGameInfoPanel instead)
-  if (migration.pending && !stranded) {
+  if (migration.pending) {
     return null;
   }
 
@@ -981,7 +979,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   }
 
   // Achievements badge (only when RA data available). Not on a stranded panel:
-  // the tab it opens has given way to the stranded card, and so has the BIOS one.
+  // the tab it opens has given way to the stranded card.
   if (detail.raId && !stranded) {
     const hasEarned = detail.achievementEarned > 0;
     const countLabel =
@@ -1051,6 +1049,8 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // does not soften that. The console's own demand is the same kind of state —
   // the game does not start — which is why it earns the same red badge rather
   // than a softer one of its own.
+  //
+  // Not on a stranded panel: the BIOS tab has given way to the stranded card.
   if (detail.biosRequiredMissing && !stranded) {
     infoItems.push(
       // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- pointer-only shortcut into the BIOS tab, which the tab bar's DialogButton already reaches from the focus ring; a role/tabIndex here would add a gamepad focus stop to the play row.
