@@ -343,8 +343,8 @@ carries the new command by its next launch.
 
 ### The Steam button opens no overlay in Desktop Mode
 
-**Symptom**: In Desktop Mode, pressing the Steam button while a RetroDECK game is running shows no in-game overlay, so
-there is no Exit to press. Big Picture's own menu opens instead, behind the game's window.
+**Symptom**: In Desktop Mode, pressing the Steam button while a RetroDECK game is running opens no in-game overlay. Big
+Picture's own menu opens instead, behind the game's window, so nothing seems to happen.
 
 **Why**: Outside Gaming Mode, Steam draws its overlay inside the game's own process, and that does not work for a game
 running in a Flatpak sandbox, which is how RetroDECK runs. This is a known limitation of Steam with Flatpak games
@@ -352,13 +352,15 @@ running in a Flatpak sandbox, which is how RetroDECK runs. This is a known limit
 [ValveSoftware/steam-for-linux#8952](https://github.com/ValveSoftware/steam-for-linux/issues/8952)), not something
 Tender can change.
 
-**Fix**: Leave the game through the emulator's own menu. RetroDECK sets RetroArch's menu to open when you press L3 and
-R3 together (both sticks pressed in); there, choose **Quit** in the **Main Menu**. A standalone emulator has a menu or
-hotkeys of its own. With a keyboard you can also switch to Big Picture with Alt+Tab and end the game from its game page:
-the chevron beside **Resume** holds **Stop Game**, described under
-[Stopping a running game](managing-games.md#stopping-a-running-game).
+**Fix**: Leave the game through the emulator itself. In RetroArch, press Start and Select together: RetroDECK sets that
+as RetroArch's quit combination, and it quits RetroArch at once. It does not ask first, so pressing both by accident
+ends the game too. Or open RetroArch's menu, which RetroDECK sets to open when you press L3 and R3 together (both sticks
+pressed in), and choose **Quit** in the **Main Menu**. A standalone emulator has a menu or hotkeys of its own. With a
+keyboard you can also switch to Big Picture with Alt+Tab and end the game from its game page: the chevron beside
+**Resume** holds **Stop Game**, described under [Stopping a running game](managing-games.md#stopping-a-running-game).
 
-In Gaming Mode the Steam button works as usual: Steam's interface is drawn over the game there.
+In Gaming Mode the Steam button opens Steam's overlay as usual, because Steam's interface is drawn over the game there.
+How a running game is ended is under [Stopping a running game](managing-games.md#stopping-a-running-game).
 
 ### Apply to All Shortcuts says "Not applied"
 
