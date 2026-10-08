@@ -22,6 +22,7 @@ import * as cachedStore from "../utils/cachedGameDetailStore";
 import { getBiosStatusShared, _resetSharedReadsForTests } from "../api/sharedReads";
 import * as slotState from "../utils/slotState";
 import { readGameRunning } from "../utils/sessionManager";
+import { setSettingsResetState } from "../utils/settingsResetStore";
 import { resetUpdateInstallStoreForTests, setUpdateInstallAttempt } from "../utils/updateInstallStore";
 import {
   installDomEventListenerSpy,
@@ -519,6 +520,26 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.refreshMigrationState).mockResolvedValue({ retrodeck: { pending: true } });
       const { container } = await renderStranded("reloads");
       expect(container.textContent).toBe(RELOADS);
+    });
+
+    it("stands in place of the settings-reset card", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [] });
+      setSettingsResetState({ pending: true, backedUpTo: "settings.json.corrupt-seed" });
+      try {
+        const { container } = await renderStranded("reloads");
+        expect(container.textContent).toBe(RELOADS);
+      } finally {
+        act(() => setSettingsResetState({ pending: false, backedUpTo: null }));
+      }
+    });
+
+    it("stands in place of Loading while the detail read is still out", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [] });
+      setStrandedAnswer("restart_steam");
+      vi.mocked(cachedStore.getCachedGameDetail).mockReturnValue(new Promise(() => {}));
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      expect(container.textContent).toBe(RESTART_STEAM);
     });
 
     it("adds where the update's result shows, before the quit line, while an attempt has started the installer", async () => {
