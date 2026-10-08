@@ -41,7 +41,9 @@ from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_firmware_file_store import FakeFirmwareFileStore
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcessControlAdapter
+from fakes.fake_journal import FakeJournal
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
+from fakes.fake_release_download import FakeReleaseDownload
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
@@ -50,16 +52,21 @@ from fakes.fake_rom_launch_path import FakeRomLaunchPathReader
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_settings_persister import FakeSettingsPersister
+from fakes.fake_steam_interface import FakeSteamInterface
+from fakes.fake_transient_units import FakeTransientUnits
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.steam_config import SteamConfigAdapter
+from adapters.update_attempt import UpdateAttemptFileAdapter
+from adapters.update_staging import UpdateStagingAdapter
 from domain.bios_file import BiosFile
 from domain.refusal import DomainRefused, NamedDomainRefused
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
+from domain.update_release import LatestRelease, ReleaseTarball
 from host import CallDispatcher, HostStatus
 from host.dispatch import route_names
 from host.protocol import REASON_BACKEND_EXCEPTION, TYPE_ERROR, TYPE_REPLY
@@ -90,6 +97,8 @@ from services.library import LibraryService, LibraryServiceConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.prune import PruneService, PruneServiceConfig
 from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
+from services.update_install import UpdateInstallService, UpdateInstallServiceConfig
+from services.update_output import UpdateOutputService, UpdateOutputServiceConfig
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
@@ -1422,3 +1431,114 @@ class TestTheFirmwareAnswersOnTheWire:
         reason, text = classify_error(RommConnectionError("connection refused"))
         assert message["type"] == TYPE_REPLY
         assert message["result"] == {"success": False, "reason": reason, "message": text}
+
+
+class _StoredRelease:
+    """The release check's answer: one newer release, as the last check stored it."""
+
+    async def last_seen_release(self) -> LatestRelease | None:
+        url = "https://github.test/releases/download/tender-v1.1.0/romm-tender-1.1.0.tar.gz"
+        return LatestRelease(
+            version="1.1.0", tarball=ReleaseTarball(url=url, digest="0" * 64, checksum_url=f"{url}.sha256")
+        )
+
+
+async def _acknowledge_nothing(rolled_back_at: object) -> dict[str, Any]:
+    return {"success": True}
+
+
+def _dispatcher_over_update_install(tmp_path: Path, steam: FakeSteamInterface) -> CallDispatcher:
+    """The real dispatcher over ``Endpoints`` whose update install is the real ``UpdateInstallService`` over fakes."""
+    service = UpdateInstallService(
+        config=UpdateInstallServiceConfig(
+            releases=_StoredRelease(),
+            current_version="1.0.0",
+            installed_program=True,
+            steam=steam,
+            library_sync_in_flight=lambda: False,
+            rom_downloads_in_flight=set,
+            download_queue=lambda: {"downloads": []},
+            save_sync_in_flight=lambda: False,
+            firmware_downloads_in_flight=lambda: False,
+            save_directory_move_in_flight=lambda: False,
+            cleanup_running=lambda: False,
+            migration_running=lambda: False,
+            held_claims=tuple,
+            read_update_failure=lambda: None,
+            attempts=UpdateAttemptFileAdapter(state_dir=str(tmp_path / "state"), log_debug=lambda msg: None),
+            download_asset=FakeReleaseDownload(),
+            staging=UpdateStagingAdapter(directory=str(tmp_path / "cache" / "update")),
+            units=FakeTransientUnits(),
+            installer_environment=(),
+            uow_factory=FakeUnitOfWorkFactory(),
+            acknowledge_failure_toast=_acknowledge_nothing,
+            emit=FakeEventSink().emit,
+            clock=FakeClock(),
+            sleeper=FakeSleeper(),
+            loop=asyncio.get_running_loop(),
+            logger=LOGGER,
+            log_debug=lambda msg: None,
+        )
+    )
+    endpoints = Endpoints(_make_application(_make_services_bundle(update_install_service=service)), HostStatus())
+    return CallDispatcher(endpoints, LOGGER)
+
+
+def _dispatcher_over_update_output(journal: FakeJournal, started_at: str | None) -> CallDispatcher:
+    """The real dispatcher over ``Endpoints`` whose installer's output is the real ``UpdateOutputService``."""
+    service = UpdateOutputService(
+        config=UpdateOutputServiceConfig(
+            current_version="1.0.0",
+            read_update_failure=lambda: None,
+            failed_installer_started_at=lambda: started_at,
+            journal=journal,
+            loop=asyncio.get_running_loop(),
+            logger=LOGGER,
+        )
+    )
+    endpoints = Endpoints(_make_application(_make_services_bundle(update_output_service=service)), HostStatus())
+    return CallDispatcher(endpoints, LOGGER)
+
+
+class TestTheUpdaterRefusalsOnTheWire:
+    """The install press's and the installer's output window's refusals, as the wire carries them."""
+
+    async def test_a_press_that_has_to_wait_answers_every_reason_it_waits_for(self, tmp_path):
+        dispatcher = _dispatcher_over_update_install(tmp_path, FakeSteamInterface(apps=("A Game",)))
+
+        message = json.loads(await dispatcher.dispatch(1, "install_update", ["1.1.0"]))
+
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {
+            "success": False,
+            "reason": "update_waiting",
+            "message": "Something that an update would interrupt is still under way",
+            "wait_reasons": [{"reason": "app_running", "apps": ["A Game"]}],
+        }
+
+    async def test_no_failed_update_to_show_answers_not_found(self):
+        dispatcher = _dispatcher_over_update_output(FakeJournal(), started_at=None)
+
+        message = json.loads(await dispatcher.dispatch(1, "get_update_output", [None]))
+
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {
+            "success": False,
+            "reason": "not_found",
+            "message": "No failed update to show the output of",
+        }
+
+    async def test_a_journal_that_cannot_be_read_answers_a_fixed_message_without_its_error(self):
+        unreadable = FakeJournal(raises=OSError("journalctl: index.js?token=s3cr3t-admission-token"))
+        dispatcher = _dispatcher_over_update_output(unreadable, started_at="2026-09-30T11:03:20Z")
+
+        raw = await dispatcher.dispatch(1, "get_update_output", [None])
+
+        message = json.loads(raw)
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {
+            "success": False,
+            "reason": "journal_unreadable",
+            "message": "The journal could not be read",
+        }
+        assert "s3cr3t-admission-token" not in raw
