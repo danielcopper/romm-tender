@@ -53,10 +53,10 @@ answers with its own message instead — "Server unreachable", "Sign-in rejected
 - "Tender was restarted — restart Steam to use it again."
 
 Until then nothing in Tender's panel can work, so it offers nothing to press. If an update you started was installing —
-Settings › Updates said **Tender is restarting** — the note adds "The update's result shows after that.", and while any
-game is running it adds "Quit the running game yourself — Tender can't stop it right now." On a game's page the section
+Settings › Updates said **Tender is restarting** — the note adds "The update's result shows after that." While any game
+is running, it adds "Quit the running game yourself — Tender can't stop it right now." On a game's page the section
 below the play row shows the same note. The play row keeps a **Tender restarted** badge, which says nothing about RomM
-then, and Steam's own **Last played** and **Playtime**, and **Space required** for a game not downloaded; while that
+then, and Steam's own **LAST PLAYED** and **PLAYTIME**, and **SPACE REQUIRED** for a game not downloaded; while that
 page's game runs it keeps **Resume** on a page you opened before the restart, and otherwise nothing to press. Starting a
 RomM game from elsewhere in Steam — the library, the home screen, the game's menu — does not start it, and shows
 "Couldn't start the game" with the same note, since the game would run without its saves synced.

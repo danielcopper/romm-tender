@@ -612,10 +612,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   Steam's own Play on a RomM shortcut that is not running is refused** — test + prompt-only —
   `frontend/src/index.test.tsx`, `frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`,
   `frontend/src/bigpicture/RomMPlaySection.test.tsx`, `frontend/src/bigpicture/CustomPlayButton.test.tsx` and
-  `frontend/src/utils/launchInterceptor.test.ts` ("a stranded panel"). Prompt-only: a new surface outside these shells —
-  another element injected into Steam's game page, another hook on Steam's launch — gates itself on
-  `useStrandedAnswer()` / `strandedAnswer()`; a Tender dialog or menu already open at the strand is the one deliberate
-  exception (#2275 D6)
+  `frontend/src/utils/launchInterceptor.test.ts`, each in its stranded-panel `describe` block. Prompt-only: a new
+  surface outside these shells — another element injected into Steam's game page, another hook on Steam's launch — gates
+  itself on `useStrandedAnswer()` / `strandedAnswer()`; a Tender dialog or menu already open at the strand stays open
+  and fails as before (#2275 D6)
 - **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
   `scripts/check_aggregate_field_assignment.py`
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, uow_factory) is called while a UoW is open on the

@@ -82,8 +82,8 @@ and nothing else: starting a game would put the reload off and would run without
 could only say that it cannot stop the game, which the card already says. Under a version error or a pending RetroDECK
 migration the play row stays hidden, as it is otherwise, and the section shows only the card. Steam's own Play on a RomM
 shortcut that is not already running is refused before the launch gate asks anything, with "Couldn't start the game" and
-the answer, and asks the backend again, as a failed press does. Main's connection row no longer states the answer, and
-the update section's own state for a backend that answers again is gone: the card replaces both.
+the answer, and asks the backend again, as Stop Game does. Main's connection row no longer states the answer, and the
+update section's own state for a backend that answers again is gone: the card replaces both.
 
 On a page opened after the strand the play row offers nothing, a running game included: its play button never learns
 which ROM it belongs to, and reading "running" from Steam's running apps alone would be a second answer beside the

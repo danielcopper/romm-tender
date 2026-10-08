@@ -927,12 +927,14 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     );
   };
 
-  // Version mismatch — render nothing (VersionErrorCard is shown in RomMGameInfoPanel instead)
+  // Version mismatch — render nothing (RomMGameInfoPanel shows the VersionErrorCard instead, or the stranded card on a
+  // stranded panel)
   if (versionError) {
     return null;
   }
 
-  // Pending RetroDECK migration — render nothing (MigrationBlockedCard is shown in RomMGameInfoPanel instead)
+  // Pending RetroDECK migration — render nothing (RomMGameInfoPanel shows the MigrationBlockedCard instead, or the
+  // stranded card on a stranded panel)
   if (migration.pending) {
     return null;
   }
