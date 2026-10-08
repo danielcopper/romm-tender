@@ -439,9 +439,9 @@ does not say it owns its regions. A tabbed body gets none from the frame, and ne
 BIOS files are in Library › Platforms, and the value, the router branch and the menu entry left with it.
 
 **A stranded panel shows no page.** While the backend refuses the panel as stranded, the router renders the stranded
-card in place of whichever page is mounted, Main included. It decides that above the page switch, so a page added later
-is covered without a change of its own; `currentPage` is kept, and the re-check on opening Quick Access stays mounted
-beside the card. Why, and what the card says:
+card in place of whichever page is mounted, Main included. It decides that at the panel's root, `QAMPanel` in
+`index.tsx`, above the page switch, so a page added later is covered without a change of its own; `currentPage` is kept,
+and the re-check on opening Quick Access stays mounted beside the card. Why, and what the card says:
 [loading-the-panel.md](loading-the-panel.md#what-the-stranded-panel-is-told).
 
 The Sync page opens from the menu, from the conditional slot while there is something in it, and from **Open Sync** on

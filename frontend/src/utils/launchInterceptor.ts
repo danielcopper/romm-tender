@@ -6,7 +6,8 @@
  * work, and then proceed, the watcher uses the cancel-then-relaunch mechanism:
  * it `CancelGameAction`s the launch IMMEDIATELY (synchronously, which wins the
  * race against the un-pausable launch), runs the shared {@link runLaunchGate}
- * funnel, and on approval relaunches via `RunGame`.
+ * funnel — unless the panel is stranded, which refuses the start — and on
+ * approval relaunches via `RunGame`.
  *
  * The skip-set (`markLaunchSkipped` / `consumeLaunchSkip`, owned by
  * `launchGate.ts`) lets one start through that a caller has just handled — the
@@ -417,7 +418,8 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
       SteamClient.Apps.CancelGameAction(gameActionId);
 
       // A stranded panel reaches no backend, so this start could only run
-      // without its pre-launch sync. It is refused before anything else asks.
+      // without its pre-launch sync: it is refused before the launch gate asks
+      // anything.
       const stranded = strandedAnswer();
       if (stranded) {
         tellStrandedPress("Couldn't start the game", strandedPanelSentence(stranded));

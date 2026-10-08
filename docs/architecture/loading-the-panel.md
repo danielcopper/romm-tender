@@ -218,25 +218,28 @@ answer when the panel becomes stranded, and one more each time it changes.
 
 **It offers no press that cannot work** ([ADR-0043](../adr/0043-a-stranded-panel-is-told-so.md), amended): such a panel
 is never admitted again, so every press that reaches the backend could only fail. The stranded card
-(`bigpicture/StrandedPanelCard.tsx`) stands in place of the whole Quick Access panel — decided at its root, `QAMPanel`
-in `index.tsx`, above the page switch — and of the game page's section below the play row (`RomMGameInfoPanel.tsx`),
-ahead of every other card there, on a page loaded before the strand as well as after. While an update attempt has
-started the installer the card adds that the update's result shows after the reload or restart it names, read from the
-install store without a call (`installerStarted`, `utils/updateInstallStore.ts`). The play row keeps the **Tender
-restarted** badge, Steam's own Last played and Playtime, and Space Required, but not the Achievements and BIOS badges,
-whose tabs the card has replaced. It offers Resume and Stop for its game while that game runs and nothing else: no Play,
-no gear, no version or disc picker, no download control. A Resume on an overlay whose game no longer runs only takes the
+(`bigpicture/StrandedPanelCard.tsx`) stands in place of the whole Quick Access panel, Main included (where that is
+decided: [qam-panel.md](qam-panel.md#pages), Pages), and of the game page's section below the play row
+(`RomMGameInfoPanel.tsx`), ahead of every other card there, on a page loaded before the strand as well as after. While
+an update attempt has started the installer the card adds that the update's result shows after the reload or restart it
+names, read from the install store without a call (`installerStarted`, `utils/updateInstallStore.ts`). The play row
+keeps the **Tender restarted** badge, Steam's own Last played and Playtime, and Space Required, but not the Achievements
+and BIOS badges, whose tabs the card has replaced. It offers Resume for its game while that game runs and nothing else:
+no Play, no Stop, no gear, no version or disc picker, no download control. Under a version error or a pending RetroDECK
+migration the row stays hidden, as it is otherwise. A Resume on an overlay whose game no longer runs only takes the
 overlay down. On a page opened after the strand the play button never learns which game it is for, so it offers nothing
-there, a running game included. Stop says at once that it cannot stop the game. Steam's own Play on a RomM shortcut is
-refused before anything else asks — the launch interceptor cancels the start, as it always does, and then reads the
-answer the socket holds — with a notification that it could not start the game; a Play press on a game already running
-still passes, as the interceptor's running-game guard comes first. On a game's page a connection check refused as
-stranded is no verdict on RomM, so it writes none, and the badge says Tender was restarted whatever RomM last answered.
-What each of them says: [troubleshooting.md](../user-guide/troubleshooting.md#tender-says-it-was-restarted). A Tender
-dialog already open when the panel is stranded stays open, and its buttons fail as they always did.
+there, a running game included. Stop Game in a menu opened before the panel learnt it was stranded says at once that it
+cannot stop the game. Steam's own Play on a RomM shortcut is refused before the launch gate asks anything: the launch
+interceptor cancels the start, as it always does, and then reads the answer the socket holds, with a notification that
+it could not start the game. A Play press on a game already running still passes, since the interceptor's running-game
+guard comes before the cancel. On a game's page a connection check refused as stranded is no verdict on RomM, so it
+writes none, and the badge says Tender was restarted whatever RomM last answered. What each of them says:
+[troubleshooting.md](../user-guide/troubleshooting.md#tender-says-it-was-restarted). A Tender dialog already open when
+the panel is stranded stays open, and its buttons fail as they always did.
 
 The panel asks again — one connection opened only to read the close, bounded at two seconds, never two at once — when
-the Quick Access menu is opened on Tender's page, and when Stop or Steam's own Play is pressed.
+the Quick Access menu is opened on Tender's page, when Steam's own Play is pressed, and when Stop Game is pressed in a
+menu opened before the strand.
 
 ## The crash watchdog
 

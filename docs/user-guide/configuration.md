@@ -451,15 +451,16 @@ restarting**, with **Steam's interface reloads when it is done — usually withi
 Tender has to go back to Y.** Tender reports nothing once the installer has started, so the panel tells the two apart by
 whether Tender still answers. From then on the panel loses touch with the old Tender, which is expected. Once a Tender
 answers again — the new version, or the one you had if the installer went back to it — Tender's notification **Tender
-was restarted** shows, and the whole panel is replaced by the note that says so: Tender reloads Steam's interface once
-no game is running, or Steam has to be restarted, followed by **The update's result shows after that.** After the reload
-Tender says it was updated, or, if the new version did not answer once started, that the installer
-[went back to the version you had](troubleshooting.md#an-update-was-rolled-back). The check may take up to two minutes;
-the installer then waits up to a minute for the new version to answer, and up to a minute more for the one you had if it
-goes back; stopping Tender, saving your data and reloading Steam's interface come on top. Where the new version cannot
-even be put together, the check stops the installer there: nothing is replaced, Steam's interface does not reload, and
-the block says **Update to X failed — nothing was changed.** with **Check the new version** marked failed and **The new
-version does not start.**, and the main panel says the update failed
+was restarted** shows, and Tender's panel shows only a note in its place — "Tender was restarted — it reloads Steam's
+interface once no game is running." or "Tender was restarted — restart Steam to use it again." — followed by **The
+update's result shows after that.** ([Tender says it was restarted](troubleshooting.md#tender-says-it-was-restarted)).
+After the reload or the restart Tender says it was updated, or, if the new version did not answer once started, that the
+installer [went back to the version you had](troubleshooting.md#an-update-was-rolled-back). The check may take up to two
+minutes; the installer then waits up to a minute for the new version to answer, and up to a minute more for the one you
+had if it goes back; stopping Tender, saving your data and reloading Steam's interface come on top. Where the new
+version cannot even be put together, the check stops the installer there: nothing is replaced, Steam's interface does
+not reload, and the block says **Update to X failed — nothing was changed.** with **Check the new version** marked
+failed and **The new version does not start.**, and the main panel says the update failed
 ([The New Version Does Not Start](troubleshooting.md#the-new-version-does-not-start)). While the install runs, Tender
 refuses to start a library sync, a game download or a save sync.
 
