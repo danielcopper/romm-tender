@@ -325,7 +325,7 @@ export class HostSocket {
   private setStranded(answer: StrandedAnswer): void {
     if (this.stranded === answer) return;
     this.stranded = answer;
-    for (const listener of [...this.strandedListeners]) {
+    for (const listener of this.strandedListeners) {
       try {
         listener(answer);
       } catch (error) {

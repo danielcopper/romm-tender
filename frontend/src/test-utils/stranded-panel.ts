@@ -35,7 +35,7 @@ export function mockOnStrandedAnswerChange(listener: (answer: StrandedAnswer) =>
 export function setStrandedAnswer(next: StrandedAnswer): void {
   if (answer === next) return;
   answer = next;
-  for (const listener of [...listeners]) listener(next);
+  for (const listener of listeners) listener(next);
 }
 
 /** Back to a panel nobody refused, with nobody listening. Wired into the global `afterEach`. */

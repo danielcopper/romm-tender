@@ -86,21 +86,8 @@ interface Block {
   output?: { rolledBackAt: string | null; version: string };
 }
 
-/** An attempt under way. */
-function progressBlock(install: UpdateInstall, attempt: UpdateInstallAttempt, earlier: string): Block {
-  const elapsed = clock(Date.now() - (attemptSeenAt() ?? Date.now()));
-  if (attempt.step !== "installer_started") {
-    const percent = attempt.step === "downloading" ? downloadPercent(attempt) : null;
-    const verifying = attempt.step === "verifying";
-    return {
-      caption: `${verifying ? "Verifying" : "Downloading"} ${attempt.version}`,
-      aside: percent === null ? elapsed : `${percent}% · ${elapsed}`,
-      percent,
-      at: verifying ? "verify" : "download",
-      failed: false,
-      note: GAME_STARTS_CANCEL,
-    };
-  }
+/** The installer has started: what the panel can infer of the restart. */
+function restartBlock(install: UpdateInstall, earlier: string, elapsed: string): Block {
   // The backend reports nothing more, so the phase is the panel's inference:
   // while reads still answer, the installer is running its pre-install check,
   // which it does before it stops this backend; once they fail, Tender is
@@ -126,6 +113,24 @@ function progressBlock(install: UpdateInstall, attempt: UpdateInstallAttempt, ea
       gone && restartWaitLine(earlier)
     ),
   };
+}
+
+/** An attempt under way. */
+function progressBlock(install: UpdateInstall, attempt: UpdateInstallAttempt, earlier: string): Block {
+  const elapsed = clock(Date.now() - (attemptSeenAt() ?? Date.now()));
+  if (attempt.step !== "installer_started") {
+    const percent = attempt.step === "downloading" ? downloadPercent(attempt) : null;
+    const verifying = attempt.step === "verifying";
+    return {
+      caption: `${verifying ? "Verifying" : "Downloading"} ${attempt.version}`,
+      aside: percent === null ? elapsed : `${percent}% · ${elapsed}`,
+      percent,
+      at: verifying ? "verify" : "download",
+      failed: false,
+      note: GAME_STARTS_CANCEL,
+    };
+  }
+  return restartBlock(install, earlier, elapsed);
 }
 
 /** The button under a failed block where the installer ran. */

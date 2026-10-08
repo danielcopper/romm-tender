@@ -110,11 +110,6 @@ _STRANDED_LOG_WORDING = {
 }
 
 
-async def _not_yet_looked() -> ReloadOutlook:
-    """Before the injector is attached, nothing has looked at Steam's context."""
-    return ReloadOutlook.NOT_YET_LOOKED
-
-
 class HostServer:
     """Binds a loopback port and serves the panel: one file route, one upgrade."""
 
@@ -149,7 +144,8 @@ class HostServer:
         # — which is a NEW connection, so a per-connection count would reset at
         # exactly the moment it had something to report.
         self._dropped_by_closed_connections = 0
-        self._reload_outlook: Callable[[], Awaitable[ReloadOutlook]] = _not_yet_looked
+        # None until the injector is wired: nothing has looked at Steam's context then.
+        self._reload_outlook: Callable[[], Awaitable[ReloadOutlook]] | None = None
         self._stranded_sessions: OrderedDict[str, ReloadOutlook] = OrderedDict()
 
     @property
@@ -278,7 +274,7 @@ class HostServer:
         verdict = check_access(head, policy)
         if verdict.refused:
             if verdict.wrong_token and head.method == "GET" and head.path == WS_PATH and _handshake_key(head):
-                outlook = await self._reload_outlook()
+                outlook = ReloadOutlook.NOT_YET_LOOKED if self._reload_outlook is None else await self._reload_outlook()
                 if outlook is not ReloadOutlook.NOT_YET_LOOKED:
                     await self._tell_stranded_panel(head, reader, writer, verdict.log_line, outlook)
                     return
