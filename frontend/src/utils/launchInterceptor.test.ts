@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { toaster } from "../api/host";
+import { recheckStranded, toaster } from "../api/host";
+import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import * as backend from "../api/backend";
 import * as rommAppIds from "./rommAppIds";
 import * as launchGate from "./launchGate";
@@ -393,6 +394,72 @@ describe("launchInterceptor — full funnel watcher", () => {
       // Synchronously — no await yet — the cancel must already be in.
       expect(SteamClient.Apps.CancelGameAction).toHaveBeenCalledWith(77);
       resolveGate({ decision: "allow" });
+    });
+  });
+
+  describe("a stranded panel", () => {
+    const BACKEND_CALLS = [
+      backend.refreshMigrationState,
+      backend.getInstalledRom,
+      backend.getCachedGameDetail,
+      backend.isSaveTrackingConfigured,
+      backend.getSaveSetupInfo,
+      backend.confirmSlotChoice,
+      backend.checkCoreChange,
+      backend.probeReachability,
+      backend.preLaunchSync,
+      backend.checkLocalDrift,
+      backend.getRomRelaunchOptions,
+      backend.logInfo,
+      backend.logError,
+    ];
+
+    it.each([
+      ["reloads", "Tender was restarted — it reloads Steam's interface once no game is running."],
+      ["restart_steam", "Tender was restarted — restart Steam to use it again."],
+    ] as const)(
+      "refuses the start (%s): cancelled, nothing asked of the backend, and the toast says why",
+      async (answer, sentence) => {
+        setStrandedAnswer(answer);
+        register();
+        // Registering logs a line of its own; what counts is what the start asks.
+        vi.mocked(backend.logInfo).mockClear();
+        const handler = captureHandler();
+        handler(77, GAME_ID, "LaunchApp", PLAY_SOURCE);
+        await flush();
+
+        expect(SteamClient.Apps.CancelGameAction).toHaveBeenCalledWith(77);
+        expect(toaster.toast).toHaveBeenCalledTimes(1);
+        expect(toaster.toast).toHaveBeenCalledWith({
+          title: "Tender",
+          body: "Couldn't start the game",
+          subtext: sentence,
+        });
+        for (const call of BACKEND_CALLS) expect(call).not.toHaveBeenCalled();
+        expect(sessionManager.refreshAppIdMap).not.toHaveBeenCalled();
+        expect(launchGate.runLaunchGate).not.toHaveBeenCalled();
+        expect(runGameMock()).not.toHaveBeenCalled();
+      },
+    );
+
+    it("asks the backend again, as Stop does", async () => {
+      setStrandedAnswer("reloads");
+      register();
+      captureHandler()(77, GAME_ID, "LaunchApp", PLAY_SOURCE);
+      await flush();
+
+      expect(recheckStranded).toHaveBeenCalledTimes(1);
+    });
+
+    it("still lets a Play press on a game that is already running through, uncancelled", async () => {
+      setStrandedAnswer("restart_steam");
+      vi.mocked(sessionManager.readGameRunning).mockReturnValue(SESSION_RUNNING);
+      register();
+      captureHandler()(77, GAME_ID, "LaunchApp", PLAY_SOURCE);
+      await flush();
+
+      expect(SteamClient.Apps.CancelGameAction).not.toHaveBeenCalled();
+      expect(toaster.toast).not.toHaveBeenCalled();
     });
   });
 

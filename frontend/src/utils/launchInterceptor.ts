@@ -16,6 +16,7 @@
  * Registered once, from the panel's factory; nothing unregisters it.
  */
 
+import { strandedAnswer } from "../api/host";
 import { showToast } from "./toast";
 import { isRomMAppId } from "./rommAppIds";
 import { appIdFromGameId } from "./gameId";
@@ -49,6 +50,8 @@ import { reconfirmLaunchOptions } from "./launchOptionsReconcile";
 import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "./saveSetup";
 import { BENIGN_SYNC_SKIP_REASONS, type SyncConflict } from "../types";
 import { detach } from "./detach";
+import { tellStrandedPress } from "./strandedPanelStore";
+import { strandedPanelSentence } from "./strandedPanelWording";
 import { TimeoutError, boundedOr, rethrowTimeout, withTimeout } from "./withTimeout";
 
 /**
@@ -412,6 +415,15 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
       // against the un-pausable launch: from here the launch is stopped and we
       // relaunch only on approval.
       SteamClient.Apps.CancelGameAction(gameActionId);
+
+      // A stranded panel reaches no backend, so this start could only run
+      // without its pre-launch sync. It is refused before anything else asks.
+      const stranded = strandedAnswer();
+      if (stranded) {
+        tellStrandedPress("Couldn't start the game", strandedPanelSentence(stranded));
+        return;
+      }
+
       logInfo(`Launch interceptor: appId=${appId} not running — running the launch gate [${running.diagnostics}]`);
       const start: CancelledStart = { appId, gameId };
 
