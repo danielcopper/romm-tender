@@ -3997,6 +3997,7 @@ describe("RomMPlaySection", () => {
         emulatorDataAvailable: true,
         emulatorDataReason: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
+        emulatorPlatformSystem: null,
         platformCoreLabel: null,
         hasGameOverride: false,
       });
