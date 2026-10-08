@@ -21,7 +21,7 @@ from domain.emulator_commands import resolve_platform_option
 from domain.firmware_groups import fetched_as_required
 from domain.refusal import DomainRefused
 from domain.rom_files import TMP_EXT
-from lib.errors import Refused, RommApiError, error_response
+from lib.errors import Refused, RommApiError
 from lib.path_safety import PathTraversalError
 
 if TYPE_CHECKING:
@@ -195,8 +195,8 @@ class FirmwareDownloader:
         self._logger.info(f"Firmware downloaded: {file_name} -> {dest}")
         return {"success": True, "file_path": dest, "md5_match": md5_match}
 
-    async def _platform_firmware_rows(self, platform_slug) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-        """The library rows filed under *platform_slug*, or the failure to return instead.
+    async def _platform_firmware_rows(self, platform_slug) -> list[dict[str, Any]]:
+        """The library rows filed under *platform_slug*.
 
         The three download entry points ask the same two questions first — what
         does the library hold, and which of it is this platform's — and the
@@ -204,16 +204,9 @@ class FirmwareDownloader:
         ``ps`` both. Answering it in one place is what keeps a button from
         fetching a set the button beside it would not.
 
-        The second element is a ready-made failure response when the listing
-        could not be read; a caller returns it as it stands.
+        A listing that could not be read propagates as it was raised.
         """
-        try:
-            firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
-        except Exception as e:
-            self._logger.error(f"Failed to fetch firmware: {e}")
-            resp = error_response(e)
-            resp["downloaded"] = 0
-            return [], resp
+        firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
 
         fw_slugs = firmware_paths.resolve_firmware_slugs(platform_slug)
         # One row per name, the first listed: RomM may list a name in both of a
@@ -222,14 +215,12 @@ class FirmwareDownloader:
         for fw in firmware_list:
             if firmware_paths.parse_firmware_slug(fw.get("file_path", "")) in fw_slugs:
                 rows.setdefault(fw.get("file_name", ""), fw)
-        return list(rows.values()), None
+        return list(rows.values())
 
     async def download_all_firmware(self, platform_slug) -> dict[str, Any]:
         """Download all firmware for a given platform slug."""
         await self._loop.run_in_executor(None, self._demand.download_root)
-        platform_firmware, failure = await self._platform_firmware_rows(platform_slug)
-        if failure is not None:
-            return failure
+        platform_firmware = await self._platform_firmware_rows(platform_slug)
 
         placements = await self._platform_placements(self._resolve_system(platform_slug))
         downloaded, errors = await self._download_firmware_batch(platform_firmware, placements)
@@ -307,9 +298,7 @@ class FirmwareDownloader:
         caller as it stands rather than collapsed into a name in a list.
         """
         await self._loop.run_in_executor(None, self._demand.download_root)
-        rows, failure = await self._platform_firmware_rows(platform_slug)
-        if failure is not None:
-            return failure
+        rows = await self._platform_firmware_rows(platform_slug)
 
         wanted = [fw for fw in rows if fw.get("file_name") == file_name]
         if not wanted:
@@ -344,9 +333,7 @@ class FirmwareDownloader:
         identify falls back to "any emulator requires it".
         """
         await self._loop.run_in_executor(None, self._demand.download_root)
-        rows, failure = await self._platform_firmware_rows(platform_slug)
-        if failure is not None:
-            return failure
+        rows = await self._platform_firmware_rows(platform_slug)
 
         system = self._resolve_system(platform_slug)
         identity = await self._loop.run_in_executor(None, self._platform_emulator_identity, system, platform_slug)

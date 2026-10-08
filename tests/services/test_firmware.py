@@ -3956,16 +3956,14 @@ class TestDownloadPlatformFirmwareFile:
         assert refused.value.reason == "declares_directory"
 
     @pytest.mark.asyncio
-    async def test_a_failed_listing_fetch_answers_with_zero(self, firmware, fw):
+    async def test_a_failed_listing_fetch_propagates(self, firmware, fw):
         _set_loop(fw, asyncio.get_running_loop())
         fw._listing._firmware_cache = None
         with patch.object(firmware.romm_api, "list_firmware", side_effect=OSError("Connection reset")):
-            result = await fw.download_platform_firmware_file("dc", "missing.bin")
+            download = fw.download_platform_firmware_file("dc", "missing.bin")
+            with pytest.raises(OSError, match="Connection reset"):
+                await download
 
-        assert result["success"] is False
-        assert result["reason"] == "unknown"
-        assert "Connection reset" in result["message"]
-        assert result["downloaded"] == 0
         assert fw._listing._firmware_cache is None
 
 
@@ -6182,8 +6180,8 @@ class TestBadPathFirmwareUseCases:
         assert any("disk full" in record.getMessage() for record in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_download_all_firmware_returns_error_with_zero_when_list_fetch_fails(self, fake_romm_api, caplog):
-        """Initial ``list_firmware`` failure short-circuits with ``downloaded=0``."""
+    async def test_download_all_firmware_propagates_a_failed_list_fetch(self, fake_romm_api, caplog):
+        """An initial ``list_firmware`` failure propagates before anything is fetched."""
         import logging
 
         fw = self._build_service(fake_romm_api)
@@ -6191,19 +6189,16 @@ class TestBadPathFirmwareUseCases:
         fake_romm_api.fail_on_next(OSError("connection reset"))
 
         with caplog.at_level(logging.ERROR):
-            result = await fw.download_all_firmware("dc")
+            download = fw.download_all_firmware("dc")
+            with pytest.raises(OSError, match="connection reset"):
+                await download
 
-        assert result["success"] is False
-        assert result["downloaded"] == 0
-        assert "message" in result
         # The cache was not populated by the failed fetch.
         assert fw._listing._firmware_cache is None
 
     @pytest.mark.asyncio
-    async def test_download_required_firmware_returns_error_with_zero_when_list_fetch_fails(
-        self, fake_romm_api, caplog
-    ):
-        """Initial ``list_firmware`` failure short-circuits with ``downloaded=0``."""
+    async def test_download_required_firmware_propagates_a_failed_list_fetch(self, fake_romm_api, caplog):
+        """An initial ``list_firmware`` failure propagates before anything is fetched."""
         import logging
 
         fw = self._build_service(fake_romm_api)
@@ -6211,11 +6206,10 @@ class TestBadPathFirmwareUseCases:
         fake_romm_api.fail_on_next(OSError("connection reset"))
 
         with caplog.at_level(logging.ERROR):
-            result = await fw.download_required_firmware("dc")
+            download = fw.download_required_firmware("dc")
+            with pytest.raises(OSError, match="connection reset"):
+                await download
 
-        assert result["success"] is False
-        assert result["downloaded"] == 0
-        assert "message" in result
         # The cache was not populated by the failed fetch.
         assert fw._listing._firmware_cache is None
 

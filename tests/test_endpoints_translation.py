@@ -1411,3 +1411,14 @@ class TestTheFirmwareAnswersOnTheWire:
             "reason": "not_in_library",
             "message": "dc_boot.bin is not in your RomM library for n64",
         }
+
+    async def test_a_romm_error_reading_the_library_answers_its_classified_reason(self):
+        romm_api = FakeRommApi()
+        romm_api.list_firmware_side_effect = RommConnectionError("connection refused")
+        dispatcher = _dispatcher_over_firmware(romm_api, FakeFirmwareFileStore(), FakeUnitOfWork())
+
+        message = json.loads(await dispatcher.dispatch(1, "download_all_firmware", ["dc"]))
+
+        reason, text = classify_error(RommConnectionError("connection refused"))
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {"success": False, "reason": reason, "message": text}
