@@ -961,6 +961,24 @@ class TestGetBiosStatusFound:
         assert captured["install"].system == "naomi"
 
     @pytest.mark.asyncio
+    async def test_the_launching_emulator_is_asked_off_the_loop(self, game_detail, active_core_resolver):
+        """An uninstalled game's emulator asks its platform's system, which may read RomM's listing."""
+        _seed_rom(game_detail, 42, app_id=50000, name="Game", platform_slug="gba")
+        threads: list[threading.Thread] = []
+        original = active_core_resolver.active_emulator_for_rom
+
+        def recording(rom_id, *, reading=None):
+            threads.append(threading.current_thread())
+            return original(rom_id, reading=reading)
+
+        active_core_resolver.active_emulator_for_rom = recording
+
+        await game_detail.service.get_bios_status(42)
+
+        assert threads
+        assert threading.main_thread() not in threads
+
+    @pytest.mark.asyncio
     async def test_bios_check_differs_by_per_game_override(self, game_detail, active_core_resolver):
         """RESULT-FLIP: two gba ROMs, one pinned to gpSP + one default, drive different BIOS results.
 

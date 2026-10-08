@@ -448,7 +448,7 @@ class GameDetailService:
         # the first and send the page back to the platform's own pick — and
         # names it by its LABEL, and a caller splitting those is how a page comes
         # to name one emulator and judge by another.
-        emulator = self._active_core.active_emulator_for_rom(rom_id)
+        emulator = await self._loop.run_in_executor(None, self._active_core.active_emulator_for_rom, rom_id)
 
         try:
             bios = await self._bios_checker.check_platform_bios(

@@ -12,6 +12,7 @@ import hashlib
 import io
 import logging
 import re
+import threading
 import zipfile
 import zlib
 from types import SimpleNamespace
@@ -1890,6 +1891,41 @@ class TestSearchableDirectory:
         h.store.files["/roms/not-a-system/Game (U).sfc"] = b"x"
 
         assert h.service.has_adoption_candidate("not-a-system", "Game (USA).sfc") is False
+
+
+class TestThePlatformsSystemIsAskedOffTheLoop:
+    """The system may be read from RomM's listing, which would hold every endpoint on the loop."""
+
+    def _recording(self, h) -> list[threading.Thread]:
+        threads: list[threading.Thread] = []
+        platform_systems = FakePlatformSystems()
+        original = platform_systems.platform_system
+
+        def recording(platform_slug, *, source=None, reading=None, ask_romm=True):
+            threads.append(threading.current_thread())
+            return original(platform_slug, source=source, reading=reading, ask_romm=ask_romm)
+
+        platform_systems.platform_system = recording
+        h.service._platform_systems = platform_systems
+        return threads
+
+    async def test_by_verify(self, h):
+        h.stage_detail(_single_file_detail())
+        threads = self._recording(h)
+
+        await h.service.verify_existing_content(_ROM_ID)
+
+        assert threads
+        assert threading.main_thread() not in threads
+
+    async def test_by_adopt(self, h):
+        h.stage_detail(_single_file_detail())
+        threads = self._recording(h)
+
+        await h.service.adopt_existing_rom(_ROM_ID, "/roms/snes/Game.sfc")
+
+        assert threads
+        assert threading.main_thread() not in threads
 
 
 class TestAPlatformWithNoSystem:

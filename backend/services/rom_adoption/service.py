@@ -530,11 +530,10 @@ class RomAdoptionService:
         """
         rom_id = int(rom_id)
         try:
-            rom_detail = await self._loop.run_in_executor(None, self._romm_api.get_rom, rom_id)
+            rom_detail, target = await self._loop.run_in_executor(None, self._detail_and_target_io, rom_id)
         except Exception as e:
             self._logger.error(f"Failed to fetch ROM {rom_id} for adoption: {e}")
             return error_response(e)
-        target = self._resolve_target(rom_detail)
         if isinstance(target, FolderRefused):
             raise target
         source_path = self._resolve_source(target, candidate_path)
@@ -734,15 +733,13 @@ class RomAdoptionService:
         """
         rom_id = int(rom_id)
         try:
-            rom_detail = await self._loop.run_in_executor(None, self._romm_api.get_rom, rom_id)
+            rom_detail, target = await self._loop.run_in_executor(None, self._detail_and_target_io, rom_id)
         except Exception as e:
             self._logger.error(f"Failed to fetch ROM {rom_id} for verification: {e}")
             failure = error_response(e)
             return {"status": "error", "message": failure["message"], "differences": []}
-        target = self._resolve_target(rom_detail)
         if isinstance(target, FolderRefused):
             return {
-                **target.details,
                 "status": "error",
                 "reason": target.reason,
                 "message": target.message,
@@ -954,6 +951,11 @@ class RomAdoptionService:
         )
 
     # ── Target resolution ───────────────────────────────────────────
+
+    def _detail_and_target_io(self, rom_id: int) -> tuple[dict[str, Any], _Target | FolderRefused]:
+        """The ROM's server detail and the path its content occupies. Blocking: both may read RomM."""
+        rom_detail = self._romm_api.get_rom(rom_id)
+        return rom_detail, self._resolve_target(rom_detail)
 
     def _download_system(self, rom_detail: dict[str, Any]) -> str | FolderRefused:
         """The system a download of this ROM lands under in RetroDECK, or the download's refusal where it has none."""
