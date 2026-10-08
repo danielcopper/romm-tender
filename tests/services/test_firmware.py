@@ -3566,29 +3566,6 @@ class TestDownloadFirmware:
         assert record.platform_slug == "n64"
 
     @pytest.mark.asyncio
-    async def test_handles_download_error(self, firmware, fw, tmp_path):
-
-        fw_detail = {
-            "id": 10,
-            "file_name": "bios.bin",
-            "file_path": "bios/n64/bios.bin",
-            "file_size_bytes": 100,
-            "md5_hash": "",
-        }
-
-        _set_loop(fw, asyncio.get_running_loop())
-
-        with (
-            patch.object(firmware.romm_api, "get_firmware", return_value=fw_detail),
-            patch.object(firmware.romm_api, "download_firmware", side_effect=OSError("Connection reset")),
-        ):
-            download = fw.download_firmware(10)
-            with pytest.raises(Refused) as refused:
-                await download
-
-        assert refused.value.reason == "bios_download_failed"
-
-    @pytest.mark.asyncio
     async def test_rejects_traversal_in_server_file_name(self, firmware, fw, tmp_path):
         """#966: a server ``file_name`` of ``../evil.desktop`` is rejected, nothing written outside BIOS."""
         bios_dir = tmp_path / "retrodeck" / "bios"
@@ -5674,7 +5651,7 @@ class _UnpreparableStore(FakeFirmwareFileStore):
 
 
 class TestASingleDownloadThatFails:
-    """What one firmware download answers when the folder, the transfer or the transfer's caller fails."""
+    """What one firmware download raises when the folder, the transfer or the metadata fetch fails."""
 
     _FW: ClassVar[dict[str, Any]] = {
         "id": 4,
@@ -5746,9 +5723,11 @@ class TestASingleDownloadThatFails:
 
 
 class TestABatchDownloadCarriesOnPastAFailedFile:
-    """A file whose download refuses or meets a RomM error is named and passed over; anything else ends the batch.
+    """A file whose download this service refuses (``Refused``) or that meets a RomM error is logged, named in the
+    errors and passed over; anything else ends the batch, RetroDECK's folder refusal included — no later file could
+    land either.
 
-    RetroDECK's folder refusal is among the "anything else": it is a domain refusal, and no later file could land.
+    RetroDECK's folder refusal is a domain refusal (``DomainRefused``), not this service's ``Refused``.
     """
 
     _NAMES = ("refused", "romm_error", "fetched")

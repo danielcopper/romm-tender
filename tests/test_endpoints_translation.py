@@ -1364,7 +1364,7 @@ def _dispatcher_over_firmware(
 
 
 class TestTheFirmwareAnswersOnTheWire:
-    """The firmware downloads' and deletes' refusals and partial results, as the wire carries them."""
+    """The firmware downloads' and deletes' refusals, partial results and RomM errors, as the wire carries them."""
 
     async def test_a_partial_delete_answers_its_count(self):
         uow = FakeUnitOfWork()
