@@ -156,10 +156,11 @@ class FirmwareDownloader:
         The index is a parameter rather than a per-call read so a batch pays for
         the machine-wide question once instead of once per file.
 
-        A RomM error propagates. Where this device cannot create the folder or
-        prepare the temporary file, the ``.tmp`` is removed and the download
-        refuses with ``bios_download_failed``; the adapter answers a failed
-        transfer as a RomM error, so an ``OSError`` here is this device's.
+        A RomM error propagates. Where this device cannot create the folder, the
+        ``.tmp`` is removed and the download refuses with
+        ``bios_download_failed``. The adapter answers everything in the transfer
+        as a RomM error, including a ``.tmp`` it could not open or write, so an
+        ``OSError`` here is this device's.
         """
         firmware_id = int(firmware_id)
         fw = await self._loop.run_in_executor(None, self._romm_api.get_firmware, firmware_id)
@@ -181,8 +182,7 @@ class FirmwareDownloader:
             if isinstance(e, OSError):
                 raise Refused(
                     "bios_download_failed",
-                    f"{file_name} could not be downloaded: its folder or temporary file could not be prepared "
-                    "on this device",
+                    f"{file_name} could not be downloaded: its folder could not be created on this device",
                 ) from e
             raise
 
@@ -247,9 +247,10 @@ class FirmwareDownloader:
         A folder declaration is skipped whatever is at its destination: the
         emulator lists that name, so there is no file to fetch into it.
 
-        A file whose download refuses or meets a RomM error is logged, named in
-        the errors and passed over; anything else ends the batch, RetroDECK's
-        folder refusal included — no later file could land either.
+        A file whose download this service refuses (``Refused``) or that meets a
+        RomM error is logged, named in the errors and passed over; anything else
+        ends the batch, RetroDECK's folder refusal included — no later file could
+        land either.
         """
         downloaded = 0
         errors = []
