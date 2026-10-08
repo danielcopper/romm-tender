@@ -1,3 +1,5 @@
+import type { RommErrorCode } from "./api";
+
 /**
  * Emulator sources as the backend answers them: what the resolver detected,
  * keyed by its installation kind, and what each one's health states.
@@ -40,10 +42,12 @@ export interface EmulatorSourcesListing {
 export type EmulatorSourceDirection = "up" | "down";
 
 /** Why an emulator list could not be given: no source answers (`no_source`,
- *  `switched_off`), the answering source's catalogue was refused, or the
+ *  `switched_off`), the answering source's catalogue was refused, the
  *  platform has no switched-on system there (`no_platform_system`,
- *  `platform_system_off`). */
+ *  `platform_system_off`), or RomM could not be read for the platform's ids
+ *  (one of {@link RommErrorCode}, `server_unreachable` while it is offline). */
 export type EmulatorDataReason =
+  | RommErrorCode
   | "no_source"
   | "switched_off"
   | "sealed"

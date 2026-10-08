@@ -220,10 +220,14 @@ drops a system is not followed yet.
 
 **The ids are kept.** `kv_config`'s `platform_ids` holds every listed platform's four ids and display name, replaced at
 the start of every sync from RomM's listing (a failed write is logged and leaves the run alone). Where none are kept for
-a platform — the first start after an update — `PlatformSystemService` reads the listing once and keeps it. The game
-page's two looks at the disk — whether a download's target is already taken, and whether the game is there under another
-name — must reach no network, so they never read the listing: for them a platform with no kept ids has no system, and
-they go quiet.
+a platform — the first start after an update — `PlatformSystemService` reads the listing once and keeps it. Where that
+read fails, the question answers the reason `classify_error` gives it — `server_unreachable` while RomM is offline — as
+every other read that needs RomM does, and keeps nothing; the next read with RomM reachable keeps the ids. A game not
+downloaded then shows the offline state on its page (its save status, its BIOS tab reading unknown, its emulator list
+not established), and so does the platform page; a downloaded game keeps its recorded system and is not affected. The
+game page's two looks at the disk — whether a download's target is already taken, and whether the game is there under
+another name — must reach no network, so they never read the listing: for them a platform with no kept ids has no
+system, and they go quiet.
 
 The platform page names the system taken with its source in its header line ([qam-panel.md](qam-panel.md#library)).
 

@@ -218,7 +218,9 @@ class PlatformSystem:
     named under :data:`SWITCHED_OFF`. ``source`` is the source asked, ``None``
     where none was — and for a system an install record holds, which no source
     was asked for. ``unasked`` says why none was asked, in the vocabulary of
-    :mod:`domain.emulator_sources`.
+    :mod:`domain.emulator_sources` — or, where RomM's listing could not be read
+    for the platform's ids, the reason that read failed with, and
+    ``unasked_message`` its message.
     """
 
     state: str
@@ -227,6 +229,7 @@ class PlatformSystem:
     system: str | None = None
     source: ArrangedSource | None = None
     unasked: str | None = None
+    unasked_message: str | None = None
 
     @property
     def taken(self) -> str | None:
@@ -247,6 +250,8 @@ class PlatformSystem:
             return FolderRefused(PLATFORM_SYSTEM_OFF, f"System {self.system} is switched off in {kind}.", **details)
         if self.state != UNASKED:
             raise ValueError(f"a platform with system {self.system!r} is not refused")
+        if self.unasked is not None and self.unasked_message is not None:
+            return FolderRefused(self.unasked, self.unasked_message)
         if self.unasked == NO_SOURCE_DETECTED:
             return not_installed(purpose)
         if self.unasked == ALL_SOURCES_SWITCHED_OFF:

@@ -237,6 +237,12 @@ describe("emulatorDataReasonSentence", () => {
     }
   });
 
+  it("reads a platform whose ids RomM could not give as a list not established", () => {
+    expect(emulatorDataReasonSentence("server_unreachable", RETRODECK, null)).toBe(
+      "RetroDECK's emulator list is not established.",
+    );
+  });
+
   it("names a source of a kind it does not know by its kind", () => {
     expect(emulatorDataReasonSentence("unavailable", { kind: "standalone_x", starts_games: false })).toBe(
       "standalone_x's emulator list is not established.",

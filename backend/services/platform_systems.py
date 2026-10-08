@@ -19,12 +19,14 @@ from domain.platform_names import decode_platform_names
 from domain.platform_system import (
     FOUND,
     PLATFORM_IDS_KEY,
+    UNASKED,
     PlatformIds,
     PlatformSystem,
     decode_platform_ids,
     encode_platform_ids,
     platform_ids_by_slug,
 )
+from lib.errors import RommApiError, classify_error
 
 if TYPE_CHECKING:
     from domain.emulator_sources import SourcesReading
@@ -69,10 +71,23 @@ class PlatformSystemService:
         """The system *platform_slug* is in *source*, the answering source where it is ``None``.
 
         Where no ids are kept for the platform they are read from RomM's
-        listing and kept, and a failed read raises; with *ask_romm* false they
-        count as none instead.
+        listing and kept; with *ask_romm* false they count as none instead. A
+        read that fails answers :data:`~domain.platform_system.UNASKED` with the
+        reason every RomM read is classified by, and keeps nothing.
         """
-        ids, name = self._ids_and_name(platform_slug, ask_romm=ask_romm)
+        try:
+            ids, name = self._ids_and_name(platform_slug, ask_romm=ask_romm)
+        except RommApiError as exc:
+            reason, message = classify_error(exc)
+            self._log_debug(f"[platforms] no ids kept for {platform_slug}, and RomM's listing failed: {reason}")
+            return PlatformSystem(
+                UNASKED,
+                platform_slug,
+                platform_slug,
+                source=self._source_platform_systems.asked_source(source=source, reading=reading),
+                unasked=reason,
+                unasked_message=message,
+            )
         return self._source_platform_systems.platform_system(
             ids, platform_slug=platform_slug, platform_name=name, source=source, reading=reading
         )

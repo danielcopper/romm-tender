@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
     from adapters.emulator_sources import EmulatorSourcesAdapter
-    from domain.emulator_sources import SourcesReading
+    from domain.emulator_sources import ArrangedSource, SourcesReading
     from domain.platform_system import PlatformIds
 
 
@@ -53,7 +53,7 @@ class AtlasPlatformSystemsAdapter:
         """
         reading = reading if reading is not None else self._sources.read()
         unasked = self._unasked(reading, source)
-        arranged = reading.answering if source is None else next((s for s in reading.sources if s.kind == source), None)
+        arranged = self._arranged(reading, source)
         if unasked is not None or arranged is None:
             return PlatformSystem(
                 UNASKED,
@@ -68,6 +68,18 @@ class AtlasPlatformSystemsAdapter:
             return PlatformSystem(UNASKED, platform_slug, platform_name, source=arranged, unasked=CATALOGUE_UNAVAILABLE)
         self._log_debug(f"[platforms] {platform_slug} in {arranged.kind}: {pick.state} {pick.system}")
         return PlatformSystem(pick.state, platform_slug, platform_name, system=pick.system, source=arranged)
+
+    def asked_source(
+        self, *, source: str | None = None, reading: SourcesReading | None = None
+    ) -> ArrangedSource | None:
+        """The source :meth:`platform_system` would ask for *source*, or ``None`` where there is none."""
+        return self._arranged(reading if reading is not None else self._sources.read(), source)
+
+    @staticmethod
+    def _arranged(reading: SourcesReading, source: str | None) -> ArrangedSource | None:
+        if source is None:
+            return reading.answering
+        return next((s for s in reading.sources if s.kind == source), None)
 
     @staticmethod
     def _unasked(reading: SourcesReading, source: str | None) -> str | None:

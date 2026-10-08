@@ -294,6 +294,22 @@ class TestPlatformSystem:
 
         assert refusal.reason == reason
 
+    def test_a_rom_m_that_could_not_be_read_refuses_with_its_reason_and_message(self):
+        platform = PlatformSystem(
+            UNASKED, "vic-20", "VIC-20", source=RETRODECK, unasked="server_unreachable", unasked_message="offline"
+        )
+
+        refusal = platform.refusal(GAME_DOWNLOAD)
+
+        assert (refusal.reason, refusal.message) == ("server_unreachable", "offline")
+        assert platform.unavailable_options() == {
+            "available": False,
+            "options": [],
+            "reason": "server_unreachable",
+            "source": {"kind": "retrodeck", "starts_games": True},
+        }
+        assert platform.payload() is None
+
     def test_a_question_that_raised_refuses_every_folder(self):
         refusal = _platform(UNASKED, unasked=CATALOGUE_UNAVAILABLE).refusal(GAME_DOWNLOAD)
 

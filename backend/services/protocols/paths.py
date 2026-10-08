@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from domain.emulator_sources import SourceReport, SourcesReading
+    from domain.emulator_sources import ArrangedSource, SourceReport, SourcesReading
     from domain.firmware_wants import FirmwareCatalogue
     from domain.platform_system import PlatformIds, PlatformSystem
     from domain.retrodeck_folders import FolderRefused, MoveRoots
@@ -40,6 +40,12 @@ class SourcePlatformSystems(Protocol):
         reading: SourcesReading | None = None,
     ) -> PlatformSystem:
         """The system in *source*, the answering source where it is ``None``."""
+        ...
+
+    def asked_source(
+        self, *, source: str | None = None, reading: SourcesReading | None = None
+    ) -> ArrangedSource | None:
+        """The source a question for *source* goes to, or ``None`` where there is none."""
         ...
 
 

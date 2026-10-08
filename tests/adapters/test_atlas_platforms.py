@@ -211,6 +211,19 @@ class TestEachSourceIsAskedForItself:
         assert emudeck.asked == []
 
 
+class TestTheSourceAQuestionGoesTo:
+    def test_the_answering_source_or_the_one_named(self, traces):
+        retrodeck, emudeck = _Installation("retrodeck", {}), _Installation("emudeck", {})
+        adapter, _ = _adapter([retrodeck, emudeck], traces, settings={SWITCHED_OFF_SETTING: ["retrodeck"]})
+
+        answering = adapter.asked_source()
+        named = adapter.asked_source(source="retrodeck")
+
+        assert (answering.kind if answering else None, named.kind if named else None) == ("emudeck", "retrodeck")
+        assert adapter.asked_source(source="bare_retroarch_native") is None
+        assert retrodeck.asked == emudeck.asked == []
+
+
 class TestWhereNoSourceCanBeAsked:
     def test_no_source_detected(self, traces):
         adapter, _ = _adapter([], traces)

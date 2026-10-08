@@ -7,12 +7,12 @@ from unittest.mock import MagicMock
 
 import pytest
 from fakes.fake_romm_api import FakeRommApi
-from fakes.fake_source_platform_systems import FakeSourcePlatformSystems
+from fakes.fake_source_platform_systems import RETRODECK_SOURCE, FakeSourcePlatformSystems
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 
-from domain.platform_system import FOUND, NO_SYSTEM, PLATFORM_IDS_KEY, PlatformIds, decode_platform_ids
+from domain.platform_system import FOUND, NO_SYSTEM, PLATFORM_IDS_KEY, UNASKED, PlatformIds, decode_platform_ids
 from domain.rom_install import RomInstall
-from lib.errors import RommApiError
+from lib.errors import RommAuthError, RommConnectionError, classify_error
 from services.platform_systems import PlatformSystemService, PlatformSystemServiceConfig
 
 _SNES = {"id": 3, "slug": "snes", "name": "Super Nintendo", "igdb_id": 19, "ss_id": 4}
@@ -121,13 +121,31 @@ class TestWhereNoneAreKept:
         assert _listing_reads(romm) == 1
         assert sources.asked[-1][0] == PlatformIds()
 
-    def test_a_failed_read_raises_and_keeps_nothing(self, service, uow_factory, romm):
-        romm.list_platforms_side_effect = RommApiError("server unreachable")
+    def test_a_read_that_cannot_reach_rom_m_answers_unreachable_and_keeps_nothing(
+        self, service, uow_factory, romm, sources
+    ):
+        romm.list_platforms_side_effect = RommConnectionError("connection refused")
 
-        with pytest.raises(RommApiError):
-            service.platform_system("snes")
+        platform = service.platform_system("snes", source="retrodeck")
 
+        assert (platform.state, platform.unasked) == (UNASKED, "server_unreachable")
+        assert platform.unasked_message == classify_error(RommConnectionError("x"))[1]
+        assert platform.source == RETRODECK_SOURCE
+        assert sources.asked == []
         assert uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY) is None
+
+    def test_a_refused_read_answers_its_own_reason(self, service, romm):
+        romm.list_platforms_side_effect = RommAuthError("401")
+
+        assert service.platform_system("snes").unasked == "auth_failed"
+
+    def test_the_next_read_with_rom_m_reachable_keeps_the_ids(self, service, uow_factory, romm):
+        romm.list_platforms_side_effect = RommConnectionError("connection refused")
+        service.platform_system("snes")
+        romm.list_platforms_side_effect = None
+
+        assert service.platform_system("snes").state == FOUND
+        assert decode_platform_ids(uow_factory.uow.kv_config.get(PLATFORM_IDS_KEY)) is not None
 
     def test_a_caller_that_must_not_reach_rom_m_gets_no_ids(self, service, uow_factory, romm, sources):
         service.platform_system("snes", ask_romm=False)

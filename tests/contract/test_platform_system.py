@@ -14,8 +14,9 @@ import os
 import pytest
 
 from domain.platform_system import FOUND, NO_SYSTEM, PLATFORM_IDS_KEY, SWITCHED_OFF, PlatformIds, decode_platform_ids
+from lib.errors import RommConnectionError
 
-from ._seed import seed_rom
+from ._seed import enable_save_sync, seed_rom
 
 pytestmark = pytest.mark.usefixtures("seeded_retrodeck")
 
@@ -114,6 +115,47 @@ async def test_where_no_ids_are_kept_they_are_read_once_from_rom_m_and_kept(harn
     assert [ids for ids, _slug, _source in harness.platform_systems.asked] == [
         PlatformIds(igdb_id=24, tgdb_id=5, name="Game Boy Advance")
     ] * 2
+    with harness.uow_factory() as uow:
+        kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
+    assert kept == {_SLUG: PlatformIds(igdb_id=24, tgdb_id=5, name="Game Boy Advance")}
+
+
+async def test_with_rom_m_unreachable_and_no_ids_kept_the_pages_show_the_offline_state(harness):
+    _seed_server(harness)
+    seed_rom(harness, 5, platform_slug=_SLUG)
+    enable_save_sync(harness)
+    harness.romm.list_platforms_side_effect = RommConnectionError("connection refused")
+
+    status = await harness.endpoints.get_save_status(5)
+    bios = await harness.endpoints.get_bios_status(5)
+    game_core = await harness.endpoints.get_platform_core_info(5)
+    core = await harness.endpoints.get_system_core_info(_SLUG)
+    started = await harness.endpoints.start_download(5)
+
+    assert status["rom_id"] == 5
+    assert bios["bios_level"] == "unknown"
+    assert bios["bios_status_unknown"] is True
+    for answer in (game_core, core):
+        assert answer["emulator_data_available"] is False
+        assert answer["emulator_data_reason"] == "server_unreachable"
+        assert answer["emulator_source"] == {"kind": "retrodeck", "starts_games": True}
+        assert answer["platform_system"] is None
+    assert started["success"] is False
+    assert started["reason"] == "server_unreachable"
+    assert harness.platform_systems.asked == []
+    with harness.uow_factory() as uow:
+        assert uow.kv_config.get(PLATFORM_IDS_KEY) is None
+
+
+async def test_the_next_read_with_rom_m_reachable_keeps_the_ids(harness):
+    _seed_server(harness)
+    harness.romm.list_platforms_side_effect = RommConnectionError("connection refused")
+    await harness.endpoints.get_system_core_info(_SLUG)
+    harness.romm.list_platforms_side_effect = None
+
+    core = await harness.endpoints.get_system_core_info(_SLUG)
+
+    assert core["platform_system"]["state"] == "found"
     with harness.uow_factory() as uow:
         kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
     assert kept == {_SLUG: PlatformIds(igdb_id=24, tgdb_id=5, name="Game Boy Advance")}
