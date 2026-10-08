@@ -653,7 +653,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     try {
       const result = await downloadAllFirmware(detail.platformSlug);
       if (result.success) {
-        showToast(`BIOS downloaded (${result.downloaded ?? 0} files)`);
+        showToast(`BIOS downloaded (${result.downloaded} files)`);
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug: detail.platformSlug } }),
         );
