@@ -45,6 +45,7 @@ from domain.shortcut_data import EmulatorInvocation
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.cores import CoreService, CoreServiceConfig
 from services.firmware import FirmwareService, FirmwareServiceConfig
+from services.firmware.deletion import FirmwareDeletionIncomplete
 from services.firmware.status import FirmwareStatusReader
 from services.game_detail import GameDetailService, GameDetailServiceConfig
 
@@ -747,6 +748,7 @@ class TestWhereNoBiosDownloadMayLand:
 
         result = await fw.delete_bios_file("dc", "dc_boot.bin")
 
+        assert isinstance(result, dict)
         assert result["deleted_count"] == 1
         assert not bios.exists()
 
@@ -2309,6 +2311,7 @@ class TestGetFirmwareStatusDeletableCount:
         assert "retired.bin" not in rows
         # And the count means the delete: it removes ours, leaves theirs.
         deleted = await fw.delete_platform_bios("gc")
+        assert isinstance(deleted, dict)
         assert deleted["deleted_count"] == 2
         assert retired not in store.files
         assert ipl in store.files
@@ -4280,6 +4283,7 @@ class TestDeletePlatformBios:
 
             result = await fw.delete_platform_bios("psx")
 
+        assert isinstance(result, dict)
         # (b) success/deleted_count response is correct: only the one downloaded.
         assert result["success"] is True
         assert result["deleted_count"] == 1
@@ -4369,6 +4373,7 @@ class TestDeletePlatformBios:
 
             result = await fw.delete_platform_bios("gc")
 
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 1
         assert shipped in store.files
@@ -4394,6 +4399,7 @@ class TestDeletePlatformBios:
 
             result = await fw.delete_platform_bios("gc")
 
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 0
         assert ipl in store.files
@@ -4423,6 +4429,7 @@ class TestDeletePlatformBios:
 
             result = await fw.delete_platform_bios("gc")
 
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 1
         assert ipl not in store.files
@@ -4454,6 +4461,7 @@ class TestDeletePlatformBios:
 
             result = await fw.delete_platform_bios("gc")
 
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 1
         assert flat not in store.files
@@ -4475,6 +4483,7 @@ class TestDeletePlatformBios:
         with patch.object(firmware.romm_api, "list_firmware", return_value=self._gamecube_listing()):
             result = await fw.delete_platform_bios("gc")
 
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 0
         assert firmware.uow.bios_files.get("gc", "IPL.bin") is None
@@ -4513,6 +4522,7 @@ class TestDeletePlatformBios:
         with patch.object(firmware.romm_api, "list_firmware", return_value=[]):
             result = await fw.delete_platform_bios("psx")
 
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 1
         assert path not in store.files
@@ -5903,13 +5913,81 @@ class TestDeletePlatformBiosIOLogsWarnings:
             result = await fw.delete_platform_bios("psx")
 
         # One file deleted (the second), one failed with a logged warning.
-        assert result["success"] is False
-        assert result["deleted_count"] == 1
+        assert result == FirmwareDeletionIncomplete(
+            reason="delete_incomplete", message="Deleted 1 file(s), 1 error(s)", deleted_count=1
+        )
         assert any("scph5501.bin" in record.getMessage() for record in caplog.records)
         # The failing file's BIOS record must remain (it wasn't actually removed).
         assert firmware.uow.bios_files.get("psx", "scph5501.bin") is not None
         # The successful file's BIOS record is cleared.
         assert firmware.uow.bios_files.get("psx", "scph5502.bin") is None
+
+
+class TestAPartialBiosDeleteIsIncomplete:
+    """Each of the three Delete buttons answers a removal that took only part with what it did remove."""
+
+    @staticmethod
+    def _record(firmware, name: str, path: str) -> None:
+        firmware.uow.bios_files.save(
+            BiosFile.mark_downloaded(
+                platform_slug="ps2",
+                file_name=name,
+                file_path=path,
+                downloaded_at="2026-01-01T00:00:00+00:00",
+                firmware_id=None,
+            )
+        )
+
+    def _two_downloads_one_stuck(self, firmware, fw, folder: str) -> FakeFirmwareFileStore:
+        store = FakeFirmwareFileStore({f"{folder}/scph39001.bin": b"\x00", f"{folder}/scph70012.bin": b"\x00"})
+        store.remove_failures.add(f"{folder}/scph39001.bin")
+        fw._deletion._firmware_file_store = store
+        self._record(firmware, "scph39001.bin", f"{folder}/scph39001.bin")
+        self._record(firmware, "scph70012.bin", f"{folder}/scph70012.bin")
+        return store
+
+    @pytest.mark.asyncio
+    async def test_the_platform_delete_answers_what_it_removed(self, firmware, fw):
+        store = self._two_downloads_one_stuck(firmware, fw, "/fake/bios/pcsx2/bios")
+
+        result = await fw.delete_platform_bios("ps2")
+
+        assert result == FirmwareDeletionIncomplete(
+            reason="delete_incomplete", message="Deleted 1 file(s), 1 error(s)", deleted_count=1
+        )
+        assert list(store.files) == ["/fake/bios/pcsx2/bios/scph39001.bin"]
+
+    @pytest.mark.asyncio
+    async def test_the_folder_delete_answers_what_it_removed(self, firmware, fw):
+        store = self._two_downloads_one_stuck(firmware, fw, "/fake/bios/pcsx2/bios")
+
+        result = await fw.delete_bios_folder("ps2", "/fake/bios/pcsx2/bios")
+
+        assert result == FirmwareDeletionIncomplete(
+            reason="delete_incomplete",
+            message=(
+                "Could not delete every file: scph39001.bin: "
+                "simulated remove failure: /fake/bios/pcsx2/bios/scph39001.bin"
+            ),
+            deleted_count=1,
+        )
+        assert list(store.files) == ["/fake/bios/pcsx2/bios/scph39001.bin"]
+
+    @pytest.mark.asyncio
+    async def test_the_file_delete_answers_that_it_removed_nothing(self, firmware, fw):
+        store = self._two_downloads_one_stuck(firmware, fw, "/fake/bios/pcsx2/bios")
+
+        result = await fw.delete_bios_file("ps2", "scph39001.bin")
+
+        assert result == FirmwareDeletionIncomplete(
+            reason="delete_incomplete",
+            message=(
+                "Could not delete scph39001.bin: scph39001.bin: "
+                "simulated remove failure: /fake/bios/pcsx2/bios/scph39001.bin"
+            ),
+            deleted_count=0,
+        )
+        assert len(store.files) == 2
 
 
 class TestBadPathFirmwareUseCases:

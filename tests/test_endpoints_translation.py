@@ -34,10 +34,14 @@ from _factories import (
 )
 from bootstrap import ServicesBundle
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
+from fakes.fake_core_info_provider import FakeCoreInfoProvider
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_event_sink import FakeEventSink
+from fakes.fake_firmware_file_store import FakeFirmwareFileStore
+from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcessControlAdapter
+from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
@@ -51,6 +55,7 @@ from fakes.library_peers import FakeArtworkManager
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.steam_config import SteamConfigAdapter
+from domain.bios_file import BiosFile
 from domain.refusal import DomainRefused, NamedDomainRefused
 from domain.rom import Rom
 from domain.rom_install import RomInstall
@@ -79,6 +84,7 @@ from lib.errors import (
 from lib.partial_failure import PartialFailure
 from main import Endpoints
 from services.connection import ConnectionService, ConnectionServiceConfig
+from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
@@ -1330,3 +1336,62 @@ class TestTheCleanupRefusalsOnTheWire:
         assert message["reason"] == REASON_BACKEND_EXCEPTION
         assert message["message"] == "RuntimeError: database unavailable"
         assert "result" not in message
+
+
+def _dispatcher_over_firmware(
+    romm_api: FakeRommApi, store: FakeFirmwareFileStore, uow: FakeUnitOfWork
+) -> CallDispatcher:
+    """The real dispatcher over ``Endpoints`` whose firmware use cases are the real ``FirmwareService`` over fakes."""
+    service = FirmwareService(
+        config=FirmwareServiceConfig(
+            romm_api=romm_api,
+            loop=asyncio.get_running_loop(),
+            logger=LOGGER,
+            clock=FakeClock(),
+            firmware_file_store=store,
+            firmware_resolver=FakeFirmwareResolver(),
+            platform_firmware_resolver=FakeFirmwareResolver(),
+            retrodeck_folders=FakeRetroDeckFolders(bios="/retrodeck/bios"),
+            core_info=FakeCoreInfoProvider(),
+            resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
+            platform_core_reader=FakePlatformCoreReader(),
+            uow_factory=FakeUnitOfWorkFactory(uow),
+            conflict_rules=_make_conflict_rules(),
+        )
+    )
+    endpoints = Endpoints(_make_application(_make_services_bundle(firmware_service=service)), HostStatus())
+    return CallDispatcher(endpoints, LOGGER)
+
+
+class TestTheFirmwareAnswersOnTheWire:
+    """A BIOS delete that removed only part answers ``delete_incomplete`` with how many files it removed."""
+
+    async def test_a_partial_delete_answers_its_count(self):
+        uow = FakeUnitOfWork()
+        store = FakeFirmwareFileStore(
+            {"/retrodeck/bios/dc_boot.bin": b"boot", "/retrodeck/bios/dc_flash.bin": b"flash"}
+        )
+        store.remove_failures.add("/retrodeck/bios/dc_flash.bin")
+        for name in ("dc_boot.bin", "dc_flash.bin"):
+            with uow:
+                uow.bios_files.save(
+                    BiosFile.mark_downloaded(
+                        platform_slug="dc",
+                        file_name=name,
+                        file_path=f"/retrodeck/bios/{name}",
+                        downloaded_at="2026-01-01T00:00:00+00:00",
+                        firmware_id=None,
+                    )
+                )
+
+        dispatcher = _dispatcher_over_firmware(FakeRommApi(), store, uow)
+        message = json.loads(await dispatcher.dispatch(1, "delete_platform_bios", ["dc"]))
+
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {
+            "success": False,
+            "reason": "delete_incomplete",
+            "message": "Deleted 1 file(s), 1 error(s)",
+            "deleted_count": 1,
+        }
+        assert list(store.files) == ["/retrodeck/bios/dc_flash.bin"]

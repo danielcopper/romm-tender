@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain import firmware_paths
 from domain.retrodeck_folders import FolderRefused
-from lib.list_result import ErrorCode
+from lib.partial_failure import PartialFailure
 
 if TYPE_CHECKING:
     import asyncio
@@ -47,6 +47,13 @@ class PlatformBiosDeleterConfig:
     uow_factory: UnitOfWorkFactory
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
+
+
+@dataclass(frozen=True)
+class FirmwareDeletionIncomplete(PartialFailure):
+    """A BIOS delete that removed only part of the files its records name."""
+
+    deleted_count: int
 
 
 class PlatformBiosDeleter:
@@ -167,7 +174,7 @@ class PlatformBiosDeleter:
             for slug, file_name in keys:
                 uow.bios_files.delete(slug, file_name)
 
-    async def delete_bios_folder(self, platform_slug, folder_path) -> dict[str, Any]:
+    async def delete_bios_folder(self, platform_slug, folder_path) -> dict[str, Any] | FirmwareDeletionIncomplete:
         """Delete the BIOS files Tender downloaded inside *folder_path*.
 
         The folder row's twin of :meth:`delete_bios_file`, and the same
@@ -198,17 +205,16 @@ class PlatformBiosDeleter:
         self._listing.invalidate()
 
         if errors:
-            return {
-                "success": False,
-                "reason": ErrorCode.UNKNOWN.value,
-                "deleted_count": deleted,
-                "message": f"Could not delete every file: {errors[0]}",
-            }
+            return FirmwareDeletionIncomplete(
+                reason="delete_incomplete",
+                message=f"Could not delete every file: {errors[0]}",
+                deleted_count=deleted,
+            )
         if deleted == 0:
             return {"success": True, "deleted_count": 0, "message": "Nothing to delete in this folder"}
         return {"success": True, "deleted_count": deleted, "message": f"Deleted {deleted} BIOS file(s)"}
 
-    async def delete_bios_file(self, platform_slug, file_name) -> dict[str, Any]:
+    async def delete_bios_file(self, platform_slug, file_name) -> dict[str, Any] | FirmwareDeletionIncomplete:
         """Delete one BIOS file Tender downloaded, by name.
 
         The per-row twin of :meth:`delete_platform_bios`, running the same
@@ -224,17 +230,16 @@ class PlatformBiosDeleter:
         self._listing.invalidate()
 
         if errors:
-            return {
-                "success": False,
-                "reason": ErrorCode.UNKNOWN.value,
-                "deleted_count": deleted,
-                "message": f"Could not delete {file_name}: {errors[0]}",
-            }
+            return FirmwareDeletionIncomplete(
+                reason="delete_incomplete",
+                message=f"Could not delete {file_name}: {errors[0]}",
+                deleted_count=deleted,
+            )
         if deleted == 0:
             return {"success": True, "deleted_count": 0, "message": f"Nothing to delete for {file_name}"}
         return {"success": True, "deleted_count": deleted, "message": f"Deleted {file_name}"}
 
-    async def delete_platform_bios(self, platform_slug) -> dict[str, Any]:
+    async def delete_platform_bios(self, platform_slug) -> dict[str, Any] | FirmwareDeletionIncomplete:
         """Delete the BIOS files Tender downloaded for a platform.
 
         Scoped to Tender's own downloads, never to everything sitting in the
@@ -247,12 +252,11 @@ class PlatformBiosDeleter:
         self._listing.invalidate()
 
         if errors:
-            return {
-                "success": False,
-                "reason": ErrorCode.UNKNOWN.value,
-                "deleted_count": deleted,
-                "message": f"Deleted {deleted} file(s), {len(errors)} error(s)",
-            }
+            return FirmwareDeletionIncomplete(
+                reason="delete_incomplete",
+                message=f"Deleted {deleted} file(s), {len(errors)} error(s)",
+                deleted_count=deleted,
+            )
         if deleted == 0:
             return {"success": True, "deleted_count": 0, "message": "No BIOS files for this platform"}
         return {"success": True, "deleted_count": deleted, "message": f"Deleted {deleted} BIOS file(s)"}

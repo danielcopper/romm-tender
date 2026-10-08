@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from services.firmware.deletion import PlatformBiosDeleter, PlatformBiosDeleterConfig
+from services.firmware.deletion import FirmwareDeletionIncomplete, PlatformBiosDeleter, PlatformBiosDeleterConfig
 from services.firmware.demand import FirmwareDemand, FirmwareDemandConfig
 from services.firmware.downloads import FirmwareDownloader, FirmwareDownloaderConfig
 from services.firmware.listing import FirmwareListing, FirmwareListingConfig
@@ -203,17 +203,17 @@ class FirmwareService:
             with self._downloads.downloading():
                 return await self._downloads.download_required_firmware(platform_slug)
 
-    async def delete_platform_bios(self, platform_slug) -> dict[str, Any]:
+    async def delete_platform_bios(self, platform_slug) -> dict[str, Any] | FirmwareDeletionIncomplete:
         """Delete the BIOS files Tender downloaded for a platform."""
         async with self._rules.hold("delete_platform_bios", update=True, migration=True):
             return await self._deletion.delete_platform_bios(platform_slug)
 
-    async def delete_bios_file(self, platform_slug, file_name) -> dict[str, Any]:
+    async def delete_bios_file(self, platform_slug, file_name) -> dict[str, Any] | FirmwareDeletionIncomplete:
         """Delete one BIOS file Tender downloaded for a platform."""
         async with self._rules.hold("delete_bios_file", update=True, migration=True):
             return await self._deletion.delete_bios_file(platform_slug, file_name)
 
-    async def delete_bios_folder(self, platform_slug, folder_path) -> dict[str, Any]:
+    async def delete_bios_folder(self, platform_slug, folder_path) -> dict[str, Any] | FirmwareDeletionIncomplete:
         """Delete the BIOS files Tender downloaded inside a declared folder."""
         async with self._rules.hold("delete_bios_folder", update=True, migration=True):
             return await self._deletion.delete_bios_folder(platform_slug, folder_path)
