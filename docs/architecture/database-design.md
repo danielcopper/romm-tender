@@ -275,21 +275,25 @@ maps 1:1 onto these tables.
 
 `SyncRun` carries its own invariants, so per GLOSSARY.md it gets a typed table rather than untyped `kv_config` rows. The
 full live `kv_config` key set is `device_id` (the server-issued device identity), `platform_names` (the JSON-encoded
-`platform_slug → display_name` cache), `retrodeck_home_path` (+ its pending-migration `_previous`, and — when the home
-is changed _again_ before the migration runs — a `_hops` JSON array of the additional pending homes, oldest→newest, so
-files under an intermediate home are never stranded, [#1042](https://github.com/danielcopper/romm-tender/issues/1042)),
-`save_directories_recorded` (present once the one-time pass that records the answered save directories of the installed
-ROMs has finished over a detected emulator installation with no ROM failing), `shortcut_launcher_relocated` (present
-once a reading of Steam's shortcut file found no shortcut of ours naming a launcher outside the launcher's home),
-`playtime_scope_notice` (present while RomM refuses the token the playtime read needs, cleared by a later read that
-succeeds or a fresh sign-in), `update_check_last_seen` (what the release checks last established), `last_run_version`
-(the version the previous start ran as), `update_available_seen_version` (the release the user has seen in Settings ›
-Updates), and the three marks of an update toast already raised — `update_available_toasted_version` (the release told
-about), `update_failure_toasted_at` (the installer's record of a failed update) and `update_stopped_toasted_at` (an
-installer found stopped) — the truly miscellaneous singleton scalars. The `platform_names` cache is a single JSON blob
-the library sync refreshes every run so two reads need no RomM: the game-detail platform name, and a platform removal's
-answer, whose name the frontend finds that platform's Steam collection by. The schema version is **not** a `kv_config`
-key — it is tracked in `PRAGMA user_version` by the [migration runner](#the-migration-framework)
+`platform_slug → display_name` cache), `platform_ids` (each RomM platform's IGDB, libretro, ScreenScraper and TheGamesDB
+ids and its display name, keyed by slug: replaced with every listed platform's at the start of every sync, and read from
+RomM once for a platform none are kept for — what a platform's system is asked with, see
+[core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)), `retrodeck_home_path` (+ its
+pending-migration `_previous`, and — when the home is changed _again_ before the migration runs — a `_hops` JSON array
+of the additional pending homes, oldest→newest, so files under an intermediate home are never stranded,
+[#1042](https://github.com/danielcopper/romm-tender/issues/1042)), `save_directories_recorded` (present once the
+one-time pass that records the answered save directories of the installed ROMs has finished over a detected emulator
+installation with no ROM failing), `shortcut_launcher_relocated` (present once a reading of Steam's shortcut file found
+no shortcut of ours naming a launcher outside the launcher's home), `playtime_scope_notice` (present while RomM refuses
+the token the playtime read needs, cleared by a later read that succeeds or a fresh sign-in), `update_check_last_seen`
+(what the release checks last established), `last_run_version` (the version the previous start ran as),
+`update_available_seen_version` (the release the user has seen in Settings › Updates), and the three marks of an update
+toast already raised — `update_available_toasted_version` (the release told about), `update_failure_toasted_at` (the
+installer's record of a failed update) and `update_stopped_toasted_at` (an installer found stopped) — the truly
+miscellaneous singleton scalars. The `platform_names` cache is a single JSON blob the library sync refreshes every run
+so two reads need no RomM: the game-detail platform name, and a platform removal's answer, whose name the frontend finds
+that platform's Steam collection by. The schema version is **not** a `kv_config` key — it is tracked in
+`PRAGMA user_version` by the [migration runner](#the-migration-framework)
 ([#781](https://github.com/danielcopper/romm-tender/issues/781)).
 
 `SyncRun` is a **history** table, not a single "last run" row: a 1-row table would let a newly-started run

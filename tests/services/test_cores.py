@@ -883,11 +883,10 @@ class TestSetGameCoreTransactionBoundary:
     """The label resolution runs between transactions, never inside one.
 
     The emulator-options read re-probes ES-DE's config and each option's
-    install on every call; the slug→system resolver parses Tender's own
-    ``config.json`` once and memoises it for the life of the process, so it is
-    the first call that can land on the file. A UoW takes SQLite's ``BEGIN
-    IMMEDIATE`` write lock, so either read held inside one stalls every other
-    writer for its duration (GLOSSARY.md → Unit of Work, #1779).
+    install on every call, and the game's system is the install record's or a
+    question to the resolver that opens a UoW of its own. A UoW takes SQLite's
+    ``BEGIN IMMEDIATE`` write lock, so either read held inside one stalls every
+    other writer for its duration (GLOSSARY.md → Unit of Work, #1779).
     ``FakeUnitOfWork`` shares no connection, so what a test can see is the
     ordering.
     """

@@ -262,13 +262,14 @@ and the row you focus is the one the right-hand pane describes.
    pane). Checking one platform takes a tenth to half a second on a Steam Deck, so a library of thirty is done in a few
    seconds, and leaving the page stops the work
 4. Move down the list to pick a platform; the pane on the right changes with the focus
-5. The pane's first line names the platform, how many ROMs it has on RomM, how many are in Steam, and the emulator it
-   launches with — by name, in grey when it is the platform's default and in gold when you have picked something else.
-   If it reads **RetroDECK decides**, Tender could not pin any of this platform's emulators — they may need setting up,
-   or ES-DE's command for them is not one Tender can bake — so RetroDECK chooses one itself when a game starts. If it
-   reads **no emulator installed** in red, the emulator RetroDECK would have fallen back to is not on this machine, and
-   the sentence below names it. If it reads **no emulator** in red, RetroDECK has none for this platform at all. The
-   sentence below the line says which of the three it is
+5. The pane's first line names the platform, how many ROMs it has on RomM, how many are in Steam, the system its games
+   are in your emulator source — "RetroDECK system psx", in the same grey — and the emulator it launches with — by name,
+   in grey when it is the platform's default and in gold when you have picked something else. If it reads **RetroDECK
+   decides**, Tender could not pin any of this platform's emulators — they may need setting up, or ES-DE's command for
+   them is not one Tender can bake — so RetroDECK chooses one itself when a game starts. If it reads **no emulator
+   installed** in red, the emulator RetroDECK would have fallen back to is not on this machine, and the sentence below
+   names it. If it reads **no emulator** in red, RetroDECK has none for this platform at all. The sentence below the
+   line says which of the three it is
 6. The **chip button** at the right of that line opens a menu of the platform's emulators — the same button, in the same
    two colours, as the one on a game's page. It is always there: it opens the menu whenever there is more than one
    emulator to choose between — also before the platform's first sync, so you can pick before its games reach Steam —
@@ -276,7 +277,9 @@ and the row you focus is the one the right-hand pane describes.
    nothing to choose — no emulator for the platform, or an emulator list that could not be established (no emulator
    source found, every source switched off, a broken ES-DE systems file, a RetroDECK that has not been set up yet, a
    list that cannot be read yet, or not established for another reason) — a line under the header says so as well, since
-   a tooltip needs a mouse
+   a tooltip needs a mouse. A platform your emulator source has no system for says **"RetroDECK has no system for
+   _platform_, so Tender cannot download its games."**, and one whose only systems are switched off there says **"System
+   _system_ is switched off in RetroDECK."** — see [Managing Games](managing-games.md#downloading-roms)
 7. **BIOS files** states how many required files are ready (e.g. "1 / 2 required") when the system needs any, and
    otherwise names the emulator and says it marks none of its BIOS files as required. Under that heading is the same
    sentence the game page shows, with your RomM library's own inventory behind it (e.g. "(3/5 RomM library files)").

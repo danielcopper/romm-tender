@@ -347,14 +347,15 @@ key.
 
 Residents (per [ADR-0003](docs/adr/0003-json-sqlite-persistence-boundary.md)): the RetroDECK home path marker
 (`retrodeck_home_path` + its pending-migration `_previous`), `device_id` (server-issued identity), `platform_names`
-(platform_slug → display_name cache), `save_directories_recorded`, the marker that the one-time pass recording the
-installed ROMs' [answered save directories](#answered-save-directory) has finished over a detected emulator installation
-with no ROM failing, `update_check_last_seen`, what the release checks last established (see _Available release_ below),
-`update_available_toasted_version`, the release the user has been told about, `update_available_seen_version`, the
-release the user has seen in Settings › Updates, `last_run_version`, the version the previous start ran as (see
-_Rolled-back update_ below), and `update_failure_toasted_at` and `update_stopped_toasted_at`, the failed update and the
-stopped attempt whose toasts were raised (see _Failed-update toast_ below). The schema version is **not** a `kv_config`
-key — it lives in `PRAGMA user_version`.
+(platform_slug → display_name cache), `platform_ids` (each RomM platform's ids the resolver is asked with, beside its
+display name — see [Platform system](#platform-system)), `save_directories_recorded`, the marker that the one-time pass
+recording the installed ROMs' [answered save directories](#answered-save-directory) has finished over a detected
+emulator installation with no ROM failing, `update_check_last_seen`, what the release checks last established (see
+_Available release_ below), `update_available_toasted_version`, the release the user has been told about,
+`update_available_seen_version`, the release the user has seen in Settings › Updates, `last_run_version`, the version
+the previous start ran as (see _Rolled-back update_ below), and `update_failure_toasted_at` and
+`update_stopped_toasted_at`, the failed update and the stopped attempt whose toasts were raised (see _Failed-update
+toast_ below). The schema version is **not** a `kv_config` key — it lives in `PRAGMA user_version`.
 
 **Not** a dumping ground: anything with its own lifecycle, invariants, or repeat-row potential gets its own aggregate.
 `kv_config` is for the truly small, the truly singleton, and the truly miscellaneous.
@@ -559,6 +560,16 @@ ADR-0001 and **dropped by [ADR-0003](docs/adr/0003-json-sqlite-persistence-bound
 display names resolve live from RomM; sync exclusion is the user-intent `enabled_platforms` config in `settings.json`,
 not per-platform local state. A `Platform` aggregate is reintroduced only when a concrete need lands (the
 standalone-emulator roadmap), not speculatively.
+
+### Platform system
+
+The system a RomM platform's games belong to in one emulator source — `snes`, `psx` — as that source answers it for the
+ids RomM holds for the platform (IGDB, libretro, ScreenScraper, TheGamesDB). Never RomM's slug, which no source
+declares, and never Tender's own table; a platform can be one system in RetroDECK and another in EmuDeck. Only a
+switched-on system is taken; where there is none, the platform has **no system** or only a **switched-off** one, and
+nothing of it is downloaded. An installed game keeps the system its install record holds. Rules:
+[core-emulator-selection.md](docs/architecture/core-emulator-selection.md#a-platforms-system). _Avoid_: platform map,
+mapped system — there is no map.
 
 ### Emulator override vs default core vs launching emulator
 

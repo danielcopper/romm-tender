@@ -258,7 +258,7 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # (services/protocols/paths.py) — two more questions to ES-DE's
         # catalogue, answered by the same resolver, and kept the same way, as
         # the CoreInfoProvider reads above. Both Protocols are call-shaped, and
-        # unlike SystemResolver there is no method name a service could write
+        # unlike SandboxLauncherFn there is no method name a service could write
         # beside the attribute: the implementations
         # (AtlasCatalogueAdapter.get_supported_extensions / .is_known_system)
         # are on no Protocol a service holds. So the attribute is all there is,
@@ -475,14 +475,14 @@ def main(argv: list[str]) -> int:
             print()
             print(
                 "ERROR: a UoW-opening seam (ActiveCoreResolver / RelaunchOptionsResolver / "
-                "uow_factory) must not be called while a UoW is open on the same path "
+                "PlatformSystems / uow_factory) must not be called while a UoW is open on the same path "
                 "(CLAUDE.md → Invariant register). Snapshot inside the UoW, close it, then "
                 "resolve outside."
             )
         if any(_WRITE_LOCK_REMEDY in line for line in findings):
             print()
             print(
-                "ERROR: a file-I/O seam (DiscResolver / CoreInfoProvider / SystemResolver) "
+                "ERROR: a file-I/O seam (DiscResolver / CoreInfoProvider / SaveLocationReader) "
                 "must not be called while a UoW is open — a Unit of Work wraps database "
                 "reads and writes only, never file or server I/O (CLAUDE.md → Invariant "
                 "register, GLOSSARY.md → Unit of Work, ADR-0006). Snapshot inside the UoW, "

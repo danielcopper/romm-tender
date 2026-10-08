@@ -641,10 +641,10 @@ Format: **invariant** — tier — enforced by.
   before the cancel. Detail: `docs/architecture/loading-the-panel.md` → What the stranded panel is told
 - **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
   `scripts/check_aggregate_field_assignment.py`
-- **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, uow_factory) is called while a UoW is open on the
-  same path** — check — `scripts/check_uow_seam_nesting.py` (the first of the **two** rules that script carries, over
-  one shared matcher; the file-I/O rule below is a different hazard with its own seam list and its own failure message,
-  and neither entry is evidence about the other)
+- **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, PlatformSystems, uow_factory) is called while a
+  UoW is open on the same path** — check — `scripts/check_uow_seam_nesting.py` (the first of the **two** rules that
+  script carries, over one shared matcher; the file-I/O rule below is a different hazard with its own seam list and its
+  own failure message, and neither entry is evidence about the other)
 - **No file-I/O seam is called while a UoW is open — a Unit of Work wraps database reads and writes, never file or
   server I/O (GLOSSARY.md → Unit of Work, ADR-0006)** — check — `scripts/check_uow_seam_nesting.py`, second seam family
   (`IO_SEAM_METHODS`). The list is **the seams this checker can see and has been told about, never an inventory of the
@@ -654,45 +654,43 @@ Format: **invariant** — tier — enforced by.
   again; only a run's one reading of the sources keeps a system's answer for the run; `get_emulator_options`
   additionally globs each **bakeable standalone** option's emulator install through the find rules on **every** call,
   uncached so a component installed mid-session is seen), `SandboxLauncherFn` (re-probes the flatpak roots for
-  `es_find_rules.xml` and re-stats it before it may use the parse cache), `SystemResolver` (parses Tender's **own**
-  bundled `config.json`, not RetroDECK's `retrodeck.json`, and does no network work despite living on the RomM HTTP
-  adapter), `SystemSupportedExtensionsFn` / `SystemKnownFn` (two more questions to the same catalogue, asked afresh from
-  the panel and once per reading within a run), `SteamConfigStore.read_shortcut_exes` (parses Steam's whole
-  `shortcuts.vdf` — 315 KB and 828 entries on the reference machine — for the one-time shortcut relocation. **Listing it
-  changes nothing at its only call site**: the service reaches it through `run_in_executor` as a bound method, which is
-  this checker's documented blind spot, so the entry is a statement of the rule rather than an enforcement of it. It is
-  also not the store's only real I/O — `grid_dir()` is called from `services/artwork.py` (six sites),
-  `services/shortcut_removal.py` and `services/library/reporter.py`, `set_steam_input_config()` from
-  `services/settings.py`, `services/shortcut_removal.py` and `services/library/reporter.py`, and `write_shortcut_icon()`
-  from `services/steamgrid.py` — those are unlisted, and their being unlisted is a gap, not a judgement),
-  `FirmwarePlatformResolver` (reads what one system's emulators want WITH content verification: it opens each candidate
-  in a declared folder and reads it the way the emulator does — 59-173 ms per system on the reference machine at
-  emu-atlas 0.22) and its whole-machine sibling `FirmwareResolver`, the save answer — `resolve_save_answer` and the
-  saves package's own `save_answer` wrapper, a full read of the machine per ROM (the first ask about a core also runs
-  that core's probe) — the savestate question put to the same catalogue entry (`resolve_savestate_location`) and the
-  seam's detection question (`installation_detected`, which detects the emulator sources afresh and reads the answering
-  one's health), the two path resolvers — `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a
-  directory that may sit on the SD card the marker is pending a migration away from) and `ResolvedPathFn` (the same
-  walk, but on **both** sides of a comparison, so a call site costs what the rows it checks cost, not what it checks
-  them against) — and every `RetroDeckFolders` question: `download_folder`, `bios_download_folder`, `rom_root`,
-  `rom_folders`, `bios_folder`, `saves_root` and `move_roots`, each a fresh reading of the emulator sources and a
-  question to the resolver, which reads RetroDECK's settings file and ES-DE's, and a `realpath` of the answer — together
-  with the services' own wrappers around them (`_rom_folder`, `_rom_folders`, `_resolve_target`, `_platform_dir`,
-  `_saves_root`, `download_root`, `status_root`), which are what the services call. The firmware timing is the only
-  entry a cost was measured for; every other one is listed from reading its implementation. One other real I/O seam was
-  weighed and kept out — the reason is in the script's docstring, and it is not an exemption; nor is it an inventory of
-  what else touches the disk. **"It's only a read" is the reasoning this rule exists to refuse**:
-  `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The database is
-  in WAL, so readers are unaffected — but every other **writer** waits on the lock for up to `busy_timeout=5000` and
-  fails with `SQLITE_BUSY` if it is still held then, and `FakeUnitOfWork` shares no connection, so no unit test notices.
-  Six call sites had drifted across the rule before anything looked (#1779), for the reason the check exists: nothing at
-  a call site reveals that an injected seam touches the disk. **The rule and the gate come from reading code — no
-  measurement of how long any of those transactions actually held the lock exists, and nothing here should be read as
-  one.** What the check sees is the deadlock rule's matcher unchanged — an **attribute** call naming a listed seam,
-  lexically inside a `with <...>uow_factory()` block in the same function scope — so it inherits every blind spot of
-  that half: a seam behind a helper one level down, an alias to a local, a factory attribute whose name does not end in
-  `uow_factory`, a nested `def`/`lambda` (which resets the scope by design), a seam **passed as a bound method**
-  (`run_in_executor(None, self._disc_resolver.enumerate_discs, install)` — an attribute, not a call, and
+  `es_find_rules.xml` and re-stats it before it may use the parse cache), `SystemSupportedExtensionsFn` /
+  `SystemKnownFn` (two more questions to the same catalogue, asked afresh from the panel and once per reading within a
+  run), `SteamConfigStore.read_shortcut_exes` (parses Steam's whole `shortcuts.vdf` — 315 KB and 828 entries on the
+  reference machine — for the one-time shortcut relocation. **Listing it changes nothing at its only call site**: the
+  service reaches it through `run_in_executor` as a bound method, which is this checker's documented blind spot, so the
+  entry is a statement of the rule rather than an enforcement of it. It is also not the store's only real I/O —
+  `grid_dir()` is called from `services/artwork.py` (six sites), `services/shortcut_removal.py` and
+  `services/library/reporter.py`, `set_steam_input_config()` from `services/settings.py`, `services/shortcut_removal.py`
+  and `services/library/reporter.py`, and `write_shortcut_icon()` from `services/steamgrid.py` — those are unlisted, and
+  their being unlisted is a gap, not a judgement), `FirmwarePlatformResolver` (reads what one system's emulators want
+  WITH content verification: it opens each candidate in a declared folder and reads it the way the emulator does —
+  59-173 ms per system on the reference machine at emu-atlas 0.22) and its whole-machine sibling `FirmwareResolver`, the
+  save answer — `resolve_save_answer` and the saves package's own `save_answer` wrapper, a full read of the machine per
+  ROM (the first ask about a core also runs that core's probe) — the savestate question put to the same catalogue entry
+  (`resolve_savestate_location`) and the seam's detection question (`installation_detected`, which detects the emulator
+  sources afresh and reads the answering one's health), the two path resolvers — `MigrationFileStore.realpath` (one walk
+  per stored RetroDECK-home marker, a directory that may sit on the SD card the marker is pending a migration away from)
+  and `ResolvedPathFn` (the same walk, but on **both** sides of a comparison, so a call site costs what the rows it
+  checks cost, not what it checks them against) — and every `RetroDeckFolders` question: `download_folder`,
+  `bios_download_folder`, `rom_root`, `rom_folders`, `bios_folder`, `saves_root` and `move_roots`, each a fresh reading
+  of the emulator sources and a question to the resolver, which reads RetroDECK's settings file and ES-DE's, and a
+  `realpath` of the answer — together with the services' own wrappers around them (`_rom_folder`, `_rom_folders`,
+  `_resolve_target`, `_platform_dir`, `_saves_root`, `download_root`, `status_root`), which are what the services call.
+  The firmware timing is the only entry a cost was measured for; every other one is listed from reading its
+  implementation. One other real I/O seam was weighed and kept out — the reason is in the script's docstring, and it is
+  not an exemption; nor is it an inventory of what else touches the disk. **"It's only a read" is the reasoning this
+  rule exists to refuse**: `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the
+  write lock. The database is in WAL, so readers are unaffected — but every other **writer** waits on the lock for up to
+  `busy_timeout=5000` and fails with `SQLITE_BUSY` if it is still held then, and `FakeUnitOfWork` shares no connection,
+  so no unit test notices. Six call sites had drifted across the rule before anything looked (#1779), for the reason the
+  check exists: nothing at a call site reveals that an injected seam touches the disk. **The rule and the gate come from
+  reading code — no measurement of how long any of those transactions actually held the lock exists, and nothing here
+  should be read as one.** What the check sees is the deadlock rule's matcher unchanged — an **attribute** call naming a
+  listed seam, lexically inside a `with <...>uow_factory()` block in the same function scope — so it inherits every
+  blind spot of that half: a seam behind a helper one level down, an alias to a local, a factory attribute whose name
+  does not end in `uow_factory`, a nested `def`/`lambda` (which resets the scope by design), a seam **passed as a bound
+  method** (`run_in_executor(None, self._disc_resolver.enumerate_discs, install)` — an attribute, not a call, and
   `run_in_executor` is exactly how `disc.py` and `cores.py` reach their `_io` bodies; the same shape
   `check_read_only_module.py` records for its own gate), and the hand-maintained list itself, which cannot notice a seam
   whose implementation _grows_ a file read later. Matching only attribute calls is deliberate: the pure

@@ -648,7 +648,6 @@ frontend/src/                        # Frontend TypeScript
   types/                             # TypeScript interfaces and Steam API declarations
   utils/                             # Shortcut CRUD, sync, downloads, collections, session manager, store patches
 bin/tender-rom-launcher              # Pure exec wrapper — installed to <bin root> at every start, and run from there
-defaults/config.json                 # platform_map: 153 platform slug -> RetroDECK system mappings
 tests/                               # Backend unit tests, mirroring backend/ layout
 ```
 

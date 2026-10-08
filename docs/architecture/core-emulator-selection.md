@@ -117,8 +117,9 @@ The precedence is the invariant:
 
 ```text
 active_emulator_for_rom(rom_id):
-  rom = read roms row (platform_slug + emulator_override)  ── one UoW read
-  system = resolve_system(rom.platform_slug)               ── platform→system (ADR-0010)
+  rom, install = read roms + rom_installs rows             ── one UoW read
+  system = rom_system(rom.platform_slug, install)          ── the install's system, else the platform's (below)
+  if system is None: return None                           ── no switched-on system: plain launch
   options = get_emulator_options(system)["options"]        ── every es_systems <command>, classified
   if rom.emulator_override is not None:                    ── layer 1: per-game pin (libretro OR standalone)
       inv = label_to_invocation(options, override)
@@ -176,6 +177,52 @@ and accept-list are asked once per run, and a switch or a move during the run ta
 resolver's `RealMachine` is one for the process and handed to every detection: it remembers only a libretro core's
 probe, keyed on the core file's path, modification time and size, so the probe of an unchanged core runs once while
 every answer stays live.
+
+### A platform's system
+
+RomM names a platform by a slug of its own (`psx`, `new-nintendo-3ds`), which no emulator source declares, so the system
+a platform's games belong to is the **source's own answer**: `systems_for_platform`, asked through the resolver with the
+ids RomM holds for the platform — `igdb_id`, `libretro_slug`, `ss_id` and `tgdb_id`, the four vocabularies the resolver
+has a crosswalk for (a numeric id as its decimal string), in that order. RomM's other ids (MobyGames, LaunchBox,
+RetroAchievements, Hasheous, Flashpoint) have none and are not asked. The resolver reads the catalogue's own
+`<platform>` tags, so a system the user added to a catalogue by hand is answered as readily as a shipped one, and
+nothing in Tender holds a table of platforms. `adapters/atlas_platforms.py` asks;
+`domain/platform_system.py::pick_system` decides.
+
+**Which answer is taken.** Only a **switched-on** system matches — one the catalogue declares; a system present only in
+the catalogue's comments is switched off, and one the source does not have at all is no match. The first id whose answer
+gives a switched-on system decides, and a later id is never asked. Where several systems match one platform (SNES gives
+`sfc`, `snes` and `snesna`), the one named like the platform the id was resolved to is taken — `snes` — else the first
+in the resolver's order; the regional systems differ in name and look only, and the user does not pick among them. Where
+one id's answer names several platforms (libretro's NES/Famicom entry gives `famicom` and `nes`), RomM's slug with its
+hyphens dropped chooses among them (`nes`) and only among them — it never becomes a system or a folder name itself;
+where it equals none of them, the next id is asked, and where no id gives one, the first platform with a switched-on
+system of the first such answer is taken.
+
+**Where there is none.** Where no id gives a switched-on system but some id gives a switched-off one, the platform's
+pages say **"System _system_ is switched off in _source_."**; where no id gives any, **"_source_ has no system for
+_platform_, so Tender cannot download its games."**, _platform_ being RomM's display name. The emulator list's reason is
+then `platform_system_off` or `no_platform_system`, nothing is downloaded, and the platform's BIOS download and an
+adoption's replace are refused the same way. Every other use keeps a state it already has: an uninstalled game's save
+answer is not established, the search for a copy already on disk finds nothing, and the launch falls back to the plain
+one.
+
+**Each source is asked for itself.** A download asks **RetroDECK**, the one source Tender downloads into, whatever its
+switch — the switch is the folder's question (`adapters/retrodeck_folders.py`). Every other question — the emulator
+choice, the BIOS answers, the platform page — asks the answering source (above), so a platform can be one system in
+RetroDECK and another in EmuDeck. **An installed game keeps the system its install record holds** for its saves, its
+emulator choice, its BIOS answer and its launch (`PlatformSystems.rom_system`); only a new download follows the source's
+current answer. A source that renames, moves or drops a system is not followed yet.
+
+**The ids are kept.** `kv_config`'s `platform_ids` holds every listed platform's four ids and display name, replaced at
+the start of every sync from RomM's listing (a failed write is logged and leaves the run alone). Where none are kept for
+a platform — the first start after an update — `PlatformSystemService` reads the listing once and keeps it. The game
+page's two looks at the disk — whether a download's target is already taken, and whether the game is there under another
+name — reach no network and do not: for them a platform with no kept ids has no system, and they go quiet rather than
+asking.
+
+The platform page names the system taken with its source in its header line — "78 on RomM · 78 in Steam · RetroDECK
+system psx".
 
 ### Standalone-emulator selection: first safely-bakeable
 

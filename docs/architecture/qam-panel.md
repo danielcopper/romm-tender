@@ -1342,11 +1342,12 @@ it, for the focused platform:
     I is the muted case, not this one**: ES-DE gives it two live commands, both MAME, and the first is a _libretro_ one
     whose core is installed, so it reads `RetroDECK decides` and its games start. The three standalone entries in that
     block are commented out and are not commands at all.
-  - **No options at all** — `_resolve_system` falls through to the raw RomM slug for a platform its map does not name,
-    and `get_emulator_options` answers `available: true` with an empty list for a system `es_systems.xml` does not list;
-    `vic-20`, `acorn-electron`, `nintendo-dsi`, `ps5`, `browser` and `win` are in neither. RetroDECK's own launch then
-    reads `command[1]` for the system, finds nothing, and exits 1 (`libexec/run_game.sh`). The clause reads
-    `no emulator` in **red** and the line says the games will not launch, because they will not.
+  - **No options at all** — `get_emulator_options` answers `available: true` with an empty list for a system whose
+    catalogue entry lists no command. RetroDECK's own launch then reads `command[1]` for the system, finds nothing, and
+    exits 1 (`libexec/run_game.sh`). A platform with no switched-on system in the answering source is not this case: its
+    list is not available, with the reason `no_platform_system` or `platform_system_off`
+    ([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)). The clause reads `no emulator` in
+    **red** and the line says the games will not launch, because they will not.
 
   The chip is disabled for all three, never withheld. Printing "Default" for any of them said Tender had chosen;
   printing `no emulator` for all three said the games would not start where they do. Both were wrong, in opposite

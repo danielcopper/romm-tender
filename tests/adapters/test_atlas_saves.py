@@ -1037,7 +1037,7 @@ def machine() -> Any:
 
 
 class TestTheRealMachineAnswers:
-    """The pinned per-system answers, and the platform map's coverage.
+    """The pinned per-system answers.
 
     Skipped where no RetroDECK is installed, so CI does not run this and a
     developer's pre-push gate does. No fabricated tree can stand in: atlas loads
