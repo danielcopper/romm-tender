@@ -150,6 +150,21 @@ describe("an answer on its way back", () => {
     expect(answer.message).toBe("RetroDECK: its settings file /home/deck/retrodeck.json is missing.");
   });
 
+  it("words a download refused for a platform with no system the way the platform's pages do", async () => {
+    vi.spyOn(HostSocket.prototype, "call").mockResolvedValue({
+      success: false,
+      reason: "no_platform_system",
+      message: "retrodeck has no system for Commodore VIC-20.",
+      source: "retrodeck",
+      platform: "Commodore VIC-20",
+      system: null,
+    });
+
+    const answer = await endpoint<[number], { message: string }>("start_download")(7);
+
+    expect(answer.message).toBe("RetroDECK has no system for Commodore VIC-20, so Tender cannot download its games.");
+  });
+
   it("hands every other answer back as it came", async () => {
     const refusal = { success: false, reason: "no_rom_folder", message: "RetroDECK names no ROM folder for gba." };
     vi.spyOn(HostSocket.prototype, "call").mockResolvedValue(refusal);

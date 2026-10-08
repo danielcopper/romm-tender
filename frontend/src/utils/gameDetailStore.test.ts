@@ -115,6 +115,7 @@ const coreInfo: CoreInfo = {
   emulator_data_available: true,
   emulator_data_reason: null,
   emulator_source: { kind: "retrodeck", starts_games: true },
+  platform_system: null,
   emulators: [
     {
       label: "Snes9x",
@@ -139,6 +140,7 @@ const laterCoreInfo: CoreInfo = {
   emulator_data_available: true,
   emulator_data_reason: null,
   emulator_source: { kind: "retrodeck", starts_games: true },
+  platform_system: null,
   emulators: [
     {
       label: "Genesis Plus GX",
@@ -960,6 +962,7 @@ describe("gameDetailStore", () => {
       emulator_data_available: false,
       emulator_data_reason: "switched_off",
       emulator_source: null,
+      platform_system: null,
     };
 
     it("re-reads the emulators, the BIOS state and the save status of an open entry", async () => {
@@ -989,6 +992,7 @@ describe("gameDetailStore", () => {
         emulatorDataAvailable: false,
         emulatorDataReason: "switched_off",
         emulatorSource: null,
+        emulatorPlatformSystem: null,
         biosRequiredMissing: true,
         saveSyncLabel: "After the switch",
       });

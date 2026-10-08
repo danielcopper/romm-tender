@@ -39,6 +39,7 @@ function baseConfig(overrides: Partial<EmulatorMenuConfig> = {}): EmulatorMenuCo
     emulatorDataAvailable: true,
     emulatorDataReason: null,
     emulatorSource: { kind: "retrodeck", starts_games: true },
+    emulatorPlatformSystem: null,
     activeLabel: null,
     platformCoreLabel: null,
     onPick: vi.fn(),
@@ -68,6 +69,7 @@ describe("buildEmulatorMenu", () => {
         emulatorDataAvailable: false,
         emulatorDataReason: "sealed",
         emulatorSource: { kind: "emudeck", starts_games: false },
+        emulatorPlatformSystem: null,
       }),
     );
     const its = items(menu);
@@ -83,6 +85,7 @@ describe("buildEmulatorMenu", () => {
         emulatorDataAvailable: false,
         emulatorDataReason: "not_set_up",
         emulatorSource: { kind: "retrodeck", starts_games: true },
+        emulatorPlatformSystem: null,
       }),
     );
     const its = items(menu);

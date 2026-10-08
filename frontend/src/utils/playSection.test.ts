@@ -319,6 +319,7 @@ describe("extractCoreInfo", () => {
     emulator_data_available: true,
     emulator_data_reason: null,
     emulator_source: { kind: "retrodeck", starts_games: true },
+    platform_system: null,
     emulators: [
       libretroEmu("mupen64plus_next_libretro.so", "Mupen64Plus-Next", true),
       libretroEmu("parallel_n64_libretro.so", "ParaLLEl N64"),
@@ -375,6 +376,7 @@ describe("extractCoreInfo", () => {
       emulator_data_available: false,
       emulator_data_reason: "unavailable",
       emulator_source: { kind: "retrodeck", starts_games: true },
+      platform_system: null,
       emulators: [],
     });
     expect(result.emulators).toEqual([]);

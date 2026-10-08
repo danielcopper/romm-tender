@@ -16,6 +16,7 @@ import type {
   EmulatorDataReason,
   EmulatorSource,
   EmulatorSourcesListing,
+  PlatformSystemAnswer,
   SourceHealthFinding,
 } from "../types/emulatorSources";
 
@@ -134,6 +135,32 @@ export function withFindingSentence<T>(answer: T): T {
   return { ...answer, message: findingSentence("retrodeck", finding) };
 }
 
+/** The two reasons a press is refused with for a platform that has no switched-on system in its source. */
+const PLATFORM_SYSTEM_REASONS: ReadonlySet<string> = new Set(["no_platform_system", "platform_system_off"]);
+
+function isPlatformSystemRefusal(answer: object): answer is { reason: EmulatorDataReason } & PlatformSystemAnswer {
+  const { reason, source, platform, system } = answer as Record<string, unknown>;
+  return (
+    typeof reason === "string" &&
+    PLATFORM_SYSTEM_REASONS.has(reason) &&
+    typeof source === "string" &&
+    typeof platform === "string" &&
+    (system === null || typeof system === "string")
+  );
+}
+
+/**
+ * An endpoint's answer, with the message of a refusal for a platform that has
+ * no switched-on system replaced by the sentence the platform's pages show for
+ * it, so a refused download and the page say the same thing. Every other
+ * answer comes back as it is.
+ */
+export function withPlatformSystemSentence<T>(answer: T): T {
+  if (typeof answer !== "object" || answer === null || !isPlatformSystemRefusal(answer)) return answer;
+  const sentence = platformSystemSentence(answer.reason, { ...answer, state: "no_system" });
+  return sentence === null ? answer : { ...answer, message: sentence };
+}
+
 /** Main's notice, and the settings section's line, while no emulator source is detected. */
 export const NO_SOURCE_BANNER = "No emulator source was found.";
 
@@ -158,18 +185,51 @@ export function sealedCatalogueSentence(kind: string): string {
   return `${sourceName(kind)}'s emulator list cannot be read yet.`;
 }
 
+/** Why a platform's games cannot be downloaded: the source asked has no system for it. */
+export function noPlatformSystemSentence(kind: string, platform: string): string {
+  return `${sourceName(kind)} has no system for ${platform}, so Tender cannot download its games.`;
+}
+
+/** Why a platform's games cannot be downloaded: every system it has in the source asked is switched off there. */
+export function platformSystemOffSentence(kind: string, system: string): string {
+  return `System ${system} is switched off in ${sourceName(kind)}.`;
+}
+
+/** The platform page's clause naming the system a platform is in its source. */
+export function platformSystemClause(answer: PlatformSystemAnswer): string | null {
+  return answer.state === "found" && answer.system !== null
+    ? `${sourceName(answer.source)} system ${answer.system}`
+    : null;
+}
+
+/** The sentence for a platform with no switched-on system, or `null` for any other answer. */
+function platformSystemSentence(reason: EmulatorDataReason | null, answer: PlatformSystemAnswer | null): string | null {
+  if (answer === null) return null;
+  if (reason === "no_platform_system") return noPlatformSystemSentence(answer.source, answer.platform);
+  if (reason === "platform_system_off" && answer.system !== null) {
+    return platformSystemOffSentence(answer.source, answer.system);
+  }
+  return null;
+}
+
 /**
  * Why a platform page or an emulator menu has no emulator list to offer, from
- * the answer's `reason` and its answering `source`. Never "no emulator": every
- * one of these is a list that could not be established. An answer with no
- * source is one no source answered, whatever its reason says, so it reads as
- * no source found.
+ * the answer's `reason`, its answering `source` and the platform's system
+ * there. Never "no emulator": every one of these is a list that could not be
+ * established. An answer with no source is one no source answered, whatever
+ * its reason says, so it reads as no source found.
  */
-export function emulatorDataReasonSentence(reason: EmulatorDataReason | null, source: AnsweringSource | null): string {
+export function emulatorDataReasonSentence(
+  reason: EmulatorDataReason | null,
+  source: AnsweringSource | null,
+  platformSystem: PlatformSystemAnswer | null = null,
+): string {
   if (reason === "switched_off") return "Every emulator source is switched off in Settings › Emulator sources.";
   if (reason === "no_source" || source === null) {
     return "No emulator source was found, so Tender cannot tell which emulators this platform offers.";
   }
+  const noSystem = platformSystemSentence(reason, platformSystem);
+  if (noSystem !== null) return noSystem;
   if (reason === "catalogue_invalid") {
     return `${sourceName(source.kind)}: ES-DE's systems file is broken, so its emulators are not established.`;
   }

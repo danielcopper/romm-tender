@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { EmulatorSource } from "../types/emulatorSources";
+import type { EmulatorSource, PlatformSystemAnswer } from "../types/emulatorSources";
 import {
   NO_SOURCE_BANNER,
   SOURCES_READING,
@@ -10,9 +10,13 @@ import {
   findingIsBanner,
   findingSentence,
   mainSourceBanners,
+  noPlatformSystemSentence,
+  platformSystemClause,
+  platformSystemOffSentence,
   sourceName,
   sourceRowLines,
   withFindingSentence,
+  withPlatformSystemSentence,
 } from "./emulatorSourceWording";
 
 const REPAIR = " Repair it with RetroDECK's 'Repair RetroDECK Paths'.";
@@ -243,6 +247,90 @@ describe("emulatorDataReasonSentence", () => {
     expect(emulatorDataReasonSentence("unavailable", null)).toBe(
       "No emulator source was found, so Tender cannot tell which emulators this platform offers.",
     );
+  });
+});
+
+describe("a platform with no switched-on system", () => {
+  const NO_SYSTEM: PlatformSystemAnswer = {
+    state: "no_system",
+    source: "retrodeck",
+    system: null,
+    platform: "Commodore VIC-20",
+  };
+  const SWITCHED_OFF: PlatformSystemAnswer = {
+    state: "switched_off",
+    source: "emudeck",
+    system: "xbox360",
+    platform: "Xbox 360",
+  };
+
+  it("says the source has no system for the platform, by the source's and the platform's names", () => {
+    expect(noPlatformSystemSentence("retrodeck", "Commodore VIC-20")).toBe(
+      "RetroDECK has no system for Commodore VIC-20, so Tender cannot download its games.",
+    );
+  });
+
+  it("says which system is switched off, and where", () => {
+    expect(platformSystemOffSentence("emudeck", "xbox360")).toBe("System xbox360 is switched off in EmuDeck.");
+  });
+
+  it("is what the emulator list says for either reason", () => {
+    expect(emulatorDataReasonSentence("no_platform_system", RETRODECK, NO_SYSTEM)).toBe(
+      "RetroDECK has no system for Commodore VIC-20, so Tender cannot download its games.",
+    );
+    expect(emulatorDataReasonSentence("platform_system_off", EMUDECK, SWITCHED_OFF)).toBe(
+      "System xbox360 is switched off in EmuDeck.",
+    );
+  });
+
+  it("falls back to the list not being established where the answer carries no system", () => {
+    expect(emulatorDataReasonSentence("no_platform_system", RETRODECK)).toBe(
+      "RetroDECK's emulator list is not established.",
+    );
+  });
+
+  it("rewords a refused press the way the page says it", () => {
+    const refused = {
+      success: false,
+      reason: "no_platform_system",
+      message: "retrodeck has no system for Commodore VIC-20.",
+      source: "retrodeck",
+      platform: "Commodore VIC-20",
+      system: null,
+    };
+    expect(withPlatformSystemSentence(refused)).toEqual({
+      ...refused,
+      message: "RetroDECK has no system for Commodore VIC-20, so Tender cannot download its games.",
+    });
+    expect(
+      withPlatformSystemSentence({ ...refused, reason: "platform_system_off", system: "vic20", source: "emudeck" })
+        .message,
+    ).toBe("System vic20 is switched off in EmuDeck.");
+  });
+
+  it("leaves every other answer as it is", () => {
+    const other = { success: false, reason: "no_rom_folder", message: "m", source: "retrodeck", platform: "p" };
+    expect(withPlatformSystemSentence(other)).toBe(other);
+    const unshaped = { success: false, reason: "no_platform_system", message: "m" };
+    expect(withPlatformSystemSentence(unshaped)).toBe(unshaped);
+    expect(withPlatformSystemSentence(null)).toBeNull();
+  });
+});
+
+describe("platformSystemClause", () => {
+  it("names the system taken with its source", () => {
+    expect(platformSystemClause({ state: "found", source: "retrodeck", system: "psx", platform: "PlayStation" })).toBe(
+      "RetroDECK system psx",
+    );
+  });
+
+  it("names nothing where no system was taken", () => {
+    expect(
+      platformSystemClause({ state: "switched_off", source: "retrodeck", system: "xbox360", platform: "Xbox 360" }),
+    ).toBeNull();
+    expect(
+      platformSystemClause({ state: "no_system", source: "retrodeck", system: null, platform: "VIC-20" }),
+    ).toBeNull();
   });
 });
 

@@ -13,6 +13,7 @@ import type {
   CoreInfo,
   EmulatorDataReason,
   EmulatorOption,
+  PlatformSystemAnswer,
   SaveStatus,
   SaveSyncDisplay,
 } from "../types";
@@ -61,6 +62,7 @@ export interface CoreInfoFields {
   /** Why there is no emulator list, and which source answered; see {@link CoreInfo}. */
   emulatorDataReason: EmulatorDataReason | null;
   emulatorSource: AnsweringSource | null;
+  emulatorPlatformSystem: PlatformSystemAnswer | null;
   platformCoreLabel: string | null;
   hasGameOverride: boolean;
 }
@@ -175,6 +177,7 @@ export function extractCoreInfo(coreInfo: CoreInfo): CoreInfoFields {
     emulatorDataAvailable: coreInfo.emulator_data_available,
     emulatorDataReason: coreInfo.emulator_data_reason,
     emulatorSource: coreInfo.emulator_source,
+    emulatorPlatformSystem: coreInfo.platform_system,
     platformCoreLabel: coreInfo.platform_core_label ?? null,
     hasGameOverride: coreInfo.has_game_override,
   };

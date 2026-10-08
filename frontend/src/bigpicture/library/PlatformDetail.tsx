@@ -24,7 +24,7 @@ import { oneOfRowLine } from "../../utils/biosGroup";
 import { biosHeldRatio } from "../../utils/biosHeldRatio";
 import { biosSummary } from "../../utils/biosSummary";
 import { buildEmulatorMenu } from "../../utils/emulatorMenu";
-import { emulatorDataReasonSentence } from "../../utils/emulatorSourceWording";
+import { emulatorDataReasonSentence, platformSystemClause } from "../../utils/emulatorSourceWording";
 import { getEventTarget } from "../../utils/events";
 import { pluralize } from "../../utils/pluralize";
 import { SYNC_RUNNING_HINT, useSyncRunning } from "../../utils/syncRunning";
@@ -487,17 +487,15 @@ function coreOffer(core: CoreAnswer): CoreOffer {
     return { kind: "blocked", reason: failed, notice: failed };
   }
   if (!core.emulator_data_available) {
-    const absent = emulatorDataReasonSentence(core.emulator_data_reason, core.emulator_source);
+    const absent = emulatorDataReasonSentence(core.emulator_data_reason, core.emulator_source, core.platform_system);
     return { kind: "blocked", reason: absent, notice: absent };
   }
   // An EMPTY menu first, because it is the one case where the fallback fails
-  // too. `_resolve_system` hands back the raw RomM slug for a platform its map
-  // does not name, and `get_emulator_options` answers `available: true` with no
-  // options for a system `es_systems.xml` does not list — `vic-20`,
-  // `acorn-electron`, `nintendo-dsi`, `ps5`, `browser` and `win` are in neither
-  // on this machine. RetroDECK's own launch then reads `command[1]` for the
-  // system, finds nothing, logs "No valid emulator found for system" and exits
-  // 1 (`libexec/run_game.sh`), so the games really do not start.
+  // too: `get_emulator_options` answers `available: true` with no options for a
+  // system whose catalogue entry lists no command. RetroDECK's own launch then
+  // reads `command[1]` for the system, finds nothing, logs "No valid emulator
+  // found for system" and exits 1 (`libexec/run_game.sh`), so the games really
+  // do not start.
   if (core.emulators.length === 0) {
     const none = "RetroDECK lists no emulator for this platform, so its games will not launch.";
     return { kind: "blocked", reason: none, notice: none };
@@ -997,6 +995,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
   const coreClause = !emulatorsKnown
     ? null
     : { text: activeLabel ?? fallbackLabel(noEmulator, fallbackMissing), color: coreColor };
+  const systemClause = core?.platform_system ? platformSystemClause(core.platform_system) : null;
 
   return (
     <>
@@ -1020,6 +1019,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
               count — that one really is about Steam entries. */}
           {`${row.romCount} on RomM`}
           {row.reachableCount === null ? "" : ` · ${row.reachableCount} in Steam`}
+          {systemClause === null ? "" : ` · ${systemClause}`}
           {coreClause && <span style={{ color: coreClause.color }}>{` · ${coreClause.text}`}</span>}
         </span>
         {/* Always rendered, disabled when there is nothing to pick, with the
@@ -1039,6 +1039,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
                 emulatorDataAvailable: offer.core.emulator_data_available,
                 emulatorDataReason: offer.core.emulator_data_reason,
                 emulatorSource: offer.core.emulator_source,
+                emulatorPlatformSystem: offer.core.platform_system,
                 activeLabel: offer.core.active_core_label,
                 // Null on purpose: this pane IS the platform level, so marking
                 // an entry "(system)" would restate where the reader already is.

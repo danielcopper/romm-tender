@@ -73,6 +73,7 @@ const GBA_CORE_INFO: CoreInfo = {
   emulator_data_available: true,
   emulator_data_reason: null,
   emulator_source: { kind: "retrodeck", starts_games: true },
+  platform_system: null,
   active_core: MGBA.emulator,
   active_core_label: MGBA.label,
   platform_core_label: null,
@@ -85,6 +86,7 @@ function coreInfo(overrides: Partial<SystemCoreInfo> = {}): SystemCoreInfo {
     emulator_data_available: true,
     emulator_data_reason: null,
     emulator_source: { kind: "retrodeck", starts_games: true },
+    platform_system: null,
     active_core_label: "mGBA",
     ...overrides,
   };
@@ -129,6 +131,7 @@ function firmwarePlatform(overrides: Partial<FirmwarePlatformExt> = {}): Firmwar
     deletable_count: 0,
     emulator_data_reason: null,
     emulator_source: { kind: "retrodeck", starts_games: true },
+    platform_system: null,
     ...overrides,
   };
 }
@@ -1067,6 +1070,51 @@ describe("Library › Platforms", () => {
       expect(container.textContent).toContain("12 on RomM · 9 in Steam · mGBA");
     });
 
+    it("names the system the platform is in its source, muted like the counts", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({ platform_system: { state: "found", source: "retrodeck", system: "gba", platform: "GBA" } }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("12 on RomM · 9 in Steam · RetroDECK system gba · mGBA");
+    });
+
+    it("says why a platform with no system has no emulators to pick", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [],
+          emulator_data_available: false,
+          emulator_data_reason: "no_platform_system",
+          platform_system: { state: "no_system", source: "retrodeck", system: null, platform: "Game Boy Advance" },
+          active_core_label: null,
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "RetroDECK has no system for Game Boy Advance, so Tender cannot download its games.",
+      );
+      expect(container.textContent).not.toContain("RetroDECK system");
+    });
+
+    it("says which system is switched off", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [],
+          emulator_data_available: false,
+          emulator_data_reason: "platform_system_off",
+          platform_system: { state: "switched_off", source: "retrodeck", system: "gbaoff", platform: "GBA" },
+          active_core_label: null,
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("System gbaoff is switched off in RetroDECK.");
+    });
+
     it("counts ROM files on both sides of the header while Remove keeps counting shortcuts", async () => {
       // Twelve versions behind nine shortcuts: three of them share a game with
       // another, and are reached by switching version on its shortcut. The
@@ -1231,6 +1279,7 @@ describe("Library › Platforms", () => {
           emulator_data_available: false,
           emulator_data_reason: "no_source",
           emulator_source: null,
+          platform_system: null,
           active_core_label: null,
         }),
       );
@@ -1259,6 +1308,7 @@ describe("Library › Platforms", () => {
           emulator_data_available: false,
           emulator_data_reason: "not_set_up",
           emulator_source: { kind: "retrodeck", starts_games: true },
+          platform_system: null,
           active_core_label: null,
         }),
       );

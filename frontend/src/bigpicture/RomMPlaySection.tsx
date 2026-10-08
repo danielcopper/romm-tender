@@ -837,6 +837,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         emulatorDataAvailable: detail.emulatorDataAvailable,
         emulatorDataReason: detail.emulatorDataReason,
         emulatorSource: detail.emulatorSource,
+        emulatorPlatformSystem: detail.emulatorPlatformSystem,
         activeLabel: detail.activeCoreLabel,
         platformCoreLabel: detail.platformCoreLabel,
         followSystem: {
