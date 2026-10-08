@@ -55,12 +55,29 @@ export function getAppDetails(appId: number, timeoutMs = 2000): Promise<SteamApp
  *
  * Every Steam ``Set*`` returns ``void`` with no success signal, so we fire
  * ``SetAppLaunchOptions`` then poll ``RegisterForAppDetails`` until the
- * read-back ``strLaunchOptions`` matches ``value``. Resolves ``true`` on a
- * confirmed match, ``false`` if no matching read-back arrives within
- * ``timeoutMs``. Setting ``""`` (the uninstalled-placeholder value) is valid
- * and confirms against an empty read-back.
+ * read-back ``strLaunchOptions`` matches ``value``. When no matching report
+ * arrives within ``timeoutMs``, the shortcut's details are read once more
+ * through {@link getAppDetails}, bounded by ``timeoutMs`` again: resolves
+ * ``true`` when either read shows ``value``, ``false`` when the re-read shows a
+ * different value or does not answer. Setting ``""`` (the
+ * uninstalled-placeholder value) is valid and confirms against an empty
+ * read-back.
  */
-export function setLaunchOptionsConfirmed(appId: number, value: string, timeoutMs = 2000): Promise<boolean> {
+export async function setLaunchOptionsConfirmed(appId: number, value: string, timeoutMs = 2000): Promise<boolean> {
+  if (await writeAndAwaitReport(appId, value, timeoutMs)) return true;
+  const details = await getAppDetails(appId, timeoutMs);
+  const confirmed = details !== null && launchOptionsOf(details) === value;
+  if (confirmed) {
+    logInfo(`setLaunchOptionsConfirmed: appId ${appId} confirmed by the re-read after the report missed the wait`);
+  }
+  return confirmed;
+}
+
+function launchOptionsOf(details: SteamAppDetails): string {
+  return details.strLaunchOptions ?? details.LaunchOptions ?? "";
+}
+
+function writeAndAwaitReport(appId: number, value: string, timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
     let resolved = false;
     // Declared with `let` BEFORE RegisterForAppDetails so a (hypothetical)
@@ -79,8 +96,7 @@ export function setLaunchOptionsConfirmed(appId: number, value: string, timeoutM
 
     reg = SteamClient.Apps.RegisterForAppDetails(appId, (details) => {
       if (!details) return;
-      const current = details.strLaunchOptions ?? details.LaunchOptions ?? "";
-      if (current === value) finish(true);
+      if (launchOptionsOf(details) === value) finish(true);
     });
 
     setTimeout(() => finish(false), timeoutMs);

@@ -17,6 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from lib.errors import Refused
+
 if TYPE_CHECKING:
     from services.protocols import ConflictRules
 
@@ -43,11 +45,7 @@ class PruneLeaseService:
         """Extend the live lease *lease_token* names; a lease that has expired is never revived."""
         renewed = await self._rules.renew_lease(str(lease_token))
         if not renewed:
-            return {
-                "success": False,
-                "reason": "stale_lease",
-                "message": "Operation lease is no longer active.",
-            }
+            raise Refused("stale_lease", "Operation lease is no longer active.")
         return {"success": True, "message": "Operation lease renewed."}
 
     async def release_orphaned_prune_leases(self) -> dict[str, Any]:

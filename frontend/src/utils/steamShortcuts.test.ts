@@ -72,6 +72,108 @@ describe("setLaunchOptionsConfirmed", () => {
     expect(setLaunchOptions).toHaveBeenCalledWith(99, "new-value");
     expect(unregister).toHaveBeenCalled();
   });
+
+  it("confirms a write whose report misses the wait when the re-read shows the value", async () => {
+    vi.useFakeTimers();
+    // The first registration only ever reports the old value; a fresh read
+    // after the wait sees the value Steam took.
+    let registrations = 0;
+    const { fn } = makeRegisterForAppDetails(() => ({
+      strLaunchOptions: ++registrations === 1 ? "old-value" : "new-value",
+    }));
+    vi.stubGlobal("SteamClient", {
+      Apps: { SetAppLaunchOptions: vi.fn(), RegisterForAppDetails: fn },
+    });
+
+    const promise = setLaunchOptionsConfirmed(5, "new-value", 2000);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await expect(promise).resolves.toBe(true);
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("still resolves false when the re-read after the wait shows a different value", async () => {
+    vi.useFakeTimers();
+    const { fn } = makeRegisterForAppDetails(() => ({ strLaunchOptions: "old-value" }));
+    vi.stubGlobal("SteamClient", {
+      Apps: { SetAppLaunchOptions: vi.fn(), RegisterForAppDetails: fn },
+    });
+
+    const promise = setLaunchOptionsConfirmed(5, "new-value", 2000);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await expect(promise).resolves.toBe(false);
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("resolves false once the re-read is out of time too, when Steam never answers it", async () => {
+    vi.useFakeTimers();
+    const { fn, unregister } = makeRegisterForAppDetails(() => undefined);
+    vi.stubGlobal("SteamClient", {
+      Apps: { SetAppLaunchOptions: vi.fn(), RegisterForAppDetails: fn },
+    });
+
+    let outcome: boolean | undefined;
+    void setLaunchOptionsConfirmed(5, "new-value", 2000).then((confirmed) => {
+      outcome = confirmed;
+    });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(fn).toHaveBeenCalledTimes(2);
+    expect(outcome).toBeUndefined();
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(outcome).toBe(false);
+    expect(unregister).toHaveBeenCalledTimes(2);
+  });
+
+  describe("the line logged when the re-read confirms", () => {
+    const RESCUE_LINE = "setLaunchOptionsConfirmed: appId 5 confirmed by the re-read after the report missed the wait";
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    function stubReports(reportFor: (registration: number) => SteamAppDetails | undefined) {
+      let registrations = 0;
+      const { fn } = makeRegisterForAppDetails(() => reportFor(++registrations));
+      vi.stubGlobal("SteamClient", {
+        Apps: { SetAppLaunchOptions: vi.fn(), RegisterForAppDetails: fn },
+      });
+    }
+
+    it("is logged once, at info, when the report missed the wait and the re-read shows the value", async () => {
+      vi.useFakeTimers();
+      const logInfoSpy = vi.spyOn(backend, "logInfo").mockImplementation(() => {});
+      stubReports((registration) => ({ strLaunchOptions: registration === 1 ? "old-value" : "new-value" }));
+
+      const promise = setLaunchOptionsConfirmed(5, "new-value", 2000);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      await expect(promise).resolves.toBe(true);
+      expect(logInfoSpy).toHaveBeenCalledTimes(1);
+      expect(logInfoSpy).toHaveBeenCalledWith(RESCUE_LINE);
+    });
+
+    it("is not logged when the first report confirms", async () => {
+      const logInfoSpy = vi.spyOn(backend, "logInfo").mockImplementation(() => {});
+      stubReports(() => ({ strLaunchOptions: "new-value" }));
+
+      await expect(setLaunchOptionsConfirmed(5, "new-value", 2000)).resolves.toBe(true);
+      expect(logInfoSpy).not.toHaveBeenCalled();
+    });
+
+    it("is not logged when the re-read shows a different value too", async () => {
+      vi.useFakeTimers();
+      const logInfoSpy = vi.spyOn(backend, "logInfo").mockImplementation(() => {});
+      stubReports(() => ({ strLaunchOptions: "old-value" }));
+
+      const promise = setLaunchOptionsConfirmed(5, "new-value", 2000);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      await expect(promise).resolves.toBe(false);
+      expect(logInfoSpy).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("removeShortcutConfirmedOutcome", () => {
