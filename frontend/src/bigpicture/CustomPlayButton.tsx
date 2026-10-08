@@ -15,14 +15,9 @@
  */
 
 import { useState, useEffect, useRef, useCallback, FC, ReactElement } from "react";
-import {
-  addEventListener,
-  isStrandedPanelFailure,
-  recheckStranded,
-  removeEventListener,
-  strandedAnswer,
-} from "../api/host";
+import { addEventListener, isStrandedPanelFailure, removeEventListener, strandedAnswer } from "../api/host";
 import { showToast } from "../utils/toast";
+import { tellStrandedPress, useStrandedAnswer } from "../utils/strandedPanelStore";
 import { strandedPanelSentence } from "../utils/strandedPanelWording";
 import { Focusable, DialogButton, Menu, MenuItem, MenuSeparator, Navigation, showContextMenu } from "@decky/ui";
 import { appActionButtonClasses, basicAppDetailsSectionStylerClasses } from "../utils/deckyUiInternals";
@@ -149,14 +144,9 @@ const BLUE_RIGHT: [number, number, number] = [0, 120, 212]; // #0078d4
 const GREEN_LEFT: [number, number, number] = [80, 200, 47]; // #50c82f
 const GREEN_RIGHT: [number, number, number] = [24, 177, 78]; // #18b14e
 
-/**
- * Say that Stop cannot reach the backend of a stranded panel, *sentence* being
- * the answer that backend gave it. The answer may have changed since, so the
- * panel asks again; a changed answer raises its own notification.
- */
+/** Say that Stop cannot reach the backend of a stranded panel, *sentence* being the answer that backend gave it. */
 function tellStrandedStop(sentence: string): void {
-  showToast("Couldn't stop the game", { subtext: sentence });
-  detach(recheckStranded());
+  tellStrandedPress("Couldn't stop the game", sentence);
 }
 
 function formatProgress(downloaded: number, total: number): string {
@@ -183,6 +173,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   const [actionPending, setActionPending] = useState(false);
   const [dlProgress, setDlProgress] = useState<DownloadProgress | null>(null);
   const [isOffline, setIsOffline] = useState(getRommConnectionState() === "offline");
+  const stranded = useStrandedAnswer() !== null;
   // Positive-knowledge only: set solely when RomM 404s the bound id, so an
   // unreachable server never reaches this state (#1570 F20).
   const [boundVanished, setBoundVanished] = useState(() => isBoundVanished(appId));
@@ -909,6 +900,12 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     // overlay and fall through to the normal launch funnel — self-heal, so a click
     // never strands the user on a dead Resume.
     if (!readGameRunning(appId, romId).running) {
+      // A stranded panel offers no Play, so the stale overlay only comes down.
+      if (strandedAnswer()) {
+        detach(debugLog(`CustomPlayButton: Resume on appId=${appId} from a stranded panel but nothing is running`));
+        clearRunningOverlay();
+        return;
+      }
       detach(debugLog(`CustomPlayButton: Resume on appId=${appId} but nothing is running — self-healing to launch`));
       setIsRunning(false);
       await handlePlay();
@@ -1393,6 +1390,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     detach(debugLog(`CustomPlayButton: returning null (state=${state})`));
     return null;
   }
+  // A stranded panel offers only Resume and Stop, and only while the game runs.
+  if (stranded && !isRunning) return null;
   detach(debugLog(`CustomPlayButton: rendering state=${state}`));
 
   // Dropdown arrow button style. Shared shape for the play-state chevron and

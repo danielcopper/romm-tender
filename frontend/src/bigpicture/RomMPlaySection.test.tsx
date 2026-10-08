@@ -3928,6 +3928,142 @@ describe("RomMPlaySection", () => {
     });
   });
 
+  describe("a stranded panel's play row", () => {
+    const TWO_VERSIONS = {
+      multi_version: true,
+      server_query_failed: false,
+      bound_vanished: false,
+      versions: [1, 2].map((rom_id) => ({
+        rom_id,
+        name: `Game ${rom_id}`,
+        label: `Game ${rom_id}`,
+        regions: [],
+        languages: [],
+        revision: "",
+        tags: [],
+        synced: true,
+        installed: false,
+        active: rom_id === 1,
+        is_default: rom_id === 1,
+        switchable: true,
+        vanished: false,
+      })),
+    };
+
+    /** A row with every control it can carry: two emulators, two discs, two versions. */
+    const renderFullRow = async () => {
+      stubAppStore({ [testAppId]: { rt_last_time_played: 1234, minutes_playtime_forever: 90 } });
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 42,
+        installed: true,
+        platform_slug: "snes",
+      });
+      vi.mocked(playSectionUtils.extractCoreInfo).mockReturnValue({
+        activeCoreLabel: "Snes9x",
+        activeCoreIsDefault: true,
+        emulators: [
+          {
+            label: "Snes9x",
+            kind: "libretro",
+            core_so: "snes9x.so",
+            emulator: "snes9x.so",
+            is_default: true,
+            bakeable: true,
+            reason: null,
+          },
+          {
+            label: "BlastEm",
+            kind: "libretro",
+            core_so: "blastem.so",
+            emulator: "blastem.so",
+            is_default: false,
+            bakeable: true,
+            reason: null,
+          },
+        ],
+        emulatorDataAvailable: true,
+        emulatorDataReason: null,
+        emulatorSource: { kind: "retrodeck", starts_games: true },
+        platformCoreLabel: null,
+        hasGameOverride: false,
+      });
+      vi.mocked(backend.getDiscSelection).mockReset();
+      vi.mocked(backend.getDiscSelection).mockResolvedValue({
+        multi_disc: true,
+        discs: [
+          { filename: "ff7 (Disc 1).cue", label: "Disc 1", index: 1 },
+          { filename: "ff7 (Disc 2).cue", label: "Disc 2", index: 2 },
+        ],
+        selected: null,
+        default: { kind: "m3u", label: "All discs (m3u)", filename: "ff7.m3u" },
+      });
+      vi.mocked(backend.getVersionList).mockResolvedValue(TWO_VERSIONS);
+      vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: null });
+      const utils = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      // Every control is on screen before the strand: three gears, the disc
+      // picker (the one untitled button) and the version trigger.
+      await waitFor(() => {
+        expect(utils.container.querySelectorAll("button")).toHaveLength(5);
+      });
+      return utils;
+    };
+
+    it("offers none of its controls once the answer arrives, and keeps the play button and Steam's own facts", async () => {
+      const { container } = await renderFullRow();
+
+      act(() => setStrandedAnswer("reloads"));
+
+      expect(container.querySelectorAll("button")).toHaveLength(0);
+      expect(container.querySelector('[data-testid="play-button"]')).not.toBeNull();
+      expect(container.textContent).toContain("Tender restarted");
+      expect(container.textContent).toContain("LAST PLAYED");
+      expect(container.textContent).toContain("PLAYTIME");
+    });
+
+    it("drops the Achievements and BIOS badges, whose tabs the card replaced, and keeps Space Required", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 42,
+        installed: false,
+        fs_size_bytes: 123456,
+        ra_id: 12345,
+        achievement_summary: { earned: 3, total: 50, earned_hardcore: 0 },
+        bios_status: { platform_slug: "snes", server_count: 1, local_count: 0, all_downloaded: false },
+        bios_level: "missing",
+        bios_label: "0/3",
+      });
+      vi.mocked(playSectionUtils.extractBiosInfo).mockReturnValue({
+        biosNeeded: true,
+        biosLabel: "0/3",
+        biosRequiredMissing: true,
+      });
+      const { container } = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      expect(container.textContent).toContain("ACHIEVEMENTS");
+      expect(container.textContent).toContain("BIOS");
+
+      act(() => setStrandedAnswer("reloads"));
+
+      expect(container.textContent).not.toContain("ACHIEVEMENTS");
+      expect(container.textContent).not.toContain("BIOS");
+      expect(container.textContent).toContain("SPACE REQUIRED");
+    });
+
+    it("stays on screen in place of a version error or a pending migration, so Resume and Stop stay reachable", async () => {
+      vi.mocked(useVersionError).mockReturnValue("server too old");
+      vi.mocked(useMigrationStatus).mockReturnValue({ pending: true });
+      setStrandedAnswer("restart_steam");
+
+      const { container } = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+
+      expect(container.querySelector('[data-testid="play-button"]')).not.toBeNull();
+      expect(container.textContent).toContain("Tender restarted");
+    });
+  });
+
   describe("context menus", () => {
     it("showRomMMenu yields 6 MenuItems + 1 separator (Refresh artwork/metadata/saves/bios + delete-saves + uninstall)", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({

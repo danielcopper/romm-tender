@@ -22,6 +22,7 @@ import * as cachedStore from "../utils/cachedGameDetailStore";
 import { getBiosStatusShared, _resetSharedReadsForTests } from "../api/sharedReads";
 import * as slotState from "../utils/slotState";
 import { readGameRunning } from "../utils/sessionManager";
+import { resetUpdateInstallStoreForTests, setUpdateInstallAttempt } from "../utils/updateInstallStore";
 import {
   installDomEventListenerSpy,
   uninstallDomEventListenerSpy,
@@ -378,6 +379,7 @@ describe("RomMGameInfoPanel", () => {
     const RELOADS = "Tender was restarted — it reloads Steam's interface once no game is running.";
     const RESTART_STEAM = "Tender was restarted — restart Steam to use it again.";
     const QUIT_LINE = "Quit the running game yourself — Tender can't stop it right now.";
+    const UPDATE_LINE = "The update's result shows after that.";
 
     // The global afterEach unstubs every global, test-setup's SteamClient included.
     beforeEach(() => {
@@ -485,7 +487,59 @@ describe("RomMGameInfoPanel", () => {
       expect(unregister).toHaveBeenCalledTimes(1);
     });
 
-    it("a detail read that failed for any other reason still renders nothing, the panel stranded or not", async () => {
+    it("turns a page loaded before the strand into the card once the answer arrives", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [] });
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 77,
+        save_sync_enabled: true,
+        metadata: makeMetadata(),
+        stale_fields: [],
+      });
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      expect(container.textContent).toContain("GAME INFO");
+
+      act(() => setStrandedAnswer("restart_steam"));
+
+      expect(container.textContent).toBe(RESTART_STEAM);
+    });
+
+    it("stands in place of the version error card", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [] });
+      vi.mocked(useVersionError).mockReturnValue("RomM 5.0.0 is too old");
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(RELOADS);
+    });
+
+    it("stands in place of the migration card", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [] });
+      currentMigrationState = { pending: true };
+      // The mount's own refresh would otherwise clear the pending state.
+      vi.mocked(backend.refreshMigrationState).mockResolvedValue({ retrodeck: { pending: true } });
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(RELOADS);
+    });
+
+    it("adds where the update's result shows, before the quit line, while an attempt has started the installer", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      setUpdateInstallAttempt({
+        version: "1.0.0",
+        step: "installer_started",
+        bytes_done: 0,
+        bytes_total: null,
+        failure: null,
+      });
+      try {
+        const { container } = await renderStranded("reloads");
+        expect(container.textContent).toBe(`${RELOADS}${UPDATE_LINE} ${QUIT_LINE}`);
+      } finally {
+        act(() => resetUpdateInstallStoreForTests());
+      }
+    });
+
+    it("a detail read that failed for any other reason renders nothing until the panel is stranded, then the card", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [] });
       vi.mocked(cachedStore.getCachedGameDetail).mockRejectedValue(
         new HostTransportError("connection_lost", "socket closed"),
       );
@@ -493,7 +547,7 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
       expect(container.firstChild).toBeNull();
       act(() => setStrandedAnswer("reloads"));
-      expect(container.firstChild).toBeNull();
+      expect(container.textContent).toBe(RELOADS);
     });
   });
 

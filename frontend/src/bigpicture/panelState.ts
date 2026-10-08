@@ -17,7 +17,6 @@ import {
   debugLog,
 } from "../api/backend";
 import type { BiosAnswer } from "../api/backend";
-import { isStrandedPanelFailure } from "../api/host";
 import { getBiosStatusShared, getPlatformCoreInfoShared, getRomMetadataShared } from "../api/sharedReads";
 import type {
   RomMetadata,
@@ -61,10 +60,10 @@ export interface PanelState {
   saveSyncEnabled: boolean;
   saveStatus: SaveStatus | null;
   conflicts: SyncConflict[];
-  // Why there is no detail to show: `stranded` when its read was refused because
-  // this panel is stranded, which the panel then says; `failed` for every other
-  // miss, the game not being found included.
-  error: false | "failed" | "stranded";
+  // Why there is no detail to show: `failed` for every miss, the game not being
+  // found included. A stranded panel's refused read is not told apart here: the
+  // panel shows the stranded card from the socket's own answer instead.
+  error: false | "failed";
   activeTab: string;
   raId: number | null;
   slotConfirmed: boolean;
@@ -483,8 +482,7 @@ export async function loadData(
   } catch (e) {
     detach(debugLog(`RomMGameInfoPanel: loadData error: ${e}`));
     if (!cancelled() && !overtaken()) {
-      const error = isStrandedPanelFailure(e) ? "stranded" : "failed";
-      setter((prev) => ({ ...prev, loading: false, error }));
+      setter((prev) => ({ ...prev, loading: false, error: "failed" }));
     }
   }
 }
