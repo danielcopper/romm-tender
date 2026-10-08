@@ -7,8 +7,8 @@ carrying ``{success: False, reason, message}``, a bug as the host's
 what a case hands them, which puts the exception exactly where a use case would
 raise it; Stop Game's refusals, the connection's, a partial bulk uninstall, the
 conflict resolution's, a partial save deletion, the save syncs' and device
-list's refusals, the save slots' and the library preview's failures run through
-the real services.
+list's refusals, the save slots', the library preview's and the removed-game
+cleanup's failures run through the real services.
 """
 
 from __future__ import annotations
@@ -25,7 +25,13 @@ from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
-from _factories import _make_application, _make_conflict_rules, _make_retry, _make_services_bundle
+from _factories import (
+    _make_application,
+    _make_conflict_rules,
+    _make_prune_conflicts,
+    _make_retry,
+    _make_services_bundle,
+)
 from bootstrap import ServicesBundle
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
@@ -76,6 +82,7 @@ from services.connection import ConnectionService, ConnectionServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
+from services.prune import PruneService, PruneServiceConfig
 from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
 from tests.services.saves._helpers import (
     _create_save,
@@ -1209,3 +1216,117 @@ class TestTheLibraryPreviewFailuresOnTheWire:
             "something broke",
             False,
         )
+
+
+def _dispatcher_over_cleanup(uow_factory: Any, events: FakeEventSink) -> tuple[CallDispatcher, PruneService]:
+    """The real dispatcher over ``Endpoints`` whose cleanup use cases are the real ``PruneService``.
+
+    Only the preview and the action report are reached, so what a run would mutate through stays a mock.
+    """
+    prune_conflicts = _make_prune_conflicts()
+    service = PruneService(
+        config=PruneServiceConfig(
+            loop=asyncio.get_running_loop(),
+            logger=LOGGER,
+            clock=FakeClock(),
+            uuid_gen=FakeUuidGen(),
+            emit=events.emit,
+            uow_factory=uow_factory,
+            romm_api=MagicMock(),
+            recovery_store=MagicMock(),
+            prune_artifacts=MagicMock(),
+            steam_recovery=MagicMock(),
+            retrodeck_folders=FakeRetroDeckFolders(),
+            save_coordinator=MagicMock(),
+            active_downloads=set,
+            drift_probe=MagicMock(),
+            remove_installed_files=MagicMock(),
+            switch_version=MagicMock(),
+            settings={},
+            run_claim=prune_conflicts,
+            conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
+        )
+    )
+    endpoints = Endpoints(_make_application(_make_services_bundle(prune_service=service)), HostStatus())
+    return CallDispatcher(endpoints, LOGGER), service
+
+
+_A_PREVIEW_PAGE = {"scope": "bulk", "rom_id": None, "preview_id": None, "offset": 0, "limit": 50}
+
+
+class TestTheCleanupRefusalsOnTheWire:
+    """The cleanup's refusals answer their reason and message — the two the panel branches on included — and a fault
+    in its preview is a transport error.
+    """
+
+    async def test_a_stale_action_answers_its_reason_and_message(self):
+        dispatcher, _ = _dispatcher_over_cleanup(FakeUnitOfWorkFactory(FakeUnitOfWork()), FakeEventSink())
+        claim = {"phase": "claim", "run_id": "run-1", "action_token": "token-1"}
+
+        message = json.loads(await dispatcher.dispatch(1, "report_prune_action", [claim]))
+
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {
+            "success": False,
+            "reason": "stale_action",
+            "message": "This cleanup action token is no longer active.",
+        }
+
+    async def test_a_binding_that_changed_before_the_claim_answers_local_state_changed(self):
+        events = FakeEventSink()
+        dispatcher, service = _dispatcher_over_cleanup(FakeUnitOfWorkFactory(FakeUnitOfWork()), events)
+        app_id = 0x80000001
+        # The run's own requester, so the action is pending exactly as a run leaves it; the empty
+        # database binds no shortcut to it, so the claim's binding check fails.
+        requested = asyncio.create_task(
+            service._request_action("run-1", "remove_shortcut", {"app_id": app_id}, 1, None, {1})
+        )
+        async with asyncio.timeout(5):
+            while not events.events:
+                await asyncio.sleep(0)
+        claim = {
+            "phase": "claim",
+            "run_id": "run-1",
+            "action_token": events.events[-1][1]["action_token"],
+            "action": "remove_shortcut",
+            "app_id": app_id,
+            "target_rom_id": None,
+        }
+
+        message = json.loads(await dispatcher.dispatch(1, "report_prune_action", [claim]))
+
+        requested.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await requested
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {
+            "success": False,
+            "reason": "local_state_changed",
+            "message": "The shortcut binding changed before the Steam action.",
+        }
+
+    async def test_a_stale_preview_answers_its_reason_and_message(self):
+        dispatcher, _ = _dispatcher_over_cleanup(FakeUnitOfWorkFactory(FakeUnitOfWork()), FakeEventSink())
+        page = {**_A_PREVIEW_PAGE, "preview_id": "a-preview-nobody-built"}
+
+        message = json.loads(await dispatcher.dispatch(1, "get_prune_preview", [page]))
+
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {
+            "success": False,
+            "reason": "stale_preview",
+            "message": "This cleanup preview is stale. Scan again before confirming.",
+        }
+
+    async def test_a_fault_in_the_preview_answers_a_transport_error(self):
+        def unreadable_database() -> FakeUnitOfWork:
+            raise RuntimeError("database unavailable")
+
+        dispatcher, _ = _dispatcher_over_cleanup(unreadable_database, FakeEventSink())
+
+        message = json.loads(await dispatcher.dispatch(1, "get_prune_preview", [_A_PREVIEW_PAGE]))
+
+        assert message["type"] == TYPE_ERROR
+        assert message["reason"] == REASON_BACKEND_EXCEPTION
+        assert message["message"] == "RuntimeError: database unavailable"
+        assert "result" not in message

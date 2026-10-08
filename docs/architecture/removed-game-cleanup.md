@@ -417,8 +417,8 @@ removed ids and affected appIds stay truthful even after cancellation or a faile
 `cancel_prune(run_id)` is the wire entry point, reachable from the confirmation dialog and from the Gone from RomM pane
 while a run is live. It deliberately checks no conflict rule, like the run's other endpoints: stopping the run must stay
 available while that claim is held. It cancels only the run whose id matches, is idempotent for repeat requests, and
-answers the canonical failure shape for an unknown, finished, or malformed id. Nothing is rolled back: the group already
-executing runs to its own verdict and reports what it committed.
+refuses an unknown or finished id with `stale_run` and a malformed one with `invalid_run_id`. Nothing is rolled back:
+the group already executing runs to its own verdict and reports what it committed.
 
 ### Where a cancellation lands
 

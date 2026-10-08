@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 from lib.errors import Refused, RommApiError, classify_error
 from services.prune._models import cancellation_state, shielded
@@ -21,7 +21,7 @@ from services.prune.results import GroupOutcome
 if TYPE_CHECKING:
     from domain.rom import Rom
     from services.protocols import VersionSwitcherFn
-    from services.prune._models import ActionRequester, RecoveryHandle
+    from services.prune._models import ActionOutcome, ActionRequester, RecoveryHandle
     from services.prune.planning import GroupPlan
     from services.prune.registry import PruneRegistry
     from services.prune.results import MutationLedger, PruneResultReporter
@@ -221,13 +221,13 @@ class SteamActionRunner:
 
     async def _snapshot_outcome(
         self,
-        capture: dict[str, Any],
+        capture: ActionOutcome,
         rows: list[Rom],
         ledger: MutationLedger,
         bound_rom_id: int,
         app_id: int,
     ) -> tuple[dict[str, object] | None, dict[str, Any] | None]:
-        if capture.get("success") and capture.get("shortcut_absent") is True:
+        if capture.success and capture.shortcut_absent:
             ledger.app_id = app_id
             ledger.committed_action = "remove_shortcut"
             try:
@@ -240,15 +240,10 @@ class SteamActionRunner:
                     state.group_result = self._shortcut_absence_result(ledger, state.child_result, app_id)
                 raise
             return None, self._shortcut_absence_result(ledger, bool(reconciled), app_id)
-        snapshot = capture.get("snapshot")
-        if not capture.get("success") or not isinstance(snapshot, dict):
-            return None, self._results.group_result(
-                rows,
-                "failed",
-                "steam_snapshot_failed",
-                capture.get("message", "Steam snapshot failed."),
-            )
-        return cast("dict[str, object]", snapshot), None
+        snapshot = capture.snapshot
+        if not capture.success or snapshot is None:
+            return None, self._results.group_result(rows, "failed", "steam_snapshot_failed", capture.message)
+        return snapshot, None
 
     def _shortcut_absence_result(self, ledger: MutationLedger, reconciled: bool, app_id: int) -> dict[str, Any]:
         if reconciled and "shortcut_binding" not in ledger.mutations:
@@ -305,33 +300,25 @@ class SteamActionRunner:
             ledger.mutations.append("shortcut_binding")
         return launch_options, None
 
-    def _repoint_action_outcome(self, action: dict[str, Any], ledger: MutationLedger) -> dict[str, Any] | None:
-        if action.get("success"):
+    def _repoint_action_outcome(self, action: ActionOutcome, ledger: MutationLedger) -> dict[str, Any] | None:
+        if action.success:
             return None
-        if action.get("mutation_attempted") is True or action.get("reason") == "action_ambiguous":
+        if action.mutation_attempted or action.reason == "action_ambiguous":
             ledger.action_ambiguous = True
-            return self._results.ledger_result(
-                ledger,
-                "action_ambiguous",
-                action.get("message", "The binding changed but Steam confirmation is unknown."),
-            )
-        return self._results.ledger_result(
-            ledger,
-            "steam_action_failed",
-            action.get("message", "The binding changed but Steam confirmation failed."),
-        )
+            return self._results.ledger_result(ledger, "action_ambiguous", action.message)
+        return self._results.ledger_result(ledger, "steam_action_failed", action.message)
 
     async def _remove_action_outcome(
         self,
-        action: dict[str, Any],
+        action: ActionOutcome,
         rows: list[Rom],
         ledger: MutationLedger,
         bound_rom_id: int,
         app_id: int,
         handle: RecoveryHandle | None,
     ) -> tuple[Literal["remove_shortcut"] | None, dict[str, Any] | None]:
-        if not action.get("success"):
-            if action.get("mutation_attempted") is True or action.get("reason") == "action_ambiguous":
+        if not action.success:
+            if action.mutation_attempted or action.reason == "action_ambiguous":
                 ledger.app_id = app_id
                 ledger.committed_action = "remove_shortcut"
                 ledger.action_ambiguous = True
@@ -344,7 +331,7 @@ class SteamActionRunner:
                 rows,
                 "failed",
                 "steam_action_failed",
-                action.get("message", "Shortcut removal failed."),
+                action.message,
                 GroupOutcome(bundle_path=handle.bundle_path if handle else None),
             )
         ledger.app_id = app_id
