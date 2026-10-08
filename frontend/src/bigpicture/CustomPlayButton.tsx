@@ -985,8 +985,9 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       return;
     }
 
-    // A panel the backend already refused as stranded cannot stop anything, so
-    // it says so before asking to confirm a stop that cannot happen.
+    // A menu opened before the strand still offers Stop Game, and a panel the
+    // backend already refused cannot stop anything, so it says so before asking
+    // to confirm a stop that cannot happen.
     const stranded = strandedAnswer();
     if (stranded) {
       detach(debugLog(`CustomPlayButton: Stop on appId=${appId} from a stranded panel — not stopping`));
@@ -1390,7 +1391,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     detach(debugLog(`CustomPlayButton: returning null (state=${state})`));
     return null;
   }
-  // A stranded panel offers only Resume and Stop, and only while the game runs.
+  // A stranded panel offers only Resume, and only while the game runs.
   if (stranded && !isRunning) return null;
   detach(debugLog(`CustomPlayButton: rendering state=${state}`));
 
@@ -1480,7 +1481,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // green Resume button brings the live session to front via `handleResumeGame`;
   // a chevron beside it opens the Stop Game action, which confirms and then has
   // the backend terminate the emulator. No Uninstall entry here — uninstalling a
-  // running game is a footgun.
+  // running game is a footgun. On a stranded panel the chevron goes: Stop Game is
+  // its only entry, and it could only say that it cannot stop the game.
   if (isRunning) {
     return (
       <Focusable
@@ -1494,7 +1496,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
           className={[appActionButtonClasses?.PlayButton, "romm-btn-play"].filter(Boolean).join(" ")}
           style={{
             ...mainBtnStyle,
-            borderRadius: "2px 0 0 2px",
+            borderRadius: stranded ? "2px" : "2px 0 0 2px",
             background: "linear-gradient(to right, #70d61d 0%, #01a75b 60%)",
             backgroundPosition: "25%",
             backgroundSize: "330% 100%",
@@ -1506,27 +1508,29 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
         >
           Resume
         </DialogButton>
-        <DialogButton
-          className="romm-btn-cancel"
-          aria-label="Game actions"
-          title="Game actions"
-          style={{
-            ...dropdownArrowStyle,
-            background: "rgba(255, 255, 255, 0.15)",
-            color: "#fff",
-          }}
-          onClick={(e: MouseEvent) => showRunningActionsMenu(e)}
-        >
-          <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path
-              d="M1 1.5L6 6.5L11 1.5"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </DialogButton>
+        {!stranded && (
+          <DialogButton
+            className="romm-btn-cancel"
+            aria-label="Game actions"
+            title="Game actions"
+            style={{
+              ...dropdownArrowStyle,
+              background: "rgba(255, 255, 255, 0.15)",
+              color: "#fff",
+            }}
+            onClick={(e: MouseEvent) => showRunningActionsMenu(e)}
+          >
+            <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M1 1.5L6 6.5L11 1.5"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </DialogButton>
+        )}
       </Focusable>
     );
   }

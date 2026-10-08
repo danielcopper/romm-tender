@@ -3379,15 +3379,19 @@ describe("CustomPlayButton — state-aware Resume (#1313)", () => {
   });
 
   describe("on a stranded panel", () => {
-    it("keeps Resume and its Stop menu while the game runs, and Resume still foregrounds it", async () => {
+    it("keeps only Resume while the game runs, and Resume still foregrounds it", async () => {
       vi.mocked(readGameRunning).mockReturnValue(SESSION_RUNNING);
-      const { findByText, getByLabelText, queryByText } = render(<CustomPlayButton appId={100} />);
+      const { container, findByText, getByLabelText, queryByLabelText, queryByText } = render(
+        <CustomPlayButton appId={100} />,
+      );
       await findByText("Resume");
+      expect(getByLabelText("Game actions")).toBeInTheDocument();
 
       act(() => setStrandedAnswer("reloads"));
 
       expect(queryByText("Resume")).toBeInTheDocument();
-      expect(getByLabelText("Game actions")).toBeInTheDocument();
+      expect(queryByLabelText("Game actions")).toBeNull();
+      expect(container.querySelectorAll("button")).toHaveLength(1);
       await act(async () => {
         queryByText("Resume")!.click();
       });
@@ -3404,6 +3408,26 @@ describe("CustomPlayButton — state-aware Resume (#1313)", () => {
       await findByText(offered);
 
       act(() => setStrandedAnswer("restart_steam"));
+
+      expect(container.querySelectorAll("button")).toHaveLength(0);
+      expect(container.textContent).toBe("");
+    });
+
+    it("offers nothing on a page opened after the strand, even while its game runs", async () => {
+      // The page's own detail read fails as stranded, so the button never learns its ROM.
+      setStrandedAnswer("reloads");
+      vi.mocked(readGameRunning).mockReturnValue(SESSION_RUNNING);
+      vi.mocked(getCachedGameDetail).mockRejectedValue(
+        new HostTransportError(
+          "stranded_panel",
+          "Tender was restarted — it reloads Steam's interface once no game is running.",
+        ),
+      );
+      const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+      const { container } = render(<CustomPlayButton appId={100} />);
+
+      await waitFor(() => expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("CustomPlayButton init error")));
+      logSpy.mockRestore();
 
       expect(container.querySelectorAll("button")).toHaveLength(0);
       expect(container.textContent).toBe("");
