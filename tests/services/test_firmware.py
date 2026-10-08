@@ -42,9 +42,11 @@ from domain.firmware_wants import (
 from domain.retrodeck_folders import BIOS_DOWNLOAD, FolderRefused, finding_refusal, switched_off
 from domain.rom import Rom
 from domain.shortcut_data import EmulatorInvocation
+from lib.errors import Refused, RommConnectionError, ServerUnreachable
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.cores import CoreService, CoreServiceConfig
 from services.firmware import FirmwareService, FirmwareServiceConfig
+from services.firmware.deletion import FirmwareDeletionIncomplete
 from services.firmware.status import FirmwareStatusReader
 from services.game_detail import GameDetailService, GameDetailServiceConfig
 
@@ -747,6 +749,7 @@ class TestWhereNoBiosDownloadMayLand:
 
         result = await fw.delete_bios_file("dc", "dc_boot.bin")
 
+        assert isinstance(result, dict)
         assert result["deleted_count"] == 1
         assert not bios.exists()
 
@@ -2309,6 +2312,7 @@ class TestGetFirmwareStatusDeletableCount:
         assert "retired.bin" not in rows
         # And the count means the delete: it removes ours, leaves theirs.
         deleted = await fw.delete_platform_bios("gc")
+        assert isinstance(deleted, dict)
         assert deleted["deleted_count"] == 2
         assert retired not in store.files
         assert ipl in store.files
@@ -3562,28 +3566,6 @@ class TestDownloadFirmware:
         assert record.platform_slug == "n64"
 
     @pytest.mark.asyncio
-    async def test_handles_download_error(self, firmware, fw, tmp_path):
-
-        fw_detail = {
-            "id": 10,
-            "file_name": "bios.bin",
-            "file_path": "bios/n64/bios.bin",
-            "file_size_bytes": 100,
-            "md5_hash": "",
-        }
-
-        _set_loop(fw, asyncio.get_running_loop())
-
-        with (
-            patch.object(firmware.romm_api, "get_firmware", return_value=fw_detail),
-            patch.object(firmware.romm_api, "download_firmware", side_effect=OSError("Connection reset")),
-        ):
-            result = await fw.download_firmware(10)
-
-        assert result["success"] is False
-        assert "reason" in result
-
-    @pytest.mark.asyncio
     async def test_rejects_traversal_in_server_file_name(self, firmware, fw, tmp_path):
         """#966: a server ``file_name`` of ``../evil.desktop`` is rejected, nothing written outside BIOS."""
         bios_dir = tmp_path / "retrodeck" / "bios"
@@ -3613,12 +3595,12 @@ class TestDownloadFirmware:
             patch.object(firmware.romm_api, "get_firmware", return_value=fw_detail),
             patch.object(firmware.romm_api, "download_firmware", side_effect=fake_download),
         ):
-            result = await fw.download_firmware(10)
+            download = fw.download_firmware(10)
+            with pytest.raises(Refused) as refused:
+                await download
 
-        # Canonical path_traversal failure shape.
-        assert result["success"] is False
-        assert result["reason"] == "path_traversal"
-        assert "message" in result
+        assert refused.value.reason == "path_traversal"
+        assert refused.value.message
         # No download was ever attempted (rejected before make_dirs / fetch).
         assert download_called == []
         # Nothing written outside the BIOS directory.
@@ -3742,7 +3724,7 @@ class TestDownloadAllFirmware:
 
         async def failing_download(fw_id, _placements):
             download_called_ids.append(fw_id)
-            return {"success": False}
+            raise Refused("bios_download_failed", "scph5501.bin could not be downloaded")
 
         with (
             patch.object(firmware.romm_api, "list_firmware", return_value=firmware_list),
@@ -3881,34 +3863,34 @@ class TestDownloadPlatformFirmwareFile:
             patch.object(fw._downloads, "_download_one", side_effect=fake_download_one),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(bios_dir))),
         ):
-            result = await fw.download_platform_firmware_file("dc", "nowhere.bin")
+            download = fw.download_platform_firmware_file("dc", "nowhere.bin")
+            with pytest.raises(Refused) as refused:
+                await download
 
-        assert result["success"] is False
-        assert result["reason"] == "not_in_library"
-        assert result["downloaded"] == 0
+        assert refused.value.reason == "not_in_library"
 
     @pytest.mark.asyncio
-    async def test_the_one_fetch_s_own_failure_is_surfaced(self, firmware, fw, tmp_path):
-        # One press wants the reason: the single fetch's failure shape reaches
-        # the caller intact rather than folded into a count of errors.
+    async def test_the_one_fetch_s_own_refusal_reaches_the_caller(self, firmware, fw, tmp_path):
+        # One press wants the reason: the single fetch's refusal reaches the
+        # caller intact rather than folded into a count of errors.
         bios_dir = tmp_path / "retrodeck" / "bios"
         bios_dir.mkdir(parents=True)
         _set_loop(fw, asyncio.get_running_loop())
 
         async def fake_download_one(_fw_id, _placements):
-            return {"success": False, "reason": "server_unreachable", "message": "RomM is unreachable"}
+            raise ServerUnreachable("RomM is unreachable")
 
         with (
             patch.object(firmware.romm_api, "list_firmware", return_value=self._listing()),
             patch.object(fw._downloads, "_download_one", side_effect=fake_download_one),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(bios_dir))),
         ):
-            result = await fw.download_platform_firmware_file("dc", "missing.bin")
+            download = fw.download_platform_firmware_file("dc", "missing.bin")
+            with pytest.raises(ServerUnreachable) as refused:
+                await download
 
-        assert result["success"] is False
-        assert result["reason"] == "server_unreachable"
-        assert result["message"] == "RomM is unreachable"
-        assert result["downloaded"] == 0
+        assert refused.value.reason == "server_unreachable"
+        assert refused.value.message == "RomM is unreachable"
 
     @pytest.mark.asyncio
     async def test_a_folder_declaration_is_refused_rather_than_fetched(self, firmware, fw, tmp_path):
@@ -3943,23 +3925,21 @@ class TestDownloadPlatformFirmwareFile:
             patch.object(fw._downloads, "_download_one", side_effect=fake_download_one),
             patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(bios_dir))),
         ):
-            result = await fw.download_platform_firmware_file("ps2", "bios")
+            download = fw.download_platform_firmware_file("ps2", "bios")
+            with pytest.raises(Refused) as refused:
+                await download
 
-        assert result["success"] is False
-        assert result["reason"] == "declares_directory"
-        assert result["downloaded"] == 0
+        assert refused.value.reason == "declares_directory"
 
     @pytest.mark.asyncio
-    async def test_a_failed_listing_fetch_answers_with_zero(self, firmware, fw):
+    async def test_a_failed_listing_fetch_propagates(self, firmware, fw):
         _set_loop(fw, asyncio.get_running_loop())
         fw._listing._firmware_cache = None
         with patch.object(firmware.romm_api, "list_firmware", side_effect=OSError("Connection reset")):
-            result = await fw.download_platform_firmware_file("dc", "missing.bin")
+            download = fw.download_platform_firmware_file("dc", "missing.bin")
+            with pytest.raises(OSError, match="Connection reset"):
+                await download
 
-        assert result["success"] is False
-        assert result["reason"] == "unknown"
-        assert "Connection reset" in result["message"]
-        assert result["downloaded"] == 0
         assert fw._listing._firmware_cache is None
 
 
@@ -4280,6 +4260,7 @@ class TestDeletePlatformBios:
 
             result = await fw.delete_platform_bios("psx")
 
+        assert isinstance(result, dict)
         # (b) success/deleted_count response is correct: only the one downloaded.
         assert result["success"] is True
         assert result["deleted_count"] == 1
@@ -4369,6 +4350,7 @@ class TestDeletePlatformBios:
 
             result = await fw.delete_platform_bios("gc")
 
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 1
         assert shipped in store.files
@@ -4394,6 +4376,7 @@ class TestDeletePlatformBios:
 
             result = await fw.delete_platform_bios("gc")
 
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 0
         assert ipl in store.files
@@ -4423,6 +4406,7 @@ class TestDeletePlatformBios:
 
             result = await fw.delete_platform_bios("gc")
 
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 1
         assert ipl not in store.files
@@ -4454,6 +4438,7 @@ class TestDeletePlatformBios:
 
             result = await fw.delete_platform_bios("gc")
 
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 1
         assert flat not in store.files
@@ -4475,6 +4460,7 @@ class TestDeletePlatformBios:
         with patch.object(firmware.romm_api, "list_firmware", return_value=self._gamecube_listing()):
             result = await fw.delete_platform_bios("gc")
 
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 0
         assert firmware.uow.bios_files.get("gc", "IPL.bin") is None
@@ -4513,6 +4499,7 @@ class TestDeletePlatformBios:
         with patch.object(firmware.romm_api, "list_firmware", return_value=[]):
             result = await fw.delete_platform_bios("psx")
 
+        assert isinstance(result, dict)
         assert result["success"] is True
         assert result["deleted_count"] == 1
         assert path not in store.files
@@ -5601,22 +5588,22 @@ class TestDownloadFirmwareErrors:
     """Tests for download_firmware error handling."""
 
     @pytest.mark.asyncio
-    async def test_fetch_metadata_error(self, fw):
-        """Fetch firmware metadata failure returns error."""
+    async def test_a_failed_metadata_fetch_propagates(self, fw):
+        """A failed firmware metadata fetch reaches the caller as it was raised."""
         assert isinstance(fw._config.romm_api, MagicMock)
         fw._config.romm_api.get_firmware.side_effect = Exception("not found")
         _inline_executor(fw)
 
-        result = await fw.download_firmware(999)
-        assert result["success"] is False
+        download = fw.download_firmware(999)
+        with pytest.raises(Exception, match="not found"):
+            await download
 
     @pytest.mark.asyncio
-    async def test_malformed_file_path_returns_failure_and_persists_nothing(self, firmware, fw, tmp_path):
+    async def test_malformed_file_path_refuses_and_persists_nothing(self, firmware, fw, tmp_path):
         """A firmware whose file_path yields an empty slug fails the BiosFile invariant.
 
-        The service catches the aggregate's ValueError, returns the canonical
-        download-failure shape, removes the renamed file, and persists no record
-        — no exception escapes.
+        The service catches the aggregate's ValueError, removes the renamed
+        file, persists no record and refuses with ``invalid_firmware``.
         """
         content = b"firmware bytes"
         # file_path has a single segment → parse_firmware_slug returns "" →
@@ -5643,17 +5630,188 @@ class TestDownloadFirmwareErrors:
             patch.object(firmware.romm_api, "get_firmware", return_value=fw_detail),
             patch.object(firmware.romm_api, "download_firmware", side_effect=fake_download),
         ):
-            result = await fw.download_firmware(7)
+            download = fw.download_firmware(7)
+            with pytest.raises(Refused) as refused:
+                await download
 
-        # Canonical failure shape, no exception escaped.
-        assert result["success"] is False
-        assert "reason" in result
-        assert "Invalid firmware metadata" in result["message"]
+        assert refused.value.reason == "invalid_firmware"
+        assert "Invalid firmware metadata" in refused.value.message
         # The renamed/downloaded file was cleaned up — nothing left dangling.
         assert not os.path.exists(os.path.join(str(bios_dir), "orphan.bin"))
         # No BiosFile record persisted (empty slug key would be ("", "orphan.bin")).
         assert firmware.uow.bios_files.get("", "orphan.bin") is None
         assert list(firmware.uow.bios_files.iter_all()) == []
+
+
+class _UnpreparableStore(FakeFirmwareFileStore):
+    """A file store on a device where no folder can be created."""
+
+    def make_dirs(self, path: str) -> None:
+        raise PermissionError(f"simulated: cannot create {path}")
+
+
+class TestASingleDownloadThatFails:
+    """What one firmware download raises when the folder, the transfer or the metadata fetch fails."""
+
+    _FW: ClassVar[dict[str, Any]] = {
+        "id": 4,
+        "file_name": "dc_boot.bin",
+        "file_path": "bios/dc/dc_boot.bin",
+        "md5_hash": "",
+    }
+    _TMP = "/fake/bios/dc_boot.bin.tmp"
+
+    def _service(self, fake_romm_api, store: FakeFirmwareFileStore) -> FirmwareService:
+        fake_romm_api.firmware_files = [dict(self._FW)]
+        fw = _make_firmware_service(
+            romm_api=fake_romm_api,
+            firmware_file_store=store,
+            retrodeck_folders=FakeRetroDeckFolders(bios="/fake/bios"),
+        )
+        _set_loop(fw, asyncio.get_running_loop())
+        return fw
+
+    @pytest.mark.asyncio
+    async def test_a_folder_this_device_cannot_create_refuses_and_leaves_no_tmp(self, fake_romm_api):
+        store = _UnpreparableStore({self._TMP: b"partial"})
+        fw = self._service(fake_romm_api, store)
+
+        download = fw.download_firmware(4)
+        with pytest.raises(Refused) as refused:
+            await download
+
+        assert refused.value.reason == "bios_download_failed"
+        assert "on this device" in refused.value.message
+        assert isinstance(refused.value.__cause__, PermissionError)
+        assert self._TMP not in store.files
+        assert "download_firmware" not in [name for name, _args, _kwargs in fake_romm_api.call_log]
+
+    @pytest.mark.asyncio
+    async def test_a_romm_error_in_the_transfer_propagates_and_leaves_no_tmp(self, fake_romm_api):
+        store = FakeFirmwareFileStore({self._TMP: b"partial"})
+        fw = self._service(fake_romm_api, store)
+        fake_romm_api.download_firmware_side_effect = RommConnectionError("connection refused")
+
+        download = fw.download_firmware(4)
+        with pytest.raises(RommConnectionError, match="connection refused"):
+            await download
+
+        assert self._TMP not in store.files
+
+    @pytest.mark.asyncio
+    async def test_any_other_failure_in_the_transfer_propagates_and_leaves_no_tmp(self, fake_romm_api):
+        store = FakeFirmwareFileStore({self._TMP: b"partial"})
+        fw = self._service(fake_romm_api, store)
+        fake_romm_api.download_firmware_side_effect = RuntimeError("a bug")
+
+        download = fw.download_firmware(4)
+        with pytest.raises(RuntimeError, match="a bug"):
+            await download
+
+        assert self._TMP not in store.files
+
+    @pytest.mark.asyncio
+    async def test_a_romm_error_fetching_the_metadata_propagates(self, fake_romm_api):
+        fw = self._service(fake_romm_api, FakeFirmwareFileStore())
+        fake_romm_api.get_firmware_side_effect = RommConnectionError("connection refused")
+
+        download = fw.download_firmware(4)
+        with pytest.raises(RommConnectionError, match="connection refused"):
+            await download
+
+        assert "download_firmware" not in [name for name, _args, _kwargs in fake_romm_api.call_log]
+
+
+class TestABatchDownloadCarriesOnPastAFailedFile:
+    """A file whose download this service refuses (``Refused``) or that meets a RomM error is logged, named in the
+    errors and passed over; anything else ends the batch, RetroDECK's folder refusal included — no later file could
+    land either.
+
+    RetroDECK's folder refusal is a domain refusal (``DomainRefused``), not this service's ``Refused``.
+    """
+
+    _NAMES = ("refused", "romm_error", "fetched")
+
+    def _service(self, tmp_path) -> FirmwareService:
+        fw = _make_firmware_service(
+            core_info=FakeCoreInfoProvider(active_core=("flycast_libretro", "Flycast")),
+            retrodeck_folders=FakeRetroDeckFolders(bios=str(tmp_path / "bios")),
+        )
+        for name in self._NAMES:
+            _resolver(fw).declare(f"{name}.bin", required_by=[_id("flycast_libretro")])
+        _stub_listing(
+            fw,
+            [
+                {"id": n, "file_name": f"{name}.bin", "file_path": f"bios/dc/{name}.bin", "md5_hash": ""}
+                for n, name in enumerate(self._NAMES, start=1)
+            ],
+        )
+        _inline_executor(fw)
+        return fw
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("entry", ["download_all_firmware", "download_required_firmware"])
+    async def test_it_names_each_failed_file_and_fetches_the_rest(self, tmp_path, entry, caplog):
+        fw = self._service(tmp_path)
+        attempted = []
+
+        async def fake_download_one(fw_id, _placements):
+            attempted.append(fw_id)
+            if fw_id == 1:
+                raise Refused("bios_download_failed", "refused.bin could not be downloaded")
+            if fw_id == 2:
+                raise RommConnectionError("connection refused")
+            return {"success": True, "file_path": "/bios/fetched.bin", "md5_match": None}
+
+        with (
+            patch.object(fw._downloads, "_download_one", side_effect=fake_download_one),
+            caplog.at_level(logging.ERROR),
+        ):
+            result = await getattr(fw, entry)("dc")
+
+        assert attempted == [1, 2, 3]
+        assert result["success"] is True
+        assert result["downloaded"] == 1
+        assert result["message"].endswith("(2 failed: refused.bin, romm_error.bin)")
+        logged = [record.getMessage() for record in caplog.records]
+        assert "Failed to download firmware refused.bin: refused.bin could not be downloaded" in logged
+        assert "Failed to download firmware romm_error.bin: connection refused" in logged
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("entry", ["download_all_firmware", "download_required_firmware"])
+    async def test_a_retrodeck_folder_refusal_ends_the_batch(self, tmp_path, entry):
+        fw = self._service(tmp_path)
+        attempted = []
+
+        async def fake_download_one(fw_id, _placements):
+            attempted.append(fw_id)
+            if fw_id == 2:
+                raise switched_off(BIOS_DOWNLOAD)
+            return {"success": True, "file_path": f"/bios/{fw_id}.bin", "md5_match": None}
+
+        with patch.object(fw._downloads, "_download_one", side_effect=fake_download_one):
+            download = getattr(fw, entry)("dc")
+            with pytest.raises(FolderRefused) as refused:
+                await download
+
+        assert refused.value.reason == switched_off(BIOS_DOWNLOAD).reason
+        assert attempted == [1, 2]
+
+    @pytest.mark.asyncio
+    async def test_an_unexpected_exception_ends_the_batch(self, tmp_path):
+        fw = self._service(tmp_path)
+        attempted = []
+
+        async def fake_download_one(fw_id, _placements):
+            attempted.append(fw_id)
+            raise RuntimeError("a bug")
+
+        with patch.object(fw._downloads, "_download_one", side_effect=fake_download_one):
+            download = fw.download_all_firmware("dc")
+            with pytest.raises(RuntimeError, match="a bug"):
+                await download
+
+        assert attempted == [1]
 
 
 # ── Firmware list cache tests ─────────────────────────────
@@ -5903,13 +6061,81 @@ class TestDeletePlatformBiosIOLogsWarnings:
             result = await fw.delete_platform_bios("psx")
 
         # One file deleted (the second), one failed with a logged warning.
-        assert result["success"] is False
-        assert result["deleted_count"] == 1
+        assert result == FirmwareDeletionIncomplete(
+            reason="delete_incomplete", message="Deleted 1 file(s), 1 error(s)", deleted_count=1
+        )
         assert any("scph5501.bin" in record.getMessage() for record in caplog.records)
         # The failing file's BIOS record must remain (it wasn't actually removed).
         assert firmware.uow.bios_files.get("psx", "scph5501.bin") is not None
         # The successful file's BIOS record is cleared.
         assert firmware.uow.bios_files.get("psx", "scph5502.bin") is None
+
+
+class TestAPartialBiosDeleteIsIncomplete:
+    """Each of the three Delete buttons answers a delete that did not remove every file with what it did remove."""
+
+    @staticmethod
+    def _record(firmware, name: str, path: str) -> None:
+        firmware.uow.bios_files.save(
+            BiosFile.mark_downloaded(
+                platform_slug="ps2",
+                file_name=name,
+                file_path=path,
+                downloaded_at="2026-01-01T00:00:00+00:00",
+                firmware_id=None,
+            )
+        )
+
+    def _two_downloads_one_stuck(self, firmware, fw, folder: str) -> FakeFirmwareFileStore:
+        store = FakeFirmwareFileStore({f"{folder}/scph39001.bin": b"\x00", f"{folder}/scph70012.bin": b"\x00"})
+        store.remove_failures.add(f"{folder}/scph39001.bin")
+        fw._deletion._firmware_file_store = store
+        self._record(firmware, "scph39001.bin", f"{folder}/scph39001.bin")
+        self._record(firmware, "scph70012.bin", f"{folder}/scph70012.bin")
+        return store
+
+    @pytest.mark.asyncio
+    async def test_the_platform_delete_answers_what_it_removed(self, firmware, fw):
+        store = self._two_downloads_one_stuck(firmware, fw, "/fake/bios/pcsx2/bios")
+
+        result = await fw.delete_platform_bios("ps2")
+
+        assert result == FirmwareDeletionIncomplete(
+            reason="delete_incomplete", message="Deleted 1 file(s), 1 error(s)", deleted_count=1
+        )
+        assert list(store.files) == ["/fake/bios/pcsx2/bios/scph39001.bin"]
+
+    @pytest.mark.asyncio
+    async def test_the_folder_delete_answers_what_it_removed(self, firmware, fw):
+        store = self._two_downloads_one_stuck(firmware, fw, "/fake/bios/pcsx2/bios")
+
+        result = await fw.delete_bios_folder("ps2", "/fake/bios/pcsx2/bios")
+
+        assert result == FirmwareDeletionIncomplete(
+            reason="delete_incomplete",
+            message=(
+                "Could not delete every file: scph39001.bin: "
+                "simulated remove failure: /fake/bios/pcsx2/bios/scph39001.bin"
+            ),
+            deleted_count=1,
+        )
+        assert list(store.files) == ["/fake/bios/pcsx2/bios/scph39001.bin"]
+
+    @pytest.mark.asyncio
+    async def test_the_file_delete_answers_that_it_removed_nothing(self, firmware, fw):
+        store = self._two_downloads_one_stuck(firmware, fw, "/fake/bios/pcsx2/bios")
+
+        result = await fw.delete_bios_file("ps2", "scph39001.bin")
+
+        assert result == FirmwareDeletionIncomplete(
+            reason="delete_incomplete",
+            message=(
+                "Could not delete scph39001.bin: scph39001.bin: "
+                "simulated remove failure: /fake/bios/pcsx2/bios/scph39001.bin"
+            ),
+            deleted_count=0,
+        )
+        assert len(store.files) == 2
 
 
 class TestBadPathFirmwareUseCases:
@@ -5952,8 +6178,8 @@ class TestBadPathFirmwareUseCases:
         assert any("disk full" in record.getMessage() for record in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_download_all_firmware_returns_error_with_zero_when_list_fetch_fails(self, fake_romm_api, caplog):
-        """Initial ``list_firmware`` failure short-circuits with ``downloaded=0``."""
+    async def test_download_all_firmware_propagates_a_failed_list_fetch(self, fake_romm_api, caplog):
+        """An initial ``list_firmware`` failure propagates before anything is fetched."""
         import logging
 
         fw = self._build_service(fake_romm_api)
@@ -5961,19 +6187,16 @@ class TestBadPathFirmwareUseCases:
         fake_romm_api.fail_on_next(OSError("connection reset"))
 
         with caplog.at_level(logging.ERROR):
-            result = await fw.download_all_firmware("dc")
+            download = fw.download_all_firmware("dc")
+            with pytest.raises(OSError, match="connection reset"):
+                await download
 
-        assert result["success"] is False
-        assert result["downloaded"] == 0
-        assert "message" in result
         # The cache was not populated by the failed fetch.
         assert fw._listing._firmware_cache is None
 
     @pytest.mark.asyncio
-    async def test_download_required_firmware_returns_error_with_zero_when_list_fetch_fails(
-        self, fake_romm_api, caplog
-    ):
-        """Initial ``list_firmware`` failure short-circuits with ``downloaded=0``."""
+    async def test_download_required_firmware_propagates_a_failed_list_fetch(self, fake_romm_api, caplog):
+        """An initial ``list_firmware`` failure propagates before anything is fetched."""
         import logging
 
         fw = self._build_service(fake_romm_api)
@@ -5981,11 +6204,10 @@ class TestBadPathFirmwareUseCases:
         fake_romm_api.fail_on_next(OSError("connection reset"))
 
         with caplog.at_level(logging.ERROR):
-            result = await fw.download_required_firmware("dc")
+            download = fw.download_required_firmware("dc")
+            with pytest.raises(OSError, match="connection reset"):
+                await download
 
-        assert result["success"] is False
-        assert result["downloaded"] == 0
-        assert "message" in result
         # The cache was not populated by the failed fetch.
         assert fw._listing._firmware_cache is None
 

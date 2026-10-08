@@ -18,6 +18,8 @@ import os
 
 import pytest
 
+from lib.errors import RommConnectionError
+
 # Every download, adoption and removal here lands in RetroDECK's folders.
 pytestmark = pytest.mark.usefixtures("seeded_retrodeck")
 
@@ -78,18 +80,18 @@ async def test_a_name_outside_the_platform_is_refused(harness):
     assert result["reason"] == "not_in_library"
     assert isinstance(result["message"], str)
     assert result["message"]
-    assert result["downloaded"] == 0
+    assert "downloaded" not in result
     assert "download_firmware" not in [name for name, _args, _kwargs in harness.romm.call_log]
 
 
 async def test_an_unreachable_server_reports_its_own_reason(harness):
     harness.romm.firmware_files = [dict(f) for f in _DC_FIRMWARE]
-    harness.romm.download_firmware_side_effect = OSError("Connection reset")
+    harness.romm.download_firmware_side_effect = RommConnectionError("Connection reset")
 
     result = await harness.endpoints.download_platform_firmware_file("dc", "dc_boot.bin")
 
     assert result["success"] is False
     assert result["reason"]
-    assert result["downloaded"] == 0
+    assert "downloaded" not in result
     with harness.uow_factory() as uow:
         assert uow.bios_files.get("dc", "dc_boot.bin") is None
