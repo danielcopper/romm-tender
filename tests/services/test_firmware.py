@@ -6072,7 +6072,7 @@ class TestDeletePlatformBiosIOLogsWarnings:
 
 
 class TestAPartialBiosDeleteIsIncomplete:
-    """Each of the three Delete buttons answers a removal that took only part with what it did remove."""
+    """Each of the three Delete buttons answers a delete that did not remove every file with what it did remove."""
 
     @staticmethod
     def _record(firmware, name: str, path: str) -> None:
