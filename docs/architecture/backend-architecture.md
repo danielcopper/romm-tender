@@ -1703,8 +1703,9 @@ write. A traversal attempt (`../`, an absolute path, or a `%2e%2e%2f`-encoded ZI
 pre-decode ZIP-slip check passes) **aborts the whole download** rather than skipping the offending entry:
 already-extracted members are cleaned up (no half-installed ROM), a canonical
 `{"success": false, "reason": "path_traversal", "message": ...}` failure is returned, and the `download_failed` event
-fires so the UI doesn't hang on "downloading". Firmware downloads surface the same canonical failure from
-`download_firmware`.
+fires so the UI doesn't hang on "downloading". A firmware download refuses with the same reason, raised by the single
+download (`FirmwareDownloader._download_one`) and answered by `Endpoints`; a batch download names that file among its
+failures and carries on.
 
 #### StartupHealingService notes
 
