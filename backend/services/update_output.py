@@ -27,6 +27,7 @@ from domain.update_output import (
     runs_other_than,
     utc_stamp_seconds,
 )
+from lib.errors import NamedRefused, Refused
 
 if TYPE_CHECKING:
     import asyncio
@@ -35,6 +36,12 @@ if TYPE_CHECKING:
     from domain.update_outcome import UpdateFailure
     from domain.update_output import JournalEntry
     from services.protocols import FailedInstallerStartFn, JournalEntriesFn, UpdateFailureFn
+
+
+class NothingToShow(NamedRefused):
+    """No failed update stands that this output belongs to. The panel branches on this reason."""
+
+    reason = "not_found"
 
 
 @dataclass(frozen=True)
@@ -88,26 +95,28 @@ class UpdateOutputService:
         ``"rotated"`` where the journal no longer reaches back that far, and
         where it does, ``"terminal"`` for a record — the installer was run by
         hand — and ``"empty"`` for an attempt, whose installer this program
-        started as a unit. The canonical failure shape answers ``not_found``
-        where no such failure stands, ``invalid_value`` for an argument of
-        another type, and ``journal_unreadable`` where the journal could not be
-        read; the first two are logged, since a panel asks only about a failure
-        it shows.
+        started as a unit. Refuses with :class:`NothingToShow` where no such
+        failure stands, ``invalid_value`` for an argument of another type, and
+        ``journal_unreadable`` where the journal could not be read; the first
+        two are logged, since a panel asks only about a failure it shows.
         """
         if rolled_back_at is not None and not isinstance(rolled_back_at, str):
             self._logger.warning(f"update: the installer's output was asked for with {rolled_back_at!r}")
-            return {"success": False, "reason": "invalid_value", "message": "Invalid record"}
+            raise Refused("invalid_value", "Invalid record")
         try:
             if rolled_back_at is None:
                 started_at = self._failed_installer_started_at()
                 at = utc_stamp_seconds(started_at) if started_at is not None else None
                 if at is None:
-                    return self._nothing_to_show("the latest attempt did not fail after its installer ran")
+                    raise self._nothing_to_show("the latest attempt did not fail after its installer ran")
                 return await self._loop.run_in_executor(None, self._attempt_output_io, at)
             return await self._loop.run_in_executor(None, self._record_output_io, rolled_back_at)
         except OSError as e:
             self._logger.warning(f"update: the journal could not be read for the installer's output: {e!r}")
-            return {"success": False, "reason": "journal_unreadable", "message": "The journal could not be read"}
+            # The message is fixed: the error's own text could carry the
+            # admission token, which only the lines the sections show are
+            # cleared of.
+            raise Refused("journal_unreadable", "The journal could not be read") from e
 
     def _attempt_output_io(self, started_at: float) -> dict[str, Any]:
         """The installer's output for an attempt whose installer this program started at *started_at*.
@@ -124,7 +133,7 @@ class UpdateOutputService:
         failure = standing_update_failure(self._read_update_failure(), self._current_version)
         at = utc_stamp_seconds(rolled_back_at)
         if failure is None or failure.rolled_back_at != rolled_back_at or at is None:
-            return self._nothing_to_show(f"no standing record is stamped {rolled_back_at}")
+            raise self._nothing_to_show(f"no standing record is stamped {rolled_back_at}")
         run = run_around(self._journal(INSTALLER_UNIT, since=at - RUN_SPAN_SECONDS, until=at + RUN_SPAN_SECONDS), at)
         if run is None:
             return _missing(OutputGap.TERMINAL if self._reaches_back_to_io(at) else OutputGap.ROTATED)
@@ -134,9 +143,9 @@ class UpdateOutputService:
         """Whether the journal holds any line at or before *at*, so a run there would still be in it."""
         return bool(self._journal(None, until=at, last=1))
 
-    def _nothing_to_show(self, why: str) -> dict[str, Any]:
+    def _nothing_to_show(self, why: str) -> NothingToShow:
         self._logger.info(f"update: there is no failed update to show the installer's output of: {why}")
-        return {"success": False, "reason": "not_found", "message": "No failed update to show the output of"}
+        return NothingToShow("No failed update to show the output of")
 
     def _failed_version_io(self, failure: UpdateFailure, began: float, at: float) -> tuple[JournalEntry, ...] | None:
         """This program's own lines from *began*, the installer's start, to *at*, the rollback, after a rollback.

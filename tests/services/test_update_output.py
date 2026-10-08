@@ -15,7 +15,8 @@ from fakes.running_loop import running_loop
 from domain.update_install import INSTALLER_UNIT
 from domain.update_outcome import UpdateFailure, UpdateFailureKind
 from domain.update_output import REPLACED_RUN_LINES, SERVICE_UNIT, JournalEntry, utc_stamp_seconds
-from services.update_output import UpdateOutputService, UpdateOutputServiceConfig
+from lib.errors import Refused
+from services.update_output import NothingToShow, UpdateOutputService, UpdateOutputServiceConfig
 
 _RUNNING = "1.0.31"
 _TRIED = "1.0.32"
@@ -227,11 +228,12 @@ class TestAnAttemptOfThisProcess:
     async def test_no_attempt_whose_installer_ran_is_nothing_to_show(self, logger):
         journal = FakeJournal()
         service = _make(logger, journal, started_at=None)
+        asked = service.get_update_output(None)
 
-        answer = await service.get_update_output(None)
+        with pytest.raises(NothingToShow) as refused:
+            await asked
 
-        assert answer["success"] is False
-        assert answer["reason"] == "not_found"
+        assert refused.value.reason == "not_found"
         assert journal.reads == []
 
 
@@ -239,49 +241,63 @@ class TestWhatIsNotAnswered:
     async def test_a_stamp_that_is_not_the_standing_record_s_is_nothing_to_show(self, logger):
         journal = FakeJournal(_ROLLBACK_JOURNAL)
         service = _make(logger, journal, record=_record())
+        asked = service.get_update_output("2026-09-29T08:00:00Z")
 
-        answer = await service.get_update_output("2026-09-29T08:00:00Z")
+        with pytest.raises(NothingToShow) as refused:
+            await asked
 
-        assert (answer["success"], answer["reason"]) == (False, "not_found")
+        assert refused.value.reason == "not_found"
         assert journal.reads == []
 
     async def test_a_record_that_no_longer_stands_is_nothing_to_show(self, logger):
         leftover = UpdateFailure(_TRIED, "0.9.0", _STAMP)
         service = _make(logger, FakeJournal(_ROLLBACK_JOURNAL), record=leftover)
+        asked = service.get_update_output(_STAMP)
 
-        assert (await service.get_update_output(_STAMP))["reason"] == "not_found"
+        with pytest.raises(NothingToShow):
+            await asked
 
     async def test_no_record_at_all_is_nothing_to_show(self, logger):
         service = _make(logger, FakeJournal(_ROLLBACK_JOURNAL))
+        asked = service.get_update_output(_STAMP)
 
-        assert (await service.get_update_output(_STAMP))["reason"] == "not_found"
+        with pytest.raises(NothingToShow):
+            await asked
 
     async def test_nothing_to_show_is_logged_with_what_was_asked_about(self, logger, caplog):
         service = _make(logger, FakeJournal(_ROLLBACK_JOURNAL))
+        asked = service.get_update_output(_STAMP)
 
-        with caplog.at_level(logging.INFO, logger=logger.name):
-            await service.get_update_output(_STAMP)
+        with caplog.at_level(logging.INFO, logger=logger.name), pytest.raises(NothingToShow):
+            await asked
 
         assert f"no standing record is stamped {_STAMP}" in caplog.text
 
     @pytest.mark.parametrize("value", [7, ["2026"], {"at": 1}, True])
     async def test_an_argument_that_is_neither_a_stamp_nor_none_is_refused_and_logged(self, logger, caplog, value):
-        with caplog.at_level(logging.WARNING, logger=logger.name):
-            answer = await _make(logger, FakeJournal()).get_update_output(value)
+        asked = _make(logger, FakeJournal()).get_update_output(value)
 
-        assert answer == {"success": False, "reason": "invalid_value", "message": "Invalid record"}
+        with caplog.at_level(logging.WARNING, logger=logger.name), pytest.raises(Refused) as refused:
+            await asked
+
+        assert (refused.value.reason, refused.value.message) == ("invalid_value", "Invalid record")
         assert repr(value) in caplog.text
 
     async def test_a_journal_that_cannot_be_read_is_said_and_logged(self, logger, caplog):
         service = _make(logger, FakeJournal(raises=OSError("journalctl exited with status 1")), record=_record())
+        asked = service.get_update_output(_STAMP)
 
-        with caplog.at_level(logging.WARNING, logger=logger.name):
-            answer = await service.get_update_output(_STAMP)
+        with caplog.at_level(logging.WARNING, logger=logger.name), pytest.raises(Refused) as refused:
+            await asked
 
-        assert answer == {"success": False, "reason": "journal_unreadable", "message": "The journal could not be read"}
+        assert (refused.value.reason, refused.value.message) == ("journal_unreadable", "The journal could not be read")
         assert "the journal could not be read" in caplog.text
 
     async def test_a_journal_that_gave_no_answer_in_time_is_one_that_could_not_be_read(self, logger):
         service = _make(logger, FakeJournal(raises=TimeoutError("journalctl did not answer")), started_at=_STAMP)
+        asked = service.get_update_output(None)
 
-        assert (await service.get_update_output(None))["reason"] == "journal_unreadable"
+        with pytest.raises(Refused) as refused:
+            await asked
+
+        assert refused.value.reason == "journal_unreadable"
