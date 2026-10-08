@@ -19,6 +19,7 @@ import type {
   PlatformSystemAnswer,
   SourceHealthFinding,
 } from "../types/emulatorSources";
+import type { RommErrorCode } from "../types/api";
 
 const SOURCE_NAMES: ReadonlyMap<string, string> = new Map([
   ["retrodeck", "RetroDECK"],
@@ -188,6 +189,23 @@ export function sealedCatalogueSentence(kind: string): string {
 /** Why a platform has no system yet: its ids are not kept, and RomM, which gives them, cannot be reached. */
 const ROMM_UNREACHABLE_SENTENCE = "RomM cannot be reached, so Tender does not know this platform's system yet.";
 
+/** Why a platform has no system yet: its ids are not kept, and RomM refused the read that gives them. */
+const ROMM_REFUSED_SENTENCE = "RomM did not give this platform's ids, so Tender does not know its system yet.";
+
+/** Every reason a RomM read can fail with: a `Record` so that a code added to {@link RommErrorCode} must be added here. */
+const ROMM_READ_FAILURES: Record<RommErrorCode, true> = {
+  server_unreachable: true,
+  auth_failed: true,
+  not_found: true,
+  unsupported: true,
+  unknown: true,
+  version_error: true,
+  stale_conflict: true,
+  stale_preview: true,
+  config_error: true,
+  in_progress: true,
+};
+
 /** Why a platform's games cannot be downloaded: the source asked has no system for it. */
 export function noPlatformSystemSentence(kind: string, platform: string): string {
   return `${sourceName(kind)} has no system for ${platform}, so Tender cannot download its games.`;
@@ -220,8 +238,8 @@ function platformSystemSentence(reason: EmulatorDataReason | null, answer: Platf
  * the answer's `reason`, its answering `source` and the platform's system
  * there. Never "no emulator": every one of these is a list that could not be
  * established. An answer with no source is one no source answered, whatever
- * its reason says, so it reads as no source found — except RomM being
- * unreachable, which stands whether or not a source answers.
+ * its reason says, so it reads as no source found — except a failed read of
+ * RomM for the platform's ids, which stands whether or not a source answers.
  */
 export function emulatorDataReasonSentence(
   reason: EmulatorDataReason | null,
@@ -230,6 +248,7 @@ export function emulatorDataReasonSentence(
 ): string {
   if (reason === "switched_off") return "Every emulator source is switched off in Settings › Emulator sources.";
   if (reason === "server_unreachable") return ROMM_UNREACHABLE_SENTENCE;
+  if (reason !== null && Object.prototype.hasOwnProperty.call(ROMM_READ_FAILURES, reason)) return ROMM_REFUSED_SENTENCE;
   if (reason === "no_source" || source === null) {
     return "No emulator source was found, so Tender cannot tell which emulators this platform offers.";
   }

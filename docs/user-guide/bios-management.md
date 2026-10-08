@@ -282,7 +282,8 @@ and the row you focus is the one the right-hand pane describes.
    _system_ is switched off in _source_."**, naming the source that answers — see
    [Managing Games](managing-games.md#downloading-roms). Where Tender has not learned a platform's system yet and RomM
    cannot be reached to tell it, the line, a game's BIOS tab and its emulator menu say **"RomM cannot be reached, so
-   Tender does not know this platform's system yet."**
+   Tender does not know this platform's system yet."**; where RomM answers but does not give it — a failed sign-in, say
+   — they say **"RomM did not give this platform's ids, so Tender does not know its system yet."**
 7. **BIOS files** states how many required files are ready (e.g. "1 / 2 required") when the system needs any, and
    otherwise names the emulator and says it marks none of its BIOS files as required. Under that heading is the same
    sentence the game page shows, with your RomM library's own inventory behind it (e.g. "(3/5 RomM library files)").

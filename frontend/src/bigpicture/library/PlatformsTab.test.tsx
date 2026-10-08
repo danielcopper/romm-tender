@@ -1117,6 +1117,25 @@ describe("Library › Platforms", () => {
       );
     });
 
+    it("says RomM did not give the platform's ids where it refused them", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [],
+          emulator_data_available: false,
+          emulator_data_reason: "auth_failed",
+          platform_system: null,
+          active_core_label: null,
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "RomM did not give this platform's ids, so Tender does not know its system yet.",
+      );
+      expect(container.textContent).not.toContain("emulator list is not established");
+    });
+
     it("says which system is switched off", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({

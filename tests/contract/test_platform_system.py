@@ -14,7 +14,7 @@ import os
 import pytest
 
 from domain.platform_system import FOUND, NO_SYSTEM, PLATFORM_IDS_KEY, SWITCHED_OFF, PlatformIds, decode_platform_ids
-from lib.errors import RommConnectionError
+from lib.errors import RommAuthError, RommConnectionError
 
 from ._seed import enable_save_sync, seed_rom
 
@@ -163,3 +163,14 @@ async def test_the_next_read_with_rom_m_reachable_keeps_the_ids(harness):
     with harness.uow_factory() as uow:
         kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
     assert kept == {_SLUG: PlatformIds(igdb_id=24, tgdb_id=5, name="Game Boy Advance")}
+
+
+async def test_with_rom_m_refusing_the_read_the_pages_name_its_reason(harness):
+    _seed_server(harness)
+    harness.romm.list_platforms_side_effect = RommAuthError("401")
+
+    core = await harness.endpoints.get_system_core_info(_SLUG)
+
+    assert core["emulator_data_available"] is False
+    assert core["emulator_data_reason"] == "auth_failed"
+    assert core["emulator_source"] == {"kind": "retrodeck", "starts_games": True}

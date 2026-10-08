@@ -225,9 +225,12 @@ read fails, the question answers the reason `classify_error` gives it — `serve
 every other read that needs RomM does, and keeps nothing; the next read with RomM reachable keeps the ids. A game not
 downloaded then shows the offline state on its page (its save status, its BIOS tab reading unknown), and its emulator
 menu, its BIOS tab and the platform page say **"RomM cannot be reached, so Tender does not know this platform's system
-yet."**; a downloaded game keeps its recorded system and is not affected. The game page's two looks at the disk —
-whether a download's target is already taken, and whether the game is there under another name — must reach no network,
-so they never read the listing: for them a platform with no kept ids has no system, and they go quiet.
+yet."**; where RomM answered but refused the read for any other reason (`auth_failed`, `not_found`, `config_error`, …),
+they say **"RomM did not give this platform's ids, so Tender does not know its system yet."**, and the cause itself
+shows where Tender's connection state shows it; a downloaded game keeps its recorded system and is not affected. The
+game page's two looks at the disk — whether a download's target is already taken, and whether the game is there under
+another name — must reach no network, so they never read the listing: for them a platform with no kept ids has no
+system, and they go quiet.
 
 The platform page names the system taken with its source in its header line ([qam-panel.md](qam-panel.md#library)).
 

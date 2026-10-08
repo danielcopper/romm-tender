@@ -243,6 +243,15 @@ describe("emulatorDataReasonSentence", () => {
     expect(emulatorDataReasonSentence("server_unreachable", null, null)).toBe(sentence);
   });
 
+  it.each(["auth_failed", "not_found", "config_error", "unsupported", "unknown"] as const)(
+    "says RomM did not give the platform's ids where it refused them with %s",
+    (reason) => {
+      const sentence = "RomM did not give this platform's ids, so Tender does not know its system yet.";
+      expect(emulatorDataReasonSentence(reason, RETRODECK, null)).toBe(sentence);
+      expect(emulatorDataReasonSentence(reason, null, null)).toBe(sentence);
+    },
+  );
+
   it("names a source of a kind it does not know by its kind", () => {
     expect(emulatorDataReasonSentence("unavailable", { kind: "standalone_x", starts_games: false })).toBe(
       "standalone_x's emulator list is not established.",
