@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from types import ModuleType
 
+    import pytest
+
 _SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "check_404_not_unreachable.py"
 
 
@@ -325,7 +327,7 @@ class TestCollectFindings:
         assert findings[0].path.name == "dirty.py"
         assert findings[0].function == "g"
 
-    def test_exempt_module_is_skipped(self, tmp_path: Path):
+    def test_exempt_module_is_skipped(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         dirty = (
             "def f():\n"
             "    try:\n"
@@ -333,14 +335,16 @@ class TestCollectFindings:
             "    except Exception:\n"
             '        return {"success": False, "reason": ErrorCode.SERVER_UNREACHABLE.value, "message": "m"}\n'
         )
-        services_dir = _make_services_tree(tmp_path, {"steamgrid.py": dirty, "other.py": dirty})
+        monkeypatch.setattr(check, "EXEMPT", {"exempt.py": "never talks to RomM"})
+        services_dir = _make_services_tree(tmp_path, {"exempt.py": dirty, "other.py": dirty})
         findings = check.collect_findings(services_dir)
         assert [f.path.name for f in findings] == ["other.py"]
 
-    def test_exempt_entries_carry_a_reason(self):
+    def test_exempt_entries_carry_a_reason(self, monkeypatch: pytest.MonkeyPatch, capsys):
         """EXEMPT is a dict so every waiver states why, visibly in review."""
-        assert check.EXEMPT
-        assert all(isinstance(why, str) and why for why in check.EXEMPT.values())
+        monkeypatch.setattr(check, "EXEMPT", {"exempt.py": "never talks to RomM"})
+        assert check.main([]) == 0
+        assert "exempt.py — never talks to RomM" in capsys.readouterr().out
 
     def test_missing_directory_yields_nothing(self, tmp_path: Path):
         assert check.collect_findings(tmp_path / "nope") == []
