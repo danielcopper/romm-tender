@@ -12,6 +12,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 
 from domain.update_outcome import UpdateFailure, UpdateFailureKind
+from lib.errors import Refused
 from services.update_outcome import (
     FAILURE_DISMISSED_KEY,
     FAILURE_TOASTED_KEY,
@@ -472,11 +473,10 @@ class TestDismissingTheCard:
     def test_a_stamp_that_is_not_one_is_refused(self, logger, unusable):
         service, _, settings, persister = _make(logger)
 
-        assert service.dismiss_update_failure(unusable) == {
-            "success": False,
-            "reason": "invalid_value",
-            "message": "Invalid record",
-        }
+        with pytest.raises(Refused) as refused:
+            service.dismiss_update_failure(unusable)
+
+        assert (refused.value.reason, refused.value.message) == ("invalid_value", "Invalid record")
         assert FAILURE_DISMISSED_KEY not in settings
         assert persister.save_count == 0
 
@@ -545,9 +545,12 @@ class TestTheFailureToast:
     async def test_a_stamp_that_is_not_one_is_refused_and_records_nothing(self, logger, stamp):
         service, factory, _, _ = _make(logger, running="1.2.3", record=_Record(_FAILURE))
 
-        answer = await service.acknowledge_update_failure_toast(stamp)
+        acknowledgement = service.acknowledge_update_failure_toast(stamp)
 
-        assert answer == {"success": False, "reason": "invalid_value", "message": "Invalid record"}
+        with pytest.raises(Refused) as refused:
+            await acknowledgement
+
+        assert (refused.value.reason, refused.value.message) == ("invalid_value", "Invalid record")
         with factory() as uow:
             assert uow.kv_config.get(FAILURE_TOASTED_KEY) is None
 

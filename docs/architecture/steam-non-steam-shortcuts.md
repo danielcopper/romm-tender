@@ -84,6 +84,19 @@ Pass the raw path:
 SteamClient.Apps.SetShortcutExe(appId, "/home/deck/.local/bin/tender-rom-launcher");
 ```
 
+### Launch options pass through a shell
+
+Steam runs a non-Steam shortcut's launch options through a shell, and the launcher receives what that shell made of
+them. Measured on the reference device: a `$HOME` inside double quotes in the launch options reached the program
+expanded, and a `$(…)` inside them was run. Double quotes therefore do not keep a file name literal — `$`, backticks and
+`$(…)` in it are still expanded.
+
+So `build_launch_options` (`backend/domain/shortcut_data.py`) puts the ROM path in **single** quotes, writing a `'`
+inside it as `'\''`; nothing inside single quotes is expanded, and the launched program receives the path exactly as the
+file is named. Only the path is quoted that way: the invocation before it is Tender's own text, and its `-e "…"` is
+meant for the shell as written. `TestTheShellHandsThePathOverAsNamed` in `tests/domain/test_shortcut_data.py` runs built
+launch options through `sh -c` and checks the arguments the program receives.
+
 ### Updating existing shortcuts
 
 Steam **assigns** a shortcut's `appId` when `AddShortcut` creates it, and that `appId` is **stable for the shortcut's
@@ -371,7 +384,7 @@ Each entry has these key fields:
 | `AppName`       | string       | Display name                                                                                                                                                                                                                                                                    |
 | `Exe`           | string       | Executable path. `AddShortcut`-created entries store it **unquoted** (on-device inspection) — the API handles any quoting internally                                                                                                                                            |
 | `StartDir`      | string       | Start directory. Stored **unquoted** for `AddShortcut`-created entries                                                                                                                                                                                                          |
-| `LaunchOptions` | string       | The full launch command the `bin/tender-rom-launcher` exec wrapper runs, e.g. `flatpak run --nosocket=wayland net.retrodeck.retrodeck "/path/to/game.iso"` — or `""` (placeholder) for an uninstalled ROM. No `romm:<id>` marker; ownership is detected by the exe path instead |
+| `LaunchOptions` | string       | The full launch command the `bin/tender-rom-launcher` exec wrapper runs, e.g. `flatpak run --nosocket=wayland net.retrodeck.retrodeck '/path/to/game.iso'` — or `""` (placeholder) for an uninstalled ROM. No `romm:<id>` marker; ownership is detected by the exe path instead |
 | `appid`         | signed int32 | Assigned by Steam when `AddShortcut` runs; stored as the signed int32 form (`to_signed_app_id`)                                                                                                                                                                                 |
 | `icon`          | string       | Icon path or hash                                                                                                                                                                                                                                                               |
 | `tags`          | object       | Steam collection tags. Tender manages collections via `collectionStore` (machine-scoped names like `RomM: N64 (steamdeck)`), not by writing this VDF field.                                                                                                                     |

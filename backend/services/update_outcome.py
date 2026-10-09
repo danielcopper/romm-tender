@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 from domain.update_install import INSTALLER_UNIT
 from domain.update_outcome import UpdateFailureKind, announced_update, standing_update_failure
+from lib.errors import Refused
 
 if TYPE_CHECKING:
     import asyncio
@@ -171,11 +172,11 @@ class UpdateOutcomeService:
         """Record that the panel raised the toast for the record stamped *rolled_back_at*, for every later start.
 
         Per record, so a later record owes its own toast. Idempotent. Returns
-        ``{"success": True}``, or the canonical failure shape for a stamp that
-        is not a non-empty string.
+        ``{"success": True}``, and refuses ``invalid_value`` for a stamp that is
+        not a non-empty string.
         """
         if not isinstance(rolled_back_at, str) or not rolled_back_at:
-            return {"success": False, "reason": "invalid_value", "message": "Invalid record"}
+            raise Refused("invalid_value", "Invalid record")
         await self._loop.run_in_executor(None, self._record_toast_io, rolled_back_at)
         return {"success": True}
 
@@ -211,11 +212,11 @@ class UpdateOutcomeService:
         """Record that the user waved away the card for the record stamped *rolled_back_at*.
 
         Per record and never global, so a later rollback raises the card again.
-        Idempotent. Returns ``{"success": True}``, or the canonical failure shape
+        Idempotent. Returns ``{"success": True}``, and refuses ``invalid_value``
         for a stamp that is not a non-empty string.
         """
         if not isinstance(rolled_back_at, str) or not rolled_back_at:
-            return {"success": False, "reason": "invalid_value", "message": "Invalid record"}
+            raise Refused("invalid_value", "Invalid record")
         self._settings[FAILURE_DISMISSED_KEY] = rolled_back_at
         self._settings_persister.save_settings()
         return {"success": True}

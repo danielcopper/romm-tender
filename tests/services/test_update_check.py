@@ -20,6 +20,7 @@ from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock, FakeSleeper
 
 from domain.update_release import LatestRelease, ReleaseTarball, UpdateCheck, encode_update_check
+from lib.errors import Refused
 from services.update_check import (
     DISMISSED_KEY,
     ENABLED_KEY,
@@ -397,11 +398,10 @@ class TestDismissal:
     def test_a_version_that_is_not_one_is_refused(self, unusable):
         service, _, settings, persister = _make()
 
-        assert service.dismiss_update_notice(unusable) == {
-            "success": False,
-            "reason": "invalid_value",
-            "message": "Invalid version",
-        }
+        with pytest.raises(Refused) as refused:
+            service.dismiss_update_notice(unusable)
+
+        assert (refused.value.reason, refused.value.message) == ("invalid_value", "Invalid version")
         assert DISMISSED_KEY not in settings
         assert persister.save_count == 0
 
@@ -473,11 +473,10 @@ class TestTheSwitch:
     def test_a_value_that_is_not_a_boolean_is_refused(self, unusable):
         service, _, settings, persister = _make()
 
-        assert service.set_update_check_enabled(unusable) == {
-            "success": False,
-            "reason": "invalid_value",
-            "message": "Invalid value",
-        }
+        with pytest.raises(Refused) as refused:
+            service.set_update_check_enabled(unusable)
+
+        assert (refused.value.reason, refused.value.message) == ("invalid_value", "Invalid value")
         assert ENABLED_KEY not in settings
         assert persister.save_count == 0
 
@@ -1056,22 +1055,27 @@ class TestTheAvailableToast:
         service, _, _, _ = _make(latest=_release("0.35.0"), uow_factory=uow_factory)
         await service.get_update_notice()
 
-        answer = await service.acknowledge_update_available_toast("0.34.0")
+        stale = service.acknowledge_update_available_toast("0.34.0")
 
-        assert answer == {
-            "success": False,
-            "reason": "version_changed",
-            "message": "Not the release the last check stored",
-        }
+        with pytest.raises(Refused) as refused:
+            await stale
+
+        assert (refused.value.reason, refused.value.message) == (
+            "version_changed",
+            "Not the release the last check stored",
+        )
         assert _toasted(uow_factory) is None
         assert (await service.get_update_notice())["toast_owed"] is True
 
     async def test_an_acknowledgement_before_any_check_is_refused(self):
         service, _, _, _ = _make()
 
-        answer = await service.acknowledge_update_available_toast("0.34.0")
+        early = service.acknowledge_update_available_toast("0.34.0")
 
-        assert answer["reason"] == "version_changed"
+        with pytest.raises(Refused) as refused:
+            await early
+
+        assert refused.value.reason == "version_changed"
 
     @pytest.mark.parametrize("unusable", [None, "", 3, ["0.34.0"], True])
     async def test_a_version_that_is_not_one_is_refused(self, unusable):
@@ -1079,11 +1083,12 @@ class TestTheAvailableToast:
         service, _, _, _ = _make(latest=_release("0.34.0"), uow_factory=uow_factory)
         await service.get_update_notice()
 
-        assert await service.acknowledge_update_available_toast(unusable) == {
-            "success": False,
-            "reason": "invalid_value",
-            "message": "Invalid version",
-        }
+        refusal = service.acknowledge_update_available_toast(unusable)
+
+        with pytest.raises(Refused) as refused:
+            await refusal
+
+        assert (refused.value.reason, refused.value.message) == ("invalid_value", "Invalid version")
         assert _toasted(uow_factory) is None
 
     async def test_the_pushed_notice_says_whether_the_toast_is_owed(self):
@@ -1193,22 +1198,27 @@ class TestTheSeenRelease:
         service, _, _, _ = _make(latest=_release("0.35.0"), uow_factory=uow_factory)
         await service.get_update_notice()
 
-        answer = await service.mark_update_available_seen("0.34.0")
+        stale = service.mark_update_available_seen("0.34.0")
 
-        assert answer == {
-            "success": False,
-            "reason": "version_changed",
-            "message": "Not the release the last check stored",
-        }
+        with pytest.raises(Refused) as refused:
+            await stale
+
+        assert (refused.value.reason, refused.value.message) == (
+            "version_changed",
+            "Not the release the last check stored",
+        )
         assert _seen(uow_factory) is None
         assert (await service.get_update_notice())["seen"] is False
 
     async def test_seen_before_any_check_is_refused(self):
         service, _, _, _ = _make()
 
-        answer = await service.mark_update_available_seen("0.34.0")
+        early = service.mark_update_available_seen("0.34.0")
 
-        assert answer["reason"] == "version_changed"
+        with pytest.raises(Refused) as refused:
+            await early
+
+        assert refused.value.reason == "version_changed"
 
     @pytest.mark.parametrize("unusable", [None, "", 3, ["0.34.0"], True])
     async def test_a_version_that_is_not_one_is_refused(self, unusable):
@@ -1216,11 +1226,12 @@ class TestTheSeenRelease:
         service, _, _, _ = _make(latest=_release("0.34.0"), uow_factory=uow_factory)
         await service.get_update_notice()
 
-        assert await service.mark_update_available_seen(unusable) == {
-            "success": False,
-            "reason": "invalid_value",
-            "message": "Invalid version",
-        }
+        refusal = service.mark_update_available_seen(unusable)
+
+        with pytest.raises(Refused) as refused:
+            await refusal
+
+        assert (refused.value.reason, refused.value.message) == ("invalid_value", "Invalid version")
         assert _seen(uow_factory) is None
 
     async def test_the_pushed_notice_says_whether_the_release_was_seen(self):

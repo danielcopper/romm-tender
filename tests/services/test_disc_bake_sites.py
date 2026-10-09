@@ -280,14 +280,14 @@ class TestInstallRecorderBakeSite:
         recorder = self._recorder(FakeUnitOfWorkFactory(uow=uow), disc_resolver)
         app_id, launch_options = recorder.do_resolve_launch_bake(1, {}, _DISC1_PATH)
         assert app_id == 1234
-        assert launch_options.endswith(f'"{_DISC2_PATH}"')
+        assert launch_options.endswith(f"'{_DISC2_PATH}'")
 
     def test_resolve_launch_bake_unpinned_defaults_to_disc_1(self, disc_resolver):
         uow = FakeUnitOfWork()
         _seed_multi_disc(uow, rom_id=1, selected_disc=None, app_id=1234)
         recorder = self._recorder(FakeUnitOfWorkFactory(uow=uow), disc_resolver)
         _app_id, launch_options = recorder.do_resolve_launch_bake(1, {}, _DISC1_PATH)
-        assert launch_options.endswith(f'"{_DISC1_PATH}"')
+        assert launch_options.endswith(f"'{_DISC1_PATH}'")
 
     def test_resolve_launch_bake_returns_the_empty_command_for_an_unlaunchable_install(self, disc_resolver):
         # download_complete's re-bake reads through the same seam, so the freshly

@@ -427,7 +427,7 @@ and the folder rule applies only when disc resolution returned `file_path`.
 (`game="$game/$(basename "$game")"`, `run_game.sh:63-67`), so the standalone `-e "%EMULATOR_RPCS3% --no-gui %ROM%"` form
 handed a folder points RPCS3 at a nonexistent `…/<Game>/<Game>` and never boots. A folder-boot standalone is therefore
 baked as a **direct sandbox invocation** that bypasses `run_game.sh`:
-`flatpak run --nosocket=wayland --command=<launcher> net.retrodeck.retrodeck <args> "<folder>"`, running the emulator's
+`flatpak run --nosocket=wayland --command=<launcher> net.retrodeck.retrodeck <args> '<folder>'`, running the emulator's
 own launcher inside the sandbox. `ActiveCoreResolver.active_emulator_for_rom` makes this rewrite: when the resolved
 emulator is a standalone and the ROM's install is a folder-boot layout (same `folder_boot_root` fact), it resolves the
 emulator's sandbox launcher via the `SandboxLauncherFn` seam (`EsFindRulesAdapter.resolve_sandbox_launcher` → the

@@ -1,7 +1,13 @@
 """Tests for domain/shortcut_data.py pure functions."""
 
+import json
 import os
 import shlex
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
 
 from domain.shortcut_data import (
     RETRODECK_INVOCATION,
@@ -147,12 +153,12 @@ class TestBuildLaunchOptions:
 
     def test_quotes_path(self):
         assert build_launch_options(RETRODECK_INVOCATION, "/roms/n64/zelda.z64") == (
-            'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/n64/zelda.z64"'
+            "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/n64/zelda.z64'"
         )
 
     def test_quotes_path_with_spaces(self):
         result = build_launch_options(RETRODECK_INVOCATION, "/roms/dc/My Game.chd")
-        assert result == 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/dc/My Game.chd"'
+        assert result == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/dc/My Game.chd'"
 
     def test_empty_path_yields_no_launch_command(self):
         # An empty path is the "no launch target" signal — not downloaded, or
@@ -176,14 +182,13 @@ class TestBuildLaunchOptions:
         result = build_launch_options(invocation, "/run/media/deck/Emulation/retrodeck/roms/ps3/Metal Gear Solid 4")
         assert result == (
             "flatpak run --nosocket=wayland --command=/app/retrodeck/components/rpcs3/component_launcher.sh "
-            'net.retrodeck.retrodeck --no-gui "/run/media/deck/Emulation/retrodeck/roms/ps3/Metal Gear Solid 4"'
+            "net.retrodeck.retrodeck --no-gui '/run/media/deck/Emulation/retrodeck/roms/ps3/Metal Gear Solid 4'"
         )
 
-    # The tests below use shlex.split(posix=True) as a reference POSIX /
-    # ``\"``-honoring tokenizer: it proves the escaping is internally correct (a
-    # server-controlled ROM filename round-trips to exactly ONE final argv token).
-    # Parity with Steam's actual (closed-source) launch-time tokenizer is verified
-    # on-device, not here.
+    # The tests below use shlex.split(posix=True) as a reference POSIX
+    # tokenizer: a server-controlled ROM filename round-trips to exactly ONE
+    # final argv token. What a real shell hands the launched program is
+    # TestTheShellHandsThePathOverAsNamed's to show.
 
     def test_quote_in_path_round_trips_to_one_arg(self):
         path = '/roms/gba/Game".gba'
@@ -215,8 +220,8 @@ class TestBuildLaunchOptions:
         path = "/roms/gba/dir\\"  # ends in one literal backslash
         result = build_launch_options(RETRODECK_INVOCATION, path)
         tokens = shlex.split(result, posix=True)
-        # Without escaping, the trailing \ would escape the closing " and merge
-        # the token with whatever follows; backslash-escaping keeps it one arg.
+        # Inside single quotes a backslash is literal, so a trailing \ cannot
+        # escape the closing quote and merge the token with whatever follows.
         assert tokens[-1] == path
         assert tokens == ["flatpak", "run", "--nosocket=wayland", "net.retrodeck.retrodeck", path]
 
@@ -249,6 +254,75 @@ class TestBuildLaunchOptions:
         assert shlex.split(result, posix=True)[-1] == path
 
 
+class TestTheShellHandsThePathOverAsNamed:
+    """The launch options run through a real ``sh -c``, standing in for the shell Steam hands them to.
+
+    A ``flatpak`` stub first on ``PATH`` records the argv it is started with,
+    so each case reads what the launched program receives rather than what a
+    tokenizer in this process makes of the string.
+    """
+
+    @staticmethod
+    def _argv_after_the_shell(tmp_path: Path, launch_options: str) -> list[str]:
+        stub = tmp_path / "bin" / "flatpak"
+        stub.parent.mkdir()
+        stub.write_text(f"#!{sys.executable}\nimport json, sys\nsys.stdout.write(json.dumps(sys.argv[1:]))\n")
+        stub.chmod(0o755)
+        result = subprocess.run(
+            ["sh", "-c", launch_options],
+            env={**os.environ, "PATH": f"{stub.parent}{os.pathsep}{os.environ['PATH']}"},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        return json.loads(result.stdout)
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/roms/dc/My Game.chd",
+            "/roms/gba/$HOME.gba",
+            "/roms/gba/${HOME}.gba",
+            "/roms/gba/a`echo X`b.gba",
+            "/roms/gba/a`b.gba",
+            "/roms/gba/$(echo X).gba",
+            "/roms/gba/Link's Awakening.gba",
+            "/roms/gba/it's 'quoted'.gba",
+            "'",
+            '/roms/gba/Game".gba',
+            "/roms/gba/a\\b.gba",
+            "/roms/gba/dir\\",
+            '/roms/gba/a\\"b.gba',
+            "/roms/psx/Final Fantasy VII (Disc 1).chd",
+            "/roms/snes/Tom & Jerry.sfc",
+            "/roms/snes/Hey!.sfc",
+            "/roms/snes/a;b.sfc",
+            "/roms/snes/*.sfc",
+        ],
+    )
+    def test_the_launched_program_receives_the_path_as_named(self, tmp_path, path):
+        launch_options = build_launch_options(RETRODECK_INVOCATION, path)
+        assert self._argv_after_the_shell(tmp_path, launch_options) == [
+            "run",
+            "--nosocket=wayland",
+            "net.retrodeck.retrodeck",
+            path,
+        ]
+
+    def test_the_invocation_s_own_quoting_reaches_the_program_intact(self, tmp_path):
+        invocation = resolve_emulator_invocation({"id": 1}, EmulatorInvocation.libretro("mgba"))
+        path = "/roms/gba/Link's $HOME.gba"
+        assert self._argv_after_the_shell(tmp_path, build_launch_options(invocation, path)) == [
+            "run",
+            "--nosocket=wayland",
+            "net.retrodeck.retrodeck",
+            "-e",
+            "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/mgba.so %ROM%",
+            path,
+        ]
+
+
 class TestRetroDeckStartsWithoutItsWaylandSocket:
     """Every RetroDECK launch command starts the Flatpak with ``--nosocket=wayland``.
 
@@ -267,7 +341,7 @@ class TestRetroDeckStartsWithoutItsWaylandSocket:
 
     def test_the_plain_command(self):
         result = build_launch_options(resolve_emulator_invocation({"id": 1}), "/roms/n64/zelda.z64")
-        assert result == 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/n64/zelda.z64"'
+        assert result == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/n64/zelda.z64'"
         assert self._flatpak_options(result) == ["--nosocket=wayland"]
 
     def test_the_standalone_e_command(self):
@@ -275,7 +349,7 @@ class TestRetroDeckStartsWithoutItsWaylandSocket:
         result = build_launch_options(resolve_emulator_invocation({"id": 1}, emulator), "/roms/ps2/gt4.iso")
         assert result == (
             "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
-            '-e "%EMULATOR_PCSX2% -batch %ROM%" "/roms/ps2/gt4.iso"'
+            "-e \"%EMULATOR_PCSX2% -batch %ROM%\" '/roms/ps2/gt4.iso'"
         )
         assert self._flatpak_options(result) == ["--nosocket=wayland"]
 
@@ -284,7 +358,7 @@ class TestRetroDeckStartsWithoutItsWaylandSocket:
         result = build_launch_options(resolve_emulator_invocation({"id": 1}, emulator), "/roms/snes/mario.sfc")
         assert result == (
             "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
-            '-e "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/snes9x.so %ROM%" "/roms/snes/mario.sfc"'
+            "-e \"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/snes9x.so %ROM%\" '/roms/snes/mario.sfc'"
         )
         assert self._flatpak_options(result) == ["--nosocket=wayland"]
 
@@ -293,7 +367,7 @@ class TestRetroDeckStartsWithoutItsWaylandSocket:
         result = build_launch_options(resolve_emulator_invocation({"id": 1}, emulator), "/roms/ps3/Game")
         assert result == (
             f"flatpak run --nosocket=wayland --command={self._LAUNCHER} "
-            'net.retrodeck.retrodeck --no-gui "/roms/ps3/Game"'
+            "net.retrodeck.retrodeck --no-gui '/roms/ps3/Game'"
         )
         assert self._flatpak_options(result) == ["--nosocket=wayland", f"--command={self._LAUNCHER}"]
 
@@ -340,7 +414,7 @@ class TestBuildShortcutsData:
         result = build_shortcuts_data(roms, _LAUNCHER, {1: "/roms/n64/gamea.z64"}, {})
         assert (
             result[0]["launch_options"]
-            == 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/n64/gamea.z64"'
+            == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/n64/gamea.z64'"
         )
 
     def test_installed_rom_path_with_spaces_is_quoted(self):
@@ -348,7 +422,7 @@ class TestBuildShortcutsData:
         result = build_shortcuts_data(roms, _LAUNCHER, {7: "/roms/dc/My Game.chd"}, {})
         assert (
             result[0]["launch_options"]
-            == 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/dc/My Game.chd"'
+            == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/dc/My Game.chd'"
         )
 
     def test_uninstalled_rom_gets_empty_launch_options(self):
@@ -364,7 +438,7 @@ class TestBuildShortcutsData:
         result = build_shortcuts_data(roms, _LAUNCHER, {1: "/roms/snes/installed.sfc"}, {})
         assert (
             result[0]["launch_options"]
-            == 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/snes/installed.sfc"'
+            == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/snes/installed.sfc'"
         )
         assert result[1]["launch_options"] == ""
 
@@ -394,7 +468,7 @@ class TestBuildShortcutsData:
         assert result[0]["launch_options"] == (
             "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
             '-e "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/pcsx_rearmed_libretro.so %ROM%" '
-            '"/roms/psx/game.chd"'
+            "'/roms/psx/game.chd'"
         )
 
     def test_installed_rom_with_standalone_override_bakes_e_form(self):
@@ -408,7 +482,7 @@ class TestBuildShortcutsData:
         )
         assert result[0]["launch_options"] == (
             'flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "%EMULATOR_RPCS3% --no-gui %ROM%" '
-            '"/roms/ps3/game/PS3_GAME/USRDIR/EBOOT.BIN"'
+            "'/roms/ps3/game/PS3_GAME/USRDIR/EBOOT.BIN'"
         )
 
     def test_installed_rom_absent_from_overrides_is_plain(self):
@@ -417,7 +491,7 @@ class TestBuildShortcutsData:
         result = build_shortcuts_data(
             roms, _LAUNCHER, {1: "/roms/n64/g.z64"}, {2: EmulatorInvocation.libretro("other_libretro")}
         )
-        assert result[0]["launch_options"] == 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/n64/g.z64"'
+        assert result[0]["launch_options"] == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/n64/g.z64'"
         assert "-e" not in result[0]["launch_options"]
 
     def test_uninstalled_rom_with_override_still_empty(self):

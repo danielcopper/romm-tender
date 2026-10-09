@@ -121,7 +121,7 @@ async def test_ps3_folder_install_bakes_direct_sandbox_invocation(harness):
     # Direct sandbox invocation over the game folder; never the nested EBOOT, never run_game -e.
     assert (
         launch_options
-        == f'flatpak run --nosocket=wayland --command={launcher} net.retrodeck.retrodeck --no-gui "{rom_dir}"'
+        == f"flatpak run --nosocket=wayland --command={launcher} net.retrodeck.retrodeck --no-gui '{rom_dir}'"
     )
     assert "EBOOT.BIN" not in launch_options
     assert "-e " not in launch_options

@@ -586,7 +586,7 @@ class TestAdopt:
         result = await h.service.adopt_existing_rom(_ROM_ID)
 
         assert result["app_id"] == 1042
-        assert result["launch_options"].endswith('"/roms/snes/Game.sfc"')
+        assert result["launch_options"].endswith("'/roms/snes/Game.sfc'")
         rom = h.uow.roms.get(_ROM_ID)
         assert rom is not None
         assert rom.applied_launch_options == result["launch_options"]

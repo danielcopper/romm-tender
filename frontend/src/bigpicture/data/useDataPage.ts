@@ -487,7 +487,7 @@ export function useDataPage(): DataPageState {
         } else {
           // Reset every kept shortcut's now-stale launch command to the uninstalled
           // "" placeholder so a raced-past not_installed can't exec a stale
-          // `flatpak run … "<deleted path>"` into a deleted path. Batched to avoid
+          // `flatpak run … '<deleted path>'` into a deleted path. Batched to avoid
           // serializing the per-shortcut confirm-poll timeouts; best-effort — a
           // failed confirm is logged, not fatal.
           await withPruneLease(

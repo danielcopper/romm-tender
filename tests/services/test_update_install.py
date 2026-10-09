@@ -36,7 +36,15 @@ from domain.update_install import (
 )
 from domain.update_outcome import UpdateFailure, UpdateFailureKind
 from domain.update_release import LatestRelease, ReleaseTarball
-from services.update_install import UpdateInstallService, UpdateInstallServiceConfig
+from lib.errors import Refused
+from services.update_install import (
+    NotOffered,
+    UpdateInProgress,
+    UpdateInstallService,
+    UpdateInstallServiceConfig,
+    UpdateWaiting,
+    VersionChanged,
+)
 from tests._conflict_rules import call_sites_with_rule, claim_names_in_source, claims_held_on_the_prune_conflicts
 
 if TYPE_CHECKING:
@@ -395,8 +403,10 @@ class TestWaitReasons:
         rig.steam.raises = RuntimeError("debugger gone")
 
         assert (await rig.service.get_update_install_state())["wait_reasons"] == [{"reason": "running_apps_unknown"}]
-        answer = await rig.service.install_update(_OFFERED)
-        assert (answer["reason"], answer["wait_reasons"]) == ("update_waiting", [{"reason": "running_apps_unknown"}])
+        press = rig.service.install_update(_OFFERED)
+        with pytest.raises(UpdateWaiting) as refused:
+            await press
+        assert refused.value.details == {"wait_reasons": [{"reason": "running_apps_unknown"}]}
 
     async def test_the_reload_limit_carries_the_time_it_frees_up(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path, frees_at=1_800_000_600.0)
@@ -411,11 +421,10 @@ class TestWaitReasons:
 
         state = await rig.service.get_update_install_state()
         assert state["wait_reasons"] == [{"reason": "interface_reload_limit_unknown"}]
-        answer = await rig.service.install_update(_OFFERED)
-        assert (answer["reason"], answer["wait_reasons"]) == (
-            "update_waiting",
-            [{"reason": "interface_reload_limit_unknown"}],
-        )
+        press = rig.service.install_update(_OFFERED)
+        with pytest.raises(UpdateWaiting) as refused:
+            await press
+        assert refused.value.details == {"wait_reasons": [{"reason": "interface_reload_limit_unknown"}]}
         assert rig.service.is_update_in_progress() is False
 
     async def test_every_reason_that_holds_is_named(self, rigs, tmp_path):
@@ -473,10 +482,12 @@ class TestWaitReasons:
     async def test_a_claim_refuses_the_press_too(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path)
         rig.work.claims = ["adopt_existing_rom"]
+        press = rig.service.install_update(_OFFERED)
 
-        answer = await rig.service.install_update(_OFFERED)
+        with pytest.raises(UpdateWaiting) as refused:
+            await press
 
-        assert (answer["reason"], answer["wait_reasons"]) == ("update_waiting", [{"reason": "other_work"}])
+        assert refused.value.details == {"wait_reasons": [{"reason": "other_work"}]}
         assert rig.service.is_update_in_progress() is False
 
     @pytest.mark.parametrize("claim", sorted(READ_ONLY_CLAIMS))
@@ -502,58 +513,81 @@ class TestARefusedPress:
     async def test_a_press_while_work_is_in_flight_is_refused_with_every_reason(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path, apps=("A Game",))
         rig.work.save_sync = True
+        press = rig.service.install_update(_OFFERED)
 
-        answer = await rig.service.install_update(_OFFERED)
+        with pytest.raises(UpdateWaiting) as refused:
+            await press
 
-        assert answer["success"] is False
-        assert answer["reason"] == "update_waiting"
-        assert isinstance(answer["message"], str)
-        assert answer["message"]
-        assert answer["wait_reasons"] == [{"reason": "app_running", "apps": ["A Game"]}, {"reason": "save_sync"}]
+        assert refused.value.reason == "update_waiting"
+        assert isinstance(refused.value.message, str)
+        assert refused.value.message
+        assert refused.value.details == {
+            "wait_reasons": [{"reason": "app_running", "apps": ["A Game"]}, {"reason": "save_sync"}]
+        }
         assert rig.service.is_update_in_progress() is False
         assert rig.downloads.calls == []
+
+    async def test_a_waiting_press_holds_nothing_and_starts_no_attempt(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+        rig.work.save_sync = True
+        press = rig.service.install_update(_OFFERED)
+
+        with pytest.raises(UpdateWaiting):
+            await press
+
+        assert rig.service.is_update_in_progress() is False
+        assert (await rig.service.get_update_install_state())["attempt"] is None
+        assert rig.events.events == []
+        assert not os.path.exists(_record_path(tmp_path))
 
     async def test_the_press_takes_a_reading_of_its_own(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path)
         await rig.service.get_update_install_state()
         rig.steam.apps = ("Started since",)
+        press = rig.service.install_update(_OFFERED)
 
-        answer = await rig.service.install_update(_OFFERED)
+        with pytest.raises(UpdateWaiting):
+            await press
 
-        assert answer["reason"] == "update_waiting"
         assert rig.steam.readings == 2
 
     async def test_a_version_that_is_not_the_stored_one_is_refused(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path)
+        press = rig.service.install_update("1.2.0")
 
-        answer = await rig.service.install_update("1.2.0")
+        with pytest.raises(VersionChanged) as refused:
+            await press
 
-        assert answer["reason"] == "version_changed"
-        assert answer["success"] is False
+        assert refused.value.reason == "version_changed"
         assert rig.service.is_update_in_progress() is False
 
     @pytest.mark.parametrize("version", [None, 110, ""])
     async def test_a_version_off_the_wire_that_is_not_the_stored_string_is_refused(self, rigs, tmp_path, version):
         rig = await _built(rigs, tmp_path)
+        press = rig.service.install_update(version)
 
-        assert (await rig.service.install_update(version))["reason"] == "version_changed"
+        with pytest.raises(VersionChanged):
+            await press
 
     async def test_a_press_with_nothing_offered_is_refused(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path, installed_program=False)
+        press = rig.service.install_update(_OFFERED)
 
-        answer = await rig.service.install_update(_OFFERED)
+        with pytest.raises(NotOffered) as refused:
+            await press
 
-        assert answer["reason"] == "not_offered"
+        assert refused.value.reason == "not_offered"
         assert rig.steam.readings == 0
 
     async def test_a_second_press_while_an_attempt_runs_is_refused(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path)
         assert await rig.service.install_update(_OFFERED) == {"success": True}
+        second = rig.service.install_update(_OFFERED)
 
-        answer = await rig.service.install_update(_OFFERED)
+        with pytest.raises(UpdateInProgress) as refused:
+            await second
 
-        assert answer["reason"] == "update_in_progress"
-        assert answer["success"] is False
+        assert refused.value.reason == "update_in_progress"
 
     async def test_a_press_that_started_while_another_read_steam_is_refused(self, rigs, tmp_path):
         """Both presses pass the first check and wait on Steam together; the one answered second finds the rule held."""
@@ -565,11 +599,11 @@ class TestARefusedPress:
         await steam.both_waiting()
 
         steam.answer.set()
-        answers = await asyncio.gather(first, second)
+        answers = await asyncio.gather(first, second, return_exceptions=True)
 
         assert steam.readings == 2
-        assert sorted(answer["success"] for answer in answers) == [False, True]
-        assert {answer.get("reason") for answer in answers} == {None, "update_in_progress"}
+        assert [answer for answer in answers if not isinstance(answer, BaseException)] == [{"success": True}]
+        assert [type(answer) for answer in answers if isinstance(answer, BaseException)] == [UpdateInProgress]
 
 
 # ── The press, through to the installer ──────────────────────────────────────
@@ -1365,9 +1399,12 @@ class TestTheStoppedAttemptsToast:
     async def test_a_stamp_that_is_not_one_is_refused_and_records_nothing(self, rigs, tmp_path, stamp):
         rig = await _built(rigs, tmp_path)
 
-        answer = await rig.service.acknowledge_stopped_attempt_toast(stamp)
+        acknowledgement = rig.service.acknowledge_stopped_attempt_toast(stamp)
 
-        assert answer == {"success": False, "reason": "invalid_value", "message": "Invalid attempt"}
+        with pytest.raises(Refused) as refused:
+            await acknowledgement
+
+        assert (refused.value.reason, refused.value.message) == ("invalid_value", "Invalid attempt")
         with rig.uow_factory() as uow:
             assert uow.kv_config.get("update_stopped_toasted_at") is None
 
@@ -1519,9 +1556,12 @@ class TestTheAttemptsToast:
     async def test_a_number_that_is_not_one_is_refused(self, rigs, tmp_path, attempt):
         rig = await _built(rigs, tmp_path)
 
-        answer = await rig.service.acknowledge_update_attempt_toast(attempt)
+        acknowledgement = rig.service.acknowledge_update_attempt_toast(attempt)
 
-        assert answer == {"success": False, "reason": "invalid_value", "message": "Invalid attempt"}
+        with pytest.raises(Refused) as refused:
+            await acknowledgement
+
+        assert (refused.value.reason, refused.value.message) == ("invalid_value", "Invalid attempt")
 
 
 class TestTheFailedInstallersStart:

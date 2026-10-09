@@ -34,6 +34,7 @@ from domain.update_install import (
 )
 from domain.update_outcome import standing_update_failure
 from domain.version import is_newer_version
+from lib.errors import NamedRefused, Refused
 
 if TYPE_CHECKING:
     import logging
@@ -79,6 +80,35 @@ _INSTALLER_RAN = frozenset({InstallFailure.INSTALLER_STOPPED, InstallFailure.NEW
 # How often the installer's unit is asked whether it still runs. It stops this
 # process when it gets far enough, so the watch only ever sees it end early.
 _WATCH_SECONDS = 3.0
+
+
+class UpdateWaiting(NamedRefused):
+    """Something a restart would cut short is under way, so a press waits.
+
+    Raised with ``wait_reasons``, every reason as
+    :meth:`UpdateInstallService.get_update_install_state` words it. The panel
+    branches on this reason and takes those as what a press waits for.
+    """
+
+    reason = "update_waiting"
+
+
+class UpdateInProgress(NamedRefused):
+    """An attempt already holds the update rule. The panel branches on this reason."""
+
+    reason = "update_in_progress"
+
+
+class NotOffered(NamedRefused):
+    """No newer release is offered to install. The panel branches on this reason."""
+
+    reason = "not_offered"
+
+
+class VersionChanged(NamedRefused):
+    """The press names a release other than the one offered now. The panel branches on this reason."""
+
+    reason = "version_changed"
 
 
 class _AttemptFailedError(Exception):
@@ -338,11 +368,11 @@ class UpdateInstallService:
         """Record that the panel raised the toast for the stopped attempt started at *started_at*, for good.
 
         Per attempt, so a later one owes its own toast. Idempotent. Returns
-        ``{"success": True}``, or the canonical failure shape for a stamp that
-        is not a non-empty string.
+        ``{"success": True}``, and refuses ``invalid_value`` for a stamp that is
+        not a non-empty string.
         """
         if not isinstance(started_at, str) or not started_at:
-            return {"success": False, "reason": "invalid_value", "message": "Invalid attempt"}
+            raise Refused("invalid_value", "Invalid attempt")
         await self._loop.run_in_executor(None, self._record_toast_io, started_at)
         if self._stopped is not None and self._stopped.started_at == started_at:
             self._stopped_toast_owed = False
@@ -388,11 +418,11 @@ class UpdateInstallService:
         stopped attempt's raised toast, and where an installer that stopped
         was the pre-install check refusing it — its record unreadable when the
         attempt ended — that record's toast as raised. Returns ``{"success":
-        True}``, or the canonical failure shape for a number that is not an
+        True}``, and refuses ``invalid_value`` for a number that is not an
         integer.
         """
         if not isinstance(attempt, int) or isinstance(attempt, bool):
-            return {"success": False, "reason": "invalid_value", "message": "Invalid attempt"}
+            raise Refused("invalid_value", "Invalid attempt")
         current = self._attempt
         if attempt != self._attempt_toast_owed or current is None:
             return {"success": True}
@@ -470,42 +500,32 @@ class UpdateInstallService:
     async def install_update(self, version: object) -> dict[str, Any]:
         """Start installing *version*, the stored release; answer once the attempt is under way.
 
-        Refused, in the canonical failure shape, with ``reason``
-        ``update_in_progress`` while an attempt holds the rule, ``not_offered``
-        where :meth:`get_update_install_state` offers nothing,
-        ``version_changed`` where *version* is not the stored release, and
-        ``update_waiting`` — carrying ``wait_reasons`` as that method words
-        them — while anything a restart would cut short is under way. Every
-        reason is asked again here, with one reading of Steam's running apps.
-        Otherwise the update rule is held from this moment, the attempt runs on
-        by itself and reports through ``update_install_progress``, and the
-        answer is ``{"success": True}``.
+        Refuses with :class:`UpdateInProgress` while an attempt holds the rule,
+        :class:`NotOffered` where :meth:`get_update_install_state` offers
+        nothing, :class:`VersionChanged` where *version* is not the stored
+        release, and :class:`UpdateWaiting` while anything a restart would cut
+        short is under way. Every reason is asked again here, with one reading
+        of Steam's running apps. Otherwise the update rule is held from this
+        moment, the attempt runs on by itself and reports through
+        ``update_install_progress``, and the answer is ``{"success": True}``.
         """
-        if self.is_update_in_progress():
-            return self._in_progress_refusal()
+        self._refuse_while_in_progress()
         release = await self._offered_release()
         if release is None or release.tarball is None:
-            return {"success": False, "reason": "not_offered", "message": "No newer release is offered to install"}
+            raise NotOffered("No newer release is offered to install")
         if version != release.version:
-            return {
-                "success": False,
-                "reason": "version_changed",
-                "message": f"The release offered is now {release.version}",
-            }
+            raise VersionChanged(f"The release offered is now {release.version}")
         apps = await self._running_apps()
         limit = await self._reload_limit_waits()
         # Asked again after the readings: a second press may have started an
         # attempt while this one waited for them.
-        if self.is_update_in_progress():
-            return self._in_progress_refusal()
+        self._refuse_while_in_progress()
         waits = [*_app_waits(apps), *self._work_waits(), *limit]
         if waits:
-            return {
-                "success": False,
-                "reason": "update_waiting",
-                "message": "Something that an update would interrupt is still under way",
-                "wait_reasons": [wait.to_wire() for wait in waits],
-            }
+            raise UpdateWaiting(
+                "Something that an update would interrupt is still under way",
+                wait_reasons=[wait.to_wire() for wait in waits],
+            )
         self._holding = True
         self._presses += 1
         self._attempt_toast_owed = None
@@ -851,9 +871,9 @@ class UpdateInstallService:
         standing = standing_update_failure(record, self._current_version)
         return standing is not None and standing.attempted_version == version
 
-    @staticmethod
-    def _in_progress_refusal() -> dict[str, Any]:
-        return {"success": False, "reason": "update_in_progress", "message": "An update is already being installed"}
+    def _refuse_while_in_progress(self) -> None:
+        if self.is_update_in_progress():
+            raise UpdateInProgress("An update is already being installed")
 
 
 def _failure_at(attempt: InstallAttempt | None) -> InstallFailure:

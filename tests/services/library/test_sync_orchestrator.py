@@ -177,7 +177,7 @@ class TestShortcutDataFormat:
             {},
         )
         assert (
-            result[0]["launch_options"] == 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/n64/game.z64"'
+            result[0]["launch_options"] == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/n64/game.z64'"
         )
 
     def test_start_dir_is_parent_of_exe(self, library):
@@ -2163,7 +2163,7 @@ class TestDoSyncPerUnit:
         by_rom = {s["rom_id"]: s for s in unit_events[0]["shortcuts"]}
         assert (
             by_rom[10]["launch_options"]
-            == 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/n64/installed.z64"'
+            == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/n64/installed.z64'"
         )
         assert by_rom[11]["launch_options"] == ""
 
@@ -2206,11 +2206,11 @@ class TestDoSyncPerUnit:
         assert by_rom[10]["launch_options"] == (
             "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
             '-e "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/pcsx_rearmed_libretro.so %ROM%" '
-            '"/roms/psx/pinned.chd"'
+            "'/roms/psx/pinned.chd'"
         )
         assert (
             by_rom[11]["launch_options"]
-            == 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/psx/plain.chd"'
+            == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/psx/plain.chd'"
         )
         assert "-e" not in by_rom[11]["launch_options"]
 
@@ -2251,7 +2251,7 @@ class TestDoSyncPerUnit:
         # Stale → PLAIN launch, never -e with a bogus core.
         assert (
             by_rom[10]["launch_options"]
-            == 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/psx/stale.chd"'
+            == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/psx/stale.chd'"
         )
         assert "-e" not in by_rom[10]["launch_options"]
         assert "Removed Core" in caplog.text
