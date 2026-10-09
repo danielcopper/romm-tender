@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from domain.update_release import UpdateCheck, decode_update_check, encode_update_check
 from domain.version import is_newer_version
+from lib.errors import Refused
 
 if TYPE_CHECKING:
     import logging
@@ -223,11 +224,11 @@ class UpdateCheckService:
         """Record that the user waved away the card for *version*.
 
         Per version and never global, so one Dismiss cannot end the card for
-        every later release. Idempotent. Returns ``{"success": True}``, or the
-        canonical failure shape for a version that is not a non-empty string.
+        every later release. Idempotent. Returns ``{"success": True}``, and
+        refuses ``invalid_value`` for a version that is not a non-empty string.
         """
         if not isinstance(version, str) or not version:
-            return {"success": False, "reason": "invalid_value", "message": _INVALID_VERSION_MESSAGE}
+            raise Refused("invalid_value", _INVALID_VERSION_MESSAGE)
         self._settings[DISMISSED_KEY] = version
         self._settings_persister.save_settings()
         return {"success": True}
@@ -236,32 +237,30 @@ class UpdateCheckService:
         """Record that the panel raised the toast for *version*, for every later start.
 
         Per version, so the next release owes its own. Idempotent. Returns
-        ``{"success": True}``, or the canonical failure shape: ``invalid_value``
-        for a version that is not a non-empty string, and ``version_changed``
-        where *version* is not the release the last check stored — a toast
-        acknowledged after a newer release replaced it must not take the newer
-        one's toast with it.
+        ``{"success": True}``, and refuses ``invalid_value`` for a version that
+        is not a non-empty string and ``version_changed`` where *version* is
+        not the release the last check stored — a toast acknowledged after a
+        newer release replaced it must not take the newer one's toast with it.
         """
         if not isinstance(version, str) or not version:
-            return {"success": False, "reason": "invalid_value", "message": _INVALID_VERSION_MESSAGE}
+            raise Refused("invalid_value", _INVALID_VERSION_MESSAGE)
         if not await self._loop.run_in_executor(None, self._record_for_stored_release_io, TOASTED_KEY, version):
-            return {"success": False, "reason": "version_changed", "message": "Not the release the last check stored"}
+            raise Refused("version_changed", "Not the release the last check stored")
         return {"success": True}
 
     async def mark_update_available_seen(self, version: object) -> dict[str, Any]:
         """Record that the user has seen *version* in Settings → Updates, for every later start.
 
         Per version, so the next release is unseen again. Idempotent. Returns
-        ``{"success": True}``, or the canonical failure shape: ``invalid_value``
-        for a version that is not a non-empty string, and ``version_changed``
-        where *version* is not the release the last check stored — a release
-        seen just before a newer one replaced it must not mark the newer one
-        seen.
+        ``{"success": True}``, and refuses ``invalid_value`` for a version that
+        is not a non-empty string and ``version_changed`` where *version* is
+        not the release the last check stored — a release seen just before a
+        newer one replaced it must not mark the newer one seen.
         """
         if not isinstance(version, str) or not version:
-            return {"success": False, "reason": "invalid_value", "message": _INVALID_VERSION_MESSAGE}
+            raise Refused("invalid_value", _INVALID_VERSION_MESSAGE)
         if not await self._loop.run_in_executor(None, self._record_for_stored_release_io, SEEN_KEY, version):
-            return {"success": False, "reason": "version_changed", "message": "Not the release the last check stored"}
+            raise Refused("version_changed", "Not the release the last check stored")
         return {"success": True}
 
     def set_update_check_enabled(self, enabled: object) -> dict[str, Any]:
@@ -269,11 +268,11 @@ class UpdateCheckService:
 
         With it off :meth:`get_update_notice` and the running check make no
         request at all; :meth:`check_for_update_now` still does. Returns
-        ``{"success": True}``, or the canonical failure shape for a non-boolean
+        ``{"success": True}``, and refuses ``invalid_value`` for a non-boolean
         value off the untrusted frontend wire.
         """
         if not isinstance(enabled, bool):
-            return {"success": False, "reason": "invalid_value", "message": "Invalid value"}
+            raise Refused("invalid_value", "Invalid value")
         self._settings[ENABLED_KEY] = enabled
         self._settings_persister.save_settings()
         return {"success": True}
