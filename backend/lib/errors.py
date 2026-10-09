@@ -11,12 +11,14 @@ from lib.list_result import ErrorCode
 
 
 class SgdbApiError(Exception):
-    """Raised by SteamGridDb adapter for non-2xx HTTP responses.
+    """Raised by the SteamGridDB adapter for every failure to reach SteamGridDB or to read its answer.
 
-    Wraps urllib.error.HTTPError so callers never import urllib.
+    ``status_code`` is the HTTP status of a non-2xx answer, and ``None`` where
+    there is no status to report: SteamGridDB could not be reached, or what it
+    sent could not be read.
     """
 
-    def __init__(self, status_code: int, message: str) -> None:
+    def __init__(self, status_code: int | None, message: str) -> None:
         super().__init__(message)
         self.status_code = status_code
 

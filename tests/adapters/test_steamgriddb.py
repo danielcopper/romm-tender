@@ -172,3 +172,65 @@ class TestRequestHttpErrorWrapping:
             with pytest.raises(SgdbApiError) as exc_info:
                 adapter.request("/games/igdb/123")
             assert exc_info.value.status_code == 403
+
+
+def _answering(body: bytes) -> MagicMock:
+    resp = MagicMock()
+    resp.read.return_value = body
+    resp.__enter__ = lambda s: s
+    resp.__exit__ = MagicMock(return_value=False)
+    return resp
+
+
+def _breaking_mid_read() -> MagicMock:
+    resp = MagicMock()
+    resp.read.side_effect = http.client.IncompleteRead(b"{")
+    resp.__enter__ = lambda s: s
+    resp.__exit__ = MagicMock(return_value=False)
+    return resp
+
+
+# Each way SteamGridDB can fail to answer or be read, as ``urlopen`` meets it.
+_NO_ANSWER = {
+    "unreachable": {"side_effect": urllib.error.URLError("Name or service not known")},
+    "timeout": {"side_effect": TimeoutError("timed out")},
+    "connection reset": {"side_effect": ConnectionResetError("reset by peer")},
+    "disconnected": {"side_effect": http.client.RemoteDisconnected("closed without response")},
+    "broken mid-read": {"return_value": _breaking_mid_read()},
+    "not JSON": {"return_value": _answering(b"<html>Bad Gateway</html>")},
+    "not UTF-8": {"return_value": _answering(b"\xff\xfe")},
+}
+
+
+@pytest.fixture(params=["request", "verify_api_key"])
+def asking(adapter, request):
+    """One of the adapter's two calls to SteamGridDB's API, with its argument bound."""
+    if request.param == "request":
+        return lambda: adapter.request("/search/autocomplete/mario")
+    return lambda: adapter.verify_api_key("any-key")
+
+
+class TestEveryFailureIsAnSgdbApiError:
+    @pytest.mark.parametrize("urlopen", list(_NO_ANSWER.values()), ids=list(_NO_ANSWER))
+    def test_a_failure_with_no_status_raises_it_without_one(self, asking, urlopen):
+        with patch("urllib.request.urlopen", **urlopen), pytest.raises(SgdbApiError) as exc_info:
+            asking()
+
+        assert exc_info.value.status_code is None
+        assert exc_info.value.__cause__ is not None
+
+    def test_an_answer_that_is_not_a_json_object_raises_it_without_a_status(self, asking):
+        with patch("urllib.request.urlopen", return_value=_answering(b"[]")), pytest.raises(SgdbApiError) as exc_info:
+            asking()
+
+        assert exc_info.value.status_code is None
+
+    def test_an_http_error_keeps_its_status(self, asking):
+        http_error = urllib.error.HTTPError(
+            "https://steamgriddb.com", 502, "Bad Gateway", http.client.HTTPMessage(), None
+        )
+        with patch("urllib.request.urlopen", side_effect=http_error), pytest.raises(SgdbApiError) as exc_info:
+            asking()
+
+        assert exc_info.value.status_code == 502
+        assert exc_info.value.__cause__ is http_error
