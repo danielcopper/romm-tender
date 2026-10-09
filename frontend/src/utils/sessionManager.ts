@@ -5,8 +5,8 @@
  * Uses SteamClient.GameSessions.RegisterForAppLifetimeNotifications to detect
  * game lifecycle events — the notification's own `unAppID` identifies the app on
  * both edges. The guarded `runningApps` reader (`SteamUIStore.RunningApps`) is
- * used only for LIVENESS — at reload-adoption and in {@link readGameRunning} —
- * never to identify a launching app.
+ * used for LIVENESS — at reload-adoption and in {@link readGameRunning} — and
+ * for the log line at a reported start, never to identify a launching app.
  */
 
 import { showToast } from "./toast";
@@ -561,8 +561,14 @@ export async function initSessionManager(): Promise<void> {
 
   // Game lifecycle notifications
   SteamClient.GameSessions.RegisterForAppLifetimeNotifications((update) => {
-    if (update.bRunning) stoppedSinceStart.delete(update.unAppID);
-    else stoppedSinceStart.add(update.unAppID);
+    if (update.bRunning) {
+      stoppedSinceStart.delete(update.unAppID);
+      // Adoption counts only an entry that reads Running; this line is where a
+      // device shows what a game reads once Steam has reported its start.
+      logInfo(`App start reported: appId=${update.unAppID}, ${readRunningApps().diagnostics}`);
+    } else {
+      stoppedSinceStart.add(update.unAppID);
+    }
     // Taken at the notification, not when the chain reaches it: the window is
     // about how long Steam took to report the start.
     const notedRomId = update.bRunning ? takeNotedRom(update.unAppID) : null;
@@ -570,13 +576,13 @@ export async function initSessionManager(): Promise<void> {
       .then(async () => {
         if (update.bRunning) {
           // The notification's own appid identifies the app that started. Do NOT
-          // consult `SteamUIStore.RunningApps` here: its head is the most recently
-          // FOREGROUNDED app and a fresh arrival is appended at the tail, so the
-          // head names some other running game — attributing the start to it opens
-          // a session on the wrong rom and never opens one for this app, whose
-          // stop then finalizes nothing. Reading it also cost a 500ms delay that
-          // stalled the whole serialized lifecycle chain (a stop queued behind a
-          // start waited for it too); both are gone.
+          // consult `SteamUIStore.RunningApps` here: a start Steam's own Play makes
+          // is unshifted to the head, one the reconciler notices is appended at
+          // the tail, so the head may name some other running game — attributing
+          // the start to it opens a session on the wrong rom and never opens one
+          // for this app, whose stop then finalizes nothing. Reading it also cost
+          // a 500ms delay that stalled the whole serialized lifecycle chain (a stop
+          // queued behind a start waited for it too); both are gone.
           const appId = update.unAppID;
           if (appId) {
             // Refresh map in case a sync happened since init

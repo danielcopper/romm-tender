@@ -113,14 +113,17 @@ async function initDrainingAdoptionPoll(): Promise<void> {
 
 // Liveness comes from `SteamUIStore.RunningApps` — the one running-app surface
 // (#1588). It is a membership set, so a single-entry list seeds a running game
-// and an empty list seeds "the store reports nothing", which is exactly what the
-// empty-store adoption window looks like on-device.
+// (its display status Running) and an empty list seeds "the store reports
+// nothing", which is exactly what the empty-store adoption window looks like
+// on-device.
 function stubRunningApp(appid: number, displayName = "Game"): void {
-  vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid, display_name: displayName }] });
+  stubRunningApps([{ appid, display_name: displayName }]);
 }
 
 function stubRunningApps(apps: { appid: number; display_name: string }[]): void {
-  vi.stubGlobal("SteamUIStore", { RunningApps: apps });
+  vi.stubGlobal("SteamUIStore", {
+    RunningApps: apps.map((app) => ({ ...app, local_per_client_data: { display_status: 4 } })),
+  });
 }
 
 function stubNothingRunning(): void {
@@ -282,6 +285,18 @@ describe("sessionManager lifecycle forwarding", () => {
     expect(backend.finalizeGameSession).toHaveBeenCalledWith(ROM_ID);
   });
 
+  it("logs every listed entry's display status when Steam reports a start", async () => {
+    await initDrainingAdoptionPoll();
+    const lifetime = captureLifetimeCb();
+    stubListedWithStatus([{ appid: APP_ID, status: 1 }]);
+
+    await startGame(lifetime);
+
+    expect(backend.logInfo).toHaveBeenCalledWith(
+      `App start reported: appId=${APP_ID}, SteamUIStore.RunningApps=[${APP_ID}:1]`,
+    );
+  });
+
   it("updates the playtime display when finalize returns a total", async () => {
     vi.mocked(backend.finalizeGameSession).mockResolvedValue({ ...IDLE_FINALIZE, total_seconds: 42 });
     await initDrainingAdoptionPoll();
@@ -309,11 +324,11 @@ describe("sessionManager lifecycle forwarding", () => {
   // #1624: the start path takes the app id from the notification itself. The
   // running-app store must not be consulted — see the reader's docstring.
   it("opens the session for the app the notification names, not the running-app head", async () => {
-    // A DIFFERENT app sits at the head of the store. `RunningApps` is ordered
-    // most-recently-foregrounded and appends fresh arrivals at the tail, so the
-    // head is never the app that just started; trusting it would open a session
-    // on the wrong app and leave this one's stop finalizing nothing.
-    vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: OTHER_APP_ID, display_name: "Other" }] });
+    // A DIFFERENT app sits at the head of the store. A start Steam's own Play
+    // makes is unshifted to the head, one the reconciler notices is appended at
+    // the tail, so the head may name some other running game; trusting it would
+    // open a session on the wrong app and leave this one's stop finalizing nothing.
+    stubRunningApp(OTHER_APP_ID, "Other");
     await initSessionManager();
     const lifetime = captureLifetimeCb();
 
@@ -578,6 +593,16 @@ describe("sessionManager readGameRunning", () => {
     );
   });
 
+  it("is running when the store lists the game with a display status that cannot be read", async () => {
+    await initDrainingAdoptionPoll();
+    vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: APP_ID, display_name: "Game" }] });
+
+    const reading = readGameRunning(APP_ID, ROM_ID);
+
+    expect(reading.running).toBe(true);
+    expect(reading.decidedBy).toBe("store");
+  });
+
   it("states every signal in its diagnostics, naming the one that decided", async () => {
     await initDrainingAdoptionPoll();
     const lifetime = captureLifetimeCb();
@@ -709,6 +734,18 @@ describe("sessionManager reload adoption", () => {
     // The original rom is finalized on stop.
     expect(backend.finalizeGameSession).toHaveBeenCalledWith(ROM_ID);
     expect(backend.recordSessionStart).not.toHaveBeenCalled();
+  });
+
+  it("adopts an attested session whose app's display status cannot be read", async () => {
+    seedSessions([{ appId: APP_ID, romId: ROM_ID, startMs: 5_000 }]);
+    vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: APP_ID, display_name: "Game" }] });
+
+    await initSessionManager();
+
+    expect(backend.logInfo).not.toHaveBeenCalledWith(expect.stringContaining("orphaned"));
+    const lifetime = captureLifetimeCb();
+    await stopGame(lifetime);
+    expect(backend.finalizeGameSession).toHaveBeenCalledWith(ROM_ID);
   });
 
   it("adopts a running game with no breadcrumb and re-stamps the marker", async () => {
