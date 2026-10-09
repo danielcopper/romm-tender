@@ -386,9 +386,13 @@ class TestWaitReasons:
         rig = await _built(rigs, tmp_path)
         rig.steam.apps_status_unread = ("Celeste",)
 
-        answer = await rig.service.install_update(_OFFERED)
+        press = rig.service.install_update(_OFFERED)
+        with pytest.raises(UpdateWaiting) as refused:
+            await press
 
-        assert answer["wait_reasons"] == [{"reason": "app_running", "apps": [], "apps_status_unread": ["Celeste"]}]
+        assert refused.value.details == {
+            "wait_reasons": [{"reason": "app_running", "apps": [], "apps_status_unread": ["Celeste"]}]
+        }
         assert rig.service.is_update_in_progress() is False
 
     async def test_a_reading_that_could_not_be_taken_is_its_own_reason_never_nothing_running(self, rigs, tmp_path):

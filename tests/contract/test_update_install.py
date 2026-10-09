@@ -113,6 +113,16 @@ async def test_a_running_app_makes_the_press_wait(installed):
     assert installed.units.starts == []
 
 
+async def test_an_app_whose_status_could_not_be_read_makes_the_press_wait_and_is_named_apart(installed):
+    installed.steam.apps_status_unread = ("Celeste",)
+
+    answer = await installed.endpoints.install_update(_OFFERED)
+
+    assert answer["reason"] == "update_waiting"
+    assert answer["wait_reasons"] == [{"reason": "app_running", "apps": [], "apps_status_unread": ["Celeste"]}]
+    assert installed.units.starts == []
+
+
 async def test_a_lease_a_frontend_still_holds_makes_the_press_wait_as_other_work(installed):
     token = await installed.prune_conflicts.acquire_lease("launch_reconfirm")
 
