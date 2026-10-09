@@ -563,8 +563,8 @@ export async function initSessionManager(): Promise<void> {
   SteamClient.GameSessions.RegisterForAppLifetimeNotifications((update) => {
     if (update.bRunning) {
       stoppedSinceStart.delete(update.unAppID);
-      // Adoption counts only an entry that reads Running; this line is where a
-      // device shows what a game reads once Steam has reported its start.
+      // Adoption does not count an entry that reads Launching; this line is where
+      // a device shows what a game reads once Steam has reported its start.
       logInfo(`App start reported: appId=${update.unAppID}, ${readRunningApps().diagnostics}`);
     } else {
       stoppedSinceStart.add(update.unAppID);

@@ -106,7 +106,7 @@ interface SessionBudgetBannerProps {
   /**
    * Disables the "Restart Steam now" button for reasons the caller knows about
    * (mid-flight / not connected). The banner ALSO disables it while any listed
-   * app is starting, running or exiting, or reads a status that cannot be read —
+   * app is starting, running or exiting, or one whose status cannot be read —
    * checked here via ``isAnyAppHolding`` — so a restart does not close a game
    * Steam reports.
    */

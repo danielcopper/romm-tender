@@ -12,7 +12,7 @@ import { isAnyAppHolding } from "./runningApps";
  * client restart resets the renderer's per-session heap budget.
  *
  * Fire-and-forget: `StartRestart` tears the client down and back up. Refused
- * while any listed app is starting, running or exiting, or reads a status that
+ * while any listed app is starting, running or exiting, or one whose status
  * cannot be read, so a click does not close a game Steam reports; callers also
  * disable their button then, and this check covers the race where a game
  * started between render and click.

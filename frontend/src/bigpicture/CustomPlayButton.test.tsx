@@ -78,7 +78,7 @@ vi.mock("../utils/migrationStore", () => ({
 // alone; its signals are tested against the real predicate in
 // `sessionManager.test.ts`, and `STOPPED_BUT_LISTED` is its answer for a game
 // the store lists whose stop was seen. `runningApps` is mocked empty, so a guard
-// that read the store directly would throw rather than pass. With
+// that reached for its reader instead would throw rather than pass. With
 // `sessionManager` mocked, CustomPlayButton is the only in-graph importer of it
 // and nothing in-graph imports `runningApps`, so a full mock of each is safe.
 const { NOT_RUNNING, SESSION_RUNNING, STORE_RUNNING, STOPPED_BUT_LISTED } = vi.hoisted(() => {

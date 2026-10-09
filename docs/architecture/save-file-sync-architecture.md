@@ -1972,7 +1972,7 @@ things Steam's own interface code does (read in the Steam client's webpack modul
 That a running RomM shortcut reads Running, and that a start Steam's Play listed early reads ReadyToLaunch or Launching
 when the start is reported, is read from Steam's code. The guard's log line names every entry's status, and so does the
 line the session manager logs the moment Steam reports a start (`App start reported: …`, at `info`); those are where a
-device shows it. Reload adoption counts only an entry that reads Running until that is measured.
+device shows it. Until that is measured, reload adoption does not count an entry that reads Launching.
 
 The same rule stands in `readGameRunning`, in the stranded panel's card and at reload adoption. The session-budget
 banner's **Restart Steam now** asks the list a second question, with no stop rule, twice — the banner to disable the
