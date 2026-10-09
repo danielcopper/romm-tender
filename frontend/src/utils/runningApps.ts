@@ -31,8 +31,9 @@
  * and every round reports what the store said (`diagnostics`: absent / empty /
  * threw / the appids found) so the on-device log can tell those cases apart.
  *
- * It can also keep an exited app listed for a while, which is why no question
- * of whether a game is running reads it alone:
+ * Being listed is not being running: Steam lists a game it is only starting,
+ * and can keep one listed long after it exited. So an entry counts only by its
+ * overview's display status, and the reading names every listed entry's status:
  * `docs/architecture/save-file-sync-architecture.md`, "Is the game running".
  */
 
@@ -42,16 +43,41 @@ export interface RunningApp {
 }
 
 export interface RunningAppsReading {
-  /** The running apps the store reported this round, in store order. */
+  /** The listed apps that count as running this round, in store order. */
   apps: RunningApp[];
-  /** Diagnostic — what the store reported this round. */
+  /** Diagnostic — what the store reported this round, every listed entry with its display status. */
   diagnostics: string;
 }
 
 const SOURCE_LABEL = "SteamUIStore.RunningApps";
 
-/** Coerce one candidate into a {@link RunningApp}, or `null` if it isn't one. */
-function coerceRunningApp(value: unknown): RunningApp | null {
+/**
+ * Steam's `EDisplayStatus` value for an app that is running. The backend's
+ * reload wait names the values it holds for in `backend/host/inject/recovery.py`,
+ * and `tests/host/inject/test_recovery.py` holds Running equal in both.
+ */
+const DISPLAY_STATUS_RUNNING = 4;
+
+/** One entry the store lists, with its display status — `null` where it cannot be read. */
+interface ListedApp {
+  app: RunningApp;
+  status: number | null;
+}
+
+/** The overview's `local_per_client_data.display_status`, or `null` where it cannot be read. */
+function readDisplayStatus(rec: Record<string, unknown>): number | null {
+  try {
+    const data = rec.local_per_client_data;
+    if (typeof data !== "object" || data === null) return null;
+    const status = (data as Record<string, unknown>).display_status;
+    return typeof status === "number" ? status : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Coerce one candidate into a {@link ListedApp}, or `null` if it isn't one. */
+function coerceListedApp(value: unknown): ListedApp | null {
   if (typeof value !== "object" || value === null) return null;
   const rec = value as Record<string, unknown>;
   const appid = rec.appid;
@@ -62,15 +88,15 @@ function coerceRunningApp(value: unknown): RunningApp | null {
       : typeof rec.strDisplayName === "string"
         ? rec.strDisplayName
         : "";
-  return { appid, display_name: name };
+  return { app: { appid, display_name: name }, status: readDisplayStatus(rec) };
 }
 
 /**
- * Coerce a list-shaped source (plain array or MobX observable) into running
- * apps, dropping any entry that isn't a running app. Never throws — a
- * non-iterable or a throwing iterator yields an empty list.
+ * Coerce a list-shaped source (plain array or MobX observable) into listed
+ * apps, dropping any entry that isn't an app. Never throws — a non-iterable or
+ * a throwing iterator yields an empty list.
  */
-function coerceRunningAppList(value: unknown): RunningApp[] {
+function coerceListedAppList(value: unknown): ListedApp[] {
   if (value === null || value === undefined) return [];
   let items: unknown[];
   if (Array.isArray(value)) {
@@ -80,26 +106,34 @@ function coerceRunningAppList(value: unknown): RunningApp[] {
   } else {
     return [];
   }
-  const apps: RunningApp[] = [];
+  const listed: ListedApp[] = [];
   for (const item of items) {
-    const app = coerceRunningApp(item);
-    if (app) apps.push(app);
+    const entry = coerceListedApp(item);
+    if (entry) listed.push(entry);
   }
-  return apps;
+  return listed;
 }
 
-/** Diagnostic note for the list — the appids found, or why none were. */
-function describeList(apps: RunningApp[], raw: unknown): string {
-  if (apps.length > 0) return `[${apps.map((a) => a.appid).join(",")}]`;
+/**
+ * Does a listed entry count as running? One whose status cannot be read does:
+ * the save-file-sync page's "Is the game running" says why.
+ */
+function countsAsRunning(entry: ListedApp): boolean {
+  return entry.status === null || entry.status === DISPLAY_STATUS_RUNNING;
+}
+
+/** Diagnostic note for the list — every entry found as `appid:status` (`?` unreadable), or why none were. */
+function describeList(listed: ListedApp[], raw: unknown): string {
+  if (listed.length > 0) return `[${listed.map((e) => `${e.app.appid}:${e.status ?? "?"}`).join(",")}]`;
   if (raw === null || raw === undefined) return "absent";
   return "empty";
 }
 
 /**
- * Read `SteamUIStore.RunningApps` once, as a list plus a diagnostic naming what
- * the store reported. Never throws: an absent store, a `null` store, a throwing
- * getter and a non-list value all read as "nothing running" with a note saying
- * which.
+ * Read `SteamUIStore.RunningApps` once, as the apps that count as running plus a
+ * diagnostic naming what the store listed. Never throws: an absent store, a
+ * `null` store, a throwing getter and a non-list value all read as "nothing
+ * running" with a note saying which.
  */
 export function readRunningApps(): RunningAppsReading {
   // NOSONAR(typescript:S7741) — SteamUIStore is an undeclared Steam SP global; a
@@ -111,8 +145,11 @@ export function readRunningApps(): RunningAppsReading {
     // One getter read — re-reading for the diagnostic could observe a different
     // value, or throw outside the coercion it describes.
     const raw: unknown = SteamUIStore.RunningApps;
-    const apps = coerceRunningAppList(raw);
-    return { apps, diagnostics: `${SOURCE_LABEL}=${describeList(apps, raw)}` };
+    const listed = coerceListedAppList(raw);
+    return {
+      apps: listed.filter(countsAsRunning).map((entry) => entry.app),
+      diagnostics: `${SOURCE_LABEL}=${describeList(listed, raw)}`,
+    };
   } catch (e) {
     return { apps: [], diagnostics: `${SOURCE_LABEL}=threw:${e}` };
   }

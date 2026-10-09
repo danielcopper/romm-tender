@@ -374,6 +374,20 @@ describe("SessionBudgetBanner — Restart Steam now button (#35)", () => {
     );
   });
 
+  it("leaves the button enabled past a game Steam kept listed after it exited", () => {
+    vi.stubGlobal("SteamUIStore", {
+      RunningApps: [{ appid: 123, display_name: "Game", local_per_client_data: { display_status: 11 } }],
+    });
+    const { container, queryByTestId } = render(
+      <SessionBudgetBanner syncButton={RESUME_BUTTON} lastAttemptStatus="paused" rssKb={2199000} />,
+    );
+    const btn = buttonByText(container, "Restart Steam now")!;
+    expect(btn.disabled).toBe(false);
+    expect(queryByTestId("button-desc")).toBeNull();
+    fireEvent.click(btn);
+    expect(vi.mocked(SteamClient.User.StartRestart)).toHaveBeenCalledWith(false);
+  });
+
   it("hard-guards the click so a game that started after render can't be killed", () => {
     // Rendered with no game → button enabled.
     const { container } = render(

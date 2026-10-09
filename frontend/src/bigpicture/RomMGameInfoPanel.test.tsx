@@ -472,6 +472,14 @@ describe("RomMGameInfoPanel", () => {
       expect(container.textContent).toBe(RELOADS);
     });
 
+    it("adds no quit line for a game Steam kept listed after it exited", async () => {
+      vi.stubGlobal("SteamUIStore", {
+        RunningApps: [{ appid: testAppId + 1, display_name: "Other", local_per_client_data: { display_status: 11 } }],
+      });
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(RELOADS);
+    });
+
     it("still shows the card, with the store's reading, when Steam offers no game sessions", async () => {
       vi.stubGlobal("SteamClient", {});
       vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });

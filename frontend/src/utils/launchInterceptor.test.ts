@@ -69,14 +69,16 @@ const { NOT_RUNNING, SESSION_RUNNING, STORE_RUNNING, STOPPED_BUT_LISTED } = vi.h
 // The guard asks `readGameRunning` alone; its signals are tested against the
 // real predicate in `sessionManager.test.ts`. `isAppRunning` stays mocked so a
 // test that has the store list the game while the predicate says it stopped
-// catches a guard that reads the store directly.
+// catches a guard that reads the store directly. `readRunningApps` stays real
+// for the tests that hand the guard the real predicate over a stubbed store.
 vi.mock("./sessionManager", () => ({
   getAppIdRomIdMapSnapshot: vi.fn(() => ({})),
   refreshAppIdMap: vi.fn(),
   readGameRunning: vi.fn(() => NOT_RUNNING),
 }));
 
-vi.mock("./runningApps", () => ({
+vi.mock("./runningApps", async (importActual) => ({
+  ...(await importActual<typeof import("./runningApps")>()),
   isAppRunning: vi.fn(() => false),
 }));
 
@@ -373,6 +375,60 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(SteamClient.Apps.CancelGameAction).toHaveBeenCalledWith(77);
       expect(launchGate.runLaunchGate).toHaveBeenCalled();
       expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+    });
+
+    describe("with the real reading of Steam's running-app list", () => {
+      const OTHER_APP_ID = 3000000002;
+
+      /** The store lists each app with its overview's display status. */
+      const stubListed = (apps: { appid: number; status: number }[]): void => {
+        vi.stubGlobal("SteamUIStore", {
+          RunningApps: apps.map(({ appid, status }) => ({
+            appid,
+            display_name: `App ${appid}`,
+            local_per_client_data: { display_status: status },
+          })),
+        });
+      };
+
+      beforeEach(async () => {
+        const actual = await vi.importActual<typeof import("./sessionManager")>("./sessionManager");
+        vi.mocked(sessionManager.readGameRunning).mockImplementation(actual.readGameRunning);
+      });
+
+      it("gates a start Steam already put at the head of the list while another game runs", async () => {
+        // Steam's own Play lists the starting app (not yet Running) before it
+        // reports the start.
+        stubListed([
+          { appid: APP_ID, status: 11 },
+          { appid: OTHER_APP_ID, status: 4 },
+        ]);
+
+        register();
+        captureHandler()(77, GAME_ID, "LaunchApp", PLAY_SOURCE);
+        await flush();
+
+        expect(SteamClient.Apps.CancelGameAction).toHaveBeenCalledWith(77);
+        expect(launchGate.runLaunchGate).toHaveBeenCalled();
+        expect(backend.logInfo).toHaveBeenCalledWith(
+          expect.stringContaining(`SteamUIStore.RunningApps=[${APP_ID}:11,${OTHER_APP_ID}:4]`),
+        );
+      });
+
+      it("passes a link press on a game that reads Running ungated", async () => {
+        stubListed([{ appid: APP_ID, status: 4 }]);
+
+        register();
+        captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+        await flush();
+
+        expect(SteamClient.Apps.CancelGameAction).not.toHaveBeenCalled();
+        expect(launchGate.runLaunchGate).not.toHaveBeenCalled();
+        expect(backend.preLaunchSync).not.toHaveBeenCalled();
+        expect(backend.logInfo).toHaveBeenCalledWith(
+          expect.stringContaining(`already running — skipping pre-launch sync [decided by store`),
+        );
+      });
     });
   });
 

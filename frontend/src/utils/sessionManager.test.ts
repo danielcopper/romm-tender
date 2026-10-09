@@ -127,6 +127,17 @@ function stubNothingRunning(): void {
   vi.stubGlobal("SteamUIStore", { RunningApps: [] });
 }
 
+/** The store lists each app with its overview's display status (4 Running, 11 ReadyToLaunch, 1 Launching). */
+function stubListedWithStatus(apps: { appid: number; status: number }[]): void {
+  vi.stubGlobal("SteamUIStore", {
+    RunningApps: apps.map(({ appid, status }) => ({
+      appid,
+      display_name: `App ${appid}`,
+      local_per_client_data: { display_status: status },
+    })),
+  });
+}
+
 // The durable attestation: one versioned localStorage row holding EVERY open
 // session. `seedSessions` writes the current (v2) shape; a few tests seed a
 // literal v1 row instead, so the in-place upgrade stays covered where it
@@ -532,15 +543,50 @@ describe("sessionManager readGameRunning", () => {
     expect(readGameRunning(UNMAPPED_APP_ID, undefined).decidedBy).toBe("store");
   });
 
+  it.each([
+    ["ReadyToLaunch", 11],
+    ["Launching", 1],
+  ])("is not running when the store lists the game reading %s", async (_name, status) => {
+    await initDrainingAdoptionPoll();
+    stubListedWithStatus([{ appid: APP_ID, status }]);
+
+    const reading = readGameRunning(APP_ID, ROM_ID);
+
+    expect(reading.running).toBe(false);
+    expect(reading.decidedBy).toBe("none");
+  });
+
+  it("is running when the store lists the game reading Running", async () => {
+    await initDrainingAdoptionPoll();
+    stubListedWithStatus([{ appid: APP_ID, status: 4 }]);
+
+    const reading = readGameRunning(APP_ID, ROM_ID);
+
+    expect(reading.running).toBe(true);
+    expect(reading.decidedBy).toBe("store");
+  });
+
+  it("names each listed entry's display status in its diagnostics", async () => {
+    await initDrainingAdoptionPoll();
+    stubListedWithStatus([
+      { appid: APP_ID, status: 11 },
+      { appid: OTHER_APP_ID, status: 4 },
+    ]);
+
+    expect(readGameRunning(APP_ID, ROM_ID).diagnostics).toBe(
+      `decided by none: session=none, stopObserved=no, SteamUIStore.RunningApps=[${APP_ID}:11,${OTHER_APP_ID}:4]`,
+    );
+  });
+
   it("states every signal in its diagnostics, naming the one that decided", async () => {
     await initDrainingAdoptionPoll();
     const lifetime = captureLifetimeCb();
     await startApp(lifetime, APP_ID);
     await stopApp(lifetime, APP_ID);
-    stubRunningApp(APP_ID);
+    stubListedWithStatus([{ appid: APP_ID, status: 4 }]);
 
     expect(readGameRunning(APP_ID, ROM_ID).diagnostics).toBe(
-      `decided by stop: session=none, stopObserved=yes, SteamUIStore.RunningApps=[${APP_ID}]`,
+      `decided by stop: session=none, stopObserved=yes, SteamUIStore.RunningApps=[${APP_ID}:4]`,
     );
   });
 });
@@ -1171,6 +1217,26 @@ describe("sessionManager reload adoption", () => {
     const lifetime = captureLifetimeCb();
     await stopGame(lifetime);
     expect(backend.finalizeGameSession).toHaveBeenCalledWith(ROM_ID);
+  });
+
+  it("orphans an attested session whose app Steam lists only as left behind after its exit", async () => {
+    seedSessions([{ appId: APP_ID, romId: ROM_ID, startMs: 5_000 }]);
+    stubListedWithStatus([{ appid: APP_ID, status: 11 }]);
+
+    await initDrainingAdoptionPoll();
+
+    expect(readCrumb()).toBeNull();
+    expect(backend.recordSessionStart).not.toHaveBeenCalled();
+    expect(backend.logInfo).toHaveBeenCalledWith(expect.stringContaining("orphaned"));
+  });
+
+  it("re-stamps no session for an app of ours Steam lists only as left behind after its exit", async () => {
+    stubListedWithStatus([{ appid: APP_ID, status: 11 }]);
+
+    await initDrainingAdoptionPoll();
+
+    expect(backend.recordSessionStart).not.toHaveBeenCalled();
+    expect(readCrumb()).toBeNull();
   });
 
   it("orphan-clears the breadcrumb after the poll times out with nothing running", async () => {
