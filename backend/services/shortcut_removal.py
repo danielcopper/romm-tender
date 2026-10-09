@@ -32,6 +32,8 @@ if TYPE_CHECKING:
     from services.protocols import (
         ArtworkRemover,
         ConflictRules,
+        HeldClaimsFn,
+        ShortcutIconJob,
         SteamConfigStore,
         UnitOfWorkFactory,
     )
@@ -40,6 +42,12 @@ if TYPE_CHECKING:
 # library sync refreshes every run. Read here so a platform's removal can find
 # the platform's Steam collection by the name the sync gave it. Mirrors ``library.reporter._PLATFORM_NAMES_KEY``.
 _PLATFORM_NAMES_KEY = "platform_names"
+
+# The claims a removal holds on the prune conflicts: the three use cases'
+# operations and the lease between them.
+_REMOVAL_CLAIMS = frozenset(
+    {"remove_all_shortcuts", "remove_platform_shortcuts", "report_removal_results", "shortcut_removal"}
+)
 
 
 @dataclass(frozen=True)
@@ -51,7 +59,10 @@ class ShortcutRemovalServiceConfig:
     seam over the ``roms`` / ``kv_config`` repositories ShortcutRemovalService
     reads and unbinds), and the ``ConflictRules`` each use case checks at its
     entry under its endpoint's name, and takes and releases the removal's
-    lease through.
+    lease through. ``held_claims`` is what :meth:`ShortcutRemovalService.is_removal_in_flight`
+    reads; the ``icon_job`` is stopped once a removal's claim, or its report's,
+    is held, and asked for again once the removal ends, unless it ends by its
+    lease expiring or being released as orphaned.
     """
 
     steam_config: SteamConfigStore
@@ -60,6 +71,8 @@ class ShortcutRemovalServiceConfig:
     artwork_remover: ArtworkRemover
     uow_factory: UnitOfWorkFactory
     conflict_rules: ConflictRules
+    held_claims: HeldClaimsFn
+    icon_job: ShortcutIconJob
 
 
 class ShortcutRemovalService:
@@ -77,6 +90,16 @@ class ShortcutRemovalService:
         self._artwork_remover = config.artwork_remover
         self._uow_factory = config.uow_factory
         self._rules = config.conflict_rules
+        self._held_claims = config.held_claims
+        self._icon_job = config.icon_job
+
+    def is_removal_in_flight(self) -> bool:
+        """Whether a removal is under way: its set's call, its lease or its report holds a claim.
+
+        The lease ends when the report releases it, when it expires, or when it
+        is released as orphaned.
+        """
+        return any(claim in _REMOVAL_CLAIMS for claim in self._held_claims())
 
     # ── Removal queries ────────────────────────────────────────────────────
 
@@ -90,13 +113,18 @@ class ShortcutRemovalService:
         ``shortcut_removal`` lease in ``prune_lease_token`` for the frontend's
         Steam writes.
         """
-        async with self._rules.hold("remove_all_shortcuts", update=True, migration=True, sync=True, prune=True):
-            with self._uow_factory() as uow:
-                roms = list(uow.roms.iter_all())
-            app_ids = [rom.shortcut_app_id for rom in roms if rom.shortcut_app_id is not None]
-            rom_ids = [str(rom.rom_id) for rom in roms]
-            result: dict[str, Any] = {"success": True, "app_ids": app_ids, "rom_ids": rom_ids}
-            return await self._with_removal_lease(result)
+        result: dict[str, Any] = {}
+        try:
+            async with self._rules.hold("remove_all_shortcuts", update=True, migration=True, sync=True, prune=True):
+                await self._icon_job.stop_for_removal()
+                with self._uow_factory() as uow:
+                    roms = list(uow.roms.iter_all())
+                app_ids = [rom.shortcut_app_id for rom in roms if rom.shortcut_app_id is not None]
+                rom_ids = [str(rom.rom_id) for rom in roms]
+                result = await self._with_removal_lease({"success": True, "app_ids": app_ids, "rom_ids": rom_ids})
+        finally:
+            self._ask_for_the_icon_job_unless_leased(result)
+        return result
 
     async def remove_platform_shortcuts(self, platform_slug: str) -> dict[str, Any]:
         """Return app_ids and rom_ids for a platform for the frontend to remove via SteamClient.
@@ -107,9 +135,17 @@ class ShortcutRemovalService:
         shortcut to remove, the answer carries a ``shortcut_removal`` lease in
         ``prune_lease_token`` for the frontend's Steam writes.
         """
-        async with self._rules.hold("remove_platform_shortcuts", update=True, migration=True, sync=True, prune=True):
-            result = await self._loop.run_in_executor(None, self._remove_platform_shortcuts_io, platform_slug)
-            return await self._with_removal_lease(result)
+        result: dict[str, Any] = {}
+        try:
+            async with self._rules.hold(
+                "remove_platform_shortcuts", update=True, migration=True, sync=True, prune=True
+            ):
+                await self._icon_job.stop_for_removal()
+                found = await self._loop.run_in_executor(None, self._remove_platform_shortcuts_io, platform_slug)
+                result = await self._with_removal_lease(found)
+        finally:
+            self._ask_for_the_icon_job_unless_leased(result)
+        return result
 
     async def _with_removal_lease(self, result: dict[str, Any]) -> dict[str, Any]:
         """Add a ``shortcut_removal`` lease to a removal set that succeeded and names a shortcut.
@@ -121,6 +157,11 @@ class ShortcutRemovalService:
         if result.get("success") and result.get("app_ids"):
             result["prune_lease_token"] = await self._rules.acquire_lease("shortcut_removal")
         return result
+
+    def _ask_for_the_icon_job_unless_leased(self, result: dict[str, Any]) -> None:
+        """Ask for the icon job again where the removal ends here: no lease, so no report follows."""
+        if "prune_lease_token" not in result:
+            self._icon_job.request_run()
 
     def _remove_platform_shortcuts_io(self, platform_slug: str) -> dict[str, Any]:
         with self._uow_factory() as uow:
@@ -200,13 +241,20 @@ class ShortcutRemovalService:
         call that sends no token releases nothing. A refused call releases
         nothing either.
         """
-        async with self._rules.hold("report_removal_results", prune=True):
-            try:
-                await self._loop.run_in_executor(None, self._report_removal_results_io, removed_rom_ids)
-                return {"success": True, "message": f"Removed {len(removed_rom_ids)} shortcuts"}
-            finally:
-                if lease_token is not None:
-                    await self._rules.release_lease(str(lease_token))
+        try:
+            async with self._rules.hold("report_removal_results", prune=True):
+                try:
+                    # Its lease may have expired or been released as orphaned,
+                    # and a run started since must not write after the deletion.
+                    await self._icon_job.stop_for_removal()
+                    await self._loop.run_in_executor(None, self._report_removal_results_io, removed_rom_ids)
+                    return {"success": True, "message": f"Removed {len(removed_rom_ids)} shortcuts"}
+                finally:
+                    if lease_token is not None:
+                        await self._rules.release_lease(str(lease_token))
+        finally:
+            # Outside the hold, so the run it starts does not yield to this call's own claim.
+            self._icon_job.request_run()
 
     # ── Live-shortcut reconcile ────────────────────────────────────────────
 

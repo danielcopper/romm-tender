@@ -38,6 +38,7 @@ from adapters.game_process import GameProcessAdapter
 from adapters.gavel_native import GavelNativeAdapter
 from adapters.github_releases import GithubReleaseAdapter
 from adapters.hostname import HostnameAdapter
+from adapters.icon_image import IconImages
 from adapters.journal import JournalctlAdapter
 from adapters.launcher_install import LauncherInstallAdapter
 from adapters.machine_id import MachineIdAdapter
@@ -97,10 +98,12 @@ if TYPE_CHECKING:
         FirmwareResolver,
         GameProcessControl,
         HostnameReader,
+        IconDownscaleFn,
         JournalEntriesFn,
         LatestReleaseFn,
         MachineIdReader,
         MigrationFileStore,
+        PanelConnectedFn,
         PathExistsReader,
         PlatformCoreReader,
         PruneArtifactStore,
@@ -127,6 +130,7 @@ if TYPE_CHECKING:
         SystemKnownFn,
         SystemM3uSupportFn,
         SystemSupportedExtensionsFn,
+        TenderLogoFn,
         TransientUnitControl,
         UnitOfWorkFactory,
         UpdateAttemptStore,
@@ -194,6 +198,8 @@ class AdapterBundle:
     update_staging: UpdateStagingStore
     transient_units: TransientUnitControl
     journal: JournalEntriesFn
+    downscale_icon: IconDownscaleFn
+    tender_logo: TenderLogoFn
 
 
 @dataclass(frozen=True)
@@ -209,11 +215,11 @@ class RuntimeBundle:
 
     ``steam`` is the host's reading of Steam's interface, which only the
     process hosting this backend can take and which ``main.py`` hands in the
-    way it hands in the emit. The bundle carries no directory. Where anything
-    lives is the ``AppDirectories`` the entry point resolved, which reaches a
-    service as ``WiringConfig.directories`` — this bundle used to hold two
-    paths beside the seams above, which is how a question about the plugin
-    loader's own layout came to sit next to a question about the user's data.
+    way it hands in the emit; ``panel_connected`` is the host's answer to
+    whether a panel is there to hear an event, handed in the same way. The
+    bundle carries no directory. Where anything lives is the
+    ``AppDirectories`` the entry point resolved, which reaches a service as
+    ``WiringConfig.directories``.
     """
 
     loop: asyncio.AbstractEventLoop
@@ -225,6 +231,7 @@ class RuntimeBundle:
     hostname_provider: HostnameReader
     machine_id_provider: MachineIdReader
     steam: SteamInterfaceReader
+    panel_connected: PanelConnectedFn
 
 
 @dataclass(frozen=True)
@@ -427,6 +434,7 @@ def bootstrap(
         logger.warning("Certificate verification is off for RomM requests (romm_allow_insecure_ssl is on)")
     romm_api = RommApiAdapter(http_adapter)
     steam_config = SteamConfigAdapter(user_home=user_home, logger=logger)
+    icon_images = IconImages(code_dir=directories.code_dir, logger=logger)
     sgdb_adapter = SteamGridDbAdapter(settings=settings, logger=logger, user_agent=user_agent)
     cover_art_file_store = CoverArtFileStoreAdapter()
     sgdb_artwork_cache = SgdbArtworkCacheAdapter(cache_dir=directories.cache_dir)
@@ -517,6 +525,8 @@ def bootstrap(
         update_staging=update_staging,
         transient_units=transient_units,
         journal=journal,
+        downscale_icon=icon_images.downscale,
+        tender_logo=icon_images.tender_logo,
     )
     stores = StateBundle(
         settings=settings,

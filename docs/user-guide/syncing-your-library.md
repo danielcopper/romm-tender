@@ -452,8 +452,16 @@ Each synced game gets up to five types of artwork:
 | Icon                  | SteamGridDB | Taskbar, small UI elements      |
 
 Cover art is always applied from RomM. The other four types require a
-[SteamGridDB API key](configuration.md#steamgriddb-api-key). Games without a SteamGridDB match will show Steam's default
-placeholders for those slots.
+[SteamGridDB API key](configuration.md#steamgriddb-api-key); games without a SteamGridDB match show Steam's default
+placeholders for hero, logo and wide grid, and Tender's logo as their icon.
+
+Icons arrive in the background, without opening each game: after every sync and when Tender starts, every game Tender
+manages that has no icon yet gets one, a few at a time. A game the sync has just added shows an empty spot in the
+desktop client's library list until its icon arrives. Without a SteamGridDB API key no icon is fetched, and a game the
+sync adds keeps Steam's default icon instead. The background job leaves an icon you set yourself alone, and does not ask
+again for a game SteamGridDB had none for; **Refresh Artwork** does, and so does opening the game's page for a game
+Tender already knows on SteamGridDB (opening the page also replaces an icon you set yourself). A game that had no icon
+at all before shows its first one after Steam restarts, which switching between Game Mode and Desktop Mode does.
 
 You can refresh artwork for any individual game from its
 [game detail page](managing-games.md#refreshing-artwork-and-metadata).

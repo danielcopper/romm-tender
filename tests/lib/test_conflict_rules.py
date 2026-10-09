@@ -287,7 +287,7 @@ async def test_an_event_somebody_heard_keeps_the_lease_its_token_names():
     rules = _Rules()
     emit = _Emit()
 
-    await rules.rules.emit_under_lease("download_complete", emit)
+    assert await rules.rules.emit_under_lease("download_complete", emit) is True
 
     (token,) = emit.tokens
     assert token.startswith("download_complete:")
@@ -299,7 +299,7 @@ async def test_an_event_somebody_heard_keeps_the_lease_its_token_names():
 async def test_an_event_nobody_heard_gives_its_lease_back():
     rules = _Rules()
 
-    await rules.rules.emit_under_lease("download_complete", _Emit(heard=False))
+    assert await rules.rules.emit_under_lease("download_complete", _Emit(heard=False)) is False
 
     assert rules.conflicts.conflicting_operations == 0
 
@@ -356,6 +356,22 @@ async def test_a_held_operation_refuses_the_start_naming_its_holder():
         {},
     )
     assert rules.conflicts.cleanup_running is False
+
+
+async def test_a_shortcut_icon_hand_over_refuses_the_start_naming_it():
+    rules = _Rules()
+    await rules.rules.acquire_lease("shortcut_icons")
+
+    refusal = await _start_refusal(rules.rules, migration=True, sync=True)
+
+    assert _said(refusal) == (
+        "operation_active",
+        (
+            "Another local-data operation is in progress (setting shortcut icons); wait for it to finish before "
+            "starting cleanup."
+        ),
+        {},
+    )
 
 
 async def test_the_reservation_is_asked_before_the_migration_and_the_sync_rule():

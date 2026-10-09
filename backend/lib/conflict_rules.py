@@ -147,16 +147,19 @@ class ConflictRuleSet:
         """Drop every lease a frontend holds, and answer how many there were."""
         return await self._prune_conflicts.release_orphaned_leases()
 
-    async def emit_under_lease(self, key: str, emit_with: Callable[[str], Awaitable[bool]]) -> None:
+    async def emit_under_lease(self, key: str, emit_with: Callable[[str], Awaitable[bool]]) -> bool:
         """Take a lease under *key* and emit through *emit_with*, which puts its token in ``prune_lease_token``.
 
         For an event whose Steam writes the frontend makes after the backend's
-        part is over. Checks no rule, like :meth:`acquire_lease`, so call it
-        while something else still refuses a cleanup's start. *emit_with* is
+        part is over. Checks no rule, like :meth:`acquire_lease`, so the caller
+        keeps a cleanup from starting across it: by calling it while something
+        else still refuses a cleanup's start, or by being stopped before a
+        cleanup reserves its start, as the shortcut icon job is. *emit_with* is
         the emit itself, written at the call site as a literal
         ``self._emit("<event>", …)`` so ``scripts/check_event_parity.py`` sees
-        the event. The lease is released again when the emit raises or nobody
-        heard the event, since no frontend holds its token then to release it.
+        the event. Answers whether anybody heard it; the lease is released
+        again when the emit raises or nobody heard the event, since no frontend
+        holds its token then to release it.
         """
         token = await self.acquire_lease(key)
         try:
@@ -166,3 +169,4 @@ class ConflictRuleSet:
             raise
         if not heard:
             await self.release_lease(token)
+        return heard

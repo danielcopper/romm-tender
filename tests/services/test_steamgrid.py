@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -17,15 +18,17 @@ from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
+from fakes.fake_shortcut_icon_job import FakeShortcutIconJob
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
 from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
+from models.shortcut_icon import IconAnswer
 
 from adapters.debug_logger import SettingsAwareDebugLogger
 from adapters.steam_config import SteamConfigAdapter
 from domain.rom import Rom
-from lib.errors import Refused, SgdbApiError, SteamGridDirMissingError
+from lib.errors import Refused, SgdbApiError, SgdbRateLimitedError, SteamGridDirMissingError
 from lib.prune_conflicts import PruneConflicts
 from services.library import LibraryService, LibraryServiceConfig
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
@@ -103,6 +106,7 @@ def steamgrid(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow, emi
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
+            icon_job=FakeShortcutIconJob(),
         ),
     )
 
@@ -124,6 +128,7 @@ def steamgrid(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow, emi
             log_debug=debug_logger,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
+            downscale_icon=lambda data: data,
         ),
     )
     return SteamGridHarness(
@@ -1187,6 +1192,7 @@ class TestDebugLoggerProtocolSeam:
                 renderer_rss=FakeRendererRss(),
                 renderer_gc=FakeRendererGc(),
                 conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
+                icon_job=FakeShortcutIconJob(),
             ),
         )
 
@@ -1205,6 +1211,7 @@ class TestDebugLoggerProtocolSeam:
                 log_debug=capture,
                 uow_factory=FakeUnitOfWorkFactory(),
                 conflict_rules=_make_conflict_rules(),
+                downscale_icon=lambda data: data,
             ),
         )
         harness = SteamGridHarness(
@@ -1507,3 +1514,316 @@ class TestPruneOrphanedArtworkCacheEdgeCases:
 
         # File still present (remove was patched to fail)
         assert tmp_path in sgdb_artwork_cache.files
+
+
+def _record_icon_writes(steamgrid: SteamGridHarness, tmp_path) -> dict[str, bytes]:
+    """Route the service's icon writes into a dict keyed by the path each would have had."""
+    written: dict[str, bytes] = {}
+
+    def fake_write_icon(app_id, icon_bytes):
+        path = os.path.join(str(tmp_path), f"{app_id}_icon.png")
+        written[path] = icon_bytes
+        return path
+
+    steamgrid.steam_config.write_shortcut_icon = fake_write_icon  # type: ignore[method-assign]
+    return written
+
+
+class TestEveryIconIsDownscaled:
+    def test_the_game_pages_icon_is_written_as_the_downscale_answers_it(self, steamgrid, tmp_path):
+        written = _record_icon_writes(steamgrid, tmp_path)
+        steamgrid.service._downscale_icon = lambda data: b"small:" + data
+
+        path = steamgrid.service._save_icon_to_grid(7, b"big")
+
+        assert written[path] == b"small:big"
+
+    def test_a_game_page_icon_the_downscale_cannot_read_is_written_as_it_came(self, steamgrid, tmp_path, caplog):
+        written = _record_icon_writes(steamgrid, tmp_path)
+        steamgrid.service._downscale_icon = lambda _data: None
+
+        with caplog.at_level(logging.WARNING):
+            path = steamgrid.service._save_icon_to_grid(7, b"<html>")
+
+        assert written[path] == b"<html>"
+        assert "app_id 7 is not an image Tender reads" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_the_jobs_icon_is_written_as_its_fetch_answered_it(self, steamgrid, tmp_path):
+        written = _record_icon_writes(steamgrid, tmp_path)
+        steamgrid.service._loop = asyncio.get_running_loop()
+        steamgrid.service._downscale_icon = lambda data: b"again:" + data
+
+        path = await steamgrid.service.write_job_icon(7, b"already small", 0)
+
+        assert path is not None
+        assert written[path] == b"already small"
+
+
+class TestTheJobsWriteAndAPickOnTheGamePage:
+    @pytest.mark.asyncio
+    async def test_the_job_writes_while_nothing_was_picked_since_it_read_the_generation(self, steamgrid, tmp_path):
+        written = _record_icon_writes(steamgrid, tmp_path)
+        steamgrid.service._loop = asyncio.get_running_loop()
+        generation = steamgrid.service.icon_generation(7)
+
+        path = await steamgrid.service.write_job_icon(7, b"from the job", generation)
+
+        assert path is not None
+        assert written[path] == b"from the job"
+
+    @pytest.mark.asyncio
+    async def test_a_pick_made_since_wins_and_the_job_writes_nothing(self, steamgrid, tmp_path):
+        import base64
+
+        written = _record_icon_writes(steamgrid, tmp_path)
+        steamgrid.service._loop = asyncio.get_running_loop()
+        generation = steamgrid.service.icon_generation(7)
+
+        await steamgrid.service.save_shortcut_icon(7, base64.b64encode(b"picked").decode("ascii"))
+        path = await steamgrid.service.write_job_icon(7, b"from the job", generation)
+
+        assert path is None
+        assert list(written.values()) == [b"picked"]
+
+    @pytest.mark.asyncio
+    async def test_a_pick_made_while_the_jobs_write_is_on_disk_waits_for_it_and_lands_last(self, steamgrid, tmp_path):
+        import base64
+        import threading
+
+        written: dict[str, bytes] = {}
+        jobs_write_started = threading.Event()
+        jobs_write_may_finish = threading.Event()
+
+        def write_icon(app_id, icon_bytes):
+            if icon_bytes == b"from the job":
+                jobs_write_started.set()
+                jobs_write_may_finish.wait(timeout=5)
+            path = os.path.join(str(tmp_path), f"{app_id}_icon.png")
+            written[path] = icon_bytes
+            return path
+
+        steamgrid.steam_config.write_shortcut_icon = write_icon  # type: ignore[method-assign]
+        steamgrid.service._loop = asyncio.get_running_loop()
+        generation = steamgrid.service.icon_generation(7)
+
+        job = asyncio.ensure_future(steamgrid.service.write_job_icon(7, b"from the job", generation))
+        while not jobs_write_started.is_set():
+            await asyncio.sleep(0.01)
+        pick = asyncio.ensure_future(steamgrid.service.save_shortcut_icon(7, base64.b64encode(b"picked").decode()))
+        await asyncio.sleep(0.05)
+        jobs_write_may_finish.set()
+        await asyncio.gather(job, pick)
+
+        assert list(written.values()) == [b"picked"]
+
+    @pytest.mark.asyncio
+    async def test_each_pick_moves_its_shortcuts_generation_on_and_no_other(self, steamgrid, tmp_path):
+        import base64
+
+        _record_icon_writes(steamgrid, tmp_path)
+        steamgrid.service._loop = asyncio.get_running_loop()
+        icon = base64.b64encode(b"picked").decode("ascii")
+
+        await steamgrid.service.save_shortcut_icon(7, icon)
+        await steamgrid.service.save_shortcut_icon(7, icon)
+
+        assert steamgrid.service.icon_generation(7) == 2
+        assert steamgrid.service.icon_generation(8) == 0
+
+
+def _seed_rom_with_ids(uow, rom_id, *, sgdb_id=None, igdb_id=None):
+    with uow:
+        uow.roms.save(
+            Rom(
+                rom_id=rom_id,
+                platform_slug="n64",
+                name="Game",
+                fs_name="Game.z64",
+                shortcut_app_id=100 + rom_id,
+                last_synced_at="2025-01-01T00:00:00",
+                sgdb_id=sgdb_id,
+                igdb_id=igdb_id,
+            )
+        )
+
+
+class TestFetchShortcutIcon:
+    @pytest.fixture(autouse=True)
+    def _with_a_key(self, steamgrid):
+        steamgrid.settings["steamgriddb_api_key"] = "key"
+
+    def test_a_cached_icon_is_answered_without_asking_steamgriddb(
+        self, steamgrid, sgdb_artwork_cache, fake_steamgrid_db_api
+    ):
+        sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 1, "icon")] = b"cached"
+
+        fetch = steamgrid.service.do_fetch_shortcut_icon(1)
+
+        assert (fetch.answer, fetch.data) == (IconAnswer.ICON, b"cached")
+        assert fake_steamgrid_db_api.requested_paths == []
+
+    def test_answers_the_icon_downscaled(self, steamgrid, sgdb_artwork_cache):
+        sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 1, "icon")] = b"big"
+        steamgrid.service._downscale_icon = lambda data: b"small:" + data
+
+        assert steamgrid.service.do_fetch_shortcut_icon(1).data == b"small:big"
+
+    def test_a_cached_icon_the_downscale_cannot_read_fails_and_leaves_the_cache(
+        self, steamgrid, sgdb_artwork_cache, caplog
+    ):
+        cached = _cached_path(sgdb_artwork_cache, 1, "icon")
+        sgdb_artwork_cache.files[cached] = b"<html>"
+        steamgrid.service._downscale_icon = lambda _data: None
+
+        with caplog.at_level(logging.WARNING):
+            fetch = steamgrid.service.do_fetch_shortcut_icon(1)
+
+        assert fetch.answer is IconAnswer.FAILED
+        assert cached not in sgdb_artwork_cache.files
+        assert "rom_id=1 is not an image Tender reads" in caplog.text
+
+    def test_a_cache_root_that_cannot_be_written_fails_the_fetch(self, steamgrid, sgdb_artwork_cache, monkeypatch):
+        def unwritable() -> str:
+            raise PermissionError("Permission denied: '/cache/sgdb'")
+
+        monkeypatch.setattr(sgdb_artwork_cache, "cache_dir", unwritable)
+
+        assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.FAILED
+
+    def test_without_an_api_key_nothing_is_established(self, steamgrid, uow):
+        steamgrid.settings["steamgriddb_api_key"] = ""
+        _seed_rom_with_ids(uow, 1, sgdb_id=5)
+
+        assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.FAILED
+
+    def test_fetches_by_the_stored_id_and_caches_the_icon(
+        self, steamgrid, uow, sgdb_artwork_cache, fake_steamgrid_db_api
+    ):
+        _seed_rom_with_ids(uow, 1, sgdb_id=5)
+        fake_steamgrid_db_api.seed_artwork(5, "icon", "https://cdn/icon5.png")
+        fake_steamgrid_db_api.seed_image_bytes("https://cdn/icon5.png", b"icon five")
+
+        fetch = steamgrid.service.do_fetch_shortcut_icon(1)
+
+        assert (fetch.answer, fetch.data) == (IconAnswer.ICON, b"icon five")
+        assert sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 1, "icon")] == b"icon five"
+
+    def test_resolves_a_missing_id_through_igdb_and_saves_it(self, steamgrid, uow, fake_steamgrid_db_api):
+        _seed_rom_with_ids(uow, 1, igdb_id=77)
+        fake_steamgrid_db_api.seed_igdb_lookup(77, 5)
+        fake_steamgrid_db_api.seed_artwork(5, "icon", "https://cdn/icon5.png")
+        fake_steamgrid_db_api.seed_image_bytes("https://cdn/icon5.png", b"icon five")
+
+        fetch = steamgrid.service.do_fetch_shortcut_icon(1)
+
+        assert fetch.answer is IconAnswer.ICON
+        assert uow.roms.get(1).sgdb_id == 5
+
+    def test_a_rom_with_neither_id_has_no_icon(self, steamgrid, uow, fake_steamgrid_db_api):
+        _seed_rom_with_ids(uow, 1)
+
+        assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.NO_ICON
+        assert fake_steamgrid_db_api.requested_paths == []
+
+    def test_an_igdb_id_steamgriddb_has_no_game_for_has_no_icon(self, steamgrid, uow, fake_steamgrid_db_api):
+        _seed_rom_with_ids(uow, 1, igdb_id=77)
+        fake_steamgrid_db_api.seed_igdb_lookup(77, None)
+
+        assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.NO_ICON
+        assert uow.roms.get(1).sgdb_id is None
+
+    def test_a_game_with_no_icon_has_no_icon(self, steamgrid, uow, fake_steamgrid_db_api):
+        _seed_rom_with_ids(uow, 1, sgdb_id=5)
+        fake_steamgrid_db_api.seed_raw_response("/icons/game/5", {"success": True, "data": []})
+
+        assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.NO_ICON
+
+    def test_an_icon_answer_that_says_it_failed_establishes_nothing(
+        self, steamgrid, uow, fake_steamgrid_db_api, caplog
+    ):
+        _seed_rom_with_ids(uow, 1, sgdb_id=5)
+        fake_steamgrid_db_api.seed_raw_response("/icons/game/5", {"success": False, "errors": ["oops"]})
+
+        with caplog.at_level(logging.WARNING):
+            assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.FAILED
+        assert "SGDB icon fetch failed" not in caplog.text
+        assert steamgrid.service._download_icon_io(1, "dummy") is IconAnswer.FAILED
+
+    def test_no_icon_answer_at_all_establishes_nothing(self, steamgrid, uow, fake_steamgrid_db_api):
+        _seed_rom_with_ids(uow, 1, sgdb_id=5)
+
+        assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.FAILED
+        assert fake_steamgrid_db_api.requested_paths == ["/icons/game/5"]
+
+    def test_an_igdb_answer_that_says_it_failed_establishes_nothing(
+        self, steamgrid, uow, fake_steamgrid_db_api, caplog
+    ):
+        _seed_rom_with_ids(uow, 1, igdb_id=77)
+        fake_steamgrid_db_api.seed_raw_response("/games/igdb/77", {"success": False, "errors": ["oops"]})
+
+        with caplog.at_level(logging.WARNING):
+            assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.FAILED
+        assert uow.roms.get(1).sgdb_id is None
+        assert "SGDB icon fetch failed" not in caplog.text
+        assert steamgrid.service._cross_ref_igdb_io(1) is IconAnswer.FAILED
+
+    def test_no_igdb_answer_at_all_establishes_nothing(self, steamgrid, uow, fake_steamgrid_db_api):
+        _seed_rom_with_ids(uow, 1, igdb_id=77)
+
+        assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.FAILED
+
+    @pytest.mark.parametrize("status", [401, 403])
+    def test_a_refused_key_answers_key_refused_and_leaves_the_warning_to_the_job(
+        self, steamgrid, uow, fake_steamgrid_db_api, status, caplog
+    ):
+        _seed_rom_with_ids(uow, 1, sgdb_id=5)
+        fake_steamgrid_db_api.request_side_effect = SgdbApiError(status, "Unauthorized")
+
+        with caplog.at_level(logging.WARNING):
+            assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.KEY_REFUSED
+
+        assert caplog.text == ""
+
+    def test_a_game_steamgriddb_does_not_know_has_no_icon(self, steamgrid, uow, fake_steamgrid_db_api):
+        _seed_rom_with_ids(uow, 1, sgdb_id=5)
+        fake_steamgrid_db_api.request_side_effect = SgdbApiError(404, "Not Found")
+
+        assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.NO_ICON
+
+    @pytest.mark.parametrize("where", ["api", "cdn", "igdb"])
+    def test_a_429_anywhere_answers_rate_limited(self, steamgrid, uow, fake_steamgrid_db_api, where):
+        if where == "igdb":
+            _seed_rom_with_ids(uow, 1, igdb_id=77)
+            fake_steamgrid_db_api.request_side_effect = SgdbRateLimitedError("Too Many Requests")
+        else:
+            _seed_rom_with_ids(uow, 1, sgdb_id=5)
+            fake_steamgrid_db_api.seed_artwork(5, "icon", "https://cdn/icon5.png")
+            if where == "api":
+                fake_steamgrid_db_api.request_side_effect = SgdbRateLimitedError("Too Many Requests")
+            else:
+                fake_steamgrid_db_api.download_image_side_effect = SgdbRateLimitedError("Too Many Requests")
+
+        assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.RATE_LIMITED
+
+    def test_a_server_error_establishes_nothing(self, steamgrid, uow, fake_steamgrid_db_api):
+        _seed_rom_with_ids(uow, 1, sgdb_id=5)
+        fake_steamgrid_db_api.request_side_effect = SgdbApiError(500, "Server Error")
+
+        assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.FAILED
+
+    def test_a_download_that_did_not_land_establishes_nothing(self, steamgrid, uow, fake_steamgrid_db_api, caplog):
+        _seed_rom_with_ids(uow, 1, sgdb_id=5)
+        fake_steamgrid_db_api.seed_artwork(5, "icon", "https://cdn/icon5.png")
+        fake_steamgrid_db_api.download_image_return = False
+
+        with caplog.at_level(logging.WARNING):
+            assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.FAILED
+        assert "SGDB icon fetch failed" not in caplog.text
+        assert steamgrid.service._download_icon_io(1, "dummy") is IconAnswer.FAILED
+
+    def test_a_network_failure_establishes_nothing(self, steamgrid, uow, fake_steamgrid_db_api):
+        _seed_rom_with_ids(uow, 1, sgdb_id=5)
+        fake_steamgrid_db_api.request_side_effect = OSError("network down")
+
+        assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.FAILED

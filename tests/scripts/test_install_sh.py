@@ -86,6 +86,7 @@ _CHECKOUT_FILES = (
     "dist/globals.js",
     "dist/index-coexistence.js",
     "bin/tender-rom-launcher",
+    "defaults/tender-icon.png",
     "LICENSE",
     "THIRD-PARTY-NOTICES.md",
     "install.sh",

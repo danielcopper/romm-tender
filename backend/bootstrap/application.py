@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
     from domain.app_directories import AppDirectories
     from domain.update_release import UpdateSource
-    from services.protocols import EventEmitter, SteamInterfaceReader
+    from services.protocols import EventEmitter, PanelConnectedFn, SteamInterfaceReader
 
     from .services import ServicesBundle
 
@@ -53,6 +53,8 @@ class Application:
         self._save_directory_backfill: asyncio.Task[None] | None = None
         # The release check asked for as long as the backend runs, held likewise.
         self._due_update_checks: asyncio.Task[None] | None = None
+        # The shortcut icon job's start-up run, waiting for a panel to connect.
+        self._shortcut_icons_at_start: asyncio.Task[None] | None = None
 
     def run_startup_repairs(self, report_failure: Callable[[str], None]) -> None:
         """Run the start-up repairs, each one reporting a failure rather than raising it.
@@ -77,14 +79,16 @@ class Application:
         steps.run("note_update_attempt", services.update_install_service.note_start)
         steps.run("record_save_directories", self._start_save_directory_backfill)
         steps.run("run_due_update_checks", self._start_due_update_checks)
+        steps.run("shortcut_icons", self._start_shortcut_icons)
 
     async def shutdown(self) -> None:
         """Stop the background tasks that are still running, then shut the services down."""
-        for task in (self._save_directory_backfill, self._due_update_checks):
+        for task in (self._save_directory_backfill, self._due_update_checks, self._shortcut_icons_at_start):
             if task is not None:
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
         services = self.services
+        await services.shortcut_icon_service.shutdown()
         await services.update_install_service.shutdown()
         services.sync_service.shutdown()
         await services.prune_service.shutdown()
@@ -108,6 +112,12 @@ class Application:
         """Start asking the release check whenever it may be due, for as long as the backend runs."""
         self._due_update_checks = self._loop.create_task(self.services.update_check_service.run_due_checks())
 
+    def _start_shortcut_icons(self) -> None:
+        """Run the shortcut icon job once a panel is connected to hear what it hands over."""
+        self._shortcut_icons_at_start = self._loop.create_task(
+            self.services.shortcut_icon_service.run_when_a_panel_connects()
+        )
+
 
 def build_application(
     *,
@@ -119,6 +129,7 @@ def build_application(
     loop: asyncio.AbstractEventLoop,
     emit: EventEmitter,
     steam: SteamInterfaceReader,
+    panel_connected: PanelConnectedFn,
 ) -> Application:
     """Build every adapter and wire every service into an :class:`Application`.
 
@@ -147,6 +158,7 @@ def build_application(
                 hostname_provider=result.runtime_adapters.hostname_provider,
                 machine_id_provider=result.runtime_adapters.machine_id_provider,
                 steam=steam,
+                panel_connected=panel_connected,
             ),
             callbacks=result.callbacks,
             min_required_version=MIN_ROMM_VERSION,

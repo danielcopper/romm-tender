@@ -54,6 +54,7 @@ if TYPE_CHECKING:
         RendererRssFn,
         RommLibraryApi,
         SettingsPersister,
+        ShortcutIconJob,
         Sleeper,
         SteamConfigStore,
         UnitOfWorkFactory,
@@ -80,7 +81,8 @@ class LibraryServiceConfig:
     before a reading, so the apply can pause before Steam's per-session budget is
     exhausted. ``conflict_rules`` are what a library use case checks at
     its entry, under its endpoint's name, and what the ``sync_stale`` /
-    ``sync_complete`` events take their leases through.
+    ``sync_complete`` events take their leases through. The ``icon_job`` is handed
+    to the orchestrator and, as its placeholder path, to the chunk dispatcher.
     """
 
     romm_api: RommLibraryApi
@@ -103,6 +105,7 @@ class LibraryServiceConfig:
     renderer_rss: RendererRssFn
     renderer_gc: RendererGcFn
     conflict_rules: ConflictRules
+    icon_job: ShortcutIconJob
 
 
 class LibraryService:
@@ -207,6 +210,7 @@ class LibraryService:
                 sync_state_box=self._box,
                 reporter=reporter_binding,
                 session_budget=self._session_budget,
+                icon_placeholder_path=config.icon_job.placeholder_path,
             )
         )
 
@@ -254,6 +258,7 @@ class LibraryService:
                 cover_preparer=self._cover_preparer,
                 sync_run_recorder=self._sync_run_recorder,
                 conflict_rules=config.conflict_rules,
+                icon_job=config.icon_job,
             )
         )
 

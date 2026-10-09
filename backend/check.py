@@ -137,6 +137,7 @@ def _written_roots(directories: AppDirectories) -> tuple[str, ...]:
 
 async def _build_on_copies(directories: AppDirectories, user_home: str, logger: logging.Logger) -> None:
     """Build the application exactly as ``build_backend`` in ``main.py`` does, and run nothing of it."""
+    events = EventSink(logger)
     build_application(
         directories=directories,
         update_source=resolve_update_source(os.environ, _THIS_TREE),
@@ -144,8 +145,9 @@ async def _build_on_copies(directories: AppDirectories, user_home: str, logger: 
         user_home=user_home,
         logger=logger,
         loop=asyncio.get_running_loop(),
-        emit=EventSink(logger).emit,
+        emit=events.emit,
         steam=HostStatus().steam,
+        panel_connected=lambda: events.connected,
     )
 
 

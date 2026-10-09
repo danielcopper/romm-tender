@@ -3,6 +3,7 @@
 import asyncio
 import json
 import sqlite3
+import threading
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,6 +13,7 @@ from _factories import (
     _record_operations_at_lease,
     _refused_by_conflict_rule,
 )
+from fakes.fake_shortcut_icon_job import FakeShortcutIconJob
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 
@@ -100,7 +102,12 @@ def prune_conflicts():
 
 
 @pytest.fixture
-def svc(steam_config, artwork_remover_mock, uow_factory, logger, prune_conflicts):
+def icon_job():
+    return FakeShortcutIconJob()
+
+
+@pytest.fixture
+def svc(steam_config, artwork_remover_mock, uow_factory, logger, prune_conflicts, icon_job):
     return ShortcutRemovalService(
         config=ShortcutRemovalServiceConfig(
             steam_config=steam_config,
@@ -109,6 +116,8 @@ def svc(steam_config, artwork_remover_mock, uow_factory, logger, prune_conflicts
             artwork_remover=artwork_remover_mock,
             uow_factory=uow_factory,
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
+            held_claims=prune_conflicts.held_claims,
+            icon_job=icon_job,
         ),
     )
 
@@ -469,6 +478,8 @@ def _artwork_integration_service(uow, steam_config, tmp_path, logger) -> Shortcu
             artwork_remover=artwork_svc,
             uow_factory=FakeUnitOfWorkFactory(uow),
             conflict_rules=_make_conflict_rules(),
+            held_claims=tuple,
+            icon_job=FakeShortcutIconJob(),
         ),
     )
     svc._loop = asyncio.get_running_loop()
@@ -775,3 +786,125 @@ class TestTheRemovalLease:
         await svc.report_removal_results([], None)
 
         assert released == []
+
+    @pytest.mark.asyncio
+    async def test_report_removal_results_holds_prune_claim(self, svc, prune_conflicts):
+        held_during_report: list[list[str]] = []
+        orig_io = svc._report_removal_results_io
+
+        def recording_io(ids):
+            held_during_report.append([h.label for h in prune_conflicts._operations.values()])
+            return orig_io(ids)
+
+        svc._report_removal_results_io = recording_io
+        await svc.report_removal_results([], None)
+        assert held_during_report == [["report_removal_results"]]
+
+
+# ── TestTheShortcutIconJob ────────────────────────────────────────────────────
+
+
+class TestTheShortcutIconJob:
+    """A removal stops the shortcut icon job once its claim is held, and asks for it again once it is over."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("platform", [None, "n64"])
+    async def test_the_job_is_stopped_once_the_removal_is_in_flight(self, svc, uow, icon_job, platform):
+        _seed_rom(uow, 10, app_id=1001)
+        in_flight_at_stop: list[bool] = []
+
+        async def stop_for_removal() -> None:
+            in_flight_at_stop.append(svc.is_removal_in_flight())
+
+        icon_job.stop_for_removal = stop_for_removal
+
+        if platform is None:
+            await svc.remove_all_shortcuts()
+        else:
+            await svc.remove_platform_shortcuts(platform)
+
+        assert in_flight_at_stop == [True]
+
+    @pytest.mark.asyncio
+    async def test_the_removal_stays_in_flight_until_its_report_and_then_asks_for_the_job(self, svc, uow, icon_job):
+        _seed_rom(uow, 10, app_id=1001)
+        in_flight_at_request: list[bool] = []
+        icon_job.request_run = lambda **_options: in_flight_at_request.append(svc.is_removal_in_flight())
+
+        answer = await svc.remove_all_shortcuts()
+        assert svc.is_removal_in_flight() is True
+        assert in_flight_at_request == []
+
+        await svc.report_removal_results(["10"], answer["prune_lease_token"])
+
+        assert svc.is_removal_in_flight() is False
+        assert in_flight_at_request == [False]
+
+    @pytest.mark.asyncio
+    async def test_a_report_stops_the_job_before_it_deletes_anything(self, svc, uow, icon_job):
+        _seed_rom(uow, 10, app_id=1001)
+        steps: list[str] = []
+        orig_io = svc._report_removal_results_io
+
+        async def stop_for_removal() -> None:
+            steps.append(f"stop in flight={svc.is_removal_in_flight()}")
+
+        def recording_io(ids):
+            steps.append("delete")
+            return orig_io(ids)
+
+        icon_job.stop_for_removal = stop_for_removal
+        svc._report_removal_results_io = recording_io
+
+        await svc.report_removal_results(["10"], None)
+
+        assert steps == ["stop in flight=True", "delete"]
+
+    @pytest.mark.asyncio
+    async def test_a_report_without_a_lease_keeps_the_job_yielding_while_it_deletes(self, svc, uow):
+        _seed_rom(uow, 10, app_id=1001)
+        deleting = threading.Event()
+        release = threading.Event()
+        orig_io = svc._report_removal_results_io
+
+        def held_io(ids):
+            deleting.set()
+            if not release.wait(timeout=5):
+                raise TimeoutError("test did not release the report")
+            return orig_io(ids)
+
+        svc._report_removal_results_io = held_io
+        report = asyncio.create_task(svc.report_removal_results(["10"], None))
+        assert await asyncio.get_running_loop().run_in_executor(None, deleting.wait, 5)
+
+        in_flight_while_deleting = svc.is_removal_in_flight()
+        release.set()
+        await report
+
+        assert in_flight_while_deleting is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("method", ["remove_all_shortcuts", "remove_platform_shortcuts"])
+    async def test_a_removal_with_nothing_to_remove_asks_for_the_job_at_once(self, svc, icon_job, method):
+        if method == "remove_all_shortcuts":
+            answer = await svc.remove_all_shortcuts()
+        else:
+            answer = await svc.remove_platform_shortcuts("n64")
+
+        assert "prune_lease_token" not in answer
+        assert icon_job.removal_stops == 1
+        assert icon_job.requests == [False]
+        assert svc.is_removal_in_flight() is False
+
+    @pytest.mark.asyncio
+    async def test_a_removal_that_fails_asks_for_the_job_again(self, svc, icon_job):
+        def broken_read():
+            raise sqlite3.OperationalError("database is locked")
+
+        svc._uow_factory = broken_read
+
+        with pytest.raises(sqlite3.OperationalError):
+            await svc.remove_all_shortcuts()
+
+        assert icon_job.removal_stops == 1
+        assert icon_job.requests == [False]

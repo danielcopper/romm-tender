@@ -524,6 +524,22 @@ export interface SyncApplyUnitData {
    * session-budget headroom backend-side; empty/absent on later chunks.
    */
   cover_refreshes?: { rom_id: number; app_id: number }[];
+  /**
+   * The placeholder icon a shortcut this chunk mints is given at once
+   * (docs/architecture/steam-non-steam-shortcuts.md, "Shortcut icons"). `null`
+   * where the backend has none to give.
+   */
+  icon_placeholder_path: string | null;
+}
+
+/**
+ * A batch of icons the shortcut icon job has written into Steam's grid
+ * directory, each to be pointed at with `SetShortcutIcon` under the batch's
+ * prune lease.
+ */
+export interface ShortcutIconsData {
+  icons: { app_id: number; icon_path: string }[];
+  prune_lease_token: string;
 }
 
 export interface SyncStaleData {

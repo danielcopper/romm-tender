@@ -14,6 +14,7 @@ import pytest
 import pytest_asyncio
 from _factories import _make_conflict_rules
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
+from fakes.fake_shortcut_icon_job import FakeShortcutIconJob
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeUuidGen
 from models.prune import InstalledContentRemoval, SaveQuarantine, SealedSourceClaims
@@ -246,6 +247,7 @@ class Harness:
     clock: FakeClock
     switch_calls: list[dict[str, Any]]
     conflicts: PruneConflicts
+    icon_job: FakeShortcutIconJob
 
 
 def _rom(
@@ -339,6 +341,7 @@ async def harness() -> Harness:
 
     clock = FakeClock()
     conflicts = PruneConflicts(logger=logging.getLogger("test-prune-conflicts"), log_debug=lambda _msg: None)
+    icon_job = FakeShortcutIconJob()
     service = PruneService(
         config=PruneServiceConfig(
             loop=loop,
@@ -368,6 +371,7 @@ async def harness() -> Harness:
             settings={"preferred_region": "USA"},
             run_claim=conflicts,
             conflict_rules=_make_conflict_rules(prune_conflicts=conflicts),
+            icon_job=icon_job,
         )
     )
     return Harness(
@@ -385,6 +389,7 @@ async def harness() -> Harness:
         clock,
         switch_calls,
         conflicts,
+        icon_job,
     )
 
 
@@ -3364,3 +3369,146 @@ async def test_an_unreadable_completion_is_refused_and_the_action_still_awaits_i
     assert still_awaited is True
     assert accepted == {"success": True, "message": "Action result accepted."}
     assert outcome == ActionOutcome(success=True, message="done", snapshot=snapshot)
+
+
+class TestTheShortcutIconJob:
+    """A cleanup stops the shortcut icon job before it reserves its start, and resumes it after."""
+
+    @pytest.mark.asyncio
+    async def test_the_job_is_stopped_before_the_start_is_reserved(self, harness):
+        _seed(harness.uow, _rom(1, fetch="old"))
+        preview = await _preview(harness)
+        reserved_at_stop: list[bool] = []
+
+        async def stop_for_cleanup() -> None:
+            reserved_at_stop.append(harness.conflicts.cleanup_running)
+
+        harness.icon_job.stop_for_cleanup = stop_for_cleanup  # type: ignore[method-assign]
+
+        await _start(harness, preview["preview_id"])
+
+        assert reserved_at_stop == [False]
+        await _finish(harness)
+
+    @pytest.mark.asyncio
+    async def test_a_start_that_begins_no_run_resumes_the_job(self, harness):
+        _seed(harness.uow, _rom(1, fetch="old"))
+
+        with pytest.raises(Refused) as refused:
+            await _start(harness, "not-a-preview")
+
+        assert refused.value.reason == "stale_preview"
+        assert harness.icon_job.stops == 1
+        assert harness.icon_job.resumes == 1
+
+    @pytest.mark.asyncio
+    async def test_a_started_run_resumes_the_job_only_once_it_has_ended(self, harness):
+        _seed(harness.uow, _rom(1, fetch="old"))
+        harness.romm.outcomes[1] = [{"id": 1}]
+        preview = await _preview(harness)
+
+        await _start(harness, preview["preview_id"])
+        assert harness.icon_job.resumes == 0
+        await _finish(harness)
+
+        assert harness.icon_job.resumes == 1
+
+    @pytest.mark.asyncio
+    async def test_a_start_refused_while_a_run_is_under_way_resumes_only_its_own_stop(self, harness):
+        _seed(harness.uow, _rom(1, fetch="old"))
+        harness.romm.outcomes[1] = [{"id": 1}]
+        preview = await _preview(harness)
+        await _start(harness, preview["preview_id"])
+
+        with pytest.raises(Refused):
+            await _start(harness, preview["preview_id"])
+        assert (harness.icon_job.stops, harness.icon_job.resumes) == (2, 1)
+        await _finish(harness)
+
+        assert (harness.icon_job.stops, harness.icon_job.resumes) == (2, 2)
+
+    @pytest.mark.asyncio
+    async def test_a_start_cancelled_while_it_waits_for_the_stop_resumes_the_job(self, harness):
+        _seed(harness.uow, _rom(1, fetch="old"))
+        preview = await _preview(harness)
+        stopping = asyncio.Event()
+
+        async def stop_held_by_a_write() -> None:
+            harness.icon_job.stops += 1
+            stopping.set()
+            await asyncio.Event().wait()
+
+        harness.icon_job.stop_for_cleanup = stop_held_by_a_write  # type: ignore[method-assign]
+        start = asyncio.create_task(_start(harness, preview["preview_id"]))
+        await stopping.wait()
+        start.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await start
+
+        assert (harness.icon_job.stops, harness.icon_job.resumes) == (1, 1)
+
+    @pytest.mark.asyncio
+    async def test_a_start_refused_after_an_overlapping_start_began_its_run_resumes_its_own_stop(
+        self, harness, monkeypatch
+    ):
+        _seed(harness.uow, _rom(1, fetch="old"))
+        harness.romm.outcomes[1] = [{"id": 1}]
+        preview = await _preview(harness)
+        loop = asyncio.get_running_loop()
+        refreshing = threading.Event()
+        release_refresh = threading.Event()
+        second_reading_root = threading.Event()
+        release_root = threading.Event()
+        build = harness.service._preview_builder.build
+        rom_root = harness.service._retrodeck_folders.rom_root
+        root_reads = 0
+
+        def held_refresh(*args):
+            refreshing.set()
+            if not release_refresh.wait(timeout=5):
+                raise TimeoutError("test did not release the preview refresh")
+            return build(*args)
+
+        def second_root_held():
+            nonlocal root_reads
+            root_reads += 1
+            if root_reads == 2:
+                second_reading_root.set()
+                if not release_root.wait(timeout=5):
+                    raise TimeoutError("test did not release the second start's ROM root")
+            return rom_root()
+
+        monkeypatch.setattr(harness.service._preview_builder, "build", held_refresh)
+        monkeypatch.setattr(harness.service._retrodeck_folders, "rom_root", second_root_held)
+        first = asyncio.create_task(_start(harness, preview["preview_id"]))
+        assert await loop.run_in_executor(None, refreshing.wait, 5)
+        second = asyncio.create_task(_start(harness, preview["preview_id"]))
+        assert await loop.run_in_executor(None, second_reading_root.wait, 5)
+        release_refresh.set()
+        assert (await first)["status"] == "running"
+        release_root.set()
+        with pytest.raises(Refused):
+            await second
+        await _finish(harness)
+
+        assert (harness.icon_job.stops, harness.icon_job.resumes) == (2, 2)
+
+    @pytest.mark.asyncio
+    async def test_a_run_whose_task_never_started_resumes_the_job_when_its_claim_is_released(self, harness):
+        _seed(harness.uow, _rom(1, fetch="old"))
+        preview = await _preview(harness)
+
+        async def never_starts(*_args: Any) -> None:
+            await asyncio.Event().wait()
+
+        harness.service._run = never_starts  # type: ignore[method-assign]
+        await _start(harness, preview["preview_id"])
+        task = harness.service._task
+        assert task is not None
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        await asyncio.sleep(0)
+
+        assert harness.conflicts.cleanup_running is False
+        assert harness.icon_job.resumes == 1

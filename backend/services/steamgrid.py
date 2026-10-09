@@ -16,6 +16,8 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from models.shortcut_icon import IconAnswer, IconFetch
+
 from domain.sgdb_artwork import (
     asset_type_endpoint,
     asset_type_name,
@@ -25,7 +27,14 @@ from domain.sgdb_artwork import (
     parse_autocomplete_results,
     sgdb_endpoint_path,
 )
-from lib.errors import AuthFailed, Refused, ServerUnreachable, SgdbApiError, SteamGridDirMissingError
+from lib.errors import (
+    AuthFailed,
+    Refused,
+    ServerUnreachable,
+    SgdbApiError,
+    SgdbRateLimitedError,
+    SteamGridDirMissingError,
+)
 
 if TYPE_CHECKING:
     import logging
@@ -33,6 +42,7 @@ if TYPE_CHECKING:
     from services.protocols import (
         ConflictRules,
         DebugLogger,
+        IconDownscaleFn,
         PendingSyncReader,
         RommRomReader,
         SettingsPersister,
@@ -71,9 +81,10 @@ class SteamGridServiceConfig:
     runtime infrastructure, the ``settings.json`` persister, the SQLite
     Unit-of-Work factory (the ``sgdb_id`` cross-ref is persisted onto the
     ``roms`` aggregate via the UoW), the pending-sync read seam, the
-    debug-logger seam SteamGridService needs at construction time, and the
+    debug-logger seam SteamGridService needs at construction time, the
     ``ConflictRules`` the artwork, icon, resolution and game-id use cases check
-    at their entry, and the artwork one takes the ``sgdb_artwork`` lease through.
+    at their entry, and the artwork one takes the ``sgdb_artwork`` lease through,
+    and the downscale every icon passes through before it is written.
     """
 
     sgdb_api: SteamGridDbApi
@@ -88,6 +99,7 @@ class SteamGridServiceConfig:
     log_debug: DebugLogger
     uow_factory: UnitOfWorkFactory
     conflict_rules: ConflictRules
+    downscale_icon: IconDownscaleFn
 
 
 class SteamGridService:
@@ -111,6 +123,11 @@ class SteamGridService:
         self._log_debug = config.log_debug
         self._uow_factory = config.uow_factory
         self._rules = config.conflict_rules
+        self._downscale_icon = config.downscale_icon
+        # Per app id: the count ``icon_generation`` answers, and the lock a page
+        # save and the icon job's write take turns under.
+        self._icon_generations: dict[int, int] = {}
+        self._icon_locks: dict[int, asyncio.Lock] = {}
 
     # -- SGDB lookup -------------------------------------------------------
 
@@ -165,9 +182,8 @@ class SteamGridService:
 
         Checks the persisted ROM row first, then the in-memory
         pending-sync map. Returns ``None`` when neither carries a
-        ``sgdb_id``. RomM re-reads and IGDB cross-refs are gated behind
-        the explicit ``get_sgdb_resolution`` user action, not this
-        passive lookup.
+        ``sgdb_id``. RomM re-reads and the name search are left to the
+        explicit ``get_sgdb_resolution`` user action.
         """
         rom_id = int(rom_id)
         with self._uow_factory() as uow:
@@ -234,9 +250,9 @@ class SteamGridService:
     async def get_sgdb_resolution(self, rom_id):
         """Resolve which SGDB game id to use for *rom_id*, picker-driven.
 
-        The single explicit user action that may re-read RomM and run the
-        IGDB cross-ref / name-search cascade. RomM's ``sgdb_id`` always
-        wins when present. Returns one of:
+        The single explicit user action that may re-read RomM and offer the
+        name search; the shortcut icon job runs the IGDB cross-ref without
+        one. RomM's ``sgdb_id`` always wins when present. Returns one of:
 
         - ``{"decision": "no_api_key"}`` — no key configured.
         - ``{"decision": "resolved", "sgdb_id": int}`` — a winning id was
@@ -470,7 +486,18 @@ class SteamGridService:
     # -- icon saving -------------------------------------------------------
 
     def _save_icon_to_grid(self, app_id, icon_bytes):
-        """Write the icon PNG into Steam's grid dir; return its path or ``None``.
+        """Write the icon, downscaled, into Steam's grid dir; return its path or ``None``.
+
+        One the downscale cannot read is written as it came.
+        """
+        icon = self._downscale_icon(icon_bytes)
+        if icon is None:
+            self._logger.warning(f"Icon for app_id {app_id} is not an image Tender reads; written as it came")
+            icon = icon_bytes
+        return self._write_icon_to_grid(app_id, icon)
+
+    def _write_icon_to_grid(self, app_id, icon_bytes):
+        """Write *icon_bytes* into Steam's grid dir as they are; return the path or ``None``.
 
         Pointing the shortcut at this file is the frontend's job via
         ``SteamClient.Apps.SetShortcutIcon`` — Steam holds shortcuts.vdf in
@@ -506,7 +533,120 @@ class SteamGridService:
             self._logger.error(f"Failed to decode icon base64: {e}")
             raise Refused("invalid_payload", "Failed to decode icon data") from e
 
-        icon_path = await self._loop.run_in_executor(None, self._save_icon_to_grid, app_id, icon_bytes)
+        async with self._icon_lock(app_id):
+            self._icon_generations[app_id] = self._icon_generations.get(app_id, 0) + 1
+            icon_path = await self._loop.run_in_executor(None, self._save_icon_to_grid, app_id, icon_bytes)
         if not icon_path:
             raise Refused("icon_write_failed", "Failed to write icon to Steam grid directory")
         return {"success": True, "icon_path": icon_path}
+
+    # -- icons for the shortcut icon job ------------------------------------
+
+    def _icon_lock(self, app_id: int) -> asyncio.Lock:
+        lock = self._icon_locks.get(app_id)
+        if lock is None:
+            lock = self._icon_locks[app_id] = asyncio.Lock()
+        return lock
+
+    def icon_generation(self, app_id: int) -> int:
+        """Implements ``services.protocols.ShortcutIconSource.icon_generation``.
+
+        The icon job reads it before it fetches, and its write lands only while
+        it is unchanged, so an icon picked on the game page meanwhile wins.
+        """
+        return self._icon_generations.get(int(app_id), 0)
+
+    async def write_job_icon(self, app_id: int, icon_bytes: bytes, generation: int) -> str | None:
+        """Write the icon job's icon for *app_id*, which its fetch downscaled; answer its path.
+
+        ``None`` when the game page has saved an icon for it since *generation*
+        was read, or when the file could not be written. Takes turns with the
+        page's save under one lock per app id, so the check and the write
+        cannot be split by one.
+        """
+        app_id = int(app_id)
+        async with self._icon_lock(app_id):
+            if self.icon_generation(app_id) != generation:
+                return None
+            return await self._loop.run_in_executor(None, self._write_icon_to_grid, app_id, icon_bytes)
+
+    def do_fetch_shortcut_icon(self, rom_id: int) -> IconFetch:
+        """Implements ``services.protocols.ShortcutIconSource.do_fetch_shortcut_icon``."""
+        rom_id = int(rom_id)
+        if not self._settings.get("steamgriddb_api_key"):
+            return IconFetch(IconAnswer.FAILED)
+        try:
+            cached = os.path.join(self._sgdb_artwork_cache.cache_dir(), f"{rom_id}_icon.png")
+            if not self._sgdb_artwork_cache.exists(cached):
+                answer = self._download_icon_io(rom_id, cached)
+                if answer is not None:
+                    return IconFetch(answer)
+            return self._downscaled(rom_id, cached)
+        except SgdbRateLimitedError:
+            return IconFetch(IconAnswer.RATE_LIMITED)
+        except SgdbApiError as e:
+            # SteamGridDB answers 404 ("Game not found.") for a game id it does
+            # not know, as its own client library, npm's steamgriddb, documents.
+            if e.status_code == 404:
+                return IconFetch(IconAnswer.NO_ICON)
+            if e.status_code in (401, 403):
+                return IconFetch(IconAnswer.KEY_REFUSED)
+            self._logger.warning(f"SGDB icon fetch failed for rom_id={rom_id}: HTTP {e.status_code}")
+            return IconFetch(IconAnswer.FAILED)
+        except Exception as e:
+            self._logger.warning(f"SGDB icon fetch failed for rom_id={rom_id}: {e}")
+            return IconFetch(IconAnswer.FAILED)
+
+    def _download_icon_io(self, rom_id: int, cached: str) -> IconAnswer | None:
+        """Download *rom_id*'s icon to *cached*; ``None`` once it is there, else what to answer instead.
+
+        Lets the API's errors through.
+        """
+        sgdb_id = self._resolve_sgdb_id_state_only(rom_id)
+        if not sgdb_id:
+            found = self._cross_ref_igdb_io(rom_id)
+            if isinstance(found, IconAnswer):
+                return found
+            sgdb_id = found
+        path = sgdb_endpoint_path("icon", sgdb_id)
+        result = self._sgdb_api.request(path) if path else None
+        if result is None or not result.get("success"):
+            return IconAnswer.FAILED
+        if not result.get("data"):
+            return IconAnswer.NO_ICON
+        if not self._sgdb_api.download_image(result["data"][0]["url"], cached):
+            return IconAnswer.FAILED
+        return None
+
+    def _downscaled(self, rom_id: int, cached: str) -> IconFetch:
+        icon = self._downscale_icon(self._sgdb_artwork_cache.read_bytes(cached))
+        if icon is not None:
+            return IconFetch(IconAnswer.ICON, icon)
+        self._logger.warning(f"SGDB icon for rom_id={rom_id} is not an image Tender reads; removed from the cache")
+        try:
+            self._sgdb_artwork_cache.remove_file(cached)
+        except OSError as e:
+            self._logger.warning(f"Failed to remove the cached icon for rom_id={rom_id}: {e}")
+        return IconFetch(IconAnswer.FAILED)
+
+    def _cross_ref_igdb_io(self, rom_id: int) -> int | IconAnswer:
+        """Resolve *rom_id*'s SteamGridDB id through its stored IGDB id, and save it.
+
+        ``NO_ICON`` when the ROM has no IGDB id or SteamGridDB knows no game
+        for it, ``FAILED`` for an answer that says neither. Lets the API's
+        errors through, so the caller can tell a 429 from a game SteamGridDB
+        does not know.
+        """
+        with self._uow_factory() as uow:
+            rom = uow.roms.get(rom_id)
+        igdb_id = rom.igdb_id if rom is not None else None
+        if not igdb_id:
+            return IconAnswer.NO_ICON
+        result = self._sgdb_api.request(f"/games/igdb/{igdb_id}")
+        if result is None or not result.get("success"):
+            return IconAnswer.FAILED
+        if not result.get("data"):
+            return IconAnswer.NO_ICON
+        sgdb_id = int(result["data"]["id"])
+        self._persist_sgdb_id(str(rom_id), sgdb_id)
+        return sgdb_id

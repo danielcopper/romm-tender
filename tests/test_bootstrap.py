@@ -9,7 +9,7 @@ import sqlite3
 import subprocess
 import sys
 from dataclasses import fields
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -55,6 +55,7 @@ from models.shortcut_launcher import ShortcutLauncher
 
 from adapters import atlas_zstd
 from adapters.gavel_native import GavelNativeAdapter
+from adapters.icon_image import IconImages
 from adapters.retrodeck_folders import RetroDeckFoldersAdapter
 from adapters.romm.http import RommHttpAdapter
 from adapters.romm.romm_api import RommApiAdapter
@@ -82,11 +83,15 @@ from services.playtime import PlaytimeService
 from services.prune import PruneService
 from services.prune_leases import PruneLeaseService
 from services.saves import SaveService
+from services.shortcut_icons import ShortcutIconService
 from services.steamgrid import SteamGridService
 from services.update_check import UpdateCheckService
 from services.update_outcome import UpdateOutcomeService
 from services.update_output import UpdateOutputService
 from services.version_switch import VersionSwitchService
+
+if TYPE_CHECKING:
+    from lib.conflict_rules import ConflictRuleSet
 
 _GAVEL = GavelNativeAdapter()
 
@@ -146,6 +151,16 @@ class TestBootstrap:
     def test_returns_steam_config(self, tmp_path):
         result = _bootstrap_for(tmp_path)
         assert isinstance(result.adapters.steam_config, SteamConfigAdapter)
+
+    def test_the_icons_are_downscaled_and_the_logo_is_read_from_the_code_root(self, tmp_path):
+        defaults = tmp_path / "code" / "defaults"
+        defaults.mkdir(parents=True)
+        (defaults / "tender-icon.png").write_bytes(b"logo")
+
+        result = _bootstrap_for(tmp_path)
+
+        assert getattr(result.adapters.downscale_icon, "__func__", None) is IconImages.downscale
+        assert result.adapters.tender_logo() == b"logo"
 
     def test_returns_romm_api(self, tmp_path):
         result = _bootstrap_for(tmp_path)
@@ -282,6 +297,7 @@ class TestTheCacheRootAndTheDataRootStayApart:
                     hostname_provider=result.runtime_adapters.hostname_provider,
                     machine_id_provider=result.runtime_adapters.machine_id_provider,
                     steam=FakeSteamInterface(),
+                    panel_connected=lambda: False,
                 ),
                 callbacks=result.callbacks,
                 min_required_version=MIN_ROMM_VERSION,
@@ -654,6 +670,9 @@ class TestWireServices:
                 path=str(tmp_path / "home" / ".local" / "bin" / "tender-rom-launcher"),
                 at_home=True,
             ),
+            "downscale_icon": MagicMock(),
+            "tender_logo": MagicMock(),
+            "panel_connected": MagicMock(),
         }
 
     @staticmethod
@@ -697,6 +716,8 @@ class TestWireServices:
                 update_staging=deps["update_staging"],
                 transient_units=FakeTransientUnits(),
                 journal=FakeJournal(),
+                downscale_icon=deps["downscale_icon"],
+                tender_logo=deps["tender_logo"],
             ),
             stores=StateBundle(
                 settings=deps["settings"],
@@ -711,6 +732,7 @@ class TestWireServices:
                 hostname_provider=deps["hostname_provider"],
                 machine_id_provider=deps["machine_id_provider"],
                 steam=FakeSteamInterface(),
+                panel_connected=deps["panel_connected"],
             ),
             callbacks=CallbackBundle(
                 retrodeck_folders=deps["retrodeck_folders"],
@@ -782,7 +804,7 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(fields(result)) == 34
+        assert len(fields(result)) == 35
         assert all(getattr(result, field.name) is not None for field in fields(result))
         assert isinstance(result.prune_conflicts, PruneConflicts)
         assert isinstance(result.core_service, CoreService)
@@ -797,6 +819,31 @@ class TestWireServices:
         assert isinstance(result.leftover_tmp_cleanup_service, LeftoverTmpCleanupService)
         assert isinstance(result.update_outcome_service, UpdateOutcomeService)
         assert isinstance(result.update_output_service, UpdateOutputService)
+        assert isinstance(result.shortcut_icon_service, ShortcutIconService)
+        deps["loop"].close()
+
+    def test_the_icon_job_reads_the_cleanup_the_sync_and_the_removal_it_yields_to(self, tmp_path):
+        deps = self._make_deps(tmp_path)
+        result = wire_services(self._make_config(deps))
+        job = result.shortcut_icon_service
+
+        async def what_the_job_reads() -> list[tuple[bool, bool, bool]]:
+            seen = [(job._cleanup_running(), job._sync_in_flight(), job._removal_in_flight())]
+            result.prune_conflicts.register_run("cleanup")
+            seen.append((job._cleanup_running(), job._sync_in_flight(), job._removal_in_flight()))
+            result.prune_conflicts.release_run("cleanup")
+            result.sync_service._box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
+            seen.append((job._cleanup_running(), job._sync_in_flight(), job._removal_in_flight()))
+            await result.prune_conflicts.acquire_lease("shortcut_removal")
+            seen.append((job._cleanup_running(), job._sync_in_flight(), job._removal_in_flight()))
+            return seen
+
+        assert deps["loop"].run_until_complete(what_the_job_reads()) == [
+            (False, False, False),
+            (True, False, False),
+            (False, True, False),
+            (False, True, True),
+        ]
         deps["loop"].close()
 
     def test_pending_sync_binding_observes_library_rebinds(self, tmp_path):
@@ -881,4 +928,44 @@ class TestWireServices:
             migration_service.is_retrodeck_migration_pending
         )
         assert save_sync_service._sync_engine._is_retrodeck_migration_pending.__self__ is migration_service  # type: ignore[union-attr]
+        deps["loop"].close()
+
+    def test_icon_job_and_steamgrid_wiring(self, tmp_path):
+        deps = self._make_deps(tmp_path)
+        cfg = self._make_config(deps)
+        result = wire_services(cfg)
+
+        sgdb = result.sgdb_service
+        assert sgdb._sgdb_api is deps["sgdb_adapter"]
+        assert sgdb._romm_api is deps["romm_api"]
+        assert sgdb._steam_config is deps["steam_config"]
+        assert sgdb._sgdb_artwork_cache is deps["sgdb_artwork_cache"]
+        assert sgdb._settings is deps["settings"]
+        assert sgdb._loop is deps["loop"]
+        assert sgdb._logger is deps["logger"]
+        assert sgdb._settings_persister is deps["settings_persister"]
+        assert sgdb._log_debug is deps["log_debug"]
+        assert sgdb._uow_factory is deps["uow_factory"]
+        assert cast("ConflictRuleSet", sgdb._rules)._prune_conflicts is result.prune_conflicts
+        assert sgdb._downscale_icon is deps["downscale_icon"]
+
+        job = result.shortcut_icon_service
+        assert job._steam_config is deps["steam_config"]
+        assert job._icons is sgdb
+        assert job._uow_factory is deps["uow_factory"]
+        assert job._settings is deps["settings"]
+        assert job._rules is sgdb._rules
+        assert cast("ConflictRuleSet", job._rules)._prune_conflicts is result.prune_conflicts
+        assert job._emit is deps["emit"]
+        assert job._sleeper is deps["sleeper"]
+        assert job._panel_connected is deps["panel_connected"]
+        assert job._tender_logo is deps["tender_logo"]
+        assert job._loop is deps["loop"]
+        assert job._logger is deps["logger"]
+        assert job._log_debug is deps["log_debug"]
+
+        assert result.shortcut_removal_service._icon_job is job
+        assert result.prune_service._icon_job is job
+        assert result.sync_service._orchestrator._icon_job is job
+
         deps["loop"].close()

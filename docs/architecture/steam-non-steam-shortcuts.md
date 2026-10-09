@@ -366,8 +366,8 @@ Shortcut creation and every field update go through the frontend `SteamClient.Ap
 while Steam is running (Steam holds the file in memory and rewrites it from memory, silently clobbering external writes
 — see [shortcuts.vdf is memory-authoritative](#shortcutsvdf-is-memory-authoritative)). The backend `SteamConfigAdapter`
 (`adapters/steam_config.py`) still lays down artwork **files** in the grid directory, including the icon PNG; its
-`shortcuts.vdf` read/write helpers remain in the adapter but are no longer on any live path after the icon write moved
-to `SteamClient.Apps.SetShortcutIcon`.
+`read_shortcuts` / `write_shortcuts` helpers are on no live path. `read_shortcut_exes` (the launcher relocation) and
+`read_shortcut_icons` (the shortcut icon job) still read the file, which Tender never writes while Steam runs.
 
 ### shortcuts.vdf structure
 
@@ -579,6 +579,88 @@ The backend also writes each `{app_id}p.png` grid file at commit (`SyncReporter.
 `ArtworkService.finalize_cover_path`). That copy costs no renderer heap and is the durability net: it lands the grid
 file even if a per-item API call failed, so a residual gray tile resolves the next time the game's page is opened or on
 the next client restart.
+
+### Shortcut icons
+
+Every shortcut Tender manages gets its SteamGridDB icon in the background, never inside the apply loop: there a cold
+icon fetch cost about a second per minted shortcut, almost all of it SteamGridDB's image CDN missing its edge cache
+(measured by the maintainer on a Steam Deck, Steam client version 1788652215).
+
+**What Steam shows**, measured on a Steam Deck LCD in Desktop Mode, in the desktop client, Steam client version
+1788652215 (2026-10-05):
+
+- A shortcut with **no** icon shows a newly set one only after Steam restarts — through `SetShortcutIcon` or by hand in
+  Properties alike. **Replacing** an icon a shortcut already has shows at once, and so does an icon set right after
+  `AddShortcut`, and new bytes written to the same file followed by `SetShortcutIcon` with the same path.
+- Steam rewrites `shortcuts.vdf` soon after a shortcut's creation and after an icon is set, not only on exit. The
+  maintainer measured the first on the same client: five shortcuts added 50 ms apart were all in the file 0.15 s after
+  the last `AddShortcut`.
+- Steam's app overview carries no icon for a shortcut that had none when the session began: `icon_hash`, `icon_data` and
+  `icon_data_format` read `undefined` before and after `SetShortcutIcon`. So the file is where the icons are read from.
+
+**The placeholder.** The apply loop gives every shortcut it mints the placeholder icon right after its cover
+(`applyPlaceholderIcon` in `syncManager.ts`): `tender-icon-placeholder.png`, a transparent 1×1 PNG of 68 bytes
+(`domain/shortcut_icon.py`) that the backend writes into the grid directory and rewrites when it is missing; each
+`sync_apply_unit` frame names its path as `icon_placeholder_path`. The list shows an empty spot rather than a grey box,
+and the job's icon is then a replacement, which shows at once. A shortcut the sync adopts (an untracked orphan) gets
+none, since it may carry an icon somebody set by hand. Without a SteamGridDB API key no job would replace the
+placeholder, so the frame names none and a minted shortcut keeps Steam's own grey box. A shortcut that had no icon
+before — one minted without a key included — shows its first one after one Steam restart.
+
+**Why 64×64.** In the desktop client the library list draws icons at 20 px (40 px at 2×), SteamGridDB's are often 512 or
+1024 px, and Steam holds a shortcut's icon in the renderer as base64 for the whole session once it has one: a 1 MB PNG
+becomes 1.35 MB of `icon_data`. Both are the maintainer's measurements (Steam Deck, client 1788652215). 64 px, the size
+the maintainer chose, leaves room above the largest size drawn. So every SteamGridDB icon Tender writes into the grid
+directory, the game page's included, is downscaled to fit 64×64 with its aspect kept (`adapters/icon_image.py`); the
+full-size file stays in the artwork cache. Where the vendored `png` does not load, icons are written full size and that
+is logged once.
+
+**The job** (`services/shortcut_icons.py`):
+
+- **Worklist:** every bound shortcut whose `icon` in `shortcuts.vdf` is empty or a file named like the placeholder
+  (`domain/shortcut_icon.py`, `icon_worklist`) — by name, so a placeholder minted under another Steam account's grid
+  directory still counts — derived at every run and never stored, so a stopped run leaves exactly the rest. The logo, or
+  any other path — an icon somebody set by hand — is left alone. A bound shortcut the file does not hold yet is counted
+  in the log and left for the next run.
+- **One icon:** `SteamGridService.do_fetch_shortcut_icon` serves it from the artwork cache first. A ROM with no
+  SteamGridDB id stored is resolved through its stored IGDB id, and the id is saved as **Refresh Artwork** saves it; no
+  name search runs, since picking from one needs a person. The fetch answers the icon downscaled, and the job writes it
+  as `{app_id}_icon.png`. A file the downscale cannot read — a page in place of an image, a truncated PNG — is a failure
+  and leaves the artwork cache, so the next run downloads it again; the game page writes such a file as it came, with a
+  warning.
+- **No icon:** a game SteamGridDB has no icon for, or one no SteamGridDB game can be found for, gets Tender's logo —
+  `tender-icon.png`, shipped in `defaults/` and copied into the grid directory. The job does not ask again; **Refresh
+  Artwork** does, and so does the game page's passive artwork apply the first time the page is opened in a session, for
+  a game whose SteamGridDB id is known. Where the logo cannot be read, that is logged, and the shortcut keeps its
+  placeholder and stays on the worklist. A timeout, an answer that says it failed, or any other failure is not "no
+  icon": the shortcut stays on the worklist and the next run asks again.
+- **Pace:** four fetches at a time. A 429 from SteamGridDB's API or its image CDN (`SgdbRateLimitedError`) pauses every
+  worker: 30 s, twice as long at each 429 in a row, at most 15 minutes, then on; every run starts the pause over. A 401
+  or 403 from the API — a key SteamGridDB does not accept — ends the run with one warning; what was written before it is
+  still handed over.
+- **Hand-over:** finished icons go to the frontend as the `shortcut_icons` event in batches of up to 25
+  `(app_id, icon_path)` pairs, each batch under one prune lease (`emit_under_lease`); `applyShortcutIcons`
+  (`utils/shortcutIcons.ts`) sets each and gives the lease back, and stops once the lease is cancelled. A batch no panel
+  heard — Steam restarted, as it does at every switch between Game Mode and Desktop Mode — ends the run, and the job
+  runs again once a panel is connected.
+- **Triggers:** the end of every sync run — after an apply, 10 s later, so Steam has rewritten its file with the
+  shortcuts the run minted — backend start once a panel is connected, the end of a removed-game cleanup and the end of a
+  shortcut removal (one whose lease expires, or is released as orphaned when a panel mounts, leaves it to the next
+  trigger). Without a SteamGridDB API key it does nothing.
+- **Yielding:** the job yields to a sync in flight, a removed-game cleanup and a shortcut removal (from the call that
+  names what to remove until its report, or until its lease expires or is released as orphaned). It asks before each
+  fetch, write and hand-over; once it has yielded, the run ends, and what it wrote but did not hand over waits for the
+  next run, which the end of what it yielded to asks for. A removal stops the run under way once its claim is held
+  (`stop_for_removal`), and so does its report, which may arrive after its lease is gone and a run has started. A
+  cleanup's start stops it (`stop_for_cleanup`) before it reserves its start, and no run starts until the cleanup
+  resumes it (`resume_after_cleanup`). Either stop waits for a write or hand-over under way; a fetch is abandoned,
+  though its thread runs on and may still fill the artwork cache or save the game's SteamGridDB id. The job is no
+  endpoint, so it takes no conflict-rule `hold`; the lease on each batch is a claim like any event's, and a cleanup
+  pressed while the frontend holds one is refused ([Prune conflicts](removed-game-cleanup.md#prune-conflicts)).
+- **A pick on the game page wins:** `save_shortcut_icon` and the job's write take turns under one lock per app id, and
+  the job writes only while the page has saved no icon since it read that app's generation; the hand-over leaves out a
+  shortcut whose generation has moved since, so a logo queued before a pick is left out; and the frontend skips a
+  shortcut whose artwork apply is under way (`isArtworkApplyInFlight`).
 
 ## Pre-launch launch-options confirmation
 

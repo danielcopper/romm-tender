@@ -43,6 +43,7 @@ _HOLDER_NAMES = {
     "download_complete": "finishing a download",
     "prune_complete": "finishing a cleanup",
     "migration_relaunch_options": "finishing a RetroDECK move",
+    "shortcut_icons": "setting shortcut icons",
 }
 
 

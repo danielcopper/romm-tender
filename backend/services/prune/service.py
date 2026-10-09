@@ -39,6 +39,7 @@ if TYPE_CHECKING:
         RetroDeckFolders,
         RommLivenessApi,
         SaveDriftProbeFn,
+        ShortcutIconJob,
         SteamRecoveryStore,
         UnitOfWorkFactory,
         UuidGen,
@@ -75,7 +76,8 @@ class PruneServiceConfig:
     ``conflict_rules`` are what the preview and the start check at their entry
     — the start through its exclusive reservation — and what the final
     completion frame is leased through; ``run_claim`` is where a started run
-    holds its claim.
+    holds its claim. The ``icon_job`` is stopped before a start reserves it and
+    resumed once no run holds a claim.
     """
 
     loop: asyncio.AbstractEventLoop
@@ -97,6 +99,7 @@ class PruneServiceConfig:
     settings: dict[str, Any]
     run_claim: PruneRunClaim
     conflict_rules: ConflictRules
+    icon_job: ShortcutIconJob
 
 
 def _refuse_invalid_action_report(request: dict[str, Any], pending: PendingAction) -> None:
@@ -143,6 +146,7 @@ class PruneService:
         self._settings = config.settings
         self._run_claim = config.run_claim
         self._rules = config.conflict_rules
+        self._icon_job = config.icon_job
         self._recovery_store = config.recovery_store
         self._retrodeck_folders = config.retrodeck_folders
         self._preview_builder = PreviewBuilder(
@@ -280,10 +284,19 @@ class PruneService:
         conflicts). A run that starts registers its run claim before the
         reservation is given back, so the two overlap.
         """
-        async with self._rules.hold_start("start_prune", update=True, migration=True, sync=True):
-            return await self._start_prune(request)
+        # The icon job is stopped before the reservation (what that guarantees is
+        # ``ShortcutIconJob.stop_for_cleanup``'s). A start that begins no run
+        # resumes it; one that begins a run leaves that to the run's end.
+        began: list[asyncio.Task[None]] = []
+        try:
+            await self._icon_job.stop_for_cleanup()
+            async with self._rules.hold_start("start_prune", update=True, migration=True, sync=True):
+                return await self._start_prune(request, began)
+        finally:
+            if not began:
+                self._icon_job.resume_after_cleanup()
 
-    async def _start_prune(self, request: object) -> dict[str, Any]:
+    async def _start_prune(self, request: object, began: list[asyncio.Task[None]]) -> dict[str, Any]:
         if not isinstance(request, dict) or request.get("confirmed") is not True:
             raise Refused("confirmation_required", "Explicit confirmation is required before cleanup.")
         # While RetroDECK's folders are defaults, or could not be established,
@@ -336,6 +349,7 @@ class PruneService:
                 self._release_event = asyncio.Event()
                 self._completed_action_tokens.clear()
                 self._task = self._loop.create_task(self._run(run_id, refreshed, options))
+                began.append(self._task)
                 self._task.add_done_callback(self._release_stranded_claim)
         finally:
             async with self._admission_lock:
@@ -512,6 +526,7 @@ class PruneService:
         self._run_id = None
         self._run_preview_id = None
         self._release_event.set()
+        self._icon_job.resume_after_cleanup()
 
     async def _run(self, run_id: str, preview: PrunePreview, options: PruneOptions) -> None:
         try:
@@ -527,6 +542,7 @@ class PruneService:
             self._run_id = None
             self._run_preview_id = None
             self._release_event.set()
+            self._icon_job.resume_after_cleanup()
 
     async def _request_action(
         self,

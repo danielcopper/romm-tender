@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from contextlib import AbstractAsyncContextManager
 
     from models.prune import InstalledContentRemoval, SaveQuarantine, SourceClaim
+    from models.shortcut_icon import IconFetch
     from models.state import ShortcutRegistryEntry
     from models.sync import ClientSaveState
 
@@ -763,3 +764,76 @@ class PlaytimeScopeNoticeClearFn(Protocol):
     """
 
     def __call__(self) -> None: ...
+
+
+class ShortcutIconSource(Protocol):
+    """What the shortcut icon job asks of the SteamGridDB service: the icon, and a write the game page can overrule."""
+
+    def icon_generation(self, app_id: int) -> int:
+        """How many icons the game page has saved for *app_id* in this process."""
+        ...
+
+    def do_fetch_shortcut_icon(self, rom_id: int) -> IconFetch:
+        """Fetch *rom_id*'s SteamGridDB icon, from the cache first, downscale it, and say what came of it.
+
+        A ROM with no SteamGridDB id stored is resolved through its stored
+        IGDB id, and an id found that way is saved as Refresh Artwork saves it.
+        No game, or a game SteamGridDB holds no icon for, answers ``NO_ICON``;
+        a 429 from the API or the image CDN ``RATE_LIMITED``; a 401 or 403 from
+        the API ``KEY_REFUSED``, which the caller logs; anything else that went
+        wrong ``FAILED``, and so does an icon the downscale cannot read, which
+        leaves the cache. Synchronous — callers on the loop offload it.
+        """
+        ...
+
+    async def write_job_icon(self, app_id: int, icon_bytes: bytes, generation: int) -> str | None:
+        """Write the icon unless the game page saved one since *generation*; answer its path or ``None``."""
+        ...
+
+
+class ShortcutIconJob(Protocol):
+    """What a sync, a removed-game cleanup and a shortcut removal ask of the shortcut icon job."""
+
+    def request_run(self, *, settle: bool = False) -> None:
+        """Run the job, or run it again once the run under way ends; *settle* waits for Steam's file to catch up."""
+        ...
+
+    async def stop_for_cleanup(self) -> None:
+        """Stop the job, start no run until :meth:`resume_after_cleanup`, and wait for a write or hand-over under way.
+
+        A cleanup calls it before it reserves its start, so no icon the job
+        writes into the grid directory or hands over lands once it has. A fetch
+        in flight is abandoned, though its thread runs on and may still fill the
+        artwork cache or save the game's SteamGridDB id.
+        """
+        ...
+
+    def resume_after_cleanup(self) -> None:
+        """Undo one :meth:`stop_for_cleanup`; once every one is undone, run the job.
+
+        Each cleanup start that stopped the job calls it once: the start itself
+        when it begins no run, or else the end of the run it began.
+        """
+        ...
+
+    async def stop_for_removal(self) -> None:
+        """Stop the run under way and wait for a write or hand-over under way.
+
+        Its caller already holds a claim that every later run yields to by
+        itself.
+        """
+        ...
+
+    async def placeholder_path(self) -> str | None:
+        """The placeholder icon's path, written if missing.
+
+        ``None`` without a SteamGridDB API key, since no icon would replace it,
+        and where it cannot be written.
+        """
+        ...
+
+
+class IconPlaceholderPathFn(Protocol):
+    """The placeholder icon a sync gives each shortcut it mints; ``None`` where there is none to give."""
+
+    async def __call__(self) -> str | None: ...

@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from adapters.steamgriddb import SteamGridDbAdapter
-from lib.errors import SgdbApiError
+from lib.errors import SgdbApiError, SgdbRateLimitedError
 
 
 @pytest.fixture
@@ -174,6 +174,10 @@ class TestRequestHttpErrorWrapping:
             assert exc_info.value.status_code == 403
 
 
+def _http_error(code, reason):
+    return urllib.error.HTTPError("https://steamgriddb.com", code, reason, http.client.HTTPMessage(), None)
+
+
 def _answering(body: bytes) -> MagicMock:
     resp = MagicMock()
     resp.read.return_value = body
@@ -234,3 +238,55 @@ class TestEveryFailureIsAnSgdbApiError:
 
         assert exc_info.value.status_code == 502
         assert exc_info.value.__cause__ is http_error
+
+
+class TestTooManyRequests:
+    def test_the_api_answers_rate_limited_not_a_plain_api_error(self, adapter):
+        with (
+            patch("urllib.request.urlopen", side_effect=_http_error(429, "Too Many Requests")),
+            pytest.raises(SgdbRateLimitedError) as exc_info,
+        ):
+            adapter.request("/icons/game/1")
+        assert exc_info.value.status_code == 429
+        assert isinstance(exc_info.value, SgdbApiError)
+
+    def test_the_image_cdn_answers_rate_limited_and_leaves_no_file(self, adapter, tmp_path):
+        dest = tmp_path / "icon.png"
+        with (
+            patch("urllib.request.urlopen", side_effect=_http_error(429, "Too Many Requests")),
+            pytest.raises(SgdbRateLimitedError),
+        ):
+            adapter.download_image("https://cdn2.steamgriddb.com/icon/x.png", str(dest))
+        assert not dest.exists()
+        assert not (tmp_path / "icon.png.tmp").exists()
+
+    def test_the_image_cdn_removes_a_partial_download_file_on_http_error(self, adapter, tmp_path):
+        dest = tmp_path / "icon.png"
+        tmp_file = tmp_path / "icon.png.tmp"
+        tmp_file.write_bytes(b"partial-data")
+        with (
+            patch("urllib.request.urlopen", side_effect=_http_error(429, "Too Many Requests")),
+            pytest.raises(SgdbRateLimitedError),
+        ):
+            adapter.download_image("https://cdn2.steamgriddb.com/icon/x.png", str(dest))
+        assert not tmp_file.exists()
+
+    def test_the_image_cdn_suppresses_oserror_when_removing_tmp_file(self, adapter, tmp_path):
+        dest = tmp_path / "icon.png"
+        tmp_file = tmp_path / "icon.png.tmp"
+        tmp_file.write_bytes(b"partial-data")
+        with (
+            patch("urllib.request.urlopen", side_effect=_http_error(500, "Internal Server Error")),
+            patch("os.remove", side_effect=OSError("permission denied")),
+        ):
+            assert adapter.download_image("https://cdn2.steamgriddb.com/icon/x.png", str(dest)) is False
+
+    def test_any_other_http_error_from_the_image_cdn_logs_a_warning_and_answers_false(self, adapter, tmp_path, caplog):
+        dest = tmp_path / "icon.png"
+        with (
+            caplog.at_level(logging.WARNING),
+            patch("urllib.request.urlopen", side_effect=_http_error(404, "Not Found")),
+        ):
+            assert adapter.download_image("https://cdn2.steamgriddb.com/icon/x.png", str(dest)) is False
+        assert "SGDB image download failed: HTTP Error 404: Not Found" in caplog.text
+        assert not dest.exists()
