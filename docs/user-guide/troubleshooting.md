@@ -55,13 +55,13 @@ answers with its own message instead — "Server unreachable", "Sign-in rejected
 Until then nothing in Tender's panel can work, so it offers nothing to press. If an update you started was installing —
 Settings › Updates said **Tender is restarting** — the note adds "The update's result shows after that." While any game
 is running, it adds "Quit the running game yourself — Tender can't stop it right now." If Steam lists a game as running
-but Tender cannot tell whether it is, it says that instead — "Steam lists Celeste as running, and Tender can't tell
-whether it is. If it has closed, restart Steam." On a game's page the section below the play row shows the same note.
-The play row keeps a **Tender restarted** badge, which says nothing about RomM then, and Steam's own **LAST PLAYED** and
-**PLAYTIME**, and **SPACE REQUIRED** for a game not downloaded; while that page's game runs it keeps **Resume** on a
-page you opened before the restart, and otherwise nothing to press. Starting a RomM game from elsewhere in Steam — the
-library, the home screen, the game's menu — does not start it, and shows "Couldn't start the game" with the same note,
-since the game would run without its saves synced.
+but Tender cannot tell whether it still is, and sees no other game running, it says that instead — "Steam lists Celeste
+as running, and Tender can't tell whether it still is. Quit it if it's open; if it has already closed, restart Steam."
+On a game's page the section below the play row shows the same note. The play row keeps a **Tender restarted** badge,
+which says nothing about RomM then, and Steam's own **LAST PLAYED** and **PLAYTIME**, and **SPACE REQUIRED** for a game
+not downloaded; while that page's game runs it keeps **Resume** on a page you opened before the restart, and otherwise
+nothing to press. Starting a RomM game from elsewhere in Steam — the library, the home screen, the game's menu — does
+not start it, and shows "Couldn't start the game" with the same note, since the game would run without its saves synced.
 
 **Explanation**: Tender's backend restarted while Steam kept running, and the panel in Steam is the one the backend that
 stopped had loaded. The running backend can never accept it, and it told the panel what happens next. The first note
@@ -71,10 +71,10 @@ it has taken Steam's interface down twice in the last ten minutes. In the first 
 panel is told nothing yet, and the notification comes once the backend has looked at Steam.
 
 **Fix**: For the first note, quit every running game; Steam's interface reloads a moment later with a working panel. If
-the note says Tender can't tell whether a game Steam lists is running, and that game has closed, restart Steam. For the
-second, restart Steam. Opening the Quick Access menu on Tender's page or starting a RomM game from Steam asks the
-backend again, and a new notification says so when its answer has changed. The backend's log carries one line for that
-panel, and one more each time its answer changes:
+the note says Tender can't tell whether a game Steam lists is still running, quit that game if it is open; if it has
+already closed, restart Steam. For the second, restart Steam. Opening the Quick Access menu on Tender's page or starting
+a RomM game from Steam asks the backend again, and a new notification says so when its answer has changed. The backend's
+log carries one line for that panel, and one more each time its answer changes:
 
 ```bash
 grep "a panel another backend process loaded" ~/.local/state/romm-tender/backend.log | tail -n 5

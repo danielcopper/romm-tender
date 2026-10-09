@@ -548,6 +548,27 @@ Format: **invariant** — tier — enforced by.
   calls `ReloadLimit.record` once each is under way — the SIGTERM before it is sent, the reload once Steam has not
   refused it — and nothing checks that a third takedown does the same; it would pass every test above and reload in a
   loop again
+- **Whether a listed app runs is read only through `frontend/src/utils/runningApps.ts` (panel) or
+  `RUNNING_APPS_EXPRESSION` (`backend/host/inject/recovery.py`), by display status — Running alone makes a game run,
+  Launching, Running and Terminating hold a restart or a wait; an unreadable status counts as running or holding** —
+  test + prompt-only. Being listed in `SteamUIStore.RunningApps` is not being running: Steam's own Play lists a game it
+  is only starting, before the start is reported, and Steam keeps a game listed after its exit while it still knows a
+  window for it — read without the status, the first skipped the pre-launch sync and the second held the stranded
+  panel's reload and every update until Steam was restarted
+  ([Is the game running](save-file-sync-architecture.md#is-the-game-running)). The panel reads the list twice:
+  `readRunningApps` for whether a game runs (Running alone, for `readGameRunning`, the stranded card and reload
+  adoption) and `isAnyAppHolding` for the session-budget banner's restart, which closes a game on its way in or out as
+  well. The backend's expression is the second reading, and both waits — the reload and an update's install — read it.
+  An unreadable status counts as running or holding on both sides, because a field Steam renamed hits every entry at
+  once, and read as "not running" it would gate a link on a running game, let a restart close one, and lose every
+  running session at a JS-context rebuild. `tests/host/inject/test_recovery.py::TestTheStatusHomesAgree` reads
+  `runningApps.ts` and holds its `DISPLAY_STATUSES_THAT_HOLD` equal to the backend's; `TestWhichEntriesHold` runs the
+  expression under node over Launching, Running, ReadyToLaunch and Terminating and four unreadable shapes;
+  `frontend/src/utils/runningApps.test.ts` pins both panel readings. **Prompt-only**: no module reads
+  `SteamUIStore.RunningApps` but these two — a third reader would pass every test above with its own rule — and the
+  stranded card's sentence follows what the backend waits on: it names an app whose status could not be read whatever
+  stop Tender saw for it, because the backend's reload has no stop rule; the card's tests pin that, and nothing joins
+  them to the backend's expression
 - **Tender's Quick Access entry composes with Decky's rather than going through it, and everything it binds to the Quick
   Access window is bound from inside that window's React tree** — test + prompt-only —
   `frontend/src/qam/quickAccessEntry.test.ts` pins what a render pass does to a tab array (added once, added again to

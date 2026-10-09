@@ -130,16 +130,17 @@ in Steam. The knock is answered, though — the panel is told, below.
 **What it does about it** (`backend/host/inject/recovery.py`):
 
 1. **Waits until no app is running.** It reads `SteamUIStore.RunningApps` — the source the panel itself reads running
-   apps from — every five seconds, and only two empty lists in a row let it act: the store has been measured listing
-   none for several seconds with a game still up, under a condition the reader's own module comment names
-   (`frontend/src/utils/runningApps.ts`). An entry counts by its display status, as it does in the panel
-   ([Is the game running](save-file-sync-architecture.md#is-the-game-running)), with one difference: the wait holds for
-   Launching and Terminating as well as Running (`DISPLAY_STATUSES_THAT_HOLD`), because a game on its way in or out is
-   still one a reload would take the interface away from, and an entry whose status it cannot read holds too — its line
-   in the log says `(status unread)` beside the name. So a game Steam keeps listed after it exited no longer holds the
-   reload for ever. A store it cannot read, a shape it does not know, or no renderer attached is no answer, and it keeps
-   waiting. Then it asks the page whose panel it carries, rather than trusting the last reading, and acts only if it is
-   still the earlier backend's. The same gate stands in front of the fallback.
+   apps from — every five seconds, and only two readings in a row with no entry that holds let it act: the store has
+   been measured listing none for several seconds with a game still up, under a condition the reader's own module
+   comment names (`frontend/src/utils/runningApps.ts`). An entry counts by its display status, as it does in the panel
+   ([Is the game running](save-file-sync-architecture.md#is-the-game-running)), and the way the panel's restart reads it
+   rather than the way the panel asks whether a game runs: the wait holds for Launching and Terminating as well as
+   Running (`DISPLAY_STATUSES_THAT_HOLD`), because a game on its way in or out is still one a reload would take the
+   interface away from, and an entry whose status it cannot read holds too — its line in the log says `(status unread)`
+   beside the name. So a game Steam keeps listed after it exited, reading ReadyToLaunch, does not hold the reload. A
+   store it cannot read, a shape it does not know, or no renderer attached is no answer, and it keeps waiting. Then it
+   asks the page whose panel it carries, rather than trusting the last reading, and acts only if it is still the earlier
+   backend's. The same gate stands in front of the fallback.
 2. **Asks Steam to rebuild its JS context** with `SteamClient.Browser.RestartJSContext()`, evaluated in
    `SharedJSContext`. Evaluated directly, the call answers "Cannot find default execution context" — the answer that led
    [ADR-0024](../adr/0024-session-budget-rss-gate.md) to rule the call out. Scheduled with `setTimeout`, as Decky Loader
@@ -228,8 +229,9 @@ decided: [qam-panel.md](qam-panel.md#pages), Pages), and of the game page's sect
 (`RomMGameInfoPanel.tsx`), ahead of every other card there, on a page loaded before the strand as well as after. While
 an update attempt has started the installer the card adds that the update's result shows after the reload or restart it
 names, read from the install store without a call (`installerStarted`, `utils/updateInstallStore.ts`). While a game runs
-it adds that Tender cannot stop it — or, where only apps whose display status could not be read make a game run, that
-Steam lists them and a restart of Steam settles it
+it adds that Tender cannot stop it. Where no game is seen to run but the store lists apps whose display status could not
+be read — which hold the reload all the same — it says instead that Steam lists them, that Tender cannot tell whether
+they still run, to quit them if they are open and to restart Steam if they have closed
 ([Is the game running](save-file-sync-architecture.md#is-the-game-running)). The play row keeps the **Tender restarted**
 badge, Steam's own Last played and Playtime, and Space Required, but not the Achievements and BIOS badges, whose tabs
 the card has replaced. It offers Resume for its game while that game runs and nothing else: no Play, no Stop, no gear,
