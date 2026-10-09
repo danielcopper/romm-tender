@@ -1276,11 +1276,11 @@ worded by `platformSystemClause`); it is absent where no system was taken, which
 why ([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)). **That line, the notes under the BIOS
 heading and the lines under each BIOS file's name share one size**, `NOTE_FONT` (10 px), below the 11 px
 `SECONDARY_FONT` the other panes' secondary lines keep: on the Deck the three read as large as the rows' file names at
-11 px, and set apart they looked like three different sizes. The BIOS rows themselves are set in the 11 px
-`SECONDARY_FONT`, the marks in their On-disk cell at 12 px, so the table reads heading (12 px, bold capitals) > file
-name (11 px) > small print (10 px); left to inherit the pane's size, a file name rendered nearly as large as the
-heading. The column heads keep the table header's 11 px and the row buttons their own 11 px label, so focus and press
-sizes are unchanged.
+11 px, and set apart they looked like three different sizes. The BIOS table's rows and its column names are set at 12
+px, the heading's size, and the marks in the On-disk cell at 12 px too: on the Deck 11 px and 10 px are no difference at
+all, so a file name one pixel above the description under it did not read as a name, and column names in the secondary
+size read as notes rather than as a table head. Two pixels is the gap that shows. The row buttons keep their own 11 px
+label, so focus and press sizes are unchanged.
 
 **Both counts on the second line are ROM files.** `N` is RomM's own `rom_count` for the platform; `M` is
 `reachable_count` — the platform's reachable ROMs (every member of a sibling group that holds a binding, because one

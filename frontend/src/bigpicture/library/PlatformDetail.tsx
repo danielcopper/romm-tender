@@ -239,14 +239,24 @@ function libraryMark(file: FirmwareRow): typeof LIBRARY_MARK | null {
 // and `Contents` is about to be filled for file rows (#1803).
 const TABLE_COLUMNS = "1fr 48px 84px 92px";
 
-// A file's row is set in SECONDARY_FONT: below the 12px section heading over the
-// table and above the NOTE_FONT lines under each name, so the three read in that
-// order. Left to inherit the pane's own size, a file name rendered nearly as
-// large as the heading on the Deck.
-const BIOS_TABLE_REGISTER: TableRegister = { ...PANE_TABLE_REGISTER, rowFont: SECONDARY_FONT };
+// A file's row and the column names over the rows are set at the 12px of the
+// section heading, two pixels above the NOTE_FONT lines under each name: on the
+// Deck one pixel apart is no difference at all, and column names set like the
+// notes read as notes rather than as a table head.
+const BIOS_TABLE_FONT = "12px";
+const BIOS_TABLE_REGISTER: TableRegister = {
+  ...PANE_TABLE_REGISTER,
+  rowFont: BIOS_TABLE_FONT,
+  headerFont: BIOS_TABLE_FONT,
+};
 
 const BiosTableHeader: FC = () => (
-  <PaneTableHeader columns={TABLE_COLUMNS} cells={["File", "On disk", "Contents", ""]} />
+  <PaneTableHeader
+    columns={TABLE_COLUMNS}
+    cells={["File", "On disk", "Contents", ""]}
+    register={BIOS_TABLE_REGISTER}
+    testId="bios-table-header"
+  />
 );
 
 /**

@@ -99,6 +99,9 @@ export interface TableRegister {
    *  inherits the pane's. */
   rowFont?: CSSProperties["fontSize"];
   rowLineHeight?: CSSProperties["lineHeight"];
+  /** Set where a page's column names must read above its small print; left off,
+   *  they are set in {@link SECONDARY_FONT}. */
+  headerFont?: CSSProperties["fontSize"];
   /** A hairline under the column names. */
   rule?: boolean;
 }
@@ -215,7 +218,7 @@ export const PaneTableHeader: FC<{
       gap: COLUMN_GAP,
       padding: register.headerPadding,
       ...(register.rule ? { borderBottom: TABLE_LINE } : {}),
-      fontSize: SECONDARY_FONT,
+      fontSize: register.headerFont ?? SECONDARY_FONT,
       color: MUTED,
     }}
   >

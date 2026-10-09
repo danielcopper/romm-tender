@@ -1124,7 +1124,7 @@ describe("Library › Platforms", () => {
       expect(Number.parseFloat(NOTE_FONT)).toBeLessThan(Number.parseFloat(SECONDARY_FONT));
     });
 
-    it("sets a BIOS file's name between the BIOS heading and the small print", async () => {
+    it("sets a BIOS file's name and the column names clearly above the small print", async () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1132,10 +1132,17 @@ describe("Library › Platforms", () => {
       const heading = [...container.querySelectorAll<HTMLElement>("span")].find(
         (el) => el.textContent === "BIOS FILES",
       );
+      const head = container.querySelector<HTMLElement>('[data-testid="bios-table-header"]');
       const row = container.querySelector<HTMLElement>('[data-testid="bios-file-row"]');
       const marks = container.querySelector<HTMLElement>('[data-testid="disk-mark"]')?.parentElement;
-      expect(px(row?.style.fontSize)).toBeLessThan(px(heading?.style.fontSize));
-      expect(px(row?.style.fontSize)).toBeGreaterThan(px(NOTE_FONT));
+      const description = [...container.querySelectorAll<HTMLElement>("div")].find((el) =>
+        el.textContent.startsWith("GBA BIOS"),
+      );
+      // One pixel apart reads as no difference on the Deck.
+      expect(px(row?.style.fontSize) - px(description?.style.fontSize)).toBeGreaterThanOrEqual(2);
+      expect(px(head?.style.fontSize)).toBeGreaterThan(px(NOTE_FONT));
+      expect(head?.style.fontSize).toBe(row?.style.fontSize);
+      expect(px(row?.style.fontSize)).toBeLessThanOrEqual(px(heading?.style.fontSize));
       expect(px(marks?.style.fontSize)).toBeLessThanOrEqual(px(heading?.style.fontSize));
     });
 
