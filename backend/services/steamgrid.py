@@ -52,6 +52,16 @@ def _refusal_for(error: SgdbApiError) -> Refused:
     return ServerUnreachable(f"SteamGridDB error: HTTP {error.status_code}")
 
 
+def _refuse_a_key_that_cannot_be_sent(api_key: str) -> None:
+    """Refuse a key no HTTP header can carry, one with a CR or LF or past latin-1, as ``auth_failed``.
+
+    Checked before the key reaches the adapter: ``http.client`` raises on such a
+    header value, and the exception holds the whole ``Bearer`` value.
+    """
+    if any(ch in "\r\n" or ch > "\xff" for ch in api_key):
+        raise AuthFailed("Invalid API key")
+
+
 @dataclass(frozen=True)
 class SteamGridServiceConfig:
     """Frozen wiring bundle handed to ``SteamGridService.__init__``.
@@ -243,6 +253,7 @@ class SteamGridService:
         rom_id_str = str(rom_id)
         if not self._settings.get("steamgriddb_api_key"):
             return {"decision": "no_api_key"}
+        _refuse_a_key_that_cannot_be_sent(self._settings["steamgriddb_api_key"])
 
         state_id = self._resolve_sgdb_id_state_only(rom_id)
         romm_id, igdb_id, rom_data = await self._fetch_ids_from_romm(rom_id)
@@ -274,11 +285,13 @@ class SteamGridService:
 
         Returns ``{"success": True, "games": [{"id", "name",
         "release_year", "thumb_url"}]}``. Refuses with ``no_api_key`` when no
-        API key is configured, and answers an ``SgdbApiError`` as
-        ``auth_failed`` or ``server_unreachable``.
+        API key is configured, with ``auth_failed`` when the key cannot be sent,
+        and answers an ``SgdbApiError`` as ``auth_failed`` or
+        ``server_unreachable``.
         """
         if not self._settings.get("steamgriddb_api_key"):
             raise Refused("no_api_key", "No SteamGridDB API key configured")
+        _refuse_a_key_that_cannot_be_sent(self._settings["steamgriddb_api_key"])
         path = build_autocomplete_path(str(term))
         try:
             payload = await self._loop.run_in_executor(None, self._sgdb_api.request, path)
@@ -322,6 +335,7 @@ class SteamGridService:
     async def _apply_sgdb_game_id(self, rom_id, sgdb_id):
         rom_id = int(rom_id)
         sgdb_id = int(sgdb_id)
+        _refuse_a_key_that_cannot_be_sent(self._settings.get("steamgriddb_api_key", ""))
 
         # Start clean: ``_download_sgdb_artwork`` early-returns an
         # existing cache file, so a re-pick of a different game must
@@ -379,6 +393,7 @@ class SteamGridService:
         if not self._settings.get("steamgriddb_api_key"):
             self._log_debug("SGDB artwork skipped: no API key configured")
             return {"base64": None, "no_api_key": True}
+        _refuse_a_key_that_cannot_be_sent(self._settings["steamgriddb_api_key"])
 
         sgdb_id = self._resolve_sgdb_id_state_only(rom_id)
         if not sgdb_id:
@@ -404,6 +419,7 @@ class SteamGridService:
             api_key = self._settings.get("steamgriddb_api_key", "")
         if not api_key:
             raise Refused("no_api_key", "No API key configured")
+        _refuse_a_key_that_cannot_be_sent(api_key)
         try:
             data = await self._loop.run_in_executor(None, self._sgdb_api.verify_api_key, api_key)
         except SgdbApiError as e:

@@ -1554,12 +1554,12 @@ class TestTheUpdaterRefusalsOnTheWire:
         assert "s3cr3t-admission-token" not in raw
 
 
-def _dispatcher_over_steamgrid() -> CallDispatcher:
+def _dispatcher_over_steamgrid(api_key: str = "sgdb-key", uow: FakeUnitOfWork | None = None) -> CallDispatcher:
     """The real dispatcher over ``Endpoints`` whose SteamGridDB use cases are the real ``SteamGridService``.
 
     The service talks to SteamGridDB through the real ``SteamGridDbAdapter``, so a case patches ``urlopen``.
     """
-    settings: dict[str, Any] = {"steamgriddb_api_key": "sgdb-key"}
+    settings: dict[str, Any] = {"steamgriddb_api_key": api_key}
     service = SteamGridService(
         config=SteamGridServiceConfig(
             sgdb_api=SteamGridDbAdapter(settings=settings, logger=LOGGER, user_agent="romm-tender/0.0.0-test"),
@@ -1572,7 +1572,7 @@ def _dispatcher_over_steamgrid() -> CallDispatcher:
             settings_persister=FakeSettingsPersister(),
             get_pending_sync=dict,
             log_debug=lambda msg: None,
-            uow_factory=FakeUnitOfWorkFactory(),
+            uow_factory=FakeUnitOfWorkFactory(uow=uow),
             conflict_rules=_make_conflict_rules(),
         )
     )
@@ -1602,3 +1602,51 @@ class TestTheSteamGridDBRefusalsOnTheWire:
             "message": "Could not reach SteamGridDB",
         }
         assert "name resolution" not in raw
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            pytest.param("fake-sgdb-key\nX-Injected: 1", id="line-feed"),
+            pytest.param("fake-sgdb-key-\u2019", id="past-latin-1"),
+        ],
+    )
+    @pytest.mark.parametrize(
+        ("route_name", "args"),
+        [
+            ("verify_sgdb_api_key", None),
+            ("search_sgdb_games", ["Zelda"]),
+            ("get_sgdb_resolution", [42]),
+            ("apply_sgdb_game_id", [42, 7]),
+            ("get_sgdb_artwork_base64", [42, 1]),
+        ],
+    )
+    async def test_a_key_no_header_can_carry_reaches_neither_the_reply_nor_a_log_line(
+        self, route_name, args, key, caplog
+    ):
+        """``verify_sgdb_api_key`` is handed the key; every other route sends the stored one."""
+        caplog.set_level(logging.DEBUG)
+        uow = FakeUnitOfWork()
+        with uow:
+            uow.roms.save(
+                Rom(
+                    rom_id=42,
+                    platform_slug="n64",
+                    name="Zelda",
+                    fs_name="Zelda.z64",
+                    shortcut_app_id=1,
+                    last_synced_at="2025-01-01T00:00:00",
+                    sgdb_id=9999,
+                )
+            )
+        dispatcher = _dispatcher_over_steamgrid(api_key=key, uow=uow)
+
+        with patch("http.client.HTTPSConnection.connect", side_effect=OSError("no network in this test")):
+            raw = await dispatcher.dispatch(1, route_name, args if args is not None else [key])
+
+        message = json.loads(raw)
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {"success": False, "reason": "auth_failed", "message": "Invalid API key"}
+        assert "fake-sgdb-key" not in raw
+        assert "Bearer" not in raw
+        assert "fake-sgdb-key" not in caplog.text
+        assert "Bearer" not in caplog.text

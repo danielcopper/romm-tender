@@ -471,6 +471,56 @@ class TestConflictRulesAtTheUseCase:
         assert steamgrid.prune_conflicts.conflicting_operations == 0
 
 
+# Fake keys no HTTP header can carry: a line break that would end the header, and a character past latin-1.
+_KEYS_NO_HEADER_CAN_CARRY = [
+    pytest.param("fake-sgdb-key\nX-Injected: 1", id="line-feed"),
+    pytest.param("fake-sgdb-key-\u2019", id="past-latin-1"),
+]
+
+
+class TestAKeyNoHeaderCanCarry:
+    """A key that cannot travel in the ``Authorization`` header is refused before any request is made."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("key", _KEYS_NO_HEADER_CAN_CARRY)
+    async def test_the_key_check_refuses_a_typed_key_without_a_request(self, steamgrid, fake_steamgrid_db_api, key):
+        steamgrid.service._loop = asyncio.get_running_loop()
+        verifying = steamgrid.service.verify_sgdb_api_key(key)
+
+        with pytest.raises(Refused) as refused:
+            await verifying
+
+        assert (refused.value.reason, refused.value.message) == ("auth_failed", "Invalid API key")
+        assert fake_steamgrid_db_api.call_log == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("key", _KEYS_NO_HEADER_CAN_CARRY)
+    @pytest.mark.parametrize(
+        ("use_case", "args"),
+        [
+            ("verify_sgdb_api_key", ()),
+            ("search_sgdb_games", ("Zelda",)),
+            ("get_sgdb_resolution", (42,)),
+            ("apply_sgdb_game_id", (42, 7)),
+            ("get_sgdb_artwork_base64", (42, 1)),
+        ],
+    )
+    async def test_every_use_case_that_sends_the_stored_key_refuses_it_without_a_request(
+        self, steamgrid, uow, fake_romm_api, fake_steamgrid_db_api, key, use_case, args
+    ):
+        steamgrid.settings["steamgriddb_api_key"] = key
+        steamgrid.service._loop = asyncio.get_running_loop()
+        _seed_rom(uow, 42, sgdb_id=9999, name="Zelda")
+        fake_romm_api.roms[42] = {"id": 42, "name": "Zelda", "igdb_id": 1234}
+        answering = getattr(steamgrid.service, use_case)(*args)
+
+        with pytest.raises(Refused) as refused:
+            await answering
+
+        assert (refused.value.reason, refused.value.message) == ("auth_failed", "Invalid API key")
+        assert fake_steamgrid_db_api.call_log == []
+
+
 class TestGetSgdbResolution:
     """The picker-driven resolution cascade in ``get_sgdb_resolution``.
 
