@@ -29,6 +29,7 @@ import { clearPlatformCollection } from "../../utils/collections";
 import { setSyncProgress } from "../../utils/syncProgress";
 import { biosColorForLevel } from "../../utils/biosColor";
 import type { CoreInfo, FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo } from "../../types";
+import { NOTE_FONT, SECONDARY_FONT } from "../layout/pane";
 
 // `scrollFocusedToCenter` is the game page tab's, not this page's: one test
 // below renders that tab beside the pane to compare what the two say.
@@ -1086,7 +1087,7 @@ describe("Library › Platforms", () => {
       expect(factParts(container).map((el) => el.textContent)).toEqual(["mGBA", "· 12 on RomM", "· 9 in Steam"]);
       const line = container.querySelector<HTMLElement>('[data-testid="platform-facts"]')!;
       expect(line.textContent).not.toContain("Game Boy Advance");
-      expect(line.style.fontSize).toBe("11px");
+      expect(line.style.fontSize).toBe(NOTE_FONT);
       expect(line.style.flexWrap).toBe("wrap");
     });
 
@@ -1106,16 +1107,21 @@ describe("Library › Platforms", () => {
       }
     });
 
-    it("sets the notes under the BIOS heading in the size of the facts line", async () => {
+    it("sets the facts line, the BIOS notes and each file's description in one small size", async () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const note = [...container.querySelectorAll<HTMLElement>("div")].find((el) =>
-        el.textContent.startsWith("The one file the launching emulator requires"),
-      );
-      expect(note?.style.fontSize).toBe(
-        container.querySelector<HTMLElement>('[data-testid="platform-facts"]')!.style.fontSize,
-      );
+      const byText = (start: string) =>
+        [...container.querySelectorAll<HTMLElement>("div")].find((el) => el.textContent.startsWith(start));
+      const facts = container.querySelector<HTMLElement>('[data-testid="platform-facts"]');
+      const note = byText("The one file the launching emulator requires");
+      const description = byText("GBA BIOS");
+      expect([facts?.style.fontSize, note?.style.fontSize, description?.style.fontSize]).toEqual([
+        NOTE_FONT,
+        NOTE_FONT,
+        NOTE_FONT,
+      ]);
+      expect(Number.parseFloat(NOTE_FONT)).toBeLessThan(Number.parseFloat(SECONDARY_FONT));
     });
 
     it("names the system the platform is in its source, muted like the counts", async () => {

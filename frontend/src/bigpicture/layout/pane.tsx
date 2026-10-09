@@ -17,10 +17,18 @@ import { Focusable } from "@decky/ui";
 
 /** The size every secondary LINE on a pane is set in: a header's counts clause,
  *  the under-row description and note lines, a table cell beside them, the muted
- *  sentences, the table header and the legend. One constant, because the device
- *  pass asked for the cell to match those lines and a second literal is how they
- *  drift apart again. Button labels are not lines and keep their own sizes. */
+ *  sentences, the table header and the legend — except the platform page's small
+ *  print, which is {@link NOTE_FONT}. One constant, because the device pass asked
+ *  for the cell to match those lines and a second literal is how they drift apart
+ *  again. Button labels are not lines and keep their own sizes. */
 export const SECONDARY_FONT = "11px";
+
+/** The size of the platform page's small print: the facts line under the
+ *  platform's name, the notes under the BIOS heading and the lines under each
+ *  BIOS file's name. One constant so the three cannot drift apart, and below
+ *  {@link SECONDARY_FONT} because at that size they read as large as the rows'
+ *  file names on the Deck. */
+export const NOTE_FONT = "10px";
 
 export const MUTED = "#8f98a0";
 export const RED = "#d94126";
@@ -310,8 +318,8 @@ export const SectionTitle: FC<{ title: string; note?: string; noteColor?: string
   </div>
 );
 
-export const Muted: FC<{ children: ReactNode }> = ({ children }) => (
-  <div style={{ fontSize: SECONDARY_FONT, color: MUTED, padding: "0 16px 6px" }}>{children}</div>
+export const Muted: FC<{ children: ReactNode; fontSize?: string }> = ({ children, fontSize = SECONDARY_FONT }) => (
+  <div style={{ fontSize, color: MUTED, padding: "0 16px 6px" }}>{children}</div>
 );
 
 /**

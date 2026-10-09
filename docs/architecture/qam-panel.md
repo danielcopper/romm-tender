@@ -636,11 +636,11 @@ List and detail is `Columns` with two columns. The Sync page's table beside its 
 ### The pane primitives
 
 The pieces a detail pane is built from, in `frontend/src/bigpicture/layout/pane.tsx` so that the next pane is written
-against the same scale rather than a second literal for the same size: the 11 px every secondary line is set in, the
-verdict palette, the two button shapes (`FLAT_BUTTON` for a button sharing a row, `ROW_BUTTON` for a table row's action
-column), a section title, a muted line, a row of buttons, and the two lines that report an action — the status line
-bound to the entry and the group it belongs under, and the sentence saying which other entry is working while this
-pane's buttons are disabled.
+against the same scale rather than a second literal for the same size: the 11 px every secondary line is set in and the
+10 px of the platform page's small print, the verdict palette, the two button shapes (`FLAT_BUTTON` for a button sharing
+a row, `ROW_BUTTON` for a table row's action column), a section title, a muted line, a row of buttons, and the two lines
+that report an action — the status line bound to the entry and the group it belongs under, and the sentence saying which
+other entry is working while this pane's buttons are disabled.
 
 ### List and detail
 
@@ -1267,14 +1267,16 @@ listing they need fails.
 The detail offers no sync control of its own — the row already is one, focus is already there and A works the toggle,
 and the list's two header buttons act on every row at once — so it opens with a two-line header instead of a Sync
 section. The first line is the platform's name alone, with the core picker's icon button right-aligned beside it; the
-second, in the 11 px secondary size and muted, is `<core name> · N on RomM · M in Steam · <source> system: <system>`.
-Each part of that line keeps itself on one line and carries its `·` in front, so the line wraps only between parts and
-never cuts one: with the name beside the facts, the Deck's width squeezed a two-word name onto two lines over the counts
-and broke `RetroDECK system snes` after its first word. The system part names the system the platform is in the
-answering source and its source (`RetroDECK system: psx`, worded by `platformSystemClause`); it is absent where no
-system was taken, which is when the line under the header says why
-([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)). The notes under the BIOS heading are set
-in the same size.
+second, in the platform page's 10 px small print and muted, is
+`<core name> · N on RomM · M in Steam · <source> system: <system>`. Each part of that line keeps itself on one line and
+carries its `·` in front, so the line wraps only between parts and never cuts one: with the name beside the facts, the
+Deck's width squeezed a two-word name onto two lines over the counts and broke `RetroDECK system snes` after its first
+word. The system part names the system the platform is in the answering source and its source (`RetroDECK system: psx`,
+worded by `platformSystemClause`); it is absent where no system was taken, which is when the line under the header says
+why ([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)). **That line, the notes under the BIOS
+heading and the lines under each BIOS file's name share one size**, `NOTE_FONT` (10 px), below the 11 px
+`SECONDARY_FONT` the other panes' secondary lines keep: on the Deck the three read as large as the rows' file names at
+11 px, and set apart they looked like three different sizes.
 
 **Both counts on the second line are ROM files.** `N` is RomM's own `rom_count` for the platform; `M` is
 `reachable_count` — the platform's reachable ROMs (every member of a sibling group that holds a binding, because one

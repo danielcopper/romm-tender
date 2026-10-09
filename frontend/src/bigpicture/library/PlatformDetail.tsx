@@ -37,6 +37,7 @@ import {
   GroupStatus,
   MUTED,
   Muted,
+  NOTE_FONT,
   PALE_GREEN,
   PaneTableHeader,
   PaneTableRow,
@@ -286,7 +287,7 @@ const BiosRowLines: FC<{ lines: string[] }> = ({ lines }) =>
   lines.length === 0 ? null : (
     <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginLeft: "18px", marginTop: "2px" }}>
       {lines.map((line) => (
-        <div key={line} style={{ fontSize: SECONDARY_FONT, color: MUTED, whiteSpace: "pre-wrap" }}>
+        <div key={line} style={{ fontSize: NOTE_FONT, color: MUTED, whiteSpace: "pre-wrap" }}>
           {line}
         </div>
       ))}
@@ -439,7 +440,7 @@ const BiosFileRow: FC<{ file: FirmwareRow; action: ReactNode }> = ({ file, actio
         <div
           style={{
             marginLeft: "18px",
-            fontSize: SECONDARY_FONT,
+            fontSize: NOTE_FONT,
             color: MUTED,
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -493,7 +494,7 @@ const HeaderFacts: FC<{ parts: { text: string; color?: string }[] }> = ({ parts 
       flexWrap: "wrap",
       columnGap: "4px",
       padding: "2px 16px 0",
-      fontSize: SECONDARY_FONT,
+      fontSize: NOTE_FONT,
       color: MUTED,
     }}
   >
@@ -820,21 +821,23 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
           pass, and its width was what wrapped that line three times. Two places
           state a platform's BIOS state and they now agree by construction. */}
       <SectionTitle title="BIOS files" note={summaryLabel} noteColor={biosColorForLevel(firmware.bios_level ?? null)} />
-      <Muted>{`${summaryDescription}${heldRatio}`}</Muted>
+      <Muted fontSize={NOTE_FONT}>{`${summaryDescription}${heldRatio}`}</Muted>
       {/* The route the summary above cannot name: nothing here could say which
           files this system wants, so the reader has to be told that placing one
           by hand still works. The line used to open "BIOS management is not
           supported for this system yet", which is a claim about Tender and
           not what the state means: install an emulator that declares firmware
           for this platform and the pane answers, with nothing changed here. */}
-      {nothingEstablished && <Muted>You can still put BIOS files in your BIOS folder by hand.</Muted>}
+      {nothingEstablished && (
+        <Muted fontSize={NOTE_FONT}>You can still put BIOS files in your BIOS folder by hand.</Muted>
+      )}
       {files.length > 0 && <BiosTableHeader />}
       {files.map((file) => (
         <BiosFileRow key={file.file_name} file={file} action={rowAction(row, state, file, fetchable)} />
       ))}
       {files.length > 0 && <BiosLegend files={files} />}
       {unanswered > 0 && (
-        <Muted>
+        <Muted fontSize={NOTE_FONT}>
           {unanswered === 1 ? "1 file" : `${unanswered} files`} nothing installed could answer for. Report at
           github.com/danielcopper/romm-tender/issues if needed.
         </Muted>
@@ -1126,11 +1129,13 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
               not come. A read that did not come back is a question that could
               not be asked. What is left is a finished answer: there is nothing
               to manage here. */}
-          {row.firmwareState === "pending" && <Muted>Checking what this platform needs…</Muted>}
+          {row.firmwareState === "pending" && <Muted fontSize={NOTE_FONT}>Checking what this platform needs…</Muted>}
           {row.firmwareState === "failed" && (
-            <Muted>Could not read the BIOS state. Pick the platform again to retry.</Muted>
+            <Muted fontSize={NOTE_FONT}>Could not read the BIOS state. Pick the platform again to retry.</Muted>
           )}
-          {row.firmwareState === "nothing" && <Muted>Nothing is known about this platform&apos;s BIOS files.</Muted>}
+          {row.firmwareState === "nothing" && (
+            <Muted fontSize={NOTE_FONT}>Nothing is known about this platform&apos;s BIOS files.</Muted>
+          )}
         </>
       )}
       <RemoveSection row={row} state={state} />
