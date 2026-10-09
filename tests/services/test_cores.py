@@ -411,7 +411,7 @@ class TestSetGameCore:
         assert result["launch_options"] == (
             "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
             '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
-            '"/roms/snes/mario.sfc"'
+            "'/roms/snes/mario.sfc'"
         )
         # The pin landed on the Rom aggregate.
         assert uow.roms.get(42).emulator_override == "bsnes"
@@ -427,7 +427,7 @@ class TestSetGameCore:
         assert result["app_id"] == 99
         assert result["launch_options"] == (
             "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
-            '-e "%EMULATOR_PCSX2% -batch %ROM%" "/roms/ps2/gt4.iso"'
+            "-e \"%EMULATOR_PCSX2% -batch %ROM%\" '/roms/ps2/gt4.iso'"
         )
         assert uow.roms.get(42).emulator_override == "PCSX2 (Standalone)"
 
@@ -500,7 +500,7 @@ class TestClearGameCore:
         assert result["launch_options"] == (
             "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
             '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
-            '"/roms/snes/mario.sfc"'
+            "'/roms/snes/mario.sfc'"
         )
         # The pin is gone (SQL NULL).
         assert uow.roms.get(42).emulator_override is None
@@ -514,7 +514,7 @@ class TestClearGameCore:
         result = event_loop.run_until_complete(service.clear_game_core(42))
         assert result["success"] is True
         assert (
-            result["launch_options"] == 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/snes/mario.sfc"'
+            result["launch_options"] == "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/snes/mario.sfc'"
         )
         assert "-e" not in result["launch_options"]
         assert uow.roms.get(42).emulator_override is None
@@ -573,7 +573,7 @@ class TestSetSystemCore:
                     "launch_options": (
                         "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
                         '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
-                        '"/roms/snes/a.sfc"'
+                        "'/roms/snes/a.sfc'"
                     ),
                 }
             ],
@@ -607,12 +607,12 @@ class TestSetSystemCoreFanOut:
             101: (
                 "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
                 '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
-                '"/roms/snes/a.sfc"'
+                "'/roms/snes/a.sfc'"
             ),
             102: (
                 "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
                 '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
-                '"/roms/snes/b.sfc"'
+                "'/roms/snes/b.sfc'"
             ),
         }
 
@@ -629,7 +629,7 @@ class TestSetSystemCoreFanOut:
         assert items == {
             101: (
                 "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
-                '-e "%EMULATOR_PCSX2% -batch %ROM%" "/roms/ps2/a.iso"'
+                "-e \"%EMULATOR_PCSX2% -batch %ROM%\" '/roms/ps2/a.iso'"
             ),
         }
 
@@ -679,7 +679,7 @@ class TestSetSystemCoreFanOut:
         assert items == [
             {
                 "app_id": 101,
-                "launch_options": 'flatpak run --nosocket=wayland net.retrodeck.retrodeck "/roms/snes/a.sfc"',
+                "launch_options": "flatpak run --nosocket=wayland net.retrodeck.retrodeck '/roms/snes/a.sfc'",
             }
         ]
 
@@ -734,7 +734,7 @@ class TestCoreChangePreservesPinnedDisc:
         result = event_loop.run_until_complete(service.set_game_core(42, "bsnes"))
         assert result["success"] is True
         assert result["app_id"] == 99
-        assert f'"{_DISC_DIR}/{_DISC2}"' in result["launch_options"]
+        assert f"'{_DISC_DIR}/{_DISC2}'" in result["launch_options"]
         assert _DISC1 not in result["launch_options"]
         # The disc seam was queried with the pin.
         assert (_DISC_DIR, _DISC2) in disc_resolver.calls
@@ -756,7 +756,7 @@ class TestCoreChangePreservesPinnedDisc:
         result = event_loop.run_until_complete(service.clear_game_core(42))
         assert result["success"] is True
         assert result["app_id"] == 99
-        assert f'"{_DISC_DIR}/{_DISC2}"' in result["launch_options"]
+        assert f"'{_DISC_DIR}/{_DISC2}'" in result["launch_options"]
         assert _DISC1 not in result["launch_options"]
         # The DISC pin survives a core clear.
         assert uow.roms.get(42).selected_disc == _DISC2
@@ -770,7 +770,7 @@ class TestCoreChangePreservesPinnedDisc:
         active_core.per_rom[1] = ("bsnes_libretro", "bsnes")
         result = event_loop.run_until_complete(service.set_system_core("snes", "bsnes"))
         items = {item["app_id"]: item["launch_options"] for item in result["rebake_items"]}
-        assert f'"{_DISC_DIR}/{_DISC2}"' in items[101]
+        assert f"'{_DISC_DIR}/{_DISC2}'" in items[101]
         assert _DISC1 not in items[101]
         assert (_DISC_DIR, _DISC2) in disc_resolver.calls
 
@@ -784,7 +784,7 @@ class TestCoreChangePreservesPinnedDisc:
         assert result["launch_options"] == (
             "flatpak run --nosocket=wayland net.retrodeck.retrodeck -e "
             '"%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/bsnes_libretro.so %ROM%" '
-            '"/roms/snes/mario.sfc"'
+            "'/roms/snes/mario.sfc'"
         )
 
 

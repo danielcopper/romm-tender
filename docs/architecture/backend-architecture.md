@@ -1428,7 +1428,7 @@ RetroDECK's `run_game.sh` reinterprets a directory `%ROM%` as a "directory as a 
 never launch a bare folder. Two overrides fire together, both keyed on the same `folder_boot_root` fact and neither a
 `file_path` rewrite: the baked **path** becomes the game folder (`folder_boot_root`, `domain/rom_files.py`, in the
 `DiscLaunchResolver` seam), and the baked **invocation** becomes a **direct sandbox command** that bypasses
-`run_game.sh` — `flatpak run --nosocket=wayland --command=<launcher> net.retrodeck.retrodeck <args> "<folder>"`,
+`run_game.sh` — `flatpak run --nosocket=wayland --command=<launcher> net.retrodeck.retrodeck <args> '<folder>'`,
 resolved in `ActiveCoreResolver.active_emulator_for_rom` (standalone + folder-boot install → the `SandboxLauncherFn`
 seam, `EsFindRulesAdapter.resolve_sandbox_launcher`, gives the `/app/…/component_launcher.sh` sandbox path →
 `EmulatorInvocation.direct`). `file_path` stays the EBOOT anchor ([ADR-0019](../adr/0019-folder-as-launch-target.md),

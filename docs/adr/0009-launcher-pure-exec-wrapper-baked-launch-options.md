@@ -163,3 +163,10 @@ storage + precedence + bake-site model is [ADR-0011](0011-per-game-core-override
 See also: [ADR-0005](0005-launcher-resolves-path-from-sqlite.md) (superseded interim),
 [ADR-0008](0008-rom-install-launch-file-and-rom-dir.md) (`RomInstall` launch `file_path` — the path baked into the
 command), [ADR-0003](0003-json-sqlite-persistence-boundary.md) (persistence boundary).
+
+## Amendment — the ROM path is single-quoted
+
+Steam runs a non-Steam shortcut's launch options through a shell, so double quotes left `$`, backticks and `$(…)` in a
+file name to be expanded before the launcher received the path (#2302). The path is now single-quoted, with a `'` inside
+it written as `'\''`; the invocation before it stays verbatim. The current rule is in
+`docs/architecture/steam-non-steam-shortcuts.md`, "Launch options pass through a shell".

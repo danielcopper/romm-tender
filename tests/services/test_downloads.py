@@ -1542,7 +1542,7 @@ class TestDoDownloadSingleFile:
         # so the frontend confirm-sets launch options without a full-library scan.
         assert payload["app_id"] == 1042
         # launch_options carries the full RetroDECK launch command for the resolved path.
-        assert payload["launch_options"] == f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{target_path}"'
+        assert payload["launch_options"] == f"flatpak run --nosocket=wayland net.retrodeck.retrodeck '{target_path}'"
         # download_queue status is completed
         assert downloads.service._download_queue[42]["status"] == "completed"
 
@@ -1633,7 +1633,7 @@ class TestDoDownloadSingleFile:
             rom = uow.roms.get(42)
         assert rom is not None
         assert rom.applied_launch_options == payload["launch_options"]
-        assert rom.applied_launch_options == f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{target_path}"'
+        assert rom.applied_launch_options == f"flatpak run --nosocket=wayland net.retrodeck.retrodeck '{target_path}'"
 
     @pytest.mark.asyncio
     async def test_download_complete_does_not_record_applied_for_unbound_rom(self, downloads, tmp_path, emit):
@@ -1835,7 +1835,7 @@ class TestDoDownloadOverrideRebake:
         assert payload["launch_options"] == (
             "flatpak run --nosocket=wayland net.retrodeck.retrodeck "
             '-e "%EMULATOR_RETROARCH% -L /var/config/retroarch/cores/pcsx_rearmed_libretro.so %ROM%" '
-            f'"{target_path}"'
+            f"'{target_path}'"
         )
 
     @pytest.mark.asyncio
@@ -1845,7 +1845,7 @@ class TestDoDownloadOverrideRebake:
             {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
         ]
         payload, target_path = await self._run_single_download(downloads, tmp_path, emit, rom_id=43, override=None)
-        assert payload["launch_options"] == f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{target_path}"'
+        assert payload["launch_options"] == f"flatpak run --nosocket=wayland net.retrodeck.retrodeck '{target_path}'"
         assert "-e" not in payload["launch_options"]
 
     @pytest.mark.asyncio
@@ -1860,7 +1860,7 @@ class TestDoDownloadOverrideRebake:
             payload, target_path = await self._run_single_download(
                 downloads, tmp_path, emit, rom_id=44, override="Removed Core"
             )
-        assert payload["launch_options"] == f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{target_path}"'
+        assert payload["launch_options"] == f"flatpak run --nosocket=wayland net.retrodeck.retrodeck '{target_path}'"
         assert "-e" not in payload["launch_options"]
         assert "Removed Core" in caplog.text
         assert "no longer resolves" in caplog.text
@@ -1941,7 +1941,7 @@ class TestDoDownloadMultiFile:
         assert payload["file_path"] == installed.file_path
         assert (
             payload["launch_options"]
-            == f'flatpak run --nosocket=wayland net.retrodeck.retrodeck "{installed.file_path}"'
+            == f"flatpak run --nosocket=wayland net.retrodeck.retrodeck '{installed.file_path}'"
         )
         # Status is completed
         assert downloads.service._download_queue[55]["status"] == "completed"
