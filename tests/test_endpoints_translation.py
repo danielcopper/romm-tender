@@ -5,10 +5,8 @@ so the transport half is the one the panel meets: a refusal arrives as a reply
 carrying ``{success: False, reason, message}``, a bug as the host's
 ``backend_exception`` error. The services are stand-ins that raise or answer
 what a case hands them, which puts the exception exactly where a use case would
-raise it; Stop Game's refusals, the connection's, a partial bulk uninstall, the
-conflict resolution's, a partial save deletion, the save syncs' and device
-list's refusals, the save slots', the library preview's and the removed-game
-cleanup's failures run through the real services.
+raise it — except in the ``…OnTheWire`` classes, which run their cases through
+the real services.
 """
 
 from __future__ import annotations
@@ -1447,8 +1445,13 @@ async def _acknowledge_nothing(rolled_back_at: object) -> dict[str, Any]:
     return {"success": True}
 
 
-def _dispatcher_over_update_install(tmp_path: Path, steam: FakeSteamInterface) -> CallDispatcher:
-    """The real dispatcher over ``Endpoints`` whose update install is the real ``UpdateInstallService`` over fakes."""
+def _dispatcher_over_update_install(
+    tmp_path: Path, steam: FakeSteamInterface, *, save_sync_in_flight: bool
+) -> CallDispatcher:
+    """The real dispatcher over ``Endpoints`` whose update install is the real ``UpdateInstallService``.
+
+    The service runs over fakes and tmp-dir adapters.
+    """
     service = UpdateInstallService(
         config=UpdateInstallServiceConfig(
             releases=_StoredRelease(),
@@ -1458,7 +1461,7 @@ def _dispatcher_over_update_install(tmp_path: Path, steam: FakeSteamInterface) -
             library_sync_in_flight=lambda: False,
             rom_downloads_in_flight=set,
             download_queue=lambda: {"downloads": []},
-            save_sync_in_flight=lambda: False,
+            save_sync_in_flight=lambda: save_sync_in_flight,
             firmware_downloads_in_flight=lambda: False,
             save_directory_move_in_flight=lambda: False,
             cleanup_running=lambda: False,
@@ -1504,7 +1507,9 @@ class TestTheUpdaterRefusalsOnTheWire:
     """The install press's and the installer's output window's refusals, as the wire carries them."""
 
     async def test_a_press_that_has_to_wait_answers_every_reason_it_waits_for(self, tmp_path):
-        dispatcher = _dispatcher_over_update_install(tmp_path, FakeSteamInterface(apps=("A Game",)))
+        dispatcher = _dispatcher_over_update_install(
+            tmp_path, FakeSteamInterface(apps=("A Game",)), save_sync_in_flight=True
+        )
 
         message = json.loads(await dispatcher.dispatch(1, "install_update", ["1.1.0"]))
 
@@ -1513,7 +1518,7 @@ class TestTheUpdaterRefusalsOnTheWire:
             "success": False,
             "reason": "update_waiting",
             "message": "Something that an update would interrupt is still under way",
-            "wait_reasons": [{"reason": "app_running", "apps": ["A Game"]}],
+            "wait_reasons": [{"reason": "app_running", "apps": ["A Game"]}, {"reason": "save_sync"}],
         }
 
     async def test_no_failed_update_to_show_answers_not_found(self):
