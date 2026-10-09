@@ -494,8 +494,8 @@ class SteamGridService:
 
         Returns the written ``icon_path`` on success so the frontend can
         point the shortcut at it via ``SteamClient.Apps.SetShortcutIcon``.
-        Refuses with ``invalid_payload`` for data that is not base64 and with
-        ``icon_write_failed`` when the file cannot be written.
+        Refuses with ``invalid_payload`` when the data does not decode as base64
+        and with ``icon_write_failed`` when the file cannot be written.
         """
         async with self._rules.hold("save_shortcut_icon", prune=True):
             return await self._save_shortcut_icon(app_id, icon_base64)

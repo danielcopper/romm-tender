@@ -11,11 +11,9 @@ from lib.list_result import ErrorCode
 
 
 class SgdbApiError(Exception):
-    """Raised by the SteamGridDB adapter for every failure to reach SteamGridDB or to read its answer.
+    """A SteamGridDB call that failed.
 
-    ``status_code`` is the HTTP status of a non-2xx answer, and ``None`` where
-    there is no status to report: SteamGridDB could not be reached, or what it
-    sent could not be read.
+    ``status_code`` is the HTTP status of a non-2xx answer, ``None`` where there is none.
     """
 
     def __init__(self, status_code: int | None, message: str) -> None:

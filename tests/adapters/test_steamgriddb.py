@@ -190,7 +190,7 @@ def _breaking_mid_read() -> MagicMock:
     return resp
 
 
-# Each way SteamGridDB can fail to answer or be read, as ``urlopen`` meets it.
+# Ways SteamGridDB can fail to answer, or answer something unreadable, as the patched ``urlopen`` produces them.
 _NO_ANSWER = {
     "unreachable": {"side_effect": urllib.error.URLError("Name or service not known")},
     "timeout": {"side_effect": TimeoutError("timed out")},

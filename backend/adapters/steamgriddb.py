@@ -44,13 +44,7 @@ class SteamGridDbAdapter:
         return ssl.create_default_context(cafile=_ca_bundle())
 
     def _get_json(self, url: str, api_key: str) -> dict[str, Any]:
-        """Authenticated GET of *url*, answering SteamGridDB's JSON object.
-
-        Raises ``SgdbApiError`` on every failure to reach SteamGridDB or to read
-        its answer: with the HTTP status of a non-2xx answer, or with
-        ``status_code=None`` where there is none — no connection, a timeout, a
-        broken response, or a body that is not a JSON object.
-        """
+        """Authenticated GET of *url*, answering SteamGridDB's JSON object; raises as ``SteamGridDbApi`` states."""
         req = urllib.request.Request(url, method="GET")
         req.add_header("Authorization", f"Bearer {api_key}")
         req.add_header("User-Agent", self._user_agent)
