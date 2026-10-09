@@ -830,7 +830,7 @@ export function usePlatformsPage(): PlatformsPageState {
     [runDownload],
   );
   const downloadAll = useCallback(
-    (slug: string) => runDownload(slug, "all", () => downloadAllFirmware(slug)),
+    (slug: string) => runDownload(slug, "all", () => downloadAllFirmware(slug, null)),
     [runDownload],
   );
   const downloadOne = useCallback(

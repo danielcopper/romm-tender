@@ -17,18 +17,71 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from domain.emulator_sources import SourceReport, SourcesReading
+    from domain.emulator_sources import ArrangedSource, SourceReport, SourcesReading
     from domain.firmware_wants import FirmwareCatalogue
+    from domain.platform_system import PlatformIds, PlatformSystem
     from domain.retrodeck_folders import FolderRefused, MoveRoots
+    from domain.rom_install import RomInstall
     from domain.save_answer import SaveAnswer
     from domain.savestate_location import NoSavestates, SavestateLocation
     from domain.shortcut_data import EmulatorInvocation
 
 
-class SystemResolver(Protocol):
-    """Resolve a RomM platform slug to a RetroDECK system path."""
+class SourcePlatformSystems(Protocol):
+    """Which system a platform is in one emulator source, asked of the resolver with the platform's ids."""
 
-    def __call__(self, platform_slug: str, platform_fs_slug: str | None = None) -> str: ...
+    def platform_system(
+        self,
+        ids: PlatformIds,
+        *,
+        platform_slug: str,
+        platform_name: str,
+        source: str | None = None,
+        reading: SourcesReading | None = None,
+    ) -> PlatformSystem:
+        """The system in *source*, the answering source where it is ``None``."""
+        ...
+
+    def asked_source(
+        self, *, source: str | None = None, reading: SourcesReading | None = None
+    ) -> ArrangedSource | None:
+        """The source a question for *source* goes to, or ``None`` where there is none."""
+        ...
+
+
+class PlatformSystems(Protocol):
+    """The system a RomM platform is in an emulator source, and the system an installed game keeps.
+
+    A platform's system reads its kept ids and may read RomM's listing and ask
+    the resolver, so no call is made while a Unit of Work is open or on the
+    event loop. An installed game's system comes from its record alone.
+    """
+
+    def platform_system(
+        self,
+        platform_slug: str,
+        *,
+        source: str | None = None,
+        reading: SourcesReading | None = None,
+        ask_romm: bool = True,
+    ) -> PlatformSystem:
+        """The system *platform_slug* is in *source*, the answering source where it is ``None``.
+
+        A download names the source it lands in; every other question asks the
+        answering source. Where no ids are kept for the platform they are read
+        from RomM, unless *ask_romm* is false — a caller that must not reach the
+        network then gets the answer for a platform with no ids. A read that
+        fails raises nothing: it answers ``UNASKED`` with the reason and message
+        ``classify_error`` gives the failure and the source that would have been
+        asked, and keeps nothing.
+        """
+        ...
+
+    def rom_system(
+        self, platform_slug: str, install: RomInstall | None, *, reading: SourcesReading | None = None
+    ) -> PlatformSystem:
+        """The system a game is asked about: its install record's where it is installed, else the platform's."""
+        ...
 
 
 class FirmwareResolver(Protocol):
@@ -277,14 +330,12 @@ class SystemKnownFn(Protocol):
     not name it, and ``None`` when the file could not be read, which is a
     different thing from a denial and must not be treated as one.
 
-    The candidate search asks before it searches a platform directory: the
-    game-detail page resolves that directory from a RomM slug alone, and an
-    unmapped slug is taken verbatim as a directory name. A directory that is not
-    an ES-DE system is not a place a game can live, so a namesake inside it is
-    content the emulator will never look at. The same answer also protects the
-    accept-list's default-safe branch, which reads an empty extension set as
-    "cannot tell" and would otherwise let every entry through for a directory
-    that was never a system.
+    The candidate search asks before it searches a system's directory: a
+    directory that is not an ES-DE system is not a place a game can live, so a
+    namesake inside it is content the emulator will never look at. The same
+    answer also protects the accept-list's default-safe branch, which reads an
+    empty extension set as "cannot tell" and would otherwise let every entry
+    through for a directory that was never a system.
     """
 
     def __call__(self, system_name: str) -> bool | None: ...

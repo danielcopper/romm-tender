@@ -268,8 +268,8 @@ class TestFirmwareEndpointDelegation:
     @pytest.mark.asyncio
     async def test_download_all_firmware_delegates(self, endpoints, services):
         services.firmware_service.download_all_firmware = AsyncMock(return_value={"success": True})
-        result = await endpoints.download_all_firmware("snes")
-        services.firmware_service.download_all_firmware.assert_awaited_once_with("snes")
+        result = await endpoints.download_all_firmware("snes", 7)
+        services.firmware_service.download_all_firmware.assert_awaited_once_with("snes", 7)
         assert result == {"success": True}
 
     @pytest.mark.asyncio

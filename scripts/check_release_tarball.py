@@ -81,7 +81,6 @@ REQUIRED_FILES = (
     "backend/main.py",
     "backend/native/libgavel-x86_64-linux.so",
     "bin/tender-rom-launcher",
-    "defaults/config.json",
     "dist/globals.js",
     "dist/index-coexistence.js",
     "dist/index.js",

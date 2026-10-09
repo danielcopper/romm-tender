@@ -24,7 +24,7 @@ import { oneOfRowLine } from "../../utils/biosGroup";
 import { biosHeldRatio } from "../../utils/biosHeldRatio";
 import { biosSummary } from "../../utils/biosSummary";
 import { buildEmulatorMenu } from "../../utils/emulatorMenu";
-import { emulatorDataReasonSentence } from "../../utils/emulatorSourceWording";
+import { emulatorDataReasonSentence, platformSystemClause } from "../../utils/emulatorSourceWording";
 import { getEventTarget } from "../../utils/events";
 import { pluralize } from "../../utils/pluralize";
 import { SYNC_RUNNING_HINT, useSyncRunning } from "../../utils/syncRunning";
@@ -37,7 +37,9 @@ import {
   GroupStatus,
   MUTED,
   Muted,
+  NOTE_FONT,
   PALE_GREEN,
+  PANE_TABLE_REGISTER,
   PaneTableHeader,
   PaneTableRow,
   RED,
@@ -46,6 +48,7 @@ import {
   SectionTitle,
   VIOLET,
   type ScopedStatus,
+  type TableRegister,
 } from "../layout/pane";
 import type { CoreAnswer, DetailStatus, PlatformRow, PlatformsPageState, StatusScope } from "./usePlatformsPage";
 
@@ -236,8 +239,24 @@ function libraryMark(file: FirmwareRow): typeof LIBRARY_MARK | null {
 // and `Contents` is about to be filled for file rows (#1803).
 const TABLE_COLUMNS = "1fr 48px 84px 92px";
 
+// A file's row and the column names over the rows are set at the 12px of the
+// section heading, two pixels above the NOTE_FONT lines under each name: on the
+// Deck one pixel apart is no difference at all, and column names set like the
+// notes read as notes rather than as a table head.
+const BIOS_TABLE_FONT = "12px";
+const BIOS_TABLE_REGISTER: TableRegister = {
+  ...PANE_TABLE_REGISTER,
+  rowFont: BIOS_TABLE_FONT,
+  headerFont: BIOS_TABLE_FONT,
+};
+
 const BiosTableHeader: FC = () => (
-  <PaneTableHeader columns={TABLE_COLUMNS} cells={["File", "On disk", "Contents", ""]} />
+  <PaneTableHeader
+    columns={TABLE_COLUMNS}
+    cells={["File", "On disk", "Contents", ""]}
+    register={BIOS_TABLE_REGISTER}
+    testId="bios-table-header"
+  />
 );
 
 /**
@@ -286,7 +305,7 @@ const BiosRowLines: FC<{ lines: string[] }> = ({ lines }) =>
   lines.length === 0 ? null : (
     <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginLeft: "18px", marginTop: "2px" }}>
       {lines.map((line) => (
-        <div key={line} style={{ fontSize: SECONDARY_FONT, color: MUTED, whiteSpace: "pre-wrap" }}>
+        <div key={line} style={{ fontSize: NOTE_FONT, color: MUTED, whiteSpace: "pre-wrap" }}>
           {line}
         </div>
       ))}
@@ -386,6 +405,8 @@ const BiosFileRow: FC<{ file: FirmwareRow; action: ReactNode }> = ({ file, actio
     // on it went on explaining it.
     <PaneTableRow
       columns={TABLE_COLUMNS}
+      register={BIOS_TABLE_REGISTER}
+      testId="bios-file-row"
       focusStop={!action}
       cells={[
         {
@@ -418,7 +439,7 @@ const BiosFileRow: FC<{ file: FirmwareRow; action: ReactNode }> = ({ file, actio
               )}
             </>
           ),
-          style: { display: "flex", gap: "4px", fontSize: "14px", whiteSpace: "nowrap" },
+          style: { display: "flex", gap: "4px", fontSize: "12px", whiteSpace: "nowrap" },
           clip: false,
         },
         { content: contentsCell(file), style: { color: MUTED, fontSize: SECONDARY_FONT } },
@@ -439,7 +460,7 @@ const BiosFileRow: FC<{ file: FirmwareRow; action: ReactNode }> = ({ file, actio
         <div
           style={{
             marginLeft: "18px",
-            fontSize: SECONDARY_FONT,
+            fontSize: NOTE_FONT,
             color: MUTED,
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -478,6 +499,33 @@ const BiosFileRow: FC<{ file: FirmwareRow; action: ReactNode }> = ({ file, actio
  * chip would hide a failure behind a hover the Deck's controller has no way to
  * perform.
  */
+/**
+ * The header's second line: the facts about the platform, smaller and muted.
+ *
+ * Each part keeps itself on one line and carries the separator in front of it,
+ * so the line wraps only between parts — at the Deck's width a free-flowing
+ * line broke "RetroDECK system snes" after its first word — and never cuts one.
+ */
+const HeaderFacts: FC<{ parts: { text: string; color?: string }[] }> = ({ parts }) => (
+  <div
+    data-testid="platform-facts"
+    style={{
+      display: "flex",
+      flexWrap: "wrap",
+      columnGap: "4px",
+      padding: "2px 16px 0",
+      fontSize: NOTE_FONT,
+      color: MUTED,
+    }}
+  >
+    {parts.map((part, index) => (
+      <span key={part.text} style={{ whiteSpace: "nowrap", color: part.color }}>
+        {index === 0 ? part.text : `· ${part.text}`}
+      </span>
+    ))}
+  </div>
+);
+
 type CoreOffer = { kind: "pick"; core: SystemCoreInfo } | { kind: "blocked"; reason: string; notice?: string };
 
 function coreOffer(core: CoreAnswer): CoreOffer {
@@ -487,17 +535,15 @@ function coreOffer(core: CoreAnswer): CoreOffer {
     return { kind: "blocked", reason: failed, notice: failed };
   }
   if (!core.emulator_data_available) {
-    const absent = emulatorDataReasonSentence(core.emulator_data_reason, core.emulator_source);
+    const absent = emulatorDataReasonSentence(core.emulator_data_reason, core.emulator_source, core.platform_system);
     return { kind: "blocked", reason: absent, notice: absent };
   }
   // An EMPTY menu first, because it is the one case where the fallback fails
-  // too. `_resolve_system` hands back the raw RomM slug for a platform its map
-  // does not name, and `get_emulator_options` answers `available: true` with no
-  // options for a system `es_systems.xml` does not list — `vic-20`,
-  // `acorn-electron`, `nintendo-dsi`, `ps5`, `browser` and `win` are in neither
-  // on this machine. RetroDECK's own launch then reads `command[1]` for the
-  // system, finds nothing, logs "No valid emulator found for system" and exits
-  // 1 (`libexec/run_game.sh`), so the games really do not start.
+  // too: `get_emulator_options` answers `available: true` with no options for a
+  // system whose catalogue entry lists no command. RetroDECK's own launch then
+  // reads `command[1]` for the system, finds nothing, logs "No valid emulator
+  // found for system" and exits 1 (`libexec/run_game.sh`), so the games really
+  // do not start.
   if (core.emulators.length === 0) {
     const none = "RetroDECK lists no emulator for this platform, so its games will not launch.";
     return { kind: "blocked", reason: none, notice: none };
@@ -795,21 +841,23 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
           pass, and its width was what wrapped that line three times. Two places
           state a platform's BIOS state and they now agree by construction. */}
       <SectionTitle title="BIOS files" note={summaryLabel} noteColor={biosColorForLevel(firmware.bios_level ?? null)} />
-      <Muted>{`${summaryDescription}${heldRatio}`}</Muted>
+      <Muted fontSize={NOTE_FONT}>{`${summaryDescription}${heldRatio}`}</Muted>
       {/* The route the summary above cannot name: nothing here could say which
           files this system wants, so the reader has to be told that placing one
           by hand still works. The line used to open "BIOS management is not
           supported for this system yet", which is a claim about Tender and
           not what the state means: install an emulator that declares firmware
           for this platform and the pane answers, with nothing changed here. */}
-      {nothingEstablished && <Muted>You can still put BIOS files in your BIOS folder by hand.</Muted>}
+      {nothingEstablished && (
+        <Muted fontSize={NOTE_FONT}>You can still put BIOS files in your BIOS folder by hand.</Muted>
+      )}
       {files.length > 0 && <BiosTableHeader />}
       {files.map((file) => (
         <BiosFileRow key={file.file_name} file={file} action={rowAction(row, state, file, fetchable)} />
       ))}
       {files.length > 0 && <BiosLegend files={files} />}
       {unanswered > 0 && (
-        <Muted>
+        <Muted fontSize={NOTE_FONT}>
           {unanswered === 1 ? "1 file" : `${unanswered} files`} nothing installed could answer for. Report at
           github.com/danielcopper/romm-tender/issues if needed.
         </Muted>
@@ -997,30 +1045,23 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
   const coreClause = !emulatorsKnown
     ? null
     : { text: activeLabel ?? fallbackLabel(noEmulator, fallbackMissing), color: coreColor };
+  const systemClause = core?.platform_system ? platformSystemClause(core.platform_system) : null;
 
   return (
     <>
-      {/* One header line rather than a Sync section: the toggle is in the list
+      {/* Two header lines rather than a Sync section: the toggle is in the list
           row, so what is left here is what the platform IS — and, since the
-          device round, the core picker too: a full-width button under this line
-          cost the pane a `Field`-height row and a warning line to say what the
-          picker itself says. */}
+          device round, the core picker too: a full-width button under the
+          header cost the pane a `Field`-height row and a warning line to say
+          what the picker itself says. The name has the first line to itself,
+          because sharing it with the facts squeezed a two-word name onto two
+          lines over the counts at the Deck's width. */}
       <Focusable
         flow-children="horizontal"
-        style={{ display: "flex", alignItems: "baseline", gap: "10px", padding: "8px 16px 0" }}
+        style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 16px 0" }}
       >
-        <span style={{ fontSize: "16px", fontWeight: 600, color: "#dcdedf", minWidth: 0 }}>{row.name}</span>
-        <span style={{ flex: "1 1 auto", fontSize: SECONDARY_FONT, color: MUTED }}>
-          {/* Both halves count ROM FILES, which is what makes the pair readable:
-              one shortcut serves a whole sibling group and the game's page
-              switches versions across it, so a version that did not win the
-              binding is still reachable and still belongs on the right. Counting
-              shortcuts there instead read as "207 are missing" on a platform
-              where nothing was. The Remove button below keeps the shortcut
-              count — that one really is about Steam entries. */}
-          {`${row.romCount} on RomM`}
-          {row.reachableCount === null ? "" : ` · ${row.reachableCount} in Steam`}
-          {coreClause && <span style={{ color: coreClause.color }}>{` · ${coreClause.text}`}</span>}
+        <span style={{ flex: "1 1 auto", minWidth: 0, fontSize: "16px", fontWeight: 600, color: "#dcdedf" }}>
+          {row.name}
         </span>
         {/* Always rendered, disabled when there is nothing to pick, with the
             reason in the tooltip — the same ruling the Remove group follows.
@@ -1039,6 +1080,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
                 emulatorDataAvailable: offer.core.emulator_data_available,
                 emulatorDataReason: offer.core.emulator_data_reason,
                 emulatorSource: offer.core.emulator_source,
+                emulatorPlatformSystem: offer.core.platform_system,
                 activeLabel: offer.core.active_core_label,
                 // Null on purpose: this pane IS the platform level, so marking
                 // an entry "(system)" would restate where the reader already is.
@@ -1052,6 +1094,21 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
           <FaMicrochip size={16} color={coreColor} />
         </DialogButton>
       </Focusable>
+      {/* Both counts are ROM FILES, which is what makes the pair readable: one
+          shortcut serves a whole sibling group and the game's page switches
+          versions across it, so a version that did not win the binding is
+          still reachable and still belongs on the right. Counting shortcuts
+          there instead read as "207 are missing" on a platform where nothing
+          was. The Remove button below keeps the shortcut count — that one
+          really is about Steam entries. */}
+      <HeaderFacts
+        parts={[
+          ...(coreClause ? [{ text: coreClause.text, color: coreClause.color }] : []),
+          { text: `${row.romCount} on RomM` },
+          ...(row.reachableCount === null ? [] : [{ text: `${row.reachableCount} in Steam` }]),
+          ...(systemClause === null ? [] : [{ text: systemClause }]),
+        ]}
+      />
       {/* The count is what failed, not the removal: taking the platform's games
           out of Steam needs only the slug. So the line says the number is
           missing and stops there — the buttons below stay live. */}
@@ -1092,11 +1149,13 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
               not come. A read that did not come back is a question that could
               not be asked. What is left is a finished answer: there is nothing
               to manage here. */}
-          {row.firmwareState === "pending" && <Muted>Checking what this platform needs…</Muted>}
+          {row.firmwareState === "pending" && <Muted fontSize={NOTE_FONT}>Checking what this platform needs…</Muted>}
           {row.firmwareState === "failed" && (
-            <Muted>Could not read the BIOS state. Pick the platform again to retry.</Muted>
+            <Muted fontSize={NOTE_FONT}>Could not read the BIOS state. Pick the platform again to retry.</Muted>
           )}
-          {row.firmwareState === "nothing" && <Muted>Nothing is known about this platform&apos;s BIOS files.</Muted>}
+          {row.firmwareState === "nothing" && (
+            <Muted fontSize={NOTE_FONT}>Nothing is known about this platform&apos;s BIOS files.</Muted>
+          )}
         </>
       )}
       <RemoveSection row={row} state={state} />

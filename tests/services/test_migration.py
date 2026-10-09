@@ -18,6 +18,7 @@ from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_migration_file_store import FakeMigrationFileStore
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
+from fakes.fake_platform_systems import FakePlatformSystems
 from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_settings_persister import FakeSettingsPersister
@@ -111,7 +112,7 @@ def migration(logger) -> MigrationHarness:
             core_info=core_info,
             sandbox_launcher=FakeSandboxLauncher(),
             platform_core_reader=FakePlatformCoreReader(),
-            resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
+            platform_systems=FakePlatformSystems(),
             logger=logger,
         ),
     )

@@ -262,21 +262,28 @@ and the row you focus is the one the right-hand pane describes.
    pane). Checking one platform takes a tenth to half a second on a Steam Deck, so a library of thirty is done in a few
    seconds, and leaving the page stops the work
 4. Move down the list to pick a platform; the pane on the right changes with the focus
-5. The pane's first line names the platform, how many ROMs it has on RomM, how many are in Steam, and the emulator it
-   launches with — by name, in grey when it is the platform's default and in gold when you have picked something else.
-   If it reads **RetroDECK decides**, Tender could not pin any of this platform's emulators — they may need setting up,
-   or ES-DE's command for them is not one Tender can bake — so RetroDECK chooses one itself when a game starts. If it
-   reads **no emulator installed** in red, the emulator RetroDECK would have fallen back to is not on this machine, and
-   the sentence below names it. If it reads **no emulator** in red, RetroDECK has none for this platform at all. The
-   sentence below the line says which of the three it is
-6. The **chip button** at the right of that line opens a menu of the platform's emulators — the same button, in the same
+5. The pane's first line names the platform. The smaller grey line under it names the emulator it launches with — by
+   name, in grey when it is the platform's default and in gold when you have picked something else — then how many ROMs
+   it has on RomM, how many are in Steam, and the system its games are in your emulator source ("RetroDECK system:
+   psx"). If it reads **RetroDECK decides**, Tender could not pin any of this platform's emulators — they may need
+   setting up, or ES-DE's command for them is not one Tender can bake — so RetroDECK chooses one itself when a game
+   starts. If it reads **no emulator installed** in red, the emulator RetroDECK would have fallen back to is not on this
+   machine, and the sentence below names it. If it reads **no emulator** in red, RetroDECK has none for this platform at
+   all. The sentence below the line says which of the three it is
+6. The **chip button** at the right of the name opens a menu of the platform's emulators — the same button, in the same
    two colours, as the one on a game's page. It is always there: it opens the menu whenever there is more than one
    emulator to choose between — also before the platform's first sync, so you can pick before its games reach Steam —
    and is greyed out otherwise, with the reason shown if you hover it. Where the reason is a problem rather than simply
    nothing to choose — no emulator for the platform, or an emulator list that could not be established (no emulator
    source found, every source switched off, a broken ES-DE systems file, a RetroDECK that has not been set up yet, a
    list that cannot be read yet, or not established for another reason) — a line under the header says so as well, since
-   a tooltip needs a mouse
+   a tooltip needs a mouse. A platform your emulator source has no system for says **"_Source_ has no system for
+   _platform_, so Tender cannot download its games."**, and one whose only systems are switched off there says **"System
+   _system_ is switched off in _source_."**, naming the source that answers — see
+   [Managing Games](managing-games.md#downloading-roms). Where Tender has not learned a platform's system yet and RomM
+   cannot be reached to tell it, the line, a game's BIOS tab and its emulator menu say **"RomM cannot be reached, so
+   Tender does not know this platform's system yet."**; where RomM answers but does not give it — a failed sign-in, say
+   — they say **"RomM did not give this platform's ids, so Tender does not know its system yet."**
 7. **BIOS files** states how many required files are ready (e.g. "1 / 2 required") when the system needs any, and
    otherwise names the emulator and says it marks none of its BIOS files as required. Under that heading is the same
    sentence the game page shows, with your RomM library's own inventory behind it (e.g. "(3/5 RomM library files)").
@@ -736,8 +743,9 @@ file is broken, the source's list cannot be read yet (EmuDeck's today), or it is
 Tender stores the choice in its own settings and **immediately re-applies it** to every installed game on that platform
 — the change takes effect right away, with no sync needed (games that already have a per-game core keep their own
 choice). If the switch cannot be made, the pane says so under the button and the header keeps naming the core that is
-actually in effect. The page works even when your RomM server is offline — core switching and BIOS status are available,
-only the download buttons are withdrawn.
+actually in effect. Once a sync has run, the page works even when your RomM server is offline — core switching and BIOS
+status are available, only the download buttons are withdrawn. Before the first sync after an update, a platform needs
+RomM once to learn its system; offline, it says so instead.
 
 !!! note "A RetroDECK default-core change needs a Force Full Sync"
 

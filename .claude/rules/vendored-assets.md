@@ -2,7 +2,6 @@
 paths:
   - "backend/_vendor/**"
   - "backend/native/**"
-  - "defaults/**"
 ---
 
 # Vendored code, binaries, and data `[ours]`
@@ -36,8 +35,7 @@ an upstream release with a pinned SHA-256 (CI re-verifies it), loaded by an adap
 fallback; provenance and the update procedure live in [`native/README.md`](../../backend/native/README.md).
 
 **Vendored data** used to be a third category — `defaults/bios_registry.json`, a firmware snapshot copied from an
-emu-atlas release under its own checksum. It is gone with the swap to the live resolver, and nothing in `defaults/` is
-vendored today; `config.json` is maintained in this repo.
+emu-atlas release under its own checksum. It is gone with the swap to the live resolver, and so is `defaults/`.
 
 The shared rule across the categories that remain: **the artifact is an upstream copy pinned by checksum** — verbatim,
 or verbatim plus the local patch its provenance entry documents. Editing one in place to fix a problem is always wrong —

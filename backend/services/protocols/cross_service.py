@@ -224,6 +224,10 @@ class BiosChecker(Protocol):
     ``rom_regions`` are the game's own regions as RomM names them, so a one-of
     group is judged for the regions this game is sold in rather than for every
     region the group serves. Empty for a caller with no game in hand.
+
+    ``install`` is the game's install record, whose system an installed game
+    is asked about; ``None`` asks the platform's system in the answering
+    source.
     """
 
     async def check_platform_bios(
@@ -231,6 +235,7 @@ class BiosChecker(Protocol):
         platform_slug: str,
         launching_emulator: LaunchingEmulator | None = None,
         rom_regions: tuple[str, ...] = (),
+        install: RomInstall | None = None,
     ) -> dict[str, Any]: ...
 
 

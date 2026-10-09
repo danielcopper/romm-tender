@@ -20,8 +20,10 @@ from fakes.fake_core_info_provider import (
     libretro_option,
     standalone_option,
 )
+from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
+from domain.platform_system import NO_SYSTEM, PlatformSystem
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.shortcut_data import EmulatorInvocation
@@ -29,23 +31,6 @@ from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolver
 
 if TYPE_CHECKING:
     import pytest
-
-
-class FakeSystemResolver:
-    """In-memory ``SystemResolver`` mapping platform slugs to RetroDECK systems.
-
-    Records each call so a test can assert the resolver normalized the ROM's
-    platform slug before reaching the core read seams. Unknown slugs pass
-    through unchanged, mirroring the real resolver.
-    """
-
-    def __init__(self, mapping: dict[str, str] | None = None) -> None:
-        self.mapping = mapping if mapping is not None else {}
-        self.calls: list[tuple[str, str | None]] = []
-
-    def __call__(self, platform_slug: str, platform_fs_slug: str | None = None) -> str:
-        self.calls.append((platform_slug, platform_fs_slug))
-        return self.mapping.get(platform_slug, platform_slug)
 
 
 class FakePlatformCoreReader:
@@ -112,11 +97,11 @@ def _make_resolver(
     *,
     uow: FakeUnitOfWork,
     core_info: FakeCoreInfoProvider,
-    resolve_system: FakeSystemResolver | None = None,
+    platform_systems: FakePlatformSystems | None = None,
     platform_core_reader: FakePlatformCoreReader | None = None,
     sandbox_launchers: dict[str, str] | None = None,
-) -> tuple[ActiveCoreResolver, FakeSystemResolver]:
-    resolver_fn = resolve_system if resolve_system is not None else FakeSystemResolver()
+) -> tuple[ActiveCoreResolver, FakePlatformSystems]:
+    resolver_fn = platform_systems if platform_systems is not None else FakePlatformSystems()
     platform_reader = platform_core_reader if platform_core_reader is not None else FakePlatformCoreReader()
     resolver = ActiveCoreResolver(
         config=ActiveCoreResolverConfig(
@@ -124,7 +109,7 @@ def _make_resolver(
             core_info=core_info,
             sandbox_launcher=FakeSandboxLauncher(sandbox_launchers),
             platform_core_reader=platform_reader,
-            resolve_system=resolver_fn,
+            platform_systems=resolver_fn,
             logger=logging.getLogger("test"),
         ),
     )
@@ -158,15 +143,15 @@ def test_resolvable_override_normalizes_platform_slug_to_system() -> None:
     core_info = FakeCoreInfoProvider(
         available_cores=[{"core_so": "mgba_libretro", "label": "mGBA", "is_default": True}],
     )
-    resolver, resolve_system = _make_resolver(
+    resolver, platform_systems = _make_resolver(
         uow=uow,
         core_info=core_info,
-        resolve_system=FakeSystemResolver(mapping={"gba": "gba"}),
+        platform_systems=FakePlatformSystems(mapping={"gba": "gba"}),
     )
 
     resolver.active_core_for_rom(7)
     # The available-cores read seam must receive the resolved system, not the raw slug.
-    assert resolve_system.calls == [("gba", None)]
+    assert platform_systems.calls == [("gba", None)]
     assert core_info.emulator_options_calls == ["gba"]
 
 
@@ -585,3 +570,37 @@ def test_folder_boot_standalone_unresolvable_launcher_keeps_run_game_and_warns(
 
     assert result == _RPCS3
     assert any("sandbox" in r.message and "launcher" in r.message for r in caplog.records)
+
+
+# --- the platform's system -------------------------------------------------------
+
+
+def test_a_platform_with_no_system_falls_back_to_the_plain_launch() -> None:
+    uow = FakeUnitOfWork()
+    _seed_rom(uow, rom_id=8, platform_slug="vic-20", emulator_override="VICE")
+    core_info = FakeCoreInfoProvider(
+        available_cores=[{"core_so": "vice_libretro", "label": "VICE", "is_default": True}]
+    )
+    platform = PlatformSystem(NO_SYSTEM, "vic-20", "VIC-20", source=RETRODECK_SOURCE)
+    resolver, _ = _make_resolver(
+        uow=uow, core_info=core_info, platform_systems=FakePlatformSystems(answers={"vic-20": platform})
+    )
+
+    assert resolver.active_emulator_for_rom(8) is None
+    assert core_info.emulator_options_calls == []
+
+
+def test_an_installed_game_launches_with_its_install_records_system() -> None:
+    uow = FakeUnitOfWork()
+    _seed_rom(uow, rom_id=9, platform_slug="dc")
+    _seed_install(uow, rom_id=9, file_path="/roms/naomi/a.zip", rom_dir=None, platform_slug="dc", system="naomi")
+    core_info = FakeCoreInfoProvider(
+        available_cores=[{"core_so": "flycast_libretro", "label": "Flycast", "is_default": True}]
+    )
+    resolver, _ = _make_resolver(
+        uow=uow, core_info=core_info, platform_systems=FakePlatformSystems(mapping={"dc": "dreamcast"})
+    )
+
+    resolver.active_emulator_for_rom(9)
+
+    assert core_info.emulator_options_calls == ["naomi"]

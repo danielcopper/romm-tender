@@ -322,8 +322,8 @@ class Endpoints:
         return await self._services.firmware_service.get_platform_firmware_status(platform_slug)
 
     @route
-    async def download_all_firmware(self, platform_slug):
-        return await self._services.firmware_service.download_all_firmware(platform_slug)
+    async def download_all_firmware(self, platform_slug, rom_id):
+        return await self._services.firmware_service.download_all_firmware(platform_slug, rom_id)
 
     @route
     async def download_required_firmware(self, platform_slug):

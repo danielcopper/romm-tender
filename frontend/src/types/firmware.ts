@@ -3,7 +3,7 @@
  * file status, and the available-cores selection presented in the UI.
  */
 
-import type { AnsweringSource, EmulatorDataReason } from "./emulatorSources";
+import type { AnsweringSource, EmulatorDataReason, PlatformSystemAnswer } from "./emulatorSources";
 
 /**
  * What the machine answers about one firmware file, in the four values the
@@ -284,6 +284,9 @@ export interface CoreInfo {
   emulator_data_reason: EmulatorDataReason | null;
   /** The source the answer came from; `null` where no source answers. */
   emulator_source: AnsweringSource | null;
+  /** The system the emulator list is about — an installed game's own, otherwise
+   *  the platform's in the answering source; `null` where no source was asked. */
+  platform_system: PlatformSystemAnswer | null;
   /** The IDENTITY of the emulator this ROM launches with — the same spelling the
    *  picker rows carry in {@link EmulatorOption.emulator} and the same one a
    *  firmware row's `cores` map is keyed on, so the BIOS tab can highlight the
@@ -322,6 +325,8 @@ export interface SystemCoreInfo {
   /** As on {@link CoreInfo}. */
   emulator_data_reason: EmulatorDataReason | null;
   emulator_source: AnsweringSource | null;
+  /** The platform's system in the answering source, which the page names. */
+  platform_system: PlatformSystemAnswer | null;
   active_core_label: string | null;
 }
 
@@ -354,6 +359,7 @@ export interface FirmwarePlatformExt extends FirmwarePlatformNamed {
   emulator_data_available?: boolean;
   emulator_data_reason: EmulatorDataReason | null;
   emulator_source: AnsweringSource | null;
+  platform_system: PlatformSystemAnswer | null;
   // Per-platform BIOS aggregates computed by the backend from the same
   // core-aware classified files (`compute_bios_level`), so the platform detail
   // reads the unknown/ok/partial/missing decision and display counts off the

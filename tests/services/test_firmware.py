@@ -21,6 +21,7 @@ from fakes.fake_firmware_file_store import FakeFirmwareFileStore
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
+from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -39,8 +40,10 @@ from domain.firmware_wants import (
     SYSTEM_FIRMWARE_RUNS_WITHOUT,
     FolderVerdict,
 )
+from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.retrodeck_folders import BIOS_DOWNLOAD, FolderRefused, finding_refusal, switched_off
 from domain.rom import Rom
+from domain.rom_install import RomInstall
 from domain.shortcut_data import EmulatorInvocation
 from lib.errors import Refused, RommConnectionError, ServerUnreachable
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
@@ -49,24 +52,6 @@ from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.firmware.deletion import FirmwareDeletionIncomplete
 from services.firmware.status import FirmwareStatusReader
 from services.game_detail import GameDetailService, GameDetailServiceConfig
-
-
-class FakeSystemResolver:
-    """In-memory ``SystemResolver`` for tests.
-
-    Maps known RomM platform slugs to RetroDECK systems and records each
-    call. Unknown slugs fall through unchanged, mirroring the real
-    resolver's pass-through. Used to assert the core read seams receive a
-    normalized system while BIOS-folder lookups stay on the raw slug.
-    """
-
-    def __init__(self, mapping: dict[str, str] | None = None) -> None:
-        self.mapping = mapping if mapping is not None else {}
-        self.calls: list[tuple[str, str | None]] = []
-
-    def __call__(self, platform_slug: str, platform_fs_slug: str | None = None) -> str:
-        self.calls.append((platform_slug, platform_fs_slug))
-        return self.mapping.get(platform_slug, platform_slug)
 
 
 def _make_clock() -> FakeClock:
@@ -130,7 +115,7 @@ def _make_firmware_service(
     firmware_resolver: FakeFirmwareResolver | None = None,
     retrodeck_folders: FakeRetroDeckFolders | None = None,
     core_info: FakeCoreInfoProvider | None = None,
-    resolve_system: FakeSystemResolver | None = None,
+    platform_systems: FakePlatformSystems | None = None,
     platform_core_reader: FakePlatformCoreReader | None = None,
     logger=None,
     conflict_rules=None,
@@ -174,7 +159,7 @@ def _make_firmware_service(
             platform_firmware_resolver=resolver,
             retrodeck_folders=paths,
             core_info=core_info if core_info is not None else FakeCoreInfoProvider(),
-            resolve_system=resolve_system if resolve_system is not None else FakeSystemResolver(),
+            platform_systems=platform_systems if platform_systems is not None else FakePlatformSystems(),
             platform_core_reader=platform_core_reader if platform_core_reader is not None else FakePlatformCoreReader(),
             uow_factory=uow_factory if uow_factory is not None else FakeUnitOfWorkFactory(),
             conflict_rules=conflict_rules if conflict_rules is not None else _make_conflict_rules(),
@@ -1597,8 +1582,8 @@ class TestGetFirmwareStatus:
             active_core=("flycast_libretro", "Flycast"),
             options=[libretro_option("flycast_libretro", "Flycast")],
         )
-        resolver = FakeSystemResolver(mapping={"dc": "dreamcast"})
-        fw = _make_firmware_service(core_info=core_info, resolve_system=resolver)
+        resolver = FakePlatformSystems(mapping={"dc": "dreamcast"})
+        fw = _make_firmware_service(core_info=core_info, platform_systems=resolver)
 
         firmware_list = [
             {
@@ -3307,7 +3292,7 @@ class TestTheAnswerNamesTheEmulatorItJudgedBy:
         """
         parameters = list(inspect.signature(FirmwareStatusReader.check_platform_bios).parameters)
 
-        assert parameters == ["self", "platform_slug", "launching_emulator", "rom_regions"]
+        assert parameters == ["self", "platform_slug", "launching_emulator", "rom_regions", "install"]
 
 
 _PSX_ROM_ID = 501
@@ -3369,14 +3354,14 @@ def _rom_scoped_surfaces(
         )
     )
     uow_factory = FakeUnitOfWorkFactory(uow)
-    resolve_system = FakeSystemResolver()
+    platform_systems = FakePlatformSystems()
     active_core = ActiveCoreResolver(
         config=ActiveCoreResolverConfig(
             uow_factory=uow_factory,
             core_info=core_info,
             sandbox_launcher=FakeSandboxLauncher(),
             platform_core_reader=_platform_core_reader(fw),
-            resolve_system=resolve_system,
+            platform_systems=platform_systems,
             logger=logger,
         )
     )
@@ -3385,7 +3370,7 @@ def _rom_scoped_surfaces(
             loop=asyncio.get_running_loop(),
             logger=logger,
             core_info=core_info,
-            resolve_system=resolve_system,
+            platform_systems=platform_systems,
             settings={},
             settings_persister=FakeSettingsPersister(),
             uow_factory=uow_factory,
@@ -3406,7 +3391,7 @@ def _rom_scoped_surfaces(
             active_core=active_core,
             path_exists=FakePathExistsReader(),
             retrodeck_folders=FakeRetroDeckFolders(),
-            resolve_system=resolve_system,
+            platform_systems=platform_systems,
             candidate_probe=lambda platform_slug, fs_name: False,
         )
     )
@@ -4887,8 +4872,8 @@ class TestCheckPlatformBiosSlugNormalization:
             active_core=("flycast_libretro", "Flycast"),
             available_cores=[{"label": "Flycast", "so": "flycast_libretro"}],
         )
-        resolver = FakeSystemResolver(mapping={"dc": "dreamcast", "sms": "mastersystem", "neo-geo-pocket": "ngp"})
-        fw = _make_firmware_service(core_info=core_info, resolve_system=resolver)
+        resolver = FakePlatformSystems(mapping={"dc": "dreamcast", "sms": "mastersystem", "neo-geo-pocket": "ngp"})
+        fw = _make_firmware_service(core_info=core_info, platform_systems=resolver)
 
         firmware_list = [
             {
@@ -5167,8 +5152,8 @@ class TestDownloadRequiredFirmware:
         the per-core required flags use the correct active core.
         """
         core_info = FakeCoreInfoProvider(active_core=("flycast_libretro", "Flycast"))
-        resolver = FakeSystemResolver(mapping={"dc": "dreamcast"})
-        fw = _make_firmware_service(core_info=core_info, resolve_system=resolver)
+        resolver = FakePlatformSystems(mapping={"dc": "dreamcast"})
+        fw = _make_firmware_service(core_info=core_info, platform_systems=resolver)
 
         firmware_list = [
             {
@@ -6272,3 +6257,139 @@ class TestTheEmulatorListIsReadOffTheLoop:
 
         assert threads, "the answer asked the emulator list"
         assert threading.get_ident() not in threads
+
+
+class TestThePlatformsSystem:
+    """The BIOS answers ask the system the download does: the platform's, or an installed game's recorded one."""
+
+    _CORE = "flycast_libretro"
+
+    def _service(self, firmware, platform_systems: FakePlatformSystems, resolver: FakeFirmwareResolver):
+        core_info = FakeCoreInfoProvider(
+            active_core=(self._CORE, "Flycast"), options=[libretro_option(self._CORE, "Flycast")]
+        )
+        fw = _make_firmware_service(
+            romm_api=firmware.romm_api,
+            uow_factory=FakeUnitOfWorkFactory(firmware.uow),
+            firmware_resolver=resolver,
+            core_info=core_info,
+            platform_systems=platform_systems,
+        )
+        _inline_executor(fw)
+        _stub_listing(fw, [])
+        return fw, core_info
+
+    @pytest.mark.asyncio
+    async def test_the_game_page_asks_an_installed_games_recorded_system(self, firmware):
+        resolver = FakeFirmwareResolver()
+        fw, core_info = self._service(firmware, FakePlatformSystems({"dc": "dreamcast"}), resolver)
+        install = RomInstall(
+            rom_id=1,
+            file_path="/roms/naomi/a.zip",
+            rom_dir=None,
+            platform_slug="dc",
+            system="naomi",
+            installed_at="2026-01-01T00:00:00+00:00",
+        )
+
+        await fw.check_platform_bios("dc", install=install)
+
+        assert core_info.emulator_options_calls == ["naomi"]
+        assert resolver.calls == ["naomi"]
+
+    @pytest.mark.asyncio
+    async def test_a_game_not_installed_asks_the_platforms_system(self, firmware):
+        resolver = FakeFirmwareResolver()
+        fw, core_info = self._service(firmware, FakePlatformSystems({"dc": "dreamcast"}), resolver)
+
+        await fw.check_platform_bios("dc")
+
+        assert core_info.emulator_options_calls == ["dreamcast"]
+        assert resolver.calls == ["dreamcast"]
+
+    @pytest.mark.asyncio
+    async def test_a_platform_with_no_system_reads_no_firmware_and_says_why(self, firmware):
+        resolver = FakeFirmwareResolver()
+        platform = PlatformSystem(NO_SYSTEM, "dc", "Dreamcast", source=RETRODECK_SOURCE)
+        fw, core_info = self._service(firmware, FakePlatformSystems(answers={"dc": platform}), resolver)
+        _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "file_path": "bios/dc/dc_boot.bin"}])
+
+        answer = (await fw.get_platform_firmware_status("dc"))["platform"]
+
+        assert core_info.emulator_options_calls == []
+        assert resolver.calls == []
+        assert answer["emulator_data_reason"] == "no_platform_system"
+        assert answer["platform_system"] == {
+            "state": "no_system",
+            "source": "retrodeck",
+            "system": None,
+            "platform": "Dreamcast",
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_downloaded_games_bios_download_places_for_its_recorded_system(self, firmware, tmp_path):
+        resolver = FakeFirmwareResolver()
+        fw, _ = self._service(firmware, FakePlatformSystems({"dc": "dreamcast"}), resolver)
+        _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "file_path": "bios/dc/dc_boot.bin"}])
+        with firmware.uow:
+            firmware.uow.roms.save(
+                Rom(
+                    rom_id=7,
+                    platform_slug="dc",
+                    name="Game",
+                    fs_name="g.zip",
+                    shortcut_app_id=None,
+                    last_synced_at="2026-01-01T00:00:00",
+                )
+            )
+            firmware.uow.rom_installs.save(
+                RomInstall(
+                    rom_id=7,
+                    file_path="/roms/naomi/g.zip",
+                    rom_dir=None,
+                    platform_slug="dc",
+                    system="naomi",
+                    installed_at="2026-01-01T00:00:00+00:00",
+                )
+            )
+
+        with (
+            patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(tmp_path / "bios"))),
+            patch.object(fw._downloads, "_download_firmware_batch", AsyncMock(return_value=(0, []))),
+        ):
+            await fw.download_all_firmware("dc", 7)
+
+        assert resolver.calls == ["naomi"]
+
+    @pytest.mark.asyncio
+    async def test_the_platform_pages_bios_download_follows_the_current_system(self, firmware, tmp_path):
+        resolver = FakeFirmwareResolver()
+        fw, _ = self._service(firmware, FakePlatformSystems({"dc": "dreamcast"}), resolver)
+        _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "file_path": "bios/dc/dc_boot.bin"}])
+
+        with (
+            patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(tmp_path / "bios"))),
+            patch.object(fw._downloads, "_download_firmware_batch", AsyncMock(return_value=(0, []))),
+        ):
+            await fw.download_all_firmware("dc", None)
+
+        assert resolver.calls == ["dreamcast"]
+
+    @pytest.mark.parametrize(
+        ("state", "reason"), [(NO_SYSTEM, "no_platform_system"), (SWITCHED_OFF, "platform_system_off")]
+    )
+    @pytest.mark.asyncio
+    async def test_its_bios_download_is_refused_like_the_games(self, firmware, tmp_path, state, reason):
+        resolver = FakeFirmwareResolver()
+        platform = PlatformSystem(state, "dc", "Dreamcast", system="dreamcast", source=RETRODECK_SOURCE)
+        fw, _ = self._service(firmware, FakePlatformSystems(answers={"dc": platform}), resolver)
+        _stub_listing(fw, [{"id": 1, "file_name": "dc_boot.bin", "file_path": "bios/dc/dc_boot.bin"}])
+
+        with (
+            patch.object(fw._demand, "_retrodeck_folders", FakeRetroDeckFolders(bios=str(tmp_path / "bios"))),
+            pytest.raises(FolderRefused) as refused,
+        ):
+            await fw.download_all_firmware("dc")
+
+        assert refused.value.reason == reason
+        assert resolver.calls == []

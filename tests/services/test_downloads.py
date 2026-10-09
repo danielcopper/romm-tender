@@ -3,11 +3,12 @@ import concurrent.futures
 import logging
 import os
 import sqlite3
+import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from _factories import (
@@ -19,6 +20,7 @@ from _factories import (
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
+from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -28,6 +30,7 @@ from fakes.system_time import FakeClock, FakeSleeper
 from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.download_file import DownloadFileAdapter
 from adapters.rom_files import RomFileAdapter
+from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused, finding_refusal, switched_off
 from domain.rom import Rom
 from domain.rom_files import TMP_EXT, ZIP_TMP_EXT
@@ -119,6 +122,19 @@ def _seed_group_member(
             )
 
 
+def _hops_answering(answer: Any) -> AsyncMock:
+    """An executor stand-in whose every hop answers *answer*, but for the download's platform question.
+
+    That one runs inline: it answers the platform's system, which a stubbed
+    ROM read has nothing to say about.
+    """
+
+    async def hop(_executor: Any, fn: Any, *args: Any) -> Any:
+        return fn(*args) if getattr(fn, "__name__", "") == "_download_platform_io" else answer
+
+    return AsyncMock(side_effect=hop)
+
+
 @dataclass
 class DownloadsHarness:
     """The download service, the two services it works with, and the seams a test drives.
@@ -145,7 +161,7 @@ class DownloadsHarness:
 @pytest.fixture
 def downloads(emit, logger) -> DownloadsHarness:
     romm_api = MagicMock()
-    resolve_system = MagicMock(side_effect=lambda slug, fs_slug=None: fs_slug or slug)
+    platform_systems = FakePlatformSystems()
     prune_conflicts = _make_prune_conflicts()
     uow = FakeUnitOfWork()
     # The real ActiveCoreResolver folds the DB override over this fake's
@@ -159,7 +175,7 @@ def downloads(emit, logger) -> DownloadsHarness:
             core_info=core_info,
             sandbox_launcher=FakeSandboxLauncher(),
             platform_core_reader=FakePlatformCoreReader(),
-            resolve_system=resolve_system,
+            platform_systems=platform_systems,
             logger=logger,
         ),
     )
@@ -185,7 +201,7 @@ def downloads(emit, logger) -> DownloadsHarness:
         config=RomAdoptionServiceConfig(
             romm_api=romm_api,
             download_file_store=download_file_store,
-            resolve_system=resolve_system,
+            platform_systems=platform_systems,
             retrodeck_folders=retrodeck_folders,
             install_recorder=install_recorder,
             adoption_move=AdoptionMoveAdapter(),
@@ -212,7 +228,7 @@ def downloads(emit, logger) -> DownloadsHarness:
         config=DownloadServiceConfig(
             romm_api=romm_api,
             download_file_store=download_file_store,
-            resolve_system=resolve_system,
+            platform_systems=platform_systems,
             loop=running_loop(),
             logger=logger,
             emit=emit,
@@ -272,7 +288,6 @@ async def _set_event_loop(downloads):
 class TestStartDownload:
     @pytest.mark.asyncio
     async def test_starts_download_task(self, downloads, tmp_path):
-        from unittest.mock import AsyncMock
 
         downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
@@ -292,7 +307,7 @@ class TestStartDownload:
         }
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
         _create_task_calls = []
 
         def _close_coro_task(coro):
@@ -337,7 +352,6 @@ class TestStartDownload:
 
     @pytest.mark.asyncio
     async def test_checks_disk_space(self, downloads, tmp_path):
-        from unittest.mock import AsyncMock
 
         downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
@@ -357,7 +371,7 @@ class TestStartDownload:
         }
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         downloads.service._download_file_store.disk_free = lambda _path: 50 * 1024 * 1024
         coro = downloads.service.start_download(42)
@@ -640,10 +654,9 @@ class TestOccupiedTargetPreFlight:
 
     def _stage(self, downloads, detail, *, occupied_path, is_dir=False, size=4096):
         """Point the detail fetch at *detail* and stage one occupied path."""
-        from unittest.mock import AsyncMock
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=detail)
+        downloads.service._loop.run_in_executor = _hops_answering(detail)
         # Close the coroutine the real create_task would have owned; leaving it
         # unawaited makes pytest raise a RuntimeWarning at collection time.
         downloads.service._loop.create_task = MagicMock(side_effect=lambda coro: (coro.close(), MagicMock())[1])
@@ -760,7 +773,6 @@ class TestOccupiedTargetPreFlight:
         # until the gate has passed. Otherwise the user who opens the dialog and
         # presses Cancel is left with one version uninstalled and nothing in its
         # place. Real files, real remover, real install rows.
-        from unittest.mock import AsyncMock
 
         roms = tmp_path / "retrodeck" / "roms"
         paths = FakeRetroDeckFolders(roms=str(roms), bios=str(tmp_path / "retrodeck" / "bios"))
@@ -789,7 +801,7 @@ class TestOccupiedTargetPreFlight:
             )
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=_SINGLE_DETAIL)
+        downloads.service._loop.run_in_executor = _hops_answering(_SINGLE_DETAIL)
         downloads.service._loop.create_task = MagicMock(side_effect=lambda coro: (coro.close(), MagicMock())[1])
 
         result = await downloads.service.start_download(1)
@@ -813,10 +825,9 @@ class TestResumingAReplaceDownload:
 
     def _stage(self, downloads, detail, *, occupied_path):
         """Point the detail fetch at *detail* and hold one path permanently occupied."""
-        from unittest.mock import AsyncMock
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=detail)
+        downloads.service._loop.run_in_executor = _hops_answering(detail)
         downloads.service._loop.create_task = MagicMock(side_effect=lambda coro: (coro.close(), MagicMock())[1])
         store = downloads.service._download_file_store
         store.describe_path = lambda path: (
@@ -1116,7 +1127,6 @@ class TestDetectLaunchFile:
 class TestDiskSpaceMultiFile:
     @pytest.mark.asyncio
     async def test_multi_file_rom_requires_double_space(self, downloads, tmp_path):
-        from unittest.mock import AsyncMock
 
         downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
@@ -1138,7 +1148,7 @@ class TestDiskSpaceMultiFile:
         }
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         # 700MB free: enough for single-file (600MB) but not multi-file (1100MB)
         downloads.service._download_file_store.disk_free = lambda _path: 700 * 1024 * 1024
@@ -1150,7 +1160,6 @@ class TestDiskSpaceMultiFile:
 
     @pytest.mark.asyncio
     async def test_single_file_rom_uses_normal_space_check(self, downloads, tmp_path):
-        from unittest.mock import AsyncMock
 
         downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
@@ -1172,7 +1181,7 @@ class TestDiskSpaceMultiFile:
         }
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         def _close_coro_task(coro):
             # Consume the fire-and-forget _do_download coroutine so it isn't left
@@ -1192,7 +1201,6 @@ class TestDiskSpaceMultiFile:
     @pytest.mark.asyncio
     async def test_nested_multi_file_rom_requires_double_space(self, downloads, tmp_path):
         """#855: nested-multi (has_multiple_files=False, len(files) > 1) reserves 2x."""
-        from unittest.mock import AsyncMock
 
         downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
@@ -1219,7 +1227,7 @@ class TestDiskSpaceMultiFile:
         }
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         # 700MB free: enough for single-file (600MB) but not multi-file (1100MB).
         # If the gate only read has_multiple_files (False), this would pass —
@@ -2887,7 +2895,6 @@ class TestDoDownloadNestedSingleFile:
     @pytest.mark.asyncio
     async def test_nested_single_file_start_download_uses_files_entry(self, downloads, tmp_path):
         """start_download: nested-single-file enters the queue with the resolved filename."""
-        from unittest.mock import AsyncMock
 
         downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
@@ -2910,7 +2917,7 @@ class TestDoDownloadNestedSingleFile:
         }
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         def _close_coro_task(coro):
             coro.close()
@@ -2927,7 +2934,6 @@ class TestDoDownloadNestedSingleFile:
     @pytest.mark.asyncio
     async def test_nested_single_file_empty_files_falls_back(self, downloads, tmp_path, caplog, logger):
         """Defensive: empty files list falls back to fs_name and logs a warning."""
-        from unittest.mock import AsyncMock
 
         downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
@@ -2950,7 +2956,7 @@ class TestDoDownloadNestedSingleFile:
         }
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         def _close_coro_task(coro):
             coro.close()
@@ -2969,7 +2975,6 @@ class TestDoDownloadNestedSingleFile:
     @pytest.mark.asyncio
     async def test_nested_single_file_missing_files_key_falls_back(self, downloads, tmp_path, caplog, logger):
         """Defensive: missing files key falls back to fs_name and logs a warning."""
-        from unittest.mock import AsyncMock
 
         downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
@@ -2992,7 +2997,7 @@ class TestDoDownloadNestedSingleFile:
         }
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         def _close_coro_task(coro):
             coro.close()
@@ -3011,7 +3016,6 @@ class TestDoDownloadNestedSingleFile:
     @pytest.mark.asyncio
     async def test_nested_single_file_traversal_sanitized(self, downloads, tmp_path):
         """Defensive: path traversal in files[0].file_name is sanitized via os.path.basename."""
-        from unittest.mock import AsyncMock
 
         downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
@@ -3034,7 +3038,7 @@ class TestDoDownloadNestedSingleFile:
         }
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         def _close_coro_task(coro):
             coro.close()
@@ -3121,7 +3125,6 @@ class TestPathTraversalFsName:
 
     @pytest.mark.asyncio
     async def test_fs_name_traversal_sanitized(self, downloads, tmp_path):
-        from unittest.mock import AsyncMock
 
         downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
@@ -3141,7 +3144,7 @@ class TestPathTraversalFsName:
         }
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         def _close_coro_task(coro):
             coro.close()
@@ -3164,7 +3167,6 @@ class TestPathTraversalFsName:
         """A degenerate fs_name ("..") basenames to ".." — the file_name guard
         must fall back to the synthetic rom_<id>, so target_path can never
         resolve to the platform dir's parent (the roms root)."""
-        from unittest.mock import AsyncMock
 
         downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
@@ -3184,7 +3186,7 @@ class TestPathTraversalFsName:
         }
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         def _close_coro_task(coro):
             coro.close()
@@ -3216,7 +3218,8 @@ class TestPathTraversalPlatformSlug:
             "name": "Evil ROM",
             "fs_name": "game.z64",
             "fs_size_bytes": 1024,
-            # Unmapped slug passes through resolve_system verbatim (ADR-0010).
+            # The fake answers a platform as its own system, so the slug reaches
+            # the folder question as a system name.
             "platform_slug": "../../etc",
             "platform_name": "Nintendo 64",
         }
@@ -3245,6 +3248,82 @@ class TestPathTraversalPlatformSlug:
         assert not escape_dir.exists()
         # The rom is no longer marked in-progress (cleaned up on rejection).
         assert 77 not in downloads.service._download_in_progress
+
+
+class TestAPlatformWithNoSystemDownloadsNothing:
+    """A platform RetroDECK has no switched-on system for is refused before anything is fetched."""
+
+    @pytest.mark.parametrize(
+        ("state", "system", "reason"),
+        [(NO_SYSTEM, None, "no_platform_system"), (SWITCHED_OFF, "xbox360", "platform_system_off")],
+    )
+    @pytest.mark.asyncio
+    async def test_it_is_refused_naming_why(self, downloads, tmp_path, state, system, reason):
+        platform = PlatformSystem(state, "xbox-360", "Xbox 360", system=system, source=RETRODECK_SOURCE)
+        downloads.service._platform_systems = FakePlatformSystems(answers={"xbox-360": platform})
+        downloads.service._loop = asyncio.get_running_loop()
+        made_dirs: list[str] = []
+        downloads.service._download_file_store.make_dirs = lambda p: made_dirs.append(p)
+        rom_detail = {
+            "id": 78,
+            "name": "Halo",
+            "fs_name": "halo.iso",
+            "fs_size_bytes": 1024,
+            "platform_slug": "xbox-360",
+        }
+
+        from unittest.mock import patch
+
+        with (
+            patch.object(downloads.romm_api, "get_rom", return_value=rom_detail),
+            pytest.raises(FolderRefused) as refused,
+        ):
+            await downloads.service.start_download(78)
+
+        assert refused.value.reason == reason
+        assert refused.value.details == {"source": "retrodeck", "platform": "Xbox 360", "system": system}
+        assert made_dirs == []
+        assert 78 not in downloads.service._download_queue
+        assert 78 not in downloads.service._download_in_progress
+
+    @pytest.mark.asyncio
+    async def test_the_question_is_asked_off_the_loop(self, downloads):
+        # It may read RomM's listing, which would hold every endpoint for as
+        # long as the request takes.
+        threads: list[threading.Thread] = []
+        platform_systems = FakePlatformSystems()
+        original = platform_systems.platform_system
+
+        def recording(platform_slug, *, source=None, reading=None, ask_romm=True):
+            threads.append(threading.current_thread())
+            return original(platform_slug, source=source, reading=reading, ask_romm=ask_romm)
+
+        platform_systems.platform_system = recording
+        downloads.service._platform_systems = platform_systems
+        downloads.service._loop = asyncio.get_running_loop()
+        rom_detail = {"id": 80, "name": "Mario", "fs_name": "mario.sfc", "fs_size_bytes": 1024, "platform_slug": "snes"}
+
+        from unittest.mock import patch
+
+        with patch.object(downloads.romm_api, "get_rom", return_value=rom_detail):
+            await downloads.service.start_download(80)
+
+        assert threads
+        assert threading.main_thread() not in threads
+
+    @pytest.mark.asyncio
+    async def test_the_system_is_asked_of_retrodeck_which_a_download_lands_in(self, downloads):
+        platform_systems = FakePlatformSystems()
+        downloads.service._platform_systems = platform_systems
+        downloads.service._loop = asyncio.get_running_loop()
+        rom_detail = {"id": 79, "name": "Mario", "fs_name": "mario.sfc", "fs_size_bytes": 1024, "platform_slug": "snes"}
+
+        from unittest.mock import patch
+
+        with patch.object(downloads.romm_api, "get_rom", return_value=rom_detail):
+            await downloads.service.start_download(79)
+
+        assert platform_systems.calls[0] == ("snes", "retrodeck")
 
 
 class TestCleanupPartialDownload:
@@ -3722,7 +3801,6 @@ class TestStartDownloadReDownload:
 
     @pytest.mark.asyncio
     async def test_re_download_after_completed(self, downloads, tmp_path):
-        from unittest.mock import AsyncMock
 
         downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
@@ -3742,7 +3820,7 @@ class TestStartDownloadReDownload:
         }
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         def _close_coro_task(coro):
             coro.close()
@@ -4059,7 +4137,6 @@ class TestStartDownloadCreateTaskFailure:
 
     @pytest.mark.asyncio
     async def test_create_task_failure_propagates_and_releases_the_flag(self, downloads, tmp_path):
-        from unittest.mock import AsyncMock
 
         downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
@@ -4079,7 +4156,7 @@ class TestStartDownloadCreateTaskFailure:
         }
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         def _raise_after_closing(coro):
             # Close the fire-and-forget _do_download coroutine before raising so it
@@ -4451,7 +4528,6 @@ class TestStartDownloadInProgressLeak:
 
     @pytest.mark.asyncio
     async def test_make_dirs_oserror_releases_flag(self, downloads, tmp_path):
-        from unittest.mock import AsyncMock
 
         self._wire(downloads, tmp_path)
         rom_detail = {
@@ -4463,7 +4539,7 @@ class TestStartDownloadInProgressLeak:
             "platform_name": "Nintendo 64",
         }
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         def _boom(_path):
             raise OSError("SD card unmounted")
@@ -4486,7 +4562,6 @@ class TestStartDownloadInProgressLeak:
 
     @pytest.mark.asyncio
     async def test_disk_free_oserror_releases_flag(self, downloads, tmp_path):
-        from unittest.mock import AsyncMock
 
         self._wire(downloads, tmp_path)
         rom_detail = {
@@ -4498,7 +4573,7 @@ class TestStartDownloadInProgressLeak:
             "platform_name": "Nintendo 64",
         }
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         def _boom(_path):
             raise OSError("statvfs failed: SD card gone")
@@ -4526,7 +4601,7 @@ class TestStartDownloadInProgressLeak:
             "platform_name": "Nintendo 64",
         }
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
         downloads.service._target_gate = AsyncMock(side_effect=OSError("lstat failed: SD card gone"))
 
         coro = downloads.service.start_download(45)
@@ -4557,7 +4632,6 @@ class TestStartDownloadInProgressLeak:
 
     @pytest.mark.asyncio
     async def test_a_bug_in_the_folder_lookup_releases_flag(self, downloads, tmp_path):
-        from unittest.mock import AsyncMock
 
         # A TypeError from the folder lookup is a bug that stays one, and still
         # releases the flag.
@@ -4577,7 +4651,7 @@ class TestStartDownloadInProgressLeak:
             "platform_name": "Nintendo 64",
         }
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         coro = downloads.service.start_download(44)
         with pytest.raises(TypeError):
@@ -5117,7 +5191,6 @@ class TestConcurrencyReservation:
 
     @pytest.mark.asyncio
     async def test_reservation_blocks_sibling_that_fits_alone(self, downloads, tmp_path):
-        from unittest.mock import AsyncMock
 
         self._wire(downloads, tmp_path)
 
@@ -5146,13 +5219,13 @@ class TestConcurrencyReservation:
         downloads.service._download_file_store.disk_free = lambda _path: 900 * 1024 * 1024
 
         # First download: fits (900 free, needs 500) → reserved.
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=_detail(1))
+        downloads.service._loop.run_in_executor = _hops_answering(_detail(1))
         r1 = await downloads.service.start_download(1)
         assert r1["success"] is True
         assert downloads.service._reserved_bytes[1] == 500 * 1024 * 1024
 
         # Second download: 900 free - 500 reserved = 400 < 500 needed → rejected.
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=_detail(2))
+        downloads.service._loop.run_in_executor = _hops_answering(_detail(2))
         r2 = downloads.service.start_download(2)
         with pytest.raises(Refused) as refused:
             await r2
@@ -5632,7 +5705,6 @@ class TestPauseResume:
     @pytest.mark.asyncio
     async def test_resume_rebegins_with_resume_true(self, downloads, tmp_path):
         """resume_download calls the transfer with resume=True (appends, not restarts)."""
-        from unittest.mock import AsyncMock
 
         self._retrodeck(downloads, tmp_path)
 
@@ -5662,7 +5734,7 @@ class TestPauseResume:
         }
 
         downloads.service._loop = MagicMock()
-        downloads.service._loop.run_in_executor = AsyncMock(return_value=rom_detail)
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
         captured_coros = []
 
         def _capture_task(coro):
@@ -5809,7 +5881,6 @@ def _stage_download_prologue(downloads, rom_id: int = 1) -> list[Any]:
     The returned list collects the coroutines ``create_task`` was handed, which
     is how "did a download actually start?" is observed.
     """
-    from unittest.mock import AsyncMock
 
     started: list[Any] = []
 
@@ -5819,8 +5890,8 @@ def _stage_download_prologue(downloads, rom_id: int = 1) -> list[Any]:
         return MagicMock()
 
     downloads.service._loop = MagicMock()
-    downloads.service._loop.run_in_executor = AsyncMock(
-        return_value={
+    downloads.service._loop.run_in_executor = _hops_answering(
+        {
             "id": rom_id,
             "name": f"Game {rom_id}",
             "fs_name": f"game_{rom_id}.z64",

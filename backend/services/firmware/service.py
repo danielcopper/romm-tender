@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     import logging
 
     from domain.emulator_commands import LaunchingEmulator
+    from domain.rom_install import RomInstall
     from services.protocols import (
         Clock,
         ConflictRules,
@@ -35,9 +36,9 @@ if TYPE_CHECKING:
         FirmwarePlatformResolver,
         FirmwareResolver,
         PlatformCoreReader,
+        PlatformSystems,
         RetroDeckFolders,
         RommFirmwareApi,
-        SystemResolver,
         UnitOfWorkFactory,
     )
 
@@ -62,7 +63,7 @@ class FirmwareServiceConfig:
     platform_firmware_resolver: FirmwarePlatformResolver
     retrodeck_folders: RetroDeckFolders
     core_info: CoreInfoProvider
-    resolve_system: SystemResolver
+    platform_systems: PlatformSystems
     platform_core_reader: PlatformCoreReader
     uow_factory: UnitOfWorkFactory
     conflict_rules: ConflictRules
@@ -116,7 +117,7 @@ class FirmwareService:
                 demand=self._demand,
                 listing=self._listing,
                 core_info=config.core_info,
-                resolve_system=config.resolve_system,
+                platform_systems=config.platform_systems,
                 platform_core_reader=config.platform_core_reader,
                 firmware_file_store=config.firmware_file_store,
                 uow_factory=config.uow_factory,
@@ -131,7 +132,7 @@ class FirmwareService:
                 listing=self._listing,
                 demand=self._demand,
                 core_info=config.core_info,
-                resolve_system=config.resolve_system,
+                platform_systems=config.platform_systems,
                 platform_core_reader=config.platform_core_reader,
                 firmware_file_store=config.firmware_file_store,
                 clock=config.clock,
@@ -173,23 +174,25 @@ class FirmwareService:
         platform_slug,
         launching_emulator: LaunchingEmulator | None = None,
         rom_regions: tuple[str, ...] = (),
+        install: RomInstall | None = None,
     ) -> dict[str, Any]:
         """Return the platform's BIOS status, filtered by what *launching_emulator* needs.
 
-        *rom_regions* narrows a one-of group to the game's own regions.
+        *rom_regions* narrows a one-of group to the game's own regions; an
+        *install* is asked about the system it records.
         """
-        return await self._status.check_platform_bios(platform_slug, launching_emulator, rom_regions)
+        return await self._status.check_platform_bios(platform_slug, launching_emulator, rom_regions, install)
 
     async def download_firmware(self, firmware_id) -> dict[str, Any]:
         """Download one firmware file by its RomM id."""
         with self._downloads.downloading():
             return await self._downloads.download_firmware(firmware_id)
 
-    async def download_all_firmware(self, platform_slug) -> dict[str, Any]:
-        """Download all firmware the library holds for a platform."""
+    async def download_all_firmware(self, platform_slug, rom_id: int | None = None) -> dict[str, Any]:
+        """Download all firmware the library holds for a platform; for *rom_id*'s recorded system where it is given."""
         async with self._rules.hold("download_all_firmware", update=True, migration=True):
             with self._downloads.downloading():
-                return await self._downloads.download_all_firmware(platform_slug)
+                return await self._downloads.download_all_firmware(platform_slug, rom_id)
 
     async def download_platform_firmware_file(self, platform_slug, file_name) -> dict[str, Any]:
         """Download the one firmware file the library holds for a platform under that name."""

@@ -8,7 +8,7 @@ import {
 import * as backend from "../api/backend";
 import { _resetSharedReadsForTests } from "../api/sharedReads";
 import { libretroEmu } from "../test-utils/coreFixtures";
-import type { AnsweringSource, EmulatorDataReason, EmulatorOption } from "../types";
+import type { AnsweringSource, EmulatorDataReason, EmulatorOption, PlatformSystemAnswer } from "../types";
 
 interface BiosState {
   biosNeeded: boolean;
@@ -24,6 +24,7 @@ interface CoreState {
   emulatorDataAvailable: boolean;
   emulatorDataReason: EmulatorDataReason | null;
   emulatorSource: AnsweringSource | null;
+  emulatorPlatformSystem: PlatformSystemAnswer | null;
   platformCoreLabel: string | null;
   hasGameOverride: boolean;
   unrelated: string;
@@ -207,6 +208,7 @@ describe("refreshCoreInfoInBackground", () => {
       emulator_data_available: true,
       emulator_data_reason: null,
       emulator_source: { kind: "retrodeck", starts_games: true },
+      platform_system: null,
       emulators: [
         libretroEmu("mupen64plus_next_libretro.so", "Mupen64Plus-Next", true),
         libretroEmu("parallel_n64_libretro.so", "ParaLLEl N64"),
@@ -228,6 +230,7 @@ describe("refreshCoreInfoInBackground", () => {
       emulatorDataAvailable: true,
       emulatorDataReason: null,
       emulatorSource: { kind: "retrodeck", starts_games: true },
+      emulatorPlatformSystem: null,
       platformCoreLabel: null,
       hasGameOverride: false,
       unrelated: "keep",
@@ -248,6 +251,7 @@ describe("refreshCoreInfoInBackground", () => {
       emulator_data_available: true,
       emulator_data_reason: null,
       emulator_source: { kind: "retrodeck", starts_games: true },
+      platform_system: null,
       emulators: [],
     });
     const setter = vi.fn();
@@ -275,6 +279,7 @@ describe("refreshCoreInfoInBackground", () => {
       emulator_data_available: true,
       emulator_data_reason: null,
       emulator_source: { kind: "retrodeck", starts_games: true },
+      platform_system: null,
       emulators: [],
     });
     await flushMicrotasks();

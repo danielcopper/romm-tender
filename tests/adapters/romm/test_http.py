@@ -12,7 +12,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from adapters.romm.http import RommHttpAdapter
-from domain.app_directories import resolve_directories
 from lib.errors import (
     RommApiError,
     RommAuthError,
@@ -28,7 +27,6 @@ from lib.errors import (
     classify_error,
 )
 from lib.list_result import ErrorCode
-from main import _CODE_DIR_FALLBACK
 
 # The UA every adapter in this file is constructed with, and the value its
 # outgoing header is then asserted against — this file pins the pass-through,
@@ -66,27 +64,10 @@ class RommHttpHarness:
 
 
 @pytest.fixture
-def romm_http(project_root) -> RommHttpHarness:
+def romm_http() -> RommHttpHarness:
     settings: dict[str, Any] = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
-    adapter = RommHttpAdapter(
-        settings, project_root, logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
-    )
+    adapter = RommHttpAdapter(settings, logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None)
     return RommHttpHarness(adapter=adapter, settings=settings)
-
-
-class TestResolveSystem:
-    def test_exact_slug_match(self, romm_http):
-        result = romm_http.adapter.resolve_system("n64")
-        assert result == "n64"
-
-    def test_fs_slug_fallback(self, romm_http):
-        # A slug not in the map but its fs_slug is
-        result = romm_http.adapter.resolve_system("nonexistent-slug", "n64")
-        assert result == "n64"
-
-    def test_fallback_returns_slug_as_is(self, romm_http):
-        result = romm_http.adapter.resolve_system("totally-unknown-platform")
-        assert result == "totally-unknown-platform"
 
 
 class TestRommDownloadUrlEncoding:
@@ -293,7 +274,6 @@ class TestCustomProxyHeaders:
         }
         adapter = RommHttpAdapter(
             settings,
-            "/fake/code_dir",
             logging.getLogger("test"),
             "romm-tender/9.9.9",
             log_debug=lambda _msg: None,
@@ -388,7 +368,7 @@ class TestCustomProxyHeaderLogging:
     def _adapter(self, headers: list[dict[str, str]]):
         log_debug = MagicMock()
         settings = {"romm_url": "http://romm.local", "romm_custom_headers": headers}
-        adapter = RommHttpAdapter(settings, "/fake/code_dir", MagicMock(), "romm-tender/9.9.9", log_debug=log_debug)
+        adapter = RommHttpAdapter(settings, MagicMock(), "romm-tender/9.9.9", log_debug=log_debug)
         return adapter, log_debug
 
     def _request(self, adapter) -> None:
@@ -1037,96 +1017,6 @@ class TestRommUploadMultipart:
         assert b'filename="evilInjected-Header: bad.srm"' in body
 
 
-class TestPlatformMap:
-    def test_loads_config_json(self, romm_http):
-        pm = romm_http.adapter.load_platform_map()
-        assert isinstance(pm, dict)
-        assert "n64" in pm
-        assert "snes" in pm
-        assert len(pm) > 50  # Should have many entries
-
-    def test_both_romm_3ds_platforms_resolve_to_one_system(self, romm_http):
-        """RomM carries "3ds" and "new-nintendo-3ds" as separate platforms.
-
-        RetroDECK has one 3DS system for both, so the map must collapse them.
-        Without the second key ``resolve_system`` passes it through verbatim
-        (ADR-0010 §5) and the download lands in a folder ES-DE never scans
-        (#1678).
-        """
-        adapter = romm_http.adapter
-        assert adapter.resolve_system("3ds") == "n3ds"
-        assert adapter.resolve_system("new-nintendo-3ds") == "n3ds"
-
-    def test_short_romm_slugs_resolve_to_their_es_de_system(self, romm_http):
-        """Three RomM slugs whose ES-DE system is spelled differently.
-
-        Unmapped, ``resolve_system`` passes each through verbatim (ADR-0010 §5)
-        and the download lands in a folder ES-DE never scans. RomM's
-        ``atari8bit`` covers the whole 8-bit line, which RetroDECK serves from
-        ``atari800`` (``atarixe`` is the console variant).
-        """
-        adapter = romm_http.adapter
-        assert adapter.resolve_system("atari8bit") == "atari800"
-        assert adapter.resolve_system("mac") == "macintosh"
-        assert adapter.resolve_system("sega32") == "sega32x"
-
-    def test_cd_i_resolves_to_the_declared_es_de_system(self, romm_http):
-        """Both CD-i keys name RetroDECK's system, which is ``cdimono1``.
-
-        ``cdi`` is not a RomM platform slug at all — it survives only as a
-        folder-name alias, matched via ``platform_fs_slug``. The key a real
-        library hits is ``philips-cd-i``.
-        """
-        adapter = romm_http.adapter
-        assert adapter.resolve_system("philips-cd-i") == "cdimono1"
-        assert adapter.resolve_system("unknown-slug", "cdi") == "cdimono1"
-
-    def test_the_shipped_map_is_read_from_the_code_directory(self, tmp_path):
-        """The adapter reads ``defaults/config.json`` under the code directory the program resolves for itself.
-
-        A wrong path fails in silence: the map degrades to ``{}`` and every slug
-        passes through verbatim, so only a slug the shipped file maps to a
-        different name can tell the two apart. The directory comes from
-        ``resolve_directories`` over ``main``'s own fallback — the checkout rung;
-        an installed start takes ``TENDER_CODE_DIR`` instead — rather than from
-        the test setup.
-        """
-        import logging
-
-        directories = resolve_directories({}, str(tmp_path), _CODE_DIR_FALLBACK)
-        adapter = RommHttpAdapter(
-            {}, directories.code_dir, logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
-        )
-        assert adapter.resolve_system("dc") == "dreamcast"
-
-    def test_missing_config_returns_empty_map(self, tmp_path):
-        """A code_dir with no defaults/config.json degrades to an empty map, not an error.
-
-        ``resolve_system`` then falls back to its verbatim pass-through (ADR-0010
-        §5) rather than raising into the synchronous game-detail builder.
-        """
-        import logging
-
-        adapter = RommHttpAdapter(
-            {}, str(tmp_path), logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
-        )
-        assert adapter.load_platform_map() == {}
-        # resolve_system survives the empty map and passes the slug through unchanged.
-        assert adapter.resolve_system("dc") == "dc"
-
-    def test_corrupt_config_returns_empty_map(self, tmp_path):
-        """A corrupt (non-JSON) config.json degrades to an empty map, not an error."""
-        import logging
-
-        (tmp_path / "defaults").mkdir()
-        (tmp_path / "defaults" / "config.json").write_text("{ this is not valid json")
-        adapter = RommHttpAdapter(
-            {}, str(tmp_path), logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
-        )
-        assert adapter.load_platform_map() == {}
-        assert adapter.resolve_system("dc") == "dc"
-
-
 # ============================================================================
 # _translate_http_error
 # ============================================================================
@@ -1629,7 +1519,6 @@ class TestTranslateHttpStatus:
 
         return RommHttpAdapter(
             {"romm_url": "http://test", "romm_user": "u", "romm_pass": "p"},
-            "/tmp",
             logging.getLogger("test"),
             _USER_AGENT,
             log_debug=lambda _msg: None,
@@ -1786,9 +1675,7 @@ class TestDownloadTimeout:
         import logging
 
         settings = {"romm_url": "http://romm.local", "romm_user": "user", "romm_pass": "pass"}
-        return RommHttpAdapter(
-            settings, "/fake/code_dir", logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
-        )
+        return RommHttpAdapter(settings, logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None)
 
     # ------------------------------------------------------------------
     # _stream_to_file direct tests
@@ -2052,9 +1939,7 @@ def _resume_adapter():
     import logging
 
     settings = {"romm_url": "http://romm.local", "romm_user": "u", "romm_pass": "p"}
-    return RommHttpAdapter(
-        settings, "/fake/code_dir", logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
-    )
+    return RommHttpAdapter(settings, logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None)
 
 
 class TestIsCloudflare:
@@ -2249,9 +2134,7 @@ class TestDownloadExternal:
             "romm_api_token": "rmm_secret",
             "romm_api_token_origin": "http://romm.local",
         }
-        return RommHttpAdapter(
-            settings, "/fake/code_dir", logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
-        )
+        return RommHttpAdapter(settings, logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None)
 
     def test_omits_authorization_even_with_stored_token(self, tmp_path):
         """The host-bound RomM bearer must NEVER reach the external url_cover host."""
@@ -2441,9 +2324,7 @@ class TestDownloadConditional:
             "romm_api_token": "rmm_secret",
             "romm_api_token_origin": "http://romm.local",
         }
-        adapter = RommHttpAdapter(
-            settings, "/fake/code_dir", logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
-        )
+        adapter = RommHttpAdapter(settings, logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None)
         dest = str(tmp_path / "c.png")
         resp = _make_resp(200, {"Content-Length": "1"}, b"x")
         with patch("urllib.request.urlopen", return_value=resp) as mock_open:

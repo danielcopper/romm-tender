@@ -86,8 +86,7 @@ new code in it.
   method an endpoint; which endpoints must be `def` is **not checked**.
 - `vendored-assets.md` — `_vendor/` and `native/` are checksum-pinned upstream copies — verbatim, or verbatim plus a
   documented local patch — and every vendored tree carries its own manifest. The checksums are checked; the reflex to
-  fix the upstream artifact instead of the copy is not. `defaults/` holds no vendored artifact since the BIOS registry
-  left.
+  fix the upstream artifact instead of the copy is not.
 - `testing-backend.md` — test tiers, gate tests, vendored conformance vectors.
 - `testing-frontend.md` — the backend-event harness, that `api/host` is stubbed suite-wide so no socket is ever opened,
   non-vacuous catch assertions.
@@ -618,10 +617,11 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   and fails as before (#2275 D6)
 - **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
   `scripts/check_aggregate_field_assignment.py`
-- **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, uow_factory) is called while a UoW is open on the
-  same path** — check — `scripts/check_uow_seam_nesting.py`, first seam family (a seam reached as a bound method,
-  through a helper, a local alias or a nested `def`/`lambda`, inside a UoW opened through a factory attribute not ending
-  in `uow_factory`, a `__call__`-only seam, and a seam whose implementation later grows a UoW open slip past it)
+- **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, PlatformSystems, uow_factory) is called while a
+  UoW is open on the same path** — check — `scripts/check_uow_seam_nesting.py`, first seam family (a seam reached as a
+  bound method, through a helper, a local alias or a nested `def`/`lambda`, inside a UoW opened through a factory
+  attribute not ending in `uow_factory`, a `__call__`-only seam, and a seam whose implementation later grows a UoW open
+  slip past it)
 - **No file-I/O seam is called while a UoW is open — a Unit of Work wraps database reads and writes, never file or
   server I/O** — check — `scripts/check_uow_seam_nesting.py`, second seam family (`IO_SEAM_METHODS`, which carries each
   `__call__`-only seam's bound attribute); one `# pragma: no uow-check` suppresses the line for both families.

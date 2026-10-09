@@ -17,6 +17,7 @@ const coreInfo: CoreInfo = {
   emulator_data_available: true,
   emulator_data_reason: null,
   emulator_source: { kind: "retrodeck", starts_games: true },
+  platform_system: null,
   emulators: [
     {
       label: "Snes9x",
@@ -98,6 +99,26 @@ describe("BiosTab", () => {
     expect(container.querySelector('[data-testid="bios-reason"]')).toBeNull();
   });
 
+  it("says on a game page that the source has no system for the game's platform", () => {
+    const { container } = render(
+      <BiosTab
+        biosStatus={{ needs_bios: false, bios_status_unknown: true }}
+        biosLevel="unknown"
+        coreInfo={{
+          ...coreInfo,
+          emulators: [],
+          emulator_data_available: false,
+          emulator_data_reason: "no_platform_system",
+          platform_system: { state: "no_system", source: "retrodeck", system: null, platform: "Commodore VIC-20" },
+        }}
+        isActive={true}
+      />,
+    );
+    expect(container.querySelector('[data-testid="bios-reason"]')?.textContent).toBe(
+      "RetroDECK has no system for Commodore VIC-20, so Tender cannot download its games.",
+    );
+  });
+
   it("puts the reason line between the BIOS heading and the state", () => {
     const { container } = render(
       <BiosTab
@@ -108,6 +129,7 @@ describe("BiosTab", () => {
           emulator_data_available: false,
           emulator_data_reason: "switched_off",
           emulator_source: null,
+          platform_system: null,
         }}
         isActive={true}
       />,
@@ -939,6 +961,7 @@ describe("BiosTab", () => {
       emulator_data_available: true,
       emulator_data_reason: null,
       emulator_source: { kind: "retrodeck", starts_games: true },
+      platform_system: null,
       emulators,
     });
 
@@ -1198,6 +1221,7 @@ describe("BiosTab", () => {
       emulator_data_available: true,
       emulator_data_reason: null,
       emulator_source: { kind: "retrodeck", starts_games: true },
+      platform_system: null,
       emulators: [libretroEmu("mednafen_psx_libretro", "Beetle PSX", true)],
     };
     const option = (file_name: string, region: string, here: boolean): BiosFileStatus => ({
