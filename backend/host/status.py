@@ -25,6 +25,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from host.inject.recovery import ListedApp
+
 
 def _no_messages_dropped() -> int:
     """Before a server exists, nothing has been dropped."""
@@ -35,21 +37,21 @@ class SteamReadings:
     """What the injector can read of Steam, for the application. Answers nothing until it is attached."""
 
     def __init__(self) -> None:
-        self._running_apps: Callable[[], Awaitable[tuple[str, ...] | None]] | None = None
+        self._running_apps: Callable[[], Awaitable[tuple[ListedApp, ...] | None]] | None = None
         self._reload_frees_at: Callable[[], Awaitable[float | None]] | None = None
 
     def attach(
         self,
         *,
-        running_apps: Callable[[], Awaitable[tuple[str, ...] | None]],
+        running_apps: Callable[[], Awaitable[tuple[ListedApp, ...] | None]],
         reload_frees_at: Callable[[], Awaitable[float | None]],
     ) -> None:
         """Answer from now on through the injector's own readings."""
         self._running_apps = running_apps
         self._reload_frees_at = reload_frees_at
 
-    async def running_apps(self) -> tuple[str, ...] | None:
-        """Steam's running apps by name; ``None`` where no reading could be taken, as before anything is attached."""
+    async def running_apps(self) -> tuple[ListedApp, ...] | None:
+        """Steam's running apps; ``None`` where no reading could be taken, as before anything is attached."""
         if self._running_apps is None:
             return None
         return await self._running_apps()

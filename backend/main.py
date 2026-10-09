@@ -973,7 +973,8 @@ class Endpoints:
         program with a stored release newer than the running version, which
         ``version`` names, whatever the check's switch says. ``wait_reasons``
         lists, as ``{"reason", ...}``, everything a press would be refused for
-        now — ``app_running`` (with ``apps``), ``running_apps_unknown``,
+        now — ``app_running`` (with ``apps``, and ``apps_status_unread``
+        where an app's status could not be read), ``running_apps_unknown``,
         ``library_sync``, ``rom_downloads``, ``save_sync``,
         ``firmware_downloads``, ``save_directory_move``,
         ``removed_games_cleanup``, ``retrodeck_migration``, ``other_work``,

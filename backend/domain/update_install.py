@@ -221,19 +221,25 @@ class InstallFailure(StrEnum):
 class Wait:
     """One reason a press waits.
 
-    ``apps`` names what is running, for ``app_running`` alone; ``frees_at`` is
-    the epoch second ``interface_reload_limit`` ends at, for that one alone.
+    For ``app_running`` alone, ``apps`` names what Steam lists with a status
+    that holds the wait, and ``apps_status_unread`` what it lists with a status
+    that could not be read, which holds it too — on the wire only where it
+    names any; ``frees_at`` is the epoch second ``interface_reload_limit`` ends
+    at, for that one alone.
     """
 
     reason: WaitReason
     apps: tuple[str, ...] = ()
+    apps_status_unread: tuple[str, ...] = ()
     frees_at: float | None = None
 
     def to_wire(self) -> dict[str, Any]:
-        """The JSON shape: ``reason`` always, ``apps`` and ``frees_at`` only on the reason they belong to."""
+        """The JSON shape: ``reason`` always, the rest only on the reason it belongs to."""
         wire: dict[str, Any] = {"reason": self.reason.value}
         if self.reason is WaitReason.APP_RUNNING:
             wire["apps"] = list(self.apps)
+            if self.apps_status_unread:
+                wire["apps_status_unread"] = list(self.apps_status_unread)
         if self.reason is WaitReason.INTERFACE_RELOAD_LIMIT:
             wire["frees_at"] = self.frees_at
         return wire

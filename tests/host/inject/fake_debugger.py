@@ -78,6 +78,7 @@ class FakePage:
     bootstrap_answer: dict[str, Any] = field(default_factory=lambda: {"ok": True})
     bootstrap_raises: bool = False
     running_apps: list[str] | None = field(default_factory=list)
+    apps_status_unread: list[str] = field(default_factory=list)
     apps_script: list[list[str] | None] = field(default_factory=list)
     apps_raise: bool = False
     reload_answer: bool | None = True
@@ -97,7 +98,7 @@ class FakePage:
             if self.apps_raise:
                 return _THREW
             listed = self.apps_script.pop(0) if self.apps_script else self.running_apps
-            return {"result": {"type": "object", "value": listed}}
+            return {"result": {"type": "object", "value": self._apps_answer(listed)}}
         if expression == self.reload_expression:
             return (
                 _THREW if self.reload_answer is None else {"result": {"type": "boolean", "value": self.reload_answer}}
@@ -109,6 +110,13 @@ class FakePage:
         self.marker_instance = str(facts.get("instance", ""))
         self.marker_version = str(facts.get("version", ""))
         return {"result": {"type": "object", "value": dict(self.bootstrap_answer)}}
+
+    def _apps_answer(self, listed: list[str] | None) -> list[dict[str, Any]] | None:
+        """The running-apps expression's answer: *listed* with its status read, then ``apps_status_unread``."""
+        if listed is None:
+            return None
+        read = [{"name": name, "statusRead": True} for name in listed]
+        return read + [{"name": name, "statusRead": False} for name in self.apps_status_unread]
 
     def _owner(self) -> dict[str, Any]:
         if self.owner_raises:

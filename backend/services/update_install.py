@@ -50,6 +50,7 @@ if TYPE_CHECKING:
         FailureToastAcknowledgeFn,
         HeldClaimsFn,
         LastSeenReleaseReader,
+        ListedRunningApp,
         ReleaseAssetDownloadFn,
         Sleeper,
         SteamInterfaceReader,
@@ -445,7 +446,8 @@ class UpdateInstallService:
         with a stored release newer than the running version, which ``version``
         names (``None`` where nothing is offered), whatever the check's switch
         says. ``wait_reasons`` lists every reason a press would be refused
-        now, each ``{"reason"}`` plus ``apps`` for ``app_running`` and
+        now, each ``{"reason"}`` plus ``apps`` for ``app_running`` (and
+        ``apps_status_unread`` where an app's status could not be read) and
         ``frees_at`` for ``interface_reload_limit``; empty where nothing is
         offered or an attempt holds the rule. ``paused_downloads`` counts the
         paused ROM downloads a restart would lose. ``attempt`` is the latest
@@ -577,7 +579,8 @@ class UpdateInstallService:
             )
             raise _AttemptFailedError(InstallFailure.RUNNING_APPS_UNKNOWN)
         if apps:
-            self._logger.warning(f"update: {', '.join(apps)} started during the download of {version}; nothing changed")
+            names = ", ".join(app.name for app in apps)
+            self._logger.warning(f"update: {names} started during the download of {version}; nothing changed")
             raise _AttemptFailedError(InstallFailure.GAME_STARTED)
         await self._write_record(version)
         self._logger.info(
@@ -785,7 +788,7 @@ class UpdateInstallService:
             return None
         return release if is_newer_version(release.version, self._current_version) else None
 
-    async def _running_apps(self) -> tuple[str, ...] | None:
+    async def _running_apps(self) -> tuple[ListedRunningApp, ...] | None:
         """One reading of Steam's running apps; a reader that raised took none, which is never "nothing runs"."""
         try:
             return await self._steam.running_apps()
@@ -874,9 +877,15 @@ def _stopped_wire(stopped: UpdateAttemptRecord, toast_owed: bool) -> dict[str, A
     }
 
 
-def _app_waits(apps: tuple[str, ...] | None) -> list[Wait]:
+def _app_waits(apps: tuple[ListedRunningApp, ...] | None) -> list[Wait]:
     if apps is None:
         return [Wait(WaitReason.RUNNING_APPS_UNKNOWN)]
     if apps:
-        return [Wait(WaitReason.APP_RUNNING, apps=apps)]
+        return [
+            Wait(
+                WaitReason.APP_RUNNING,
+                apps=tuple(app.name for app in apps if app.status_read),
+                apps_status_unread=tuple(app.name for app in apps if not app.status_read),
+            )
+        ]
     return []
