@@ -132,9 +132,14 @@ in Steam. The knock is answered, though — the panel is told, below.
 1. **Waits until no app is running.** It reads `SteamUIStore.RunningApps` — the source the panel itself reads running
    apps from — every five seconds, and only two empty lists in a row let it act: the store has been measured listing
    none for several seconds with a game still up, under a condition the reader's own module comment names
-   (`frontend/src/utils/runningApps.ts`). A store it cannot read, a shape it does not know, or no renderer attached is
-   no answer, and it keeps waiting. Then it asks the page whose panel it carries, rather than trusting the last reading,
-   and acts only if it is still the earlier backend's. The same gate stands in front of the fallback.
+   (`frontend/src/utils/runningApps.ts`). An entry counts by its display status, as it does in the panel
+   ([Is the game running](save-file-sync-architecture.md#is-the-game-running)), with one difference: the wait holds for
+   Launching and Terminating as well as Running (`DISPLAY_STATUSES_THAT_HOLD`), because a game on its way in or out is
+   still one a reload would take the interface away from, and an entry whose status it cannot read holds too — its line
+   in the log says `(status unread)` beside the name. So a game Steam keeps listed after it exited no longer holds the
+   reload for ever. A store it cannot read, a shape it does not know, or no renderer attached is no answer, and it keeps
+   waiting. Then it asks the page whose panel it carries, rather than trusting the last reading, and acts only if it is
+   still the earlier backend's. The same gate stands in front of the fallback.
 2. **Asks Steam to rebuild its JS context** with `SteamClient.Browser.RestartJSContext()`, evaluated in
    `SharedJSContext`. Evaluated directly, the call answers "Cannot find default execution context" — the answer that led
    [ADR-0024](../adr/0024-session-budget-rss-gate.md) to rule the call out. Scheduled with `setTimeout`, as Decky Loader
@@ -222,18 +227,21 @@ is never admitted again, so every press that reaches the backend could only fail
 decided: [qam-panel.md](qam-panel.md#pages), Pages), and of the game page's section below the play row
 (`RomMGameInfoPanel.tsx`), ahead of every other card there, on a page loaded before the strand as well as after. While
 an update attempt has started the installer the card adds that the update's result shows after the reload or restart it
-names, read from the install store without a call (`installerStarted`, `utils/updateInstallStore.ts`). The play row
-keeps the **Tender restarted** badge, Steam's own Last played and Playtime, and Space Required, but not the Achievements
-and BIOS badges, whose tabs the card has replaced. It offers Resume for its game while that game runs and nothing else:
-no Play, no Stop, no gear, no version or disc picker, no download control. Under a version error or a pending RetroDECK
-migration the row stays hidden, as it is otherwise. A Resume on an overlay whose game no longer runs only takes the
-overlay down. On a page opened after the strand the play button never learns which game it is for, so it offers nothing
-there, a running game included. Stop Game in a menu opened before the panel learnt it was stranded says at once that it
-cannot stop the game. Steam's own Play on a RomM shortcut is refused before the launch gate asks anything: the launch
-interceptor cancels the start, as it always does, and then reads the answer the socket holds, with a notification that
-it could not start the game. A Play press on a game already running still passes, since the interceptor's running-game
-guard comes before the cancel. On a game's page a connection check refused as stranded is no verdict on RomM, so it
-writes none, and the badge says Tender was restarted whatever RomM last answered. What each of them says:
+names, read from the install store without a call (`installerStarted`, `utils/updateInstallStore.ts`). While a game runs
+it adds that Tender cannot stop it — or, where only apps whose display status could not be read make a game run, that
+Steam lists them and a restart of Steam settles it
+([Is the game running](save-file-sync-architecture.md#is-the-game-running)). The play row keeps the **Tender restarted**
+badge, Steam's own Last played and Playtime, and Space Required, but not the Achievements and BIOS badges, whose tabs
+the card has replaced. It offers Resume for its game while that game runs and nothing else: no Play, no Stop, no gear,
+no version or disc picker, no download control. Under a version error or a pending RetroDECK migration the row stays
+hidden, as it is otherwise. A Resume on an overlay whose game no longer runs only takes the overlay down. On a page
+opened after the strand the play button never learns which game it is for, so it offers nothing there, a running game
+included. Stop Game in a menu opened before the panel learnt it was stranded says at once that it cannot stop the game.
+Steam's own Play on a RomM shortcut is refused before the launch gate asks anything: the launch interceptor cancels the
+start, as it always does, and then reads the answer the socket holds, with a notification that it could not start the
+game. A Play press on a game already running still passes, since the interceptor's running-game guard comes before the
+cancel. On a game's page a connection check refused as stranded is no verdict on RomM, so it writes none, and the badge
+says Tender was restarted whatever RomM last answered. What each of them says:
 [troubleshooting.md](../user-guide/troubleshooting.md#tender-says-it-was-restarted). A Tender dialog already open when
 the panel is stranded stays open, and its buttons fail as they always did.
 

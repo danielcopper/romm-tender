@@ -1863,27 +1863,29 @@ swaps the tree and rolls back what does not answer
   stored release (`LastSeenReleaseReader.last_seen_release`) is strictly newer than the running version, whatever the
   check's switch says. A run from a checkout is offered nothing.
 - **What a press waits for** is listed as `wait_reasons`, each a discriminant the panel words: an app Steam lists as
-  running (`app_running`, with the names), a running-apps reading that could not be taken (`running_apps_unknown` —
-  never read as "nothing running"; with `TENDER_INJECT=off` the injector never attaches, so no reading is ever taken), a
-  library sync, ROM downloads in flight or queued, a save sync (the device gate, pre-launch and post-exit included, and
-  every save operation outside it — a conflict resolved, a slot switched or deleted, a save copied or rolled back, local
-  saves deleted), firmware downloads, a save directory being followed, a removed-game cleanup, a RetroDECK migration
-  that is moving files, any other claim of work held on the prune conflicts (`other_work` — an uninstall, a shortcut
-  removal, a version switch, an adoption, a lease the frontend holds for its Steam writes), Steam's interface reload
-  limit (`interface_reload_limit`, with `frees_at`, when the oldest recorded takedown leaves the window), and a reading
-  of that limit that could not be taken (`interface_reload_limit_unknown` — never read as a limit that lets one more
-  through, since the restarted backend replaces the panel only where the limit lets it). A migration that is only
-  **pending** does not wait: the stored question survives the restart and is asked again. **Paused** ROM downloads do
-  not wait either — they are counted as `paused_downloads`, because the queue lives in memory and a start removes their
-  partial files, so the restart cancels them. The running apps and the reload limit are the host's
-  (`SteamInterfaceReader`, filled in by `host/runtime.py` once the injector exists), and the claims are the prune
-  conflicts' (`HeldClaimsFn`, which sweeps expired leases first); every other reader is the owning service's own. A
-  claim counts toward the reason that names its work — `domain/update_install.py` maps each endpoint and lease key to
-  one, the save use cases to the save sync among them and the rest of the work to `other_work` — except a claim whose
-  own work only reads, or writes a cache it can build again (`READ_ONLY_CLAIMS` there), which a restart cuts nothing
-  short of and which makes no press wait; a lease such a read hands out is a claim of its own. A test reads every claim
-  name the source takes and fails on one in neither list, and a claim neither names still counts as `other_work`, so
-  work nobody classified makes a press wait rather than slipping through.
+  running (`app_running`, with the names, and the names of those whose display status could not be read apart in
+  `apps_status_unread` — such an app holds the wait too, by the rule under
+  [Is the game running](save-file-sync-architecture.md#is-the-game-running)), a running-apps reading that could not be
+  taken (`running_apps_unknown` — never read as "nothing running"; with `TENDER_INJECT=off` the injector never attaches,
+  so no reading is ever taken), a library sync, ROM downloads in flight or queued, a save sync (the device gate,
+  pre-launch and post-exit included, and every save operation outside it — a conflict resolved, a slot switched or
+  deleted, a save copied or rolled back, local saves deleted), firmware downloads, a save directory being followed, a
+  removed-game cleanup, a RetroDECK migration that is moving files, any other claim of work held on the prune conflicts
+  (`other_work` — an uninstall, a shortcut removal, a version switch, an adoption, a lease the frontend holds for its
+  Steam writes), Steam's interface reload limit (`interface_reload_limit`, with `frees_at`, when the oldest recorded
+  takedown leaves the window), and a reading of that limit that could not be taken (`interface_reload_limit_unknown` —
+  never read as a limit that lets one more through, since the restarted backend replaces the panel only where the limit
+  lets it). A migration that is only **pending** does not wait: the stored question survives the restart and is asked
+  again. **Paused** ROM downloads do not wait either — they are counted as `paused_downloads`, because the queue lives
+  in memory and a start removes their partial files, so the restart cancels them. The running apps and the reload limit
+  are the host's (`SteamInterfaceReader`, filled in by `host/runtime.py` once the injector exists), and the claims are
+  the prune conflicts' (`HeldClaimsFn`, which sweeps expired leases first); every other reader is the owning service's
+  own. A claim counts toward the reason that names its work — `domain/update_install.py` maps each endpoint and lease
+  key to one, the save use cases to the save sync among them and the rest of the work to `other_work` — except a claim
+  whose own work only reads, or writes a cache it can build again (`READ_ONLY_CLAIMS` there), which a restart cuts
+  nothing short of and which makes no press wait; a lease such a read hands out is a claim of its own. A test reads
+  every claim name the source takes and fails on one in neither list, and a claim neither names still counts as
+  `other_work`, so work nobody classified makes a press wait rather than slipping through.
 - **The press** (`install_update`, naming the version it means) is refused while an attempt holds the rule
   (`update_in_progress`), where nothing is offered (`not_offered`), for a version that is not the stored one
   (`version_changed`), and while any reason holds (`update_waiting`, carrying `wait_reasons`). The reasons are asked
