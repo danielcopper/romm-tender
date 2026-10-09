@@ -14,9 +14,10 @@ import {
   downloadPercent,
   failedStep,
   installSteps,
+  namesStatusUnread,
   pausedDownloadsHint,
   restartWaitLine,
-  waitReasonLine,
+  waitReasonLines,
   type InstallStepId,
   type InstallStepStatus,
 } from "../../utils/updateInstallView";
@@ -229,24 +230,26 @@ export const UpdateInstallRows: FC<{ install: UpdateInstall; record: RolledBackU
   }, [install.underWay]);
   const pausedHint = pausedDownloadsHint(install.pausedDownloads);
   const waiting = !install.underWay && install.waitReasons.length > 0;
-  const [onlyWait, ...moreWaits] = install.waitReasons;
+  const waitLines = install.waitReasons.flatMap(waitReasonLines);
+  // A sentence never follows "Waiting for:" on the header's own line.
+  const inlineWait = waitLines.length === 1 && !install.waitReasons.some(namesStatusUnread) ? waitLines[0] : null;
   const unread = installStateUnread(install);
 
   const description = (
     <>
       {waiting && (
         <div data-testid="updates-waiting">
-          {onlyWait && moreWaits.length === 0 ? (
+          {inlineWait !== null ? (
             <>
               {`${WAITING_FOR} `}
-              <span data-testid="updates-wait-reason">{waitReasonLine(onlyWait)}</span>
+              <span data-testid="updates-wait-reason">{inlineWait}</span>
             </>
           ) : (
             <>
               <div>{WAITING_FOR}</div>
-              {install.waitReasons.map((wait) => (
-                <div key={wait.reason} data-testid="updates-wait-reason">
-                  {waitReasonLine(wait)}
+              {waitLines.map((line) => (
+                <div key={line} data-testid="updates-wait-reason">
+                  {line}
                 </div>
               ))}
             </>

@@ -45,6 +45,8 @@ export interface RunningApp {
 export interface RunningAppsReading {
   /** The listed apps that count as running this round, in store order. */
   apps: RunningApp[];
+  /** The appids among {@link apps} that count only because their display status could not be read. */
+  statusUnread: ReadonlySet<number>;
   /** Diagnostic — what the store reported this round, every listed entry with its display status. */
   diagnostics: string;
 }
@@ -139,19 +141,21 @@ export function readRunningApps(): RunningAppsReading {
   // NOSONAR(typescript:S7741) — SteamUIStore is an undeclared Steam SP global; a
   // direct `=== undefined` would throw ReferenceError when it is genuinely absent.
   if (typeof SteamUIStore === "undefined" || SteamUIStore === null) {
-    return { apps: [], diagnostics: `${SOURCE_LABEL}=no-store` };
+    return { apps: [], statusUnread: new Set(), diagnostics: `${SOURCE_LABEL}=no-store` };
   }
   try {
     // One getter read — re-reading for the diagnostic could observe a different
     // value, or throw outside the coercion it describes.
     const raw: unknown = SteamUIStore.RunningApps;
     const listed = coerceListedAppList(raw);
+    const counted = listed.filter(countsAsRunning);
     return {
-      apps: listed.filter(countsAsRunning).map((entry) => entry.app),
+      apps: counted.map((entry) => entry.app),
+      statusUnread: new Set(counted.filter((entry) => entry.status === null).map((entry) => entry.app.appid)),
       diagnostics: `${SOURCE_LABEL}=${describeList(listed, raw)}`,
     };
   } catch (e) {
-    return { apps: [], diagnostics: `${SOURCE_LABEL}=threw:${e}` };
+    return { apps: [], statusUnread: new Set(), diagnostics: `${SOURCE_LABEL}=threw:${e}` };
   }
 }
 

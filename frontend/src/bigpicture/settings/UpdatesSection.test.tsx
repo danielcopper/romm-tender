@@ -346,6 +346,28 @@ describe("UpdatesSection", () => {
       ]);
     });
 
+    it("says what to do about a game Steam lists whose status could not be read, under the header", () => {
+      const { getByTestId, getAllByTestId } = withInstall({
+        waitReasons: [{ reason: "app_running", apps: [], apps_status_unread: ["Celeste"] }],
+      });
+
+      expect(getByTestId("updates-waiting").firstElementChild?.textContent).toBe("Waiting for:");
+      expect(getAllByTestId("updates-wait-reason").map((row) => row.textContent)).toEqual([
+        "Steam lists Celeste as running, and Tender can't tell whether it is. If it has closed, restart Steam.",
+      ]);
+    });
+
+    it("names the game to close and the one whose status could not be read, a line each", () => {
+      const { getAllByTestId } = withInstall({
+        waitReasons: [{ reason: "app_running", apps: ["Hades"], apps_status_unread: ["Celeste"] }],
+      });
+
+      expect(getAllByTestId("updates-wait-reason").map((row) => row.textContent)).toEqual([
+        "A game to close (Hades)",
+        "Steam lists Celeste as running, and Tender can't tell whether it is. If it has closed, restart Steam.",
+      ]);
+    });
+
     it("names a single reason on the header's own line", () => {
       const waiting = withInstall({ waitReasons: [{ reason: "library_sync" }] }).getByTestId("updates-waiting");
 

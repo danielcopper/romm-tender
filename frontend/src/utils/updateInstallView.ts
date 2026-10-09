@@ -9,6 +9,7 @@
  */
 
 import type { UpdateInstallAttempt, UpdateInstallFailure, UpdateWaitReason } from "../api/backend";
+import { statusUnreadSentence } from "./runningAppsWording";
 
 export const WAITING_FOR = "Waiting for:";
 
@@ -152,6 +153,25 @@ export function waitReasonLine(wait: UpdateWaitReason): string {
     default:
       return PLAIN_WAIT_LINES[wait.reason];
   }
+}
+
+/**
+ * Every line *wait* stands for under "Waiting for": one per reason, but two for
+ * a game Steam lists when some of what it lists could not be read — the game to
+ * close, and the sentence for the apps only a restart of Steam can settle.
+ */
+export function waitReasonLines(wait: UpdateWaitReason): string[] {
+  if (wait.reason !== "app_running") return [waitReasonLine(wait)];
+  const unread = wait.apps_status_unread ?? [];
+  return [
+    ...(wait.apps.length > 0 ? [waitReasonLine(wait)] : []),
+    ...(unread.length > 0 ? [statusUnreadSentence(unread)] : []),
+  ];
+}
+
+/** Does *wait* name an app whose display status could not be read? */
+export function namesStatusUnread(wait: UpdateWaitReason): boolean {
+  return wait.reason === "app_running" && (wait.apps_status_unread ?? []).length > 0;
 }
 
 /** `""` where nothing is paused; a paused download never holds the button back. */

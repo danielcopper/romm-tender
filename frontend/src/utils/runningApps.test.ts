@@ -165,6 +165,12 @@ describe("runningApps — guarded SteamUIStore reader", () => {
       expect(readRunningApps().apps.map((app) => app.appid)).toEqual([1, 2]);
     });
 
+    it("names the apps that count only because their status could not be read", () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [listed(1, 4), listed(2, undefined), listed(3, 11)] });
+
+      expect([...readRunningApps().statusUnread]).toEqual([2]);
+    });
+
     it("reports empty for a present but non-list value", () => {
       vi.stubGlobal("SteamUIStore", { RunningApps: 7 as unknown as SteamAppOverview[] });
 
