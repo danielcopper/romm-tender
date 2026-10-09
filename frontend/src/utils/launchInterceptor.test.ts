@@ -5,7 +5,6 @@ import * as backend from "../api/backend";
 import * as rommAppIds from "./rommAppIds";
 import * as launchGate from "./launchGate";
 import * as sessionManager from "./sessionManager";
-import * as runningApps from "./runningApps";
 import * as steamShortcuts from "./steamShortcuts";
 import { FIRST_CONTACT_DEADLINE_MS, registerLaunchInterceptor, type LaunchPrompts } from "./launchInterceptor";
 import type { GateVerdict, LaunchGateOps } from "./launchGate";
@@ -67,19 +66,12 @@ const { NOT_RUNNING, SESSION_RUNNING, STORE_RUNNING, STOPPED_BUT_LISTED } = vi.h
 });
 
 // The guard asks `readGameRunning` alone; its signals are tested against the
-// real predicate in `sessionManager.test.ts`. `isAppRunning` stays mocked so a
-// test that has the store list the game while the predicate says it stopped
-// catches a guard that reads the store directly. `readRunningApps` stays real
-// for the tests that hand the guard the real predicate over a stubbed store.
+// real predicate in `sessionManager.test.ts`. `readRunningApps` stays real for
+// the tests that hand the guard the real predicate over a stubbed store.
 vi.mock("./sessionManager", () => ({
   getAppIdRomIdMapSnapshot: vi.fn(() => ({})),
   refreshAppIdMap: vi.fn(),
   readGameRunning: vi.fn(() => NOT_RUNNING),
-}));
-
-vi.mock("./runningApps", async (importActual) => ({
-  ...(await importActual<typeof import("./runningApps")>()),
-  isAppRunning: vi.fn(() => false),
 }));
 
 vi.mock("./migrationStore", () => ({
@@ -180,7 +172,6 @@ describe("launchInterceptor — full funnel watcher", () => {
     // Default: nothing running, so the already-running guard is inert and the
     // existing funnel tests run unchanged. Overridden per-test.
     vi.mocked(sessionManager.readGameRunning).mockReturnValue(NOT_RUNNING);
-    vi.mocked(runningApps.isAppRunning).mockReturnValue(false);
     vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "allow" });
     // The shared relaunch re-confirm (#1152) runs on every relaunch; default it
     // to a resolved command + a clean confirm-set so the existing verdict tests
@@ -296,7 +287,6 @@ describe("launchInterceptor — full funnel watcher", () => {
     it("skips the funnel when a running-app source reports the appId running", async () => {
       // No live session in our state, but Steam's running-app surfaces show it.
       vi.mocked(sessionManager.readGameRunning).mockReturnValue(STORE_RUNNING);
-      vi.mocked(runningApps.isAppRunning).mockReturnValue(true);
 
       register();
       const handler = captureHandler();
@@ -317,7 +307,6 @@ describe("launchInterceptor — full funnel watcher", () => {
       // Another game may well be live; what matters is that the PRESSED rom (42)
       // is not → the guard is inert and the normal cancel+gate funnel proceeds.
       vi.mocked(sessionManager.readGameRunning).mockReturnValue(NOT_RUNNING);
-      vi.mocked(runningApps.isAppRunning).mockReturnValue(false);
 
       register();
       const handler = captureHandler();
@@ -331,8 +320,7 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(backend.logInfo).not.toHaveBeenCalledWith(expect.stringContaining("already running"));
     });
 
-    it("cancels and gates when the game's stop was seen, though the store still lists it", async () => {
-      vi.mocked(runningApps.isAppRunning).mockReturnValue(true);
+    it("cancels and gates when the reading says the game's stop overrules the store's listing", async () => {
       vi.mocked(sessionManager.readGameRunning).mockReturnValue(STOPPED_BUT_LISTED);
 
       register();

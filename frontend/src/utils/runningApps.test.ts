@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { readRunningApps, isAppRunning, isAnyAppHolding } from "./runningApps";
+import { readRunningApps, isAnyAppHolding } from "./runningApps";
 
 /** A listed entry whose overview reports `status` as its display status. */
 const listed = (appid: number, status: unknown) => ({
@@ -176,35 +176,6 @@ describe("runningApps — guarded SteamUIStore reader", () => {
       const { apps, diagnostics } = readRunningApps();
       expect(apps).toEqual([]);
       expect(diagnostics).toBe("SteamUIStore.RunningApps=empty");
-    });
-  });
-
-  describe("isAppRunning", () => {
-    it("is true when the appId is reported by the store", () => {
-      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: 100, display_name: "Game" }] });
-
-      expect(isAppRunning(100)).toBe(true);
-    });
-
-    it("is true for a background entry, not just the foreground one", () => {
-      vi.stubGlobal("SteamUIStore", {
-        RunningApps: [
-          { appid: 999, display_name: "Foreground" },
-          { appid: 100, display_name: "Background" },
-        ],
-      });
-
-      expect(isAppRunning(100)).toBe(true);
-    });
-
-    it("is false when the store reports a different appId", () => {
-      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: 999, display_name: "Other" }] });
-
-      expect(isAppRunning(100)).toBe(false);
-    });
-
-    it("is false and does not throw when the store is absent", () => {
-      expect(isAppRunning(100)).toBe(false);
     });
   });
 

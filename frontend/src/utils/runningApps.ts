@@ -185,15 +185,6 @@ export function readRunningApps(): RunningAppsReading {
 }
 
 /**
- * Is a specific `appId` currently running per the store? Never throws. One
- * signal of `readGameRunning` (`utils/sessionManager`); a caller asking whether
- * a game is running asks that instead.
- */
-export function isAppRunning(appId: number): boolean {
-  return readRunningApps().apps.some((app) => app.appid === appId);
-}
-
-/**
  * Does any listed app hold a restart of Steam — reading Launching, Running or
  * Terminating, or a status that cannot be read, as the backend's waits hold?
  * A restart closes Steam and any game with it, one on its way in or out
