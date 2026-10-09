@@ -219,6 +219,21 @@ async function focusRow(container: HTMLElement, name: string): Promise<void> {
 /** The header's core chip. Always rendered since the device round — disabled
  *  with the reason in its title where there is nothing to pick — so it is found
  *  by position rather than by the one title it carries when it is live. */
+/** The parts of the line under the platform's name, each its own element. */
+function factParts(container: HTMLElement): HTMLElement[] {
+  const line = container.querySelector('[data-testid="platform-facts"]');
+  return line ? [...line.querySelectorAll<HTMLElement>(":scope > span")] : [];
+}
+
+/** Each part's text, without the separator it carries in front. */
+function factTexts(container: HTMLElement): string[] {
+  return factParts(container).map((el) => el.textContent.replace(/^· /, ""));
+}
+
+function factPart(container: HTMLElement, text: string): HTMLElement | undefined {
+  return factParts(container).find((el) => el.textContent.replace(/^· /, "") === text);
+}
+
 function coreButton(container: HTMLElement): HTMLButtonElement | null {
   return container.querySelector<HTMLButtonElement>('[data-testid="wide-page-body"] button[title]');
 }
@@ -1063,11 +1078,44 @@ describe("Library › Platforms", () => {
   // The detail's header and its core section
   // ------------------------------------------------------------------
   describe("the detail", () => {
-    it("carries the counts and the core on one header line", async () => {
+    it("puts the core and the counts on a line of their own under the name", async () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("12 on RomM · 9 in Steam · mGBA");
+      expect(factTexts(container)).toEqual(["mGBA", "12 on RomM", "9 in Steam"]);
+      expect(factParts(container).map((el) => el.textContent)).toEqual(["mGBA", "· 12 on RomM", "· 9 in Steam"]);
+      const line = container.querySelector<HTMLElement>('[data-testid="platform-facts"]')!;
+      expect(line.textContent).not.toContain("Game Boy Advance");
+      expect(line.style.fontSize).toBe("11px");
+      expect(line.style.flexWrap).toBe("wrap");
+    });
+
+    it("keeps every part of that line on one line, so it wraps only between parts", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({ platform_system: { state: "found", source: "retrodeck", system: "gba", platform: "GBA" } }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const parts = factParts(container);
+      expect(parts).toHaveLength(4);
+      for (const part of parts) {
+        expect(part.style.whiteSpace).toBe("nowrap");
+        expect(part.style.overflow).toBe("");
+        expect(part.style.textOverflow).toBe("");
+      }
+    });
+
+    it("sets the notes under the BIOS heading in the size of the facts line", async () => {
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const note = [...container.querySelectorAll<HTMLElement>("div")].find((el) =>
+        el.textContent.startsWith("The one file the launching emulator requires"),
+      );
+      expect(note?.style.fontSize).toBe(
+        container.querySelector<HTMLElement>('[data-testid="platform-facts"]')!.style.fontSize,
+      );
     });
 
     it("names the system the platform is in its source, muted like the counts", async () => {
@@ -1077,7 +1125,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("12 on RomM · 9 in Steam · RetroDECK system gba · mGBA");
+      expect(factTexts(container)).toEqual(["mGBA", "12 on RomM", "9 in Steam", "RetroDECK system: gba"]);
     });
 
     it("says why a platform with no system has no emulators to pick", async () => {
@@ -1163,7 +1211,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("12 on RomM · 12 in Steam");
+      expect(factTexts(container)).toEqual(["mGBA", "12 on RomM", "12 in Steam"]);
       expect(buttonByText(container, "Remove 9 shortcuts")).toBeTruthy();
     });
 
@@ -1176,7 +1224,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("12 on RomM · 3 in Steam");
+      expect(factTexts(container)).toEqual(["mGBA", "12 on RomM", "3 in Steam"]);
     });
 
     it("names the active core in the header and greys it when it is the default", async () => {
@@ -1186,7 +1234,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const clause = [...container.querySelectorAll<HTMLElement>("span")].find((el) => el.textContent === " · mGBA");
+      const clause = factPart(container, "mGBA");
       expect(clause).toBeTruthy();
       expect(clause!.style.color).toBe(GREY);
       expect(container.textContent).not.toContain("Default");
@@ -1200,9 +1248,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const clause = [...container.querySelectorAll<HTMLElement>("span")].find(
-        (el) => el.textContent === " · VBA Next",
-      );
+      const clause = factPart(container, "VBA Next");
       expect(clause!.style.color).toBe(AMBER);
       expect(coreButton(container)!.querySelector("svg")!.style.color).toBe(AMBER);
     });
@@ -1216,9 +1262,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const clause = [...container.querySelectorAll<HTMLElement>("span")].find(
-        (el) => el.textContent === " · no emulator",
-      );
+      const clause = factPart(container, "no emulator");
       expect(clause).toBeTruthy();
       expect(clause!.style.color).toBe(RED);
       expect(container.textContent).toContain("RetroDECK lists no emulator for this platform");
@@ -1250,9 +1294,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const clause = [...container.querySelectorAll<HTMLElement>("span")].find(
-        (el) => el.textContent === " · no emulator installed",
-      );
+      const clause = factPart(container, "no emulator installed");
       expect(clause).toBeTruthy();
       expect(clause!.style.color).toBe(RED);
       expect(container.textContent).toContain("RetroDECK would launch these with mGBA, which is not installed");
@@ -1277,9 +1319,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const clause = [...container.querySelectorAll<HTMLElement>("span")].find(
-        (el) => el.textContent === " · RetroDECK decides",
-      );
+      const clause = factPart(container, "RetroDECK decides");
       expect(clause).toBeTruthy();
       expect(clause!.style.color).toBe(GREY);
       expect(container.textContent).toContain("None of this platform's emulators can be pinned from here");
@@ -1332,10 +1372,7 @@ describe("Library › Platforms", () => {
       // nothing was established — beside a sentence saying the opposite. The
       // assertion is on the clause span rather than on the pane's text, so a
       // sentence that names emulators in its own words does not trip it.
-      const clauses = [...container.querySelectorAll<HTMLElement>("span")].filter((el) =>
-        el.textContent.startsWith(" · "),
-      );
-      expect(clauses).toEqual([]);
+      expect(factTexts(container)).toEqual(["12 on RomM", "9 in Steam"]);
     });
 
     it("says a RetroDECK that is not set up has no emulators established instead of an empty picker", async () => {
@@ -1818,7 +1855,7 @@ describe("Library › Platforms", () => {
       expect(within(container).getByTestId("status-core").textContent).toBe("RetroDECK is not installed");
       // The header still names the old core, which every shortcut following the
       // platform's pick still launches with.
-      expect(container.textContent).toContain("· mGBA");
+      expect(factTexts(container)[0]).toBe("mGBA");
     });
 
     it("shows a switch that threw", async () => {

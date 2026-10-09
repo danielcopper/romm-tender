@@ -478,6 +478,33 @@ const BiosFileRow: FC<{ file: FirmwareRow; action: ReactNode }> = ({ file, actio
  * chip would hide a failure behind a hover the Deck's controller has no way to
  * perform.
  */
+/**
+ * The header's second line: the facts about the platform, smaller and muted.
+ *
+ * Each part keeps itself on one line and carries the separator in front of it,
+ * so the line wraps only between parts — at the Deck's width a free-flowing
+ * line broke "RetroDECK system snes" after its first word — and never cuts one.
+ */
+const HeaderFacts: FC<{ parts: { text: string; color?: string }[] }> = ({ parts }) => (
+  <div
+    data-testid="platform-facts"
+    style={{
+      display: "flex",
+      flexWrap: "wrap",
+      columnGap: "4px",
+      padding: "2px 16px 0",
+      fontSize: SECONDARY_FONT,
+      color: MUTED,
+    }}
+  >
+    {parts.map((part, index) => (
+      <span key={part.text} style={{ whiteSpace: "nowrap", color: part.color }}>
+        {index === 0 ? part.text : `· ${part.text}`}
+      </span>
+    ))}
+  </div>
+);
+
 type CoreOffer = { kind: "pick"; core: SystemCoreInfo } | { kind: "blocked"; reason: string; notice?: string };
 
 function coreOffer(core: CoreAnswer): CoreOffer {
@@ -999,28 +1026,19 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
 
   return (
     <>
-      {/* One header line rather than a Sync section: the toggle is in the list
+      {/* Two header lines rather than a Sync section: the toggle is in the list
           row, so what is left here is what the platform IS — and, since the
-          device round, the core picker too: a full-width button under this line
-          cost the pane a `Field`-height row and a warning line to say what the
-          picker itself says. */}
+          device round, the core picker too: a full-width button under the
+          header cost the pane a `Field`-height row and a warning line to say
+          what the picker itself says. The name has the first line to itself,
+          because sharing it with the facts squeezed a two-word name onto two
+          lines over the counts at the Deck's width. */}
       <Focusable
         flow-children="horizontal"
-        style={{ display: "flex", alignItems: "baseline", gap: "10px", padding: "8px 16px 0" }}
+        style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 16px 0" }}
       >
-        <span style={{ fontSize: "16px", fontWeight: 600, color: "#dcdedf", minWidth: 0 }}>{row.name}</span>
-        <span style={{ flex: "1 1 auto", fontSize: SECONDARY_FONT, color: MUTED }}>
-          {/* Both halves count ROM FILES, which is what makes the pair readable:
-              one shortcut serves a whole sibling group and the game's page
-              switches versions across it, so a version that did not win the
-              binding is still reachable and still belongs on the right. Counting
-              shortcuts there instead read as "207 are missing" on a platform
-              where nothing was. The Remove button below keeps the shortcut
-              count — that one really is about Steam entries. */}
-          {`${row.romCount} on RomM`}
-          {row.reachableCount === null ? "" : ` · ${row.reachableCount} in Steam`}
-          {systemClause === null ? "" : ` · ${systemClause}`}
-          {coreClause && <span style={{ color: coreClause.color }}>{` · ${coreClause.text}`}</span>}
+        <span style={{ flex: "1 1 auto", minWidth: 0, fontSize: "16px", fontWeight: 600, color: "#dcdedf" }}>
+          {row.name}
         </span>
         {/* Always rendered, disabled when there is nothing to pick, with the
             reason in the tooltip — the same ruling the Remove group follows.
@@ -1053,6 +1071,21 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
           <FaMicrochip size={16} color={coreColor} />
         </DialogButton>
       </Focusable>
+      {/* Both counts are ROM FILES, which is what makes the pair readable: one
+          shortcut serves a whole sibling group and the game's page switches
+          versions across it, so a version that did not win the binding is
+          still reachable and still belongs on the right. Counting shortcuts
+          there instead read as "207 are missing" on a platform where nothing
+          was. The Remove button below keeps the shortcut count — that one
+          really is about Steam entries. */}
+      <HeaderFacts
+        parts={[
+          ...(coreClause ? [{ text: coreClause.text, color: coreClause.color }] : []),
+          { text: `${row.romCount} on RomM` },
+          ...(row.reachableCount === null ? [] : [{ text: `${row.reachableCount} in Steam` }]),
+          ...(systemClause === null ? [] : [{ text: systemClause }]),
+        ]}
+      />
       {/* The count is what failed, not the removal: taking the platform's games
           out of Steam needs only the slug. So the line says the number is
           missing and stops there — the buttons below stay live. */}

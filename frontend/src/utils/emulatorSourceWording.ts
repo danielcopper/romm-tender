@@ -219,7 +219,7 @@ export function platformSystemOffSentence(kind: string, system: string): string 
 /** The platform page's clause naming the system a platform is in its source. */
 export function platformSystemClause(answer: PlatformSystemAnswer): string | null {
   return answer.state === "found" && answer.system !== null
-    ? `${sourceName(answer.source)} system ${answer.system}`
+    ? `${sourceName(answer.source)} system: ${answer.system}`
     : null;
 }
 

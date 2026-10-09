@@ -1265,22 +1265,26 @@ RetroDECK path migration is pending or an update is being installed, and Enable 
 listing they need fails.
 
 The detail offers no sync control of its own — the row already is one, focus is already there and A works the toggle,
-and the list's two header buttons act on every row at once — so it opens with one header line instead of a Sync section:
-the platform's name, `N on RomM · M in Steam · <source> system <system> · <core name>`, and the core picker's icon
-button, right-aligned. The system clause, muted like the counts, names the system the platform is in the answering
-source and its source (`RetroDECK system psx`, worded by `platformSystemClause`); it is absent where no system was
-taken, which is when the line under the header says why
-([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)).
+and the list's two header buttons act on every row at once — so it opens with a two-line header instead of a Sync
+section. The first line is the platform's name alone, with the core picker's icon button right-aligned beside it; the
+second, in the 11 px secondary size and muted, is `<core name> · N on RomM · M in Steam · <source> system: <system>`.
+Each part of that line keeps itself on one line and carries its `·` in front, so the line wraps only between parts and
+never cuts one: with the name beside the facts, the Deck's width squeezed a two-word name onto two lines over the counts
+and broke `RetroDECK system snes` after its first word. The system part names the system the platform is in the
+answering source and its source (`RetroDECK system: psx`, worded by `platformSystemClause`); it is absent where no
+system was taken, which is when the line under the header says why
+([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)). The notes under the BIOS heading are set
+in the same size.
 
-**Both counts on that line are ROM files.** `N` is RomM's own `rom_count` for the platform; `M` is `reachable_count` —
-the platform's reachable ROMs (every member of a sibling group that holds a binding, because one shortcut serves the
-group (ADR-0021 §2) and the game's page switches versions across it), less the versions RomM no longer serves (below).
-`M` is **not** the number of shortcuts: a fully-synced 665-ROM platform behind 458 shortcuts reads `665 · 665`, where
-counting bindings read `665 · 458` and so reported 207 games as missing when none was. The number of shortcuts is
-`count` on the same payload, and it is what the Remove group says and acts on — the two must not be folded, or the
-button offers to remove more shortcuts than exist. Where a whole game never reached Steam the two halves genuinely
-differ (`3084 on RomM · 8 in Steam` for a platform with one applied game), and that difference is the line doing its
-job.
+**Both counts on the second line are ROM files.** `N` is RomM's own `rom_count` for the platform; `M` is
+`reachable_count` — the platform's reachable ROMs (every member of a sibling group that holds a binding, because one
+shortcut serves the group (ADR-0021 §2) and the game's page switches versions across it), less the versions RomM no
+longer serves (below). `M` is **not** the number of shortcuts: a fully-synced 665-ROM platform behind 458 shortcuts
+reads `665 · 665`, where counting bindings read `665 · 458` and so reported 207 games as missing when none was. The
+number of shortcuts is `count` on the same payload, and it is what the Remove group says and acts on — the two must not
+be folded, or the button offers to remove more shortcuts than exist. Where a whole game never reached Steam the two
+halves genuinely differ (`3084 on RomM · 8 in Steam` for a platform with one applied game), and that difference is the
+line doing its job.
 
 Two things the line does not claim. The halves count **different populations** — the left is what RomM holds now, the
 right is what our own rows say — so ROMs added on RomM since the last sync widen the gap, and equality means "nothing
@@ -1316,19 +1320,19 @@ not skip a platform that still holds such a bound row — they full-fetch it —
 stale-removal scan of the first later run that completes. The direction is a conservative under-count, which is why it
 is recorded rather than guarded.
 
-**The BIOS ratio is not on that line** — it was, and its width is what wrapped the line three times on a platform with a
-long name and a long core label. It is stated once instead, beside `BIOS FILES` eight pixels below, in the colour
+**The BIOS ratio is not on the second line** — it was, and its width is what wrapped the line three times on a platform
+with a long name and a long core label. It is stated once instead, beside `BIOS FILES` eight pixels below, in the colour
 `biosColor.ts` gives the list's dot, so the two places that state a platform's BIOS state agree by construction. Under
 it, for the focused platform:
 
-- **Emulator core** — a **microchip icon button in the header line**, opening the same context menu the game page uses
+- **Emulator core** — a **microchip icon button beside the name**, opening the same context menu the game page uses
   (`buildEmulatorMenu`). It is the game page's own button and its own colour coding: grey `#8f98a0` when the active core
   is the default option, gold `#d4a72c` when it is an override, read off the payload's `is_default` for the option
-  carrying `active_core_label`. The **core clause beside it takes the same two colours from the same condition**, so the
-  name and the icon cannot disagree. A full-width button under the header, with the save-compatibility caveat under
-  that, is what this replaced: two rows for one action, on the pane where rows are the scarce thing. The caveat is not
-  lost — `buildEmulatorMenu` renders it as the menu's first item, so the copy on the page that opens the menu was the
-  same sentence twice.
+  carrying `active_core_label`. The **core part opening the line under it takes the same two colours from the same
+  condition**, so the name and the icon cannot disagree. A full-width button under the header, with the
+  save-compatibility caveat under that, is what this replaced: two rows for one action, on the pane where rows are the
+  scarce thing. The caveat is not lost — `buildEmulatorMenu` renders it as the menu's first item, so the copy on the
+  page that opens the menu was the same sentence twice.
 
   **The clause names the core; "Default" is not one of the names it can take.** `resolve_platform_label` answers with
   the real label in both ordinary cases. `null` means no option is **bakeable**, which is not the same as there being

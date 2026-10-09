@@ -262,15 +262,15 @@ and the row you focus is the one the right-hand pane describes.
    pane). Checking one platform takes a tenth to half a second on a Steam Deck, so a library of thirty is done in a few
    seconds, and leaving the page stops the work
 4. Move down the list to pick a platform; the pane on the right changes with the focus
-5. The pane's first line names the platform, how many ROMs it has on RomM, how many are in Steam, the system its games
-   are in your emulator source — "RetroDECK system psx", in the same grey — and the emulator it launches with — by name,
-   in grey when it is the platform's default and in gold when you have picked something else. If it reads **RetroDECK
-   decides**, Tender could not pin any of this platform's emulators — they may need setting up, or ES-DE's command for
-   them is not one Tender can bake — so RetroDECK chooses one itself when a game starts. If it reads **no emulator
-   installed** in red, the emulator RetroDECK would have fallen back to is not on this machine, and the sentence below
-   names it. If it reads **no emulator** in red, RetroDECK has none for this platform at all. The sentence below the
-   line says which of the three it is
-6. The **chip button** at the right of that line opens a menu of the platform's emulators — the same button, in the same
+5. The pane's first line names the platform. The smaller grey line under it names the emulator it launches with — by
+   name, in grey when it is the platform's default and in gold when you have picked something else — then how many ROMs
+   it has on RomM, how many are in Steam, and the system its games are in your emulator source ("RetroDECK system:
+   psx"). If it reads **RetroDECK decides**, Tender could not pin any of this platform's emulators — they may need
+   setting up, or ES-DE's command for them is not one Tender can bake — so RetroDECK chooses one itself when a game
+   starts. If it reads **no emulator installed** in red, the emulator RetroDECK would have fallen back to is not on this
+   machine, and the sentence below names it. If it reads **no emulator** in red, RetroDECK has none for this platform at
+   all. The sentence below the line says which of the three it is
+6. The **chip button** at the right of the name opens a menu of the platform's emulators — the same button, in the same
    two colours, as the one on a game's page. It is always there: it opens the menu whenever there is more than one
    emulator to choose between — also before the platform's first sync, so you can pick before its games reach Steam —
    and is greyed out otherwise, with the reason shown if you hover it. Where the reason is a problem rather than simply

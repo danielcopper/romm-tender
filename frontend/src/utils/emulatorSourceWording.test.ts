@@ -335,7 +335,7 @@ describe("a platform with no switched-on system", () => {
 describe("platformSystemClause", () => {
   it("names the system taken with its source", () => {
     expect(platformSystemClause({ state: "found", source: "retrodeck", system: "psx", platform: "PlayStation" })).toBe(
-      "RetroDECK system psx",
+      "RetroDECK system: psx",
     );
   });
 
