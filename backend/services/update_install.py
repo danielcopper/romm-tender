@@ -501,11 +501,10 @@ class UpdateInstallService:
         Refuses with :class:`UpdateInProgress` while an attempt holds the rule,
         :class:`NotOffered` where :meth:`get_update_install_state` offers
         nothing, :class:`VersionChanged` where *version* is not the stored
-        release, and :class:`UpdateWaiting` — carrying ``wait_reasons`` as that
-        method words them — while anything a restart would cut short is under
-        way. Every reason is asked again here, with one reading of Steam's
-        running apps. Otherwise the update rule is held from this moment, the
-        attempt runs on by itself and reports through
+        release, and :class:`UpdateWaiting` while anything a restart would cut
+        short is under way. Every reason is asked again here, with one reading
+        of Steam's running apps. Otherwise the update rule is held from this
+        moment, the attempt runs on by itself and reports through
         ``update_install_progress``, and the answer is ``{"success": True}``.
         """
         self._refuse_while_in_progress()

@@ -97,8 +97,9 @@ class UpdateOutputService:
         hand — and ``"empty"`` for an attempt, whose installer this program
         started as a unit. Refuses with :class:`NothingToShow` where no such
         failure stands, ``invalid_value`` for an argument of another type, and
-        ``journal_unreadable`` where the journal could not be read; the first
-        two are logged, since a panel asks only about a failure it shows.
+        ``journal_unreadable`` where the journal could not be read. All three
+        are logged — the first two because a panel asks only about a failure
+        it shows.
         """
         if rolled_back_at is not None and not isinstance(rolled_back_at, str):
             self._logger.warning(f"update: the installer's output was asked for with {rolled_back_at!r}")
@@ -113,9 +114,9 @@ class UpdateOutputService:
             return await self._loop.run_in_executor(None, self._record_output_io, rolled_back_at)
         except OSError as e:
             self._logger.warning(f"update: the journal could not be read for the installer's output: {e!r}")
-            # The message is fixed: the error's own text could carry the
-            # admission token, which only the lines the sections show are
-            # cleared of.
+            # The message is fixed: the error carries journalctl's stderr,
+            # which nothing runs through `hide_token`, so it could hold the
+            # admission token.
             raise Refused("journal_unreadable", "The journal could not be read") from e
 
     def _attempt_output_io(self, started_at: float) -> dict[str, Any]:
