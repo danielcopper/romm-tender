@@ -340,8 +340,12 @@ class TestCollectFindings:
         findings = check.collect_findings(services_dir)
         assert [f.path.name for f in findings] == ["other.py"]
 
-    def test_exempt_entries_carry_a_reason(self, monkeypatch: pytest.MonkeyPatch, capsys):
+    def test_exempt_entries_carry_a_reason(self):
         """EXEMPT is a dict so every waiver states why, visibly in review."""
+        assert all(isinstance(why, str) and why for why in check.EXEMPT.values())
+
+    def test_the_report_names_each_exemption_with_its_reason(self, monkeypatch: pytest.MonkeyPatch, capsys):
+        """Every waiver is printed beside its reason in the report."""
         monkeypatch.setattr(check, "EXEMPT", {"exempt.py": "never talks to RomM"})
         assert check.main([]) == 0
         assert "exempt.py — never talks to RomM" in capsys.readouterr().out
