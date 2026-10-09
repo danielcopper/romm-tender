@@ -205,6 +205,7 @@ const ROMM_READ_FAILURES: Record<RommErrorCode, true> = {
   config_error: true,
   in_progress: true,
 };
+const ROMM_READ_FAILURE_CODES: ReadonlySet<string> = new Set(Object.keys(ROMM_READ_FAILURES));
 
 /** Why a platform's games cannot be downloaded: the source asked has no system for it. */
 export function noPlatformSystemSentence(kind: string, platform: string): string {
@@ -248,7 +249,7 @@ export function emulatorDataReasonSentence(
 ): string {
   if (reason === "switched_off") return "Every emulator source is switched off in Settings › Emulator sources.";
   if (reason === "server_unreachable") return ROMM_UNREACHABLE_SENTENCE;
-  if (reason !== null && Object.prototype.hasOwnProperty.call(ROMM_READ_FAILURES, reason)) return ROMM_REFUSED_SENTENCE;
+  if (reason !== null && ROMM_READ_FAILURE_CODES.has(reason)) return ROMM_REFUSED_SENTENCE;
   if (reason === "no_source" || source === null) {
     return "No emulator source was found, so Tender cannot tell which emulators this platform offers.";
   }

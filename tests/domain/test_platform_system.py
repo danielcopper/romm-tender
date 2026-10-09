@@ -316,8 +316,9 @@ class TestPlatformSystem:
         assert isinstance(refusal, EveryFolderRefused)
 
     def test_a_found_system_is_not_refused(self):
+        found = _platform(FOUND, system="c64")
         with pytest.raises(ValueError, match="not refused"):
-            _platform(FOUND, system="c64").refusal(GAME_DOWNLOAD)
+            found.refusal(GAME_DOWNLOAD)
 
     @pytest.mark.parametrize(
         ("platform", "reason", "source"),
