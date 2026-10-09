@@ -1933,7 +1933,7 @@ confirmation, the offline drift check, the pre-launch sync and conflict resoluti
    below. An observed stop overrules the store, because the store can keep an exited app listed for a while. Measured in
    windowed Big Picture: after a game started through Tender's Play button exited, the store still listed it about 6 and
    12 s later but no longer about 18 s later; after a game started through a `steam://rungameid` link it was empty about
-   3 s after the exit. Before this rule, a press of the Play button 12 s after an exit skipped the gate, and Steam
+   3 s after the exit. Before the stop rule, a press of the Play button 12 s after an exit skipped the gate, and Steam
    itself started the game normally. In the desktop client the store was empty about 5 s after an exit. Which of the
    store's inputs lags has not been established, and Game Mode has not been measured; the rule does not depend on how
    long the lag is. A second start of a game that really is running is refused by Steam itself ("already running").
