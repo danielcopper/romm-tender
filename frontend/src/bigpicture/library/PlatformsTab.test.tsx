@@ -1124,6 +1124,21 @@ describe("Library › Platforms", () => {
       expect(Number.parseFloat(NOTE_FONT)).toBeLessThan(Number.parseFloat(SECONDARY_FONT));
     });
 
+    it("sets a BIOS file's name between the BIOS heading and the small print", async () => {
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const px = (size: string | undefined) => Number.parseFloat(size ?? "");
+      const heading = [...container.querySelectorAll<HTMLElement>("span")].find(
+        (el) => el.textContent === "BIOS FILES",
+      );
+      const row = container.querySelector<HTMLElement>('[data-testid="bios-file-row"]');
+      const marks = container.querySelector<HTMLElement>('[data-testid="disk-mark"]')?.parentElement;
+      expect(px(row?.style.fontSize)).toBeLessThan(px(heading?.style.fontSize));
+      expect(px(row?.style.fontSize)).toBeGreaterThan(px(NOTE_FONT));
+      expect(px(marks?.style.fontSize)).toBeLessThanOrEqual(px(heading?.style.fontSize));
+    });
+
     it("names the system the platform is in its source, muted like the counts", async () => {
       vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
         coreInfo({ platform_system: { state: "found", source: "retrodeck", system: "gba", platform: "GBA" } }),

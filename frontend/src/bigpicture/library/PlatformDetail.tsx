@@ -39,6 +39,7 @@ import {
   Muted,
   NOTE_FONT,
   PALE_GREEN,
+  PANE_TABLE_REGISTER,
   PaneTableHeader,
   PaneTableRow,
   RED,
@@ -47,6 +48,7 @@ import {
   SectionTitle,
   VIOLET,
   type ScopedStatus,
+  type TableRegister,
 } from "../layout/pane";
 import type { CoreAnswer, DetailStatus, PlatformRow, PlatformsPageState, StatusScope } from "./usePlatformsPage";
 
@@ -237,6 +239,12 @@ function libraryMark(file: FirmwareRow): typeof LIBRARY_MARK | null {
 // and `Contents` is about to be filled for file rows (#1803).
 const TABLE_COLUMNS = "1fr 48px 84px 92px";
 
+// A file's row is set in SECONDARY_FONT: below the 12px section heading over the
+// table and above the NOTE_FONT lines under each name, so the three read in that
+// order. Left to inherit the pane's own size, a file name rendered nearly as
+// large as the heading on the Deck.
+const BIOS_TABLE_REGISTER: TableRegister = { ...PANE_TABLE_REGISTER, rowFont: SECONDARY_FONT };
+
 const BiosTableHeader: FC = () => (
   <PaneTableHeader columns={TABLE_COLUMNS} cells={["File", "On disk", "Contents", ""]} />
 );
@@ -387,6 +395,8 @@ const BiosFileRow: FC<{ file: FirmwareRow; action: ReactNode }> = ({ file, actio
     // on it went on explaining it.
     <PaneTableRow
       columns={TABLE_COLUMNS}
+      register={BIOS_TABLE_REGISTER}
+      testId="bios-file-row"
       focusStop={!action}
       cells={[
         {
@@ -419,7 +429,7 @@ const BiosFileRow: FC<{ file: FirmwareRow; action: ReactNode }> = ({ file, actio
               )}
             </>
           ),
-          style: { display: "flex", gap: "4px", fontSize: "14px", whiteSpace: "nowrap" },
+          style: { display: "flex", gap: "4px", fontSize: "12px", whiteSpace: "nowrap" },
           clip: false,
         },
         { content: contentsCell(file), style: { color: MUTED, fontSize: SECONDARY_FONT } },
