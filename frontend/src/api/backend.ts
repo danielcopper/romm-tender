@@ -527,10 +527,7 @@ export type SgdbResolution =
   | { decision: "needs_pick"; candidates: SgdbCandidate[] };
 
 /** Result of a manual SGDB name search. */
-export interface SgdbSearchResult {
-  success: boolean;
-  games: SgdbCandidate[];
-}
+export type SgdbSearchResult = { success: true; games: SgdbCandidate[] } | EndpointFailure;
 
 export const getSgdbResolution = endpoint<[number], SgdbResolution>("get_sgdb_resolution");
 export const searchSgdbGames = endpoint<[string], SgdbSearchResult>("search_sgdb_games");
