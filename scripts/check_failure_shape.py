@@ -182,6 +182,7 @@ CONVERTED_MODULES: tuple[str, ...] = (
     "backend/services/settings.py",
     "backend/services/shortcut_removal.py",
     "backend/services/startup_healing.py",
+    "backend/services/steamgrid.py",
     "backend/services/update_check.py",
     "backend/services/update_install.py",
     "backend/services/update_outcome.py",

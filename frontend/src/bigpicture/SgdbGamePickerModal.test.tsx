@@ -243,7 +243,11 @@ describe("SgdbGamePickerModal", () => {
     });
 
     it("unsuccessful (success:false) search surfaces an error message", async () => {
-      vi.mocked(backend.searchSgdbGames).mockResolvedValue({ success: false, games: [] });
+      vi.mocked(backend.searchSgdbGames).mockResolvedValue({
+        success: false,
+        reason: "server_unreachable",
+        message: "Could not reach SteamGridDB",
+      });
       const { container } = renderPicker();
       await act(async () => {
         fireEvent.click(buttonContaining(container, "Search"));

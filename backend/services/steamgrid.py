@@ -25,8 +25,7 @@ from domain.sgdb_artwork import (
     parse_autocomplete_results,
     sgdb_endpoint_path,
 )
-from lib.errors import SgdbApiError, SteamGridDirMissingError
-from lib.list_result import ErrorCode
+from lib.errors import AuthFailed, Refused, ServerUnreachable, SgdbApiError, SteamGridDirMissingError
 
 if TYPE_CHECKING:
     import logging
@@ -42,6 +41,25 @@ if TYPE_CHECKING:
         SteamGridDbApi,
         UnitOfWorkFactory,
     )
+
+
+def _refusal_for(error: SgdbApiError) -> Refused:
+    """The refusal an ``SgdbApiError`` answers with; never the error's own text."""
+    if error.status_code in (401, 403):
+        return AuthFailed("Invalid API key")
+    if error.status_code is None:
+        return ServerUnreachable("Could not reach SteamGridDB")
+    return ServerUnreachable(f"SteamGridDB error: HTTP {error.status_code}")
+
+
+def _refuse_a_key_that_cannot_be_sent(api_key: str) -> None:
+    """Refuse a key no HTTP header can carry, one with a CR or LF or past latin-1, as ``auth_failed``.
+
+    Checked before the key reaches the adapter: ``http.client`` raises on such a
+    header value, and the exception holds the whole ``Bearer`` value.
+    """
+    if any(ch in "\r\n" or ch > "\xff" for ch in api_key):
+        raise AuthFailed("Invalid API key")
 
 
 @dataclass(frozen=True)
@@ -224,7 +242,8 @@ class SteamGridService:
         - ``{"decision": "resolved", "sgdb_id": int}`` — a winning id was
           found (and persisted when it came from RomM or IGDB).
         - ``{"decision": "needs_pick", "candidates": [...]}`` — nothing
-          resolved automatically; offer a manual name-search picker.
+          resolved automatically; offer a manual name-search picker, with no
+          candidates when the name search is refused.
         """
         async with self._rules.hold("get_sgdb_resolution", prune=True):
             return await self._get_sgdb_resolution(rom_id)
@@ -234,6 +253,7 @@ class SteamGridService:
         rom_id_str = str(rom_id)
         if not self._settings.get("steamgriddb_api_key"):
             return {"decision": "no_api_key"}
+        _refuse_a_key_that_cannot_be_sent(self._settings["steamgriddb_api_key"])
 
         state_id = self._resolve_sgdb_id_state_only(rom_id)
         romm_id, igdb_id, rom_data = await self._fetch_ids_from_romm(rom_id)
@@ -254,38 +274,31 @@ class SteamGridService:
                 return {"decision": "resolved", "sgdb_id": int(resolved)}
 
         name = (rom_data or {}).get("name") or ""
-        search = await self.search_sgdb_games(name)
-        return {"decision": "needs_pick", "candidates": search.get("games", [])}
+        try:
+            search = await self.search_sgdb_games(name)
+        except Refused:
+            return {"decision": "needs_pick", "candidates": []}
+        return {"decision": "needs_pick", "candidates": search["games"]}
 
     async def search_sgdb_games(self, term):
         """Search SGDB by name and enrich the top candidates with thumbnails.
 
-        Returns ``{"success": bool, "games": [{"id", "name",
-        "release_year", "thumb_url"}]}`` plus a ``reason`` slug on failure.
-        Returns an empty, unsuccessful result (``reason="no_api_key"``) when
-        no API key is configured. Network failures are logged and surfaced
-        as ``{"success": False, "reason": "server_unreachable", "games":
-        []}`` — the use case never raises.
+        Returns ``{"success": True, "games": [{"id", "name",
+        "release_year", "thumb_url"}]}``. Refuses with ``no_api_key`` when no
+        API key is configured, with ``auth_failed`` when the key cannot be sent,
+        and answers an ``SgdbApiError`` as ``auth_failed`` or
+        ``server_unreachable``.
         """
         if not self._settings.get("steamgriddb_api_key"):
-            return {
-                "success": False,
-                "reason": "no_api_key",
-                "message": "No SteamGridDB API key configured",
-                "games": [],
-            }
+            raise Refused("no_api_key", "No SteamGridDB API key configured")
+        _refuse_a_key_that_cannot_be_sent(self._settings["steamgriddb_api_key"])
+        path = build_autocomplete_path(str(term))
         try:
-            path = build_autocomplete_path(str(term))
             payload = await self._loop.run_in_executor(None, self._sgdb_api.request, path)
-            candidates = parse_autocomplete_results(payload)
-        except Exception as e:
+        except SgdbApiError as e:
             self._logger.warning(f"SGDB name search failed for term={term!r}: {e}")
-            return {
-                "success": False,
-                "reason": ErrorCode.SERVER_UNREACHABLE.value,
-                "message": f"SteamGridDB search failed: {e}",
-                "games": [],
-            }
+            raise _refusal_for(e) from e
+        candidates = parse_autocomplete_results(payload)
 
         capped = candidates[:6]
         thumb_futures = [
@@ -322,6 +335,7 @@ class SteamGridService:
     async def _apply_sgdb_game_id(self, rom_id, sgdb_id):
         rom_id = int(rom_id)
         sgdb_id = int(sgdb_id)
+        _refuse_a_key_that_cannot_be_sent(self._settings.get("steamgriddb_api_key", ""))
 
         # Start clean: ``_download_sgdb_artwork`` early-returns an
         # existing cache file, so a re-pick of a different game must
@@ -379,6 +393,7 @@ class SteamGridService:
         if not self._settings.get("steamgriddb_api_key"):
             self._log_debug("SGDB artwork skipped: no API key configured")
             return {"base64": None, "no_api_key": True}
+        _refuse_a_key_that_cannot_be_sent(self._settings["steamgriddb_api_key"])
 
         sgdb_id = self._resolve_sgdb_id_state_only(rom_id)
         if not sgdb_id:
@@ -403,32 +418,16 @@ class SteamGridService:
         if not api_key or api_key == "••••":
             api_key = self._settings.get("steamgriddb_api_key", "")
         if not api_key:
-            return {"success": False, "reason": "no_api_key", "message": "No API key configured"}
+            raise Refused("no_api_key", "No API key configured")
+        _refuse_a_key_that_cannot_be_sent(api_key)
         try:
             data = await self._loop.run_in_executor(None, self._sgdb_api.verify_api_key, api_key)
-            if data.get("success"):
-                return {"success": True, "message": "API key is valid"}
-            return {
-                "success": False,
-                "reason": ErrorCode.AUTH_FAILED.value,
-                "message": "API key rejected by SteamGridDB",
-            }
         except SgdbApiError as e:
-            self._logger.warning(f"SGDB API key verification HTTP error: {e.status_code}")
-            if e.status_code in (401, 403):
-                return {"success": False, "reason": ErrorCode.AUTH_FAILED.value, "message": "Invalid API key"}
-            return {
-                "success": False,
-                "reason": ErrorCode.SERVER_UNREACHABLE.value,
-                "message": f"SteamGridDB error: HTTP {e.status_code}",
-            }
-        except Exception as e:
-            self._logger.error(f"SGDB API key verification failed: {e}")
-            return {
-                "success": False,
-                "reason": ErrorCode.SERVER_UNREACHABLE.value,
-                "message": f"Connection failed: {e}",
-            }
+            self._logger.warning(f"SGDB API key verification failed: {e}")
+            raise _refusal_for(e) from e
+        if not data.get("success"):
+            raise AuthFailed("API key rejected by SteamGridDB")
+        return {"success": True, "message": "API key is valid"}
 
     def save_sgdb_api_key(self, api_key):
         if api_key and api_key != "••••":
@@ -494,8 +493,9 @@ class SteamGridService:
         """Write a frontend-supplied icon PNG into Steam's grid directory.
 
         Returns the written ``icon_path`` on success so the frontend can
-        point the shortcut at it via ``SteamClient.Apps.SetShortcutIcon``;
-        failures use the canonical ``{success, reason, message}`` shape.
+        point the shortcut at it via ``SteamClient.Apps.SetShortcutIcon``.
+        Refuses with ``invalid_payload`` when the data does not decode as base64
+        and with ``icon_write_failed`` when the file cannot be written.
         """
         async with self._rules.hold("save_shortcut_icon", prune=True):
             return await self._save_shortcut_icon(app_id, icon_base64)
@@ -504,15 +504,11 @@ class SteamGridService:
         app_id = int(app_id)
         try:
             icon_bytes = base64.b64decode(icon_base64)
-        except Exception as e:
+        except ValueError as e:
             self._logger.error(f"Failed to decode icon base64: {e}")
-            return {"success": False, "reason": "invalid_payload", "message": "Failed to decode icon data"}
+            raise Refused("invalid_payload", "Failed to decode icon data") from e
 
         icon_path = await self._loop.run_in_executor(None, self._save_icon_to_grid, app_id, icon_bytes)
         if not icon_path:
-            return {
-                "success": False,
-                "reason": "icon_write_failed",
-                "message": "Failed to write icon to Steam grid directory",
-            }
+            raise Refused("icon_write_failed", "Failed to write icon to Steam grid directory")
         return {"success": True, "icon_path": icon_path}

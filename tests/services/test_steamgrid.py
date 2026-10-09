@@ -1,5 +1,4 @@
 import asyncio
-import http.client
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -26,7 +25,7 @@ from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 from adapters.debug_logger import SettingsAwareDebugLogger
 from adapters.steam_config import SteamConfigAdapter
 from domain.rom import Rom
-from lib.errors import SgdbApiError, SteamGridDirMissingError
+from lib.errors import Refused, SgdbApiError, SteamGridDirMissingError
 from lib.prune_conflicts import PruneConflicts
 from services.library import LibraryService, LibraryServiceConfig
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
@@ -156,21 +155,23 @@ class TestVerifySgdbApiKey:
     async def test_invalid_api_key_401(self, steamgrid, fake_steamgrid_db_api):
         steamgrid.service._loop = asyncio.get_running_loop()
         fake_steamgrid_db_api.verify_api_key_side_effect = SgdbApiError(401, "Unauthorized")
+        verifying = steamgrid.service.verify_sgdb_api_key("bad-key")
 
-        result = await steamgrid.service.verify_sgdb_api_key("bad-key")
+        with pytest.raises(Refused) as refused:
+            await verifying
 
-        assert result["success"] is False
-        assert "Invalid API key" in result["message"]
+        assert (refused.value.reason, refused.value.message) == ("auth_failed", "Invalid API key")
 
     @pytest.mark.asyncio
     async def test_invalid_api_key_403(self, steamgrid, fake_steamgrid_db_api):
         steamgrid.service._loop = asyncio.get_running_loop()
         fake_steamgrid_db_api.verify_api_key_side_effect = SgdbApiError(403, "Forbidden")
+        verifying = steamgrid.service.verify_sgdb_api_key("bad-key")
 
-        result = await steamgrid.service.verify_sgdb_api_key("bad-key")
+        with pytest.raises(Refused) as refused:
+            await verifying
 
-        assert result["success"] is False
-        assert "Invalid API key" in result["message"]
+        assert (refused.value.reason, refused.value.message) == ("auth_failed", "Invalid API key")
 
     @pytest.mark.asyncio
     async def test_empty_string_falls_back_to_saved_key(self, steamgrid, fake_steamgrid_db_api):
@@ -199,62 +200,75 @@ class TestVerifySgdbApiKey:
     async def test_no_key_configured(self, steamgrid):
         steamgrid.service._loop = asyncio.get_running_loop()
         # No saved key, no provided key
-        result = await steamgrid.service.verify_sgdb_api_key("")
-        assert result["success"] is False
-        assert "No API key configured" in result["message"]
+        verifying = steamgrid.service.verify_sgdb_api_key("")
+
+        with pytest.raises(Refused) as refused:
+            await verifying
+
+        assert (refused.value.reason, refused.value.message) == ("no_api_key", "No API key configured")
 
     @pytest.mark.asyncio
     async def test_no_key_at_all_default_param(self, steamgrid):
         steamgrid.service._loop = asyncio.get_running_loop()
-        result = await steamgrid.service.verify_sgdb_api_key()
-        assert result["success"] is False
-        assert "No API key configured" in result["message"]
+        verifying = steamgrid.service.verify_sgdb_api_key()
+
+        with pytest.raises(Refused) as refused:
+            await verifying
+
+        assert (refused.value.reason, refused.value.message) == ("no_api_key", "No API key configured")
 
     @pytest.mark.asyncio
     async def test_network_error(self, steamgrid, fake_steamgrid_db_api):
         steamgrid.service._loop = asyncio.get_running_loop()
-        fake_steamgrid_db_api.verify_api_key_side_effect = ConnectionError("DNS resolution failed")
+        fake_steamgrid_db_api.verify_api_key_side_effect = SgdbApiError(None, "DNS resolution failed")
+        verifying = steamgrid.service.verify_sgdb_api_key("some-key")
 
-        result = await steamgrid.service.verify_sgdb_api_key("some-key")
+        with pytest.raises(Refused) as refused:
+            await verifying
 
-        assert result["success"] is False
-        assert "Connection failed" in result["message"]
+        assert (refused.value.reason, refused.value.message) == ("server_unreachable", "Could not reach SteamGridDB")
 
     @pytest.mark.asyncio
     async def test_sgdb_rejects_key(self, steamgrid, fake_steamgrid_db_api):
         steamgrid.service._loop = asyncio.get_running_loop()
         fake_steamgrid_db_api.seed_verify_response({"success": False})
+        verifying = steamgrid.service.verify_sgdb_api_key("rejected-key")
 
-        result = await steamgrid.service.verify_sgdb_api_key("rejected-key")
+        with pytest.raises(Refused) as refused:
+            await verifying
 
-        assert result["success"] is False
-        assert "rejected" in result["message"].lower()
+        assert (refused.value.reason, refused.value.message) == ("auth_failed", "API key rejected by SteamGridDB")
 
     @pytest.mark.asyncio
     async def test_http_500_error(self, steamgrid, fake_steamgrid_db_api):
         steamgrid.service._loop = asyncio.get_running_loop()
         fake_steamgrid_db_api.verify_api_key_side_effect = SgdbApiError(500, "Internal Server Error")
+        verifying = steamgrid.service.verify_sgdb_api_key("some-key")
 
-        result = await steamgrid.service.verify_sgdb_api_key("some-key")
+        with pytest.raises(Refused) as refused:
+            await verifying
 
-        assert result["success"] is False
-        assert "HTTP 500" in result["message"]
+        assert (refused.value.reason, refused.value.message) == ("server_unreachable", "SteamGridDB error: HTTP 500")
 
     @pytest.mark.asyncio
-    async def test_legacy_urllib_http_error_still_handled(self, steamgrid, fake_steamgrid_db_api):
-        """Defence-in-depth: a stray urllib.error.HTTPError should still be handled."""
-        import urllib.error
-
+    async def test_bad_gateway_names_its_status(self, steamgrid, fake_steamgrid_db_api):
         steamgrid.service._loop = asyncio.get_running_loop()
-        fake_steamgrid_db_api.verify_api_key_side_effect = urllib.error.HTTPError(
-            "https://steamgriddb.com", 502, "Bad Gateway", http.client.HTTPMessage(), None
-        )
+        fake_steamgrid_db_api.verify_api_key_side_effect = SgdbApiError(502, "HTTP Error 502: Bad Gateway")
+        verifying = steamgrid.service.verify_sgdb_api_key("some-key")
 
-        result = await steamgrid.service.verify_sgdb_api_key("some-key")
+        with pytest.raises(Refused) as refused:
+            await verifying
 
-        assert result["success"] is False
-        # Falls into the generic Exception branch since it's not an SgdbApiError.
-        assert "Connection failed" in result["message"]
+        assert (refused.value.reason, refused.value.message) == ("server_unreachable", "SteamGridDB error: HTTP 502")
+
+    @pytest.mark.asyncio
+    async def test_anything_but_an_sgdb_api_error_is_not_a_refusal(self, steamgrid, fake_steamgrid_db_api):
+        steamgrid.service._loop = asyncio.get_running_loop()
+        fake_steamgrid_db_api.verify_api_key_side_effect = RuntimeError("a bug")
+        verifying = steamgrid.service.verify_sgdb_api_key("some-key")
+
+        with pytest.raises(RuntimeError):
+            await verifying
 
 
 class TestGetSgdbArtworkBase64:
@@ -457,6 +471,56 @@ class TestConflictRulesAtTheUseCase:
         assert steamgrid.prune_conflicts.conflicting_operations == 0
 
 
+# Fake keys no HTTP header can carry: a line break that would end the header, and a character past latin-1.
+_KEYS_NO_HEADER_CAN_CARRY = [
+    pytest.param("fake-sgdb-key\nX-Injected: 1", id="line-feed"),
+    pytest.param("fake-sgdb-key-\u2019", id="past-latin-1"),
+]
+
+
+class TestAKeyNoHeaderCanCarry:
+    """A key that cannot travel in the ``Authorization`` header is refused before any request is made."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("key", _KEYS_NO_HEADER_CAN_CARRY)
+    async def test_the_key_check_refuses_a_typed_key_without_a_request(self, steamgrid, fake_steamgrid_db_api, key):
+        steamgrid.service._loop = asyncio.get_running_loop()
+        verifying = steamgrid.service.verify_sgdb_api_key(key)
+
+        with pytest.raises(Refused) as refused:
+            await verifying
+
+        assert (refused.value.reason, refused.value.message) == ("auth_failed", "Invalid API key")
+        assert fake_steamgrid_db_api.call_log == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("key", _KEYS_NO_HEADER_CAN_CARRY)
+    @pytest.mark.parametrize(
+        ("use_case", "args"),
+        [
+            ("verify_sgdb_api_key", ()),
+            ("search_sgdb_games", ("Zelda",)),
+            ("get_sgdb_resolution", (42,)),
+            ("apply_sgdb_game_id", (42, 7)),
+            ("get_sgdb_artwork_base64", (42, 1)),
+        ],
+    )
+    async def test_every_use_case_that_sends_the_stored_key_refuses_it_without_a_request(
+        self, steamgrid, uow, fake_romm_api, fake_steamgrid_db_api, key, use_case, args
+    ):
+        steamgrid.settings["steamgriddb_api_key"] = key
+        steamgrid.service._loop = asyncio.get_running_loop()
+        _seed_rom(uow, 42, sgdb_id=9999, name="Zelda")
+        fake_romm_api.roms[42] = {"id": 42, "name": "Zelda", "igdb_id": 1234}
+        answering = getattr(steamgrid.service, use_case)(*args)
+
+        with pytest.raises(Refused) as refused:
+            await answering
+
+        assert (refused.value.reason, refused.value.message) == ("auth_failed", "Invalid API key")
+        assert fake_steamgrid_db_api.call_log == []
+
+
 class TestGetSgdbResolution:
     """The picker-driven resolution cascade in ``get_sgdb_resolution``.
 
@@ -584,6 +648,20 @@ class TestGetSgdbResolution:
 
         assert result == {"decision": "needs_pick", "candidates": []}
 
+    @pytest.mark.asyncio
+    async def test_a_refused_name_search_still_opens_the_picker_with_no_candidates(
+        self, steamgrid, fake_romm_api, fake_steamgrid_db_api
+    ):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        steamgrid.service._loop = asyncio.get_running_loop()
+
+        fake_romm_api.roms[42] = {"id": 42, "name": "Zelda"}
+        fake_steamgrid_db_api.request_side_effect = SgdbApiError(None, "connection refused")
+
+        result = await steamgrid.service.get_sgdb_resolution(42)
+
+        assert result == {"decision": "needs_pick", "candidates": []}
+
 
 class TestSearchSgdbGames:
     @pytest.mark.asyncio
@@ -615,22 +693,58 @@ class TestSearchSgdbGames:
     @pytest.mark.asyncio
     async def test_no_api_key(self, steamgrid):
         steamgrid.service._loop = asyncio.get_running_loop()
-        result = await steamgrid.service.search_sgdb_games("mario")
-        assert result["success"] is False
-        assert result["games"] == []
-        assert result["reason"] == "no_api_key"
+        searching = steamgrid.service.search_sgdb_games("mario")
+
+        with pytest.raises(Refused) as refused:
+            await searching
+
+        assert (refused.value.reason, refused.value.message) == ("no_api_key", "No SteamGridDB API key configured")
 
     @pytest.mark.asyncio
-    async def test_network_error_returns_failure(self, steamgrid, fake_steamgrid_db_api):
+    async def test_network_error_refuses_with_a_fixed_message(self, steamgrid, fake_steamgrid_db_api):
         steamgrid.settings["steamgriddb_api_key"] = "some-key"
         steamgrid.service._loop = asyncio.get_running_loop()
-        fake_steamgrid_db_api.request_side_effect = ConnectionError("DNS failed")
+        fake_steamgrid_db_api.request_side_effect = SgdbApiError(None, "DNS failed")
+        searching = steamgrid.service.search_sgdb_games("mario")
 
-        result = await steamgrid.service.search_sgdb_games("mario")
+        with pytest.raises(Refused) as refused:
+            await searching
 
-        assert result["success"] is False
-        assert result["games"] == []
-        assert result["reason"] == "server_unreachable"
+        assert (refused.value.reason, refused.value.message) == ("server_unreachable", "Could not reach SteamGridDB")
+
+    @pytest.mark.asyncio
+    async def test_a_rejected_key_refuses_auth_failed(self, steamgrid, fake_steamgrid_db_api):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        steamgrid.service._loop = asyncio.get_running_loop()
+        fake_steamgrid_db_api.request_side_effect = SgdbApiError(401, "HTTP Error 401: Unauthorized")
+        searching = steamgrid.service.search_sgdb_games("mario")
+
+        with pytest.raises(Refused) as refused:
+            await searching
+
+        assert (refused.value.reason, refused.value.message) == ("auth_failed", "Invalid API key")
+
+    @pytest.mark.asyncio
+    async def test_a_server_error_names_its_status(self, steamgrid, fake_steamgrid_db_api):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        steamgrid.service._loop = asyncio.get_running_loop()
+        fake_steamgrid_db_api.request_side_effect = SgdbApiError(503, "HTTP Error 503: Service Unavailable")
+        searching = steamgrid.service.search_sgdb_games("mario")
+
+        with pytest.raises(Refused) as refused:
+            await searching
+
+        assert (refused.value.reason, refused.value.message) == ("server_unreachable", "SteamGridDB error: HTTP 503")
+
+    @pytest.mark.asyncio
+    async def test_anything_but_an_sgdb_api_error_is_not_a_refusal(self, steamgrid, fake_steamgrid_db_api):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        steamgrid.service._loop = asyncio.get_running_loop()
+        fake_steamgrid_db_api.request_side_effect = RuntimeError("a bug")
+        searching = steamgrid.service.search_sgdb_games("mario")
+
+        with pytest.raises(RuntimeError):
+            await searching
 
     @pytest.mark.asyncio
     async def test_caps_at_six_candidates(self, steamgrid, fake_steamgrid_db_api):
@@ -994,19 +1108,18 @@ class TestSaveShortcutIcon:
 
     @pytest.mark.asyncio
     async def test_save_shortcut_icon_invalid_base64(self, steamgrid):
-        """Invalid base64 → canonical failure shape, no icon_path."""
+        """Invalid base64 → ``invalid_payload``."""
         steamgrid.service._loop = asyncio.get_running_loop()
+        saving = steamgrid.service.save_shortcut_icon(12345, "not-valid-base64!!!")
 
-        result = await steamgrid.service.save_shortcut_icon(12345, "not-valid-base64!!!")
+        with pytest.raises(Refused) as refused:
+            await saving
 
-        assert result["success"] is False
-        assert result["reason"]
-        assert result["message"]
-        assert "icon_path" not in result
+        assert (refused.value.reason, refused.value.message) == ("invalid_payload", "Failed to decode icon data")
 
     @pytest.mark.asyncio
-    async def test_save_shortcut_icon_write_failure_returns_failure_shape(self, steamgrid):
-        """A grid-write failure → canonical failure shape, no icon_path."""
+    async def test_save_shortcut_icon_write_failure_refuses(self, steamgrid):
+        """A grid-write failure → ``icon_write_failed``."""
         import base64
 
         def raise_missing(_app_id, _bytes):
@@ -1016,12 +1129,15 @@ class TestSaveShortcutIcon:
         steamgrid.service._loop = asyncio.get_running_loop()
 
         icon_b64 = base64.b64encode(b"real icon png").decode("ascii")
-        result = await steamgrid.service.save_shortcut_icon(12345, icon_b64)
+        saving = steamgrid.service.save_shortcut_icon(12345, icon_b64)
 
-        assert result["success"] is False
-        assert result["reason"]
-        assert result["message"]
-        assert "icon_path" not in result
+        with pytest.raises(Refused) as refused:
+            await saving
+
+        assert (refused.value.reason, refused.value.message) == (
+            "icon_write_failed",
+            "Failed to write icon to Steam grid directory",
+        )
 
 
 class TestDebugLoggerProtocolSeam:
