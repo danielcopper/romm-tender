@@ -156,9 +156,9 @@ export function waitReasonLine(wait: UpdateWaitReason): string {
 }
 
 /**
- * Every line *wait* stands for under "Waiting for": one per reason, but two for
- * a game Steam lists when some of what it lists could not be read — the game to
- * close, and the sentence for the apps only a restart of Steam can settle.
+ * Every line *wait* stands for under "Waiting for": one per reason, and for a
+ * game Steam lists, "A game to close (…)" for the apps whose status was read
+ * beside the sentence for those whose status could not be.
  */
 export function waitReasonLines(wait: UpdateWaitReason): string[] {
   if (wait.reason !== "app_running") return [waitReasonLine(wait)];

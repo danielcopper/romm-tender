@@ -452,7 +452,9 @@ describe("RomMGameInfoPanel", () => {
     });
 
     it("drops the quit line on a game's stop while Steam's store still lists that game", async () => {
-      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      vi.stubGlobal("SteamUIStore", {
+        RunningApps: [{ appid: testAppId + 1, display_name: "Other", local_per_client_data: { display_status: 4 } }],
+      });
       const { container } = await renderStranded("reloads");
       act(() => lifetimeListener()({ unAppID: testAppId + 1, nInstanceID: 1, bRunning: false }));
       expect(container.textContent).toBe(RELOADS);
@@ -469,7 +471,9 @@ describe("RomMGameInfoPanel", () => {
 
     it("opens without the quit line when the store still lists a game whose stop Tender has seen", async () => {
       const exitedAppId = testAppId + 1;
-      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: exitedAppId, display_name: "Other" }] });
+      vi.stubGlobal("SteamUIStore", {
+        RunningApps: [{ appid: exitedAppId, display_name: "Other", local_per_client_data: { display_status: 4 } }],
+      });
       // The store lists only the exited game, so only it is asked about.
       vi.mocked(readGameRunning).mockReturnValue({ running: false, decidedBy: "stop", diagnostics: "stop observed" });
       const { container } = await renderStranded("reloads");
@@ -488,7 +492,38 @@ describe("RomMGameInfoPanel", () => {
       vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
       const { container } = await renderStranded("reloads");
       expect(container.textContent).toBe(
-        `${RELOADS}Steam lists Other as running, and Tender can't tell whether it is. If it has closed, restart Steam.`,
+        `${RELOADS}Steam lists Other as running, and Tender can't tell whether it still is. ` +
+          "Quit it if it's open; if it has already closed, restart Steam.",
+      );
+    });
+
+    it("keeps saying what to do about a game whose status could not be read once its stop is seen", async () => {
+      // The backend's reload has no stop rule, so it waits on the game all the same.
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      const { container } = await renderStranded("reloads");
+      act(() => lifetimeListener()({ unAppID: testAppId + 1, nInstanceID: 1, bRunning: false }));
+      expect(container.textContent).toBe(
+        `${RELOADS}Steam lists Other as running, and Tender can't tell whether it still is. ` +
+          "Quit it if it's open; if it has already closed, restart Steam.",
+      );
+    });
+
+    it("opens saying what to do about a game whose status could not be read when its stop was already seen", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      vi.mocked(readGameRunning).mockReturnValue({ running: false, decidedBy: "stop", diagnostics: "stop observed" });
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(
+        `${RELOADS}Steam lists Other as running, and Tender can't tell whether it still is. ` +
+          "Quit it if it's open; if it has already closed, restart Steam.",
+      );
+    });
+
+    it("calls a game with no name whose status could not be read a game", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1 }] });
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(
+        `${RELOADS}Steam lists a game as running, and Tender can't tell whether it still is. ` +
+          "Quit it if it's open; if it has already closed, restart Steam.",
       );
     });
 

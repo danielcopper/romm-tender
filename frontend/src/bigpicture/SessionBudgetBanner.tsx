@@ -1,6 +1,6 @@
 import { FC, ReactNode } from "react";
 import { PanelSectionRow, ButtonItem, Focusable } from "@decky/ui";
-import { isAnyAppRunning } from "../utils/runningApps";
+import { isAnyAppHolding } from "../utils/runningApps";
 import { restartSteam } from "../utils/steamRestart";
 
 /**
@@ -105,9 +105,10 @@ interface SessionBudgetBannerProps {
   resumeReady?: boolean | null | undefined;
   /**
    * Disables the "Restart Steam now" button for reasons the caller knows about
-   * (mid-flight / not connected). The banner ALSO disables it while a game is
-   * running — checked here via ``isAnyAppRunning`` — so a restart can never close a
-   * running game.
+   * (mid-flight / not connected). The banner ALSO disables it while any listed
+   * app is starting, running or exiting, or reads a status that cannot be read —
+   * checked here via ``isAnyAppHolding`` — so a restart does not close a game
+   * Steam reports.
    */
   restartDisabled?: boolean | undefined;
   /**
@@ -129,7 +130,8 @@ interface SessionBudgetBannerProps {
  * When ``rssKb`` is ``null`` (measurement unavailable) the
  * live number is dropped but the guidance text stays. Both banners offer a
  * **Restart Steam now** button — a deterministic full client restart that resets
- * the renderer's per-session heap budget — disabled while a game is running.
+ * the renderer's per-session heap budget — disabled while a game is starting,
+ * running or exiting.
  */
 export const SessionBudgetBanner: FC<SessionBudgetBannerProps> = ({
   lastAttemptStatus,
@@ -183,9 +185,9 @@ export const SessionBudgetBanner: FC<SessionBudgetBannerProps> = ({
         `Steam memory is high: ${formatGb(rssKb!)} of 2.4 GB — restart Steam before further large syncs.`,
       );
 
-  // A restart would close a running game, so disable (and hard-guard on click) when
-  // one is detected.
-  const gameRunning = isAnyAppRunning();
+  // A restart would close a game that is starting, running or exiting, so disable
+  // (and check again on click) while one is listed.
+  const gameRunning = isAnyAppHolding();
   return (
     <>
       {card}

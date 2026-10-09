@@ -1,17 +1,15 @@
 /**
- * What the panel says about apps Steam lists as running whose display status
- * could not be read. Such an app counts as running wherever Tender asks, so it
- * holds whatever waits for no game to run — the stranded panel's reload and an
- * update's install — and only the reader can tell whether it has closed.
+ * What the panel says about apps Steam lists whose display status could not be
+ * read: `docs/architecture/save-file-sync-architecture.md`, "Is the game
+ * running".
  */
 
-import { joined } from "./biosGroup";
+import { joined } from "./formatters";
 
 /** The sentence for *names*, every one an app Steam lists whose status could not be read. */
 export function statusUnreadSentence(names: readonly string[]): string {
-  const several = names.length > 1;
-  return (
-    `Steam lists ${joined(names)} as running, and Tender can't tell whether ${several ? "they are" : "it is"}. ` +
-    `If ${several ? "they have" : "it has"} closed, restart Steam.`
-  );
+  const listed = `Steam lists ${joined(names)} as running, and Tender can't tell whether`;
+  return names.length > 1
+    ? `${listed} they still are. Quit any that are open; if they have already closed, restart Steam.`
+    : `${listed} it still is. Quit it if it's open; if it has already closed, restart Steam.`;
 }

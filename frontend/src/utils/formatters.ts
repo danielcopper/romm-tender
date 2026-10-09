@@ -107,3 +107,11 @@ export function formatTimeAgo(iso: string): string | null {
   if (diffMin < 1440) return `${Math.floor(diffMin / 60)}h ago`;
   return `${Math.floor(diffMin / 1440)}d ago`;
 }
+
+/** "A", "A and B", "A, B and C" — the order is the caller's. */
+export function joined(names: readonly string[], word = "and"): string {
+  if (names.length <= 1) return names.join("");
+  // `slice` rather than `.at(-1)`: the panel compiles against ES2020, which has no `Array.prototype.at`.
+  const last = names.slice(-1).join("");
+  return `${names.slice(0, -1).join(", ")} ${word} ${last}`;
+}

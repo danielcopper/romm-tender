@@ -173,10 +173,11 @@ class RendererGcFn(Protocol):
 
 
 class ListedRunningApp(Protocol):
-    """One app Steam lists as running: its name, and whether its display status was read.
+    """One app Steam lists that holds a wait: its name, and whether its display status was read.
 
     ``status_read`` is false for an app that counts only because its status
-    could not be read, which is never the same as one that reads running.
+    could not be read, which is never the same as one whose status was read
+    and holds the wait.
     """
 
     @property
@@ -189,9 +190,11 @@ class ListedRunningApp(Protocol):
 class SteamInterfaceReader(Protocol):
     """What only the process hosting this backend can read of Steam's interface.
 
-    ``running_apps`` is one reading of the apps Steam lists as running, and
-    ``None`` where no reading could be taken — no debugger attached, or the
-    panel not being loaded at all — which is never the same as none running.
+    ``running_apps`` is one reading of the apps Steam lists whose display
+    status holds a wait — Launching, Running or Terminating, or a status that
+    could not be read — and ``None`` where no reading could be taken — no
+    debugger attached, or the panel not being loaded at all — which is never
+    the same as none running.
     ``reload_frees_at`` is the epoch second the limit on taking the interface
     down lets one more through, ``None`` while it would now.
     """

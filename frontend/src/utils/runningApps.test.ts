@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { readRunningApps, isAppRunning, isAnyAppRunning } from "./runningApps";
+import { readRunningApps, isAppRunning, isAnyAppHolding } from "./runningApps";
 
 /** A listed entry whose overview reports `status` as its display status. */
 const listed = (appid: number, status: unknown) => ({
@@ -31,9 +31,8 @@ describe("runningApps — guarded SteamUIStore reader", () => {
 
     it("reports every running app, in store order, without reordering", () => {
       // The reader passes the store's order through untouched. That order is
-      // "most recently foregrounded", NOT launch order — no consumer may read
-      // the head as "the app that just started" — but the reader must not
-      // invent an order of its own either.
+      // not a launch order — nothing reads the head as "the app that just
+      // started" — but the reader must not invent an order of its own either.
       vi.stubGlobal("SteamUIStore", {
         RunningApps: [
           { appid: 100, display_name: "Foreground", local_per_client_data: { display_status: 4 } },
@@ -209,27 +208,41 @@ describe("runningApps — guarded SteamUIStore reader", () => {
     });
   });
 
-  describe("isAnyAppRunning", () => {
-    it("is true when the store reports any running app", () => {
+  describe("isAnyAppHolding", () => {
+    it("is true while a listed app reads Running", () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [listed(100, 4)] });
+
+      expect(isAnyAppHolding()).toBe(true);
+    });
+
+    it("is true while a listed app reads Launching or Terminating", () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [listed(100, 1)] });
+      expect(isAnyAppHolding()).toBe(true);
+
+      vi.stubGlobal("SteamUIStore", { RunningApps: [listed(100, 36)] });
+      expect(isAnyAppHolding()).toBe(true);
+    });
+
+    it("is true while a listed app's display status cannot be read", () => {
       vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: 100, display_name: "Game" }] });
 
-      expect(isAnyAppRunning()).toBe(true);
+      expect(isAnyAppHolding()).toBe(true);
     });
 
     it("is false when the store reports an empty list", () => {
       vi.stubGlobal("SteamUIStore", { RunningApps: [] });
 
-      expect(isAnyAppRunning()).toBe(false);
+      expect(isAnyAppHolding()).toBe(false);
     });
 
     it("is false when the only entry is one Steam kept listed after its exit", () => {
       vi.stubGlobal("SteamUIStore", { RunningApps: [listed(100, 11)] });
 
-      expect(isAnyAppRunning()).toBe(false);
+      expect(isAnyAppHolding()).toBe(false);
     });
 
     it("is false and does not throw when the store is absent", () => {
-      expect(isAnyAppRunning()).toBe(false);
+      expect(isAnyAppHolding()).toBe(false);
     });
   });
 });

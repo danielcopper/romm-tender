@@ -364,7 +364,9 @@ describe("SessionBudgetBanner — Restart Steam now button (#35)", () => {
   });
 
   it("disables the button while a game is running, and says why (the one kept description)", () => {
-    vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: 123, display_name: "Game" }] });
+    vi.stubGlobal("SteamUIStore", {
+      RunningApps: [{ appid: 123, display_name: "Game", local_per_client_data: { display_status: 4 } }],
+    });
     const { container, queryByTestId } = render(
       <SessionBudgetBanner syncButton={RESUME_BUTTON} lastAttemptStatus="paused" rssKb={2199000} />,
     );
@@ -372,6 +374,27 @@ describe("SessionBudgetBanner — Restart Steam now button (#35)", () => {
     expect(queryByTestId("button-desc")!.textContent).toBe(
       "Close your running game first — restarting Steam would close it.",
     );
+  });
+
+  it.each([
+    ["Launching", 1],
+    ["Terminating", 36],
+  ])("disables the button while a game reads %s", (_name, status) => {
+    vi.stubGlobal("SteamUIStore", {
+      RunningApps: [{ appid: 123, display_name: "Game", local_per_client_data: { display_status: status } }],
+    });
+    const { container } = render(
+      <SessionBudgetBanner syncButton={RESUME_BUTTON} lastAttemptStatus="paused" rssKb={2199000} />,
+    );
+    expect(buttonByText(container, "Restart Steam now")!.disabled).toBe(true);
+  });
+
+  it("disables the button while a game's display status cannot be read", () => {
+    vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: 123, display_name: "Game" }] });
+    const { container } = render(
+      <SessionBudgetBanner syncButton={RESUME_BUTTON} lastAttemptStatus="paused" rssKb={2199000} />,
+    );
+    expect(buttonByText(container, "Restart Steam now")!.disabled).toBe(true);
   });
 
   it("leaves the button enabled past a game Steam kept listed after it exited", () => {
@@ -396,7 +419,9 @@ describe("SessionBudgetBanner — Restart Steam now button (#35)", () => {
     const btn = buttonByText(container, "Restart Steam now")!;
     expect(btn.disabled).toBe(false);
     // A game starts before the click lands — the click-time guard must win.
-    vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: 123, display_name: "Game" }] });
+    vi.stubGlobal("SteamUIStore", {
+      RunningApps: [{ appid: 123, display_name: "Game", local_per_client_data: { display_status: 4 } }],
+    });
     fireEvent.click(btn);
     expect(vi.mocked(SteamClient.User.StartRestart)).not.toHaveBeenCalled();
     expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(

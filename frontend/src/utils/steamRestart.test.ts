@@ -37,10 +37,27 @@ describe("steamRestart", () => {
     });
 
     it("refuses while a game is running, and says why", () => {
-      stubSteam({ running: [{ appid: 42, display_name: "Some Game" }] });
+      stubSteam({ running: [{ appid: 42, display_name: "Some Game", local_per_client_data: { display_status: 4 } }] });
       restartSteam();
       expect(startRestart).not.toHaveBeenCalled();
       expect(vi.mocked(showToast)).toHaveBeenCalledWith(expect.stringContaining("running game"));
+    });
+
+    it.each([
+      ["Launching", 1],
+      ["Terminating", 36],
+    ])("refuses while a game reads %s", (_name, status) => {
+      stubSteam({
+        running: [{ appid: 42, display_name: "Some Game", local_per_client_data: { display_status: status } }],
+      });
+      restartSteam();
+      expect(startRestart).not.toHaveBeenCalled();
+    });
+
+    it("refuses while a game's display status cannot be read", () => {
+      stubSteam({ running: [{ appid: 42, display_name: "Some Game" }] });
+      restartSteam();
+      expect(startRestart).not.toHaveBeenCalled();
     });
 
     it("restarts past a game Steam kept listed after it exited", () => {

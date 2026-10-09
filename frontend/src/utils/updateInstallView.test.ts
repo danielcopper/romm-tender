@@ -29,7 +29,8 @@ const failed = (failure: UpdateInstallFailure): UpdateInstallAttempt => ({ ...DO
 
 describe("waitReasonLines", () => {
   const UNREAD_CELESTE =
-    "Steam lists Celeste as running, and Tender can't tell whether it is. If it has closed, restart Steam.";
+    "Steam lists Celeste as running, and Tender can't tell whether it still is. " +
+    "Quit it if it's open; if it has already closed, restart Steam.";
 
   it("is the one line of every reason but a game Steam lists", () => {
     expect(waitReasonLines({ reason: "library_sync" })).toEqual(["Library sync"]);

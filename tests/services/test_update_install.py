@@ -750,6 +750,17 @@ class TestAFailedAttempt:
         assert (last["step"], last["failure"]) == ("failed", "game_started")
         assert rig.units.starts == []
 
+    async def test_the_refusal_s_log_line_marks_an_app_whose_status_was_not_read(self, rigs, tmp_path, caplog):
+        rig = await _built(rigs, tmp_path)
+        await rig.service.install_update(_OFFERED)
+        rig.steam.apps = ("Hades",)
+        rig.steam.apps_status_unread = ("Celeste",)
+
+        with caplog.at_level(logging.WARNING, logger="test_update_install"):
+            await rig.settled()
+
+        assert f"update: Hades, Celeste (status unread) started during the download of {_OFFERED}" in caplog.text
+
     async def test_an_installer_that_is_a_link_is_never_followed(self, rigs, tmp_path):
         body = _tarball(as_link=True)
         rig = await _built(rigs, tmp_path, body=body)

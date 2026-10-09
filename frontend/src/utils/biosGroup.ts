@@ -17,6 +17,7 @@
  */
 
 import type { OneOfGroupVerdict, OneOfMembership } from "../types";
+import { joined } from "./formatters";
 
 // The resolver's region words, as it spells them. Three, because those are the
 // regions it states today; any other arrives through the fallback below.
@@ -51,14 +52,6 @@ export const BIOS_GROUP_PHRASES: readonly string[] = [
 
 function nameOf(region: string): string {
   return REGION_NAMES[region] ?? region.toUpperCase();
-}
-
-/** "A", "A and B", "A, B and C" — the order is the caller's. */
-export function joined(names: readonly string[], word = "and"): string {
-  if (names.length <= 1) return names.join("");
-  // `slice` rather than `.at(-1)`: the panel compiles against ES2020, which has no `Array.prototype.at`.
-  const last = names.slice(-1).join("");
-  return `${names.slice(0, -1).join(", ")} ${word} ${last}`;
 }
 
 /** The regions as one phrase — "Japan and Europe". */

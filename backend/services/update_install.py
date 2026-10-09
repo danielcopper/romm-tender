@@ -579,7 +579,7 @@ class UpdateInstallService:
             )
             raise _AttemptFailedError(InstallFailure.RUNNING_APPS_UNKNOWN)
         if apps:
-            names = ", ".join(app.name for app in apps)
+            names = ", ".join(app.name if app.status_read else f"{app.name} (status unread)" for app in apps)
             self._logger.warning(f"update: {names} started during the download of {version}; nothing changed")
             raise _AttemptFailedError(InstallFailure.GAME_STARTED)
         await self._write_record(version)

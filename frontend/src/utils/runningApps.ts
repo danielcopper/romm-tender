@@ -11,11 +11,13 @@
  * running-appid array through the app store and DROPS entries whose overview has
  * not loaded yet, so the head of `RunningApps` is not even reliably Steam's own
  * `MainRunningApp` — the two diverge exactly during the post-launch window
- * Tender cares about. And the ordering it does carry is "most recently
- * FOREGROUNDED" (`SetRunningApp` removes and unshifts), while the reconciler that
- * notices a newly-launched process APPENDS it at the tail. The head is therefore
- * never a way to identify the app that just started — use the appid the lifetime
- * notification carries. Consumers here ask membership questions only.
+ * Tender cares about. And the order it carries is not a launch order:
+ * `SetRunningApp` removes and unshifts — Steam's own Play calls it for the game
+ * it starts, where another is listed — while the reconciler that notices a
+ * newly-launched process appends it at the tail. So the head may or may not be
+ * the app that just started, and nothing reads it to identify one — use the
+ * appid the lifetime notification carries. Consumers here ask membership
+ * questions only.
  *
  * The read is still guarded. A bare reference to a truly-absent SP global
  * throws `ReferenceError`, so presence is probed with `typeof`; a present store
@@ -29,11 +31,14 @@
  * device evidence) — and a JS-context rebuild under a running game is guarded
  * the same way. So a single empty round proves nothing — the adoption path polls,
  * and every round reports what the store said (`diagnostics`: absent / empty /
- * threw / the appids found) so the on-device log can tell those cases apart.
+ * threw / every listed entry with its status) so the on-device log can tell
+ * those cases apart.
  *
  * Being listed is not being running: Steam lists a game it is only starting,
  * and can keep one listed long after it exited. So an entry counts only by its
- * overview's display status, and the reading names every listed entry's status:
+ * overview's display status, read two ways — whether a game runs
+ * ({@link readRunningApps}), and whether one holds a restart of Steam
+ * ({@link isAnyAppHolding}):
  * `docs/architecture/save-file-sync-architecture.md`, "Is the game running".
  */
 
@@ -54,11 +59,12 @@ export interface RunningAppsReading {
 const SOURCE_LABEL = "SteamUIStore.RunningApps";
 
 /**
- * Steam's `EDisplayStatus` value for an app that is running. The backend's
- * reload wait names the values it holds for in `backend/host/inject/recovery.py`,
- * and `tests/host/inject/test_recovery.py` holds Running equal in both.
+ * The values of Steam's `EDisplayStatus` under which a listed entry holds a
+ * restart of Steam; Running alone makes a game run. The backend's waits name
+ * the values they hold for in `backend/host/inject/recovery.py`, and
+ * `tests/host/inject/test_recovery.py` holds the two equal.
  */
-const DISPLAY_STATUS_RUNNING = 4;
+const DISPLAY_STATUSES_THAT_HOLD = { Launching: 1, Running: 4, Terminating: 36 };
 
 /** One entry the store lists, with its display status — `null` where it cannot be read. */
 interface ListedApp {
@@ -121,7 +127,12 @@ function coerceListedAppList(value: unknown): ListedApp[] {
  * the save-file-sync page's "Is the game running" says why.
  */
 function countsAsRunning(entry: ListedApp): boolean {
-  return entry.status === null || entry.status === DISPLAY_STATUS_RUNNING;
+  return entry.status === null || entry.status === DISPLAY_STATUSES_THAT_HOLD.Running;
+}
+
+/** Does a listed entry hold a restart of Steam? One whose status cannot be read does, as it counts as running. */
+function holds(entry: ListedApp): boolean {
+  return entry.status === null || Object.values(DISPLAY_STATUSES_THAT_HOLD).includes(entry.status);
 }
 
 /** Diagnostic note for the list — every entry found as `appid:status` (`?` unreadable), or why none were. */
@@ -131,32 +142,46 @@ function describeList(listed: ListedApp[], raw: unknown): string {
   return "empty";
 }
 
+/** Every entry the store lists, with a diagnostic naming them. */
+interface Listing {
+  listed: ListedApp[];
+  diagnostics: string;
+}
+
 /**
- * Read `SteamUIStore.RunningApps` once, as the apps that count as running plus a
- * diagnostic naming what the store listed. Never throws: an absent store, a
- * `null` store, a throwing getter and a non-list value all read as "nothing
- * running" with a note saying which.
+ * Read `SteamUIStore.RunningApps` once. Never throws: an absent store, a `null`
+ * store, a throwing getter and a non-list value all read as nothing listed,
+ * with a note saying which.
  */
-export function readRunningApps(): RunningAppsReading {
+function readListing(): Listing {
   // NOSONAR(typescript:S7741) — SteamUIStore is an undeclared Steam SP global; a
   // direct `=== undefined` would throw ReferenceError when it is genuinely absent.
   if (typeof SteamUIStore === "undefined" || SteamUIStore === null) {
-    return { apps: [], statusUnread: new Set(), diagnostics: `${SOURCE_LABEL}=no-store` };
+    return { listed: [], diagnostics: `${SOURCE_LABEL}=no-store` };
   }
   try {
     // One getter read — re-reading for the diagnostic could observe a different
     // value, or throw outside the coercion it describes.
     const raw: unknown = SteamUIStore.RunningApps;
     const listed = coerceListedAppList(raw);
-    const counted = listed.filter(countsAsRunning);
-    return {
-      apps: counted.map((entry) => entry.app),
-      statusUnread: new Set(counted.filter((entry) => entry.status === null).map((entry) => entry.app.appid)),
-      diagnostics: `${SOURCE_LABEL}=${describeList(listed, raw)}`,
-    };
+    return { listed, diagnostics: `${SOURCE_LABEL}=${describeList(listed, raw)}` };
   } catch (e) {
-    return { apps: [], statusUnread: new Set(), diagnostics: `${SOURCE_LABEL}=threw:${e}` };
+    return { listed: [], diagnostics: `${SOURCE_LABEL}=threw:${e}` };
   }
+}
+
+/**
+ * Read the store once, as the apps that count as running plus a diagnostic
+ * naming what it listed. Never throws.
+ */
+export function readRunningApps(): RunningAppsReading {
+  const { listed, diagnostics } = readListing();
+  const counted = listed.filter(countsAsRunning);
+  return {
+    apps: counted.map((entry) => entry.app),
+    statusUnread: new Set(counted.filter((entry) => entry.status === null).map((entry) => entry.app.appid)),
+    diagnostics,
+  };
 }
 
 /**
@@ -168,7 +193,12 @@ export function isAppRunning(appId: number): boolean {
   return readRunningApps().apps.some((app) => app.appid === appId);
 }
 
-/** Is ANY app currently running per the store? Never throws. */
-export function isAnyAppRunning(): boolean {
-  return readRunningApps().apps.length > 0;
+/**
+ * Does any listed app hold a restart of Steam — reading Launching, Running or
+ * Terminating, or a status that cannot be read, as the backend's waits hold?
+ * A restart closes Steam and any game with it, one on its way in or out
+ * included. Never throws.
+ */
+export function isAnyAppHolding(): boolean {
+  return readListing().listed.some(holds);
 }

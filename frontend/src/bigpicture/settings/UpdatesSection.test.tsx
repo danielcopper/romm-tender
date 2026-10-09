@@ -353,7 +353,8 @@ describe("UpdatesSection", () => {
 
       expect(getByTestId("updates-waiting").firstElementChild?.textContent).toBe("Waiting for:");
       expect(getAllByTestId("updates-wait-reason").map((row) => row.textContent)).toEqual([
-        "Steam lists Celeste as running, and Tender can't tell whether it is. If it has closed, restart Steam.",
+        "Steam lists Celeste as running, and Tender can't tell whether it still is. " +
+          "Quit it if it's open; if it has already closed, restart Steam.",
       ]);
     });
 
@@ -364,7 +365,8 @@ describe("UpdatesSection", () => {
 
       expect(getAllByTestId("updates-wait-reason").map((row) => row.textContent)).toEqual([
         "A game to close (Hades)",
-        "Steam lists Celeste as running, and Tender can't tell whether it is. If it has closed, restart Steam.",
+        "Steam lists Celeste as running, and Tender can't tell whether it still is. " +
+          "Quit it if it's open; if it has already closed, restart Steam.",
       ]);
     });
 

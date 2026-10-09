@@ -70,7 +70,8 @@
 
 import type { BiosLevel, FirmwareWanted, OneOfGroupVerdict, SystemImage } from "../types/firmware";
 import { foundByContent } from "./biosFileNote";
-import { groupBlock, joined, regionNames, servesEveryRegion, type GroupBlock } from "./biosGroup";
+import { joined } from "./formatters";
+import { groupBlock, regionNames, servesEveryRegion, type GroupBlock } from "./biosGroup";
 
 /**
  * One state, in the two lengths a surface can have room for. Both are always

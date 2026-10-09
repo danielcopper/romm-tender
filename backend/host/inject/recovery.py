@@ -56,18 +56,19 @@ PANEL_BACK_AFTER_RESTART_SECONDS = 60.0
 RELOAD_DELAY_MS = 200
 
 # The values of Steam's ``EDisplayStatus`` under which a listed entry still
-# holds a wait; ``frontend/src/utils/runningApps.ts`` names Running for the
-# panel, and ``tests/host/inject/test_recovery.py`` holds the two equal.
+# holds a wait; ``frontend/src/utils/runningApps.ts`` names the same values for
+# the panel's restart, and ``tests/host/inject/test_recovery.py`` holds the two
+# equal.
 DISPLAY_STATUSES_THAT_HOLD = {"Launching": 1, "Running": 4, "Terminating": 36}
 
 # ``SteamUIStore.RunningApps`` is the source ``frontend/src/utils/runningApps.ts``
-# reads, and an entry counts here only by its display status, as it does there:
-# ``docs/architecture/save-file-sync-architecture.md``, "Is the game running".
-# Two waits read it: the stranded panel's reload below, and an update's
-# (``PanelInjector.running_apps``). Unlike the panel's reader, every shape it
-# cannot read answers ``null`` rather than an empty list, because here an empty
-# list is the go-ahead — and for the same reason an entry whose status cannot be
-# read still holds, named with ``statusRead: false``.
+# reads, and an entry counts here by its display status, with Launching and
+# Terminating holding as well as Running:
+# ``docs/architecture/loading-the-panel.md``, "A panel an earlier backend left
+# behind". Unlike the panel's reader, every shape it cannot read answers
+# ``null`` rather than an empty list, because here an empty list is the
+# go-ahead — and for the same reason an entry whose status cannot be read still
+# holds, named with ``statusRead: false``.
 RUNNING_APPS_EXPRESSION = (
     "(() => {"
     ' if (typeof SteamUIStore === "undefined" || SteamUIStore === null) { return null; }'
@@ -84,7 +85,7 @@ RUNNING_APPS_EXPRESSION = (
     " const status = statusOf(app);"
     " if (status !== null && !holding.includes(status)) { continue; }"
     " holdingApps.push({"
-    ' name: String((app && (app.display_name || app.strDisplayName || app.appid)) || "an app"),'
+    ' name: String((app && (app.display_name || app.strDisplayName)) || "a game"),'
     " statusRead: status !== null });"
     " }"
     " return holdingApps;"
@@ -157,7 +158,7 @@ def _listed_app(value: object) -> ListedApp:
     """One entry of the expression's answer; anything but ``statusRead: true`` is a status not read."""
     if not isinstance(value, dict):
         return ListedApp(name=str(value), status_read=False)
-    return ListedApp(name=str(value.get("name", "an app")), status_read=value.get("statusRead") is True)
+    return ListedApp(name=str(value.get("name", "a game")), status_read=value.get("statusRead") is True)
 
 
 async def read_running_apps(evaluate: EvaluateFn) -> AppsReading:

@@ -64,7 +64,7 @@ class TestWhichAppsAreRunning:
             f" {{ appid: 3, {RUNNING} }}"
             "] };"
         )
-        assert running_apps(tmp_path, prelude) == {"value": [held("Celeste"), held("Hades"), held("3")]}
+        assert running_apps(tmp_path, prelude) == {"value": [held("Celeste"), held("Hades"), held("a game")]}
 
     def test_an_empty_list_is_the_one_answer_that_says_nothing_runs(self, tmp_path):
         assert running_apps(tmp_path, "globalThis.SteamUIStore = { RunningApps: [] };") == {"value": []}
@@ -136,11 +136,12 @@ class TestWhichEntriesHold:
 
 
 class TestTheStatusHomesAgree:
-    def test_running_is_the_same_value_in_the_panel_s_reader(self):
+    def test_the_panel_s_reader_holds_for_the_same_values(self):
         source = _RUNNING_APPS_TS.read_text(encoding="utf-8")
-        found = re.search(r"\bDISPLAY_STATUS_RUNNING = (\d+);", source)
-        assert found is not None, "runningApps.ts no longer names DISPLAY_STATUS_RUNNING"
-        assert int(found.group(1)) == DISPLAY_STATUSES_THAT_HOLD["Running"]
+        found = re.search(r"\bDISPLAY_STATUSES_THAT_HOLD = \{([^}]*)\};", source)
+        assert found is not None, "runningApps.ts no longer names DISPLAY_STATUSES_THAT_HOLD"
+        entries = re.findall(r"(\w+): (\d+)", found.group(1))
+        assert {name: int(value) for name, value in entries} == DISPLAY_STATUSES_THAT_HOLD
 
 
 class TestTheReload:

@@ -10,24 +10,27 @@ import { useInstallerStarted } from "../utils/updateInstallStore";
 const UPDATE_LINE = "The update's result shows after that.";
 const QUIT_LINE = "Quit the running game yourself — Tender can't stop it right now.";
 
-/** Whether any app runs: `false`, `true`, or — where only apps whose display
- *  status could not be read make it so — their names. */
+/** Whether a game runs: `true`; or else, where the store lists apps whose
+ *  display status could not be read, their names; or `false`. */
 type AnyAppRunning = boolean | { statusUnread: string[] };
 
-/** {@link AnyAppRunning} by the store-and-stop part of {@link readGameRunning}'s
- *  rule over every app the store lists — no ROM is known here, so an open session
+/** {@link AnyAppRunning}. A game runs by a start the card saw, or by the
+ *  store-and-stop part of {@link readGameRunning}'s rule over every app the
+ *  store lists whose status was read — no ROM is known here, so an open session
  *  does not count — with the card's own last lifetime notification per app
- *  answering first. In which order
- *  Steam calls the card's callback and the session manager's is not known, so
- *  the card does not count on a stop having reached the session manager yet;
- *  and a start it saw counts before the store lists the app. */
+ *  answering first. In which order Steam calls the card's callback and the
+ *  session manager's is not known, so the card does not count on a stop having
+ *  reached the session manager yet; and a start it saw counts before the store
+ *  lists the app. An app whose status could not be read is named whatever stop
+ *  was seen for it: the backend's reload waits on it all the same. */
 function anyAppRunning(observed: ReadonlyMap<number, boolean>): AnyAppRunning {
   for (const running of observed.values()) if (running) return true;
   const reading = readRunningApps();
-  const running = reading.apps.filter((app) => observed.get(app.appid) ?? readGameRunning(app.appid, null).running);
-  if (running.length === 0) return false;
-  if (running.some((app) => !reading.statusUnread.has(app.appid))) return true;
-  return { statusUnread: running.map((app) => app.display_name || String(app.appid)) };
+  const unread = reading.apps.filter((app) => reading.statusUnread.has(app.appid));
+  const read = reading.apps.filter((app) => !reading.statusUnread.has(app.appid));
+  if (read.some((app) => observed.get(app.appid) ?? readGameRunning(app.appid, null).running)) return true;
+  if (unread.length === 0) return false;
+  return { statusUnread: unread.map((app) => app.display_name || "a game") };
 }
 
 /** `SteamClient.GameSessions` is declared present, and this card is the one
@@ -57,9 +60,9 @@ function useAnyAppRunning(): AnyAppRunning {
  *  game page's section below the play row. Where an update attempt has started
  *  the installer, the reload or restart the sentence names is what shows its
  *  result. Tender's Stop cannot reach the backend, so while any game runs the
- *  card says to quit it another way — unless only apps whose status could not
- *  be read make it so, which holds the reload just the same and which only the
- *  reader can tell have closed. */
+ *  card says to quit it another way; where none is seen to run but the store
+ *  lists apps whose status could not be read, which hold the reload all the
+ *  same, it says what to do about them (`utils/runningAppsWording.ts`). */
 export const StrandedPanelCard: FC<{ compact?: boolean }> = ({ compact = false }) => {
   const answer = useStrandedAnswer();
   const running = useAnyAppRunning();
