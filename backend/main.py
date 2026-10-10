@@ -485,7 +485,7 @@ class Endpoints:
 
     @route
     async def check_local_drift(self, rom_id):
-        return await self._services.launch_gate_service.check_local_drift(rom_id)
+        return await self._services.save_sync_service.check_local_drift(rom_id)
 
     @route
     async def get_rom_relaunch_options(self, rom_id):

@@ -1,12 +1,13 @@
 """Contract tests for the offline launch-path endpoints.
 
-Drives the new launch-gate funnel endpoints exactly as the frontend does
-(``frontend/src/api/backend.ts``), asserting only the response SHAPE +
-behaviour:
+Drives the endpoints the launch gate's offline branch asks exactly as the
+frontend does (``frontend/src/api/backend.ts``), asserting only the response
+SHAPE + behaviour:
 
 * ``check_local_drift(rom_id)`` → ``{"drifted": bool, "rom_id": int}`` — the
-  purely-local drift probe the offline path uses to warn the user that an
-  out-of-band local change would be overwritten the next time sync succeeds.
+  purely-local drift probe. The offline path uses it to warn the user that an
+  out-of-band local change would be overwritten the next time sync succeeds;
+  the Saves tab asks it too, for saves left under another installed version.
 * ``probe_reachability()`` → ``{"online": bool}`` — a fresh, version-free
   heartbeat at the launch decision point.
 * ``refresh_save_status(rom_id)`` → ``{"success": True}`` — fire-and-forget

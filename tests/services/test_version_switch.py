@@ -37,7 +37,7 @@ _APP_ID = 42
 
 
 class _FakeDriftProbe:
-    """Stand-in for ``LaunchGateService.check_local_drift`` (async, per rom_id)."""
+    """Stand-in for ``SaveService.check_local_drift`` (async, per rom_id)."""
 
     def __init__(self, *, drifted: bool = False) -> None:
         self.drifted = drifted

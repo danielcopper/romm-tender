@@ -345,13 +345,13 @@ class RomLaunchPathReader(Protocol):
 class SaveDriftProbeFn(Protocol):
     """Local-save drift probe consumed by VersionSwitchService and PruneService.
 
-    The composition root satisfies this with ``LaunchGateService.check_local_drift``.
+    The composition root satisfies this with ``SaveService.check_local_drift``.
     Reports whether the ROM's local save files diverge from their persisted sync
     baseline (a purely-local content-hash read) — the signal that a change to the
     ROM's shortcut would strand un-uploaded save changes: a version switch moving
     it off a downloaded version, or a removed-game cleanup rebinding it to another
     version or removing the whole game. Returns the
-    ``{"drifted": bool, "rom_id": int}`` shape and never raises (LaunchGate
+    ``{"drifted": bool, "rom_id": int}`` shape and never raises (the check
     collapses any internal error to not-drifted).
     """
 
@@ -524,28 +524,6 @@ class ArtworkRemover(Protocol):
     """
 
     def remove_artwork_files(self, grid: str, rom_id: str | int, entry: ShortcutRegistryEntry) -> None: ...
-
-
-class LaunchGateDriftReader(Protocol):
-    """Local save-file enumeration + baseline lookup consumed by LaunchGateService.
-
-    The composition root satisfies this with a thin shim over the same
-    ``RomInfoService.find_save_files`` discovery the sync/status path uses
-    and the ``rom_save_sync_states`` aggregate's per-file ``last_sync_hash``
-    baselines — so the launch-gate drift check sees exactly the files a
-    real sync would, never a divergent file-discovery path.
-
-    :meth:`find_local_save_files` returns the on-disk save files for an
-    installed ROM (``[{"path", "filename"}]``); an empty list means the ROM
-    is not installed or has no save files present.
-    :meth:`last_sync_hashes` returns the persisted ``last_sync_hash``
-    baseline per filename (``None`` for a file with no baseline yet, and
-    missing keys for files never tracked).
-    """
-
-    def find_local_save_files(self, rom_id: int) -> list[dict[str, str]]: ...
-
-    def last_sync_hashes(self, rom_id: int) -> dict[str, str | None]: ...
 
 
 class SessionPlaytimeRecorder(Protocol):
