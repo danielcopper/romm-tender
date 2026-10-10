@@ -353,7 +353,7 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
 
   it("a refused adoption with no message still says what failed", async () => {
     vi.mocked(backend.startDownload).mockResolvedValue(OCCUPIED);
-    vi.mocked(backend.adoptExistingRom).mockResolvedValue({ success: false, message: "" });
+    vi.mocked(backend.adoptExistingRom).mockResolvedValue({ success: false, reason: "nothing_to_adopt", message: "" });
     const { flow, dialogs } = makeFlow();
     dialogs.showExisting.mockResolvedValue("adopt");
 

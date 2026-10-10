@@ -27,7 +27,7 @@ import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-
 import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import * as backend from "../api/backend";
 import type { CachedGameDetail } from "../api/backend";
-import type { DownloadCompleteEvent, DownloadFailedEvent, DownloadProgressEvent } from "../types";
+import type { AdoptResult, DownloadCompleteEvent, DownloadFailedEvent, DownloadProgressEvent } from "../types";
 
 // Stub the cached-detail store: synchronous Promise.resolve so the initial
 // useEffect settles within a single waitFor tick. The default test-setup
@@ -4737,7 +4737,7 @@ describe("CustomPlayButton — the same game under another name (#260)", () => {
     candidates: [CANDIDATE],
     truncated: false,
   };
-  const ADOPTED = {
+  const ADOPTED: AdoptResult = {
     success: true,
     message: "Using the files already on this device",
     file_path: "/roms/n64/game (USA).z64",
