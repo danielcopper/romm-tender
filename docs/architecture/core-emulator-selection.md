@@ -523,10 +523,11 @@ detail page:
   fewer-than-two-disc ROM (the frontend renders no picker), else `{multi_disc: true, discs: [...], selected, default}`.
   Read-only over the local filesystem; the no-picker answers are normal responses, not failures.
 - **`select_disc(rom_id, filename)`** pins a disc (or clears to the default with `filename = null`). An unknown filename
-  is a hard `not_found` failure and **nothing is written**; a non-multi-disc ROM is `unsupported`; a not-installed ROM
-  is `not_installed` — all in the canonical `{success: false, reason, message}` shape. On success it persists the pick
-  via the pin-only `set_selected_disc` write path, bakes the new disc path **folded over the ROM's full active core**,
-  and returns the fresh `launch_options` + the now-effective `selected` for the frontend to confirm-set on the live
+  is refused with `not_found` and **nothing is written**; a folder with fewer than two discs is refused with
+  `unsupported`; a not-installed or single-file ROM with `not_installed`. Each refusal is raised, and the endpoint
+  answers it in the canonical `{success: false, reason, message}` shape. On success it persists the pick via the
+  pin-only `set_selected_disc` write path, bakes the new disc path **folded over the ROM's full active core**, and
+  returns the fresh `launch_options` + the now-effective `selected` for the frontend to confirm-set on the live
   shortcut. So the picker's selection and the baked launch command cannot diverge.
 
 ## Set, clear, and the confirm-before-toast flow
@@ -537,10 +538,9 @@ The frontend CPU-button menu on the game detail page drives two backend endpoint
 
 - **`set_game_core(rom_id, label)`** resolves the LABEL to a **bakeable `EmulatorInvocation` (libretro or standalone)
   first**, via `label_to_invocation` against the ROM platform's classified command list. A label that does not resolve
-  to a bakeable emulator — unknown, `needs_setup`, or otherwise un-bakeable — is a **hard failure**: the canonical
-  `{success: False, reason: "core_unavailable", message}` shape is returned and **nothing is written**, so the DB never
-  holds a label no consumer can bake. On success it `pin`s the override, then re-bakes and returns the new
-  `launch_options` (the `-e` override form) + the bound `app_id` for an installed ROM.
+  to a bakeable emulator — unknown, `needs_setup`, or otherwise un-bakeable — is refused with `core_unavailable` and
+  **nothing is written**, so the DB never holds a label no consumer can bake. On success it `pin`s the override, then
+  re-bakes and returns the new `launch_options` (the `-e` override form) + the bound `app_id` for an installed ROM.
 - **`clear_game_core(rom_id)`** (triggered by picking the **default-marked core** in the menu) `clear`s the override to
   `NULL`, then re-resolves the ROM's **full active core** through `ActiveCoreResolver` and bakes _that_ — the
   per-platform core or es_systems default, in `-e` form, **not** an unconditional plain launch. Because Tender always
@@ -570,11 +570,12 @@ so standalone emulators and disabled un-bakeable entries render identically (#12
    resolves the ROM's full active core and appends `{app_id, launch_options}` to a `rebake_items` list. ROMs with a
    per-game pin, uninstalled ROMs, and unbound ROMs are skipped — they have nothing live to rewrite, or their pin
    already wins.
-3. It returns `{success: true, rebake_items}`. A failure in either step answers `{success: false, reason, message}`, and
-   the frontend re-bakes only on success — so a fan-out failure after step 1 leaves the choice stored while no shortcut
-   is re-baked. The write checks no BIOS, so a firmware read cannot add a second way to report a stored switch as
-   failed. The platform detail re-reads the platform once the re-bake is done, and that read answers for the new core's
-   firmware.
+3. It returns `{success: true, rebake_items}`. A `settings.json` that cannot be written gives the previous choice back
+   to the live settings, so memory and file agree, and refuses with `save_failed` ("Save failed: …"). Any other failure
+   is a transport error, and one in the fan-out after step 1 leaves the new choice stored and in effect while no
+   shortcut is re-baked: the frontend re-bakes only on success. The write checks no BIOS, so a firmware read cannot add
+   a second way to report a stored switch as failed. The platform detail re-reads the platform once the re-bake is done,
+   and that read answers for the new core's firmware.
 
 The frontend confirm-sets each `rebake_items` entry on its live Steam shortcut the same way the per-game flow does, so a
 per-platform core change applies **immediately** to every installed game on the platform — no sync required. Because the
