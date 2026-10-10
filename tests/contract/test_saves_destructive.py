@@ -144,3 +144,34 @@ async def test_resolve_sync_conflict_server_unreachable_changes_nothing(harness,
     with open(local_path, "rb") as fh:
         assert fh.read() == b"local progress"
     assert not any(c[0] in ("upload_save", "download_save_content") for c in harness.romm.call_log)
+
+
+@pytest.mark.parametrize(
+    ("action", "transfer"),
+    [("keep_local", "upload_save"), ("use_server", "download_save_content")],
+)
+async def test_resolve_sync_conflict_unreachable_on_the_transfer_answers_server_unreachable(harness, action, transfer):
+    """The head is fetched, then the upload or download cannot reach the server → the canonical failure.
+
+    The failure is injected on the transfer itself, past the head fetch: the
+    leg whose ``RommConnectionError`` only the endpoint's translation turns
+    into ``server_unreachable``. The local file keeps its bytes and the ROM's
+    save state is not written.
+    """
+    enable_save_sync(harness)
+    seed_install(harness, 42, system="gba", file_name="game.gba")
+    local_path = _write_local_save(harness, content=b"local progress")
+    seed_server_save(harness, save_id=100, rom_id=42, slot="default", file_name="game.srm")
+    seed_save_state(harness, 42, RomSaveSyncState(active_slot="default", system="gba"))
+    setattr(harness.romm, f"{transfer}_side_effect", RommConnectionError("offline"))
+
+    result = await harness.endpoints.resolve_sync_conflict(42, "game.srm", 100, action)
+
+    _assert_canonical_unreachable(result)
+    assert any(c[0] == transfer for c in harness.romm.call_log)
+    with open(local_path, "rb") as fh:
+        assert fh.read() == b"local progress"
+    with harness.uow_factory() as uow:
+        state = uow.rom_save_sync_states.get(42)
+    assert state is not None
+    assert state.files == {}

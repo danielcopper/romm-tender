@@ -457,8 +457,6 @@ class SteamGridService:
                 continue
             # Expected format: {rom_id}_{type}.png
             parts = filename.split("_", 1)
-            if not parts:
-                continue
             rom_id = parts[0]
             if rom_id not in registry:
                 try:

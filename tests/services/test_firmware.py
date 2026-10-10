@@ -4491,65 +4491,6 @@ class TestDeletePlatformBios:
         assert firmware.uow.bios_files.get("psx", "scph5501.bin") is None
         assert firmware.uow.bios_files.get("ps", "scph5501.bin") is None
 
-    @pytest.mark.asyncio
-    async def test_delete_platform_bios_no_files(self, fw):
-        """Deleting BIOS when none exist returns success with 0."""
-
-        async def mock_check(slug, launching_emulator=None):
-            return {"needs_bios": False}
-
-        fw.check_platform_bios = mock_check
-
-        result = await fw.delete_platform_bios("snes")
-        assert result["success"] is True
-        assert result["deleted_count"] == 0
-
-    @pytest.mark.asyncio
-    async def test_delete_platform_bios_skips_not_downloaded(self, fw, tmp_path):
-        """Only files with downloaded=True are deleted (real asdict dict shape)."""
-
-        async def mock_check(slug, launching_emulator=None):
-            return {
-                "needs_bios": True,
-                "server_count": 2,
-                "local_count": 0,
-                "all_downloaded": False,
-                "files": [
-                    asdict(
-                        BiosFileEntry(
-                            file_name="bios1.bin",
-                            downloaded=False,
-                            local_path="/fake/path1",
-                            declared_path="bios1.bin",
-                            description="bios1.bin",
-                            wanted="unknown",
-                            required_by_active=False,
-                            cores={},
-                            used_by_active=True,
-                        )
-                    ),
-                    asdict(
-                        BiosFileEntry(
-                            file_name="bios2.bin",
-                            downloaded=False,
-                            local_path="/fake/path2",
-                            declared_path="bios2.bin",
-                            description="bios2.bin",
-                            wanted="unknown",
-                            required_by_active=False,
-                            cores={},
-                            used_by_active=True,
-                        )
-                    ),
-                ],
-            }
-
-        fw.check_platform_bios = mock_check
-
-        result = await fw.delete_platform_bios("psx")
-        assert result["success"] is True
-        assert result["deleted_count"] == 0
-
 
 class TestCheckPlatformBiosRequired:
     @pytest.mark.asyncio

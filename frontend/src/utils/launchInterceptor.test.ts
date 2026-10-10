@@ -425,7 +425,7 @@ describe("launchInterceptor — full funnel watcher", () => {
   });
 
   describe("cancel-first", () => {
-    it("calls CancelGameAction synchronously before any gate await", () => {
+    it("calls CancelGameAction synchronously before any gate await", async () => {
       // Make the gate hang so we can prove the cancel already happened
       // before any async funnel work.
       let resolveGate!: (v: GateVerdict) => void;
@@ -442,6 +442,11 @@ describe("launchInterceptor — full funnel watcher", () => {
       // Synchronously — no await yet — the cancel must already be in.
       expect(SteamClient.Apps.CancelGameAction).toHaveBeenCalledWith(77);
       resolveGate({ decision: "allow" });
+
+      // The launch it started runs to its relaunch inside this test, not past
+      // the teardown that removes the Steam stubs it still reads.
+      await vi.waitFor(() => expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100));
+      expect(backend.logError).not.toHaveBeenCalledWith(expect.stringContaining("Launch interceptor error"));
     });
   });
 

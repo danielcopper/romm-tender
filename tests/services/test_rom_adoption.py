@@ -1579,11 +1579,19 @@ class TestVerifyLocatesFilesExactly:
         h.store.files["/roms/psx/Game/b.bin"] = b
 
         await h.service.verify_existing_content(_ROM_ID)
-        await asyncio.sleep(0)  # let the loop drain the scheduled emit tasks
 
-        frames = [payload for name, payload in h.events if name == "verify_progress"]
-        assert frames, "no verify_progress frame was emitted"
-        assert frames[-1] == {"rom_id": _ROM_ID, "bytes_done": 10, "bytes_total": 10}
+        # The frame reaches the emitter only after several loop turns
+        # (call_soon_threadsafe, then the task its callback creates).
+        def frames() -> list[object]:
+            return [payload for name, payload in h.events if name == "verify_progress"]
+
+        try:
+            async with asyncio.timeout(2.0):
+                while not frames():
+                    await asyncio.sleep(0.01)
+        except TimeoutError:
+            pytest.fail("no verify_progress frame was emitted")
+        assert frames()[-1] == {"rom_id": _ROM_ID, "bytes_done": 10, "bytes_total": 10}
 
 
 # ── the candidate search ─────────────────────────────────────────────────

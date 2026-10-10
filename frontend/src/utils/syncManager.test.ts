@@ -728,6 +728,35 @@ describe("syncManager — chunked apply (#1025)", () => {
     expect(vi.mocked(backend.reportUnitResults)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(backend.reportUnitResults)).toHaveBeenCalledWith({ "1": 5001 }, "run-guard-1", 1, 0);
   });
+
+  it("logs an ack the backend rejects and goes on to the next chunk", async () => {
+    // The first chunk's ack rejects. The listener still resolves, the failure is
+    // logged under the unit's name, and the in-flight guard is released: the
+    // next chunk is processed and acked as usual.
+    const logErrorSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+    vi.mocked(backend.reportUnitResults).mockRejectedValueOnce(new Error("socket closed"));
+    try {
+      const applyUnit = initUnitSyncManager();
+      await act(async () => {
+        await expect(
+          applyUnit(
+            chunkOf([sc(1)], { chunkIndex: 0, chunkOffset: 0, chunkCount: 2, unitTotal: 2, runId: "run-ack-fails" }),
+          ),
+        ).resolves.toBeUndefined();
+      });
+      expect(logErrorSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to report unit results for PSX"));
+
+      await act(async () => {
+        await applyUnit(
+          chunkOf([sc(2)], { chunkIndex: 1, chunkOffset: 1, chunkCount: 2, unitTotal: 2, runId: "run-ack-fails" }),
+        );
+      });
+      expect(vi.mocked(backend.reportUnitResults)).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(backend.reportUnitResults)).toHaveBeenLastCalledWith({ "2": 5002 }, "run-ack-fails", 1, 1);
+    } finally {
+      logErrorSpy.mockRestore();
+    }
+  });
 });
 
 describe("syncManager — applies cover artwork to created shortcuts via the API (#1391)", () => {
