@@ -13,6 +13,7 @@ from domain.emulator_sources import (
     move_source,
     no_answering_source_reason,
     switch_source,
+    switched_off_starting_source,
 )
 from domain.refusal import DomainRefused
 
@@ -114,6 +115,57 @@ class TestAnsweringSource:
         )
         assert answering_source(sources) is None
         assert no_answering_source_reason(sources) == ALL_SOURCES_SWITCHED_OFF
+
+
+class TestSwitchedOffStartingSource:
+    def test_retrodeck_switched_off_refuses_a_start_by_naming_it(self):
+        sources = arrange_sources(detected=("retrodeck",), stored_order=(), switched_off=("retrodeck",))
+        assert switched_off_starting_source(sources) == "retrodeck"
+
+    def test_a_switched_on_source_that_cannot_start_games_does_not_lift_the_refusal(self):
+        sources = arrange_sources(
+            detected=("retrodeck", "emudeck"), stored_order=("emudeck", "retrodeck"), switched_off=("retrodeck",)
+        )
+        assert switched_off_starting_source(sources) == "retrodeck"
+
+    def test_retrodeck_switched_on_refuses_nothing(self):
+        sources = arrange_sources(
+            detected=("retrodeck", "emudeck"), stored_order=("emudeck", "retrodeck"), switched_off=("emudeck",)
+        )
+        assert switched_off_starting_source(sources) is None
+
+    def test_retrodeck_not_detected_refuses_nothing_even_when_stored_as_switched_off(self):
+        sources = arrange_sources(detected=("emudeck",), stored_order=(), switched_off=("retrodeck",))
+        assert switched_off_starting_source(sources) is None
+
+    def test_nothing_detected_refuses_nothing(self):
+        assert switched_off_starting_source(()) is None
+
+    def test_a_switched_off_source_that_cannot_start_games_refuses_nothing(self):
+        sources = arrange_sources(detected=("emudeck",), stored_order=(), switched_off=("emudeck",))
+        assert switched_off_starting_source(sources) is None
+
+    def test_the_starting_source_is_named_though_another_switched_off_source_comes_first(self):
+        sources = arrange_sources(
+            detected=("retrodeck", "emudeck"),
+            stored_order=("emudeck", "retrodeck"),
+            switched_off=("emudeck", "retrodeck"),
+        )
+        assert switched_off_starting_source(sources) == "retrodeck"
+
+    def test_the_kind_named_is_that_of_the_source_that_would_start_the_game(self):
+        sources = (
+            ArrangedSource(kind="retrodeck", enabled=True, starts_games=False),
+            ArrangedSource(kind="emudeck", enabled=False, starts_games=True),
+        )
+        assert switched_off_starting_source(sources) == "emudeck"
+
+    def test_a_switched_on_source_that_starts_games_takes_over_from_a_switched_off_one(self):
+        sources = (
+            ArrangedSource(kind="emudeck", enabled=False, starts_games=True),
+            ArrangedSource(kind="retrodeck", enabled=True, starts_games=True),
+        )
+        assert switched_off_starting_source(sources) is None
 
 
 class TestMoveSource:

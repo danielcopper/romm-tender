@@ -50,6 +50,13 @@ export interface PreLaunchSyncOutcome {
 }
 
 /**
+ * What the launch check learned of the source that would start the game:
+ * `switchedOff` is its kind while the user switched it off, `null` while not.
+ * `checked: false` where the check could not tell.
+ */
+export type StartingSourceAnswer = { checked: true; switchedOff: string | null } | { checked: false };
+
+/**
  * The gate's decision. Callers act on it; the gate never renders.
  *
  *   - `allow`            — every gate passed (or sync produced no blocker, or an
@@ -57,7 +64,8 @@ export interface PreLaunchSyncOutcome {
  *   - `block`            — a hard precondition failed and the user has not yet
  *                          been shown UI for it. `reason` selects the caller's
  *                          message (`not_installed`, `migration_pending`,
- *                          `no_launch_target`).
+ *                          `no_launch_target`, `source_switched_off` with
+ *                          the kind of the `source` switched off).
  *   - `abort`            — the user was shown UI (tracking-setup or core-change)
  *                          and chose not to proceed. The caller bails silently,
  *                          with no further message — the user already decided.
@@ -75,6 +83,7 @@ export interface PreLaunchSyncOutcome {
 export type GateVerdict =
   | { decision: "allow" }
   | { decision: "block"; reason: "not_installed" | "migration_pending" | "no_launch_target" }
+  | { decision: "block"; reason: "source_switched_off"; source: string }
   | { decision: "abort" }
   | { decision: "conflict"; conflicts: SyncConflict[] }
   | { decision: "offline_drift" }
@@ -106,6 +115,22 @@ export interface LaunchGateOps {
    * start nothing and say nothing. Blocks with `block`/`no_launch_target`.
    */
   hasLaunchTarget: () => Promise<boolean>;
+
+  /**
+   * Is the source that would start the game switched off in Settings ›
+   * Emulator sources? A kind blocks with `block`/`source_switched_off`: the
+   * shortcut would start the game through that source regardless. Where the
+   * check could not tell, the gate asks {@link confirmUncheckedStartingSource}.
+   * Answers rather than rejects on an expired limit, so this step never ends in
+   * the no-answer `sync_failed`.
+   */
+  readStartingSource: () => Promise<StartingSourceAnswer>;
+
+  /**
+   * Ask whether to start though the check could not tell whether the source is
+   * switched off. `true` runs the rest of the gate; `false` aborts.
+   */
+  confirmUncheckedStartingSource: () => Promise<boolean>;
 
   /**
    * Ensure save-slot tracking is configured for this ROM. Returns `"proceed"`
@@ -142,17 +167,35 @@ export interface LaunchGateOps {
 }
 
 /**
+ * Step 3 of {@link runLaunchGate}: the verdict on the source that would start
+ * the game, or `null` to go on. Where that could not be checked, the user
+ * decides; Cancel bails silently.
+ */
+async function startingSourceVerdict(ops: LaunchGateOps): Promise<GateVerdict | null> {
+  const source = await ops.readStartingSource();
+  if (!source.checked) {
+    return (await ops.confirmUncheckedStartingSource()) ? null : { decision: "abort" };
+  }
+  if (source.switchedOff !== null) {
+    return { decision: "block", reason: "source_switched_off", source: source.switchedOff };
+  }
+  return null;
+}
+
+/**
  * Run the pre-launch gate for `appId` / `romId` and return a verdict. Shows no
  * UI — the caller acts on the verdict.
  *
  * Step order (each step's failure short-circuits the rest):
  *   1. migration pending      -> block / migration_pending
  *   2. hasLaunchTarget        -> block / no_launch_target
- *   3. ensureTrackingConfigured -> "abort" => abort
- *   4. checkCoreChange        -> cancel => abort
- *   5. checkReachability      -> online vs offline split
- *   6a. online:  preLaunchSync -> conflict | sync_failed | allow
- *   6b. offline: checkLocalDrift -> offline_drift | allow
+ *   3. readStartingSource     -> block / source_switched_off;
+ *                                unchecked => confirmUncheckedStartingSource, cancel => abort
+ *   4. ensureTrackingConfigured -> "abort" => abort
+ *   5. checkCoreChange        -> cancel => abort
+ *   6. checkReachability      -> online vs offline split
+ *   7a. online:  preLaunchSync -> conflict | sync_failed | allow
+ *   7b. offline: checkLocalDrift -> offline_drift | allow
  *
  * The gate NEVER throws and NEVER blocks the user on an internal error: the
  * whole body is wrapped so any thrown error (from an injected callback or
@@ -180,22 +223,30 @@ export async function runLaunchGate(_appId: number, _romId: number, ops: LaunchG
       return { decision: "block", reason: "no_launch_target" };
     }
 
-    // 3. Save-slot tracking setup. "abort" means the user saw setup UI and
+    // 3. The source that would start the game is switched off — the start
+    //    would go through it anyway. Block before the save-sync work, for the
+    //    same reason as step 2.
+    const sourceVerdict = await startingSourceVerdict(ops);
+    if (sourceVerdict !== null) {
+      return sourceVerdict;
+    }
+
+    // 4. Save-slot tracking setup. "abort" means the user saw setup UI and
     //    declined — bail silently.
     if ((await ops.ensureTrackingConfigured()) === "abort") {
       return { decision: "abort" };
     }
 
-    // 4. Emulator core-change confirm. Cancel => bail silently.
+    // 5. Emulator core-change confirm. Cancel => bail silently.
     if (!(await ops.checkCoreChange())) {
       return { decision: "abort" };
     }
 
-    // 5. Fresh reachability probe decides the sync branch.
+    // 6. Fresh reachability probe decides the sync branch.
     const online = await ops.checkReachability();
 
     if (online) {
-      // 6a. Online — run pre-launch sync and map its outcome.
+      // 7a. Online — run pre-launch sync and map its outcome.
       const sync = await ops.preLaunchSync();
       if (sync.conflicts && sync.conflicts.length > 0) {
         return { decision: "conflict", conflicts: sync.conflicts };
@@ -206,7 +257,7 @@ export async function runLaunchGate(_appId: number, _romId: number, ops: LaunchG
       return { decision: "allow" };
     }
 
-    // 6b. Offline — block only when the local save has drifted; otherwise allow.
+    // 7b. Offline — block only when the local save has drifted; otherwise allow.
     if (await ops.checkLocalDrift()) {
       return { decision: "offline_drift" };
     }

@@ -46,6 +46,8 @@ import {
   SERVER_CALL_LIMIT_MS,
 } from "./launchGate";
 import { NO_LAUNCH_TARGET_TOAST_BODY, romHasLaunchTarget } from "./launchTarget";
+import { readStartingSource } from "./startingSource";
+import { startingSourceOffSentence } from "./emulatorSourceWording";
 import type { GateVerdict, LaunchGateOps, PreLaunchSyncOutcome } from "./launchGate";
 import { reconfirmLaunchOptions } from "./launchOptionsReconcile";
 import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "./saveSetup";
@@ -56,14 +58,14 @@ import { strandedPanelSentence } from "./strandedPanelWording";
 import { TimeoutError, boundedOr, rethrowTimeout, withTimeout } from "./withTimeout";
 
 /**
- * The four decisions the funnel has to put to the user, as questions rather than
+ * The five decisions the funnel has to put to the user, as questions rather than
  * widgets. The interceptor runs outside the component tree and owns no UI, so it
  * declares what it needs to ask and the caller supplies the answering surface —
  * `index.tsx` wires the real modals in.
  *
  * Asking directly would mean reaching from here into the modal modules, which
  * puts the launch funnel's control flow and its presentation in one knot: every
- * test of a gate branch then has to stand up four modal modules to get at it.
+ * test of a gate branch then has to stand up five modal modules to get at it.
  */
 export interface LaunchPrompts {
   /** Core changed since the last session — proceed with the new core? */
@@ -74,6 +76,8 @@ export interface LaunchPrompts {
   askOfflineDrift(): Promise<"start_anyway" | "retry" | "cancel">;
   /** Pre-launch sync failed, or the check got no answer in time — launch on the local save regardless? */
   confirmFallbackLaunch(message?: string): Promise<boolean>;
+  /** Whether the source that would start the game is switched off could not be checked — start anyway? */
+  confirmUncheckedSource(): Promise<boolean>;
 }
 
 /**
@@ -186,6 +190,8 @@ function makeWatcherOps(romId: number, prompts: LaunchPrompts): LaunchGateOps {
   return {
     migrationPending: () => getMigrationState().pending,
     hasLaunchTarget: () => romHasLaunchTarget(romId, "Watcher"),
+    readStartingSource: () => readStartingSource("Watcher"),
+    confirmUncheckedStartingSource: () => prompts.confirmUncheckedSource(),
     ensureTrackingConfigured: async (): Promise<"proceed"> => {
       await ensureTrackingConfiguredWatcher(romId);
       return "proceed";
@@ -282,6 +288,8 @@ async function handleWatcherVerdict(
         showToast(MIGRATION_TOAST_BODY);
       } else if (verdict.reason === "no_launch_target") {
         showToast(NO_LAUNCH_TARGET_TOAST_BODY);
+      } else if (verdict.reason === "source_switched_off") {
+        showToast(startingSourceOffSentence(verdict.source));
       }
       return "done";
     case "conflict": {

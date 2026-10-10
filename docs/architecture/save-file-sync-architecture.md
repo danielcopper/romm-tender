@@ -1403,7 +1403,9 @@ Runs before a RomM game starts (if `sync_before_launch` is enabled), through one
 `runLaunchGate` (`frontend/src/utils/launchGate.ts`). Tender's Play button runs it from `CustomPlayButton.handlePlay()`
 before it starts the game itself; the launch watcher (`frontend/src/utils/launchInterceptor.ts`) gates the starts that
 do not come through the Play button — Steam's own Play and a `steam://rungameid` link. Pre-launch sync is **not**
-triggered via `RegisterForAppLifetimeNotifications`.
+triggered via `RegisterForAppLifetimeNotifications`. A start the gate refuses before the save work — a ROM with no
+launch target, or the source that would start it switched off
+([Which emulator source answers](core-emulator-selection.md#which-emulator-source-answers)) — runs no sync at all.
 
 The watcher listens on `SteamClient.Apps.RegisterForGameActionStart`, which reports a start with `action` `"LaunchApp"`
 before Steam creates the game's process. Its second argument is **not the appId but the 64-bit game ID** in decimal: for
@@ -1423,21 +1425,24 @@ started without syncing saves." and logs it. An answer that arrives after the de
 more. The later steps are not bounded by this deadline but by limits of their own, which both funnels share (below).
 
 Neither funnel waits for the backend without end. Every backend call the gate makes has a limit: `LOCAL_CALL_LIMIT_MS`
-(5 s) for the calls that stay on this machine — `get_installed_rom`, `is_save_tracking_configured`,
-`confirm_slot_choice`, `check_core_change` and `check_local_drift` — and for `probe_reachability`, whose single
-heartbeat to RomM gives up after about 3 s on its own; `SERVER_CALL_LIMIT_MS` (15 s) for the two that read or sync the
-server's saves, `get_save_setup_info` and `pre_launch_sync`. Both live in `frontend/src/utils/launchGate.ts`; the
-session manager bounds with them too the backend calls it waits for while handling Steam's start and stop notifications
-(see [Post-exit sync](#post-exit-sync)). A limit is a ceiling, not a delay. A step's own fallback answers a call that
-**failed** — a launch-target read that throws lets the launch through, a probe that throws counts as offline — but never
-one that got **no answer**: that ends the check in the "Save Sync Unavailable" dialog, reading "Couldn't check your
-saves in time — launch with local saves?". The limit can expire on a slow RomM while Tender itself is fine, which is why
-the dialog does not blame either. "Launch Anyway" starts the game on the local save without re-confirming the launch
-options, because that re-confirm asks the same backend and its own timeout stops a start; "Cancel" leaves the game
-unstarted — the Play button back on Play, the watcher's start still cancelled. An answer that arrives after the dialog
-appeared starts nothing more. A wait on the user's answer in a dialog is never bounded. One wait has no limit: once an
-action is picked in the conflict dialog, the dialog waits for `resolve_sync_conflict` with its Cancel disabled
-([#2176](https://github.com/danielcopper/romm-tender/issues/2176)).
+(5 s) for the calls that stay on this machine — `get_installed_rom`, `check_start_source`,
+`is_save_tracking_configured`, `confirm_slot_choice`, `check_core_change` and `check_local_drift` — and for
+`probe_reachability`, whose single heartbeat to RomM gives up after about 3 s on its own; `SERVER_CALL_LIMIT_MS` (15 s)
+for the two that read or sync the server's saves, `get_save_setup_info` and `pre_launch_sync`. Both live in
+`frontend/src/utils/launchGate.ts`; the session manager bounds with them too the backend calls it waits for while
+handling Steam's start and stop notifications (see [Post-exit sync](#post-exit-sync)). A limit is a ceiling, not a
+delay. A step's own fallback answers a call that **failed** — a launch-target read that throws lets the launch through,
+a probe that throws counts as offline — but never one that got **no answer**: that ends the check in the "Save Sync
+Unavailable" dialog, reading "Couldn't check your saves in time — launch with local saves?". The limit can expire on a
+slow RomM while Tender itself is fine, which is why the dialog does not blame either. "Launch Anyway" starts the game on
+the local save without re-confirming the launch options, because that re-confirm asks the same backend and its own
+timeout stops a start; "Cancel" leaves the game unstarted — the Play button back on Play, the watcher's start still
+cancelled. An answer that arrives after the dialog appeared starts nothing more. The one exception is
+`check_start_source`, whose every unanswered case — no answer, a failed call, a failed detection — asks a question of
+its own instead of opening that dialog
+([Which emulator source answers](core-emulator-selection.md#which-emulator-source-answers)). A wait on the user's answer
+in a dialog is never bounded. One wait has no limit: once an action is picked in the conflict dialog, the dialog waits
+for `resolve_sync_conflict` with its Cancel disabled ([#2176](https://github.com/danielcopper/romm-tender/issues/2176)).
 
 The romId comes from `sessionManager`'s appId → romId map, which is re-read only at start-up and when a game starts,
 while `rommAppIds` learns a shortcut as soon as a sync writes it. So an owned appId can be missing from the map: the

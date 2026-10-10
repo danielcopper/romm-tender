@@ -70,6 +70,11 @@ class SourcesReading(Protocol):
         """The source a game's questions go to, or ``None`` where none answers."""
         ...
 
+    @property
+    def detection_failed(self) -> bool:
+        """Whether detecting the sources raised, so that none detected establishes nothing about any of them."""
+        ...
+
     def no_answer_reason(self) -> str:
         """Why no source answers: :data:`NO_SOURCE_DETECTED` or :data:`ALL_SOURCES_SWITCHED_OFF`."""
         ...
@@ -118,6 +123,20 @@ def answering_source(sources: Sequence[ArrangedSource]) -> ArrangedSource | None
     if starting is not None:
         return starting
     return enabled[0] if enabled else None
+
+
+def switched_off_starting_source(sources: Sequence[ArrangedSource]) -> str | None:
+    """The kind of the detected source that would start a game while it is switched off, or ``None``.
+
+    A start is refused while this answers a kind — today always RetroDECK, the
+    one source with ``starts_games``. ``None`` while a switched-on source starts
+    games, which then takes the start over, and also where no source that starts
+    games is detected at all: that start goes ahead and fails on its own,
+    because a source that is not listed has no switch to turn back on.
+    """
+    if any(source.enabled and source.starts_games for source in sources):
+        return None
+    return next((source.kind for source in sources if source.starts_games), None)
 
 
 # Why an emulator list could not be given: no source answers at all (the first
