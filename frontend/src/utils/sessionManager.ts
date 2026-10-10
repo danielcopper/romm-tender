@@ -107,6 +107,11 @@ export function isSessionActive(romId: number): boolean {
 // window must already see the stop.
 const stoppedSinceStart = new Set<number>();
 
+/** Has a lifetime stop for `appId` been observed since its last observed start? */
+export function isStopObserved(appId: number): boolean {
+  return stoppedSinceStart.has(appId);
+}
+
 /** The signal that answered {@link readGameRunning}. */
 export type GameRunningSignal = "session" | "store" | "stop" | "none";
 
@@ -128,7 +133,7 @@ export interface GameRunningReading {
  */
 export function readGameRunning(appId: number, romId: number | null | undefined): GameRunningReading {
   const sessionActive = romId != null && isSessionActive(romId);
-  const stopObserved = stoppedSinceStart.has(appId);
+  const stopObserved = isStopObserved(appId);
   const store = readRunningApps();
   const listed = store.apps.some((app) => app.appid === appId);
   let decidedBy: GameRunningSignal;

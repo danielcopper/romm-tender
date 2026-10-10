@@ -21,7 +21,7 @@ import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import * as cachedStore from "../utils/cachedGameDetailStore";
 import { getBiosStatusShared, _resetSharedReadsForTests } from "../api/sharedReads";
 import * as slotState from "../utils/slotState";
-import { readGameRunning } from "../utils/sessionManager";
+import { isStopObserved } from "../utils/sessionManager";
 import { setSettingsResetState } from "../utils/settingsResetStore";
 import { resetUpdateInstallStoreForTests, setUpdateInstallAttempt } from "../utils/updateInstallStore";
 import {
@@ -86,8 +86,8 @@ vi.mock("../utils/connectionState", async (importOriginal) => ({
 
 vi.mock("../utils/sessionManager", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../utils/sessionManager")>();
-  // The real reading by default; resetAllMocks restores it rather than wiping it.
-  return { ...actual, readGameRunning: vi.fn(actual.readGameRunning) };
+  // The real signal by default; resetAllMocks restores it rather than wiping it.
+  return { ...actual, isStopObserved: vi.fn(actual.isStopObserved) };
 });
 
 vi.mock("./MigrationBlockedCard", () => ({
@@ -476,7 +476,24 @@ describe("RomMGameInfoPanel", () => {
         RunningApps: [{ appid: exitedAppId, display_name: "Other", local_per_client_data: { display_status: 4 } }],
       });
       // The store lists only the exited game, so only it is asked about.
-      vi.mocked(readGameRunning).mockReturnValue({ running: false, decidedBy: "stop", diagnostics: "stop observed" });
+      vi.mocked(isStopObserved).mockReturnValue(true);
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(RELOADS);
+    });
+
+    it("adds the quit line while another game reads Launching", async () => {
+      vi.stubGlobal("SteamUIStore", {
+        RunningApps: [{ appid: testAppId + 1, display_name: "Other", local_per_client_data: { display_status: 1 } }],
+      });
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(`${RELOADS}${QUIT_LINE}`);
+    });
+
+    it("opens without the quit line when the store lists a game reading Launching whose stop Tender has seen", async () => {
+      vi.stubGlobal("SteamUIStore", {
+        RunningApps: [{ appid: testAppId + 1, display_name: "Other", local_per_client_data: { display_status: 1 } }],
+      });
+      vi.mocked(isStopObserved).mockReturnValue(true);
       const { container } = await renderStranded("reloads");
       expect(container.textContent).toBe(RELOADS);
     });
@@ -511,7 +528,7 @@ describe("RomMGameInfoPanel", () => {
 
     it("opens saying what to do about a game whose status could not be read when its stop was already seen", async () => {
       vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
-      vi.mocked(readGameRunning).mockReturnValue({ running: false, decidedBy: "stop", diagnostics: "stop observed" });
+      vi.mocked(isStopObserved).mockReturnValue(true);
       const { container } = await renderStranded("reloads");
       expect(container.textContent).toBe(
         `${RELOADS}Steam lists Other as running, and Tender can't tell whether it still is. ` +

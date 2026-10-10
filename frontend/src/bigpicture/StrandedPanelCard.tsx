@@ -1,8 +1,8 @@
 import { FC, useEffect, useState } from "react";
 import { WarningCard } from "./WarningCard";
-import { readRunningApps } from "../utils/runningApps";
+import { readRunningOrStartingApps } from "../utils/runningApps";
 import { statusUnreadSentence } from "../utils/runningAppsWording";
-import { readGameRunning } from "../utils/sessionManager";
+import { isStopObserved } from "../utils/sessionManager";
 import { useStrandedAnswer } from "../utils/strandedPanelStore";
 import { strandedPanelSentence } from "../utils/strandedPanelWording";
 import { useInstallerStarted } from "../utils/updateInstallStore";
@@ -14,21 +14,21 @@ const QUIT_LINE = "Quit the running game yourself — Tender can't stop it right
  *  display status could not be read, their names; or `false`. */
 type AnyAppRunning = boolean | { statusUnread: string[] };
 
-/** {@link AnyAppRunning}. A game runs by a start the card saw, or by the
- *  store-and-stop part of {@link readGameRunning}'s rule over every app the
- *  store lists whose status was read — no ROM is known here, so an open session
- *  does not count — with the card's own last lifetime notification per app
- *  answering first. In which order Steam calls the card's callback and the
- *  session manager's is not known, so the card does not count on a stop having
- *  reached the session manager yet; and a start it saw counts before the store
- *  lists the app. An app whose status could not be read is named whatever stop
+/** {@link AnyAppRunning}. A game runs by a start the card saw, or by every
+ *  app the store lists as running or starting whose status was read, unless a
+ *  stop was seen for it since its last start ({@link isStopObserved}) — no ROM
+ *  is known here, so an open session does not count — with the card's own last
+ *  lifetime notification per app answering first. In which order Steam calls
+ *  the card's callback and the session manager's is not known, so the card does
+ *  not count on a stop having reached the session manager yet; and a start it
+ *  saw counts before the store lists the app. An app whose status could not be read is named whatever stop
  *  was seen for it: the backend's reload waits on it all the same. */
 function anyAppRunning(observed: ReadonlyMap<number, boolean>): AnyAppRunning {
   for (const running of observed.values()) if (running) return true;
-  const reading = readRunningApps();
+  const reading = readRunningOrStartingApps();
   const unread = reading.apps.filter((app) => reading.statusUnread.has(app.appid));
   const read = reading.apps.filter((app) => !reading.statusUnread.has(app.appid));
-  if (read.some((app) => observed.get(app.appid) ?? readGameRunning(app.appid, null).running)) return true;
+  if (read.some((app) => observed.get(app.appid) ?? !isStopObserved(app.appid))) return true;
   if (unread.length === 0) return false;
   return { statusUnread: unread.map((app) => app.display_name || "a game") };
 }
@@ -59,8 +59,8 @@ function useAnyAppRunning(): AnyAppRunning {
 /** Shown on a stranded panel in place of Tender's Quick Access pages and of the
  *  game page's section below the play row. Where an update attempt has started
  *  the installer, the reload or restart the sentence names is what shows its
- *  result. Tender's Stop cannot reach the backend, so while any game runs the
- *  card says to quit it another way; where none is seen to run but the store
+ *  result. Tender's Stop cannot reach the backend, so while any game runs or is
+ *  starting the card says to quit it another way; where none is seen to run but the store
  *  lists apps whose status could not be read, which hold the reload all the
  *  same, it says what to do about them (`utils/runningAppsWording.ts`). */
 export const StrandedPanelCard: FC<{ compact?: boolean }> = ({ compact = false }) => {

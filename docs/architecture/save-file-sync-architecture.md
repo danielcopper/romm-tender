@@ -1919,14 +1919,14 @@ it can also keep an app listed that has already exited: [Is the game running](#i
 
 ### Is the game running
 
-Six places ask whether a game is running, and all of them ask one predicate in the session manager,
+Six places ask whether a game is running. Five ask one predicate in the session manager,
 `readGameRunning(appId, romId)`: the launch watcher's already-running guard, and the Play button's launch guard, its
-Resume overlay at mount, Resume and Stop. The sixth asks it differently: the stranded panel's card, in Quick Access and
-on a game page (`StrandedPanelCard.tsx`), asks it for every app the store lists that counts as running and whose status
-was read, with no ROM and so without rule 1, and lets its own last lifetime notification per app answer first, to tell
-whether ANY game runs. At the two launch guards a wrong "running" skips the whole launch gate — the migration block, the
-launch target, tracking setup, the core-change confirmation, the offline drift check, the pre-launch sync and conflict
-resolution.
+Resume overlay at mount, Resume and Stop. The sixth asks differently: the stranded panel's card, in Quick Access and on
+a game page (`StrandedPanelCard.tsx`), takes every app the store lists as running or starting whose status was read,
+leaves out one whose stop was observed since its last start (`isStopObserved`, the session manager's stop record), with
+no ROM and so without rule 1, and lets its own last lifetime notification per app answer first, to tell whether ANY game
+runs. At the two launch guards a wrong "running" skips the whole launch gate — the migration block, the launch target,
+tracking setup, the core-change confirmation, the offline drift check, the pre-launch sync and conflict resolution.
 
 1. **An active session answers "running"**, whatever the store says: the store has been measured reporting nothing with
    the game still up ([Surviving a JS-context rebuild mid-session](#surviving-a-js-context-rebuild-mid-session)).
