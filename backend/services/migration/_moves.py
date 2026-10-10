@@ -10,12 +10,26 @@ run. A taken destination is decided by the ``conflict_strategy`` the user chose.
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+from lib.partial_failure import PartialFailure
 
 if TYPE_CHECKING:
     import logging
 
     from services.protocols import MigrationFileStore
+
+
+@dataclass(frozen=True)
+class MigrationIncomplete(PartialFailure):
+    """A home migration in which some moves failed; the others are done."""
+
+    roms_moved: int
+    bios_moved: int
+    saves_moved: int
+    missing_count: int
+    errors: list[str]
 
 
 class FileMover:
@@ -107,14 +121,16 @@ class FileMover:
             self._logger.info(f"Migration skip (exists): {new_path}")
 
     @staticmethod
-    def build_migration_result(counts, errors):
-        """Build the result dict from migration counts and errors.
+    def build_migration_result(counts, errors) -> dict[str, Any] | MigrationIncomplete:
+        """Build the run's answer from migration counts and errors.
 
-        ``missing`` (records whose file was found at no known location — see
-        :meth:`migrate_single_item`) is surfaced additively in both the message
-        and the ``missing_count`` field so a chained migration reports lost
-        files honestly instead of a bare "No files to migrate" success; it does
-        not, on its own, make the migration a failure (only ``errors`` do).
+        A run with errors answers :class:`MigrationIncomplete`, a clean one the
+        success dict; both carry the same counts. ``missing`` (records whose
+        file was found at no known location — see :meth:`migrate_single_item`)
+        is surfaced additively in both the message and the ``missing_count``
+        field so a chained migration reports lost files honestly instead of a
+        bare "No files to migrate" success; it does not, on its own, make the
+        migration a failure (only ``errors`` do).
         """
         parts = []
         if counts["rom"]:
@@ -129,8 +145,17 @@ class FileMover:
             msg += f"; {missing} file(s) missing (not found at any known location)"
         if errors:
             msg += f" ({len(errors)} error(s))"
+            return MigrationIncomplete(
+                reason="migration_incomplete",
+                message=msg,
+                roms_moved=counts["rom"],
+                bios_moved=counts["bios"],
+                saves_moved=counts["save"],
+                missing_count=missing,
+                errors=errors,
+            )
         return {
-            "success": len(errors) == 0,
+            "success": True,
             "message": msg,
             "roms_moved": counts["rom"],
             "bios_moved": counts["bios"],

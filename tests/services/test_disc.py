@@ -21,6 +21,7 @@ from fakes.uow_open_probe import record_uow_open
 from domain.disc_selection import Disc
 from domain.rom import Rom
 from domain.rom_install import RomInstall
+from lib.errors import Refused
 from services.disc import DiscService, DiscServiceConfig
 
 _ROM_DIR = "/roms/psx/game"
@@ -211,41 +212,57 @@ class TestSelectDisc:
     def test_invalid_filename_fails_and_writes_nothing(self, event_loop, service, uow):
         _seed_rom(uow, rom_id=1, selected_disc=None)
         _seed_install(uow, rom_id=1, rom_dir=_ROM_DIR)
-        result = event_loop.run_until_complete(service.select_disc(1, "Game (Disc 9).cue"))
-        assert result == {
-            "success": False,
-            "reason": "not_found",
-            "message": "'Game (Disc 9).cue' is not a disc of ROM 1",
-        }
+        selecting = service.select_disc(1, "Game (Disc 9).cue")
+
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(selecting)
+
+        assert (refused.value.reason, refused.value.message) == (
+            "not_found",
+            "'Game (Disc 9).cue' is not a disc of ROM 1",
+        )
+        assert refused.value.details == {}
         with uow_unwrap(uow) as u:
             assert u.roms.get(1).selected_disc is None
 
     def test_not_installed_fails(self, event_loop, service, uow):
         _seed_rom(uow, rom_id=1)  # no install record
-        result = event_loop.run_until_complete(service.select_disc(1, _DISC2))
-        assert result["success"] is False
-        assert result["reason"] == "not_installed"
-        assert "message" in result
+        selecting = service.select_disc(1, _DISC2)
+
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(selecting)
+
+        assert refused.value.reason == "not_installed"
+        assert refused.value.message
 
     def test_single_file_install_fails_not_installed(self, event_loop, service, uow):
         _seed_rom(uow, rom_id=1)
         _seed_install(uow, rom_id=1, rom_dir=None)
-        result = event_loop.run_until_complete(service.select_disc(1, _DISC2))
-        assert result["success"] is False
-        assert result["reason"] == "not_installed"
+        selecting = service.select_disc(1, _DISC2)
+
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(selecting)
+
+        assert refused.value.reason == "not_installed"
 
     def test_not_multi_disc_fails_unsupported(self, event_loop, service, uow, disc_resolver):
         disc_resolver.set_discs(_ROM_DIR, [_multi_disc_list()[0]])  # only one disc
         _seed_rom(uow, rom_id=1)
         _seed_install(uow, rom_id=1, rom_dir=_ROM_DIR)
-        result = event_loop.run_until_complete(service.select_disc(1, _DISC1))
-        assert result["success"] is False
-        assert result["reason"] == "unsupported"
+        selecting = service.select_disc(1, _DISC1)
+
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(selecting)
+
+        assert refused.value.reason == "unsupported"
 
     def test_unknown_rom_fails(self, event_loop, service):
-        result = event_loop.run_until_complete(service.select_disc(999, _DISC1))
-        assert result["success"] is False
-        assert result["reason"] == "not_installed"
+        selecting = service.select_disc(999, _DISC1)
+
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(selecting)
+
+        assert refused.value.reason == "not_installed"
 
 
 # ── transaction boundary ───────────────────────────────────────────────
@@ -344,12 +361,13 @@ class TestTransactionBoundary:
         _seed_rom(uow, rom_id=1, selected_disc=None)
         _seed_install(uow, rom_id=1, rom_dir=_ROM_DIR)
         _retire_between_transactions(uow, disc_resolver, 1, drop_rom=True)
+        selecting = service.select_disc(1, _DISC2)
 
-        result = event_loop.run_until_complete(service.select_disc(1, _DISC2))
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(selecting)
 
-        assert result["success"] is False
-        assert result["reason"] == "not_installed"
-        assert "message" in result
+        assert refused.value.reason == "not_installed"
+        assert refused.value.message
 
     def test_bake_resolves_over_the_install_the_discs_were_enumerated_from(
         self, event_loop, service, uow, disc_resolver
@@ -369,11 +387,12 @@ class TestTransactionBoundary:
         _seed_rom(uow, rom_id=1, selected_disc=None)
         _seed_install(uow, rom_id=1, rom_dir=_ROM_DIR)
         _retire_between_transactions(uow, disc_resolver, 1, drop_rom=False)
+        selecting = service.select_disc(1, _DISC2)
 
-        result = event_loop.run_until_complete(service.select_disc(1, _DISC2))
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(selecting)
 
-        assert result["success"] is False
-        assert result["reason"] == "not_installed"
+        assert refused.value.reason == "not_installed"
         # Nothing was pinned on the surviving row.
         with uow_unwrap(uow) as u:
             assert u.roms.get(1).selected_disc is None
@@ -386,11 +405,12 @@ class TestTransactionBoundary:
         _seed_rom(uow, rom_id=1, selected_disc=None)
         _seed_install(uow, rom_id=1, rom_dir=_ROM_DIR)
         _unfold_install_between_transactions(uow, disc_resolver, 1)
+        selecting = service.select_disc(1, _DISC2)
 
-        result = event_loop.run_until_complete(service.select_disc(1, _DISC2))
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(selecting)
 
-        assert result["success"] is False
-        assert result["reason"] == "not_installed"
+        assert refused.value.reason == "not_installed"
         with uow_unwrap(uow) as u:
             assert u.roms.get(1).selected_disc is None
 
@@ -422,11 +442,13 @@ class TestTheDiscSelectionLease:
 
         assert seen == [["select_disc"]]
 
-    def test_a_refused_pick_carries_none(self, event_loop, service, prune_conflicts):
-        result = event_loop.run_until_complete(service.select_disc(1, _DISC2))
+    def test_a_refused_pick_takes_no_lease(self, event_loop, service, prune_conflicts):
+        selecting = service.select_disc(1, _DISC2)
 
-        assert result["reason"] == "not_installed"
-        assert "prune_lease_token" not in result
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(selecting)
+
+        assert refused.value.reason == "not_installed"
         assert prune_conflicts.conflicting_operations == 0
 
     @pytest.mark.parametrize(

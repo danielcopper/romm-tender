@@ -763,7 +763,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     successBody: string,
     admission: PruneLeaseAdmission,
   ) => {
-    await withPruneLease(result.prune_lease_token, "Core selection", async (signal) => {
+    await withPruneLease(result.success ? result.prune_lease_token : undefined, "Core selection", async (signal) => {
       if (!result.success) {
         showToast(result.message || "Failed to set core");
         return;

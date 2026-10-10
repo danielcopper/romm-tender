@@ -1873,6 +1873,7 @@ describe("Library › Platforms", () => {
     it("shows a refused switch instead of leaving the old label standing", async () => {
       vi.mocked(backend.setSystemCore).mockResolvedValue({
         success: false,
+        reason: "not_installed",
         message: "RetroDECK is not installed",
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
@@ -1916,7 +1917,7 @@ describe("Library › Platforms", () => {
           { slug: "n64", name: "N64", count: 4, reachable_count: 4 },
         ],
       });
-      let finish: (v: { success: boolean; rebake_items: never[] }) => void = () => {};
+      let finish: (v: { success: true; rebake_items: never[] }) => void = () => {};
       vi.mocked(backend.setSystemCore).mockReturnValue(
         new Promise((resolve) => {
           finish = resolve;
@@ -1951,7 +1952,11 @@ describe("Library › Platforms", () => {
     it("takes back a failed switch's line when the next one succeeds", async () => {
       // The clearing half of the scoped clear. Without it the pick's own
       // "Switching to …" line stands under a switch that is over.
-      vi.mocked(backend.setSystemCore).mockResolvedValueOnce({ success: false, message: "RetroDECK is not installed" });
+      vi.mocked(backend.setSystemCore).mockResolvedValueOnce({
+        success: false,
+        reason: "not_installed",
+        message: "RetroDECK is not installed",
+      });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
       await openCoreMenu(container);
@@ -2002,7 +2007,11 @@ describe("Library › Platforms", () => {
     });
 
     it("gives the page back when the switch is refused", async () => {
-      vi.mocked(backend.setSystemCore).mockResolvedValue({ success: false, message: "RetroDECK is not installed" });
+      vi.mocked(backend.setSystemCore).mockResolvedValue({
+        success: false,
+        reason: "not_installed",
+        message: "RetroDECK is not installed",
+      });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
       await openCoreMenu(container);
@@ -2027,7 +2036,7 @@ describe("Library › Platforms", () => {
         ],
       });
       mockFirmware([firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })]);
-      let finish: (v: { success: boolean; rebake_items: never[] }) => void = () => {};
+      let finish: (v: { success: true; rebake_items: never[] }) => void = () => {};
       vi.mocked(backend.setSystemCore).mockReturnValue(
         new Promise((resolve) => {
           finish = resolve;

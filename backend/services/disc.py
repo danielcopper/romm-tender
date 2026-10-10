@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.disc_selection import default_descriptor
 from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
-from lib.list_result import ErrorCode
+from lib.errors import NotInstalled, Refused
 
 if TYPE_CHECKING:
     import asyncio
@@ -125,10 +125,10 @@ class DiscService:
         ``filename is None`` clears the pin so the ROM follows the default (the
         ``.m3u`` when ``file_path`` is one, else disc 1). A non-``None``
         *filename* must name one of the enumerated discs — an unknown filename is
-        a hard ``not_found`` failure and **nothing is written**. The ROM must be a
-        multi-disc install: an unknown/uninstalled ROM, a single-file install,
-        or a folder with fewer than two discs returns the canonical failure shape
-        (``not_installed`` / ``unsupported``) and writes nothing. On success the
+        refused with ``not_found`` and **nothing is written**. The ROM must be a
+        multi-disc install: an unknown/uninstalled ROM or a single-file install
+        is refused with ``not_installed``, a folder with fewer than two discs
+        with ``unsupported``, and nothing is written. On success the
         pick is persisted via the pin-only ``set_selected_disc`` write path and
         the response carries the freshly-baked ``launch_options`` (the disc's path
         folded over the ROM's full active core) for the frontend to confirm-set on
@@ -137,8 +137,7 @@ class DiscService:
         """
         async with self._rules.hold("select_disc", update=True, migration=True, prune=True):
             result = await self._loop.run_in_executor(None, self._select_disc_io, rom_id, filename)
-            if result.get("success") and result.get("launch_options") is not None:
-                result["prune_lease_token"] = await self._rules.acquire_lease("disc_selection")
+            result["prune_lease_token"] = await self._rules.acquire_lease("disc_selection")
             return result
 
     def _select_disc_io(self, rom_id: int, filename: str | None) -> dict[str, Any]:
@@ -146,29 +145,17 @@ class DiscService:
             rom = uow.roms.get(rom_id)
             install = uow.rom_installs.get(rom_id)
             if rom is None or install is None or install.rom_dir is None:
-                return {
-                    "success": False,
-                    "reason": "not_installed",
-                    "message": f"ROM {rom_id} is not installed as a multi-disc ROM",
-                }
+                raise NotInstalled(f"ROM {rom_id} is not installed as a multi-disc ROM")
         # Enumerate and validate between the two transactions: enumeration lists
         # the install directory, and a UoW holds SQLite's BEGIN IMMEDIATE write
         # lock, so file I/O inside one stalls every other writer in the backend.
         discs = self._disc_resolver.enumerate_discs(install)
         if len(discs) < 2:
-            return {
-                "success": False,
-                "reason": ErrorCode.UNSUPPORTED.value,
-                "message": f"ROM {rom_id} is not a multi-disc ROM",
-            }
+            raise Refused("unsupported", f"ROM {rom_id} is not a multi-disc ROM")
         if filename is not None and filename not in {disc.filename for disc in discs}:
-            # B4: hard-fail BEFORE any write — never pin a disc no enumeration
+            # Refuse BEFORE any write — never pin a disc no enumeration
             # can resolve to a launchable path.
-            return {
-                "success": False,
-                "reason": ErrorCode.NOT_FOUND.value,
-                "message": f"'{filename}' is not a disc of ROM {rom_id}",
-            }
+            raise Refused("not_found", f"'{filename}' is not a disc of ROM {rom_id}")
         with self._uow_factory() as uow:
             # The row is re-read because the pick is now decided against a
             # snapshot: a background sync, a finishing download or the
@@ -189,11 +176,7 @@ class DiscService:
             rom = uow.roms.get(rom_id)
             current_install = uow.rom_installs.get(rom_id)
             if rom is None or current_install is None or current_install.rom_dir is None:
-                return {
-                    "success": False,
-                    "reason": "not_installed",
-                    "message": f"ROM {rom_id} is not installed as a multi-disc ROM",
-                }
+                raise NotInstalled(f"ROM {rom_id} is not installed as a multi-disc ROM")
             if filename is None:
                 rom.clear_selected_disc()
             else:

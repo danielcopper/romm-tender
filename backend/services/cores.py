@@ -26,7 +26,7 @@ from domain.shortcut_data import (
     build_launch_options,
     resolve_emulator_invocation,
 )
-from lib.list_result import ErrorCode
+from lib.errors import Refused
 
 if TYPE_CHECKING:
     import asyncio
@@ -218,11 +218,21 @@ class CoreService:
         reverting to disc 1 / the m3u (a single-disc ROM bakes its ``file_path``
         unchanged).
         """
+        platform_cores = self._settings["platform_cores"]
+        previous = platform_cores.get(platform_slug)
         if core_label:
-            self._settings["platform_cores"][platform_slug] = core_label
+            platform_cores[platform_slug] = core_label
         else:
-            self._settings["platform_cores"].pop(platform_slug, None)
-        self._settings_persister.save_settings()
+            platform_cores.pop(platform_slug, None)
+        try:
+            self._settings_persister.save_settings()
+        except OSError as e:
+            if previous is None:
+                platform_cores.pop(platform_slug, None)
+            else:
+                platform_cores[platform_slug] = previous
+            self._logger.error(f"Failed to set system core: {e}")
+            raise Refused("save_failed", f"Save failed: {e}") from e
 
         # Snapshot the installed+bound, non-overridden (rom, install) pairs in one
         # short read UoW, then close it before resolving each ROM's active core:
@@ -267,21 +277,17 @@ class CoreService:
         ROMs) is re-baked: the response carries ``rebake_items`` (a list of
         ``{"app_id", "launch_options"}``) the frontend confirm-sets on the live
         Steam shortcuts, and a ``system_core`` lease in ``prune_lease_token``
-        for those writes when there is any to make. On any failure (settings
-        write error, fan-out error) returns
-        ``{"success": False, "reason": ..., "message": ...}``.
+        for those writes when there is any to make. A settings file that cannot
+        be written refuses with ``save_failed`` and leaves the previous selection
+        in effect; a failure after the write keeps the new one.
         """
         async with self._rules.hold("set_system_core", update=True, migration=True, prune=True):
-            try:
-                rebake_items = await self._loop.run_in_executor(
-                    None,
-                    self._set_system_core_io,
-                    platform_slug,
-                    core_label,
-                )
-            except Exception as e:
-                self._logger.error(f"Failed to set system core: {e}")
-                return {"success": False, "reason": ErrorCode.UNKNOWN.value, "message": str(e)}
+            rebake_items = await self._loop.run_in_executor(
+                None,
+                self._set_system_core_io,
+                platform_slug,
+                core_label,
+            )
             result: dict[str, Any] = {"success": True, "rebake_items": rebake_items}
             if rebake_items:
                 result["prune_lease_token"] = await self._rules.acquire_lease("system_core")
@@ -293,10 +299,10 @@ class CoreService:
         The picked LABEL is resolved to a bakeable :class:`EmulatorInvocation`
         FIRST (against the emulators ES-DE lists for the ROM's platform, libretro
         OR standalone). A label that does not resolve to a bakeable emulator —
-        unknown, ``needs_setup``, or otherwise un-bakeable — is a hard failure:
-        the canonical ``{"success": False, "reason": ..., "message": ...}`` shape
-        is returned and **nothing is written**, so the DB never holds a label no
-        consumer can bake. On success the pin is written via the Unit-of-Work and
+        unknown, ``needs_setup``, or otherwise un-bakeable — is refused with
+        ``core_unavailable`` and **nothing is written**, so the DB never holds a
+        label no consumer can bake; an unknown ROM is refused with
+        ``not_found``. On success the pin is written via the Unit-of-Work and
         the response carries the freshly-baked ``launch_options`` (the ``-e``
         override form) and ``app_id`` for the frontend to confirm-set on the live
         Steam shortcut. When the ROM is not installed or not bound to a shortcut
@@ -314,11 +320,7 @@ class CoreService:
         with self._uow_factory() as uow:
             rom = uow.roms.get(rom_id)
             if rom is None:
-                return {
-                    "success": False,
-                    "reason": "not_found",
-                    "message": f"ROM {rom_id} is not tracked",
-                }
+                raise Refused("not_found", f"ROM {rom_id} is not tracked")
             platform_slug = rom.platform_slug
             install = uow.rom_installs.get(rom_id)
         # Resolve the label between the two transactions: the platform's system
@@ -328,13 +330,9 @@ class CoreService:
         options = self._emulator_options(self._platform_systems.rom_system(platform_slug, install))
         invocation = label_to_invocation(options["options"], label)
         if invocation is None:
-            # Hard-fail BEFORE any write — never persist a label that does not
+            # Refuse BEFORE any write — never persist a label that does not
             # resolve to a bakeable emulator (unknown / needs_setup / un-bakeable).
-            return {
-                "success": False,
-                "reason": "core_unavailable",
-                "message": f"Emulator '{label}' is not available for {platform_slug}",
-            }
+            raise Refused("core_unavailable", f"Emulator '{label}' is not available for {platform_slug}")
         with self._uow_factory() as uow:
             # The row is re-read because the label was resolved against a
             # snapshot: a background sync, a finishing download or the
@@ -342,11 +340,7 @@ class CoreService:
             # transactions, each on its own connection.
             rom = uow.roms.get(rom_id)
             if rom is None:
-                return {
-                    "success": False,
-                    "reason": "not_found",
-                    "message": f"ROM {rom_id} is not tracked",
-                }
+                raise Refused("not_found", f"ROM {rom_id} is not tracked")
             if rom.platform_slug != platform_slug:
                 # A re-sync rewrites platform_slug (it is a synced-identity
                 # column). The label was validated against the platform the
@@ -357,11 +351,9 @@ class CoreService:
                 # read this split exists to keep out of the transaction, and on
                 # a label valid for both platforms "unavailable" is simply
                 # false — the user retries and it works.
-                return {
-                    "success": False,
-                    "reason": "core_unavailable",
-                    "message": f"Emulator '{label}' was not verified for {rom.platform_slug}; try again",
-                }
+                raise Refused(
+                    "core_unavailable", f"Emulator '{label}' was not verified for {rom.platform_slug}; try again"
+                )
             # Enforce the aggregate invariant (strip / reject blank) via the
             # verb method, then persist the resulting label through the pin-only
             # write path (never the sync UPSERT).
@@ -384,11 +376,11 @@ class CoreService:
         per-platform core, the recomputed command bakes the ROM's FULL active core
         (the ``-e`` override form, or the plain launch when the platform resolves
         to ``(None, None)``) — never an unconditional plain launch. Clearing is
-        always valid — there is no label to resolve. When the ROM is unknown the
-        canonical failure shape is returned; when it is uninstalled or unbound the
-        NULL still lands and ``launch_options``/``app_id`` are ``None``. A live
-        update carries a ``game_core`` lease in ``prune_lease_token`` for the
-        frontend's write.
+        always valid — there is no label to resolve. An unknown ROM is refused
+        with ``not_found``; when it is uninstalled or unbound the NULL still
+        lands and ``launch_options``/``app_id`` are ``None``. A live update
+        carries a ``game_core`` lease in ``prune_lease_token`` for the frontend's
+        write.
         """
         async with self._rules.hold("clear_game_core", update=True, migration=True, prune=True):
             result = await self._loop.run_in_executor(None, self._clear_game_core_io, rom_id)
@@ -397,18 +389,14 @@ class CoreService:
 
     async def _lease_live_update(self, result: dict[str, Any]) -> None:
         """Put a ``game_core`` lease on a per-game write the frontend applies to a live shortcut."""
-        if result.get("success") and result.get("launch_options") is not None and result.get("app_id") is not None:
+        if result["launch_options"] is not None and result["app_id"] is not None:
             result["prune_lease_token"] = await self._rules.acquire_lease("game_core")
 
     def _clear_game_core_io(self, rom_id: int) -> dict[str, Any]:
         with self._uow_factory() as uow:
             rom = uow.roms.get(rom_id)
             if rom is None:
-                return {
-                    "success": False,
-                    "reason": "not_found",
-                    "message": f"ROM {rom_id} is not tracked",
-                }
+                raise Refused("not_found", f"ROM {rom_id} is not tracked")
             rom.clear_emulator_override()
             uow.roms.set_emulator_override(rom_id, rom.emulator_override)
             install = uow.rom_installs.get(rom_id)
