@@ -167,6 +167,22 @@ export interface LaunchGateOps {
 }
 
 /**
+ * Step 3 of {@link runLaunchGate}: the verdict on the source that would start
+ * the game, or `null` to go on. Where that could not be checked, the user
+ * decides; Cancel bails silently.
+ */
+async function startingSourceVerdict(ops: LaunchGateOps): Promise<GateVerdict | null> {
+  const source = await ops.readStartingSource();
+  if (!source.checked) {
+    return (await ops.confirmUncheckedStartingSource()) ? null : { decision: "abort" };
+  }
+  if (source.switchedOff !== null) {
+    return { decision: "block", reason: "source_switched_off", source: source.switchedOff };
+  }
+  return null;
+}
+
+/**
  * Run the pre-launch gate for `appId` / `romId` and return a verdict. Shows no
  * UI — the caller acts on the verdict.
  *
@@ -209,15 +225,10 @@ export async function runLaunchGate(_appId: number, _romId: number, ops: LaunchG
 
     // 3. The source that would start the game is switched off — the start
     //    would go through it anyway. Block before the save-sync work, for the
-    //    same reason as step 2. Where that could not be checked, the user
-    //    decides; Cancel bails silently.
-    const source = await ops.readStartingSource();
-    if (!source.checked) {
-      if (!(await ops.confirmUncheckedStartingSource())) {
-        return { decision: "abort" };
-      }
-    } else if (source.switchedOff !== null) {
-      return { decision: "block", reason: "source_switched_off", source: source.switchedOff };
+    //    same reason as step 2.
+    const sourceVerdict = await startingSourceVerdict(ops);
+    if (sourceVerdict !== null) {
+      return sourceVerdict;
     }
 
     // 4. Save-slot tracking setup. "abort" means the user saw setup UI and
