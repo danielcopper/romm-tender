@@ -1460,7 +1460,7 @@ class TestOnePlatformsOwnEntry:
 
     @pytest.mark.asyncio
     async def test_it_does_not_read_every_rom_to_answer_has_games(self, firmware):
-        """Which platforms are synced is one repository read, not a scan of the library (#2256)."""
+        """Which platforms are synced is one repository read, not a scan of the library."""
         _seed_rom(firmware.uow, rom_id=42, platform_slug="dc", app_id=1)
         _seed_rom(firmware.uow, rom_id=43, platform_slug="psx", app_id=None)
         fw = self._service(firmware, core_info=_test_core_info())

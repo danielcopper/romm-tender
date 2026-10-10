@@ -1189,9 +1189,9 @@ Format: **invariant** — tier — enforced by.
   whole-page tests compose through a local helper that would reproduce a composition bug rather than catch it. **The
   rule spans three frontend modules and one backend split, and nothing joins them.** `services/firmware/status.py`
   answers `get_firmware_status` (which platforms the page can speak for) and `get_platform_firmware_status` (one
-  platform's whole entry — 199-314 ms each, 5.3 s across the reference library's 25 platforms, against 171 ms for the
-  overview, measured at emu-atlas 0.22); `usePlatformsPage` owns the walk, the per-slug ordering counter and the
-  four-valued `firmwareState`; `PlatformsTab` draws the dot; `PlatformDetail` words the pane. Every failure here is
+  platform's whole entry, which pays a live per-system reading — measured in
+  [qam-panel.md, "Library"](qam-panel.md#library)); `usePlatformsPage` owns the walk, the per-slug ordering counter and
+  the four-valued `firmwareState`; `PlatformsTab` draws the dot; `PlatformDetail` words the pane. Every failure here is
   silent and looks like an answer. A state-bearing field creeping back onto the overview payload gets rendered over a
   platform nobody has asked about yet. A fifth rendering path reading `firmware === null` instead of the state says
   "nothing could be established" about most of the list for the first seconds of every visit — which is the confusion

@@ -240,7 +240,7 @@ class TestIteration:
 
 
 class TestBoundPlatformSlugs:
-    """``get_bound_platform_slugs`` — the platforms the firmware overview calls synced (#2256).
+    """``get_bound_platform_slugs`` — the platforms the firmware overview calls synced.
 
     ``platform_slug`` is ``TEXT NOT NULL`` (``001_initial.sql``), so a NULL slug
     cannot be stored; the empty slug can, and is left out.

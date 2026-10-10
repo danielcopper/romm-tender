@@ -14,12 +14,12 @@ emulators ES-DE offers for one system. Within a platform the two surfaces share
 every answer: the pane and its games read one catalogue, one row set, one
 verdict.
 
-That reading costs 59-175 ms per system on the reference machine at emu-atlas
-0.22 and a whole answer for one platform 199-314 ms, so the whole-library
-overview does not pay it at all: it answers WHICH platforms the page can speak
-for, and each platform's state is asked for on its own. The caller decides the
-order, because it is the one that knows which row the reader is looking at and
-when to stop.
+That reading is a live reading of the machine, too costly to pay for every
+platform at once (measured in ``docs/architecture/qam-panel.md``, "Library"), so
+the whole-library overview does not pay it at all: it answers WHICH platforms
+the page can speak for, and each platform's state is asked for on its own. The
+caller decides the order, because it is the one that knows which row the reader
+is looking at and when to stop.
 
 The doubt is narrower still, and is narrowed to ONE emulator: the pick the
 platform launches with. An emulator ES-DE also offers, that nothing could be read
@@ -374,11 +374,12 @@ class FirmwareStatusReader:
         ]
 
     def _read_synced_slugs(self) -> set[str]:
-        """Return platform slugs with at least one ROM bound to a Steam shortcut.
+        """The platforms the firmware page calls synced: those with a ROM still bound to a Steam shortcut.
 
-        A bound ROM (``shortcut_app_id`` set) is one that is currently in the
-        synced library, covering both platform- and collection-sync. Deselected
-        platforms get unbound on the next sync (ADR-0007) and drop out.
+        A ROM stays bound while the synced library holds it, through its platform
+        or through an enabled collection, so a deselected platform drops out on
+        the next sync unless a collection still lists one of its games
+        (ADR-0007).
         """
         with self._uow_factory() as uow:
             return uow.roms.get_bound_platform_slugs()
