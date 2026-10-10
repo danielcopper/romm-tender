@@ -22,7 +22,6 @@ from _vendor.atlas.machine import RealMachine
 from adapters.atlas_zstd import STANDARD_LIBRARY_CODEC, VENDORED_CODEC, register_zstd_codec
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
     from pathlib import Path
 
 ON_PYTHON_3_13 = sys.version_info[:2] == (3, 13)
@@ -42,13 +41,6 @@ _SEALED_APPIMAGE = base64.b64decode(
     "AAAAACAAKLUv/SAovQAAosEDCfAZAxuJEhI1Bf/FP38FAQBkEAbcAQAAAAAAAASAAAAAAAYCAAAAAAAA"
 )
 _CATALOGUE_INSIDE = "resources/systems/linux/es_systems.xml"
-
-
-@pytest.fixture(autouse=True)
-def _no_registration() -> Iterator[None]:
-    atlas.register_zstd_provider(None)
-    yield
-    atlas.register_zstd_provider(None)
 
 
 @pytest.fixture
@@ -112,6 +104,17 @@ class TestWhereTheVendoredCopyDoesNotLoad:
 
         assert atlas.zstd_provider() is None
         assert line.startswith("atlas zstd codec: none — _vendor.backports.zstd does not load (")
+        assert line.endswith("); a sealed catalogue stays sealed")
+
+    def test_a_provider_the_resolver_finds_by_itself_is_still_named(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # A ``backports.zstd`` installed system-wide is one the resolver's own
+        # probe imports.
+        monkeypatch.setitem(sys.modules, "backports.zstd", types.SimpleNamespace(decompress=lambda data: data))
+
+        line = register_zstd_codec()
+
+        assert atlas.zstd_provider() == atlas.ZstdProvider("backports.zstd", False)
+        assert line == "atlas zstd codec: backports.zstd (atlas's own)"
 
     def test_a_zstd_appimage_stays_sealed(self, sealed_appimage: str) -> None:
         # ``capability-missing`` is the read the resolver answers
