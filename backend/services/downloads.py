@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from models.state import InstalledRomEntry
 
     from domain.platform_system import PlatformSystem
+    from lib.partial_failure import PartialFailure
     from services.protocols import (
         Clock,
         ConflictRules,
@@ -316,10 +317,10 @@ class DownloadService:
         ``start_download``; ``resume_download`` validates the paused entry before calling here.
 
         Holds the ROM's in-progress claim from the first step and gives it back on every way out but a started
-        download, a cancelled start included, so the ROM is never stuck "Already downloading". Of what the steps
-        raise, an ``OSError`` (a disk that cannot be read or prepared) is refused here with ``download_start_failed``;
-        a RomM error and a refusal — RetroDECK's folder refusal among them — pass on unchanged, and anything else is
-        a bug.
+        download, a cancelled start included, so the ROM is never stuck "Already downloading". The gate's partial
+        failure is the answer as it came. Of what the steps raise, an ``OSError`` (a disk that cannot be read or
+        prepared) is refused here with ``download_start_failed``; a RomM error and a refusal — RetroDECK's folder
+        refusal and the gate's among them — pass on unchanged, and anything else is a bug.
         """
         self._download_in_progress.add(rom_id)
         try:
@@ -363,15 +364,13 @@ class DownloadService:
             checked_path = target_path
             if is_multi_file_download(rom_detail):
                 checked_path = os.path.join(roms_dir, self._resolve_safe_extract_dir_name(rom_detail))
-            occupied = await self._target_gate(
-                rom_detail, checked_path, replace=replace_existing, resume=resume, **answer
-            )
+            gated = await self._target_gate(rom_detail, checked_path, replace=replace_existing, resume=resume, **answer)
         except OSError as e:
             self._logger.error(f"Failed to prepare download for ROM {rom_id}: {e}")
             raise Refused("download_start_failed", _START_FAILED_MESSAGE) from e
-        if occupied is not None:
+        if gated is not None:
             self._download_in_progress.discard(rom_id)
-            return occupied
+            return gated
 
         # At most one downloaded version per shortcut binding (#1298): strip a
         # sibling install bound to this shortcut (or unbound) before this one
@@ -458,14 +457,14 @@ class DownloadService:
         """Return the detached task whose lifetime owns this ROM's install write."""
         return self._download_tasks.get(int(rom_id))
 
-    async def _retain_started_task(self, result: dict[str, Any], rom_id: int, label: str) -> None:
+    async def _retain_started_task(self, result: dict[str, Any] | PartialFailure, rom_id: int, label: str) -> None:
         """Hold an operation named *label* for the task a successful start or resume left running.
 
         Called inside that call's own ``hold``, so no cleanup can start between
         the two operations; the task's ``download_complete`` lease is taken
         while this one still holds.
         """
-        task = self.task_for_rom(rom_id) if result.get("success") else None
+        task = self.task_for_rom(rom_id) if isinstance(result, dict) else None
         if task is not None:
             await self._rules.retain(task, label)
 

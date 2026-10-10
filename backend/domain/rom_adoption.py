@@ -12,6 +12,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
+from domain.refusal import NamedDomainRefused
 from domain.rom_candidates import DIR, FILE, LINK, Kind
 
 # RomM publishes CRC32, MD5 and SHA-1 side by side — per file and per archive
@@ -22,8 +23,6 @@ from domain.rom_candidates import DIR, FILE, LINK, Kind
 # skipped — it costs the same read pass as MD5 and buys nothing here, so a
 # second preference tier would only be a second thing to keep in sync.
 _DIGEST_PREFERENCE: tuple[tuple[str, str], ...] = (("md5", "md5_hash"), ("crc32", "crc_hash"))
-
-_TARGET_OCCUPIED = "target_occupied"
 
 # How each kind is named in the one-line message. The kindless case is deliberately
 # vague: Tender has looked and has no word for what is there, and guessing one
@@ -339,17 +338,8 @@ def unadoptable_reason(kind: Kind | None) -> str:
     )
 
 
-def occupied_target_refusal(
-    *,
-    path: str,
-    kind: Kind | None,
-    size_bytes: int,
-    modified_at: float,
-    incoming_name: str,
-    incoming_size: int,
-    served_dir: bool,
-) -> dict[str, Any]:
-    """The refusal a download returns when its target path is already taken.
+class TargetOccupied(NamedDomainRefused):
+    """A download that stopped because its target path is already taken.
 
     Carries both sides of the comparison plus the verdict on their sizes, so the
     dialog can state whether they match rather than printing two numbers and
@@ -362,21 +352,33 @@ def occupied_target_refusal(
     it, so relating that number to the server's would be a comparison of two
     unrelated things dressed as evidence.
     """
-    return {
-        "success": False,
-        "reason": _TARGET_OCCUPIED,
-        "message": f"{_A_KIND[kind]} named '{os.path.basename(path)}' is already in place",
-        "existing": {
-            "name": os.path.basename(path),
-            "path": path,
-            "kind": kind,
-            "size_bytes": size_bytes,
-            "modified_at": modified_at,
-        },
-        "incoming": {"name": incoming_name, "size_bytes": incoming_size},
-        "sizes_match": sizes_agree(size_bytes, incoming_size) if kind in (FILE, DIR) else None,
-        "adoptable": adoptable_content(kind, served_dir=served_dir),
-    }
+
+    reason = "target_occupied"
+
+    def __init__(
+        self,
+        *,
+        path: str,
+        kind: Kind | None,
+        size_bytes: int,
+        modified_at: float,
+        incoming_name: str,
+        incoming_size: int,
+        served_dir: bool,
+    ) -> None:
+        super().__init__(
+            f"{_A_KIND[kind]} named '{os.path.basename(path)}' is already in place",
+            existing={
+                "name": os.path.basename(path),
+                "path": path,
+                "kind": kind,
+                "size_bytes": size_bytes,
+                "modified_at": modified_at,
+            },
+            incoming={"name": incoming_name, "size_bytes": incoming_size},
+            sizes_match=sizes_agree(size_bytes, incoming_size) if kind in (FILE, DIR) else None,
+            adoptable=adoptable_content(kind, served_dir=served_dir),
+        )
 
 
 def compare_manifest(

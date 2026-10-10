@@ -2,17 +2,18 @@
 
 from typing import ClassVar
 
+from domain.refusal import NamedDomainRefused
 from domain.rom_adoption import (
     DigestRequest,
     LocalFile,
     LocalMember,
     ServerFile,
     ServerMember,
+    TargetOccupied,
     adoptable_content,
     compare_manifest,
     digests_to_read,
     is_archive_name,
-    occupied_target_refusal,
     server_manifest,
     sizes_agree,
     unadoptable_reason,
@@ -33,7 +34,7 @@ def _refusal(**overrides):
         "served_dir": False,
     }
     payload.update(overrides)
-    return occupied_target_refusal(**payload)
+    return TargetOccupied(**payload)
 
 
 class TestServerManifest:
@@ -157,57 +158,57 @@ class TestSizesAgree:
 class TestOccupiedTargetRefusal:
     def test_carries_the_canonical_failure_shape(self):
         payload = _refusal()
-        assert payload["success"] is False
-        assert payload["reason"] == "target_occupied"
-        assert isinstance(payload["message"], str)
-        assert payload["message"]
-        assert "error" not in payload
-        assert "error_code" not in payload
+        assert isinstance(payload, NamedDomainRefused)
+        assert payload.reason == "target_occupied"
+        assert isinstance(payload.message, str)
+        assert payload.message
+        assert "error" not in payload.details
+        assert "error_code" not in payload.details
 
     def test_carries_both_sides_and_the_size_verdict(self):
         payload = _refusal(size_bytes=2048, incoming_size=1024)
-        assert payload["existing"] == {
+        assert payload.details["existing"] == {
             "name": "Game.sfc",
             "path": "/roms/snes/Game.sfc",
             "kind": FILE,
             "size_bytes": 2048,
             "modified_at": 1_700_000_000.0,
         }
-        assert payload["incoming"] == {"name": "Game.sfc", "size_bytes": 1024}
-        assert payload["sizes_match"] is False
+        assert payload.details["incoming"] == {"name": "Game.sfc", "size_bytes": 1024}
+        assert payload.details["sizes_match"] is False
 
     def test_names_the_kind_in_the_message(self):
-        assert _refusal(kind=DIR, path="/roms/psx/Game")["message"] == "A folder named 'Game' is already in place"
-        assert _refusal()["message"] == "A file named 'Game.sfc' is already in place"
-        assert _refusal(kind=LINK)["message"] == "A shortcut named 'Game.sfc' is already in place"
+        assert _refusal(kind=DIR, path="/roms/psx/Game").message == "A folder named 'Game' is already in place"
+        assert _refusal().message == "A file named 'Game.sfc' is already in place"
+        assert _refusal(kind=LINK).message == "A shortcut named 'Game.sfc' is already in place"
 
     def test_something_with_no_kind_is_named_as_vaguely_as_it_is_known(self):
         # Tender looked and has no word for what is there. Calling it a file
         # is the invention that let a named pipe be offered as a game.
-        assert _refusal(kind=None)["message"] == "Something named 'Game.sfc' is already in place"
+        assert _refusal(kind=None).message == "Something named 'Game.sfc' is already in place"
 
     def test_only_the_served_shape_is_adoptable(self):
-        assert _refusal()["adoptable"] is True
-        assert _refusal(kind=DIR)["adoptable"] is False
-        assert _refusal(kind=DIR, served_dir=True)["adoptable"] is True
-        assert _refusal(served_dir=True)["adoptable"] is False
+        assert _refusal().details["adoptable"] is True
+        assert _refusal(kind=DIR).details["adoptable"] is False
+        assert _refusal(kind=DIR, served_dir=True).details["adoptable"] is True
+        assert _refusal(served_dir=True).details["adoptable"] is False
 
     def test_a_link_is_never_adoptable_in_either_direction(self):
         # An install row has to be removable and the uninstall path refuses a
         # link, so this holds whatever the link resolves to.
-        assert _refusal(kind=LINK)["adoptable"] is False
-        assert _refusal(kind=LINK, served_dir=True)["adoptable"] is False
+        assert _refusal(kind=LINK).details["adoptable"] is False
+        assert _refusal(kind=LINK, served_dir=True).details["adoptable"] is False
 
     def test_something_with_no_kind_is_never_adoptable(self):
-        assert _refusal(kind=None)["adoptable"] is False
-        assert _refusal(kind=None, served_dir=True)["adoptable"] is False
+        assert _refusal(kind=None).details["adoptable"] is False
+        assert _refusal(kind=None, served_dir=True).details["adoptable"] is False
 
     def test_a_size_verdict_is_withheld_where_the_number_is_not_the_content_s(self):
         # A link's stat reports the length of the path it stores; relating that to
         # the server's byte count would dress two unrelated numbers as evidence.
-        assert _refusal(kind=LINK, size_bytes=1024, incoming_size=1024)["sizes_match"] is None
-        assert _refusal(kind=None, size_bytes=1024, incoming_size=1024)["sizes_match"] is None
-        assert _refusal(size_bytes=1024, incoming_size=1024)["sizes_match"] is True
+        assert _refusal(kind=LINK, size_bytes=1024, incoming_size=1024).details["sizes_match"] is None
+        assert _refusal(kind=None, size_bytes=1024, incoming_size=1024).details["sizes_match"] is None
+        assert _refusal(size_bytes=1024, incoming_size=1024).details["sizes_match"] is True
 
 
 class TestUnadoptableReason:

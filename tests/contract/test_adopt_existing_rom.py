@@ -21,6 +21,8 @@ from typing import Any
 
 import pytest
 
+from lib.errors import RommConnectionError
+
 from ._seed import seed_group_member, seed_rom
 
 # Every download, adoption and removal here lands in RetroDECK's folders.
@@ -209,7 +211,7 @@ async def test_adopt_refuses_when_nothing_is_there(harness):
 async def test_adopt_surfaces_a_server_failure_in_the_canonical_shape(harness):
     seed_rom(harness, _ROM_ID, platform_slug="gba")
     _place_single_file(harness)
-    harness.romm.fail_on_next(OSError("no route to host"))
+    harness.romm.fail_on_next(RommConnectionError("no route to host"))
 
     result = await harness.endpoints.adopt_existing_rom(_ROM_ID)
 
@@ -276,7 +278,7 @@ async def test_verify_reports_a_checksumless_server_as_its_own_outcome(harness):
 async def test_verify_reports_a_server_failure_as_error(harness):
     seed_rom(harness, _ROM_ID, platform_slug="gba")
     _place_single_file(harness)
-    harness.romm.fail_on_next(OSError("no route to host"))
+    harness.romm.fail_on_next(RommConnectionError("no route to host"))
 
     result = await harness.endpoints.verify_existing_content(_ROM_ID)
 

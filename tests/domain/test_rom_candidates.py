@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 
+from domain.refusal import NamedDomainRefused
 from domain.rom_candidates import (
     CANDIDATE_LIMIT,
     CRC32_MATCH,
@@ -19,15 +20,15 @@ from domain.rom_candidates import (
     LINK,
     NAME_MATCH,
     SIZE_MATCH,
+    AdoptionCandidates,
+    CandidateVanished,
     Kind,
     LocalEntry,
     LocalName,
-    candidates_refusal,
+    UnusableNamesake,
     matching_entries,
     normalize_rom_name,
     rank_candidates,
-    unusable_namesake_refusal,
-    vanished_candidate_refusal,
 )
 
 _ACCEPTED = frozenset({".gba", ".zip", ".sfc"})
@@ -407,24 +408,24 @@ class TestCandidatesRefusal:
         candidates, truncated = rank_candidates(
             (_entry("Example Quest (U).gba", size=100),), server_size=100, server_crc32="", member_crc32s={}
         )
-        refusal = candidates_refusal(
+        refusal = AdoptionCandidates(
             candidates, truncated=truncated, incoming_name="Example Quest (USA).gba", incoming_size=100
         )
-        assert refusal["success"] is False
-        assert refusal["reason"] == "adoption_candidates"
-        assert isinstance(refusal["message"], str)
-        assert refusal["message"]
-        assert "error" not in refusal
-        assert "error_code" not in refusal
+        assert isinstance(refusal, NamedDomainRefused)
+        assert refusal.reason == "adoption_candidates"
+        assert isinstance(refusal.message, str)
+        assert refusal.message
+        assert "error" not in refusal.details
+        assert "error_code" not in refusal.details
 
     def test_every_field_the_dialog_renders_crosses_the_wire(self) -> None:
         candidates, truncated = rank_candidates(
             (_entry("Example Quest (U).gba", size=100),), server_size=100, server_crc32="", member_crc32s={}
         )
-        refusal = candidates_refusal(
+        refusal = AdoptionCandidates(
             candidates, truncated=truncated, incoming_name="Example Quest (USA).gba", incoming_size=100
         )
-        assert refusal["candidates"] == [
+        assert refusal.details["candidates"] == [
             {
                 "name": "Example Quest (U).gba",
                 "path": "/roms/gba/Example Quest (U).gba",
@@ -435,62 +436,62 @@ class TestCandidatesRefusal:
                 "detail": candidates[0].detail,
             }
         ]
-        assert refusal["incoming"] == {"name": "Example Quest (USA).gba", "size_bytes": 100}
-        assert refusal["truncated"] is False
+        assert refusal.details["incoming"] == {"name": "Example Quest (USA).gba", "size_bytes": 100}
+        assert refusal.details["truncated"] is False
 
     def test_a_truncated_list_is_stated_rather_than_implied(self) -> None:
         entries = tuple(_entry(f"Game ({index:03d}).gba") for index in range(CANDIDATE_LIMIT + 1))
         candidates, truncated = rank_candidates(entries, server_size=0, server_crc32="", member_crc32s={})
-        refusal = candidates_refusal(candidates, truncated=truncated, incoming_name="Game.gba", incoming_size=0)
-        assert refusal["truncated"] is True
+        refusal = AdoptionCandidates(candidates, truncated=truncated, incoming_name="Game.gba", incoming_size=0)
+        assert refusal.details["truncated"] is True
 
 
 class TestUnusableNamesakeRefusal:
     """The namesake that cannot become this install: the other shape, or a link."""
 
     def test_the_refusal_carries_the_canonical_failure_shape(self) -> None:
-        refusal = unusable_namesake_refusal(
+        refusal = UnusableNamesake(
             (_name("Example Quest (U)", kind=DIR),),
             served_dir=False,
             incoming_name="Example Quest (USA).gba",
             incoming_size=100,
         )
-        assert refusal["success"] is False
-        assert refusal["reason"] == "unusable_namesake"
-        assert isinstance(refusal["message"], str)
-        assert refusal["message"]
-        assert "error" not in refusal
-        assert "error_code" not in refusal
+        assert isinstance(refusal, NamedDomainRefused)
+        assert refusal.reason == "unusable_namesake"
+        assert isinstance(refusal.message, str)
+        assert refusal.message
+        assert "error" not in refusal.details
+        assert "error_code" not in refusal.details
 
     def test_it_names_the_entry_and_both_shapes(self) -> None:
-        refusal = unusable_namesake_refusal(
+        refusal = UnusableNamesake(
             (_name("Example Quest (U)", kind=DIR),),
             served_dir=False,
             incoming_name="Example Quest (USA).gba",
             incoming_size=100,
         )
-        assert refusal["message"] == (
+        assert refusal.message == (
             "'Example Quest (U)' has this game's name but is a folder, and the server sends this game as a single file"
         )
-        assert refusal["existing"] == [
+        assert refusal.details["existing"] == [
             {"name": "Example Quest (U)", "path": "/roms/gba/Example Quest (U)", "kind": DIR}
         ]
-        assert refusal["served_is_dir"] is False
-        assert refusal["incoming"] == {"name": "Example Quest (USA).gba", "size_bytes": 100}
-        assert refusal["truncated"] is False
+        assert refusal.details["served_is_dir"] is False
+        assert refusal.details["incoming"] == {"name": "Example Quest (USA).gba", "size_bytes": 100}
+        assert refusal.details["truncated"] is False
 
     def test_the_other_direction_reads_the_other_way_round(self) -> None:
-        refusal = unusable_namesake_refusal(
+        refusal = UnusableNamesake(
             (_name("Example Quest (U).cue"),),
             served_dir=True,
             incoming_name="Example Quest (USA)",
             incoming_size=0,
         )
-        assert refusal["message"] == (
+        assert refusal.message == (
             "'Example Quest (U).cue' has this game's name but is a single file, "
             "and the server sends this game as a folder"
         )
-        assert refusal["served_is_dir"] is True
+        assert refusal.details["served_is_dir"] is True
 
     def test_a_link_is_named_for_what_it_is_rather_than_a_shape(self) -> None:
         # A symlink is not the wrong shape — it is the wrong *kind*, and would be
@@ -498,39 +499,39 @@ class TestUnusableNamesakeRefusal:
         # sentence must NOT end in the served shape: "…is a shortcut, and the
         # server sends this game as a single file" reads as though a folder-served
         # game would have taken the shortcut happily.
-        refusal = unusable_namesake_refusal(
+        refusal = UnusableNamesake(
             (_name("Example Quest (U).gba", kind=LINK),),
             served_dir=False,
             incoming_name="Example Quest (USA).gba",
             incoming_size=0,
         )
-        assert refusal["message"] == (
+        assert refusal.message == (
             "'Example Quest (U).gba' has this game's name but is a shortcut to somewhere else, "
             "which cannot be used as this game whatever it points at"
         )
-        assert refusal["existing"] == [
+        assert refusal.details["existing"] == [
             {"name": "Example Quest (U).gba", "path": "/roms/gba/Example Quest (U).gba", "kind": LINK}
         ]
 
     def test_several_of_one_kind_are_counted_and_still_named(self) -> None:
-        refusal = unusable_namesake_refusal(
+        refusal = UnusableNamesake(
             (_name("Example Quest (U)", kind=DIR), _name("Example Quest (E)", kind=DIR)),
             served_dir=False,
             incoming_name="Example Quest (USA).gba",
             incoming_size=0,
         )
-        assert refusal["message"] == (
+        assert refusal.message == (
             "2 folders here have this game's name, and the server sends this game as a single file"
         )
 
     def test_several_links_keep_the_reason_that_belongs_to_a_link(self) -> None:
-        refusal = unusable_namesake_refusal(
+        refusal = UnusableNamesake(
             (_name("Example Quest (U).gba", kind=LINK), _name("Example Quest (E).gba", kind=LINK)),
             served_dir=False,
             incoming_name="Example Quest (USA).gba",
             incoming_size=0,
         )
-        assert refusal["message"] == (
+        assert refusal.message == (
             "2 shortcuts to somewhere else here have this game's name, "
             "which cannot be used as this game whatever it points at"
         )
@@ -538,14 +539,14 @@ class TestUnusableNamesakeRefusal:
     def test_a_mixed_list_names_no_kind_and_no_shape(self) -> None:
         # Two kinds with two different reasons, so the sentence claims neither —
         # the dialog labels each row and that is where the detail belongs.
-        refusal = unusable_namesake_refusal(
+        refusal = UnusableNamesake(
             (_name("Example Quest (U)", kind=DIR), _name("Example Quest (E).gba", kind=LINK)),
             served_dir=False,
             incoming_name="Example Quest (USA).gba",
             incoming_size=0,
         )
-        assert refusal["message"] == "2 entries here have this game's name, and none of them can be used as this game"
-        assert refusal["existing"] == [
+        assert refusal.message == "2 entries here have this game's name, and none of them can be used as this game"
+        assert refusal.details["existing"] == [
             {"name": "Example Quest (U)", "path": "/roms/gba/Example Quest (U)", "kind": DIR},
             {"name": "Example Quest (E).gba", "path": "/roms/gba/Example Quest (E).gba", "kind": LINK},
         ]
@@ -555,29 +556,27 @@ class TestUnusableNamesakeRefusal:
         # the shown kind here would claim the entries beyond the cap were folders
         # too, which nothing read.
         entries = tuple(_name(f"Example Quest ({index:03d})", kind=DIR) for index in range(CANDIDATE_LIMIT + 3))
-        refusal = unusable_namesake_refusal(
-            entries, served_dir=False, incoming_name="Example Quest.gba", incoming_size=0
-        )
-        assert refusal["message"] == (
+        refusal = UnusableNamesake(entries, served_dir=False, incoming_name="Example Quest.gba", incoming_size=0)
+        assert refusal.message == (
             f"{CANDIDATE_LIMIT + 3} entries here have this game's name, and none of them can be used as this game"
         )
-        assert refusal["existing"] == [
+        assert refusal.details["existing"] == [
             {"name": entry.name, "path": entry.path, "kind": DIR} for entry in entries[:CANDIDATE_LIMIT]
         ]
-        assert refusal["truncated"] is True
+        assert refusal.details["truncated"] is True
 
     def test_it_refuses_to_describe_an_empty_set(self) -> None:
         with pytest.raises(ValueError):
-            unusable_namesake_refusal((), served_dir=False, incoming_name="Example Quest.gba", incoming_size=0)
+            UnusableNamesake((), served_dir=False, incoming_name="Example Quest.gba", incoming_size=0)
 
 
 class TestVanishedCandidateRefusal:
     """The backstop's own sentence."""
 
     def test_it_carries_the_canonical_failure_shape_and_claims_no_cause(self) -> None:
-        refusal = vanished_candidate_refusal(incoming_name="Example Quest (USA).gba", incoming_size=100)
-        assert refusal["success"] is False
-        assert refusal["reason"] == "candidate_vanished"
-        assert refusal["incoming"] == {"name": "Example Quest (USA).gba", "size_bytes": 100}
+        refusal = CandidateVanished(incoming_name="Example Quest (USA).gba", incoming_size=100)
+        assert isinstance(refusal, NamedDomainRefused)
+        assert refusal.reason == "candidate_vanished"
+        assert refusal.details["incoming"] == {"name": "Example Quest (USA).gba", "size_bytes": 100}
         # No list: nothing was found, and naming a cause would be a guess.
-        assert "existing" not in refusal
+        assert "existing" not in refusal.details

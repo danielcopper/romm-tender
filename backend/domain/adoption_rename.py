@@ -19,6 +19,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from domain.refusal import NamedDomainRefused
+
 ROM = "rom"
 SAVE = "save"
 SAVESTATE = "savestate"
@@ -146,22 +148,24 @@ def pairs_for_choice(
     return None
 
 
-def collision_refusal(colliding: tuple[RenamePair, ...]) -> dict[str, object]:
-    """The refusal an adoption returns when a name it needs is already taken.
+class RenameCollisions(NamedDomainRefused):
+    """An adoption that stopped because names it needs are already taken.
 
-    Returned **before** a single file has been touched, with every collision in
+    Raised **before** a single file has been touched, with every collision in
     it, so the one decision the dialog asks for covers the whole set. Asking at
     the first collision would mean asking with half the set already moved.
     """
-    return {
-        "success": False,
-        "reason": "rename_collisions",
-        "message": (
-            f"'{os.path.basename(colliding[0].target)}' already exists"
-            if len(colliding) == 1
-            else "Some of this game's files already exist under the name it would take"
-        ),
-        "collisions": [
-            {"name": os.path.basename(pair.target), "path": pair.target, "kind": pair.kind} for pair in colliding
-        ],
-    }
+
+    reason = "rename_collisions"
+
+    def __init__(self, colliding: tuple[RenamePair, ...]) -> None:
+        super().__init__(
+            (
+                f"'{os.path.basename(colliding[0].target)}' already exists"
+                if len(colliding) == 1
+                else "Some of this game's files already exist under the name it would take"
+            ),
+            collisions=[
+                {"name": os.path.basename(pair.target), "path": pair.target, "kind": pair.kind} for pair in colliding
+            ],
+        )

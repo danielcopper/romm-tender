@@ -16,6 +16,8 @@ import os
 from dataclasses import dataclass
 from typing import Literal
 
+from domain.refusal import NamedDomainRefused
+
 # Ranked strongest first: what a row rests on decides where it sits in the list.
 # ``crc32`` is a checksum the ZIP's own central directory hands over for free and
 # ``size`` a number ``stat`` already returned, so neither costs a read — and
@@ -276,43 +278,46 @@ def _evidence_for(entry: LocalEntry, server_size: int, server_crc32: str, member
     return NAME_MATCH
 
 
-def candidates_refusal(
-    candidates: tuple[AdoptionCandidate, ...],
-    *,
-    truncated: bool,
-    incoming_name: str,
-    incoming_size: int,
-) -> dict[str, object]:
-    """The refusal a download returns when this game is already on disk under another name.
+class AdoptionCandidates(NamedDomainRefused):
+    """A download that stopped because this game is already on disk under another name.
 
     The same shape as the occupied-target refusal it sits beside: nothing was
     written, no transfer started, and both sides of the comparison cross the wire
     so the dialog can be rendered off the reply. *truncated* is stated rather than
     implied — a list silently cut short reads as "that is all there is".
     """
-    return {
-        "success": False,
-        "reason": "adoption_candidates",
-        "message": (
-            f"'{candidates[0].name}' is already on this device"
-            if len(candidates) == 1
-            else f"{len(candidates)} files on this device could be this game"
-        ),
-        "incoming": {"name": incoming_name, "size_bytes": incoming_size},
-        "candidates": [
-            {
-                "name": candidate.name,
-                "path": candidate.path,
-                "is_dir": candidate.is_dir,
-                "size_bytes": candidate.size_bytes,
-                "modified_at": candidate.modified_at,
-                "evidence": candidate.evidence,
-                "detail": candidate.detail,
-            }
-            for candidate in candidates
-        ],
-        "truncated": truncated,
-    }
+
+    reason = "adoption_candidates"
+
+    def __init__(
+        self,
+        candidates: tuple[AdoptionCandidate, ...],
+        *,
+        truncated: bool,
+        incoming_name: str,
+        incoming_size: int,
+    ) -> None:
+        super().__init__(
+            (
+                f"'{candidates[0].name}' is already on this device"
+                if len(candidates) == 1
+                else f"{len(candidates)} files on this device could be this game"
+            ),
+            incoming={"name": incoming_name, "size_bytes": incoming_size},
+            candidates=[
+                {
+                    "name": candidate.name,
+                    "path": candidate.path,
+                    "is_dir": candidate.is_dir,
+                    "size_bytes": candidate.size_bytes,
+                    "modified_at": candidate.modified_at,
+                    "evidence": candidate.evidence,
+                    "detail": candidate.detail,
+                }
+                for candidate in candidates
+            ],
+            truncated=truncated,
+        )
 
 
 # What the refusal's own sentence calls each thing. It has to read as a sentence
@@ -355,15 +360,8 @@ def _namesake_message(shown: tuple[LocalName, ...], *, count: int, served_dir: b
     return f"{subject}, and the server sends this game as a {_SERVED_WORD[served_dir]}"
 
 
-def unusable_namesake_refusal(
-    entries: tuple[LocalName, ...],
-    *,
-    served_dir: bool,
-    incoming_name: str,
-    incoming_size: int,
-    limit: int = CANDIDATE_LIMIT,
-) -> dict[str, object]:
-    """The refusal a download returns for a namesake it cannot offer to take over.
+class UnusableNamesake(NamedDomainRefused):
+    """A download that stopped for a namesake it cannot offer to take over.
 
     Two things reach it, and they are one answer because the user's choice is the
     same for both: an entry whose **shape** is the other one — a loose file where
@@ -386,22 +384,32 @@ def unusable_namesake_refusal(
     unusable namesake", and a caller that reached here without one has a bug the
     refusal must not paper over.
     """
-    if not entries:
-        raise ValueError("unusable_namesake_refusal needs at least one entry")
-    shown = entries[:limit]
-    return {
-        "success": False,
-        "reason": "unusable_namesake",
-        "message": _namesake_message(shown, count=len(entries), served_dir=served_dir),
-        "incoming": {"name": incoming_name, "size_bytes": incoming_size},
-        "existing": [{"name": entry.name, "path": entry.path, "kind": entry.kind} for entry in shown],
-        "served_is_dir": served_dir,
-        "truncated": len(entries) > len(shown),
-    }
+
+    reason = "unusable_namesake"
+
+    def __init__(
+        self,
+        entries: tuple[LocalName, ...],
+        *,
+        served_dir: bool,
+        incoming_name: str,
+        incoming_size: int,
+        limit: int = CANDIDATE_LIMIT,
+    ) -> None:
+        if not entries:
+            raise ValueError("UnusableNamesake needs at least one entry")
+        shown = entries[:limit]
+        super().__init__(
+            _namesake_message(shown, count=len(entries), served_dir=served_dir),
+            incoming={"name": incoming_name, "size_bytes": incoming_size},
+            existing=[{"name": entry.name, "path": entry.path, "kind": entry.kind} for entry in shown],
+            served_is_dir=served_dir,
+            truncated=len(entries) > len(shown),
+        )
 
 
-def vanished_candidate_refusal(*, incoming_name: str, incoming_size: int) -> dict[str, object]:
-    """The refusal a download returns when the game page found a copy and this search did not.
+class CandidateVanished(NamedDomainRefused):
+    """A download that stopped because the game page found a copy and this search did not.
 
     The backstop, and the last answer in the chain. The page and the click-time
     search read the same folder from different knowledge and have diverged four
@@ -415,9 +423,11 @@ def vanished_candidate_refusal(*, incoming_name: str, incoming_size: int) -> dic
     either gone or no longer matches, and both readings are true of the ordinary
     race where the file was deleted between opening the page and pressing.
     """
-    return {
-        "success": False,
-        "reason": "candidate_vanished",
-        "message": "What was found on this device is no longer there, or can no longer be matched to this game",
-        "incoming": {"name": incoming_name, "size_bytes": incoming_size},
-    }
+
+    reason = "candidate_vanished"
+
+    def __init__(self, *, incoming_name: str, incoming_size: int) -> None:
+        super().__init__(
+            "What was found on this device is no longer there, or can no longer be matched to this game",
+            incoming={"name": incoming_name, "size_bytes": incoming_size},
+        )

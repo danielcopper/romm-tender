@@ -34,11 +34,11 @@ from domain.rom_adoption import (
     LocalFile,
     LocalMember,
     ServerFile,
+    TargetOccupied,
     adoptable_content,
     compare_manifest,
     digests_to_read,
     is_archive_name,
-    occupied_target_refusal,
     server_manifest,
     unadoptable_reason,
     unconfirmed_reason,
@@ -52,10 +52,10 @@ from domain.rom_files import (
     resolve_local_file_name,
     synthetic_rom_name,
 )
-from lib.errors import error_response
+from lib.errors import Refused, RommApiError, classify_error
 from lib.path_safety import PathTraversalError, coerce_safe_component, is_inside_folder, safe_join
 from services.rom_adoption._target import Target as _Target
-from services.rom_adoption.renamer import AdoptionRenamer, AdoptionRenamerConfig
+from services.rom_adoption.renamer import AdoptionIncomplete, AdoptionRenamer, AdoptionRenamerConfig
 from services.rom_adoption.search import CandidateSearch, CandidateSearchConfig
 
 if TYPE_CHECKING:
@@ -63,7 +63,6 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable
 
-    from domain.adoption_rename import RenamePair
     from services.protocols import (
         ActiveCoreReader,
         AdoptionMoveStore,
@@ -105,37 +104,9 @@ _UNCONFIRMED_MESSAGES = {
 }
 
 
-def _target_taken_refusal() -> dict[str, Any]:
-    """The refusal an adoption returns when the ROM's own canonical path is occupied."""
-    return {
-        "success": False,
-        "reason": "target_taken",
-        "message": "Something arrived at this game's own location — nothing was moved",
-    }
+_TARGET_TAKEN_MESSAGE = "Something arrived at this game's own location — nothing was moved"
 
-
-def _add_carried_note(refusal: dict[str, Any], carried: tuple[RenamePair, ...]) -> dict[str, Any]:
-    """Add what the carry already moved to a refusal raised by the step after it.
-
-    Without it the abort reads as clean while the game the user keeps can no
-    longer find its saves — they are at the canonical name and it is not.
-    """
-    if not carried:
-        return refusal
-    names = ", ".join(os.path.basename(pair.target) for pair in carried)
-    return {
-        **refusal,
-        "message": f"{refusal['message']} This game's saves were already renamed and are now at: {names}.",
-    }
-
-
-def _unsafe_replace_refusal() -> dict[str, Any]:
-    """The refusal a replace returns for a path outside its system's own ROM folder."""
-    return {
-        "success": False,
-        "reason": "unsafe_replace_target",
-        "message": "Refusing to remove content outside the ROM directory",
-    }
+_UNSAFE_REPLACE_MESSAGE = "Refusing to remove content outside the ROM directory"
 
 
 @dataclass(frozen=True)
@@ -238,18 +209,18 @@ class RomAdoptionService:
         candidate_path=None,
         collision_choice=None,
         page_saw_candidate: bool = False,
-    ) -> dict[str, Any] | None:
+    ) -> AdoptionIncomplete | None:
         """Decide whether a download may write the content it computed *checked_path* for.
 
         ``None`` means proceed: nothing is in the way, what is there already
         belongs to this ROM's own install, or the user chose to download over
-        whatever the gate showed them and it has been cleared. Anything else is a
-        canonical failure the caller returns untouched — the ``target_occupied``
-        refusal carrying both sides of the comparison, one of the three the
-        candidate search can return (``adoption_candidates``,
+        whatever the gate showed them and it has been cleared. Otherwise it
+        raises — :class:`TargetOccupied` carrying both sides of the comparison,
+        one of the three the candidate search raises (``adoption_candidates``,
         ``unusable_namesake``, ``candidate_vanished``), the ``rename_collisions``
-        refusal raised by carrying a discarded candidate's saves, or a removal
-        that could not be completed.
+        refusal from carrying a discarded candidate's saves, or a removal that
+        could not be completed — or answers :class:`AdoptionIncomplete` where
+        that carry or the removal after it stopped with files already moved.
 
         *page_saw_candidate* is what the game page told the user before they
         pressed. It is carried this far because the search's last answer is a
@@ -285,7 +256,7 @@ class RomAdoptionService:
         candidate_path=None,
         collision_choice=None,
         page_saw_candidate: bool = False,
-    ) -> dict[str, Any] | None:
+    ) -> AdoptionIncomplete | None:
         """Synchronous body of the download-target gate. Runs on an executor thread."""
         existing = self._download_file_store.describe_path(checked_path)
         if existing is None:
@@ -303,13 +274,13 @@ class RomAdoptionService:
             # user has never seen and the gate must ask about it. Here nothing was
             # consumed. Two different reasons, and neither generalises to the
             # other.
-            if resume:
-                return None
-            return self._search.refusal(rom_detail, checked_path, page_saw_candidate=page_saw_candidate)
+            if not resume:
+                self._search.refuse_if_found(rom_detail, checked_path, page_saw_candidate=page_saw_candidate)
+            return None
         if self._is_own_install(rom_detail, checked_path):
             return None
         if not replace:
-            return occupied_target_refusal(
+            raise TargetOccupied(
                 path=existing["path"],
                 kind=existing["kind"],
                 size_bytes=existing["size_bytes"],
@@ -318,7 +289,8 @@ class RomAdoptionService:
                 incoming_size=rom_detail.get("fs_size_bytes", 0),
                 served_dir=is_multi_file_download(rom_detail),
             )
-        return self._clear_for_replace(rom_detail, checked_path, is_dir=existing["kind"] == DIR)
+        self._clear_for_replace(rom_detail, checked_path, is_dir=existing["kind"] == DIR)
+        return None
 
     # ── Candidate search ────────────────────────────────────────────
 
@@ -367,9 +339,7 @@ class RomAdoptionService:
             return False
         return checked_path in (install.rom_dir, install.file_path)
 
-    def _clear_for_replace(
-        self, rom_detail: dict[str, Any], checked_path: str, *, is_dir: bool
-    ) -> dict[str, Any] | None:
+    def _clear_for_replace(self, rom_detail: dict[str, Any], checked_path: str, *, is_dir: bool) -> None:
         """Remove what occupies *checked_path* so the download starts on clean ground.
 
         A directory always goes: ``make_dirs`` is ``exist_ok=True`` and the
@@ -389,9 +359,10 @@ class RomAdoptionService:
         if isinstance(system, FolderRefused):
             raise system
         if not is_dir and not is_multi_file_download(rom_detail):
-            folder = self._rom_folder(system)
-            return None if is_inside_folder(checked_path, folder) else _unsafe_replace_refusal()
-        return self._remove_under_roms(checked_path, system, is_dir=is_dir)
+            if not is_inside_folder(checked_path, self._rom_folder(system)):
+                raise Refused("unsafe_replace_target", _UNSAFE_REPLACE_MESSAGE)
+            return
+        self._remove_under_roms(checked_path, system, is_dir=is_dir)
 
     def _rom_folder(self, system: str) -> str:
         """*system*'s own ROM folder, which bounds a replace as it bounds an uninstall.
@@ -405,17 +376,17 @@ class RomAdoptionService:
             raise folder
         return folder
 
-    def _remove_under_roms(self, path: str, system: str, *, is_dir: bool) -> dict[str, Any] | None:
+    def _remove_under_roms(self, path: str, system: str, *, is_dir: bool) -> None:
         """Delete *path*, refusing anything that is not safely inside *system*'s own ROM folder.
 
         The one place this service deletes ROM content, shared by both legs of a
-        replace so neither can acquire its own containment rule. Reports a failed
-        removal instead of letting the download proceed onto ground it could not
-        clear.
+        replace so neither can acquire its own containment rule. Refuses a failed
+        removal with ``replace_failed`` instead of letting the download proceed
+        onto ground it could not clear.
         """
         if not is_inside_folder(path, self._rom_folder(system)):
             self._logger.error(f"Refusing to replace content outside the ROMs directory: {path}")
-            return _unsafe_replace_refusal()
+            raise Refused("unsafe_replace_target", _UNSAFE_REPLACE_MESSAGE)
         try:
             if is_dir:
                 self._download_file_store.remove_tree(path)
@@ -423,17 +394,14 @@ class RomAdoptionService:
                 self._download_file_store.remove_file(path)
         except OSError as e:
             self._logger.error(f"Failed to remove existing content at {path}: {e}")
-            return {
-                "success": False,
-                "reason": "replace_failed",
-                "message": "Could not remove the existing files — download aborted",
-            }
+            raise Refused("replace_failed", "Could not remove the existing files — download aborted") from e
         self._logger.info(f"Replacing existing content at {path}")
-        return None
 
     # ── Downloading over a candidate ────────────────────────────────
 
-    def _discard_candidate(self, rom_detail: dict[str, Any], candidate_path, collision_choice) -> dict[str, Any] | None:
+    def _discard_candidate(
+        self, rom_detail: dict[str, Any], candidate_path, collision_choice
+    ) -> AdoptionIncomplete | None:
         """Remove the candidate the user chose to download over, and carry its saves.
 
         The dialog's second confirmation names this deletion, so it happens: the
@@ -453,9 +421,10 @@ class RomAdoptionService:
 
         A removal that fails **after** the carry is the one abort that is not
         clean: the file the user keeps can no longer find its saves, which now sit
-        under the canonical name. It is named rather than moved back — a retry of
-        the same download finds the saves already in place and re-plans to
-        nothing, where an undo would have to be undone again.
+        under the canonical name. It answers :class:`AdoptionIncomplete` naming
+        them rather than moving them back — a retry of the same download finds
+        the saves already in place and re-plans to nothing, where an undo would
+        have to be undone again.
 
         A path the store cannot describe at all is left alone and the download
         simply proceeds: nothing was named that could be removed.
@@ -467,26 +436,37 @@ class RomAdoptionService:
             raise target
         source_path = self._resolve_source(target, candidate_path)
         if source_path is None:
-            return {
-                "success": False,
-                "reason": "invalid_candidate",
-                "message": "That file is not in this game's platform folder — nothing was removed",
-            }
+            raise Refused("invalid_candidate", "That file is not in this game's platform folder — nothing was removed")
         existing = self._download_file_store.describe_path(source_path)
         if existing is None:
             return None
         rom_id = int(rom_detail.get("id") or 0)
-        refusal, carried = self._renamer.move_planned(
+        stopped, carried = self._renamer.move_planned(
             self._renamer.discarded_save_pairs(rom_id, target, source_path), collision_choice
         )
-        if refusal is not None:
-            return refusal
-        removal = self._remove_under_roms(source_path, target.system, is_dir=existing["kind"] == DIR)
-        return removal if removal is None else _add_carried_note(removal, carried)
+        if stopped is not None:
+            return stopped
+        try:
+            self._remove_under_roms(source_path, target.system, is_dir=existing["kind"] == DIR)
+        except Refused as refused:
+            if not carried:
+                raise
+            renamed = [os.path.basename(pair.target) for pair in carried]
+            return AdoptionIncomplete(
+                reason=refused.reason,
+                message=f"{refused.message} This game's saves were already renamed and are now at: "
+                f"{', '.join(renamed)}.",
+                renamed=renamed,
+                still_under_old_name=[],
+                set_aside=[],
+            )
+        return None
 
     # ── Adopt ───────────────────────────────────────────────────────
 
-    async def adopt_existing_rom(self, rom_id, candidate_path=None, collision_choice=None) -> dict[str, Any]:
+    async def adopt_existing_rom(
+        self, rom_id, candidate_path=None, collision_choice=None
+    ) -> dict[str, Any] | AdoptionIncomplete:
         """Adopt content already on disk for the ``adopt_existing_rom`` endpoint.
 
         :meth:`_adopt_existing_rom` under the endpoint's conflict rules. Only a
@@ -498,11 +478,13 @@ class RomAdoptionService:
         """
         async with self._rules.hold("adopt_existing_rom", update=True, migration=True, prune=True):
             result = await self._adopt_existing_rom(rom_id, candidate_path, collision_choice)
-            if result.get("success") and result.get("app_id") is not None:
+            if isinstance(result, dict) and result["app_id"] is not None:
                 result["prune_lease_token"] = await self._rules.acquire_lease("adopt_existing_rom")
             return result
 
-    async def _adopt_existing_rom(self, rom_id, candidate_path, collision_choice) -> dict[str, Any]:
+    async def _adopt_existing_rom(
+        self, rom_id, candidate_path, collision_choice
+    ) -> dict[str, Any] | AdoptionIncomplete:
         """Record content already on disk as this ROM's install.
 
         *candidate_path* is empty for content sitting at the ROM's own target
@@ -516,7 +498,8 @@ class RomAdoptionService:
         Nothing is downloaded or generated. Every path is re-validated
         immediately before it is used, so content that vanished between the
         dialog and the confirmation is a refusal rather than a row pointing at
-        nothing.
+        nothing. A rename that stopped after files moved answers
+        :class:`AdoptionIncomplete`; a RomM error fetching the ROM propagates.
 
         **Order: validate, carry, supersede, record.** Every reason this adoption
         could be refused is decided in the first step, because the third one
@@ -529,28 +512,18 @@ class RomAdoptionService:
         already committed.
         """
         rom_id = int(rom_id)
-        try:
-            rom_detail, target = await self._loop.run_in_executor(None, self._detail_and_target_io, rom_id)
-        except Exception as e:
-            self._logger.error(f"Failed to fetch ROM {rom_id} for adoption: {e}")
-            return error_response(e)
+        rom_detail, target = await self._loop.run_in_executor(None, self._detail_and_target_io, rom_id)
         if isinstance(target, FolderRefused):
             raise target
         source_path = self._resolve_source(target, candidate_path)
         if source_path is None:
-            return {
-                "success": False,
-                "reason": "invalid_candidate",
-                "message": "That file is not in this game's platform folder — nothing was adopted",
-            }
-        refusal = await self._loop.run_in_executor(None, self._validate_adoption_io, rom_id, target, source_path)
-        if refusal is not None:
-            return refusal
+            raise Refused("invalid_candidate", "That file is not in this game's platform folder — nothing was adopted")
+        await self._loop.run_in_executor(None, self._validate_adoption_io, rom_id, target, source_path)
         if source_path != target.path:
             worker = partial(self._carry_io, rom_id, target, source_path, collision_choice)
-            refusal = await self._loop.run_in_executor(None, worker)
-            if refusal is not None:
-                return refusal
+            stopped = await self._loop.run_in_executor(None, worker)
+            if stopped is not None:
+                return stopped
         # At most one installed version per shortcut binding (#1298), whichever
         # route produced it. The dialog's promise not to delete covers the
         # content the USER placed, at this ROM's own path; a superseded sibling
@@ -577,10 +550,10 @@ class RomAdoptionService:
             return None
         return path
 
-    def _validate_adoption_io(self, rom_id: int, target: _Target, source_path: str) -> dict[str, Any] | None:
-        """Every refusal this adoption can produce, decided before anything is moved.
+    def _validate_adoption_io(self, rom_id: int, target: _Target, source_path: str) -> None:
+        """Raise every refusal this adoption can produce, decided before anything is moved.
 
-        ``None`` means the adoption will go through. Runs off the loop: it stats
+        Returning means the adoption will go through. Runs off the loop: it stats
         the content and reads the ``roms`` row in one short UoW — the row has to
         exist for the install's foreign key, and asking here turns what would
         otherwise be an exception *after* the supersede into a refusal before it.
@@ -589,23 +562,16 @@ class RomAdoptionService:
         # regular file may have become a link between the gate's answer and the
         # user's confirmation, and this service re-validates every path
         # immediately before it uses it.
-        refusal = self._unadoptable_refusal(source_path, target)
-        if refusal is not None:
-            return refusal
+        self._refuse_unadoptable(source_path, target)
         if source_path != target.path and self._renamer.target_taken(target):
-            return _target_taken_refusal()
+            raise Refused("target_taken", _TARGET_TAKEN_MESSAGE)
         with self._uow_factory() as uow:
             known = uow.roms.get(rom_id) is not None
         if not known:
-            return {
-                "success": False,
-                "reason": "invalid_install",
-                "message": "This game is not in the local library — nothing was adopted",
-            }
-        return None
+            raise Refused("invalid_install", "This game is not in the local library — nothing was adopted")
 
-    def _unadoptable_refusal(self, path: str, target: _Target) -> dict[str, Any] | None:
-        """Why content at *path* cannot become *target*'s install, or ``None``.
+    def _refuse_unadoptable(self, path: str, target: _Target) -> None:
+        """Refuse content at *path* that cannot become *target*'s install.
 
         Both the validation before the move and the last check after it ask this,
         and they must give the same answers: a user who is told "the files are no
@@ -624,20 +590,11 @@ class RomAdoptionService:
         """
         existing = self._download_file_store.describe_path(path)
         if existing is None:
-            return {
-                "success": False,
-                "reason": "nothing_to_adopt",
-                "message": "The files are no longer there — nothing was adopted",
-            }
+            raise Refused("nothing_to_adopt", "The files are no longer there — nothing was adopted")
         if not adoptable_content(existing["kind"], served_dir=target.is_multi):
-            return {
-                "success": False,
-                "reason": "unexpected_content_kind",
-                "message": unadoptable_reason(existing["kind"]),
-            }
-        return None
+            raise Refused("unexpected_content_kind", unadoptable_reason(existing["kind"]))
 
-    def _carry_io(self, rom_id: int, target: _Target, source_path: str, collision_choice) -> dict[str, Any] | None:
+    def _carry_io(self, rom_id: int, target: _Target, source_path: str, collision_choice) -> AdoptionIncomplete | None:
         """Rename the candidate into place. Runs off the loop.
 
         The ROM's own target is re-checked here rather than left to the plan: a
@@ -646,23 +603,21 @@ class RomAdoptionService:
         one more thing to overwrite or skip.
         """
         if self._renamer.target_taken(target):
-            return _target_taken_refusal()
+            raise Refused("target_taken", _TARGET_TAKEN_MESSAGE)
         return self._renamer.carry_to_canonical(rom_id, target, source_path, collision_choice)
 
     def _adopt_io(self, rom_id: int, rom_detail: dict[str, Any], target: _Target) -> dict[str, Any]:
         """Persist the install record for content ``_validate_adoption_io`` accepted.
 
         The target is asked about once more through the same
-        :meth:`_unadoptable_refusal` the validation used: the supersede ran in
+        :meth:`_refuse_unadoptable` the validation used: the supersede ran in
         between, and content that vanished across it — or turned into something
         no install row may point at — must be refused rather than recorded. That
         window is the one refusal that can follow a completed supersede, and it
         cannot be closed: a row pointing at files that are gone would be worse,
         and one pointing at a link could never be removed.
         """
-        refusal = self._unadoptable_refusal(target.path, target)
-        if refusal is not None:
-            return refusal
+        self._refuse_unadoptable(target.path, target)
         file_path = self._adopted_launch_file(target) if target.is_multi else target.path
         rom_dir = target.path if target.is_multi else None
         # A no-op cleanup, deliberately: the recorder removes the artifact when
@@ -678,7 +633,7 @@ class RomAdoptionService:
             cleanup=lambda: None,
         )
         if error is not None or recorded is None:
-            return {"success": False, "reason": "invalid_install", "message": error or "Could not record the install"}
+            raise Refused("invalid_install", error or "Could not record the install")
         app_id, launch_options = self._install_recorder.do_resolve_launch_bake(rom_id, rom_detail, recorded)
         # Record the freshly baked command as this ROM's applied state (the value
         # the frontend writes onto the shortcut on this result), so the next sync
@@ -730,14 +685,17 @@ class RomAdoptionService:
         verdict would be a claim Tender cannot make. Only ever runs on the
         user's request — the dialog opens on cheap evidence and never waits for
         this.
+
+        A RomM error fetching the ROM answers ``error``, worded as the
+        entrypoint words that error; any other exception propagates.
         """
         rom_id = int(rom_id)
         try:
             rom_detail, target = await self._loop.run_in_executor(None, self._detail_and_target_io, rom_id)
-        except Exception as e:
+        except RommApiError as e:
             self._logger.error(f"Failed to fetch ROM {rom_id} for verification: {e}")
-            failure = error_response(e)
-            return {"status": "error", "message": failure["message"], "differences": []}
+            _reason, message = classify_error(e)
+            return {"status": "error", "message": message, "differences": []}
         if isinstance(target, FolderRefused):
             return {
                 "status": "error",

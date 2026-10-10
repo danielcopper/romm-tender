@@ -107,6 +107,9 @@ VIOLATION_CLASSES = frozenset({ERROR_CODE_DIALECT, ERROR_KEY_DIALECT, AD_HOC})
 # grows (module docstring, "Converted modules").
 CONVERTED_MODULES: tuple[str, ...] = (
     "backend/adapters/steam_config.py",
+    "backend/domain/adoption_rename.py",
+    "backend/domain/rom_adoption.py",
+    "backend/domain/rom_candidates.py",
     "backend/lib/conflict_rules.py",
     "backend/services/achievements.py",
     "backend/services/artwork.py",
@@ -155,6 +158,11 @@ CONVERTED_MODULES: tuple[str, ...] = (
     "backend/services/prune/steam_actions.py",
     "backend/services/prune_leases.py",
     "backend/services/relaunch_options_resolver.py",
+    "backend/services/rom_adoption/__init__.py",
+    "backend/services/rom_adoption/_target.py",
+    "backend/services/rom_adoption/renamer.py",
+    "backend/services/rom_adoption/search.py",
+    "backend/services/rom_adoption/service.py",
     "backend/services/rom_removal.py",
     "backend/services/saves/__init__.py",
     "backend/services/saves/_config.py",
