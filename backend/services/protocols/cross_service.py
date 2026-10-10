@@ -581,10 +581,12 @@ class SessionAchievementSync(Protocol):
     The composition root satisfies this with ``AchievementsService``'s
     ``sync_achievements_after_session``. The lifecycle service kicks
     this off as a background task — its result and any failure are
-    logged backend-side; the frontend never observes the outcome.
+    logged backend-side; the frontend never observes the outcome. A
+    missing RA username and a RomM error are logged by the refresh itself,
+    which answers nothing; anything else it raises.
     """
 
-    async def sync_achievements_after_session(self, rom_id: int) -> dict[str, Any]: ...
+    async def sync_achievements_after_session(self, rom_id: int) -> None: ...
 
 
 class SessionMigrationReader(Protocol):
