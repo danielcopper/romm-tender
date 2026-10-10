@@ -156,7 +156,7 @@ class TestSizesAgree:
 
 
 class TestOccupiedTargetRefusal:
-    def test_carries_the_canonical_failure_shape(self):
+    def test_is_a_named_domain_refusal_with_its_message(self):
         payload = _refusal()
         assert isinstance(payload, NamedDomainRefused)
         assert payload.reason == "target_occupied"

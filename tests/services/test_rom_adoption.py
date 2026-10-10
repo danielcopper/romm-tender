@@ -885,7 +885,7 @@ class TestAdopt:
         assert result["success"] is True
         assert h.uow.rom_installs.get(_ROM_ID) is not None
 
-    async def test_a_server_failure_surfaces_the_canonical_shape(self, h):
+    async def test_a_server_failure_reaches_the_entrypoint(self, h):
         h.romm_api.fail_on_next(RommConnectionError("boom"))
         adopting = h.service.adopt_existing_rom(_ROM_ID)
 
@@ -3238,7 +3238,7 @@ class TestAdoptCandidateCollisions:
         assert ".romm-backup" not in refused.value.message
 
     async def test_a_folder_at_a_collision_target_is_refused_before_anything_moves(self, h):
-        # The up-front `_not_a_file` pass, which the funnel is never reached past:
+        # The up-front `_refuse_non_files` pass, which the funnel is never reached past:
         # a folder at a savestate's name would otherwise no-op the clear and fail
         # later at the link with nothing explaining why.
         self._stage(h)
@@ -3262,10 +3262,10 @@ class TestAdoptCandidateCollisions:
         # Present at the plan's exists() probe, gone by the time the funnel looks:
         # it reports False and moves nothing, so nothing may claim it did.
         #
-        # The production list is observable only inside a refusal, so this stages
-        # one — asserting on the fake's own record instead would be a tautology
-        # about the fake (it returns False *before* it appends), green whatever
-        # the renamer does with the return value.
+        # The production list is observable only in the stopped adoption's
+        # answer, so this stages one — asserting on the fake's own record instead
+        # would be a tautology about the fake (it returns False *before* it
+        # appends), green whatever the renamer does with the return value.
         self._stage(h)
         h.quarantine.missing = {"/states/Game.state"}
         h.move.outcome = {

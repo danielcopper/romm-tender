@@ -209,7 +209,7 @@ class TestPairsForChoice:
 
 
 class TestCollisionRefusal:
-    def test_the_refusal_carries_the_canonical_failure_shape(self) -> None:
+    def test_the_refusal_is_a_named_domain_refusal_with_its_message(self) -> None:
         refusal = RenameCollisions((RenamePair("/saves/old.srm", "/saves/new.srm", SAVE),))
         assert isinstance(refusal, NamedDomainRefused)
         assert refusal.reason == "rename_collisions"

@@ -2013,10 +2013,9 @@ async def _answer(dispatcher: CallDispatcher, route: str, args: list[Any]) -> An
 
 
 class TestTheAdoptionRefusalsOnTheWire:
-    """The download gate's and the adoption's refusals, as the wire carries them.
+    """The download gate's and the adoption's refusals, and an adoption's partial result, as the wire carries them.
 
-    Each expected answer is the one these cases drew before the refusals were
-    raised rather than returned: the keys and values are unchanged.
+    Each answer is pinned whole.
     """
 
     async def test_an_occupied_target_answers_both_sides_of_the_comparison(self):

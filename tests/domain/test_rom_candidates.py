@@ -404,7 +404,7 @@ class TestRankCandidates:
 
 
 class TestCandidatesRefusal:
-    def test_the_refusal_carries_the_canonical_failure_shape(self) -> None:
+    def test_the_refusal_is_a_named_domain_refusal_with_its_message(self) -> None:
         candidates, truncated = rank_candidates(
             (_entry("Example Quest (U).gba", size=100),), server_size=100, server_crc32="", member_crc32s={}
         )
@@ -449,7 +449,7 @@ class TestCandidatesRefusal:
 class TestUnusableNamesakeRefusal:
     """The namesake that cannot become this install: the other shape, or a link."""
 
-    def test_the_refusal_carries_the_canonical_failure_shape(self) -> None:
+    def test_the_refusal_is_a_named_domain_refusal_with_its_message(self) -> None:
         refusal = UnusableNamesake(
             (_name("Example Quest (U)", kind=DIR),),
             served_dir=False,
@@ -573,7 +573,7 @@ class TestUnusableNamesakeRefusal:
 class TestVanishedCandidateRefusal:
     """The backstop's own sentence."""
 
-    def test_it_carries_the_canonical_failure_shape_and_claims_no_cause(self) -> None:
+    def test_it_is_a_named_domain_refusal_and_claims_no_cause(self) -> None:
         refusal = CandidateVanished(incoming_name="Example Quest (USA).gba", incoming_size=100)
         assert isinstance(refusal, NamedDomainRefused)
         assert refusal.reason == "candidate_vanished"
