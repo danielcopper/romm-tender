@@ -610,12 +610,12 @@ export interface RebakeItem {
 
 export const setSystemCore = endpoint<
   [string, string],
-  {
-    success: boolean;
-    message?: string;
-    rebake_items?: RebakeItem[];
-    prune_lease_token?: string;
-  }
+  | {
+      success: true;
+      rebake_items?: RebakeItem[];
+      prune_lease_token?: string;
+    }
+  | EndpointFailure
 >("set_system_core");
 
 /**
@@ -624,17 +624,17 @@ export const setSystemCore = endpoint<
  * `launch_options` (the `-e`-wrapped command for a pin, the plain command for a
  * clear) plus the shortcut's `app_id` — the frontend confirm-sets them via
  * `setLaunchOptionsConfirmed`. Both are absent/None when the ROM is uninstalled
- * or unbound (no shortcut to update). An unresolvable label hard-fails with
- * `{success: false, reason: "core_unavailable", message}`.
+ * or unbound (no shortcut to update). An unresolvable label is refused with
+ * `core_unavailable`.
  */
-export interface GameCoreApplyResult {
-  success: boolean;
-  launch_options?: string;
-  app_id?: number | null;
-  prune_lease_token?: string;
-  reason?: string;
-  message?: string;
-}
+export type GameCoreApplyResult =
+  | {
+      success: true;
+      launch_options?: string;
+      app_id?: number | null;
+      prune_lease_token?: string;
+    }
+  | EndpointFailure;
 
 // Per-game override (epic #945). Keyed by rom_id — the DB pin survives
 // uninstall/reinstall (roms.emulator_override). set_game_core pins a label;
@@ -700,18 +700,17 @@ export interface DiscSelection {
  * the pick (or NULL when clearing back to the default) and re-bakes the
  * `launch_options` for the now-selected disc — the frontend confirm-sets it via
  * `setLaunchOptionsConfirmed`. `selected` echoes the now-effective pin (null when
- * cleared). A failure carries the canonical `{success: false, reason, message}`
- * shape (`not_found` for an unknown filename, `not_installed` / `unsupported`
- * when the ROM is not a multi-disc install).
+ * cleared). A refusal is `not_found` for an unknown filename, `not_installed` /
+ * `unsupported` when the ROM is not a multi-disc install.
  */
-export interface SelectDiscResult {
-  success: boolean;
-  launch_options?: string;
-  selected?: string | null;
-  reason?: string;
-  message?: string;
-  prune_lease_token?: string;
-}
+export type SelectDiscResult =
+  | {
+      success: true;
+      launch_options?: string;
+      selected?: string | null;
+      prune_lease_token?: string;
+    }
+  | EndpointFailure;
 
 // Per-game disc pick (#865). Keyed by rom_id — the DB pin survives
 // uninstall/reinstall (roms.selected_disc). select_disc(rom_id, filename) pins a

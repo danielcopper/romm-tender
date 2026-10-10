@@ -162,7 +162,13 @@ describe("MigrationBlockedPage component", () => {
       setMigrationStatus(defaultMigration);
       vi.mocked(backend.migrateRetroDeckFiles).mockResolvedValue({
         success: false,
+        reason: "migration_incomplete",
         message: "Partial failure",
+        roms_moved: 1,
+        bios_moved: 0,
+        saves_moved: 0,
+        missing_count: 0,
+        errors: ["zelda.z64: Permission denied"],
       });
       const { getByText, queryByTestId } = render(<MigrationBlockedPage migration={defaultMigration} />);
       await act(async () => {
@@ -180,6 +186,7 @@ describe("MigrationBlockedPage component", () => {
       vi.mocked(backend.migrateRetroDeckFiles)
         .mockResolvedValueOnce({
           success: false,
+          reason: "needs_confirmation",
           message: "",
           needs_confirmation: true,
           conflict_count: 4,
@@ -273,6 +280,7 @@ describe("MigrationBlockedPage component", () => {
     it("needs_confirmation resets 'Migrating...' label back to 'Migrate Files'", async () => {
       vi.mocked(backend.migrateRetroDeckFiles).mockResolvedValueOnce({
         success: false,
+        reason: "needs_confirmation",
         message: "",
         needs_confirmation: true,
         conflict_count: 1,
@@ -364,6 +372,7 @@ describe("MigrationBlockedPage component", () => {
     it("first showModal = MigrationConflictModal, second = ConfirmModal", async () => {
       vi.mocked(backend.migrateRetroDeckFiles).mockResolvedValueOnce({
         success: false,
+        reason: "needs_confirmation",
         message: "",
         needs_confirmation: true,
         conflict_count: 1,

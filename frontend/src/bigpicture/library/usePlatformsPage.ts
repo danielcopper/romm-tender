@@ -730,7 +730,7 @@ export function usePlatformsPage(): PlatformsPageState {
               // Nothing below re-bakes a failed switch, so every live shortcut
               // keeps its old command: report the failure rather than leaving
               // the detail looking as though the switch took effect.
-              setStatus({ slug, scope: "core", text: result.message ?? "Could not change the core" });
+              setStatus({ slug, scope: "core", text: result.message });
               return;
             }
             // Re-bake launch_options for every affected installed ROM on this
