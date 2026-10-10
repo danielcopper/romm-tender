@@ -204,7 +204,10 @@ export function startingSourceOffSentence(kind: string): string {
   );
 }
 
-/** The question both launch paths ask where they could not tell whether the source that would start the game is switched off. */
+/** The title of the dialog both launch paths show where they could not tell whether the source that would start the game is switched off. */
+export const UNCHECKED_START_SOURCE_TITLE = "Emulator Source Unchecked";
+
+/** The question that dialog asks. */
 export const UNCHECKED_START_SOURCE_QUESTION =
   "Tender could not check whether the emulator source is switched on. Start anyway?";
 

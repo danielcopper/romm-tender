@@ -24,9 +24,10 @@ describe("UncheckedSourceModal — showUncheckedSourceModal", () => {
     vi.mocked(showModal).mockClear();
   });
 
-  it("asks the question with Start and Cancel", () => {
+  it("asks the question under its title with Start and Cancel", () => {
     void showUncheckedSourceModal();
     const props = lastConfirmModalProps();
+    expect(props.strTitle).toBe("Emulator Source Unchecked");
     expect(props.strDescription).toBe(
       "Tender could not check whether the emulator source is switched on. Start anyway?",
     );
