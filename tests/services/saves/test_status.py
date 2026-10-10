@@ -1341,7 +1341,7 @@ class TestCheckLocalDrift:
         svc, _ = make_service(tmp_path)
 
         def _boom(_rom_id):
-            raise RuntimeError("uow boom")
+            raise RuntimeError("discovery boom")
 
         monkeypatch.setattr(svc._rom_info, "find_save_files", _boom)
 
@@ -1366,3 +1366,46 @@ class TestCheckLocalDrift:
 
         assert result == {"drifted": False, "rom_id": 42}
         assert store.hashed != []
+
+    @pytest.mark.asyncio
+    async def test_a_hash_failure_after_the_first_change_still_answers_drifted(self, tmp_path):
+        """The check stops at the first changed file: a later file that cannot be hashed is never reached."""
+
+        class _FailsOnRtc(_RecordingSaveFileStore):
+            def content_hash(self, path: str) -> str:
+                if path.endswith(".rtc"):
+                    self.hashed.append(path)
+                    raise OSError("file vanished")
+                return super().content_hash(path)
+
+        store = _FailsOnRtc()
+        svc, _ = make_service(tmp_path, save_file_store=store)
+        _install_rom(svc, tmp_path)
+        srm = _create_save(tmp_path, ext=".srm")
+        _create_save(tmp_path, ext=".rtc", content=b"\x01" * 16)
+        _seed_synced_files(svc, {"pokemon.srm": "srm-base", "pokemon.rtc": "rtc-base"})
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": True, "rom_id": 42}
+        assert store.hashed == [str(srm)]
+
+    @pytest.mark.asyncio
+    async def test_a_failed_read_of_the_save_state_is_not_drifted(self, tmp_path, monkeypatch, caplog):
+        """The save-state read raising → drifted False (no raise), logged once."""
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+
+        def _boom():
+            raise RuntimeError("uow boom")
+
+        monkeypatch.setattr(svc._status, "_uow_factory", _boom)
+
+        with caplog.at_level("WARNING", logger="test"):
+            result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": False, "rom_id": 42}
+        warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warnings) == 1
+        assert "rom_id=42" in warnings[0].getMessage()

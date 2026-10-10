@@ -266,11 +266,10 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "get_pending_preview",
     "get_download_queue",
     "get_installed_rom",
-    # Read-only probes the launch gate's offline branch asks, among other
-    # callers: a local-only drift hash check, a version-free reachability
-    # heartbeat, a fire-and-forget read-only save-status refresh, and the
-    # pre-launch relaunch re-confirm read (#1150). None mutate RetroDECK state,
-    # so they are never refused during a migration.
+    # Probes that change no RetroDECK state: a local-only drift hash check, a
+    # version-free reachability heartbeat, a fire-and-forget save-status refresh,
+    # and the pre-launch relaunch re-confirm read. None mutate RetroDECK state, so
+    # they are never refused during a migration.
     "check_local_drift",
     "probe_reachability",
     "refresh_save_status",

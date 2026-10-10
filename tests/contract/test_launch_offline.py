@@ -1,8 +1,8 @@
-"""Contract tests for the offline launch-path endpoints.
+"""Contract tests for the drift, reachability and save-status-refresh endpoints.
 
-Drives the endpoints the launch gate's offline branch asks exactly as the
-frontend does (``frontend/src/api/backend.ts``), asserting only the response
-SHAPE + behaviour:
+Drives these endpoints exactly as the frontend does
+(``frontend/src/api/backend.ts``), asserting only the response SHAPE +
+behaviour:
 
 * ``check_local_drift(rom_id)`` → ``{"drifted": bool, "rom_id": int}`` — the
   purely-local drift probe. The offline path uses it to warn the user that an

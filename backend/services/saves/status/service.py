@@ -71,7 +71,7 @@ class StatusServiceConfig:
 
 
 class StatusService:
-    """Read-only save-status reporting: how a ROM's saves stand against the server and against their last sync."""
+    """Save-status reporting: how a ROM's saves stand against the server and against their last sync."""
 
     def __init__(self, *, config: StatusServiceConfig) -> None:
         self._config = config
@@ -470,9 +470,9 @@ class StatusService:
     async def check_local_drift(self, rom_id: int) -> dict[str, Any]:
         """Report whether the ROM's local save files changed since their last sync.
 
-        Purely local: it finds the save files the way a sync does, hashes each
-        one that has a recorded hash and compares the two, and never asks the
-        server, so it answers while the server is unreachable. Answers
+        Purely local: it finds the save files the way a sync does, hashes the
+        files that have a recorded hash, until one differs from it, and never
+        asks the server, so it answers while the server is unreachable. Answers
         ``{"drifted": bool, "rom_id": int}``: ``drifted`` is ``True`` when any
         such file's content differs. A file with no recorded hash is not drift —
         there is no synced content for it to differ from — and a ROM that is not
@@ -480,9 +480,9 @@ class StatusService:
         no sync lock: it only reads.
 
         Never raises: any internal error (a file vanished mid-hash, a failed
-        read of the save state, …) is logged and answers ``drifted: False``. A
-        false warning about unsynced changes is worse than none, so the unknown
-        counts as not drifted.
+        read of the save state, …) is logged and answers ``drifted: False`` — an
+        unknown is never reported as drift, at the cost of a check that could
+        not read passing as clean.
         """
         rom_id = int(rom_id)
         try:

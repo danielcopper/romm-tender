@@ -1,4 +1,4 @@
-"""Which local save files changed since their last sync — the saves sub-services' one comparison."""
+"""Which local save files changed since their last sync."""
 
 from __future__ import annotations
 
