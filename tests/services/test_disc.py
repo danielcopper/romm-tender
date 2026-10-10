@@ -442,7 +442,7 @@ class TestTheDiscSelectionLease:
 
         assert seen == [["select_disc"]]
 
-    def test_a_refused_pick_carries_none(self, event_loop, service, prune_conflicts):
+    def test_a_refused_pick_takes_no_lease(self, event_loop, service, prune_conflicts):
         selecting = service.select_disc(1, _DISC2)
 
         with pytest.raises(Refused) as refused:

@@ -22,7 +22,7 @@ from domain.migration_paths import (
     stranded_source_candidates,
 )
 from domain.retrodeck_folders import FolderRefused, MoveRoots, moving_not_installed
-from lib.errors import Refused
+from lib.errors import NamedRefused, Refused
 from services.migration._moves import FileMover, MigrationIncomplete
 
 if TYPE_CHECKING:
@@ -51,6 +51,12 @@ if TYPE_CHECKING:
 _KV_RETRODECK_HOME = "retrodeck_home_path"
 _KV_RETRODECK_HOME_PREVIOUS = "retrodeck_home_path_previous"
 _KV_RETRODECK_HOME_HOPS = "retrodeck_home_path_hops"
+
+
+class NeedsConfirmation(NamedRefused):
+    """Some destinations are taken, and the user decides how the migration goes on."""
+
+    reason = "needs_confirmation"
 
 
 @dataclass(frozen=True)
@@ -610,10 +616,8 @@ class MigrationService:
         )
         conflicts = self._find_conflicts(items)
 
-        # If no strategy given and there are conflicts, refuse with them for user decision
         if conflict_strategy is None and conflicts:
-            raise Refused(
-                "needs_confirmation",
+            raise NeedsConfirmation(
                 f"{len(conflicts)} file(s) already exist at destination",
                 needs_confirmation=True,
                 conflict_count=len(conflicts),
@@ -694,9 +698,11 @@ class MigrationService:
     async def migrate_retrodeck_files(self, conflict_strategy=None):
         """Move downloaded ROMs, BIOS, and save files from old RetroDECK path to new.
 
-        Refuses with ``no_migration_needed`` when no move is pending. A run in
-        which some moves failed answers :class:`MigrationIncomplete` with the
-        others done and the pending move still recorded.
+        Refuses with ``no_migration_needed`` when no move is pending or no current
+        home is recorded, and with RetroDECK's folder refusal when no RetroDECK
+        is detected or its roots may not be used. A run in which some moves
+        failed answers :class:`MigrationIncomplete` with the others done and the
+        pending move still recorded.
 
         Args:
             conflict_strategy: None to scan and refuse with
@@ -752,7 +758,8 @@ class MigrationService:
         # Record each re-baked command as the shortcut's applied state (the
         # value the frontend confirm-sets onto the relocated shortcut), so the
         # next sync skips the now-correct shortcut instead of re-touching it
-        # (delta apply, #1383). Fifth of the six recorded-state writer sites.
+        # (delta apply). One of the recorded-state writer sites the invariant
+        # register lists (docs/architecture/invariants.md).
         await self._loop.run_in_executor(None, self._record_migration_applied_io, relaunch_items)
         await self._rerecord_save_directories()
         return result

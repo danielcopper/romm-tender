@@ -32,6 +32,7 @@ from lib.prune_conflicts import PruneConflicts
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.migration import MigrationService, MigrationServiceConfig
 from services.migration._moves import MigrationIncomplete
+from services.migration.service import NeedsConfirmation
 from services.relaunch_options_resolver import RelaunchOptionsResolver, RelaunchOptionsResolverConfig
 
 
@@ -816,7 +817,7 @@ class TestMigrateRetroDeckFiles:
         # First call with no strategy refuses with the conflicts
         migrating = migration.service.migrate_retrodeck_files()
 
-        with pytest.raises(Refused) as refused:
+        with pytest.raises(NeedsConfirmation) as refused:
             await migrating
 
         assert refused.value.reason == "needs_confirmation"
@@ -1044,7 +1045,7 @@ class TestMigrateRetroDeckFiles:
         self._conflicting_rom(migration, tmp_path)
         migrating = migration.service.migrate_retrodeck_files(None)
 
-        with pytest.raises(Refused) as refused:
+        with pytest.raises(NeedsConfirmation) as refused:
             await migrating
 
         assert refused.value.reason == "needs_confirmation"
@@ -1171,7 +1172,7 @@ class TestMigrateSaveFiles:
         migration.service._retrodeck_folders = FakeRetroDeckFolders(saves=os.path.join(new_home, "saves"))
         migrating = migration.service.migrate_retrodeck_files()
 
-        with pytest.raises(Refused) as refused:
+        with pytest.raises(NeedsConfirmation) as refused:
             await migrating
 
         assert refused.value.reason == "needs_confirmation"
@@ -1575,7 +1576,7 @@ class TestMigrationRelaunchOptions:
         _seed_install(migration.uow, 1, file_path=old_rom, system="n64", app_id=4242)
         migrating = migration.service.migrate_retrodeck_files()
 
-        with pytest.raises(Refused) as refused:
+        with pytest.raises(NeedsConfirmation) as refused:
             await migrating
 
         assert refused.value.details["needs_confirmation"] is True
@@ -1717,7 +1718,7 @@ class TestMigrationFailureInjection:
             missing_count=0,
             errors=[f"bad.z64: simulated move failure: {bad_rom}"],
         )
-        # The moves that happened are re-baked, recorded and re-recorded as after a clean run.
+        # The run is re-baked, recorded and re-recorded as after a clean run.
         [(event, payload)] = emit.calls
         assert event == "migration_relaunch_options"
         assert isinstance(payload, dict)

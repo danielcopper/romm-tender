@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.disc_selection import default_descriptor
 from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
-from lib.errors import Refused
+from lib.errors import NotInstalled, Refused
 
 if TYPE_CHECKING:
     import asyncio
@@ -145,7 +145,7 @@ class DiscService:
             rom = uow.roms.get(rom_id)
             install = uow.rom_installs.get(rom_id)
             if rom is None or install is None or install.rom_dir is None:
-                raise Refused("not_installed", f"ROM {rom_id} is not installed as a multi-disc ROM")
+                raise NotInstalled(f"ROM {rom_id} is not installed as a multi-disc ROM")
         # Enumerate and validate between the two transactions: enumeration lists
         # the install directory, and a UoW holds SQLite's BEGIN IMMEDIATE write
         # lock, so file I/O inside one stalls every other writer in the backend.
@@ -153,7 +153,7 @@ class DiscService:
         if len(discs) < 2:
             raise Refused("unsupported", f"ROM {rom_id} is not a multi-disc ROM")
         if filename is not None and filename not in {disc.filename for disc in discs}:
-            # B4: hard-fail BEFORE any write — never pin a disc no enumeration
+            # Refuse BEFORE any write — never pin a disc no enumeration
             # can resolve to a launchable path.
             raise Refused("not_found", f"'{filename}' is not a disc of ROM {rom_id}")
         with self._uow_factory() as uow:
@@ -176,7 +176,7 @@ class DiscService:
             rom = uow.roms.get(rom_id)
             current_install = uow.rom_installs.get(rom_id)
             if rom is None or current_install is None or current_install.rom_dir is None:
-                raise Refused("not_installed", f"ROM {rom_id} is not installed as a multi-disc ROM")
+                raise NotInstalled(f"ROM {rom_id} is not installed as a multi-disc ROM")
             if filename is None:
                 rom.clear_selected_disc()
             else:
