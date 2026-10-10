@@ -32,7 +32,6 @@ from services.emulator_sources import EmulatorSourcesService, EmulatorSourcesSer
 from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.game_detail import GameDetailService, GameDetailServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
-from services.launch_gate import LaunchGateService, LaunchGateServiceConfig
 from services.leftover_tmp_cleanup import LeftoverTmpCleanupService, LeftoverTmpCleanupServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
 from services.metadata import MetadataService, MetadataServiceConfig
@@ -140,7 +139,6 @@ class ServicesBundle:
     update_outcome_service: UpdateOutcomeService
     update_install_service: UpdateInstallService
     update_output_service: UpdateOutputService
-    launch_gate_service: LaunchGateService
     session_lifecycle_service: SessionLifecycleService
     game_process_service: GameProcessService
     relaunch_options_resolver: RelaunchOptionsResolver
@@ -620,17 +618,8 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         ),
     )
 
-    launch_gate_service = LaunchGateService(
-        config=LaunchGateServiceConfig(
-            drift_reader=save_sync_service,
-            save_file_store=cfg.adapters.save_file_store,
-            loop=cfg.runtime.loop,
-            logger=cfg.runtime.logger,
-        ),
-    )
-
-    # Built after LaunchGateService + ConnectionService: the version-switch
-    # save-stranding gate draws drift from LaunchGateService.check_local_drift and
+    # Built after SaveService + ConnectionService: the version-switch
+    # save-stranding gate draws drift from SaveService.check_local_drift and
     # reachability from ConnectionService.probe_reachability, and re-bakes a
     # switched-onto install via the relaunch resolver. The active-download guard
     # reads DownloadService's in-progress set (built earlier — no LateBinding) (#1298).
@@ -642,7 +631,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             uow_factory=cfg.callbacks.uow_factory,
             romm_api=cfg.adapters.romm_api,
             settings=cfg.stores.settings,
-            drift_probe=launch_gate_service.check_local_drift,
+            drift_probe=save_sync_service.check_local_drift,
             reachability_probe=connection_service.probe_reachability,
             relaunch_resolver=relaunch_options_resolver,
             active_downloads=download_service.active_download_rom_ids,
@@ -702,7 +691,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             retrodeck_folders=cfg.callbacks.retrodeck_folders,
             save_coordinator=save_sync_service.prune_support,
             active_downloads=download_service.active_download_rom_ids,
-            drift_probe=launch_gate_service.check_local_drift,
+            drift_probe=save_sync_service.check_local_drift,
             remove_installed_files=rom_removal_service.delete_rom_files,
             switch_version=version_switch_service.switch_version_unchecked,
             settings=cfg.stores.settings,
@@ -818,7 +807,6 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         update_outcome_service=update_outcome_service,
         update_install_service=update_install_service,
         update_output_service=update_output_service,
-        launch_gate_service=launch_gate_service,
         session_lifecycle_service=session_lifecycle_service,
         game_process_service=game_process_service,
         relaunch_options_resolver=relaunch_options_resolver,

@@ -1921,7 +1921,7 @@ class TestRunRomSyncSession:
     @pytest.mark.asyncio
     async def test_confirmed_upload_persists_baseline(self, tmp_path):
         """A confirmed-ROM matrix upload writes the per-file baseline to the PERSISTED
-        RomSaveSyncState (launch-gate + slot-switch read it back, not the in-memory ref)."""
+        RomSaveSyncState (the drift check + slot switch read it back, not the in-memory ref)."""
         svc, _ = make_service(tmp_path)
         _enable_sync_with_device(svc, device_id="device-1")
         _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="pokemon.gba")

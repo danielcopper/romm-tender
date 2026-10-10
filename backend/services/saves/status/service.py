@@ -17,6 +17,8 @@ from domain.save_status_builders import (
 )
 from domain.sync_action import Conflict, Skip
 from lib.errors import classify_error
+from services.saves._local_changes import changed_since_last_sync
+from services.saves._save_state import read_save_state
 from services.saves._settings import save_sync_enabled
 
 if TYPE_CHECKING:
@@ -30,6 +32,7 @@ if TYPE_CHECKING:
         EventEmitter,
         RetryStrategy,
         RommSaveApi,
+        SaveFileStore,
         UnitOfWorkFactory,
     )
     from services.saves.rom_info import RomInfoService
@@ -47,8 +50,9 @@ class StatusServiceConfig:
     the shared :class:`DeviceRegistry` that owns the server device id),
     the Protocol-typed RomM adapter and retry strategy, the backend's
     event loop, the standard-library logger, the ``DebugLogger`` seam, the
-    per-ROM active-core resolver, and the event emitter used to push background
-    status updates to the frontend.
+    per-ROM active-core resolver, the event emitter used to push background
+    status updates to the frontend, and the save-file store that hashes local
+    saves for the drift check.
     """
 
     settings: dict[str, Any]
@@ -63,10 +67,11 @@ class StatusServiceConfig:
     log_debug: DebugLogger
     active_core: ActiveCoreReader
     emit: EventEmitter
+    save_file_store: SaveFileStore
 
 
 class StatusService:
-    """Read-only matrix-driven status reporting for the SAVES tab."""
+    """Save-status reporting: how a ROM's saves stand against the server and against their last sync."""
 
     def __init__(self, *, config: StatusServiceConfig) -> None:
         self._config = config
@@ -82,6 +87,7 @@ class StatusService:
         self._log_debug = config.log_debug
         self._active_core = config.active_core
         self._emit = config.emit
+        self._save_file_store = config.save_file_store
 
     def _status_entry_from_outcome(
         self,
@@ -460,6 +466,41 @@ class StatusService:
             "old_label": old_label,
             "new_label": active_label or (active_core.replace("_libretro", "") if active_core else None),
         }
+
+    async def check_local_drift(self, rom_id: int) -> dict[str, Any]:
+        """Report whether the ROM's local save files changed since their last sync.
+
+        Purely local: it finds the save files the way a sync does, hashes the
+        files that have a recorded hash, until one differs from it, and never
+        asks the server, so it answers while the server is unreachable. Answers
+        ``{"drifted": bool, "rom_id": int}``: ``drifted`` is ``True`` when any
+        such file's content differs. A file with no recorded hash is not drift —
+        there is no synced content for it to differ from — and a ROM that is not
+        installed or has no save files on disk answers ``drifted: False``. Takes
+        no sync lock: it only reads.
+
+        Never raises: any internal error (a file vanished mid-hash, a failed
+        read of the save state, …) is logged and answers ``drifted: False`` — an
+        unknown is never reported as drift, at the cost of a check that could
+        not read passing as clean.
+        """
+        rom_id = int(rom_id)
+        try:
+            return await self._loop.run_in_executor(None, self._check_local_drift_io, rom_id)
+        except Exception as e:
+            self._logger.warning(f"Local drift check failed for rom_id={rom_id}: {e}")
+            return {"drifted": False, "rom_id": rom_id}
+
+    def _check_local_drift_io(self, rom_id: int) -> dict[str, Any]:
+        """Synchronous worker of :meth:`check_local_drift`; raises what it meets."""
+        local_files = self._rom_info.find_save_files(rom_id)
+        if not local_files:
+            return {"drifted": False, "rom_id": rom_id}
+        save_state = read_save_state(self._uow_factory, rom_id)
+        if save_state is None:
+            return {"drifted": False, "rom_id": rom_id}
+        changed = changed_since_last_sync(local_files, save_state.files, self._save_file_store)
+        return {"drifted": next(changed, None) is not None, "rom_id": rom_id}
 
 
 def _outcome_server_sort_key(outcome: MatrixOutcome) -> float:

@@ -154,6 +154,7 @@ class SaveService:
                 log_debug=config.log_debug,
                 active_core=config.active_core,
                 emit=config.emit,
+                save_file_store=config.save_file_store,
             ),
         )
 
@@ -265,16 +266,12 @@ class SaveService:
         """Check if emulator core changed since last sync for a ROM."""
         return self._status.check_core_change(rom_id)
 
-    def find_local_save_files(self, rom_id: int) -> list[dict[str, str]]:
-        """Enumerate the ROM's local save files (``[{"path", "filename"}]``).
+    async def check_local_drift(self, rom_id: int) -> dict[str, Any]:
+        """Report whether the ROM's local save files changed since their last sync (``{drifted, rom_id}``).
 
-        Delegates to the shared ``RomInfoService.find_save_files`` discovery —
-        the same enumeration the sync/status path uses — so the launch gate's
-        drift check sees exactly the files a real sync would. Returns ``[]``
-        when the ROM is not installed or no save files are present. Satisfies
-        the ``LaunchGateDriftReader`` seam.
+        Satisfies the ``SaveDriftProbeFn`` seam.
         """
-        return self._rom_info.find_save_files(int(rom_id))
+        return await self._status.check_local_drift(rom_id)
 
     def quarantine_local_file(self, saves_dir: str, filename: str) -> bool:
         """Move a local save aside into ``.romm-backup`` before something destroys it.
@@ -285,21 +282,6 @@ class SaveService:
         slot-switch paths do (#965). Satisfies the ``SaveQuarantineFn`` seam.
         """
         return self._sync_engine.quarantine_local_file(saves_dir, filename)
-
-    def last_sync_hashes(self, rom_id: int) -> dict[str, str | None]:
-        """Return the per-file ``last_sync_hash`` baselines for a ROM.
-
-        Reads the ``rom_save_sync_states`` aggregate through a narrow read UoW —
-        no network — and projects each tracked file's baseline hash onto a
-        ``{filename: last_sync_hash}`` map (``None`` for a file with no
-        baseline yet). An untracked ROM yields ``{}``. Satisfies the
-        ``LaunchGateDriftReader`` seam.
-        """
-        with self._uow_factory() as uow:
-            save_entry = uow.rom_save_sync_states.get(int(rom_id))
-        if save_entry is None:
-            return {}
-        return {filename: state.last_sync_hash for filename, state in save_entry.files.items()}
 
     # ------------------------------------------------------------------
     # Sync orchestration (delegated to SyncEngine)

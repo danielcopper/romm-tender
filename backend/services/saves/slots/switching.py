@@ -17,6 +17,7 @@ from domain.save_slot import save_in_slot
 from lib.errors import NamedRefused, NotInstalled, Refused
 from lib.partial_failure import PartialFailure
 from services.saves._helpers import newest_server_saves_by_target
+from services.saves._local_changes import changed_since_last_sync
 from services.saves._messages import SAVE_SYNC_DISABLED, SAVE_SYNC_IN_CONTENT_DIR
 from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
 from services.saves._save_state import write_save_state
@@ -105,23 +106,8 @@ class SlotSwitcher:
         of the current slot. Files that were never synced do not count: the
         switch quarantines them into ``.romm-backup`` (#965).
         """
-        files_state = save_state.files
-
-        pending: list[str] = []
         local_files = self._rom_info.find_save_files(rom_id)
-        for lf in local_files:
-            filename = lf["filename"]
-            file_state = files_state.get(filename)
-            last_sync_hash = file_state.last_sync_hash if file_state else None
-            if last_sync_hash:
-                # Zip-aware RomM-parity hash — the same scheme the baseline was
-                # written with, so a zip save isn't seen as perpetually pending
-                # (#1457).
-                current_hash = self._save_file_store.content_hash(lf["path"])
-                if current_hash != last_sync_hash:
-                    pending.append(filename)
-
-        return pending
+        return list(changed_since_last_sync(local_files, save_state.files, self._save_file_store))
 
     async def switch_slot(self, rom_id: int, new_slot: str) -> dict[str, Any] | SlotSwitchIncomplete:
         """Switch the active save slot with immediate state sync.

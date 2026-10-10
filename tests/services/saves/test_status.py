@@ -1,13 +1,15 @@
 """Tests for StatusService — save-status DTO building and read-only status checks."""
 
 import asyncio
+import logging
 import threading
 from typing import cast
 
 import pytest
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
-from domain.rom_save_sync_state import RomSaveSyncState
+from adapters.save_file import SaveFileAdapter
+from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from domain.save_answer import SaveAnswer
 from lib.errors import RommConnectionError, RommNotFoundError
 from tests.services.saves._helpers import (
@@ -1218,3 +1220,192 @@ class TestGetSaveStatusRomLockSerialization:
 
         assert result["files"][0]["status"] == "synced"
         assert _adopted_baseline(svc) == local_hash
+
+
+class _RecordingSaveFileStore(SaveFileAdapter):
+    """The real save-file adapter, recording each path it hashes; ``hash_raises`` arms a mid-hash failure."""
+
+    def __init__(self, *, hash_raises: BaseException | None = None) -> None:
+        super().__init__(logger=logging.getLogger("test"))
+        self.hash_raises = hash_raises
+        self.hashed: list[str] = []
+
+    def content_hash(self, path: str) -> str:
+        self.hashed.append(path)
+        if self.hash_raises is not None:
+            raise self.hash_raises
+        return super().content_hash(path)
+
+
+def _seed_synced_files(svc, files: dict[str, str]) -> None:
+    """Record each ``{filename: last_sync_hash}`` as ROM 42's last sync."""
+    _seed_save_state(
+        svc,
+        42,
+        RomSaveSyncState(
+            system="gba",
+            active_slot="default",
+            files={
+                filename: FileSyncState(tracked_save_id=100 + i, last_sync_hash=last_sync_hash)
+                for i, (filename, last_sync_hash) in enumerate(files.items())
+            },
+        ),
+    )
+
+
+class TestCheckLocalDrift:
+    """``check_local_drift`` through the façade: local saves against their last sync, never the server."""
+
+    @pytest.mark.asyncio
+    async def test_not_installed_no_local_files_not_drifted(self, tmp_path):
+        """No local save files (not installed / nothing on disk) → drifted False, never hashes."""
+        store = _RecordingSaveFileStore()
+        svc, _ = make_service(tmp_path, save_file_store=store)
+
+        result = await svc.check_local_drift(99)
+
+        assert result == {"drifted": False, "rom_id": 99}
+        assert store.hashed == []
+
+    @pytest.mark.asyncio
+    async def test_single_file_hash_matches_not_drifted(self, tmp_path):
+        """One local file whose current hash equals its recorded hash → drifted False."""
+        store = _RecordingSaveFileStore()
+        svc, _ = make_service(tmp_path, save_file_store=store)
+        _install_rom(svc, tmp_path)
+        save = _create_save(tmp_path)
+        _seed_synced_files(svc, {"pokemon.srm": _file_md5(save)})
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": False, "rom_id": 42}
+        assert store.hashed == [str(save)]
+
+    @pytest.mark.asyncio
+    async def test_single_file_hash_mismatch_drifted(self, tmp_path):
+        """One local file whose current hash differs from its recorded hash → drifted True."""
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+        _seed_synced_files(svc, {"pokemon.srm": "hash-of-other-bytes"})
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": True, "rom_id": 42}
+
+    @pytest.mark.asyncio
+    async def test_missing_baseline_key_is_not_drift(self, tmp_path):
+        """A present file the last sync recorded nothing for → not drift, never hashes it."""
+        store = _RecordingSaveFileStore()
+        svc, _ = make_service(tmp_path, save_file_store=store)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+        _seed_synced_files(svc, {"pokemon.rtc": "rtc-base"})
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": False, "rom_id": 42}
+        assert store.hashed == []
+
+    @pytest.mark.asyncio
+    async def test_never_synced_rom_is_not_drift(self, tmp_path, caplog):
+        """A present file of a ROM with no save state at all → not drift, never hashes it, logs nothing."""
+        store = _RecordingSaveFileStore()
+        svc, _ = make_service(tmp_path, save_file_store=store)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+
+        with caplog.at_level("WARNING", logger="test"):
+            result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": False, "rom_id": 42}
+        assert store.hashed == []
+        assert [r for r in caplog.records if r.levelname == "WARNING"] == []
+
+    @pytest.mark.asyncio
+    async def test_multi_file_one_drifted_is_drifted(self, tmp_path):
+        """Multiple component files, one drifted → drifted True."""
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        srm = _create_save(tmp_path, ext=".srm")
+        _create_save(tmp_path, ext=".rtc", content=b"\x01" * 16)
+        _seed_synced_files(svc, {"pokemon.srm": _file_md5(srm), "pokemon.rtc": "rtc-base"})
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": True, "rom_id": 42}
+
+    @pytest.mark.asyncio
+    async def test_internal_error_during_enumeration_is_not_drifted(self, tmp_path, monkeypatch, caplog):
+        """The save-file discovery raising → drifted False (no raise), logged once."""
+        svc, _ = make_service(tmp_path)
+
+        def _boom(_rom_id):
+            raise RuntimeError("discovery boom")
+
+        monkeypatch.setattr(svc._rom_info, "find_save_files", _boom)
+
+        with caplog.at_level("WARNING", logger="test"):
+            result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": False, "rom_id": 42}
+        warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warnings) == 1
+        assert "rom_id=42" in warnings[0].getMessage()
+
+    @pytest.mark.asyncio
+    async def test_internal_error_during_hash_is_not_drifted(self, tmp_path):
+        """``content_hash`` raising mid-hash → drifted False (no raise)."""
+        store = _RecordingSaveFileStore(hash_raises=OSError("file vanished"))
+        svc, _ = make_service(tmp_path, save_file_store=store)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+        _seed_synced_files(svc, {"pokemon.srm": "hash-A"})
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": False, "rom_id": 42}
+        assert store.hashed != []
+
+    @pytest.mark.asyncio
+    async def test_a_hash_failure_after_the_first_change_still_answers_drifted(self, tmp_path):
+        """The check stops at the first changed file: a later file that cannot be hashed is never reached."""
+
+        class _FailsOnRtc(_RecordingSaveFileStore):
+            def content_hash(self, path: str) -> str:
+                if path.endswith(".rtc"):
+                    self.hashed.append(path)
+                    raise OSError("file vanished")
+                return super().content_hash(path)
+
+        store = _FailsOnRtc()
+        svc, _ = make_service(tmp_path, save_file_store=store)
+        _install_rom(svc, tmp_path)
+        srm = _create_save(tmp_path, ext=".srm")
+        _create_save(tmp_path, ext=".rtc", content=b"\x01" * 16)
+        _seed_synced_files(svc, {"pokemon.srm": "srm-base", "pokemon.rtc": "rtc-base"})
+
+        result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": True, "rom_id": 42}
+        assert store.hashed == [str(srm)]
+
+    @pytest.mark.asyncio
+    async def test_a_failed_read_of_the_save_state_is_not_drifted(self, tmp_path, monkeypatch, caplog):
+        """The save-state read raising → drifted False (no raise), logged once."""
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+
+        def _boom():
+            raise RuntimeError("uow boom")
+
+        monkeypatch.setattr(svc._status, "_uow_factory", _boom)
+
+        with caplog.at_level("WARNING", logger="test"):
+            result = await svc.check_local_drift(42)
+
+        assert result == {"drifted": False, "rom_id": 42}
+        warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warnings) == 1
+        assert "rom_id=42" in warnings[0].getMessage()
