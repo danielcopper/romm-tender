@@ -22,7 +22,8 @@ from domain.migration_paths import (
     stranded_source_candidates,
 )
 from domain.retrodeck_folders import FolderRefused, MoveRoots, moving_not_installed
-from services.migration._moves import FileMover
+from lib.errors import Refused
+from services.migration._moves import FileMover, MigrationIncomplete
 
 if TYPE_CHECKING:
     import logging
@@ -588,9 +589,12 @@ class MigrationService:
                 conflict_set.add(label)
         return sorted(conflict_set)
 
-    def _migrate_retrodeck_files_io(self, pending_homes, new_home, conflict_strategy, roots: MoveRoots):
+    def _migrate_retrodeck_files_io(
+        self, pending_homes, new_home, conflict_strategy, roots: MoveRoots
+    ) -> tuple[dict[str, Any] | MigrationIncomplete, list[dict[str, Any]]]:
         """Sync helper for migrate_retrodeck_files — FS traversal + moves in executor.
 
+        Answers the run's result and the relaunch items re-baked after it.
         ``pending_homes`` is the full pending set; the current home is filtered
         out defensively so a record already under it is never treated as a move
         source (detection already excludes it, this belts-and-braces that).
@@ -606,16 +610,15 @@ class MigrationService:
         )
         conflicts = self._find_conflicts(items)
 
-        # If no strategy given and there are conflicts, return them for user decision
+        # If no strategy given and there are conflicts, refuse with them for user decision
         if conflict_strategy is None and conflicts:
-            return {
-                "success": False,
-                "reason": "needs_confirmation",
-                "needs_confirmation": True,
-                "conflict_count": len(conflicts),
-                "conflicts": conflicts,
-                "message": f"{len(conflicts)} file(s) already exist at destination",
-            }
+            raise Refused(
+                "needs_confirmation",
+                f"{len(conflicts)} file(s) already exist at destination",
+                needs_confirmation=True,
+                conflict_count=len(conflicts),
+                conflicts=conflicts,
+            )
 
         counts = {"rom": 0, "bios": 0, "save": 0, "missing": 0}
         errors = []
@@ -642,9 +645,9 @@ class MigrationService:
         # is baked into the Steam shortcut's launch_options, so a relocated ROM
         # needs its shortcut rewritten or launches break. Read from a fresh UoW
         # so the relocated rom_installs.file_path is what we build the command
-        # from. Stashed on the result for the async caller to emit on the loop.
-        result["_relaunch_items"] = self._build_relaunch_items()
-        return result
+        # from. Handed back beside the result for the async caller to emit on
+        # the loop.
+        return result, self._build_relaunch_items()
 
     def _build_relaunch_items(self) -> list[dict[str, Any]]:
         """Build the ``migration_relaunch_options`` items from the post-move state.
@@ -691,10 +694,15 @@ class MigrationService:
     async def migrate_retrodeck_files(self, conflict_strategy=None):
         """Move downloaded ROMs, BIOS, and save files from old RetroDECK path to new.
 
+        Refuses with ``no_migration_needed`` when no move is pending. A run in
+        which some moves failed answers :class:`MigrationIncomplete` with the
+        others done and the pending move still recorded.
+
         Args:
-            conflict_strategy: None to scan and return conflicts, "overwrite" to
-                replace existing destination files, "skip" to keep existing files
-                and just update state paths.
+            conflict_strategy: None to scan and refuse with
+                ``needs_confirmation`` and the conflicts when a destination is
+                taken, "overwrite" to replace existing destination files, "skip"
+                to keep existing files and just update state paths.
         """
         async with self._rules.hold("migrate_retrodeck_files", update=True, prune=True):
             return await self._migrate_retrodeck_files(conflict_strategy)
@@ -707,7 +715,7 @@ class MigrationService:
         new_home = self._resolved_home(stored_home)
 
         if not pending or not new_home:
-            return {"success": False, "reason": "no_migration_needed", "message": "No path migration needed"}
+            raise Refused("no_migration_needed", "No path migration needed")
 
         # Asked once, before anything moves: where RetroDECK's roots may not be
         # used, or no RetroDECK is detected, nothing moves and the pending move
@@ -729,25 +737,24 @@ class MigrationService:
             if not self._migrations_in_flight:
                 self._status_in_flight = None
 
-    async def _run_migration(self, pending, new_home, conflict_strategy, roots: MoveRoots):
+    async def _run_migration(
+        self, pending, new_home, conflict_strategy, roots: MoveRoots
+    ) -> dict[str, Any] | MigrationIncomplete:
         """Move the files, re-bake the shortcuts and re-record the save directories, in that order."""
-        result = await self._loop.run_in_executor(
+        result, relaunch_items = await self._loop.run_in_executor(
             None, self._migrate_retrodeck_files_io, pending, new_home, conflict_strategy, roots
         )
-        # Pop the internal relaunch payload (only present on the actual-migration
-        # path, not the needs-confirmation early return) and emit it so the live
-        # Steam shortcuts get their baked launch_options rewritten to the new
-        # paths. Emitted after the executor returns — the relocation write UoW
-        # has already committed, so the items carry the persisted new paths.
-        relaunch_items = result.pop("_relaunch_items", None)
-        if relaunch_items is not None:
-            await self._emit_relaunch_items(relaunch_items)
-            # Record each re-baked command as the shortcut's applied state (the
-            # value the frontend confirm-sets onto the relocated shortcut), so the
-            # next sync skips the now-correct shortcut instead of re-touching it
-            # (delta apply, #1383). Fifth of the six recorded-state writer sites.
-            await self._loop.run_in_executor(None, self._record_migration_applied_io, relaunch_items)
-            await self._rerecord_save_directories()
+        # Emit the relaunch items, of a partial run too, so the live Steam
+        # shortcuts get their baked launch_options rewritten to the new paths.
+        # Emitted after the executor returns — the relocation write UoW has
+        # already committed, so the items carry the persisted new paths.
+        await self._emit_relaunch_items(relaunch_items)
+        # Record each re-baked command as the shortcut's applied state (the
+        # value the frontend confirm-sets onto the relocated shortcut), so the
+        # next sync skips the now-correct shortcut instead of re-touching it
+        # (delta apply, #1383). Fifth of the six recorded-state writer sites.
+        await self._loop.run_in_executor(None, self._record_migration_applied_io, relaunch_items)
+        await self._rerecord_save_directories()
         return result
 
     async def _emit_relaunch_items(self, items: list[dict[str, Any]]) -> None:

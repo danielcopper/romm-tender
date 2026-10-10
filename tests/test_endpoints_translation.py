@@ -17,6 +17,7 @@ import dataclasses
 import inspect
 import json
 import logging
+import os
 import socket
 import urllib.error
 from pathlib import Path
@@ -42,8 +43,10 @@ from fakes.fake_firmware_file_store import FakeFirmwareFileStore
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcessControlAdapter
 from fakes.fake_journal import FakeJournal
+from fakes.fake_migration_file_store import FakeMigrationFileStore
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_platform_systems import FakePlatformSystems
+from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_release_download import FakeReleaseDownload
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
@@ -95,9 +98,11 @@ from lib.partial_failure import PartialFailure
 from main import Endpoints
 from services.artwork import ArtworkService, ArtworkServiceConfig
 from services.connection import ConnectionService, ConnectionServiceConfig
+from services.cores import CoreService, CoreServiceConfig
 from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
+from services.migration import MigrationService, MigrationServiceConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.prune import PruneService, PruneServiceConfig
 from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
@@ -1727,3 +1732,157 @@ class TestTheCoverRepairRefusalsOnTheWire:
         }
         assert "Permission denied" not in raw
         assert "/home/someone" not in raw
+
+
+def _dispatcher_over_cores(settings: dict[str, Any], persister: FakeSettingsPersister) -> CallDispatcher:
+    """The real dispatcher over ``Endpoints`` whose core switches are the real ``CoreService`` over fakes."""
+    service = CoreService(
+        config=CoreServiceConfig(
+            loop=asyncio.get_running_loop(),
+            logger=LOGGER,
+            core_info=FakeCoreInfoProvider(),
+            platform_systems=FakePlatformSystems(),
+            settings=settings,
+            settings_persister=persister,
+            uow_factory=FakeUnitOfWorkFactory(FakeUnitOfWork()),
+            active_core=FakeActiveCoreResolver(),
+            disc_resolver=FakeDiscResolver(),
+            conflict_rules=_make_conflict_rules(),
+        )
+    )
+    endpoints = Endpoints(_make_application(_make_services_bundle(core_service=service)), HostStatus())
+    return CallDispatcher(endpoints, LOGGER)
+
+
+class TestThePlatformCoreSwitchOnTheWire:
+    """A platform core switch whose settings file cannot be written, as the wire carries it."""
+
+    async def test_a_failed_settings_write_answers_save_failed_and_keeps_the_previous_core(self):
+        settings: dict[str, Any] = {"platform_cores": {"snes": "bsnes"}}
+        persister = FakeSettingsPersister()
+
+        def refuse() -> None:
+            raise OSError("read-only file system")
+
+        persister.save_settings = refuse
+        dispatcher = _dispatcher_over_cores(settings, persister)
+
+        raw = await dispatcher.dispatch(1, "set_system_core", ["snes", "Snes9x"])
+
+        message = json.loads(raw)
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {
+            "success": False,
+            "reason": "save_failed",
+            "message": "Save failed: read-only file system",
+        }
+        assert settings["platform_cores"] == {"snes": "bsnes"}
+
+
+_MIGRATION_HOME = "/retrodeck"
+
+
+def _dispatcher_over_migration(store: FakeMigrationFileStore, uow: FakeUnitOfWork) -> CallDispatcher:
+    """The real dispatcher over ``Endpoints`` whose home migration is the real ``MigrationService`` over fakes.
+
+    A move is pending from ``/old`` to the detected RetroDECK's home.
+    """
+    with uow:
+        uow.kv_config.set("retrodeck_home_path_previous", "/old")
+        uow.kv_config.set("retrodeck_home_path", _MIGRATION_HOME)
+
+    async def rerecord_save_directories() -> None:
+        return None
+
+    service = MigrationService(
+        config=MigrationServiceConfig(
+            migration_file_store=store,
+            settings={},
+            loop=asyncio.get_running_loop(),
+            logger=LOGGER,
+            settings_persister=FakeSettingsPersister(),
+            emit=FakeEventSink().emit,
+            firmware_resolver=FakeFirmwareResolver(),
+            retrodeck_folders=FakeRetroDeckFolders(home=_MIGRATION_HOME),
+            relaunch_options=FakeRelaunchOptionsResolver(),
+            save_directories=lambda: rerecord_save_directories,
+            uow_factory=FakeUnitOfWorkFactory(uow),
+            conflict_rules=_make_conflict_rules(),
+        )
+    )
+    endpoints = Endpoints(_make_application(_make_services_bundle(migration_service=service)), HostStatus())
+    return CallDispatcher(endpoints, LOGGER)
+
+
+def _install_at(uow: FakeUnitOfWork, rom_id: int, file_path: str) -> None:
+    with uow:
+        uow.roms.save(
+            Rom(
+                rom_id=rom_id,
+                platform_slug="n64",
+                name=f"rom-{rom_id}",
+                fs_name=os.path.basename(file_path),
+                shortcut_app_id=None,
+                last_synced_at="2025-01-01T00:00:00",
+            )
+        )
+        uow.rom_installs.save(
+            RomInstall(
+                rom_id=rom_id,
+                file_path=file_path,
+                rom_dir=None,
+                platform_slug="n64",
+                system="n64",
+                installed_at="2025-01-01T00:00:00",
+            )
+        )
+
+
+class TestTheHomeMigrationOnTheWire:
+    """A home migration that stops for the user or partway, as the wire carries it."""
+
+    async def test_a_taken_destination_answers_needs_confirmation_with_the_conflicts(self):
+        store = FakeMigrationFileStore()
+        store.files["/old/roms/n64/zelda.z64"] = b"old"
+        store.files[f"{_MIGRATION_HOME}/roms/n64/zelda.z64"] = b"new"
+        uow = FakeUnitOfWork()
+        _install_at(uow, 1, "/old/roms/n64/zelda.z64")
+        dispatcher = _dispatcher_over_migration(store, uow)
+
+        raw = await dispatcher.dispatch(1, "migrate_retrodeck_files", [None])
+
+        message = json.loads(raw)
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {
+            "success": False,
+            "reason": "needs_confirmation",
+            "message": "1 file(s) already exist at destination",
+            "needs_confirmation": True,
+            "conflict_count": 1,
+            "conflicts": ["zelda.z64"],
+        }
+
+    async def test_a_run_whose_moves_partly_fail_answers_migration_incomplete_with_what_it_did(self):
+        store = FakeMigrationFileStore()
+        store.files["/old/roms/n64/bad.z64"] = b"bad"
+        store.files["/old/roms/n64/good.z64"] = b"good"
+        store.move_failures.add("/old/roms/n64/bad.z64")
+        uow = FakeUnitOfWork()
+        _install_at(uow, 1, "/old/roms/n64/bad.z64")
+        _install_at(uow, 2, "/old/roms/n64/good.z64")
+        dispatcher = _dispatcher_over_migration(store, uow)
+
+        raw = await dispatcher.dispatch(1, "migrate_retrodeck_files", ["overwrite"])
+
+        message = json.loads(raw)
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {
+            "success": False,
+            "reason": "migration_incomplete",
+            "message": "Migrated 1 ROM(s) (1 error(s))",
+            "roms_moved": 1,
+            "bios_moved": 0,
+            "saves_moved": 0,
+            "missing_count": 0,
+            "errors": ["bad.z64: simulated move failure: /old/roms/n64/bad.z64"],
+        }

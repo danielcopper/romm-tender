@@ -27,6 +27,7 @@ from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.shortcut_data import EmulatorInvocation
+from lib.errors import Refused
 from services.cores import CoreService, CoreServiceConfig
 
 
@@ -507,18 +508,26 @@ class TestSetGameCore:
         # must never hold a label no consumer can bake.
         _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99)
         _seed_install(uow, rom_id=42, file_path="/roms/snes/mario.sfc")
-        result = event_loop.run_until_complete(service.set_game_core(42, "Genesis Plus GX"))
-        assert result["success"] is False
-        assert result["reason"] == "core_unavailable"
-        assert result["message"] == "Emulator 'Genesis Plus GX' is not available for snes"
+        setting = service.set_game_core(42, "Genesis Plus GX")
+
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(setting)
+
+        assert (refused.value.reason, refused.value.message) == (
+            "core_unavailable",
+            "Emulator 'Genesis Plus GX' is not available for snes",
+        )
         # No pin written.
         assert uow.roms.get(42).emulator_override is None
 
     def test_unknown_rom_fails(self, event_loop, service):
-        result = event_loop.run_until_complete(service.set_game_core(7, "bsnes"))
-        assert result["success"] is False
-        assert result["reason"] == "not_found"
-        assert "7" in result["message"]
+        setting = service.set_game_core(7, "bsnes")
+
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(setting)
+
+        assert refused.value.reason == "not_found"
+        assert "7" in refused.value.message
 
     def test_resolves_system_before_label_lookup(self, event_loop, service, uow, core_info, platform_systems):
         # The installed game's system — its install record's — is read before the
@@ -580,9 +589,12 @@ class TestClearGameCore:
         assert uow.roms.get(42).emulator_override is None
 
     def test_clear_unknown_rom_fails(self, event_loop, service):
-        result = event_loop.run_until_complete(service.clear_game_core(7))
-        assert result["success"] is False
-        assert result["reason"] == "not_found"
+        clearing = service.clear_game_core(7)
+
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(clearing)
+
+        assert refused.value.reason == "not_found"
 
 
 # ── set_system_core (per-platform settings write) ──────────────────────
@@ -631,13 +643,59 @@ class TestSetSystemCore:
             ],
         }
 
-    def test_a_failed_settings_write_answers_the_canonical_failure(self, event_loop, service, settings_persister):
+    def test_a_failed_settings_write_refuses_and_keeps_the_previous_core(
+        self, event_loop, service, settings, settings_persister
+    ):
         def refuse() -> None:
             raise OSError("read-only file system")
 
         settings_persister.save_settings = refuse
-        result = event_loop.run_until_complete(service.set_system_core("snes", "Snes9x"))
-        assert result == {"success": False, "reason": "unknown", "message": "read-only file system"}
+        setting = service.set_system_core("snes", "Snes9x")
+
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(setting)
+
+        assert (refused.value.reason, refused.value.message) == ("save_failed", "Save failed: read-only file system")
+        assert settings["platform_cores"] == {}
+
+    @pytest.mark.parametrize("core_label", ["Snes9x", ""])
+    def test_a_failed_settings_write_gives_the_previous_label_back(
+        self, event_loop, service, settings, settings_persister, core_label
+    ):
+        settings["platform_cores"]["snes"] = "bsnes"
+
+        def refuse() -> None:
+            raise OSError("read-only file system")
+
+        settings_persister.save_settings = refuse
+        setting = service.set_system_core("snes", core_label)
+
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(setting)
+
+        assert refused.value.reason == "save_failed"
+        assert settings["platform_cores"] == {"snes": "bsnes"}
+
+    @pytest.mark.parametrize("failure", [RuntimeError("re-bake bug"), OSError("disc folder unreadable")])
+    def test_a_failure_after_the_settings_write_propagates_and_keeps_the_new_core(
+        self, event_loop, service, uow, settings, settings_persister, disc_resolver, failure
+    ):
+        _seed_rom(uow, rom_id=1, platform_slug="snes", shortcut_app_id=101)
+        _seed_install(uow, rom_id=1, file_path="/roms/snes/a.sfc")
+        settings["platform_cores"]["snes"] = "Snes9x"
+
+        def fail(*_args: object) -> str:
+            raise failure
+
+        disc_resolver.resolve_for_install = fail
+        setting = service.set_system_core("snes", "bsnes")
+
+        with pytest.raises(type(failure)) as raised:
+            event_loop.run_until_complete(setting)
+
+        assert raised.value is failure
+        assert settings["platform_cores"] == {"snes": "bsnes"}
+        assert settings_persister.save_count == 1
 
 
 # ── set_system_core fan-out (re-bake installed+bound ROMs on the platform) ──
@@ -907,12 +965,13 @@ class TestSetGameCoreTransactionBoundary:
         _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99)
         _seed_install(uow, rom_id=42, file_path="/roms/snes/mario.sfc")
         _retire_rom_between_transactions(uow, core_info, 42)
+        setting = service.set_game_core(42, "bsnes")
 
-        result = event_loop.run_until_complete(service.set_game_core(42, "bsnes"))
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(setting)
 
-        assert result["success"] is False
-        assert result["reason"] == "not_found"
-        assert "42" in result["message"]
+        assert refused.value.reason == "not_found"
+        assert "42" in refused.value.message
 
     def test_platform_moved_between_transactions_refuses_the_pin(self, event_loop, service, uow, core_info):
         # The label resolved against "snes"; the row is "psx" by the time it
@@ -921,17 +980,18 @@ class TestSetGameCoreTransactionBoundary:
         _seed_rom(uow, rom_id=42, platform_slug="snes", shortcut_app_id=99)
         _seed_install(uow, rom_id=42, file_path="/roms/snes/mario.sfc")
         _move_platform_between_transactions(uow, core_info, 42, platform_slug="psx")
+        setting = service.set_game_core(42, "bsnes")
 
-        result = event_loop.run_until_complete(service.set_game_core(42, "bsnes"))
+        with pytest.raises(Refused) as refused:
+            event_loop.run_until_complete(setting)
 
-        assert result["success"] is False
-        assert result["reason"] == "core_unavailable"
+        assert refused.value.reason == "core_unavailable"
         # Names the platform the row moved to, but claims only what was checked:
         # whether the label works there was never resolved, and finding out would
         # cost the ES-DE read this split keeps out of the transaction.
-        assert "psx" in result["message"]
-        assert "not verified" in result["message"]
-        assert "not available" not in result["message"]
+        assert "psx" in refused.value.message
+        assert "not verified" in refused.value.message
+        assert "not available" not in refused.value.message
         with uow as u:
             assert u.roms.get(42).emulator_override is None
 
@@ -1016,9 +1076,10 @@ class TestTheCoreWriteLeases:
         if cleanup_running:
             prune_conflicts.register_run("held-run")
         service._rules = _make_conflict_rules(prune_conflicts=prune_conflicts, migration_pending=migration_pending)
+        setting = service.set_game_core(42, "bsnes")
 
         with _refused_by_conflict_rule(reason):
-            event_loop.run_until_complete(service.set_game_core(42, "bsnes"))
+            event_loop.run_until_complete(setting)
 
         assert uow.roms.get(42).emulator_override is None
         assert prune_conflicts.conflicting_operations == 0
