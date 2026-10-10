@@ -4,8 +4,9 @@
  * A shortcut starts its game through its source whatever the emulator source
  * switch says, so a start while that source is switched off would go through a
  * source the user turned off. The backend names such a source
- * (`check_start_source`); this is the read the gate blocks on. Apart from `launchGate.ts` for the same
- * reason as `launchTarget.ts`: the gate performs no I/O itself.
+ * (`check_start_source`); this is the read the gate blocks on. Apart from
+ * `launchGate.ts` for the same reason as `launchTarget.ts`: the gate performs
+ * no I/O itself.
  */
 
 import { checkStartSource, logError } from "../api/backend";
@@ -18,9 +19,9 @@ import { boundedOr } from "./withTimeout";
  *
  * Fails **open**, as the launch-target probe does: a read that fails answers
  * `null` and lets the start through, because only an answer from the backend
- * establishes that the user switched the source off. A read that gets no answer within
- * {@link LOCAL_CALL_LIMIT_MS} rejects this call with its `TimeoutError`, for the
- * launch gate to answer.
+ * establishes that the user switched the source off. A read that gets no
+ * answer within {@link LOCAL_CALL_LIMIT_MS} rejects this call with its
+ * `TimeoutError`, for the launch gate to answer.
  */
 export async function switchedOffStartingSource(context: string): Promise<string | null> {
   const answer = await boundedOr(checkStartSource(), LOCAL_CALL_LIMIT_MS, (e) => {

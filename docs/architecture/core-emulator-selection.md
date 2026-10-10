@@ -174,12 +174,11 @@ start the game is detected and switched off, `check_start_source` answers its ki
 (`domain/emulator_sources.py::switched_off_starting_source`, over a detection and nothing else of the sources), and both
 funnels — the game page's Play and the launch watcher — refuse before any save-sync work and say, as a notification, the
 sentence `startingSourceOffSentence` (`frontend/src/utils/emulatorSourceWording.ts`) has for that kind. Today that
-source is always RetroDECK, the one with `starts_games`, and its sentence is the only one: **"RetroDECK is switched off
-in Settings › Emulator sources, and Tender can only start games through RetroDECK yet."** A kind with no sentence of its
-own says only that it is switched off. A switched-on source that starts games takes the start over, and one that does
-not starts nothing, so it lifts no refusal. Where the starting source is not detected at all, the start goes ahead: a
-source that is not listed has no switch to turn back on. While the backend is not running there is no watcher, and a
-start from Steam's library goes through as before; the launcher reads no setting of Tender's.
+source is always RetroDECK, the one with `starts_games`, and RetroDECK's is the only sentence there; a kind with no
+sentence of its own says only that it is switched off. A switched-on source that starts games takes the start over, and
+one that does not starts nothing, so it lifts no refusal. Where the starting source is not detected at all, the start
+goes ahead: a source that is not listed has no switch to turn back on. While the backend is not running there is no
+watcher, and a start from Steam's library goes through as before; the launcher reads no setting of Tender's.
 
 **How long an answer is kept.** Sources are detected per reading, so a source installed later appears on the next call,
 and nothing outlives the call or run that asked it. A call from the panel takes a fresh reading per question. The
