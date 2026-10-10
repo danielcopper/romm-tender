@@ -7,9 +7,10 @@ is pinned against upstream's own file manifest). That, and not any one import me
 keeping the copies under one root is what lets a single set of exclusions cover them all. See the `_vendor/` rules in
 [`CLAUDE.md`](../../CLAUDE.md).
 
-Everything here today is a third-party runtime dependency, imported as `from _vendor import <package>` — and only
-adapters import `_vendor.*`. They are vendored because Tender runs on the system Python, with no pip and no venv. A venv
-is tied to the Python minor version it was built with, so an OS update that moves the system Python to a new minor
+Everything here today is a third-party runtime dependency, imported as `from _vendor import <package>` — the zstd
+backport alone by name through `importlib`, so a copy that does not load costs the codec rather than the start — and
+only adapters import `_vendor.*`. They are vendored because Tender runs on the system Python, with no pip and no venv. A
+venv is tied to the Python minor version it was built with, so an OS update that moves the system Python to a new minor
 version would strand one; a pure-Python copy under the program's own code carries no such tie.
 [The runtime a vendored copy has to load in](#the-runtime-a-vendored-copy-has-to-load-in) states the limit that follows.
 The provenance entries below make updating any of them a deliberate diff rather than "diff and pray".
