@@ -62,13 +62,13 @@ class SlotDeleter:
     def _validate_slot_operation(self, rom_id: int, slot: str) -> tuple[RomSaveSyncState, dict[str, dict[str, Any]]]:
         """Shared validation for slot delete operations.
 
-        Refuses with ``disabled`` while save sync is off, ``not_installed``, or
+        Refuses with ``sync_disabled`` while save sync is off, ``not_installed``, or
         ``not_found`` when the ROM has no save state or no such slot; otherwise
         returns the loaded aggregate and its slots. Callers that mutate the
         aggregate must persist it via :func:`write_save_state`.
         """
         if not save_sync_enabled(self._settings):
-            raise Refused("disabled", SAVE_SYNC_DISABLED)
+            raise Refused("sync_disabled", SAVE_SYNC_DISABLED)
         if not self._rom_info.is_content_installed(rom_id):
             raise NotInstalled("ROM is not installed")
         save_state = read_save_state(self._uow_factory, rom_id)
