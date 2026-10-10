@@ -14,6 +14,7 @@ import {
   pausedDownloadsHint,
   restartWaitLine,
   waitReasonLine,
+  waitReasonLines,
 } from "./updateInstallView";
 
 const DOWNLOADING: UpdateInstallAttempt = {
@@ -25,6 +26,33 @@ const DOWNLOADING: UpdateInstallAttempt = {
 };
 
 const failed = (failure: UpdateInstallFailure): UpdateInstallAttempt => ({ ...DOWNLOADING, step: "failed", failure });
+
+describe("waitReasonLines", () => {
+  const UNREAD_CELESTE =
+    "Steam lists Celeste as running, and Tender can't tell whether it still is. " +
+    "Quit it if it's open; if it has already closed, restart Steam.";
+
+  it("is the one line of every reason but a game Steam lists", () => {
+    expect(waitReasonLines({ reason: "library_sync" })).toEqual(["Library sync"]);
+  });
+
+  it("is the game to close where every status was read", () => {
+    expect(waitReasonLines({ reason: "app_running", apps: ["Hades"] })).toEqual(["A game to close (Hades)"]);
+  });
+
+  it("is the sentence where only apps whose status could not be read are listed", () => {
+    expect(waitReasonLines({ reason: "app_running", apps: [], apps_status_unread: ["Celeste"] })).toEqual([
+      UNREAD_CELESTE,
+    ]);
+  });
+
+  it("is both lines where some statuses were read and some were not", () => {
+    expect(waitReasonLines({ reason: "app_running", apps: ["Hades"], apps_status_unread: ["Celeste"] })).toEqual([
+      "A game to close (Hades)",
+      UNREAD_CELESTE,
+    ]);
+  });
+});
 
 describe("waitReasonLine", () => {
   it.each<[UpdateWaitReason, string]>([

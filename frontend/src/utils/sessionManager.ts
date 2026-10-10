@@ -5,8 +5,8 @@
  * Uses SteamClient.GameSessions.RegisterForAppLifetimeNotifications to detect
  * game lifecycle events — the notification's own `unAppID` identifies the app on
  * both edges. The guarded `runningApps` reader (`SteamUIStore.RunningApps`) is
- * used only for LIVENESS — at reload-adoption and in {@link readGameRunning} —
- * never to identify a launching app.
+ * used for LIVENESS — at reload-adoption and in {@link readGameRunning} — and
+ * for the log line at a reported start, never to identify a launching app.
  */
 
 import { showToast } from "./toast";
@@ -23,7 +23,7 @@ import { saveSyncToastBody } from "./saveSyncToast";
 import { setMigrationStatus } from "./migrationStore";
 import { updatePlaytimeDisplay } from "./metadataPatches";
 import { detach } from "./detach";
-import { readRunningApps, type RunningAppsReading } from "./runningApps";
+import { readRunningApps, readRunningOrStartingApps, type RunningAppsReading } from "./runningApps";
 import { delay } from "./pacedOps";
 import { LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "./launchGate";
 import { withTimeout } from "./withTimeout";
@@ -107,6 +107,11 @@ export function isSessionActive(romId: number): boolean {
 // window must already see the stop.
 const stoppedSinceStart = new Set<number>();
 
+/** Has a lifetime stop for `appId` been observed since its last observed start? */
+export function isStopObserved(appId: number): boolean {
+  return stoppedSinceStart.has(appId);
+}
+
 /** The signal that answered {@link readGameRunning}. */
 export type GameRunningSignal = "session" | "store" | "stop" | "none";
 
@@ -128,7 +133,7 @@ export interface GameRunningReading {
  */
 export function readGameRunning(appId: number, romId: number | null | undefined): GameRunningReading {
   const sessionActive = romId != null && isSessionActive(romId);
-  const stopObserved = stoppedSinceStart.has(appId);
+  const stopObserved = isStopObserved(appId);
   const store = readRunningApps();
   const listed = store.apps.some((app) => app.appid === appId);
   let decidedBy: GameRunningSignal;
@@ -412,7 +417,7 @@ export const ADOPTION_POLL_MAX_MS = 15_000;
 async function pollForRunningApps(wanted: Set<number>): Promise<RunningAppsReading> {
   const started = Date.now();
   for (;;) {
-    const reading = readRunningApps();
+    const reading = readRunningOrStartingApps();
     detach(debugLog(`adoption poll round: ${reading.diagnostics}`));
     const surfaced = new Set(reading.apps.map((app) => app.appid));
     if (surfaced.size > 0 && [...wanted].every((appId) => surfaced.has(appId))) return reading;
@@ -561,8 +566,14 @@ export async function initSessionManager(): Promise<void> {
 
   // Game lifecycle notifications
   SteamClient.GameSessions.RegisterForAppLifetimeNotifications((update) => {
-    if (update.bRunning) stoppedSinceStart.delete(update.unAppID);
-    else stoppedSinceStart.add(update.unAppID);
+    if (update.bRunning) {
+      stoppedSinceStart.delete(update.unAppID);
+      // A game Steam has just reported started can still read Launching, which is
+      // why adoption counts it; this line is where a device shows what it reads.
+      logInfo(`App start reported: appId=${update.unAppID}, ${readRunningApps().diagnostics}`);
+    } else {
+      stoppedSinceStart.add(update.unAppID);
+    }
     // Taken at the notification, not when the chain reaches it: the window is
     // about how long Steam took to report the start.
     const notedRomId = update.bRunning ? takeNotedRom(update.unAppID) : null;
@@ -570,13 +581,13 @@ export async function initSessionManager(): Promise<void> {
       .then(async () => {
         if (update.bRunning) {
           // The notification's own appid identifies the app that started. Do NOT
-          // consult `SteamUIStore.RunningApps` here: its head is the most recently
-          // FOREGROUNDED app and a fresh arrival is appended at the tail, so the
-          // head names some other running game — attributing the start to it opens
-          // a session on the wrong rom and never opens one for this app, whose
-          // stop then finalizes nothing. Reading it also cost a 500ms delay that
-          // stalled the whole serialized lifecycle chain (a stop queued behind a
-          // start waited for it too); both are gone.
+          // consult `SteamUIStore.RunningApps` here: a start Steam's own Play makes
+          // is unshifted to the head, one the reconciler notices is appended at
+          // the tail, so the head may name some other running game — attributing
+          // the start to it opens a session on the wrong rom and never opens one
+          // for this app, whose stop then finalizes nothing. Reading it also cost
+          // a 500ms delay that stalled the whole serialized lifecycle chain (a stop
+          // queued behind a start waited for it too); both are gone.
           const appId = update.unAppID;
           if (appId) {
             // Refresh map in case a sync happened since init

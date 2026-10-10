@@ -7,7 +7,9 @@ vi.mock("./toast", () => ({ showToast: vi.fn() }));
 const restartPC = vi.fn();
 const startRestart = vi.fn();
 
-function stubSteam({ running = [] as Array<{ appid: number; display_name: string }> } = {}) {
+function stubSteam({
+  running = [] as Array<{ appid: number; display_name: string; local_per_client_data?: object }>,
+} = {}) {
   vi.stubGlobal("SteamClient", {
     System: { RestartPC: restartPC },
     User: { StartRestart: startRestart },
@@ -35,10 +37,36 @@ describe("steamRestart", () => {
     });
 
     it("refuses while a game is running, and says why", () => {
-      stubSteam({ running: [{ appid: 42, display_name: "Some Game" }] });
+      stubSteam({ running: [{ appid: 42, display_name: "Some Game", local_per_client_data: { display_status: 4 } }] });
       restartSteam();
       expect(startRestart).not.toHaveBeenCalled();
       expect(vi.mocked(showToast)).toHaveBeenCalledWith(expect.stringContaining("running game"));
+    });
+
+    it.each([
+      ["Launching", 1],
+      ["Terminating", 36],
+    ])("refuses while a game reads %s", (_name, status) => {
+      stubSteam({
+        running: [{ appid: 42, display_name: "Some Game", local_per_client_data: { display_status: status } }],
+      });
+      restartSteam();
+      expect(startRestart).not.toHaveBeenCalled();
+    });
+
+    it("refuses while a game's display status cannot be read", () => {
+      stubSteam({ running: [{ appid: 42, display_name: "Some Game" }] });
+      restartSteam();
+      expect(startRestart).not.toHaveBeenCalled();
+    });
+
+    it("restarts past a game Steam kept listed after it exited", () => {
+      stubSteam({
+        running: [{ appid: 42, display_name: "Exited Game", local_per_client_data: { display_status: 11 } }],
+      });
+      restartSteam();
+      expect(startRestart).toHaveBeenCalledWith(false);
+      expect(vi.mocked(showToast)).not.toHaveBeenCalled();
     });
   });
 });

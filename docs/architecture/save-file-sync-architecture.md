@@ -1699,13 +1699,15 @@ the re-initialized `sessionManager` recover them:
   are still running at re-init — the durable marker (`last_session_start`) is written by `recordSessionStart` precisely
   so it survives the reload, but only Steam can attest a session has not already ended. Its one surface is
   `SteamUIStore.RunningApps`, read through a guard (an absent store, a `null` store or a throwing getter degrades to
-  "nothing running", never a throw). A single read is not trusted: the store reported an **empty** list for several
-  seconds with the game still running — measured when Decky Loader's `plugin_loader` restarted (#1054 / #1148 round 2) —
-  so the read is **polled** (every 500ms for up to 15s), not one-shot, and a JS-context rebuild under a running game is
-  guarded the same way. A timed-out round logs the `diagnostics` note that tells an absent store, an empty list and a
-  throwing getter apart. The poll settles once something is running **and every attested app has surfaced**: the store
-  omits apps whose overview has not loaded, so a reading listing one concurrent game can still be missing its sibling,
-  and stopping at the first non-empty round would orphan it.
+  "nothing running", never a throw), and an entry counts only by its display status, Launching as well as Running
+  ([Is the game running](#is-the-game-running)): an app Steam kept listed after its exit is not running here either, so
+  an attested session for it is orphaned and none is re-stamped for it. A single read is not trusted: the store reported
+  an **empty** list for several seconds with the game still running — measured when Decky Loader's `plugin_loader`
+  restarted (#1054 / #1148 round 2) — so the read is **polled** (every 500ms for up to 15s), not one-shot, and a
+  JS-context rebuild under a running game is guarded the same way. A timed-out round logs the `diagnostics` note that
+  tells an absent store, an empty list and a throwing getter apart. The poll settles once something is running **and
+  every attested app has surfaced**: the store omits apps whose overview has not loaded, so a reading listing one
+  concurrent game can still be missing its sibling, and stopping at the first non-empty round would orphan it.
 - **A localStorage breadcrumb (attestation).** One versioned row (`romm-tender:active-session` →
   `{v: 2, sessions: [{appId, romId, startMs}, …]}`) holds **every** open session. It lives in localStorage, which
   outlives the JS context, so it survives the reload. Every localStorage access is wrapped — a storage failure degrades
@@ -1895,16 +1897,18 @@ The callback receives:
 The reader has one surface, `SteamUIStore.RunningApps` — the only running-app page global Steam actually exposes, and
 there is no second one to add: `Router` is not a page global on any SteamUI build, and `@decky/ui`'s `Router` export
 resolves to the same `SteamUIStore` singleton (#1588). It is read through a guard (an absent, `null`, or throwing-getter
-store degrades to "reported nothing", never a throw) and returns a `diagnostics` string distinguishing absent / empty /
-threw / the appids found.
+store degrades to "reported nothing", never a throw) and returns the listed apps that count as running — by the display
+status rule under [Is the game running](#is-the-game-running) — with a `diagnostics` string distinguishing absent /
+empty / threw / every listed entry with its display status (`[<appid>:<status>,…]`, `?` for a status it cannot read).
 
 **It answers membership, never identity.** The list is the store's private running-appid array mapped through the app
 store with unloaded overviews dropped, so its head is not even reliably Steam's own `MainRunningApp` — the two diverge
-during exactly the post-launch window Tender cares about. The order it does carry is "most recently foregrounded"
-(`SetRunningApp` removes and unshifts), while the reconciler that notices a newly-launched process appends it at the
-tail. So the head is never the app that just started, and nothing reads it to identify one: the session manager takes
-the starting app's id from the lifetime notification's own `unAppID` (#1624 — it previously waited 500ms and read the
-head, which both mis-attributed a start while another game was running and stalled the serialized lifecycle chain).
+during exactly the post-launch window Tender cares about. The order it carries is not a launch order: `SetRunningApp`
+removes and unshifts — Steam's own Play calls it for the game it starts, where another is listed (below) — while the
+reconciler that notices a newly-launched process appends it at the tail. So the head may or may not be the app that just
+started, and nothing reads it to identify one: the session manager takes the starting app's id from the lifetime
+notification's own `unAppID` (#1624 — it previously waited 500ms and read the head, which both mis-attributed a start
+while another game was running and stalled the serialized lifecycle chain).
 
 The store is also not reliable across timing — why, and what was measured, is under
 [Surviving a JS-context rebuild mid-session](#surviving-a-js-context-rebuild-mid-session) — so the adoption path
@@ -1915,24 +1919,26 @@ it can also keep an app listed that has already exited: [Is the game running](#i
 
 ### Is the game running
 
-Six places ask whether a game is running, and all of them ask one predicate in the session manager,
+Six places ask whether a game is running. Five ask one predicate in the session manager,
 `readGameRunning(appId, romId)`: the launch watcher's already-running guard, and the Play button's launch guard, its
-Resume overlay at mount, Resume and Stop. The sixth asks it differently: the stranded panel's card, in Quick Access and
-on a game page (`StrandedPanelCard.tsx`), asks it for every app the store lists, with no ROM and so without rule 1, and
-lets its own last lifetime notification per app answer first, to tell whether ANY game runs. At the two launch guards a
-wrong "running" skips the whole launch gate — the migration block, the launch target, tracking setup, the core-change
-confirmation, the offline drift check, the pre-launch sync and conflict resolution.
+Resume overlay at mount, Resume and Stop. The sixth asks differently: the stranded panel's card, in Quick Access and on
+a game page (`StrandedPanelCard.tsx`), takes every app the store lists as running or starting whose status was read,
+leaves out one whose stop was observed since its last start (`isStopObserved`, the session manager's stop record), with
+no ROM and so without rule 1, and lets its own last lifetime notification per app answer first, to tell whether ANY game
+runs. At the two launch guards a wrong "running" skips the whole launch gate — the migration block, the launch target,
+tracking setup, the core-change confirmation, the offline drift check, the pre-launch sync and conflict resolution.
 
 1. **An active session answers "running"**, whatever the store says: the store has been measured reporting nothing with
    the game still up ([Surviving a JS-context rebuild mid-session](#surviving-a-js-context-rebuild-mid-session)).
-2. **Otherwise `SteamUIStore.RunningApps` answers — unless a lifetime stop for the app has been observed since its last
-   observed start.** An observed stop overrules the store, because the store can keep an exited app listed for a while.
-   Measured in windowed Big Picture: after a game started through Tender's Play button exited, the store still listed it
-   about 6 and 12 s later but no longer about 18 s later; after a game started through a `steam://rungameid` link it was
-   empty about 3 s after the exit. Before this rule, a press of the Play button 12 s after an exit skipped the gate, and
-   Steam itself started the game normally. In the desktop client the store was empty about 5 s after an exit. Which of
-   the store's inputs lags has not been established, and Game Mode has not been measured; the rule does not depend on
-   how long the lag is. A second start of a game that really is running is refused by Steam itself ("already running").
+2. **Otherwise `SteamUIStore.RunningApps` answers — an entry counts only while its display status reads Running — unless
+   a lifetime stop for the app has been observed since its last observed start.** Why being listed is not enough is
+   below. An observed stop overrules the store, because the store can keep an exited app listed for a while. Measured in
+   windowed Big Picture: after a game started through Tender's Play button exited, the store still listed it about 6 and
+   12 s later but no longer about 18 s later; after a game started through a `steam://rungameid` link it was empty about
+   3 s after the exit. Before the stop rule, a press of the Play button 12 s after an exit skipped the gate, and Steam
+   itself started the game normally. In the desktop client the store was empty about 5 s after an exit. Which of the
+   store's inputs lags has not been established, and Game Mode has not been measured; the rule does not depend on how
+   long the lag is. A second start of a game that really is running is refused by Steam itself ("already running").
 3. **The store stays the fallback for a start that has no session behind it** — one that happened before this JS context
    existed (until reload adoption has finished), one whose session is not open yet (between a button's render and its
    press), and one for an app the session manager cannot map to a rom.
@@ -1944,10 +1950,67 @@ still answers "running" under rule 1 — only when two games run at once, becaus
 second game's start waits in the same chain, so its session is not open yet. After a JS-context rebuild the record is
 empty, so the store answers unopposed until the next stop is observed.
 
+**An entry of `RunningApps` counts only by its overview's display status: Running alone for `readGameRunning`, Launching
+or Running for reload adoption and the stranded panel's card.** The status is `local_per_client_data.display_status` on
+the entry itself, which is the app store's overview object (the list maps its appids through
+`appStore.GetAppOverviewByAppID`), and its values are Steam's `EDisplayStatus`: Launching 1, Running 4, ReadyToLaunch
+11, Terminating 36. An entry whose status cannot be read — no `local_per_client_data`, a status that is not a number, a
+getter that throws — counts as running, so a Steam build that moves the field falls back to counting every listed entry
+rather than to "nothing runs" under every reader at once. Being listed is not enough, because of two things Steam's own
+interface code does (read in the Steam client's webpack modules):
+
+- **It lists a game it is only starting.** Steam's own Play calls `SteamUIStore.SetRunningApp(appId)` right after
+  `RunGame`, and where another app is already listed that puts the new one at the head of the list — before
+  `RegisterForGameActionStart` reports the start. With nothing else listed it adds nothing. Read without the status, the
+  launch watcher took such a start, from Steam's desktop client with another game running, for a press on a game already
+  running, and let it through without the pre-launch sync.
+- **It keeps a game listed after it exited while it still knows a focusable window for it.** Its reconciler
+  (`ScopeRunningApps`) keeps an app that reads neither Running nor Launching when, on SteamOS,
+  `WindowStore.BHasAppWindow(appId)` is true. Only the composition store that recorded a window removes it, and a window
+  Big Picture's store recorded was still there after Big Picture's window had gone — so a game started in Big Picture
+  and quit with the desktop client in front stayed listed, reading ReadyToLaunch, until Steam was restarted.
+
+Measured on the Deck on 2026-10-10, in Desktop Mode with windowed Big Picture and the desktop client both in use: a
+start from Play in the desktop client while another game ran read ReadyToLaunch (11), at the head of the list, when
+`RegisterForGameActionStart` reported it, with the running game reading Running (4), and the watcher gated it. In each
+of two starts, the started game read Launching (1) when the lifetime notification reported its start, while the game
+already running read Running (4); the first read Running at most about 22 s after its start was reported. A start the
+watcher cancelled left no entry in the list. A game started in Big Picture and quit with the desktop client in front no
+longer held the stranded panel's reload, which came about 10 s after both games had exited.
+
+So a game Steam has reported started can still read Launching, and reload adoption and the stranded panel's card count
+an entry that reads Launching as well as Running (`readRunningOrStartingApps`) — including one Steam has not yet
+reported started, a state that was not measured. The launch guards count Running alone: the start they decide on read
+ReadyToLaunch, not Launching, but only Play in the desktop client was measured, and a start that read Launching at that
+moment would be let through without the pre-launch sync. The guard's log line names every entry's status, and so does
+the line the session manager logs the moment Steam reports a start (`App start reported: …`, at `info`); those are where
+a device shows it.
+
+`readGameRunning` applies it with Running alone; the stranded panel's card and reload adoption count Launching as well.
+The session-budget banner's **Restart Steam now** asks the list another question, with no stop rule, twice — the banner
+to disable the button (`SessionBudgetBanner.tsx`) and `restartSteam` at the press (`utils/steamRestart.ts`): does any
+listed game read Launching, Running or Terminating, or a status that cannot be read (`isAnyAppHolding`)? A restart
+closes Steam and any game with it, and a game on its way in or out is one it would close; an entry left behind after its
+exit reads ReadyToLaunch and does not refuse the restart that would clear it. The backend reads the list the same way —
+Launching and Terminating hold as well as Running, written out under
+[the stranded panel's reload](loading-the-panel.md#a-panel-an-earlier-backend-left-behind) — and two waits share that
+reading: the reload and an update's install
+([UpdateInstallService notes](backend-architecture.md#updateinstallservice-notes)). Each side names the values once
+(`DISPLAY_STATUSES_THAT_HOLD`, in `utils/runningApps.ts` and `backend/host/inject/recovery.py`), and
+`tests/host/inject/test_recovery.py` holds the two equal.
+
+An app that counts only because its status could not be read holds both waits, and only the user can tell whether it has
+closed, so the panel says what to do about it in one sentence (`utils/runningAppsWording.ts`): quit it if it is open,
+restart Steam if it has already closed. The update page shows it under **Waiting for:** whenever `app_running` carries
+`apps_status_unread`, beside "A game to close (…)" for the apps whose status was read. The stranded panel's card shows
+it in place of its quit line whenever the store lists such an app and no game is seen to run — even where Tender has
+seen that app stop, because the backend's reload has no stop rule and waits on it all the same; a game seen to run keeps
+the quit line.
+
 Each launch guard logs one line per decision, whether it skips the gate or runs it. The launch watcher logs at `info`
 and the Play button at `debug`, so neither line is written at the default `warn` level. The line names the signal that
 decided (`session`, `store`, `stop` or `none`) beside the session state, whether a stop was observed, and the store's
-`diagnostics`.
+`diagnostics` — every listed entry with its display status.
 
 ### State-aware Resume button (#1313)
 

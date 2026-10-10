@@ -1308,13 +1308,15 @@ export const dismissUpdateAnnouncement = endpoint<[], { success: true }>("dismis
 export const dismissUpdateFailure = endpoint<[string], UpdateSettingWrite>("dismiss_update_failure");
 
 /**
- * One reason a press of Install has to wait. `apps` names what Steam lists as
- * running; `frees_at` is when Steam's interface may be reloaded again, in epoch
+ * One reason a press of Install has to wait. `apps` names the apps Steam lists
+ * whose display status holds the wait, and `apps_status_unread`, present only
+ * where it names any, those it lists with a display status that could not be
+ * read; `frees_at` is when Steam's interface may be reloaded again, in epoch
  * seconds. `running_apps_unknown` and `interface_reload_limit_unknown` are
  * readings that could not be taken, never "nothing running" or "no limit".
  */
 export type UpdateWaitReason =
-  | { reason: "app_running"; apps: string[] }
+  | { reason: "app_running"; apps: string[]; apps_status_unread?: string[] }
   | { reason: "interface_reload_limit"; frees_at: number }
   | {
       reason:

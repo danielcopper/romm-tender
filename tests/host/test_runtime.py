@@ -22,6 +22,7 @@ from host.events import EventSink
 from host.inject import InjectionSetup
 from host.inject.bootstrap import MARKER, marker_present_expression
 from host.inject.bundles import COEXISTENCE_PANEL, GLOBALS_BUNDLE, STANDALONE_PANEL, choose_bundles
+from host.inject.recovery import ListedApp
 from host.protocol import CLOSE_STRANDED_PANEL_RELOADS
 from host.runtime import AlreadyRunningError, BackendBuild, _where_the_running_one_is, run_backend
 from host.single_instance import PortFile, SingleInstanceLock
@@ -343,8 +344,8 @@ class TestLoadingThePanelIntoSteam:
         for name in (GLOBALS_BUNDLE, STANDALONE_PANEL, COEXISTENCE_PANEL):
             (static_root / name).write_text(f"// {name}\n", encoding="utf-8")
         status = HostStatus()
-        read_during_the_build: list[tuple[str, ...] | None] = []
-        read_while_running: list[tuple[str, ...] | None] = []
+        read_during_the_build: list[tuple[ListedApp, ...] | None] = []
+        read_while_running: list[tuple[ListedApp, ...] | None] = []
         build = recorder.build
 
         async def reading_build():
@@ -379,7 +380,7 @@ class TestLoadingThePanelIntoSteam:
                 20,
             )
             assert read_during_the_build == [None]
-            assert read_while_running == [("Celeste",)]
+            assert read_while_running == [(ListedApp("Celeste", status_read=True),)]
         finally:
             await debugger.stop()
 

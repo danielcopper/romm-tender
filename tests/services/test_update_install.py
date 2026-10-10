@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_release_download import FakeReleaseDownload
-from fakes.fake_steam_interface import FakeSteamInterface
+from fakes.fake_steam_interface import FakeListedApp, FakeSteamInterface
 from fakes.fake_transient_units import FakeTransientUnits
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
@@ -136,7 +136,7 @@ class _HeldSteam:
         self.answer = asyncio.Event()
         self.readings = 0
 
-    async def running_apps(self) -> tuple[str, ...] | None:
+    async def running_apps(self) -> tuple[FakeListedApp, ...] | None:
         self.readings += 1
         await self.answer.wait()
         return ()
@@ -373,6 +373,27 @@ class TestWaitReasons:
         reasons = (await rig.service.get_update_install_state())["wait_reasons"]
 
         assert reasons == [{"reason": "app_running", "apps": ["Metroid Fusion"]}]
+
+    async def test_an_app_whose_status_could_not_be_read_is_named_apart(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path, apps=("Metroid Fusion",))
+        rig.steam.apps_status_unread = ("Celeste",)
+
+        reasons = (await rig.service.get_update_install_state())["wait_reasons"]
+
+        assert reasons == [{"reason": "app_running", "apps": ["Metroid Fusion"], "apps_status_unread": ["Celeste"]}]
+
+    async def test_only_apps_whose_status_could_not_be_read_still_make_a_press_wait(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+        rig.steam.apps_status_unread = ("Celeste",)
+
+        press = rig.service.install_update(_OFFERED)
+        with pytest.raises(UpdateWaiting) as refused:
+            await press
+
+        assert refused.value.details == {
+            "wait_reasons": [{"reason": "app_running", "apps": [], "apps_status_unread": ["Celeste"]}]
+        }
+        assert rig.service.is_update_in_progress() is False
 
     async def test_a_reading_that_could_not_be_taken_is_its_own_reason_never_nothing_running(self, rigs, tmp_path):
         rig = await _built(rigs, tmp_path, apps=None)
@@ -756,6 +777,27 @@ class TestAFailedAttempt:
 
         assert (await self._failed(rig))["failure"] == "installer_not_started"
         assert rig.units.starts == []
+
+    async def test_an_app_listed_with_its_status_unread_during_the_download_fails_the_attempt(self, rigs, tmp_path):
+        rig = await _built(rigs, tmp_path)
+        await rig.service.install_update(_OFFERED)
+        rig.steam.apps_status_unread = ("Celeste",)
+
+        last = await rig.settled()
+
+        assert (last["step"], last["failure"]) == ("failed", "game_started")
+        assert rig.units.starts == []
+
+    async def test_the_refusal_s_log_line_marks_an_app_whose_status_was_not_read(self, rigs, tmp_path, caplog):
+        rig = await _built(rigs, tmp_path)
+        await rig.service.install_update(_OFFERED)
+        rig.steam.apps = ("Hades",)
+        rig.steam.apps_status_unread = ("Celeste",)
+
+        with caplog.at_level(logging.WARNING, logger="test_update_install"):
+            await rig.settled()
+
+        assert f"update: Hades, Celeste (status unread) started during the download of {_OFFERED}" in caplog.text
 
     async def test_an_installer_that_is_a_link_is_never_followed(self, rigs, tmp_path):
         body = _tarball(as_link=True)

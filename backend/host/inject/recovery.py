@@ -55,17 +55,40 @@ PANEL_BACK_AFTER_RESTART_SECONDS = 60.0
 # rebuild follows.
 RELOAD_DELAY_MS = 200
 
+# The values of Steam's ``EDisplayStatus`` under which a listed entry still
+# holds a wait; ``frontend/src/utils/runningApps.ts`` names the same values for
+# the panel's restart, and ``tests/host/inject/test_recovery.py`` holds the two
+# equal.
+DISPLAY_STATUSES_THAT_HOLD = {"Launching": 1, "Running": 4, "Terminating": 36}
+
 # ``SteamUIStore.RunningApps`` is the source ``frontend/src/utils/runningApps.ts``
-# reads. Unlike that reader, every shape it cannot read answers ``null`` rather
-# than an empty list, because here an empty list is the go-ahead.
+# reads, and an entry counts here by its display status, with Launching and
+# Terminating holding as well as Running:
+# ``docs/architecture/loading-the-panel.md``, "A panel an earlier backend left
+# behind". Unlike the panel's reader, every shape it cannot read answers
+# ``null`` rather than an empty list, because here an empty list is the
+# go-ahead — and for the same reason an entry whose status cannot be read still
+# holds, named with ``statusRead: false``.
 RUNNING_APPS_EXPRESSION = (
     "(() => {"
     ' if (typeof SteamUIStore === "undefined" || SteamUIStore === null) { return null; }'
     " const listed = SteamUIStore.RunningApps;"
     ' if (listed === null || typeof listed === "undefined") { return null; }'
     ' if (!Array.isArray(listed) && typeof listed[Symbol.iterator] !== "function") { return null; }'
-    " return Array.from(listed, (app) =>"
-    ' String((app && (app.display_name || app.strDisplayName || app.appid)) || "an app"));'
+    f" const holding = {sorted(DISPLAY_STATUSES_THAT_HOLD.values())};"
+    " const statusOf = (app) => {"
+    " try { const status = app.local_per_client_data.display_status;"
+    ' return typeof status === "number" ? status : null; } catch (error) { return null; }'
+    " };"
+    " const holdingApps = [];"
+    " for (const app of listed) {"
+    " const status = statusOf(app);"
+    " if (status !== null && !holding.includes(status)) { continue; }"
+    " holdingApps.push({"
+    ' name: String((app && (app.display_name || app.strDisplayName)) || "a game"),'
+    " statusRead: status !== null });"
+    " }"
+    " return holdingApps;"
     " })()"
 )
 
@@ -116,11 +139,26 @@ class _OwnerReading:
 
 
 @dataclass(frozen=True)
-class AppsReading:
-    """Steam's running apps by name, or why they could not be read (``names`` is ``None``)."""
+class ListedApp:
+    """One app Steam lists that holds a wait; ``status_read`` is false where only an unread status makes it hold."""
 
-    names: tuple[str, ...] | None
+    name: str
+    status_read: bool
+
+
+@dataclass(frozen=True)
+class AppsReading:
+    """Steam's running apps, or why they could not be read (``apps`` is ``None``)."""
+
+    apps: tuple[ListedApp, ...] | None
     why: str = ""
+
+
+def _listed_app(value: object) -> ListedApp:
+    """One entry of the expression's answer; anything but ``statusRead: true`` is a status not read."""
+    if not isinstance(value, dict):
+        return ListedApp(name=str(value), status_read=False)
+    return ListedApp(name=str(value.get("name", "a game")), status_read=value.get("statusRead") is True)
 
 
 async def read_running_apps(evaluate: EvaluateFn) -> AppsReading:
@@ -131,7 +169,12 @@ async def read_running_apps(evaluate: EvaluateFn) -> AppsReading:
         return AppsReading(None, f"{type(exc).__name__}: {exc}")
     if not isinstance(value, list):
         return AppsReading(None, "Steam's list of running apps could not be read")
-    return AppsReading(tuple(str(name) for name in value))
+    return AppsReading(tuple(_listed_app(item) for item in value))
+
+
+def describe_listed(apps: tuple[ListedApp, ...]) -> str:
+    """The apps by name for a log line, each one held only by an unread status saying so."""
+    return ", ".join(app.name if app.status_read else f"{app.name} (status unread)" for app in apps)
 
 
 class StrandedPanelRecovery:
@@ -319,21 +362,21 @@ class StrandedPanelRecovery:
             reading = await self._running_apps()
             if not self._still_stranded(marker):
                 return False
-            if reading.names == () and empty_before:
+            if reading.apps == () and empty_before:
                 owner = await self._owner_now()
                 if owner.answered:
                     self._stranded = owner.marker
                     return self._still_stranded(marker)
                 line = f"inject: cannot tell whose panel Steam carries ({owner.why}); waiting before {before}"
-            elif reading.names == ():
+            elif reading.apps == ():
                 empty_before = True
                 line = f"inject: no app is running; asking once more before {before}"
-            elif reading.names is None:
+            elif reading.apps is None:
                 empty_before = False
                 line = f"inject: cannot tell whether an app is running ({reading.why}); waiting before {before}"
             else:
                 empty_before = False
-                line = f"inject: waiting for {', '.join(reading.names)} to exit before {before}"
+                line = f"inject: waiting for {describe_listed(reading.apps)} to exit before {before}"
             if line != said:
                 said = line
                 self._logger.info(line)

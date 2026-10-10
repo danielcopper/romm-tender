@@ -53,7 +53,7 @@ from host.inject.cdp import (
     unnamed_targets,
 )
 from host.inject.machine import DECKY_LOADER_PORT, decky_loader_is_serving, read_steam_build
-from host.inject.recovery import PanelPresence, StrandedPanelRecovery, read_running_apps
+from host.inject.recovery import ListedApp, PanelPresence, StrandedPanelRecovery, read_running_apps
 from host.inject.reload_limit import RELOAD_LIMIT_FILENAME, ReloadLimit
 from host.inject.watchdog import (
     INJECT_ENV,
@@ -228,9 +228,9 @@ class PanelInjector:
         """What the marker of a panel this process loaded says about who loaded it."""
         return self._instance
 
-    async def running_apps(self) -> tuple[str, ...] | None:
-        """Steam's running apps by name, one reading; ``None`` where it could not be taken."""
-        return (await read_running_apps(self._evaluate_attached)).names
+    async def running_apps(self) -> tuple[ListedApp, ...] | None:
+        """Steam's running apps, one reading; ``None`` where it could not be taken."""
+        return (await read_running_apps(self._evaluate_attached)).apps
 
     async def reload_frees_at(self) -> float | None:
         """When Steam's interface may be taken down once more; ``None`` while it may be now.

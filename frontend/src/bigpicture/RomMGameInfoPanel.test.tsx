@@ -21,7 +21,7 @@ import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import * as cachedStore from "../utils/cachedGameDetailStore";
 import { getBiosStatusShared, _resetSharedReadsForTests } from "../api/sharedReads";
 import * as slotState from "../utils/slotState";
-import { readGameRunning } from "../utils/sessionManager";
+import { isStopObserved } from "../utils/sessionManager";
 import { setSettingsResetState } from "../utils/settingsResetStore";
 import { resetUpdateInstallStoreForTests, setUpdateInstallAttempt } from "../utils/updateInstallStore";
 import {
@@ -86,8 +86,8 @@ vi.mock("../utils/connectionState", async (importOriginal) => ({
 
 vi.mock("../utils/sessionManager", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../utils/sessionManager")>();
-  // The real reading by default; resetAllMocks restores it rather than wiping it.
-  return { ...actual, readGameRunning: vi.fn(actual.readGameRunning) };
+  // The real signal by default; resetAllMocks restores it rather than wiping it.
+  return { ...actual, isStopObserved: vi.fn(actual.isStopObserved) };
 });
 
 vi.mock("./MigrationBlockedCard", () => ({
@@ -426,7 +426,9 @@ describe("RomMGameInfoPanel", () => {
     });
 
     it("adds the quit line on a page whose own game is not running while another game runs", async () => {
-      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      vi.stubGlobal("SteamUIStore", {
+        RunningApps: [{ appid: testAppId + 1, display_name: "Other", local_per_client_data: { display_status: 4 } }],
+      });
       const { container } = await renderStranded("reloads");
       expect(container.textContent).toBe(`${RELOADS}${QUIT_LINE}`);
     });
@@ -451,14 +453,18 @@ describe("RomMGameInfoPanel", () => {
     });
 
     it("drops the quit line on a game's stop while Steam's store still lists that game", async () => {
-      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      vi.stubGlobal("SteamUIStore", {
+        RunningApps: [{ appid: testAppId + 1, display_name: "Other", local_per_client_data: { display_status: 4 } }],
+      });
       const { container } = await renderStranded("reloads");
       act(() => lifetimeListener()({ unAppID: testAppId + 1, nInstanceID: 1, bRunning: false }));
       expect(container.textContent).toBe(RELOADS);
     });
 
     it("keeps the quit line on another game's stop while the store lists a game no notification has named", async () => {
-      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      vi.stubGlobal("SteamUIStore", {
+        RunningApps: [{ appid: testAppId + 1, display_name: "Other", local_per_client_data: { display_status: 4 } }],
+      });
       const { container } = await renderStranded("reloads");
       act(() => lifetimeListener()({ unAppID: testAppId + 2, nInstanceID: 1, bRunning: false }));
       expect(container.textContent).toBe(`${RELOADS}${QUIT_LINE}`);
@@ -466,16 +472,95 @@ describe("RomMGameInfoPanel", () => {
 
     it("opens without the quit line when the store still lists a game whose stop Tender has seen", async () => {
       const exitedAppId = testAppId + 1;
-      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: exitedAppId, display_name: "Other" }] });
+      vi.stubGlobal("SteamUIStore", {
+        RunningApps: [{ appid: exitedAppId, display_name: "Other", local_per_client_data: { display_status: 4 } }],
+      });
       // The store lists only the exited game, so only it is asked about.
-      vi.mocked(readGameRunning).mockReturnValue({ running: false, decidedBy: "stop", diagnostics: "stop observed" });
+      vi.mocked(isStopObserved).mockReturnValue(true);
       const { container } = await renderStranded("reloads");
       expect(container.textContent).toBe(RELOADS);
     });
 
+    it("adds the quit line while another game reads Launching", async () => {
+      vi.stubGlobal("SteamUIStore", {
+        RunningApps: [{ appid: testAppId + 1, display_name: "Other", local_per_client_data: { display_status: 1 } }],
+      });
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(`${RELOADS}${QUIT_LINE}`);
+    });
+
+    it("opens without the quit line when the store lists a game reading Launching whose stop Tender has seen", async () => {
+      vi.stubGlobal("SteamUIStore", {
+        RunningApps: [{ appid: testAppId + 1, display_name: "Other", local_per_client_data: { display_status: 1 } }],
+      });
+      vi.mocked(isStopObserved).mockReturnValue(true);
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(RELOADS);
+    });
+
+    it("adds no quit line for a game Steam kept listed after it exited", async () => {
+      vi.stubGlobal("SteamUIStore", {
+        RunningApps: [{ appid: testAppId + 1, display_name: "Other", local_per_client_data: { display_status: 11 } }],
+      });
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(RELOADS);
+    });
+
+    it("says what to do in place of the quit line when only a game whose status could not be read is listed", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(
+        `${RELOADS}Steam lists Other as running, and Tender can't tell whether it still is. ` +
+          "Quit it if it's open; if it has already closed, restart Steam.",
+      );
+    });
+
+    it("keeps saying what to do about a game whose status could not be read once its stop is seen", async () => {
+      // The backend's reload has no stop rule, so it waits on the game all the same.
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      const { container } = await renderStranded("reloads");
+      act(() => lifetimeListener()({ unAppID: testAppId + 1, nInstanceID: 1, bRunning: false }));
+      expect(container.textContent).toBe(
+        `${RELOADS}Steam lists Other as running, and Tender can't tell whether it still is. ` +
+          "Quit it if it's open; if it has already closed, restart Steam.",
+      );
+    });
+
+    it("opens saying what to do about a game whose status could not be read when its stop was already seen", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      vi.mocked(isStopObserved).mockReturnValue(true);
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(
+        `${RELOADS}Steam lists Other as running, and Tender can't tell whether it still is. ` +
+          "Quit it if it's open; if it has already closed, restart Steam.",
+      );
+    });
+
+    it("calls a game with no name whose status could not be read a game", async () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1 }] });
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(
+        `${RELOADS}Steam lists a game as running, and Tender can't tell whether it still is. ` +
+          "Quit it if it's open; if it has already closed, restart Steam.",
+      );
+    });
+
+    it("keeps the quit line when a game reads Running beside one whose status could not be read", async () => {
+      vi.stubGlobal("SteamUIStore", {
+        RunningApps: [
+          { appid: testAppId + 1, display_name: "Other" },
+          { appid: testAppId + 2, display_name: "Running", local_per_client_data: { display_status: 4 } },
+        ],
+      });
+      const { container } = await renderStranded("reloads");
+      expect(container.textContent).toBe(`${RELOADS}${QUIT_LINE}`);
+    });
+
     it("still shows the card, with the store's reading, when Steam offers no game sessions", async () => {
       vi.stubGlobal("SteamClient", {});
-      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      vi.stubGlobal("SteamUIStore", {
+        RunningApps: [{ appid: testAppId + 1, display_name: "Other", local_per_client_data: { display_status: 4 } }],
+      });
       const { container, unmount } = await renderStranded("restart_steam");
       expect(container.textContent).toBe(`${RESTART_STEAM}${QUIT_LINE}`);
       unmount();
@@ -544,7 +629,9 @@ describe("RomMGameInfoPanel", () => {
     });
 
     it("adds where the update's result shows, before the quit line, while an attempt has started the installer", async () => {
-      vi.stubGlobal("SteamUIStore", { RunningApps: [{ appid: testAppId + 1, display_name: "Other" }] });
+      vi.stubGlobal("SteamUIStore", {
+        RunningApps: [{ appid: testAppId + 1, display_name: "Other", local_per_client_data: { display_status: 4 } }],
+      });
       setUpdateInstallAttempt({
         version: "1.0.0",
         step: "installer_started",

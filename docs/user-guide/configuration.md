@@ -430,14 +430,16 @@ Tender and restarts it. It is there for the release **Available** names, whether
 The button waits while an update would cut something short, and says what under **Waiting for:** — a game to close
 (named), library sync, game downloads, save sync (a slot switch or a save deletion counts too), BIOS downloads, a save
 directory move, a removed-game cleanup, a RetroDECK migration, or **Other Tender work** — anything else Tender is in the
-middle of, such as uninstalling games, removing shortcuts or switching a game's version. **Could not check whether a
-game is running** means Tender could not ask Steam, and it waits then too rather than assume nothing is running. An
-update reloads Steam's interface, and Tender reloads it at most twice in ten minutes; after two reloads the button waits
-until the time it names. **Could not check when Steam's interface may be reloaded** means Tender could not check that
-limit, and it waits then too. The list updates by itself every few seconds, and the button comes back on its own once
-nothing is left on it. A RetroDECK migration that is only waiting for your answer does not hold the button back: the
-question is still there after the update. Paused game downloads do not hold it back either — a line under the button
-says how many there are, because the restart cancels them.
+middle of, such as uninstalling games, removing shortcuts or switching a game's version. Where Steam lists a game as
+running but Tender cannot tell whether it still is, the list says so — "Steam lists Celeste as running, and Tender can't
+tell whether it still is. Quit it if it's open; if it has already closed, restart Steam." — and the button waits for it
+too. **Could not check whether a game is running** means Tender could not ask Steam, and it waits then too rather than
+assume nothing is running. An update reloads Steam's interface, and Tender reloads it at most twice in ten minutes;
+after two reloads the button waits until the time it names. **Could not check when Steam's interface may be reloaded**
+means Tender could not check that limit, and it waits then too. The list updates by itself every few seconds, and the
+button comes back on its own once nothing is left on it. A RetroDECK migration that is only waiting for your answer does
+not hold the button back: the question is still there after the update. Paused game downloads do not hold it back either
+— a line under the button says how many there are, because the restart cancels them.
 
 Once you press it, the button says **Installing…** and a block under it shows how far the install got: what is
 happening, with the percent of the download and the time since you pressed, a bar, and the four steps **Download**,

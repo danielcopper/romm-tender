@@ -101,6 +101,11 @@ class TestWaitOnTheWire:
     def test_a_running_app_carries_its_names(self):
         assert Wait(WaitReason.APP_RUNNING, apps=("A", "B")).to_wire() == {"reason": "app_running", "apps": ["A", "B"]}
 
+    def test_an_app_whose_status_could_not_be_read_is_carried_apart(self):
+        wait = Wait(WaitReason.APP_RUNNING, apps=("A",), apps_status_unread=("B",))
+
+        assert wait.to_wire() == {"reason": "app_running", "apps": ["A"], "apps_status_unread": ["B"]}
+
     def test_the_reload_limit_carries_when_it_frees_up(self):
         assert Wait(WaitReason.INTERFACE_RELOAD_LIMIT, frees_at=12.5).to_wire() == {
             "reason": "interface_reload_limit",

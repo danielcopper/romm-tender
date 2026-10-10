@@ -172,17 +172,34 @@ class RendererGcFn(Protocol):
     def __call__(self) -> bool: ...
 
 
+class ListedRunningApp(Protocol):
+    """One app Steam lists that holds a wait: its name, and whether its display status was read.
+
+    ``status_read`` is false for an app that counts only because its status
+    could not be read, which is never the same as one whose status was read
+    and holds the wait.
+    """
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def status_read(self) -> bool: ...
+
+
 class SteamInterfaceReader(Protocol):
     """What only the process hosting this backend can read of Steam's interface.
 
-    ``running_apps`` is one reading of the apps Steam lists as running, by
-    name, and ``None`` where no reading could be taken — no debugger attached,
-    or the panel not being loaded at all — which is never the same as none
-    running. ``reload_frees_at`` is the epoch second the limit on taking the
-    interface down lets one more through, ``None`` while it would now.
+    ``running_apps`` is one reading of the apps Steam lists whose display
+    status holds a wait — Launching, Running or Terminating, or a status that
+    could not be read — and ``None`` where no reading could be taken — no
+    debugger attached, or the panel not being loaded at all — which is never
+    the same as none running.
+    ``reload_frees_at`` is the epoch second the limit on taking the interface
+    down lets one more through, ``None`` while it would now.
     """
 
-    async def running_apps(self) -> tuple[str, ...] | None: ...
+    async def running_apps(self) -> tuple[ListedRunningApp, ...] | None: ...
 
     async def reload_frees_at(self) -> float | None: ...
 

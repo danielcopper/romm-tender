@@ -18,6 +18,7 @@ import host.inject.recovery as recovery_module
 from host.inject.bootstrap import GLOBALS_INSTALLER, MARKER, STOP_BINDING, STOP_PAYLOAD, marker_present_expression
 from host.inject.bundles import COEXISTENCE_PANEL, GLOBALS_BUNDLE, STANDALONE_PANEL, choose_bundles
 from host.inject.injector import InjectionSetup, PanelInjector
+from host.inject.recovery import RUNNING_APPS_EXPRESSION, ListedApp
 from host.inject.reload_limit import RELOAD_LIMIT_FILENAME, RELOAD_WINDOW_SECONDS
 from host.inject.watchdog import INJECT_FORCE, INJECT_OFF, WATCHDOG_FILENAME, CrashWatchdog, Fingerprint
 from host.protocol import ReloadOutlook
@@ -196,8 +197,23 @@ class TestWhatItReadsForTheApplication:
         running = await injecting()
         await wait_until(lambda: running.page.marker)
         running.page.running_apps = ["Celeste", "Hades"]
+        running.page.apps_status_unread = ["Metroid"]
 
-        assert await running.injector.running_apps() == ("Celeste", "Hades")
+        assert await running.injector.running_apps() == (
+            ListedApp("Celeste", status_read=True),
+            ListedApp("Hades", status_read=True),
+            ListedApp("Metroid", status_read=False),
+        )
+
+    async def test_it_reads_the_expression_the_reload_waits_on(self, injecting):
+        running = await injecting()
+        await wait_until(lambda: running.page.marker)
+        checks = running.page.app_checks
+
+        await running.injector.running_apps()
+
+        assert running.page.app_checks == checks + 1
+        assert running.page.evaluated[-1] == RUNNING_APPS_EXPRESSION
 
     async def test_a_definite_none_is_an_empty_reading(self, injecting):
         running = await injecting()
@@ -829,6 +845,17 @@ class TestWhileAnAppIsRunning:
 
         assert len(logged(caplog, "waiting for Celeste to exit before reloading Steam's JS context")) == 1
         assert running.webhelper.terminations == 0
+
+    async def test_an_app_held_only_by_an_unread_status_is_named_as_such(self, injecting, caplog):
+        page = stranded_page()
+        page.running_apps = ["Celeste"]
+        page.apps_status_unread = ["Hades"]
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            await injecting(page=page)
+            await wait_until(lambda: page.app_checks >= 2)
+
+        assert page.reloads == 0
+        assert logged(caplog, "waiting for Celeste, Hades (status unread) to exit before reloading Steam's JS context")
 
     async def test_it_is_announced_once_however_often_the_context_is_read_again(self, injecting, caplog):
         page = stranded_page()

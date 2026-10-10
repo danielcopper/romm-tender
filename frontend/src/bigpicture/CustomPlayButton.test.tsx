@@ -76,11 +76,11 @@ vi.mock("../utils/migrationStore", () => ({
 // Already-running guard deps. Default: nothing running, so the guard is inert and
 // the existing Play-funnel tests run unchanged. The guard asks `readGameRunning`
 // alone; its signals are tested against the real predicate in
-// `sessionManager.test.ts`. `isAppRunning` stays mocked so a test that has the
-// store list the game while the predicate says it stopped catches a guard that
-// reads the store directly. With `sessionManager` mocked, CustomPlayButton is the
-// only in-graph importer of it and nothing in-graph imports `runningApps`, so a
-// full mock of each is safe.
+// `sessionManager.test.ts`, and `STOPPED_BUT_LISTED` is its answer for a game
+// the store lists whose stop was seen. `runningApps` is mocked empty, so a guard
+// that reached for its reader instead would throw rather than pass. With
+// `sessionManager` mocked, CustomPlayButton is the only in-graph importer of it
+// and nothing in-graph imports `runningApps`, so a full mock of each is safe.
 const { NOT_RUNNING, SESSION_RUNNING, STORE_RUNNING, STOPPED_BUT_LISTED } = vi.hoisted(() => {
   const reading = (running: boolean, decidedBy: GameRunningReading["decidedBy"]): GameRunningReading => ({
     running,
@@ -98,9 +98,7 @@ vi.mock("../utils/sessionManager", () => ({
   readGameRunning: vi.fn(() => NOT_RUNNING),
   noteAppRom: vi.fn(),
 }));
-vi.mock("../utils/runningApps", () => ({
-  isAppRunning: vi.fn(() => false),
-}));
+vi.mock("../utils/runningApps", () => ({}));
 
 // Shared launch-gate modals — spy so the Play button's verdict switch is
 // observable without rendering each modal (mirrors the watcher's test shape).
@@ -147,7 +145,6 @@ import { setLaunchOptionsConfirmed } from "../utils/steamShortcuts";
 import { markLaunchSkipped, consumeLaunchSkip } from "../utils/launchGate";
 import { getMigrationState } from "../utils/migrationStore";
 import { readGameRunning, type GameRunningReading } from "../utils/sessionManager";
-import { isAppRunning } from "../utils/runningApps";
 import { showOfflineDriftModal } from "../shared/OfflineDriftModal";
 import { showFallbackLaunchModal } from "../shared/FallbackLaunchModal";
 import { handleConflicts } from "../shared/SyncConflictModal";
@@ -987,7 +984,6 @@ describe("CustomPlayButton — already-running guard (#1148 round 2)", () => {
     vi.mocked(toaster.toast).mockReset();
     // Guard defaults: no live session, nothing running (overridden per test).
     vi.mocked(readGameRunning).mockReturnValue(NOT_RUNNING);
-    vi.mocked(isAppRunning).mockReturnValue(false);
     // Gate predecessors so the NORMAL path can reach preLaunchSync when the guard
     // is inert; the guard tests assert these are never touched.
     vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "default" });
@@ -1038,7 +1034,6 @@ describe("CustomPlayButton — already-running guard (#1148 round 2)", () => {
     const { findByText } = render(<CustomPlayButton appId={100} />);
     const playBtn = await findByText("Play");
     // Running-app source flips true after render (post-mount race).
-    vi.mocked(isAppRunning).mockReturnValue(true);
     vi.mocked(readGameRunning).mockReturnValue(STORE_RUNNING);
     await act(async () => {
       playBtn.click();
@@ -1053,8 +1048,7 @@ describe("CustomPlayButton — already-running guard (#1148 round 2)", () => {
     );
   });
 
-  it("runs the pre-launch funnel when the game's stop was seen, though the store still lists it", async () => {
-    vi.mocked(isAppRunning).mockReturnValue(true);
+  it("runs the pre-launch funnel when the reading says the game's stop overrules the store's listing", async () => {
     vi.mocked(readGameRunning).mockReturnValue(STOPPED_BUT_LISTED);
     const { findByText } = render(<CustomPlayButton appId={100} />);
     const playBtn = await findByText("Play");
@@ -3134,7 +3128,6 @@ describe("CustomPlayButton — state-aware Resume (#1313)", () => {
     vi.mocked(toaster.toast).mockReset();
     // Detection defaults: not running (overridden per test).
     vi.mocked(readGameRunning).mockReturnValue(NOT_RUNNING);
-    vi.mocked(isAppRunning).mockReturnValue(false);
     // Gate predecessors so the self-heal fall-through can reach the full funnel.
     vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "default" });
     vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
@@ -3194,7 +3187,6 @@ describe("CustomPlayButton — state-aware Resume (#1313)", () => {
 
   it("renders Resume and foregrounds when a running-app source reports the appId — no gate/sync/RunGame", async () => {
     vi.mocked(readGameRunning).mockReturnValue(STORE_RUNNING);
-    vi.mocked(isAppRunning).mockReturnValue(true);
 
     const { findByText, queryByText } = render(<CustomPlayButton appId={100} />);
     await findByText("Resume");
@@ -3221,8 +3213,7 @@ describe("CustomPlayButton — state-aware Resume (#1313)", () => {
     expect(queryByText("Resume")).toBeNull();
   });
 
-  it("renders Play, not Resume, at mount when the game's stop was seen, though the store still lists it", async () => {
-    vi.mocked(isAppRunning).mockReturnValue(true);
+  it("renders Play, not Resume, at mount when the reading says the game's stop overrules the store's listing", async () => {
     vi.mocked(readGameRunning).mockReturnValue(STOPPED_BUT_LISTED);
 
     const { findByText, queryByText } = render(<CustomPlayButton appId={100} />);
@@ -3232,8 +3223,7 @@ describe("CustomPlayButton — state-aware Resume (#1313)", () => {
     expect(vi.mocked(readGameRunning)).toHaveBeenCalledWith(100, 42);
   });
 
-  it("self-heals Resume into the launch funnel when the game's stop was seen, though the store still lists it", async () => {
-    vi.mocked(isAppRunning).mockReturnValue(true);
+  it("self-heals Resume into the launch funnel when the reading says the game's stop overrules the store's listing", async () => {
     vi.mocked(readGameRunning).mockReturnValue(STOPPED_BUT_LISTED);
     const { findByText } = render(<CustomPlayButton appId={100} />);
     await findByText("Play");
@@ -3541,7 +3531,6 @@ describe("CustomPlayButton — Stop Game", () => {
     vi.mocked(toaster.toast).mockReset();
     // Live session for appId 100 / rom 42 → the running overlay renders.
     vi.mocked(readGameRunning).mockReturnValue(SESSION_RUNNING);
-    vi.mocked(isAppRunning).mockReturnValue(true);
     vi.mocked(getCachedGameDetail).mockResolvedValue({
       found: true,
       rom_id: 42,
@@ -3695,7 +3684,6 @@ describe("CustomPlayButton — Stop Game", () => {
     // Overlay seeded by the session-start EVENT while the live sources say
     // nothing is running — the same stale-overlay case handleResumeGame heals.
     vi.mocked(readGameRunning).mockReturnValue(NOT_RUNNING);
-    vi.mocked(isAppRunning).mockReturnValue(false);
 
     const utils = render(<CustomPlayButton appId={100} />);
     await utils.findByText("Play");
@@ -3721,9 +3709,8 @@ describe("CustomPlayButton — Stop Game", () => {
     expect(utils.queryByText("Resume")).toBeNull();
   });
 
-  it("clears the overlay without confirming when the game's stop was seen, though the store still lists it", async () => {
+  it("clears the overlay without confirming when the reading says the game's stop overrules the store's listing", async () => {
     vi.mocked(readGameRunning).mockReturnValue(STOPPED_BUT_LISTED);
-    vi.mocked(isAppRunning).mockReturnValue(true);
 
     const utils = render(<CustomPlayButton appId={100} />);
     await utils.findByText("Play");
@@ -4002,7 +3989,6 @@ describe("CustomPlayButton — Stop Game", () => {
     // The session-start path sets isRunning but leaves state === "launching";
     // clearing only the overlay would expose a stale "Launching..." label.
     vi.mocked(readGameRunning).mockReturnValue(NOT_RUNNING);
-    vi.mocked(isAppRunning).mockReturnValue(false);
     vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "default" });
     vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
@@ -4024,7 +4010,6 @@ describe("CustomPlayButton — Stop Game", () => {
     // The launch left the state at "launching"; the session-start event raises
     // the overlay on top of it, and the live sources now report the session.
     vi.mocked(readGameRunning).mockReturnValue(SESSION_RUNNING);
-    vi.mocked(isAppRunning).mockReturnValue(true);
     act(() => {
       globalThis.dispatchEvent(
         new CustomEvent("romm_session_changed", { detail: { running: true, appId: 100, romId: 42 } }),
@@ -4054,7 +4039,6 @@ describe("CustomPlayButton — version switch (#1298)", () => {
     // Prior describes leave the running-overlay stubs live (Resume button) —
     // reset to "nothing running" so the button lands on Play/Download.
     vi.mocked(readGameRunning).mockReturnValue(NOT_RUNNING);
-    vi.mocked(isAppRunning).mockReturnValue(false);
   });
 
   const dispatchVersionSwitched = (appId: number, romId: number) =>

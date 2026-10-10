@@ -5,19 +5,20 @@
  */
 
 import { showToast } from "./toast";
-import { isAnyAppRunning } from "./runningApps";
+import { isAnyAppHolding } from "./runningApps";
 
 /**
  * Restart the Steam client — the deterministic "free memory" action. A full
  * client restart resets the renderer's per-session heap budget.
  *
- * Fire-and-forget: `StartRestart` tears the client down and back up. Hard-guarded
- * on a running game so a click can NEVER kill one mid-session; callers also
- * disable their button while a game runs, and this guard covers the race where
- * a game started between render and click.
+ * Fire-and-forget: `StartRestart` tears the client down and back up. Refused
+ * while any listed app is starting, running or exiting, or one whose status
+ * cannot be read, so a click does not close a game Steam reports; callers also
+ * disable their button then, and this check covers the race where a game
+ * started between render and click.
  */
 export function restartSteam(): void {
-  if (isAnyAppRunning()) {
+  if (isAnyAppHolding()) {
     showToast("Close your running game before restarting Steam.");
     return;
   }
