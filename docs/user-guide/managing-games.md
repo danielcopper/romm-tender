@@ -656,6 +656,10 @@ shortcut when the game is synced or downloaded, so launching just runs that comm
 If the ROM is not downloaded, pressing Play won't launch a game — download it first from the game's detail panel; the
 shortcut's command is filled in automatically when the download completes.
 
+If RetroDECK is switched off in **Settings › Emulator sources**, pressing Play won't launch a game either — on the
+game's detail panel or in Steam's own library — and a notification says why; switch RetroDECK on again to play (see
+[Emulator sources](configuration.md#emulator-sources)).
+
 ### Stopping a running game
 
 While a game is running, its detail panel shows **Resume** instead of Play, with a small chevron beside it. The

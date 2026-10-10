@@ -110,8 +110,10 @@ class DetectedSourcesReading:
     def detection_failed(self) -> bool:
         """Whether detecting the sources raised, so that none detected establishes nothing about any of them.
 
-        Only RetroDECK's folders read it (``adapters/retrodeck_folders.py``);
-        every other reader takes such a reading as one that detected nothing.
+        RetroDECK's folders (``adapters/retrodeck_folders.py``), the platform's
+        system (``adapters/atlas_platforms.py``) and the launch check
+        (``services/emulator_sources.py``) read it; every other reader takes
+        such a reading as one that detected nothing.
         """
         return self._detection_failed
 

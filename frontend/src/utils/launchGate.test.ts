@@ -6,7 +6,7 @@ import {
   LAUNCH_SKIP_WINDOW_MS,
   NO_ANSWER_MESSAGE,
 } from "./launchGate";
-import type { LaunchGateOps, PreLaunchSyncOutcome } from "./launchGate";
+import type { LaunchGateOps, PreLaunchSyncOutcome, StartingSourceAnswer } from "./launchGate";
 import { TimeoutError } from "./withTimeout";
 import type { SyncConflict } from "../types";
 
@@ -34,6 +34,8 @@ function makeOps(overrides: Partial<LaunchGateOps> = {}): LaunchGateOps {
   return {
     migrationPending: vi.fn(() => false),
     hasLaunchTarget: vi.fn(async () => true),
+    readStartingSource: vi.fn(async (): Promise<StartingSourceAnswer> => ({ checked: true, switchedOff: null })),
+    confirmUncheckedStartingSource: vi.fn(async () => true),
     ensureTrackingConfigured: vi.fn(async (): Promise<"proceed" | "abort"> => "proceed"),
     checkCoreChange: vi.fn(async () => true),
     checkReachability: vi.fn(async () => true),
@@ -68,6 +70,64 @@ describe("runLaunchGate — verdict branches", () => {
     expect(ops.ensureTrackingConfigured).not.toHaveBeenCalled();
     expect(ops.preLaunchSync).not.toHaveBeenCalled();
     expect(ops.checkReachability).not.toHaveBeenCalled();
+  });
+
+  it("blocks with source_switched_off, naming the source, when the source that would start the game is switched off", async () => {
+    const ops = makeOps({
+      readStartingSource: vi.fn(async (): Promise<StartingSourceAnswer> => ({
+        checked: true,
+        switchedOff: "retrodeck",
+      })),
+    });
+    await expect(runLaunchGate(100, 42, ops)).resolves.toEqual({
+      decision: "block",
+      reason: "source_switched_off",
+      source: "retrodeck",
+    });
+    // Refused before the save-sync work: no sync for a start that never happens.
+    expect(ops.ensureTrackingConfigured).not.toHaveBeenCalled();
+    expect(ops.checkCoreChange).not.toHaveBeenCalled();
+    expect(ops.checkReachability).not.toHaveBeenCalled();
+    expect(ops.preLaunchSync).not.toHaveBeenCalled();
+    expect(ops.checkLocalDrift).not.toHaveBeenCalled();
+  });
+
+  it("does not ask about the source for a ROM with no launch target", async () => {
+    const ops = makeOps({ hasLaunchTarget: vi.fn(async () => false) });
+    await runLaunchGate(100, 42, ops);
+    expect(ops.readStartingSource).not.toHaveBeenCalled();
+  });
+
+  it("proceeds past the source step while the source is switched on", async () => {
+    const ops = makeOps();
+    await expect(runLaunchGate(100, 42, ops)).resolves.toEqual({ decision: "allow" });
+    expect(ops.readStartingSource).toHaveBeenCalled();
+    expect(ops.preLaunchSync).toHaveBeenCalled();
+  });
+
+  it("asks where the source could not be checked; Start runs the rest of the gate", async () => {
+    const ops = makeOps({ readStartingSource: vi.fn(async (): Promise<StartingSourceAnswer> => ({ checked: false })) });
+    await expect(runLaunchGate(100, 42, ops)).resolves.toEqual({ decision: "allow" });
+    expect(ops.confirmUncheckedStartingSource).toHaveBeenCalledTimes(1);
+    expect(ops.ensureTrackingConfigured).toHaveBeenCalled();
+    expect(ops.preLaunchSync).toHaveBeenCalled();
+  });
+
+  it("aborts where the source could not be checked and the user cancels, before any save work", async () => {
+    const ops = makeOps({
+      readStartingSource: vi.fn(async (): Promise<StartingSourceAnswer> => ({ checked: false })),
+      confirmUncheckedStartingSource: vi.fn(async () => false),
+    });
+    await expect(runLaunchGate(100, 42, ops)).resolves.toEqual({ decision: "abort" });
+    expect(ops.ensureTrackingConfigured).not.toHaveBeenCalled();
+    expect(ops.checkReachability).not.toHaveBeenCalled();
+    expect(ops.preLaunchSync).not.toHaveBeenCalled();
+  });
+
+  it("asks nothing where the source was checked", async () => {
+    const ops = makeOps();
+    await runLaunchGate(100, 42, ops);
+    expect(ops.confirmUncheckedStartingSource).not.toHaveBeenCalled();
   });
 
   it("proceeds past the launch-target step when the ROM has one", async () => {

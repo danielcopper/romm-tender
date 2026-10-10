@@ -168,6 +168,25 @@ answers, and every answer says it is not set up. Without it, the first switched-
 `starts_games` false, and the panel says Tender cannot start games through it yet. Until Tender chooses among every
 source's emulators, the order decides only while RetroDECK is absent or switched off.
 
+**A switched-off starting source starts nothing.** A shortcut's launch command starts its game through its source
+whatever that source's switch says, so the shared launch gate refuses the start instead: while the source that would
+start the game is detected and switched off, `check_start_source` answers its kind
+(`domain/emulator_sources.py::switched_off_starting_source`, over a detection and nothing else of the sources), and both
+funnels — the game page's Play and the launch watcher — refuse before any save-sync work and say, as a notification, the
+sentence `startingSourceOffSentence` (`frontend/src/utils/emulatorSourceWording.ts`) has for that kind. Today that
+source is always RetroDECK, the one with `starts_games`, and RetroDECK's is the only sentence there; a kind with no
+sentence of its own says only that it is switched off. A switched-on source that starts games takes the start over, and
+one that does not starts nothing, so it lifts no refusal. Where the starting source is not detected at all, the start
+goes ahead: a source that is not listed has no switch to turn back on. While the backend is not running there is no
+watcher, and a start from Steam's library goes through as before; the launcher reads no setting of Tender's.
+
+Where the check cannot tell — no answer within `LOCAL_CALL_LIMIT_MS`, a call that fails, or a detection of the sources
+that raised, which `check_start_source` refuses as `detection_failed` rather than answer as if nothing were detected —
+nothing starts or is refused silently: both funnels ask the question `UNCHECKED_START_SOURCE_QUESTION` holds, under the
+title `UNCHECKED_START_SOURCE_TITLE` (both in `frontend/src/utils/emulatorSourceWording.ts`), in
+`frontend/src/shared/UncheckedSourceModal.tsx`, with Start and Cancel. Start runs the rest of the launch check and
+starts the game; Cancel starts nothing.
+
 **How long an answer is kept.** Sources are detected per reading, so a source installed later appears on the next call,
 and nothing outlives the call or run that asked it. A call from the panel takes a fresh reading per question. The
 library sync's launch resolution takes one reading per run (`ShortcutLaunchResolver.do_read_sources`, in the preview and

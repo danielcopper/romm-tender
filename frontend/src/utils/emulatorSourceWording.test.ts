@@ -15,6 +15,7 @@ import {
   platformSystemOffSentence,
   sourceName,
   sourceRowLines,
+  startingSourceOffSentence,
   withFindingSentence,
   withPlatformSystemSentence,
 } from "./emulatorSourceWording";
@@ -37,6 +38,21 @@ describe("sourceName", () => {
 
   it("does not take a name off the object prototype", () => {
     expect(sourceName("constructor")).toBe("constructor");
+  });
+});
+
+describe("startingSourceOffSentence", () => {
+  it("says D1's sentence for RetroDECK, the one source Tender starts games through yet", () => {
+    expect(startingSourceOffSentence("retrodeck")).toBe(
+      "RetroDECK is switched off in Settings › Emulator sources, and Tender can only start games through RetroDECK yet.",
+    );
+  });
+
+  it("says only that another source is switched off, claiming nothing about what Tender starts through", () => {
+    expect(startingSourceOffSentence("emudeck")).toBe("EmuDeck is switched off in Settings › Emulator sources.");
+    expect(startingSourceOffSentence("future_source")).toBe(
+      "future_source is switched off in Settings › Emulator sources.",
+    );
   });
 });
 

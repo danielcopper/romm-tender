@@ -86,7 +86,7 @@ class AtlasPlatformSystemsAdapter:
         """Why the named *source* cannot be asked; ``None`` where it can, or where none is named."""
         if source is None:
             return None
-        if getattr(reading, "detection_failed", False):
+        if reading.detection_failed:
             return CATALOGUE_UNAVAILABLE
         return None if any(s.kind == source for s in reading.sources) else NO_SOURCE_DETECTED
 

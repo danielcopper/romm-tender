@@ -111,6 +111,74 @@ class TestTheListing:
         assert listing["answering"] == "emudeck"
 
 
+class TestTheStartCheck:
+    @pytest.mark.asyncio
+    async def test_retrodeck_switched_off_is_named_as_the_source_a_start_is_refused_for(self, both):
+        await both.service.set_emulator_source_enabled("retrodeck", False)
+
+        assert await both.service.check_start_source() == {"switched_off": "retrodeck"}
+
+    @pytest.mark.asyncio
+    async def test_switched_on_again_it_refuses_nothing(self, both):
+        await both.service.set_emulator_source_enabled("retrodeck", False)
+        await both.service.set_emulator_source_enabled("retrodeck", True)
+
+        assert await both.service.check_start_source() == {"switched_off": None}
+
+    @pytest.mark.asyncio
+    async def test_a_retrodeck_no_longer_detected_refuses_nothing(self, both):
+        await both.service.set_emulator_source_enabled("retrodeck", False)
+        both.detected = [installation for installation in both.detected if installation.kind != "retrodeck"]
+
+        assert await both.service.check_start_source() == {"switched_off": None}
+
+    @pytest.mark.asyncio
+    async def test_a_detection_that_raised_is_refused_never_read_as_no_source(self, both):
+        def explode(home: str, machine: object) -> list[Any]:
+            raise RuntimeError("resolver blew up")
+
+        both.settings["emulator_sources_off"] = ["retrodeck"]
+        both.sources._detect = explode
+
+        with pytest.raises(Refused) as refusal:
+            await both.service.check_start_source()
+
+        assert refusal.value.reason == "detection_failed"
+
+    @pytest.mark.asyncio
+    async def test_it_detects_once_and_reads_nothing_else_of_a_source(self):
+        asked: list[str] = []
+        rig = _Rig(_Watched("retrodeck", asked), _Watched("emudeck", asked))
+        rig.settings["emulator_sources_off"] = ["retrodeck"]
+        detections: list[int] = []
+        detect = rig.sources._detect
+        rig.sources._detect = lambda home, machine: detections.append(1) or detect(home, machine)
+
+        assert await rig.service.check_start_source() == {"switched_off": "retrodeck"}
+        assert detections == [1]
+        assert asked == []
+
+
+class _Watched(_Installation):
+    """A source that records every question put to it beyond its detection."""
+
+    def __init__(self, kind: str, asked: list[str]) -> None:
+        super().__init__(kind)
+        self._asked = asked
+
+    def health(self) -> Health:
+        self._asked.append(f"{self.kind}.health")
+        return super().health()
+
+    def root(self) -> str:
+        self._asked.append(f"{self.kind}.root")
+        return super().root()
+
+    def systems(self) -> SystemsAnswer:
+        self._asked.append(f"{self.kind}.systems")
+        return super().systems()
+
+
 class TestTheSwitch:
     @pytest.mark.asyncio
     async def test_switching_a_source_off_stores_it_and_answers_the_new_listing(self, both):
