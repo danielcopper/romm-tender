@@ -743,7 +743,7 @@ class TestGetAchievementProgress:
         assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
             (
                 level,
-                f"Achievement list for rom_id=42 unavailable, progress total is 0: {type(error).__name__}: {error}",
+                f"Achievement list for rom_id=42 unavailable, progress counts it as 0: {type(error).__name__}: {error}",
             )
         ]
 

@@ -185,9 +185,10 @@ class AchievementsService:
         Returns earned/total counts and per-achievement earned status.
         Requires RA username configured in the RomM user profile, and refuses
         with :class:`NoRaUsername` without one. Where the achievement list
-        cannot be fetched from RomM, ``total`` is 0. A RomM error reading the
-        progress answers from the stale progress where there is one, marked
-        ``stale``, and otherwise propagates.
+        cannot be fetched from RomM, it goes on with 0 as the list's count,
+        the total it falls back on where RomM's progress states none. A RomM
+        error reading the progress answers from the stale progress where there
+        is one, marked ``stale``, and otherwise propagates.
         """
         rom_id = int(rom_id)
         rom_id_str = str(rom_id)
@@ -208,7 +209,7 @@ class AchievementsService:
         try:
             total = (await self.get_achievements(rom_id))["total"]
         except RommApiError as e:
-            self._log_romm_error(f"Achievement list for rom_id={rom_id} unavailable, progress total is 0", e)
+            self._log_romm_error(f"Achievement list for rom_id={rom_id} unavailable, progress counts it as 0", e)
             total = 0
 
         try:
