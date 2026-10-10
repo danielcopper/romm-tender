@@ -30,11 +30,11 @@ what differs is what the digests prove.
   copy and that it IS the tagged release, because upstream published them. Such a manifest also lists files we never
   vendor (release artifacts, the dist-info), which is why the gate compares only the `<package>/` entries — and why it
   checks the manifest's dist-info licence entry against the sibling `<package>.LICENSE`.
-- **Generated here from the tree as we ship it** — `vdf`. A copy carrying a deliberate local patch can never match an
-  upstream release manifest, so its manifest is our own digest of the patched copy: it proves that nobody has reached
-  into the tree since, and nothing about upstream identity. Only review catches a manifest regenerated to bless an edit,
-  so regenerating one is the last step of a deliberate re-copy, version bump or patch — never the answer to a failing
-  gate:
+- **Generated here from the tree as we ship it** — `vdf`, `backports`. A copy carrying a deliberate local patch can
+  never match an upstream release manifest, so its manifest is our own digest of the patched copy: it proves that nobody
+  has reached into the tree since, and nothing about upstream identity. Only review catches a manifest regenerated to
+  bless an edit, so regenerating one is the last step of a deliberate re-copy, version bump or patch — never the answer
+  to a failing gate:
 
   ```sh
   cd backend/_vendor && find <package> -type f -not -path '*/__pycache__/*' \
@@ -131,6 +131,72 @@ licence, and the update procedure below has to put it back by hand for exactly t
 4. Regenerate the manifest from the patched tree with the command under [Manifests](#manifests), then re-run the gate:
    `python scripts/check_vendored_trees.py`.
 
+## backports
+
+`backports.zstd`, the published backport of Python 3.14's `compression.zstd`. The resolver needs a zstd codec for one
+read, EmuDeck's ES-DE catalogue sealed inside its AppImage; `adapters/atlas_zstd.py` hands this copy to it on an
+interpreter without the standard library's codec.
+
+- **Upstream:** <https://github.com/rogdham/backports.zstd>, released on PyPI as `backports.zstd`
+- **Version:** 1.7.0 — PyPI's
+  `backports_zstd-1.7.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl`
+  (`sha256:f3f4887a8a1fd1290017fe5a1d29a7d1dc5c57f9477fbd64f119316a7e3ae769`, the digest PyPI publishes for that file).
+  The release requires `>=3.10,<3.14`, and the `cp313` build is the one for the system Python Tender runs on.
+- **License:** PSF-2.0 — see [`backports/zstd/LICENSE.txt`](backports/zstd/LICENSE.txt). The compiled extension carries
+  the zstd library, whose BSD licence upstream ships beside it as
+  [`backports/zstd/LICENSE_zstd.txt`](backports/zstd/LICENSE_zstd.txt). Both are the wheel's `dist-info/licenses/`
+  files, copied into the tree.
+- **Local patches:** every import that names `backports` as its first component is made relative to its file — 32
+  statements in 14 files ([#1848](https://github.com/danielcopper/romm-tender/issues/1848) D1). Upstream imports itself
+  by its absolute name (`import backports.zstd._zstd`), and this process has no top-level `backports`, so a verbatim
+  copy does not import as `_vendor.backports.zstd`. The rule: `backports` becomes one dot per `/` in the file's path
+  below `_vendor/` (`backports/zstd/__init__.py` → `..`, so `from backports.zstd._zstd import` reads
+  `from ..zstd._zstd import`), and the one `import backports.zstd._zstd as _zstd` becomes
+  `from ..zstd import _zstd as _zstd`. Step 3 below applies it; nothing else in the tree is changed.
+  [`tests/test_vendored_backports_zstd.py`](../../tests/test_vendored_backports_zstd.py) fails on any absolute
+  self-import left.
+- **Manifest:** `backports.SHA256SUMS`, **generated here** from the tree as we ship it, as for `vdf`: it pins the
+  patched copy against later edits and says nothing about upstream identity; the wheel digest above is what ties it to
+  1.7.0.
+
+The wheel's `dist-info` is not vendored. Its `_cffi/` fallback is inert: the `_zstd_cffi` module it imports is not in
+the wheel, so where the compiled `_zstd` does not load there is no codec.
+
+### How to update backports
+
+1. Find the `cp313-cp313-manylinux…x86_64` wheel of the new version and the digest PyPI publishes for it, then download
+   it, check it and unpack it:
+
+   ```sh
+   curl -sS https://pypi.org/pypi/backports.zstd/<version>/json | python3 -c 'import json, sys
+   for f in json.load(sys.stdin)["urls"]:
+       if "cp313-cp313-manylinux" in f["filename"] and "x86_64" in f["filename"]:
+           print(f["digests"]["sha256"], f["filename"], f["url"])'
+   mkdir /tmp/zstd && cd /tmp/zstd && curl -sSO <url> && echo '<sha256>  <filename>' | sha256sum -c \
+       && unzip -q -d u <filename>
+   ```
+
+2. Delete `backend/_vendor/backports/` and copy `/tmp/zstd/u/backports/` in its place, leaving out any `__pycache__`.
+   Copy `LICENSE.txt` and `LICENSE_zstd.txt` from `/tmp/zstd/u/backports_zstd-<version>.dist-info/licenses/` into
+   `backend/_vendor/backports/zstd/`.
+3. Reapply the patch:
+
+   ```sh
+   cd backend/_vendor && find backports -type f \( -name '*.py' -o -name '*.pyi' \) | while read -r f; do
+       dots=$(printf '%s' "$f" | tr -cd / | tr / .)
+       sed -i -E \
+           -e "s/^([[:space:]]*)from backports\.?([^ ]*) import /\1from ${dots}\2 import /" \
+           -e "s/^([[:space:]]*)import backports\.(.+)\.([A-Za-z0-9_]+) as /\1from ${dots}\2 import \3 as /" \
+           "$f"
+   done
+   ```
+
+   `sed` reports nothing when a line does not match, so run `tests/test_vendored_backports_zstd.py` next: it names every
+   absolute self-import the rule missed, and imports the copy where the interpreter can load it.
+4. Bump the **Version** bullet above, and the **Local patches** counts.
+5. Regenerate the manifest from the patched tree with the command under [Manifests](#manifests), then re-run the gate:
+   `python scripts/check_vendored_trees.py`.
+
 ## The runtime a vendored copy has to load in
 
 A vendored copy loads under the interpreter the service unit starts — `/usr/bin/python3`, or whatever `TENDER_PYTHON`
@@ -144,9 +210,11 @@ device — when the backend starts, or the first time a question reaches the ass
 
 A compiled extension module built for one CPython minor version's ABI does not fit this model — a `cp313-cp313` wheel
 does not load under 3.14, so a copy vendored for today's system Python stops loading when an OS update moves it, the
-very event vendoring exists to survive. A stable-ABI (`abi3`) build is the exception. The one expected so far is
-`backports.zstd`, which ships per-version builds only (1.7.0: cp310–cp313, no abi3, no cp314); how it ships is #1735's
-decision.
+very event vendoring exists to survive. A stable-ABI (`abi3`) build is the exception. The one here is
+[`backports`](#backports), which ships per-version builds only (1.7.0: cp310–cp313, no abi3, no cp314): its `cp313` copy
+stops loading on the day the system Python reaches 3.14, which is also the day the standard library's `compression.zstd`
+takes its place. That is why it is registered only where `compression.zstd` does not import, and why a copy that does
+not load is no codec rather than a failed start (`adapters/atlas_zstd.py`).
 
 Neither artifact can see any of this, and each says less than it looks like it does. The checksum gate says the copy is
 the bytes we pinned; it never imports anything. What says the copy imports is the test suite — most directly
