@@ -7,10 +7,10 @@ deletes the ROM and carries only the saves. Same plan, same collision question,
 same answer applied to the same whole set — which is why it is one component and
 not a rule copied into each exit.
 
-Nothing here decides *whether* to act. The service owns the dialog, the refusals
-and the ordering; this owns what a rename consists of and how far it got — a
-rename that stopped after files moved answers :class:`AdoptionIncomplete`, and one
-that stopped before anything moved raises its refusal.
+Nothing here decides *whether* to act. The service owns the dialog, the
+validation before anything moves and the ordering; this owns what a rename
+consists of, the collision question, and how far a rename got —
+:meth:`AdoptionRenamer.move_planned` states what it raises and what it answers.
 """
 
 from __future__ import annotations
@@ -124,12 +124,14 @@ class AdoptionRenamer:
         file moves: renaming as you go and asking at the first collision would
         leave half the set moved when the question appears.
         """
-        stopped, _carried = self.move_planned(self.rename_plan(rom_id, target, source_path), collision_choice)
+        stopped, _carried, _set_aside = self.move_planned(
+            self.rename_plan(rom_id, target, source_path), collision_choice
+        )
         return stopped
 
     def move_planned(
         self, pairs: tuple[RenamePair, ...], collision_choice
-    ) -> tuple[AdoptionIncomplete | None, tuple[RenamePair, ...]]:
+    ) -> tuple[AdoptionIncomplete | None, tuple[RenamePair, ...], tuple[str, ...]]:
         """Ask about every taken name, then carry the pairs the answer allows.
 
         Shared by both exits of the adopt dialog, so a name already taken raises
@@ -137,14 +139,16 @@ class AdoptionRenamer:
         whole set, and neither exit can acquire its own collision rule.
 
         Raises :class:`RenameCollisions` for taken names *collision_choice* does
-        not answer, and ``replace_failed`` for an Overwrite that stopped before it
-        set anything aside or a non-file it cannot replace; a move that failed
-        with nothing renamed or set aside raises ``rename_failed``. Otherwise
-        returns ``(stopped, carried)``: a ``None`` *stopped* means every file the
-        answer allowed to move arrived, and :class:`AdoptionIncomplete` names what
-        a step that stopped partway left behind. *carried* is which files arrived,
-        so a caller whose **next** step can fail is able to say what this one
-        already did rather than reporting a clean abort over files that have moved.
+        not answer; raises ``Refused`` with ``replace_failed`` for an Overwrite
+        that stopped before it set anything aside or a non-file it cannot replace,
+        and with ``rename_failed`` for a move that failed with nothing renamed or
+        set aside. Otherwise returns ``(stopped, carried, set_aside)``: a ``None``
+        *stopped* means every file the answer allowed to move arrived, and
+        :class:`AdoptionIncomplete` names what a step that stopped partway left
+        behind. *carried* is which files arrived and *set_aside* which an
+        Overwrite moved to ``.romm-backup``, so a caller whose **next** step can
+        fail is able to say what this one already did rather than reporting a
+        clean abort over files that have moved.
         """
         occupied = frozenset(pair.target for pair in pairs if self._adoption_move.exists(pair.target))
         clear, colliding = split_collisions(pairs, occupied)
@@ -158,12 +162,12 @@ class AdoptionRenamer:
             if choice == OVERWRITE:
                 stopped, quarantined = self._replace_occupied(colliding)
                 if stopped is not None:
-                    return (stopped, ())
+                    return (stopped, (), quarantined)
             to_move = chosen
         outcome = self._adoption_move.move_pairs(tuple((pair.source, pair.target) for pair in to_move))
         stopped = self._report_move(outcome, quarantined)
         moved = frozenset(outcome["moved"])
-        return (stopped, tuple(pair for pair in to_move if pair.target in moved))
+        return (stopped, tuple(pair for pair in to_move if pair.target in moved), quarantined)
 
     def discarded_save_pairs(self, rom_id: int, target: Target, source_path: str) -> tuple[RenamePair, ...]:
         """The save and savestate pairs a discarded candidate leaves behind, ROM excluded.
@@ -273,7 +277,7 @@ class AdoptionRenamer:
         return AdoptionIncomplete(
             reason="replace_failed",
             message=(
-                f"Could not replace {failed}. Nothing was moved. "
+                f"Could not replace {failed}. Nothing was renamed. "
                 f"These were already moved to .romm-backup: {', '.join(set_aside)}."
             ),
             renamed=[],

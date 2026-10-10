@@ -422,9 +422,12 @@ class RomAdoptionService:
         A removal that fails **after** the carry is the one abort that is not
         clean: the file the user keeps can no longer find its saves, which now sit
         under the canonical name. It answers :class:`AdoptionIncomplete` naming
-        them rather than moving them back — a retry of the same download finds
-        the saves already in place and re-plans to nothing, where an undo would
-        have to be undone again.
+        them, and whatever an Overwrite set aside in ``.romm-backup`` to make room
+        for them, rather than moving them back — a retry of the same download
+        finds the saves already in place and re-plans to nothing, where an undo
+        would have to be undone again. A carry that moved nothing set nothing
+        aside either: an Overwrite clears a name only for a file that then lands
+        on it, or the carry stops first.
 
         A path the store cannot describe at all is left alone and the download
         simply proceeds: nothing was named that could be removed.
@@ -441,7 +444,7 @@ class RomAdoptionService:
         if existing is None:
             return None
         rom_id = int(rom_detail.get("id") or 0)
-        stopped, carried = self._renamer.move_planned(
+        stopped, carried, quarantined = self._renamer.move_planned(
             self._renamer.discarded_save_pairs(rom_id, target, source_path), collision_choice
         )
         if stopped is not None:
@@ -452,13 +455,19 @@ class RomAdoptionService:
             if not carried:
                 raise
             renamed = [os.path.basename(pair.target) for pair in carried]
+            set_aside = [os.path.basename(path) for path in quarantined]
+            kept = (
+                f" These were moved to .romm-backup to make room and are still there: {', '.join(set_aside)}."
+                if set_aside
+                else ""
+            )
             return AdoptionIncomplete(
                 reason=refused.reason,
                 message=f"{refused.message} This game's saves were already renamed and are now at: "
-                f"{', '.join(renamed)}.",
+                f"{', '.join(renamed)}.{kept}",
                 renamed=renamed,
                 still_under_old_name=[],
-                set_aside=[],
+                set_aside=set_aside,
             )
         return None
 

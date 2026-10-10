@@ -2588,6 +2588,32 @@ class TestDiscardCandidate:
         assert h.store.files[_OLD] == b"user's own dump"
         assert h.store.files["/saves/snes/Game.srm"] == b"battery"
 
+    async def test_a_failed_removal_after_an_overwrite_names_what_was_set_aside(self, h):
+        # The Overwrite moved the other version's save to .romm-backup before the
+        # carry, so a removal failing after it leaves that save there for a
+        # download that never starts — and only the answer can say so.
+        self._stage(h)
+        h.store.files["/saves/snes/Game (U).srm"] = b"battery"
+        h.store.files["/saves/snes/Game.srm"] = b"the other version's"
+        h.store.remove_failures = {_OLD}
+
+        result = await h.service.check_download_target(
+            _single_file_detail(), _NEW, replace=True, candidate_path=_OLD, collision_choice="overwrite"
+        )
+
+        assert isinstance(result, AdoptionIncomplete)
+        assert result.reason == "replace_failed"
+        assert result.renamed == ["Game.srm"]
+        assert result.still_under_old_name == []
+        assert result.set_aside == ["Game.srm"]
+        assert result.message == (
+            "Could not remove the existing files — download aborted "
+            "This game's saves were already renamed and are now at: Game.srm. "
+            "These were moved to .romm-backup to make room and are still there: Game.srm."
+        )
+        assert h.store.files["/saves/snes/.romm-backup/Game.srm"] == b"the other version's"
+        assert h.store.files[_OLD] == b"user's own dump"
+
     async def test_a_failed_removal_with_no_saves_says_nothing_about_them(self, h):
         self._stage(h)
         h.store.remove_failures = {_OLD}
