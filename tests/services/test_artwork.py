@@ -1694,7 +1694,7 @@ class TestRefreshCover:
         romm_api.get_rom.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_server_unreachable_when_get_rom_raises(
+    async def test_a_romm_error_fetching_the_rom_propagates(
         self,
         artwork_service,
         uow,
@@ -1831,7 +1831,7 @@ class TestRefreshCover:
             assert uow.roms.get(42).cover_source == url_cover
 
     @pytest.mark.asyncio
-    async def test_download_failure_does_not_mutate_rom(
+    async def test_an_oserror_from_the_download_refuses_download_failed_and_leaves_the_rom_row(
         self,
         artwork_service,
         uow,
@@ -1839,7 +1839,6 @@ class TestRefreshCover:
         romm_api,
         tmp_path,
     ):
-        """When ``download_cover`` raises, the ROM row's cover_path must remain untouched."""
         grid = str(tmp_path / "grid")
         steam_config.grid_dir.return_value = grid
         _seed_rom(uow, 42, app_id=999, cover_path="old/path.png")
