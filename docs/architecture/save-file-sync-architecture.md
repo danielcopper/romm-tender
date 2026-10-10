@@ -1699,7 +1699,7 @@ the re-initialized `sessionManager` recover them:
   are still running at re-init — the durable marker (`last_session_start`) is written by `recordSessionStart` precisely
   so it survives the reload, but only Steam can attest a session has not already ended. Its one surface is
   `SteamUIStore.RunningApps`, read through a guard (an absent store, a `null` store or a throwing getter degrades to
-  "nothing running", never a throw), and an entry counts only by its display status
+  "nothing running", never a throw), and an entry counts only by its display status, Launching as well as Running
   ([Is the game running](#is-the-game-running)): an app Steam kept listed after its exit is not running here either, so
   an attested session for it is orphaned and none is re-stamped for it. A single read is not trusted: the store reported
   an **empty** list for several seconds with the game still running — measured when Decky Loader's `plugin_loader`
@@ -1969,18 +1969,27 @@ things Steam's own interface code does (read in the Steam client's webpack modul
   Big Picture's store recorded was still there after Big Picture's window had gone — so a game started in Big Picture
   and quit with the desktop client in front stayed listed, reading ReadyToLaunch, until Steam was restarted.
 
-That a running RomM shortcut reads Running, and that a start Steam's Play listed early reads ReadyToLaunch or Launching
-when the start is reported, is read from Steam's code. The guard's log line names every entry's status, and so does the
-line the session manager logs the moment Steam reports a start (`App start reported: …`, at `info`); those are where a
-device shows it. Until that is measured, reload adoption does not count an entry that reads Launching.
+Measured on the Deck on 2026-10-10, in Desktop Mode with windowed Big Picture and the desktop client both in use: a
+start from Play in the desktop client while another game ran read ReadyToLaunch (11), at the head of the list, when
+`RegisterForGameActionStart` reported it, with the running game reading Running (4), and the watcher gated it. When the
+lifetime notification reported the start, both games read Launching (1), and one of them read Running at most about 22 s
+later. A start the watcher cancelled left no entry in the list. A game started in Big Picture and quit with the desktop
+client in front no longer held the stranded panel's reload, which came about 10 s after both games had exited.
 
-The same rule stands in `readGameRunning`, in the stranded panel's card and at reload adoption. The session-budget
-banner's **Restart Steam now** asks the list a second question, with no stop rule, twice — the banner to disable the
-button (`SessionBudgetBanner.tsx`) and `restartSteam` at the press (`utils/steamRestart.ts`): does any listed game read
-Launching, Running or Terminating, or a status that cannot be read (`isAnyAppHolding`)? A restart closes Steam and any
-game with it, and a game on its way in or out is one it would close; an entry left behind after its exit reads
-ReadyToLaunch and does not refuse the restart that would clear it. The backend reads the list the same way — Launching
-and Terminating hold as well as Running, written out under
+So a game Steam has reported started can still read Launching, and reload adoption and the stranded panel's card count
+an entry that reads Launching as well as Running (`readRunningOrStartingApps`). The launch guards count Running alone:
+the start they decide on read ReadyToLaunch, not Launching, but only Play in the desktop client was measured, and a
+start that read Launching at that moment would be let through without the pre-launch sync. The guard's log line names
+every entry's status, and so does the line the session manager logs the moment Steam reports a start
+(`App start reported: …`, at `info`); those are where a device shows it.
+
+The same rule stands in `readGameRunning` and, with Launching counted as well, in the stranded panel's card and at
+reload adoption. The session-budget banner's **Restart Steam now** asks the list a second question, with no stop rule,
+twice — the banner to disable the button (`SessionBudgetBanner.tsx`) and `restartSteam` at the press
+(`utils/steamRestart.ts`): does any listed game read Launching, Running or Terminating, or a status that cannot be read
+(`isAnyAppHolding`)? A restart closes Steam and any game with it, and a game on its way in or out is one it would close;
+an entry left behind after its exit reads ReadyToLaunch and does not refuse the restart that would clear it. The backend
+reads the list the same way — Launching and Terminating hold as well as Running, written out under
 [the stranded panel's reload](loading-the-panel.md#a-panel-an-earlier-backend-left-behind) — and two waits share that
 reading: the reload and an update's install
 ([UpdateInstallService notes](backend-architecture.md#updateinstallservice-notes)). Each side names the values once

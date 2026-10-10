@@ -597,10 +597,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   first and calls `ReloadLimit.record` once it is under way
 - **Whether a listed app runs is read only through `frontend/src/utils/runningApps.ts` (panel) or
   `RUNNING_APPS_EXPRESSION` (`backend/host/inject/recovery.py`), by display status — Running alone makes a game run,
-  Launching, Running and Terminating hold a restart or a wait; an unreadable status counts as running or holding** —
-  test + prompt-only — `tests/host/inject/test_recovery.py` (`TestTheStatusHomesAgree`, `TestWhichEntriesHold`),
-  `frontend/src/utils/runningApps.test.ts`. Prompt-only: no new reader of `SteamUIStore.RunningApps`, and the stranded
-  card's sentence follows what the backend waits on
+  Launching or Running one that runs or is starting, Launching, Running and Terminating hold a restart or a wait; an
+  unreadable status counts as running or holding** — test + prompt-only — `tests/host/inject/test_recovery.py`
+  (`TestTheStatusHomesAgree`, `TestWhichEntriesHold`), `frontend/src/utils/runningApps.test.ts`. Prompt-only: no new
+  reader of `SteamUIStore.RunningApps`, and the stranded card's sentence follows what the backend waits on
 - **Tender's Quick Access entry composes with Decky's rather than going through it, and everything it binds to the Quick
   Access window is bound from inside that window's React tree** — test + prompt-only —
   `frontend/src/qam/quickAccessEntry.test.ts`; finding and patching the renderers is device-only. Prompt-only: marker

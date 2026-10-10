@@ -229,9 +229,9 @@ decided: [qam-panel.md](qam-panel.md#pages), Pages), and of the game page's sect
 (`RomMGameInfoPanel.tsx`), ahead of every other card there, on a page loaded before the strand as well as after. While
 an update attempt has started the installer the card adds that the update's result shows after the reload or restart it
 names, read from the install store without a call (`installerStarted`, `utils/updateInstallStore.ts`). While a game runs
-it adds that Tender cannot stop it. Where no game is seen to run but the store lists apps whose display status could not
-be read — which hold the reload all the same — it says instead that Steam lists them, that Tender cannot tell whether
-they still run, to quit them if they are open and to restart Steam if they have closed
+or is starting it adds that Tender cannot stop it. Where no game is seen to run but the store lists apps whose display
+status could not be read — which hold the reload all the same — it says instead that Steam lists them, that Tender
+cannot tell whether they still run, to quit them if they are open and to restart Steam if they have closed
 ([Is the game running](save-file-sync-architecture.md#is-the-game-running)). The play row keeps the **Tender restarted**
 badge, Steam's own Last played and Playtime, and Space Required, but not the Achievements and BIOS badges, whose tabs
 the card has replaced. It offers Resume for its game while that game runs and nothing else: no Play, no Stop, no gear,
