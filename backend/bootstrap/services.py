@@ -37,6 +37,7 @@ from services.leftover_tmp_cleanup import LeftoverTmpCleanupService, LeftoverTmp
 from services.library import LibraryService, LibraryServiceConfig
 from services.metadata import MetadataService, MetadataServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
+from services.platform_systems import PlatformSystemService, PlatformSystemServiceConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.prune import PruneService, PruneServiceConfig
 from services.prune_leases import PruneLeaseService, PruneLeaseServiceConfig
@@ -216,13 +217,25 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     # (no service deps) so every per-game-core read consumer — migration, saves,
     # game-detail, cores — draws from the SAME seam and the read-path core never
     # diverges from the launched core.
+    # The system a RomM platform is in an emulator source, which every reader of
+    # a platform's system asks — the download, the emulator choice, the BIOS
+    # answers and the saves — so they all ask the same question.
+    platform_systems = PlatformSystemService(
+        config=PlatformSystemServiceConfig(
+            uow_factory=cfg.callbacks.uow_factory,
+            romm_api=cfg.adapters.romm_api,
+            source_platform_systems=cfg.adapters.source_platform_systems,
+            log_debug=cfg.callbacks.log_debug,
+        ),
+    )
+
     active_core_resolver = ActiveCoreResolver(
         config=ActiveCoreResolverConfig(
             uow_factory=cfg.callbacks.uow_factory,
             core_info=cfg.adapters.core_info_provider,
             sandbox_launcher=cfg.callbacks.sandbox_launcher,
             platform_core_reader=cfg.callbacks.platform_core_reader,
-            resolve_system=cfg.adapters.http_adapter.resolve_system,
+            platform_systems=platform_systems,
             logger=cfg.runtime.logger,
         ),
     )
@@ -290,7 +303,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         retrodeck_folders=cfg.callbacks.retrodeck_folders,
         active_core=active_core_resolver,
         save_locations=cfg.adapters.save_locations,
-        resolve_system=cfg.adapters.http_adapter.resolve_system,
+        platform_systems=platform_systems,
         hostname_provider=cfg.runtime.hostname_provider,
         machine_id_provider=cfg.runtime.machine_id_provider,
         log_debug=cfg.callbacks.log_debug,
@@ -395,7 +408,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             download_file_store=cfg.adapters.download_file_store,
             adoption_move=cfg.adapters.adoption_move,
             quarantine_save=save_sync_service.quarantine_local_file,
-            resolve_system=cfg.adapters.http_adapter.resolve_system,
+            platform_systems=platform_systems,
             retrodeck_folders=cfg.callbacks.retrodeck_folders,
             install_recorder=rom_install_recorder,
             m3u_support=cfg.callbacks.m3u_support,
@@ -418,7 +431,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         config=DownloadServiceConfig(
             romm_api=cfg.adapters.romm_api,
             download_file_store=cfg.adapters.download_file_store,
-            resolve_system=cfg.adapters.http_adapter.resolve_system,
+            platform_systems=platform_systems,
             loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
             emit=cfg.runtime.emit,
@@ -471,7 +484,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             platform_firmware_resolver=cfg.adapters.platform_firmware_resolver,
             retrodeck_folders=cfg.callbacks.retrodeck_folders,
             core_info=cfg.adapters.core_info_provider,
-            resolve_system=cfg.adapters.http_adapter.resolve_system,
+            platform_systems=platform_systems,
             platform_core_reader=cfg.callbacks.platform_core_reader,
             uow_factory=cfg.callbacks.uow_factory,
             conflict_rules=conflict_rules,
@@ -519,7 +532,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             active_core=active_core_resolver,
             path_exists=cfg.adapters.path_probe,
             retrodeck_folders=cfg.callbacks.retrodeck_folders,
-            resolve_system=cfg.adapters.http_adapter.resolve_system,
+            platform_systems=platform_systems,
         ),
     )
 
@@ -539,7 +552,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
             core_info=cfg.adapters.core_info_provider,
-            resolve_system=cfg.adapters.http_adapter.resolve_system,
+            platform_systems=platform_systems,
             settings=cfg.stores.settings,
             settings_persister=cfg.callbacks.settings_persister,
             uow_factory=cfg.callbacks.uow_factory,

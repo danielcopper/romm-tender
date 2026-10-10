@@ -109,11 +109,11 @@ export const SgdbGamePickerModalContent: FC<SgdbGamePickerModalProps> = ({
     setSearching(true);
     setSearchError(null);
     try {
-      const res = await searchSgdbGames(term).catch((e): { success: boolean; games: SgdbCandidate[] } => {
+      const res = await searchSgdbGames(term).catch((e): null => {
         detach(debugLog(`SgdbGamePickerModal: searchSgdbGames rejected: ${e}`));
-        return { success: false, games: [] };
+        return null;
       });
-      if (res.success) {
+      if (res?.success) {
         setResults(res.games);
         if (res.games.length === 0) {
           setSearchError("No matches found.");

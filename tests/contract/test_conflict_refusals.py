@@ -92,7 +92,7 @@ _ARGS: dict[str, tuple[Any, ...]] = {
     "delete_platform_bios": ("n64",),
     "delete_platform_saves": ("n64",),
     "delete_slot": (41, "default"),
-    "download_all_firmware": ("n64",),
+    "download_all_firmware": ("n64", None),
     "download_platform_firmware_file": ("n64", "pifdata.bin"),
     "download_required_firmware": ("n64",),
     "fetch_cover_base64": (41,),

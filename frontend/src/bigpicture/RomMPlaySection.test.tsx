@@ -339,6 +339,7 @@ describe("RomMPlaySection", () => {
       emulatorDataAvailable: true,
       emulatorDataReason: null,
       emulatorSource: { kind: "retrodeck", starts_games: true },
+      emulatorPlatformSystem: null,
       emulators: [],
       platformCoreLabel: null,
       hasGameOverride: false,
@@ -353,6 +354,7 @@ describe("RomMPlaySection", () => {
         emulator_data_available: true,
         emulator_data_reason: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
         emulators: [],
         active_core: null,
         active_core_label: null,
@@ -373,6 +375,7 @@ describe("RomMPlaySection", () => {
       emulator_data_available: true,
       emulator_data_reason: null,
       emulator_source: { kind: "retrodeck", starts_games: true },
+      platform_system: null,
       emulators: [],
       active_core: null,
       active_core_label: null,
@@ -2146,6 +2149,7 @@ describe("RomMPlaySection", () => {
         emulator_data_available: true,
         emulator_data_reason: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
         emulators: [
           {
             label: "Snes9x",
@@ -2217,6 +2221,7 @@ describe("RomMPlaySection", () => {
         emulator_data_available: true,
         emulator_data_reason: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
         emulators: [
           {
             label: "Snes9x",
@@ -2998,7 +3003,9 @@ describe("RomMPlaySection", () => {
         await act(async () => {
           await items[3]!.props.onClick?.();
         });
-        expect(vi.mocked(backend.downloadAllFirmware)).toHaveBeenCalledWith("ps1");
+        // The ROM goes along: a downloaded game's files are placed for the
+        // system its install record holds.
+        expect(vi.mocked(backend.downloadAllFirmware)).toHaveBeenCalledWith("ps1", 42);
         expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
           expect.objectContaining({ body: "BIOS downloaded (3 files)" }),
         );
@@ -3372,6 +3379,7 @@ describe("RomMPlaySection", () => {
         emulator_data_available: true,
         emulator_data_reason: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
         emulators: [
           {
             label: "Snes9x",
@@ -3399,6 +3407,7 @@ describe("RomMPlaySection", () => {
         emulatorDataAvailable: true,
         emulatorDataReason: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
+        emulatorPlatformSystem: null,
         emulators: [
           {
             label: "Snes9x",
@@ -3643,6 +3652,7 @@ describe("RomMPlaySection", () => {
         emulator_data_available: true,
         emulator_data_reason: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
         emulators: [
           {
             label: "Snes9x",
@@ -3672,6 +3682,7 @@ describe("RomMPlaySection", () => {
         emulatorDataAvailable: true,
         emulatorDataReason: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
+        emulatorPlatformSystem: null,
         emulators: [
           {
             label: "Snes9x",
@@ -3854,6 +3865,7 @@ describe("RomMPlaySection", () => {
       emulatorDataAvailable: true,
       emulatorDataReason: null,
       emulatorSource: { kind: "retrodeck", starts_games: true },
+      emulatorPlatformSystem: null,
       emulators: [
         {
           label: "Snes9x",
@@ -3985,6 +3997,7 @@ describe("RomMPlaySection", () => {
         emulatorDataAvailable: true,
         emulatorDataReason: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
+        emulatorPlatformSystem: null,
         platformCoreLabel: null,
         hasGameOverride: false,
       });
@@ -4115,6 +4128,7 @@ describe("RomMPlaySection", () => {
         emulatorDataAvailable: true,
         emulatorDataReason: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
+        emulatorPlatformSystem: null,
         emulators: [
           {
             label: "Snes9x",
@@ -4159,6 +4173,7 @@ describe("RomMPlaySection", () => {
         emulatorDataAvailable: true,
         emulatorDataReason: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
+        emulatorPlatformSystem: null,
         emulators: [
           {
             label: "Snes9x",
@@ -4201,6 +4216,7 @@ describe("RomMPlaySection", () => {
         emulatorDataAvailable: true,
         emulatorDataReason: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
+        emulatorPlatformSystem: null,
         emulators: [
           {
             label: "Snes9x",
@@ -4241,6 +4257,7 @@ describe("RomMPlaySection", () => {
         emulatorDataAvailable: true,
         emulatorDataReason: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
+        emulatorPlatformSystem: null,
         emulators: [
           {
             label: "Snes9x",
@@ -4277,6 +4294,7 @@ describe("RomMPlaySection", () => {
         emulatorDataAvailable: true,
         emulatorDataReason: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
+        emulatorPlatformSystem: null,
         emulators: [
           {
             label: "Snes9x",
@@ -4317,6 +4335,7 @@ describe("RomMPlaySection", () => {
         emulatorDataAvailable: true,
         emulatorDataReason: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
+        emulatorPlatformSystem: null,
         emulators: [
           {
             label: "Snes9x",
@@ -4599,6 +4618,7 @@ describe("RomMPlaySection", () => {
         emulatorDataAvailable: true,
         emulatorDataReason: null,
         emulatorSource: { kind: "retrodeck", starts_games: true },
+        emulatorPlatformSystem: null,
         emulators: [
           {
             label: "OnlyOne",
@@ -4627,6 +4647,7 @@ describe("RomMPlaySection", () => {
       emulatorDataAvailable: false,
       emulatorDataReason: reason,
       emulatorSource: source,
+      emulatorPlatformSystem: null,
       emulators: [],
       platformCoreLabel: null,
       hasGameOverride: false,

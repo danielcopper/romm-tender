@@ -14,13 +14,22 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.achievements import extract_achievements_from_rom, extract_game_progress
-from lib.errors import classify_error
+from lib.errors import NamedRefused, RommApiError, romm_error_log_level
 
 if TYPE_CHECKING:
     import asyncio
     import logging
 
     from services.protocols import Clock, DebugLogger, RommAchievementsApi, UnitOfWorkFactory
+
+
+class NoRaUsername(NamedRefused):
+    """No RetroAchievements username could be had, so there is no progress to read.
+
+    The RomM user profile names none, or it could not be read and none is cached.
+    """
+
+    reason = "no_ra_username"
 
 
 @dataclass(frozen=True)
@@ -120,7 +129,11 @@ class AchievementsService:
         return entry
 
     async def get_achievements(self, rom_id):
-        """Fetch achievement list for a ROM from RomM. Returns cached if fresh."""
+        """Fetch achievement list for a ROM from RomM. Returns cached if fresh.
+
+        A RomM error answers from the stale cache where there is one, marked
+        ``stale``, and otherwise propagates.
+        """
         rom_id = int(rom_id)
         rom_id_str = str(rom_id)
 
@@ -138,35 +151,26 @@ class AchievementsService:
         # Fetch ROM detail from RomM (includes ra_metadata)
         try:
             rom_data = await self._loop.run_in_executor(None, self._romm_api.get_rom, rom_id)
-            achievements = extract_achievements_from_rom(rom_data)
-
-            # Cache it
-            if rom_id_str not in self._achievements_cache:
-                self._achievements_cache[rom_id_str] = {}
-            self._achievements_cache[rom_id_str]["achievements"] = achievements
-            self._achievements_cache[rom_id_str]["cached_at"] = self._clock.time()
-            self._achievements_cache[rom_id_str]["ra_id"] = ra_id
-
-            return {"success": True, "achievements": achievements, "total": len(achievements)}
-        except Exception as e:
-            self._logger.warning(f"Failed to fetch achievements for rom_id={rom_id}: {e}")
-            # Return stale cache if available
+        except RommApiError as e:
             stale = self._achievements_cache.get(rom_id_str, {})
-            if stale.get("achievements"):
-                return {
-                    "success": True,
-                    "achievements": stale["achievements"],
-                    "total": len(stale["achievements"]),
-                    "stale": True,
-                }
-            reason, _message = classify_error(e)
+            if not stale.get("achievements"):
+                raise
+            self._log_romm_error(f"Failed to fetch achievements for rom_id={rom_id}, answering the stale list", e)
             return {
-                "success": False,
-                "reason": reason,
-                "message": str(e),
-                "achievements": [],
-                "total": 0,
+                "success": True,
+                "achievements": stale["achievements"],
+                "total": len(stale["achievements"]),
+                "stale": True,
             }
+        achievements = extract_achievements_from_rom(rom_data)
+
+        if rom_id_str not in self._achievements_cache:
+            self._achievements_cache[rom_id_str] = {}
+        self._achievements_cache[rom_id_str]["achievements"] = achievements
+        self._achievements_cache[rom_id_str]["cached_at"] = self._clock.time()
+        self._achievements_cache[rom_id_str]["ra_id"] = ra_id
+
+        return {"success": True, "achievements": achievements, "total": len(achievements)}
 
     def _progress_data_response(self, progress_data):
         """Build a success response from progress_data, excluding cached_at."""
@@ -176,20 +180,19 @@ class AchievementsService:
         """Fetch user's achievement progress for a ROM from RomM.
 
         Returns earned/total counts and per-achievement earned status.
-        Requires RA username configured in the RomM user profile.
+        Requires RA username configured in the RomM user profile, and refuses
+        with :class:`NoRaUsername` without one. Where no achievement list can
+        be had, fresh or stale, it goes on with 0 as the list's count, the
+        total it falls back on where RomM's progress states none. A RomM
+        error reading the progress answers from the stale progress where there
+        is one, marked ``stale``, and otherwise propagates.
         """
         rom_id = int(rom_id)
         rom_id_str = str(rom_id)
 
         ra_username = self.get_ra_username() or await self._fetch_ra_username()
         if not ra_username:
-            return {
-                "success": False,
-                "reason": "no_ra_username",
-                "message": "No RA username configured in RomM",
-                "earned": 0,
-                "total": 0,
-            }
+            raise NoRaUsername("No RA username configured in RomM")
 
         cached_progress = self.get_progress_cache_entry(rom_id_str)
         if cached_progress:
@@ -200,41 +203,46 @@ class AchievementsService:
         if not ra_id:
             return {"success": True, "earned": 0, "total": 0, "earned_achievements": [], "no_ra_id": True}
 
-        total = (await self.get_achievements(rom_id)).get("total", 0)
+        try:
+            total = (await self.get_achievements(rom_id))["total"]
+        except RommApiError as e:
+            self._log_debug(
+                f"Achievement list for rom_id={rom_id} unavailable, progress counts it as 0: {type(e).__name__}: {e}"
+            )
+            total = 0
 
         try:
             user_data = await self._loop.run_in_executor(None, self._romm_api.get_current_user)
-            fetched_username = (user_data.get("ra_username") or "").strip()
-            if fetched_username:
-                self._achievements_cache["_ra_user"] = {"username": fetched_username, "cached_at": self._clock.time()}
-
-            progress_data = extract_game_progress(user_data.get("ra_progression"), ra_id, total, self._clock.time())
-
-            if rom_id_str not in self._achievements_cache:
-                self._achievements_cache[rom_id_str] = {}
-            self._achievements_cache[rom_id_str]["user_progress"] = progress_data
-
-            return self._progress_data_response(progress_data)
-        except Exception as e:
-            self._logger.warning(f"Failed to fetch achievement progress for rom_id={rom_id}: {e}")
+        except RommApiError as e:
             stale_progress = self._achievements_cache.get(rom_id_str, {}).get("user_progress")
-            if stale_progress:
-                return {**self._progress_data_response(stale_progress), "stale": True}
-            reason, _message = classify_error(e)
-            return {
-                "success": False,
-                "reason": reason,
-                "message": str(e),
-                "earned": 0,
-                "total": 0,
-                "earned_achievements": [],
-            }
+            if not stale_progress:
+                raise
+            self._log_romm_error(
+                f"Failed to fetch achievement progress for rom_id={rom_id}, answering the stale progress", e
+            )
+            return {**self._progress_data_response(stale_progress), "stale": True}
+        fetched_username = (user_data.get("ra_username") or "").strip()
+        if fetched_username:
+            self._achievements_cache["_ra_user"] = {"username": fetched_username, "cached_at": self._clock.time()}
 
-    async def sync_achievements_after_session(self, rom_id):
+        progress_data = extract_game_progress(user_data.get("ra_progression"), ra_id, total, self._clock.time())
+
+        if rom_id_str not in self._achievements_cache:
+            self._achievements_cache[rom_id_str] = {}
+        self._achievements_cache[rom_id_str]["user_progress"] = progress_data
+
+        return self._progress_data_response(progress_data)
+
+    def _log_romm_error(self, what: str, error: RommApiError) -> None:
+        """Log *error* in one line, at :func:`lib.errors.romm_error_log_level`'s level."""
+        self._logger.log(romm_error_log_level(error), f"{what}: {type(error).__name__}: {error}")
+
+    async def sync_achievements_after_session(self, rom_id) -> None:
         """Post-session: force-refresh achievement progress from RomM.
 
         Called after game session ends to pick up any achievements earned during gameplay.
-        Invalidates the progress cache and fetches fresh data.
+        Invalidates the progress cache and fetches fresh data. A missing RA
+        username and a RomM error each end it with a log line and nothing raised.
         """
         rom_id = int(rom_id)
         rom_id_str = str(rom_id)
@@ -244,10 +252,15 @@ class AchievementsService:
             del self._achievements_cache[rom_id_str]["user_progress"]
 
         # Fetch fresh progress
-        result = await self.get_achievement_progress(rom_id)
-        if result.get("success"):
-            self._logger.info(
-                f"Post-session achievement sync for rom_id={rom_id}: "
-                f"{result.get('earned', 0)}/{result.get('total', 0)} earned"
-            )
-        return result
+        try:
+            result = await self.get_achievement_progress(rom_id)
+        except NoRaUsername:
+            self._log_debug(f"Post-session achievement sync for rom_id={rom_id} skipped: no RA username available")
+            return
+        except RommApiError as e:
+            self._log_romm_error(f"Post-session achievement sync failed for rom_id={rom_id}", e)
+            return
+        self._logger.info(
+            f"Post-session achievement sync for rom_id={rom_id}: "
+            f"{result.get('earned', 0)}/{result.get('total', 0)} earned"
+        )

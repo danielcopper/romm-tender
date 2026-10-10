@@ -158,7 +158,7 @@ function buildBiosHeader(
   const biosLabel = `${biosSummary(bios, bios.files ?? [], biosLevel).sentence}${heldRatio}`;
   const listReason =
     coreInfo !== null && !coreInfo.emulator_data_available
-      ? emulatorDataReasonSentence(coreInfo.emulator_data_reason, coreInfo.emulator_source)
+      ? emulatorDataReasonSentence(coreInfo.emulator_data_reason, coreInfo.emulator_source, coreInfo.platform_system)
       : null;
 
   return [

@@ -29,6 +29,7 @@ import { clearPlatformCollection } from "../../utils/collections";
 import { setSyncProgress } from "../../utils/syncProgress";
 import { biosColorForLevel } from "../../utils/biosColor";
 import type { CoreInfo, FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo } from "../../types";
+import { NOTE_FONT, SECONDARY_FONT } from "../layout/pane";
 
 // `scrollFocusedToCenter` is the game page tab's, not this page's: one test
 // below renders that tab beside the pane to compare what the two say.
@@ -73,6 +74,7 @@ const GBA_CORE_INFO: CoreInfo = {
   emulator_data_available: true,
   emulator_data_reason: null,
   emulator_source: { kind: "retrodeck", starts_games: true },
+  platform_system: null,
   active_core: MGBA.emulator,
   active_core_label: MGBA.label,
   platform_core_label: null,
@@ -85,6 +87,7 @@ function coreInfo(overrides: Partial<SystemCoreInfo> = {}): SystemCoreInfo {
     emulator_data_available: true,
     emulator_data_reason: null,
     emulator_source: { kind: "retrodeck", starts_games: true },
+    platform_system: null,
     active_core_label: "mGBA",
     ...overrides,
   };
@@ -129,6 +132,7 @@ function firmwarePlatform(overrides: Partial<FirmwarePlatformExt> = {}): Firmwar
     deletable_count: 0,
     emulator_data_reason: null,
     emulator_source: { kind: "retrodeck", starts_games: true },
+    platform_system: null,
     ...overrides,
   };
 }
@@ -216,6 +220,21 @@ async function focusRow(container: HTMLElement, name: string): Promise<void> {
 /** The header's core chip. Always rendered since the device round — disabled
  *  with the reason in its title where there is nothing to pick — so it is found
  *  by position rather than by the one title it carries when it is live. */
+/** The parts of the line under the platform's name, each its own element. */
+function factParts(container: HTMLElement): HTMLElement[] {
+  const line = container.querySelector('[data-testid="platform-facts"]');
+  return line ? [...line.querySelectorAll<HTMLElement>(":scope > span")] : [];
+}
+
+/** Each part's text, without the separator it carries in front. */
+function factTexts(container: HTMLElement): string[] {
+  return factParts(container).map((el) => el.textContent.replace(/^· /, ""));
+}
+
+function factPart(container: HTMLElement, text: string): HTMLElement | undefined {
+  return factParts(container).find((el) => el.textContent.replace(/^· /, "") === text);
+}
+
 function coreButton(container: HTMLElement): HTMLButtonElement | null {
   return container.querySelector<HTMLButtonElement>('[data-testid="wide-page-body"] button[title]');
 }
@@ -1060,11 +1079,153 @@ describe("Library › Platforms", () => {
   // The detail's header and its core section
   // ------------------------------------------------------------------
   describe("the detail", () => {
-    it("carries the counts and the core on one header line", async () => {
+    it("puts the core and the counts on a line of their own under the name", async () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("12 on RomM · 9 in Steam · mGBA");
+      expect(factTexts(container)).toEqual(["mGBA", "12 on RomM", "9 in Steam"]);
+      expect(factParts(container).map((el) => el.textContent)).toEqual(["mGBA", "· 12 on RomM", "· 9 in Steam"]);
+      const line = container.querySelector<HTMLElement>('[data-testid="platform-facts"]')!;
+      expect(line.textContent).not.toContain("Game Boy Advance");
+      expect(line.style.fontSize).toBe(NOTE_FONT);
+      expect(line.style.flexWrap).toBe("wrap");
+    });
+
+    it("keeps every part of that line on one line, so it wraps only between parts", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({ platform_system: { state: "found", source: "retrodeck", system: "gba", platform: "GBA" } }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const parts = factParts(container);
+      expect(parts).toHaveLength(4);
+      for (const part of parts) {
+        expect(part.style.whiteSpace).toBe("nowrap");
+        expect(part.style.overflow).toBe("");
+        expect(part.style.textOverflow).toBe("");
+      }
+    });
+
+    it("sets the facts line, the BIOS notes and each file's description in one small size", async () => {
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const byText = (start: string) =>
+        [...container.querySelectorAll<HTMLElement>("div")].find((el) => el.textContent.startsWith(start));
+      const facts = container.querySelector<HTMLElement>('[data-testid="platform-facts"]');
+      const note = byText("The one file the launching emulator requires");
+      const description = byText("GBA BIOS");
+      expect([facts?.style.fontSize, note?.style.fontSize, description?.style.fontSize]).toEqual([
+        NOTE_FONT,
+        NOTE_FONT,
+        NOTE_FONT,
+      ]);
+      expect(Number.parseFloat(NOTE_FONT)).toBeLessThan(Number.parseFloat(SECONDARY_FONT));
+    });
+
+    it("sets a BIOS file's name and the column names clearly above the small print", async () => {
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const px = (size: string | undefined) => Number.parseFloat(size ?? "");
+      const heading = [...container.querySelectorAll<HTMLElement>("span")].find(
+        (el) => el.textContent === "BIOS FILES",
+      );
+      const head = container.querySelector<HTMLElement>('[data-testid="bios-table-header"]');
+      const row = container.querySelector<HTMLElement>('[data-testid="bios-file-row"]');
+      const marks = container.querySelector<HTMLElement>('[data-testid="disk-mark"]')?.parentElement;
+      const description = [...container.querySelectorAll<HTMLElement>("div")].find((el) =>
+        el.textContent.startsWith("GBA BIOS"),
+      );
+      // One pixel apart reads as no difference on the Deck.
+      expect(px(row?.style.fontSize) - px(description?.style.fontSize)).toBeGreaterThanOrEqual(2);
+      expect(px(head?.style.fontSize)).toBeGreaterThan(px(NOTE_FONT));
+      expect(head?.style.fontSize).toBe(row?.style.fontSize);
+      expect(px(row?.style.fontSize)).toBeLessThanOrEqual(px(heading?.style.fontSize));
+      expect(px(marks?.style.fontSize)).toBeLessThanOrEqual(px(heading?.style.fontSize));
+    });
+
+    it("names the system the platform is in its source, muted like the counts", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({ platform_system: { state: "found", source: "retrodeck", system: "gba", platform: "GBA" } }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(factTexts(container)).toEqual(["mGBA", "12 on RomM", "9 in Steam", "RetroDECK system: gba"]);
+    });
+
+    it("says why a platform with no system has no emulators to pick", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [],
+          emulator_data_available: false,
+          emulator_data_reason: "no_platform_system",
+          platform_system: { state: "no_system", source: "retrodeck", system: null, platform: "Game Boy Advance" },
+          active_core_label: null,
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "RetroDECK has no system for Game Boy Advance, so Tender cannot download its games.",
+      );
+      expect(container.textContent).not.toContain("RetroDECK system");
+    });
+
+    it("says RomM cannot be reached where it could not give the platform's system", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [],
+          emulator_data_available: false,
+          emulator_data_reason: "server_unreachable",
+          platform_system: null,
+          active_core_label: null,
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "RomM cannot be reached, so Tender does not know this platform's system yet.",
+      );
+    });
+
+    it("says RomM did not give the platform's ids where it refused them", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [],
+          emulator_data_available: false,
+          emulator_data_reason: "auth_failed",
+          platform_system: null,
+          active_core_label: null,
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "RomM did not give this platform's ids, so Tender does not know its system yet.",
+      );
+      expect(container.textContent).not.toContain("emulator list is not established");
+    });
+
+    it("says which system is switched off", async () => {
+      vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(
+        coreInfo({
+          emulators: [],
+          emulator_data_available: false,
+          emulator_data_reason: "platform_system_off",
+          platform_system: { state: "switched_off", source: "retrodeck", system: "gbaoff", platform: "GBA" },
+          active_core_label: null,
+        }),
+      );
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("System gbaoff is switched off in RetroDECK.");
     });
 
     it("counts ROM files on both sides of the header while Remove keeps counting shortcuts", async () => {
@@ -1078,7 +1239,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("12 on RomM · 12 in Steam");
+      expect(factTexts(container)).toEqual(["mGBA", "12 on RomM", "12 in Steam"]);
       expect(buttonByText(container, "Remove 9 shortcuts")).toBeTruthy();
     });
 
@@ -1091,7 +1252,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("12 on RomM · 3 in Steam");
+      expect(factTexts(container)).toEqual(["mGBA", "12 on RomM", "3 in Steam"]);
     });
 
     it("names the active core in the header and greys it when it is the default", async () => {
@@ -1101,7 +1262,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const clause = [...container.querySelectorAll<HTMLElement>("span")].find((el) => el.textContent === " · mGBA");
+      const clause = factPart(container, "mGBA");
       expect(clause).toBeTruthy();
       expect(clause!.style.color).toBe(GREY);
       expect(container.textContent).not.toContain("Default");
@@ -1115,9 +1276,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const clause = [...container.querySelectorAll<HTMLElement>("span")].find(
-        (el) => el.textContent === " · VBA Next",
-      );
+      const clause = factPart(container, "VBA Next");
       expect(clause!.style.color).toBe(AMBER);
       expect(coreButton(container)!.querySelector("svg")!.style.color).toBe(AMBER);
     });
@@ -1131,9 +1290,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const clause = [...container.querySelectorAll<HTMLElement>("span")].find(
-        (el) => el.textContent === " · no emulator",
-      );
+      const clause = factPart(container, "no emulator");
       expect(clause).toBeTruthy();
       expect(clause!.style.color).toBe(RED);
       expect(container.textContent).toContain("RetroDECK lists no emulator for this platform");
@@ -1165,9 +1322,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const clause = [...container.querySelectorAll<HTMLElement>("span")].find(
-        (el) => el.textContent === " · no emulator installed",
-      );
+      const clause = factPart(container, "no emulator installed");
       expect(clause).toBeTruthy();
       expect(clause!.style.color).toBe(RED);
       expect(container.textContent).toContain("RetroDECK would launch these with mGBA, which is not installed");
@@ -1192,9 +1347,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      const clause = [...container.querySelectorAll<HTMLElement>("span")].find(
-        (el) => el.textContent === " · RetroDECK decides",
-      );
+      const clause = factPart(container, "RetroDECK decides");
       expect(clause).toBeTruthy();
       expect(clause!.style.color).toBe(GREY);
       expect(container.textContent).toContain("None of this platform's emulators can be pinned from here");
@@ -1231,6 +1384,7 @@ describe("Library › Platforms", () => {
           emulator_data_available: false,
           emulator_data_reason: "no_source",
           emulator_source: null,
+          platform_system: null,
           active_core_label: null,
         }),
       );
@@ -1246,10 +1400,7 @@ describe("Library › Platforms", () => {
       // nothing was established — beside a sentence saying the opposite. The
       // assertion is on the clause span rather than on the pane's text, so a
       // sentence that names emulators in its own words does not trip it.
-      const clauses = [...container.querySelectorAll<HTMLElement>("span")].filter((el) =>
-        el.textContent.startsWith(" · "),
-      );
-      expect(clauses).toEqual([]);
+      expect(factTexts(container)).toEqual(["12 on RomM", "9 in Steam"]);
     });
 
     it("says a RetroDECK that is not set up has no emulators established instead of an empty picker", async () => {
@@ -1259,6 +1410,7 @@ describe("Library › Platforms", () => {
           emulator_data_available: false,
           emulator_data_reason: "not_set_up",
           emulator_source: { kind: "retrodeck", starts_games: true },
+          platform_system: null,
           active_core_label: null,
         }),
       );
@@ -1731,7 +1883,7 @@ describe("Library › Platforms", () => {
       expect(within(container).getByTestId("status-core").textContent).toBe("RetroDECK is not installed");
       // The header still names the old core, which every shortcut following the
       // platform's pick still launches with.
-      expect(container.textContent).toContain("· mGBA");
+      expect(factTexts(container)[0]).toBe("mGBA");
     });
 
     it("shows a switch that threw", async () => {
@@ -3076,6 +3228,22 @@ describe("Library › Platforms", () => {
         .mock.calls.map(([slug]) => slug)
         .slice(readsBefore.length);
       expect(since).toEqual(["gba"]);
+    });
+
+    it("downloads for the platform's current system, with no game named", async () => {
+      vi.mocked(backend.downloadAllFirmware).mockResolvedValue({
+        success: true,
+        message: "Downloaded 0 firmware files",
+        downloaded: 0,
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Download all")!);
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
+
+      expect(vi.mocked(backend.downloadAllFirmware)).toHaveBeenCalledWith("gba", null);
     });
 
     it("stays silent towards the game page when a run moved no file", async () => {

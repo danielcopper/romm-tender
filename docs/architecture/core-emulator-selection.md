@@ -117,8 +117,9 @@ The precedence is the invariant:
 
 ```text
 active_emulator_for_rom(rom_id):
-  rom = read roms row (platform_slug + emulator_override)  ── one UoW read
-  system = resolve_system(rom.platform_slug)               ── platform→system (ADR-0010)
+  rom, install = read roms + rom_installs rows             ── one UoW read
+  system = rom_system(rom.platform_slug, install)          ── the install's system, else the platform's (below)
+  if system is None: return None                           ── no switched-on system: plain launch
   options = get_emulator_options(system)["options"]        ── every es_systems <command>, classified
   if rom.emulator_override is not None:                    ── layer 1: per-game pin (libretro OR standalone)
       inv = label_to_invocation(options, override)
@@ -176,6 +177,62 @@ and accept-list are asked once per run, and a switch or a move during the run ta
 resolver's `RealMachine` is one for the process and handed to every detection: it remembers only a libretro core's
 probe, keyed on the core file's path, modification time and size, so the probe of an unchanged core runs once while
 every answer stays live.
+
+### A platform's system
+
+RomM names a platform by a slug of its own, which only sometimes equals a system a source declares (`psx` does,
+`new-nintendo-3ds` does not), so the system a platform's games belong to is the **source's own answer**:
+`systems_for_platform`, asked through the resolver with the ids RomM holds for the platform — `igdb_id`,
+`libretro_slug`, `ss_id` and `tgdb_id`, the four vocabularies the resolver has a crosswalk for (a numeric id as its
+decimal string), in that order. RomM's other ids (MobyGames, LaunchBox, RetroAchievements, Hasheous, Flashpoint) have
+none and are not asked. The resolver reads the catalogue's own `<platform>` tags, so a system the user added to a
+catalogue by hand is answered as readily as a shipped one, and nothing in Tender holds a table of platforms.
+`adapters/atlas_platforms.py` asks; `domain/platform_system.py::pick_system` decides.
+
+**Which answer is taken.** Only a **switched-on** system matches — one the catalogue declares; a system present only in
+the catalogue's comments is switched off, and one the source does not have at all is no match. The first id whose answer
+gives a switched-on system decides, and a later id is never asked. Where several systems match one platform (SNES gives
+`sfc`, `snes` and `snesna`), the one named like the platform the id was resolved to is taken — `snes` — else the first
+in the resolver's order; the regional systems differ in name and look only, and the user does not pick among them. Where
+one id's answer names several platforms (libretro's NES/Famicom entry gives `famicom` and `nes`), only the one equal to
+RomM's slug with its hyphens dropped decides (`nes`), and the slug chooses only among them — it never becomes a system
+or a folder name itself; where it equals none of them, the next id is asked. Another platform is never taken in its
+place: a Satellaview or Amiga CD32 game is not an SNES or Amiga game, and a wrong system would stay in its folder, its
+link and its saves. So where the slug's platform has only switched-off systems, one of them is named, and where no id
+gives the slug's platform, or it has no system here, the platform has none.
+
+**Where there is none.** Where no id gives a switched-on system but some id gives a switched-off one, the platform's
+pages say **"System _system_ is switched off in _source_."**; where no id gives any, **"_source_ has no system for
+_platform_, so Tender cannot download its games."**, _platform_ being RomM's display name. The emulator list's reason is
+then `platform_system_off` or `no_platform_system`, nothing is downloaded, and the platform's BIOS download and an
+adoption's replace are refused the same way. Every other use keeps a state it already has: an uninstalled game's save
+answer is not established, the search for a copy already on disk finds nothing, and the launch falls back to the plain
+one.
+
+**Each source is asked for itself.** A download, and every question about where one would land — an uninstalled game's
+save answer, whether the target is taken, the search for a copy already there, an adoption's target — asks
+**RetroDECK**, the one source Tender downloads into, whatever its switch: the switch is the folder's question
+(`adapters/retrodeck_folders.py`). Every other question — the emulator choice, the BIOS answers, the platform page —
+asks the answering source (above), so a platform can be one system in RetroDECK and another in EmuDeck. **An installed
+game keeps the system its install record holds** for its saves, its emulator choice, its BIOS answer, the BIOS download
+started from its page and its launch (`PlatformSystems.rom_system`); only a new download, and the platform page's BIOS
+download, follow the source's current answer. A source that renames, moves or drops a system is not followed yet.
+
+**The ids are kept.** `kv_config`'s `platform_ids` holds every listed platform's four ids and display name, replaced at
+the start of every sync from RomM's listing (a failed write is logged and leaves the run alone). Where none are kept for
+a platform — the first start after an update — `PlatformSystemService` reads the listing once and keeps it. Where that
+read fails, the question answers the reason `classify_error` gives it — `server_unreachable` while RomM is offline — as
+every other read that needs RomM does, and keeps nothing; the next read with RomM reachable keeps the ids. A game not
+downloaded then shows the offline state on its page (its save status, its BIOS tab reading unknown), and its emulator
+menu, its BIOS tab and the platform page say **"RomM cannot be reached, so Tender does not know this platform's system
+yet."**; where RomM answered but refused the read for any other reason (`auth_failed`, `not_found`, `config_error`, …),
+they say **"RomM did not give this platform's ids, so Tender does not know its system yet."**, and the cause itself
+shows where Tender's connection state shows it; a downloaded game keeps its recorded system and is not affected. The
+game page's two looks at the disk — whether a download's target is already taken, and whether the game is there under
+another name — must reach no network, so they never read the listing: for them a platform with no kept ids has no
+system, and they go quiet.
+
+The platform page names the system taken with its source in its header line ([qam-panel.md](qam-panel.md#library)).
 
 ### Standalone-emulator selection: first safely-bakeable
 
@@ -235,21 +292,22 @@ libretro options are never downgraded. See [ADR-0020](../adr/0020-live-es-system
 `switched_off` where every detected source is switched off); the resolver raised (`unavailable`); the catalogue answer
 carries one of the four `emulator-catalogue-*` refusals — the arrangement ships no catalogue, the resolver has not
 located one, or the one it has could not be read (all three `unavailable`), or only part of it is readable (`sealed`,
-EmuDeck's today); or it carries `catalogue-invalid` (`catalogue_invalid`), a file ES-DE refuses its whole load on
-(usually a typo in the user's own `custom_systems` overlay); or it carries `not-set-up` (`not_set_up`), a RetroDECK the
-resolver found by its Flatpak deploy with no `retrodeck.json` — not started for this home yet, or its first-run setup
-left unfinished — which answers every question with that finding and an empty enumeration. `source` is the answering
-source's `{kind, starts_games}`. The platform page and the picker say why, from `reason`, rather than show an empty list
-they cannot distinguish from a system the frontend knows no emulator for
-([qam-panel.md](qam-panel.md#notices-and-homes)); the launch degrades to plain. The overlay entries the resolver gives
-beside `emulator-catalogue-sealed` are used nowhere — not for the emulator list, not for saves and not for firmware,
-whose answer beside a sealed catalogue reads as nothing established: an incomplete list would look complete. An empty
-list carrying none of those codes is that real "knows none", and `emulator-catalogue-exclusive` is not a refusal at all:
-a custom `es_systems.xml` declaring itself the whole catalogue gives a complete answer, merely a small one. The test is
-the codes and never an empty caveat list — a broken installation states health findings on every answer it gives.
-`options_to_payload` projects the list to the frontend picker shape
-(`{label, kind, core_so, is_default, bakeable, reason}`): bakeable entries are clickable, the default is marked, and
-`needs_setup` / `unbakeable` entries are disabled with their reason. See
+EmuDeck's on a runtime with no zstd codec, see
+[backend-architecture.md](backend-architecture.md#composition-root-bootstrap)); or it carries `catalogue-invalid`
+(`catalogue_invalid`), a file ES-DE refuses its whole load on (usually a typo in the user's own `custom_systems`
+overlay); or it carries `not-set-up` (`not_set_up`), a RetroDECK the resolver found by its Flatpak deploy with no
+`retrodeck.json` — not started for this home yet, or its first-run setup left unfinished — which answers every question
+with that finding and an empty enumeration. `source` is the answering source's `{kind, starts_games}`. The platform page
+and the picker say why, from `reason`, rather than show an empty list they cannot distinguish from a system the frontend
+knows no emulator for ([qam-panel.md](qam-panel.md#notices-and-homes)); the launch degrades to plain. The overlay
+entries the resolver gives beside `emulator-catalogue-sealed` are used nowhere — not for the emulator list, not for
+saves and not for firmware, whose answer beside a sealed catalogue reads as nothing established: an incomplete list
+would look complete. An empty list carrying none of those codes is that real "knows none", and
+`emulator-catalogue-exclusive` is not a refusal at all: a custom `es_systems.xml` declaring itself the whole catalogue
+gives a complete answer, merely a small one. The test is the codes and never an empty caveat list — a broken
+installation states health findings on every answer it gives. `options_to_payload` projects the list to the frontend
+picker shape (`{label, kind, core_so, is_default, bakeable, reason}`): bakeable entries are clickable, the default is
+marked, and `needs_setup` / `unbakeable` entries are disabled with their reason. See
 [ADR-0020](../adr/0020-live-es-systems-emulator-resolution.md) — including the 27 default flips this selection rule
 produces relative to the old first-libretro default.
 

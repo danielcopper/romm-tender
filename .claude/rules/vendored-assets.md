@@ -2,17 +2,17 @@
 paths:
   - "backend/_vendor/**"
   - "backend/native/**"
-  - "defaults/**"
 ---
 
 # Vendored code, binaries, and data `[ours]`
 
 **Vendored deps (`_vendor/`)**: Third-party runtime deps are vendored under `backend/_vendor/<package>/` (Tender runs on
 the system Python with no pip and no venv; why that rules a venv out, and the limit it sets for compiled extension
-modules, is [`_vendor/README.md`](../../backend/_vendor/README.md)'s) and imported as `from _vendor import <package>`.
-Only adapters import `_vendor.*`; services/domain/lib stay third-party-free (`domain-stdlib-only` contract in
-`.importlinter`). `_vendor/` is excluded from ruff, basedpyright, and Sonar. Every vendored package ships its upstream
-`LICENSE` and a provenance entry in [`_vendor/README.md`](../../backend/_vendor/README.md).
+modules, is [`_vendor/README.md`](../../backend/_vendor/README.md)'s) and imported as `from _vendor import <package>`
+(the zstd backport alone by its dotted name through `importlib`, in `adapters/atlas_zstd.py`). Only adapters import
+`_vendor.*`; services/domain/lib stay third-party-free (`domain-stdlib-only` contract in `.importlinter`). `_vendor/` is
+excluded from ruff, basedpyright, and Sonar. Every vendored package ships its upstream `LICENSE` and a provenance entry
+in [`_vendor/README.md`](../../backend/_vendor/README.md).
 
 **One manifest per tree.** `backend/_vendor/<package>/` is pinned by the `<package>.SHA256SUMS` beside it, and
 `scripts/check_vendored_trees.py` fails on a package directory that has none — the manifest is discovered, never named
@@ -36,8 +36,7 @@ an upstream release with a pinned SHA-256 (CI re-verifies it), loaded by an adap
 fallback; provenance and the update procedure live in [`native/README.md`](../../backend/native/README.md).
 
 **Vendored data** used to be a third category — `defaults/bios_registry.json`, a firmware snapshot copied from an
-emu-atlas release under its own checksum. It is gone with the swap to the live resolver, and nothing in `defaults/` is
-vendored today; `config.json` is maintained in this repo.
+emu-atlas release under its own checksum. It is gone with the swap to the live resolver, and so is `defaults/`.
 
 The shared rule across the categories that remain: **the artifact is an upstream copy pinned by checksum** — verbatim,
 or verbatim plus the local patch its provenance entry documents. Editing one in place to fix a problem is always wrong —

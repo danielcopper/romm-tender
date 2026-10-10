@@ -98,12 +98,7 @@ CATCH_ALL_NAMES = frozenset({"Exception", "BaseException"})
 
 # Service modules deliberately out of scope, as ``<path>: <why>``. Only for
 # modules that never talk to RomM — classify_error cannot classify their errors.
-EXEMPT: dict[str, str] = {
-    "steamgrid.py": (
-        "talks to SteamGridDB, not RomM — SGDB failures arrive as SgdbApiError "
-        "(carrying its own status_code) and classify_error has no SGDB branch"
-    ),
-}
+EXEMPT: dict[str, str] = {}
 
 
 @dataclass(frozen=True)

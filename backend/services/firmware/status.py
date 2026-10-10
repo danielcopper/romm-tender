@@ -57,13 +57,15 @@ if TYPE_CHECKING:
     from domain.emulator_commands import EmulatorOption, LaunchingEmulator
     from domain.firmware_groups import GroupVerdict
     from domain.firmware_wants import FirmwareCatalogue
+    from domain.platform_system import PlatformSystem
+    from domain.rom_install import RomInstall
     from services.firmware.demand import FirmwareDemand
     from services.firmware.listing import FirmwareListing
     from services.protocols import (
         CoreInfoProvider,
         FirmwareFileStore,
         PlatformCoreReader,
-        SystemResolver,
+        PlatformSystems,
         UnitOfWorkFactory,
     )
 
@@ -81,7 +83,7 @@ class FirmwareStatusReaderConfig:
     demand: FirmwareDemand
     listing: FirmwareListing
     core_info: CoreInfoProvider
-    resolve_system: SystemResolver
+    platform_systems: PlatformSystems
     platform_core_reader: PlatformCoreReader
     firmware_file_store: FirmwareFileStore
     uow_factory: UnitOfWorkFactory
@@ -96,7 +98,7 @@ class FirmwareStatusReader:
         self._demand = config.demand
         self._listing = config.listing
         self._core_info = config.core_info
-        self._resolve_system = config.resolve_system
+        self._platform_systems = config.platform_systems
         self._platform_core_reader = config.platform_core_reader
         self._firmware_file_store = config.firmware_file_store
         self._uow_factory = config.uow_factory
@@ -106,7 +108,7 @@ class FirmwareStatusReader:
     # ── Rows and aggregates ──────────────────────────────────
 
     def _platform_demand(
-        self, system: str, server_rows: list[dict[str, Any]], in_library: set[str]
+        self, system: str | None, server_rows: list[dict[str, Any]], in_library: set[str]
     ) -> tuple[FirmwareCatalogue, list[dict[str, Any]]]:
         """One platform's demand and its whole row set, in one worker hop. Blocking.
 
@@ -137,6 +139,12 @@ class FirmwareStatusReader:
             _overview_row(item) for item in self._demand.wanted_beyond_server(placements, in_library, bios_base)
         )
         return catalogue, rows
+
+    async def _emulator_options(self, platform: PlatformSystem) -> dict[str, Any]:
+        """The emulator options for *platform*'s system, or the unavailable answer where it has none."""
+        if platform.taken is None:
+            return platform.unavailable_options()
+        return await self._loop.run_in_executor(None, self._core_info.get_emulator_options, platform.taken)
 
     def _platform_emulator(self, platform_slug: str, options: dict[str, Any]) -> EmulatorOption | None:
         """The emulator this platform resolves to — the one pick every surface here reads.
@@ -468,8 +476,9 @@ class FirmwareStatusReader:
         :meth:`_stamp_deletable`.
         """
         slug = plat["platform_slug"]
-        system = self._resolve_system(slug)
-        options = await self._loop.run_in_executor(None, self._core_info.get_emulator_options, system)
+        platform = await self._loop.run_in_executor(None, self._platform_systems.platform_system, slug)
+        system = platform.taken
+        options = await self._emulator_options(platform)
         emulator = self._platform_emulator(slug, options)
         identity = emulator.emulator if emulator is not None else None
         plat["active_core"] = identity
@@ -478,6 +487,7 @@ class FirmwareStatusReader:
         plat["emulator_data_available"] = options["available"]
         plat["emulator_data_reason"] = options["reason"]
         plat["emulator_source"] = options["source"]
+        plat["platform_system"] = platform.payload()
         catalogue, rows = await self._loop.run_in_executor(
             None, self._platform_demand, system, plat["files"], in_library
         )
@@ -662,6 +672,7 @@ class FirmwareStatusReader:
         platform_slug,
         launching_emulator: LaunchingEmulator | None = None,
         rom_regions: tuple[str, ...] = (),
+        install: RomInstall | None = None,
     ) -> dict[str, Any]:
         """Check if RomM has firmware for this platform and whether it's downloaded.
 
@@ -692,9 +703,10 @@ class FirmwareStatusReader:
         ``bios_status_unknown: True`` and no consumer may read it as "this
         platform needs none" (#1693).
         """
-        system = self._resolve_system(platform_slug)
+        platform = await self._loop.run_in_executor(None, self._platform_systems.rom_system, platform_slug, install)
+        system = platform.taken
         fw_slugs = firmware_paths.resolve_firmware_slugs(platform_slug)
-        options = await self._loop.run_in_executor(None, self._core_info.get_emulator_options, system)
+        options = await self._emulator_options(platform)
         pick = self._resolve_launching_emulator(platform_slug, options, launching_emulator)
         identity = pick.emulator if pick is not None else None
 

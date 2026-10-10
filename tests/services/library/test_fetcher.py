@@ -16,6 +16,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from domain.platform_system import PLATFORM_IDS_KEY, PlatformIds, decode_platform_ids
 from domain.sync_state import SyncCancelled, SyncState
 from domain.work_unit import WorkUnit
 from lib.errors import Refused, RommApiError, RommNotFoundError, classify_error
@@ -2391,6 +2392,44 @@ class TestPlanEstimates:
         assert units[0].predicted_skip is None
         assert units[0].collapsed_count is None
         assert units[0].bound_count is None
+
+
+class TestTheSyncKeepsThePlatformsIds:
+    """Every sync keeps each listed platform's ids, which the platform's system is asked with offline."""
+
+    @pytest.mark.asyncio
+    async def test_every_listed_platform_is_kept_switched_off_ones_too(self, library, fake_romm_api):
+        _wire_fake(library, fake_romm_api)
+        fake_romm_api.platforms = [
+            {"id": 1, "name": "N64", "slug": "n64", "rom_count": 3, "igdb_id": 4},
+            {"id": 2, "name": "SNES", "slug": "snes", "rom_count": 2, "igdb_id": 19, "tgdb_id": 6},
+        ]
+        library.settings["enabled_platforms"] = {"1": True, "2": False}
+
+        await library.sync._fetcher.build_work_queue()
+
+        with library.sync._fetcher._uow_factory() as uow:
+            kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
+        assert kept == {
+            "n64": PlatformIds(igdb_id=4, name="N64"),
+            "snes": PlatformIds(igdb_id=19, tgdb_id=6, name="SNES"),
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_write_that_fails_leaves_the_plan_and_says_so(self, library, fake_romm_api, caplog):
+        _wire_fake(library, fake_romm_api)
+        fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
+        library.settings["enabled_platforms"] = {"1": True}
+
+        def _boom():
+            raise RuntimeError("db down")
+
+        library.sync._fetcher._uow_factory = _boom
+
+        units = await library.sync._fetcher.build_work_queue()
+
+        assert [unit.slug for unit in units] == ["n64"]
+        assert "Could not keep the platforms' ids" in caplog.text
 
 
 class TestGetPlatformsCarriesNoDerivedCount:

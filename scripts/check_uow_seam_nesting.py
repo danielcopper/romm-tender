@@ -78,15 +78,13 @@ seams are closed the cheap way instead: every consumer in ``services/`` binds
 each to one attribute, and that attribute name is what the list carries. A
 leading underscore marks an attribute a service binds rather than a method a
 Protocol names, and the list carries two kinds of them. The call-shaped seams
-are seven today: ``_resolve_system``, ``_sandbox_launcher``,
-``_system_extensions``, ``_system_known``, ``_platform_firmware_resolver``,
-``_firmware_resolver`` and ``_resolve_path``. Two of those seven are listed a
-second time under their implementation's own method name, for a peer that
-holds the object rather than the bound method:
-``RommHttpAdapter.resolve_system`` beside ``_resolve_system``, and
-``EsFindRulesAdapter.resolve_sandbox_launcher`` beside ``_sandbox_launcher``.
-The first pair happens to be the attribute minus its underscore and the second
-plainly is not, which is the point: a twin exists when the implementation has a
+are six today: ``_sandbox_launcher``, ``_system_extensions``,
+``_system_known``, ``_platform_firmware_resolver``, ``_firmware_resolver`` and
+``_resolve_path``. One of those six is listed a second time under its
+implementation's own method name, for a peer that holds the object rather than
+the bound method: ``EsFindRulesAdapter.resolve_sandbox_launcher`` beside
+``_sandbox_launcher``. The name is plainly not the attribute minus its
+underscore, which is the point: a twin exists when the implementation has a
 method name a peer could write, and it has to be read off the implementation
 rather than derived from the attribute. The other five seams have no such twin.
 That is a convention, not a guarantee — a
@@ -119,15 +117,14 @@ reason is not that its I/O matters less:
   what stops this one is the name. ``_list_files`` says nothing about which seam
   it holds — any class might bind it to something unrelated — so an entry would
   key the gate on a coincidence, where ``_system_extensions`` and
-  ``_resolve_system`` each mean one thing.
+  ``_system_known`` each mean one thing.
 
 The escape hatch is a trailing comment on the seam-call line:
 
     self._active_core.active_core_for_rom(rom_id)  # pragma: no uow-check
 
 **One pragma covers both families,** because it suppresses the *line*, not a
-named rule — so a line naming more than one seam, such as
-``get_emulator_options(self._resolve_system(slug))``, is silenced by the single
+named rule — so a line naming more than one seam is silenced by the single
 comment on it. A rule-named spelling would only ask the writer to restate what
 the failure message already told them.
 
@@ -159,7 +156,11 @@ SEAM_METHODS: frozenset[str] = frozenset(
         "has_adoption_candidate",  # RomAdoptionService — via an AdoptionCandidateProbeFn
         "installed_relaunch_items",  # RelaunchOptionsResolver (services/relaunch_options_resolver.py)
         "launch_path_for_rom",  # RelaunchOptionsResolver (services/relaunch_options_resolver.py)
+        # PlatformSystems (services/platform_systems.py), which reads the kept
+        # ids in a UoW of its own and then asks the resolver — the disk too.
+        "platform_system",
         "relaunch_item_for_rom",  # RelaunchOptionsResolver (services/relaunch_options_resolver.py)
+        "rom_system",  # PlatformSystems (services/platform_systems.py), as platform_system
     }
 )
 
@@ -229,18 +230,6 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # the implementation's own method name.
         "resolve_sandbox_launcher",
         "_sandbox_launcher",
-        # SystemResolver (services/protocols/paths.py) — parses Tender's
-        # OWN bundled defaults/config.json for its platform_map. Implemented
-        # on the RomM HTTP adapter, which the name makes easy to misread twice
-        # over: it does no network work, and the file is not RetroDECK's
-        # retrodeck.json. It is also the odd one out — the adapter memoises
-        # the map for the life of the process, so exactly one call ever opens
-        # the file. The entry earns its place because that one call can land
-        # inside a UoW. The Protocol is call-shaped, so `_resolve_system` —
-        # the attribute every consumer in services/ binds it to — is listed
-        # beside `resolve_system`, the implementation's own method name.
-        "resolve_system",
-        "_resolve_system",
         # SteamConfigStore.read_shortcut_exes (services/protocols/transport.py) —
         # parses Steam's whole shortcuts.vdf (315 KB and 828 entries on the
         # reference machine) to answer which shortcuts of ours still name a
@@ -269,7 +258,7 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # (services/protocols/paths.py) — two more questions to ES-DE's
         # catalogue, answered by the same resolver, and kept the same way, as
         # the CoreInfoProvider reads above. Both Protocols are call-shaped, and
-        # unlike SystemResolver there is no method name a service could write
+        # unlike SandboxLauncherFn there is no method name a service could write
         # beside the attribute: the implementations
         # (AtlasCatalogueAdapter.get_supported_extensions / .is_known_system)
         # are on no Protocol a service holds. So the attribute is all there is,
@@ -486,14 +475,14 @@ def main(argv: list[str]) -> int:
             print()
             print(
                 "ERROR: a UoW-opening seam (ActiveCoreResolver / RelaunchOptionsResolver / "
-                "uow_factory) must not be called while a UoW is open on the same path "
+                "PlatformSystems / uow_factory) must not be called while a UoW is open on the same path "
                 "(CLAUDE.md → Invariant register). Snapshot inside the UoW, close it, then "
                 "resolve outside."
             )
         if any(_WRITE_LOCK_REMEDY in line for line in findings):
             print()
             print(
-                "ERROR: a file-I/O seam (DiscResolver / CoreInfoProvider / SystemResolver) "
+                "ERROR: a file-I/O seam (DiscResolver / CoreInfoProvider / SaveLocationReader) "
                 "must not be called while a UoW is open — a Unit of Work wraps database "
                 "reads and writes only, never file or server I/O (CLAUDE.md → Invariant "
                 "register, GLOSSARY.md → Unit of Work, ADR-0006). Snapshot inside the UoW, "

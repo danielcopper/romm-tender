@@ -636,11 +636,11 @@ List and detail is `Columns` with two columns. The Sync page's table beside its 
 ### The pane primitives
 
 The pieces a detail pane is built from, in `frontend/src/bigpicture/layout/pane.tsx` so that the next pane is written
-against the same scale rather than a second literal for the same size: the 11 px every secondary line is set in, the
-verdict palette, the two button shapes (`FLAT_BUTTON` for a button sharing a row, `ROW_BUTTON` for a table row's action
-column), a section title, a muted line, a row of buttons, and the two lines that report an action — the status line
-bound to the entry and the group it belongs under, and the sentence saying which other entry is working while this
-pane's buttons are disabled.
+against the same scale rather than a second literal for the same size: the 11 px every secondary line is set in and the
+10 px of the platform page's small print, the verdict palette, the two button shapes (`FLAT_BUTTON` for a button sharing
+a row, `ROW_BUTTON` for a table row's action column), a section title, a muted line, a row of buttons, and the two lines
+that report an action — the status line bound to the entry and the group it belongs under, and the sentence saying which
+other entry is working while this pane's buttons are disabled.
 
 ### List and detail
 
@@ -738,14 +738,17 @@ source's card under Settings › Emulator sources, as is every finding of a swit
 yet, or a known code whose finding lacks a fact its sentence needs, reads "Problem with _source_: _code_". Where the
 answering source gives no emulator list, the platform page, the emulator menu and a game's BIOS tab say why from the
 answer's `reason` — no source detected, every source switched off, a broken ES-DE systems file, a RetroDECK that has not
-been set up yet, EmuDeck's list that cannot be read yet, or any other refusal — and never "no emulator". **_Source_ is
-switched on in Settings › Emulator sources, but Tender cannot start games through it yet.** stands on Main once for
-every switched-on source Tender cannot start games through, whether or not it is the one that answers, and is the one
-source notice drawn smaller and without the warning sign: it states a fact about Tender rather than something wrong. The
-source's card under Settings › Emulator sources says **Tender cannot start games through _source_ yet.**, switched on or
-off, and a switched-off source says it only there. Where such a source answers, the platform page, the emulator menu and
-a game's BIOS tab keep saying why there is no emulator list — today no such source gives one. Showing **Tender cannot
-start games through _source_ yet.** there beside a list such a source does give is #2222's work; no code does it today.
+been set up yet, EmuDeck's list that cannot be read yet, a platform the source has no system for (`no_platform_system`),
+a platform whose systems are all switched off there (`platform_system_off`), a platform whose system is not known
+because RomM, which gives its ids, cannot be reached (`server_unreachable`) or refused the read (any other of RomM's
+failure reasons, worded as one), or any other refusal — and never "no emulator". **_Source_ is switched on in Settings ›
+Emulator sources, but Tender cannot start games through it yet.** stands on Main once for every switched-on source
+Tender cannot start games through, whether or not it is the one that answers, and is the one source notice drawn smaller
+and without the warning sign: it states a fact about Tender rather than something wrong. The source's card under
+Settings › Emulator sources says **Tender cannot start games through _source_ yet.**, switched on or off, and a
+switched-off source says it only there. Where such a source answers, the platform page, the emulator menu and a game's
+BIOS tab keep saying why there is no emulator list — today no such source gives one. Showing **Tender cannot start games
+through _source_ yet.** there beside a list such a source does give is #2222's work; no code does it today.
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
@@ -1262,18 +1265,32 @@ RetroDECK path migration is pending or an update is being installed, and Enable 
 listing they need fails.
 
 The detail offers no sync control of its own — the row already is one, focus is already there and A works the toggle,
-and the list's two header buttons act on every row at once — so it opens with one header line instead of a Sync section:
-the platform's name, `N on RomM · M in Steam · <core name>`, and the core picker's icon button, right-aligned.
+and the list's two header buttons act on every row at once — so it opens with a two-line header instead of a Sync
+section. The first line is the platform's name alone, with the core picker's icon button right-aligned beside it; the
+second, in the platform page's 10 px small print and muted, is
+`<core name> · N on RomM · M in Steam · <source> system: <system>`. Each part of that line keeps itself on one line and
+carries its `·` in front, so the line wraps only between parts and never cuts one: with the name beside the facts, the
+Deck's width squeezed a two-word name onto two lines over the counts and broke `RetroDECK system snes` after its first
+word. The system part names the system the platform is in the answering source and its source (`RetroDECK system: psx`,
+worded by `platformSystemClause`); it is absent where no system was taken, which is when the line under the header says
+why ([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)). **That line, the notes under the BIOS
+heading and the lines under each BIOS file's name share one size**, `NOTE_FONT` (10 px), below the 11 px
+`SECONDARY_FONT` the other panes' secondary lines keep: on the Deck the three read as large as the rows' file names at
+11 px, and set apart they looked like three different sizes. The BIOS table's rows and its column names are set at 12
+px, the heading's size, and the marks in the On-disk cell at 12 px too: on the Deck 11 px and 10 px are no difference at
+all, so a file name one pixel above the description under it did not read as a name, and column names in the secondary
+size read as notes rather than as a table head. Two pixels is the gap that shows. The row buttons keep their own 11 px
+label, so focus and press sizes are unchanged.
 
-**Both counts on that line are ROM files.** `N` is RomM's own `rom_count` for the platform; `M` is `reachable_count` —
-the platform's reachable ROMs (every member of a sibling group that holds a binding, because one shortcut serves the
-group (ADR-0021 §2) and the game's page switches versions across it), less the versions RomM no longer serves (below).
-`M` is **not** the number of shortcuts: a fully-synced 665-ROM platform behind 458 shortcuts reads `665 · 665`, where
-counting bindings read `665 · 458` and so reported 207 games as missing when none was. The number of shortcuts is
-`count` on the same payload, and it is what the Remove group says and acts on — the two must not be folded, or the
-button offers to remove more shortcuts than exist. Where a whole game never reached Steam the two halves genuinely
-differ (`3084 on RomM · 8 in Steam` for a platform with one applied game), and that difference is the line doing its
-job.
+**Both counts on the second line are ROM files.** `N` is RomM's own `rom_count` for the platform; `M` is
+`reachable_count` — the platform's reachable ROMs (every member of a sibling group that holds a binding, because one
+shortcut serves the group (ADR-0021 §2) and the game's page switches versions across it), less the versions RomM no
+longer serves (below). `M` is **not** the number of shortcuts: a fully-synced 665-ROM platform behind 458 shortcuts
+reads `665 · 665`, where counting bindings read `665 · 458` and so reported 207 games as missing when none was. The
+number of shortcuts is `count` on the same payload, and it is what the Remove group says and acts on — the two must not
+be folded, or the button offers to remove more shortcuts than exist. Where a whole game never reached Steam the two
+halves genuinely differ (`3084 on RomM · 8 in Steam` for a platform with one applied game), and that difference is the
+line doing its job.
 
 Two things the line does not claim. The halves count **different populations** — the left is what RomM holds now, the
 right is what our own rows say — so ROMs added on RomM since the last sync widen the gap, and equality means "nothing
@@ -1309,19 +1326,19 @@ not skip a platform that still holds such a bound row — they full-fetch it —
 stale-removal scan of the first later run that completes. The direction is a conservative under-count, which is why it
 is recorded rather than guarded.
 
-**The BIOS ratio is not on that line** — it was, and its width is what wrapped the line three times on a platform with a
-long name and a long core label. It is stated once instead, beside `BIOS FILES` eight pixels below, in the colour
+**The BIOS ratio is not on the second line** — it was, and its width is what wrapped the line three times on a platform
+with a long name and a long core label. It is stated once instead, beside `BIOS FILES` eight pixels below, in the colour
 `biosColor.ts` gives the list's dot, so the two places that state a platform's BIOS state agree by construction. Under
 it, for the focused platform:
 
-- **Emulator core** — a **microchip icon button in the header line**, opening the same context menu the game page uses
+- **Emulator core** — a **microchip icon button beside the name**, opening the same context menu the game page uses
   (`buildEmulatorMenu`). It is the game page's own button and its own colour coding: grey `#8f98a0` when the active core
   is the default option, gold `#d4a72c` when it is an override, read off the payload's `is_default` for the option
-  carrying `active_core_label`. The **core clause beside it takes the same two colours from the same condition**, so the
-  name and the icon cannot disagree. A full-width button under the header, with the save-compatibility caveat under
-  that, is what this replaced: two rows for one action, on the pane where rows are the scarce thing. The caveat is not
-  lost — `buildEmulatorMenu` renders it as the menu's first item, so the copy on the page that opens the menu was the
-  same sentence twice.
+  carrying `active_core_label`. The **core part opening the line under it takes the same two colours from the same
+  condition**, so the name and the icon cannot disagree. A full-width button under the header, with the
+  save-compatibility caveat under that, is what this replaced: two rows for one action, on the pane where rows are the
+  scarce thing. The caveat is not lost — `buildEmulatorMenu` renders it as the menu's first item, so the copy on the
+  page that opens the menu was the same sentence twice.
 
   **The clause names the core; "Default" is not one of the names it can take.** `resolve_platform_label` answers with
   the real label in both ordinary cases. `null` means no option is **bakeable**, which is not the same as there being
@@ -1342,11 +1359,12 @@ it, for the focused platform:
     I is the muted case, not this one**: ES-DE gives it two live commands, both MAME, and the first is a _libretro_ one
     whose core is installed, so it reads `RetroDECK decides` and its games start. The three standalone entries in that
     block are commented out and are not commands at all.
-  - **No options at all** — `_resolve_system` falls through to the raw RomM slug for a platform its map does not name,
-    and `get_emulator_options` answers `available: true` with an empty list for a system `es_systems.xml` does not list;
-    `vic-20`, `acorn-electron`, `nintendo-dsi`, `ps5`, `browser` and `win` are in neither. RetroDECK's own launch then
-    reads `command[1]` for the system, finds nothing, and exits 1 (`libexec/run_game.sh`). The clause reads
-    `no emulator` in **red** and the line says the games will not launch, because they will not.
+  - **No options at all** — `get_emulator_options` answers `available: true` with an empty list for a system whose
+    catalogue entry lists no command. RetroDECK's own launch then reads `command[1]` for the system, finds nothing, and
+    exits 1 (`libexec/run_game.sh`). A platform with no switched-on system in the answering source is not this case: its
+    list is not available, with the reason `no_platform_system` or `platform_system_off`
+    ([core-emulator-selection.md](core-emulator-selection.md#a-platforms-system)). The clause reads `no emulator` in
+    **red** and the line says the games will not launch, because they will not.
 
   The chip is disabled for all three, never withheld. Printing "Default" for any of them said Tender had chosen;
   printing `no emulator` for all three said the games would not start where they do. Both were wrong, in opposite

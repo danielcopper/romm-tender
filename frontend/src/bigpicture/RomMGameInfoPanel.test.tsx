@@ -276,6 +276,7 @@ describe("RomMGameInfoPanel", () => {
       emulator_data_available: true,
       emulator_data_reason: null,
       emulator_source: { kind: "retrodeck", starts_games: true },
+      platform_system: null,
       emulators: [],
       active_core: null,
       active_core_label: null,
@@ -1860,6 +1861,7 @@ describe("RomMGameInfoPanel", () => {
         emulator_data_available: true,
         emulator_data_reason: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
         emulators: [
           {
             label: "INITIAL_CORE",
@@ -1890,6 +1892,7 @@ describe("RomMGameInfoPanel", () => {
         emulator_data_available: false,
         emulator_data_reason: "switched_off",
         emulator_source: null,
+        platform_system: null,
         emulators: [],
       });
 
@@ -1977,6 +1980,7 @@ describe("RomMGameInfoPanel", () => {
         emulator_data_available: true,
         emulator_data_reason: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
         emulators: [
           {
             label: "FROM_CORE_CHANGED",
@@ -2092,6 +2096,7 @@ describe("RomMGameInfoPanel", () => {
         emulator_data_available: true,
         emulator_data_reason: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
         emulators: [
           {
             label: "INITIAL_CORE",
@@ -2572,16 +2577,11 @@ describe("RomMGameInfoPanel", () => {
       });
       vi.mocked(backend.getAchievements).mockResolvedValue({
         success: false,
-        achievements: [],
-        total: 0,
         reason: "server_unreachable",
         message: "down",
       });
       vi.mocked(backend.getAchievementProgress).mockResolvedValue({
         success: false,
-        earned: 0,
-        total: 0,
-        earned_achievements: [],
         reason: "server_unreachable",
         message: "down",
       });
@@ -2620,9 +2620,6 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.getAchievements).mockResolvedValue({ success: true, achievements: [], total: 0 });
       vi.mocked(backend.getAchievementProgress).mockResolvedValue({
         success: false,
-        earned: 0,
-        total: 0,
-        earned_achievements: [],
         reason: "no_ra_username",
         message: "No RA username configured in RomM",
       });
@@ -3245,6 +3242,7 @@ describe("RomMGameInfoPanel", () => {
         emulator_data_available: true,
         emulator_data_reason: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
         emulators: [
           {
             label: "Snes9x",
@@ -3313,6 +3311,7 @@ describe("RomMGameInfoPanel", () => {
         emulator_data_available: true,
         emulator_data_reason: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
         emulators: [
           {
             label: "Beetle PSX HW",
@@ -3392,6 +3391,7 @@ describe("RomMGameInfoPanel", () => {
         emulator_data_available: true,
         emulator_data_reason: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
         emulators: [
           {
             label: "Beetle PSX HW",
@@ -3471,6 +3471,7 @@ describe("RomMGameInfoPanel", () => {
         emulator_data_available: true,
         emulator_data_reason: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
         emulators: [
           {
             label: "Beetle PSX HW",
@@ -3972,6 +3973,7 @@ describe("RomMGameInfoPanel", () => {
         emulator_data_available: false,
         emulator_data_reason: "sealed",
         emulator_source: { kind: "emudeck", starts_games: false },
+        platform_system: null,
         emulators: [],
         active_core: null,
         active_core_label: null,
@@ -4030,6 +4032,7 @@ describe("RomMGameInfoPanel", () => {
         emulator_data_available: true,
         emulator_data_reason: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
         emulators: [
           {
             label: "MyCore",
@@ -5096,6 +5099,7 @@ describe("RomMGameInfoPanel", () => {
         emulator_data_available: true,
         emulator_data_reason: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
         emulators: [
           {
             label,
@@ -5353,6 +5357,7 @@ describe("RomMGameInfoPanel", () => {
         emulator_data_available: true,
         emulator_data_reason: null,
         emulator_source: { kind: "retrodeck", starts_games: true },
+        platform_system: null,
         emulators: [],
       });
 

@@ -527,10 +527,7 @@ export type SgdbResolution =
   | { decision: "needs_pick"; candidates: SgdbCandidate[] };
 
 /** Result of a manual SGDB name search. */
-export interface SgdbSearchResult {
-  success: boolean;
-  games: SgdbCandidate[];
-}
+export type SgdbSearchResult = { success: true; games: SgdbCandidate[] } | EndpointFailure;
 
 export const getSgdbResolution = endpoint<[number], SgdbResolution>("get_sgdb_resolution");
 export const searchSgdbGames = endpoint<[string], SgdbSearchResult>("search_sgdb_games");
@@ -584,7 +581,9 @@ export const applySteamInputSetting = endpoint<[], { success: boolean; message: 
 // platform at a time below, in the order the page's own list is in.
 export const getFirmwareStatus = endpoint<[], FirmwareStatus>("get_firmware_status");
 export const getPlatformFirmwareStatus = endpoint<[string], PlatformFirmwareStatus>("get_platform_firmware_status");
-export const downloadAllFirmware = endpoint<[string], FirmwareDownloadResult | EndpointFailure>(
+// The ROM is the game whose page started the download, whose install record names
+// the system its files are placed for; `null` from the platform page.
+export const downloadAllFirmware = endpoint<[string, number | null], FirmwareDownloadResult | EndpointFailure>(
   "download_all_firmware",
 );
 export const downloadRequiredFirmware = endpoint<[string], FirmwareDownloadResult | EndpointFailure>(
@@ -1526,5 +1525,7 @@ export const savesRollbackToVersion = endpoint<[number, string, number], Rollbac
 export const copySaveToSlot = endpoint<[number, number, string], CopySaveToSlotStatus>("copy_save_to_slot");
 
 // Achievements endpoints
-export const getAchievements = endpoint<[number], AchievementList>("get_achievements");
-export const getAchievementProgress = endpoint<[number], AchievementProgress>("get_achievement_progress");
+export const getAchievements = endpoint<[number], AchievementList | EndpointFailure>("get_achievements");
+export const getAchievementProgress = endpoint<[number], AchievementProgress | EndpointFailure>(
+  "get_achievement_progress",
+);

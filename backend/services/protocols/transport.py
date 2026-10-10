@@ -505,20 +505,22 @@ class ReleaseAssetDownloadFn(Protocol):
 
 
 class SteamGridDbApi(Protocol):
-    """SteamGridDB HTTP API — search, artwork fetch, key verification."""
+    """SteamGridDB HTTP API — search, artwork fetch, key verification.
+
+    ``request`` and ``verify_api_key`` raise ``lib.errors.SgdbApiError`` on
+    every failure to reach SteamGridDB or to read its answer: ``status_code`` is
+    the HTTP status of a non-2xx answer (401/403 for a key it refuses), and
+    ``None`` where there is none.
+    """
 
     def request(self, path: str) -> dict[str, Any] | None:
-        """Authenticated GET to SGDB API v2. Returns parsed JSON or None if no API key."""
+        """Authenticated GET to SGDB API v2. Returns the answer's JSON object, or None if no API key."""
         ...
 
     def download_image(self, url: str, dest_path: str) -> bool:
-        """Download image from URL to dest_path with atomic write. Returns True on success."""
+        """Download image from URL to dest_path with atomic write. Returns True on success, False on any failure."""
         ...
 
     def verify_api_key(self, api_key: str) -> dict[str, Any]:
-        """Verify an API key against SGDB. Returns parsed JSON response.
-
-        Raises ``lib.errors.SgdbApiError`` on non-2xx HTTP responses
-        (e.g. 401/403 for an invalid key).
-        """
+        """Verify an API key against SGDB. Returns the answer's JSON object."""
         ...

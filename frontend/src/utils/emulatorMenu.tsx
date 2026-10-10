@@ -11,7 +11,7 @@
 
 import type { ReactNode } from "react";
 import { Menu, MenuItem, MenuSeparator } from "@decky/ui";
-import type { AnsweringSource, EmulatorDataReason, EmulatorOption } from "../types";
+import type { AnsweringSource, EmulatorDataReason, EmulatorOption, PlatformSystemAnswer } from "../types";
 import { emulatorDataReasonSentence } from "./emulatorSourceWording";
 
 /** Map a backend un-bakeable reason slug to short menu copy. */
@@ -36,6 +36,7 @@ export interface EmulatorMenuConfig {
   emulatorDataAvailable: boolean;
   emulatorDataReason: EmulatorDataReason | null;
   emulatorSource: AnsweringSource | null;
+  emulatorPlatformSystem: PlatformSystemAnswer | null;
   /** The active emulator's label — marked with a checkmark. */
   activeLabel: string | null;
   /** The per-platform override label — marked "(system)". Null in the platform
@@ -72,7 +73,7 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     return (
       <Menu label="Emulator">
         <MenuItem key="unavailable" disabled={true}>
-          {emulatorDataReasonSentence(config.emulatorDataReason, config.emulatorSource)}
+          {emulatorDataReasonSentence(config.emulatorDataReason, config.emulatorSource, config.emulatorPlatformSystem)}
         </MenuItem>
       </Menu>
     );

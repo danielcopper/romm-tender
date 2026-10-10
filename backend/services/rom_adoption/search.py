@@ -20,6 +20,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.emulator_sources import RETRODECK
 from domain.retrodeck_folders import FolderRefused
 from domain.rom_adoption import is_archive_name, server_manifest
 from domain.rom_candidates import (
@@ -43,9 +44,9 @@ if TYPE_CHECKING:
     from services.protocols import (
         DebugLogger,
         DownloadFileStore,
+        PlatformSystems,
         RetroDeckFolders,
         SystemKnownFn,
-        SystemResolver,
         SystemSupportedExtensionsFn,
         UnitOfWorkFactory,
     )
@@ -89,7 +90,7 @@ class CandidateSearchConfig:
     """
 
     download_file_store: DownloadFileStore
-    resolve_system: SystemResolver
+    platform_systems: PlatformSystems
     system_extensions: SystemSupportedExtensionsFn
     system_known: SystemKnownFn
     retrodeck_folders: RetroDeckFolders
@@ -103,7 +104,7 @@ class CandidateSearch:
 
     def __init__(self, *, config: CandidateSearchConfig) -> None:
         self._download_file_store = config.download_file_store
-        self._resolve_system = config.resolve_system
+        self._platform_systems = config.platform_systems
         self._system_extensions = config.system_extensions
         self._system_known = config.system_known
         self._retrodeck_folders = config.retrodeck_folders
@@ -132,7 +133,10 @@ class CandidateSearch:
            neither of the above applies.
         """
         platform_dir = os.path.dirname(checked_path)
-        system = self._resolve_system(rom_detail.get("platform_slug", ""), rom_detail.get("platform_fs_slug"))
+        platform = self._platform_systems.platform_system(rom_detail.get("platform_slug", ""), source=RETRODECK)
+        system = platform.taken
+        if system is None:
+            return None
         incoming_name = os.path.basename(checked_path)
         incoming_size = rom_detail.get("fs_size_bytes", 0)
         wanted = self._wanted_names(rom_detail, incoming_name)
@@ -193,17 +197,17 @@ class CandidateSearch:
         the user has, and a button that ignored it would send them to a dialog
         they were told nothing about.
 
-        The system is resolved from the slug alone — a ``roms`` row carries no
-        ``platform_fs_slug``, which the resolver consults only for a slug that
-        misses its platform map — so an unmapped slug comes out verbatim. ES-DE
-        names no folder for a system it does not declare, and
+        The system is the platform's in RetroDECK, asked without reaching RomM,
+        because this is the page's half; a platform with none has no folder to
+        search. ES-DE names no folder for a system it does not declare, and
         :meth:`_searchable_dir` refuses one besides: a namesake in such a
         directory is content no emulator will ever look at.
         """
-        system = self._resolve_system(platform_slug)
-        platform_dir = self._platform_dir(system)
+        platform = self._platform_systems.platform_system(platform_slug, source=RETRODECK, ask_romm=False)
+        system = platform.taken
+        platform_dir = None if system is None else self._platform_dir(system)
         wanted_name = normalize_rom_name(fs_name)
-        if platform_dir is None or not wanted_name:
+        if system is None or platform_dir is None or not wanted_name:
             self._log_probe(platform_slug, platform_dir, wanted_name, entries=(), found=())
             return ()
         covered = self._installed_paths() | {os.path.join(platform_dir, fs_name)}

@@ -111,7 +111,7 @@ class SaveService:
                 retrodeck_folders=config.retrodeck_folders,
                 active_core=config.active_core,
                 save_locations=config.save_locations,
-                resolve_system=config.resolve_system,
+                platform_systems=config.platform_systems,
                 logger=config.logger,
             ),
         )

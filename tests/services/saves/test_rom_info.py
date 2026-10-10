@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from typing import cast
 
+import pytest
+from fakes.fake_platform_systems import RETRODECK_SOURCE, FakePlatformSystems
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
+from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.retrodeck_folders import GAME_DOWNLOAD, switched_off
 from domain.save_answer import SaveAnswer
 from tests.services.saves._helpers import (
@@ -191,6 +194,25 @@ class TestFindSaveFiles:
         answer = svc._rom_info.save_answer(80)
 
         assert _asked(svc) == []
+        assert answer.state == "unestablished"
+        assert answer.syncable is False
+
+    @pytest.mark.parametrize("state", [NO_SYSTEM, SWITCHED_OFF])
+    def test_an_uninstalled_rom_whose_platform_has_no_system_asks_nothing(self, tmp_path, state):
+        svc, _ = make_service(tmp_path)
+        _seed_amiga_inside_content(svc)
+        _seed_rom(svc, 80, platform_slug="commodore-amiga", fs_name="Turrican.adf")
+        platform = PlatformSystem(state, "commodore-amiga", "Amiga", system="amiga", source=RETRODECK_SOURCE)
+        svc._rom_info._platform_systems = FakePlatformSystems(answers={"commodore-amiga": platform})
+        folders = svc._rom_info._retrodeck_folders
+        asked_folders: list[object] = []
+        original = folders.download_folder
+        folders.download_folder = lambda system: asked_folders.append(system) or original(system)
+
+        answer = svc._rom_info.save_answer(80)
+
+        assert _asked(svc) == []
+        assert asked_folders == []
         assert answer.state == "unestablished"
         assert answer.syncable is False
 

@@ -37,8 +37,8 @@ if TYPE_CHECKING:
     from services.protocols import (
         CoreInfoProvider,
         PlatformCoreReader,
+        PlatformSystems,
         SandboxLauncherFn,
-        SystemResolver,
         UnitOfWorkFactory,
     )
 
@@ -51,15 +51,16 @@ class ActiveCoreResolverConfig:
     ``platform_slug`` + ``emulator_override``), the core-info read seam (the
     classified emulator options + the system-layer default), the sandbox-launcher
     seam the folder-boot rewrite resolves through, the per-platform core reader
-    (the ``settings.json`` ``platform_cores`` map), the platform-slug-to-system
-    resolver, and the logger used to warn on a stale label.
+    (the ``settings.json`` ``platform_cores`` map), the platform's system — the
+    install record's for an installed ROM — and the logger used to warn on a
+    stale label.
     """
 
     uow_factory: UnitOfWorkFactory
     core_info: CoreInfoProvider
     sandbox_launcher: SandboxLauncherFn
     platform_core_reader: PlatformCoreReader
-    resolve_system: SystemResolver
+    platform_systems: PlatformSystems
     logger: logging.Logger
 
 
@@ -71,7 +72,7 @@ class ActiveCoreResolver:
         self._core_info = config.core_info
         self._sandbox_launcher = config.sandbox_launcher
         self._platform_core_reader = config.platform_core_reader
-        self._resolve_system = config.resolve_system
+        self._platform_systems = config.platform_systems
         self._logger = config.logger
 
     def active_emulator_for_rom(
@@ -92,7 +93,8 @@ class ActiveCoreResolver:
            Dolphin, …) or libretro.
 
         Returns ``None`` when the platform has no resolvable emulator at all —
-        including when ``es_systems.xml`` cannot be read — so the caller bakes
+        including when ``es_systems.xml`` cannot be read, and when the platform
+        has no switched-on system in the answering source — so the caller bakes
         the plain launch and lets RetroDECK resolve the emulator. A stale
         per-game/per-platform label is never fatal — it degrades to the next
         layer with a WARNING.
@@ -118,7 +120,10 @@ class ActiveCoreResolver:
             self._logger.warning("active_core_resolver: no ROM for rom_id=%s; resolving to plain launch", rom_id)
             return None
 
-        system = self._resolve_system(rom.platform_slug)
+        platform = self._platform_systems.rom_system(rom.platform_slug, install, reading=reading)
+        system = platform.taken
+        if system is None:
+            return None
         options = self._core_info.get_emulator_options(system, reading=reading)["options"]
         emulator = self._resolve_by_precedence(rom, rom_id, system, options, reading)
         return self._maybe_folder_boot_direct(emulator, install, rom_id)

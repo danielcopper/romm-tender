@@ -21,6 +21,7 @@ describe("biosHeldRatio", () => {
       ratio_local_count: 1,
       emulator_data_reason: null,
       emulator_source: { kind: "retrodeck", starts_games: true },
+      platform_system: null,
     };
 
     expect(biosHeldRatio(gamePage)).toBe(biosHeldRatio(platformPane));
@@ -38,6 +39,7 @@ describe("biosHeldRatio", () => {
       files: [],
       emulator_data_reason: null,
       emulator_source: { kind: "retrodeck", starts_games: true },
+      platform_system: null,
     };
 
     expect(biosHeldRatio(gamePage)).toBe("");

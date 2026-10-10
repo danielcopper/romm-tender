@@ -27,6 +27,7 @@ from domain.virtual_collection_id import virtual_types_to_list
 from domain.work_unit import WorkUnit, collection_units
 from lib.errors import Refused
 from lib.romm_paging import LIST_PAGE_SIZE
+from services.library._platform_ids import keep_platform_ids
 
 if TYPE_CHECKING:
     import asyncio
@@ -318,8 +319,9 @@ class LibraryFetcher:
     # ── ROM fetch pipeline ───────────────────────────────────────
 
     async def _fetch_enabled_platforms(self):
-        """Fetch and filter platforms by enabled_platforms setting."""
+        """Fetch and filter platforms by enabled_platforms setting, keeping every listed platform's ids."""
         platforms = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
+        await self._loop.run_in_executor(None, keep_platform_ids, self._uow_factory, self._logger, platforms)
 
         # Empty map = "all platforms enabled" (the safety floor for a user who
         # syncs without ever opening the Platforms page). ``get_platforms``

@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     import asyncio
     import logging
 
+    from domain.platform_system import PlatformSystem
     from domain.rom import Rom
     from domain.rom_install import RomInstall
     from services.protocols import (
@@ -39,8 +40,8 @@ if TYPE_CHECKING:
         ConflictRules,
         CoreInfoProvider,
         DiscResolver,
+        PlatformSystems,
         SettingsPersister,
-        SystemResolver,
         UnitOfWorkFactory,
     )
 
@@ -50,7 +51,7 @@ class CoreServiceConfig:
     """Frozen wiring bundle handed to ``CoreService.__init__``.
 
     Carries the runtime infrastructure (event loop, logger), the ES-DE
-    core-info read seam, the platform-slug-to-system resolver, the live
+    core-info read seam, the platform's system in the answering source, the live
     ``settings`` dict + its persister (where the per-platform core lands), the
     SQLite Unit-of-Work factory (to read the ROM + its install and write the
     per-game pin), the shared per-ROM active-core resolver (the menu's active
@@ -64,7 +65,7 @@ class CoreServiceConfig:
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
     core_info: CoreInfoProvider
-    resolve_system: SystemResolver
+    platform_systems: PlatformSystems
     settings: dict[str, Any]
     settings_persister: SettingsPersister
     uow_factory: UnitOfWorkFactory
@@ -85,7 +86,7 @@ class CoreService:
         self._loop = config.loop
         self._logger = config.logger
         self._core_info = config.core_info
-        self._resolve_system = config.resolve_system
+        self._platform_systems = config.platform_systems
         self._settings = config.settings
         self._settings_persister = config.settings_persister
         self._uow_factory = config.uow_factory
@@ -122,33 +123,39 @@ class CoreService:
         answering emulator source gives no emulator list, so the menu can say so
         instead of showing an empty list; ``emulator_data_reason`` says why and
         ``emulator_source`` names the answering source
-        (:meth:`adapters.atlas_catalogue.AtlasCatalogueAdapter.get_emulator_options`).
+        (:meth:`adapters.atlas_catalogue.AtlasCatalogueAdapter.get_emulator_options`);
+        where the platform has no switched-on system there, the reason is
+        ``no_platform_system`` or ``platform_system_off``. ``platform_system`` is
+        :meth:`domain.platform_system.PlatformSystem.payload` — the install
+        record's system for an installed ROM, which no source was asked for.
         When ``rom_id`` is unknown the emulator list is empty and the active
         emulator is ``(None, None)``.
         """
         return await self._loop.run_in_executor(None, self._platform_core_info_io, rom_id)
 
     def _platform_core_info_io(self, rom_id: int) -> dict[str, Any]:
-        rom = self._read_rom(rom_id)
+        rom, install = self._read_rom_and_install(rom_id)
         if rom is None:
             return {
                 "emulators": [],
                 "emulator_data_available": True,
                 "emulator_data_reason": None,
                 "emulator_source": None,
+                "platform_system": None,
                 "active_core": None,
                 "active_core_label": None,
                 "platform_core_label": None,
                 "has_game_override": False,
             }
-        system = self._resolve_system(rom.platform_slug)
-        options = self._core_info.get_emulator_options(system)
+        platform = self._platform_systems.rom_system(rom.platform_slug, install)
+        options = self._emulator_options(platform)
         emulator = self._active_core.active_emulator_for_rom(rom_id)
         return {
             "emulators": options_to_payload(options["options"]),
             "emulator_data_available": options["available"],
             "emulator_data_reason": options["reason"],
             "emulator_source": options["source"],
+            "platform_system": platform.payload(),
             "active_core": emulator.emulator if emulator is not None else None,
             "active_core_label": emulator.label if emulator is not None else None,
             "platform_core_label": self._settings.get("platform_cores", {}).get(rom.platform_slug),
@@ -164,7 +171,8 @@ class CoreService:
         platform's ES-DE system, ``emulator_data_available`` is ``False`` where
         the answering emulator source gives no emulator list (with
         ``emulator_data_reason`` and ``emulator_source`` as in
-        :meth:`get_platform_core_info`), and
+        :meth:`get_platform_core_info`), ``platform_system`` the system the
+        platform is in the answering source, and
         ``active_core_label`` is the platform-layer resolution — the per-platform
         override when it still resolves, else the es_systems default — so the
         label and a launch from this platform agree.
@@ -177,13 +185,14 @@ class CoreService:
         return await self._loop.run_in_executor(None, self._system_core_info_io, platform_slug)
 
     def _system_core_info_io(self, platform_slug: str) -> dict[str, Any]:
-        system = self._resolve_system(platform_slug)
-        options = self._core_info.get_emulator_options(system)
+        platform = self._platform_systems.platform_system(platform_slug)
+        options = self._emulator_options(platform)
         return {
             "emulators": options_to_payload(options["options"]),
             "emulator_data_available": options["available"],
             "emulator_data_reason": options["reason"],
             "emulator_source": options["source"],
+            "platform_system": platform.payload(),
             "active_core_label": resolve_platform_label(
                 options["options"], self._settings.get("platform_cores", {}).get(platform_slug)
             ),
@@ -311,13 +320,13 @@ class CoreService:
                     "message": f"ROM {rom_id} is not tracked",
                 }
             platform_slug = rom.platform_slug
-        # Resolve the label between the two transactions: the emulator-options
-        # read re-probes ES-DE's config and each option's install on every call
-        # (the slug→system resolver only on the process's first), and a UoW
-        # holds SQLite's BEGIN IMMEDIATE write lock — file I/O inside one stalls
-        # every other writer for its duration.
-        system = self._resolve_system(platform_slug)
-        invocation = label_to_invocation(self._core_info.get_emulator_options(system)["options"], label)
+            install = uow.rom_installs.get(rom_id)
+        # Resolve the label between the two transactions: the platform's system
+        # and the emulator-options read each ask the resolver on every call, and
+        # a UoW holds SQLite's BEGIN IMMEDIATE write lock — file I/O inside one
+        # stalls every other writer for its duration.
+        options = self._emulator_options(self._platform_systems.rom_system(platform_slug, install))
+        invocation = label_to_invocation(options["options"], label)
         if invocation is None:
             # Hard-fail BEFORE any write — never persist a label that does not
             # resolve to a bakeable emulator (unknown / needs_setup / un-bakeable).
@@ -449,6 +458,12 @@ class CoreService:
         bake_path = self._disc_resolver.resolve_for_install(install, rom.selected_disc)
         return (build_launch_options(invocation, bake_path), app_id)
 
-    def _read_rom(self, rom_id: int) -> Rom | None:
+    def _read_rom_and_install(self, rom_id: int) -> tuple[Rom | None, RomInstall | None]:
         with self._uow_factory() as uow:
-            return uow.roms.get(rom_id)
+            return uow.roms.get(rom_id), uow.rom_installs.get(rom_id)
+
+    def _emulator_options(self, platform: PlatformSystem) -> dict[str, Any]:
+        """The emulator options for *platform*'s system, or the unavailable answer where it has none."""
+        if platform.taken is None:
+            return platform.unavailable_options()
+        return self._core_info.get_emulator_options(platform.taken)

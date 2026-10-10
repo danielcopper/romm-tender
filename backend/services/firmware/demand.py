@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.firmware_wants import FirmwareCatalogue
 from domain.retrodeck_folders import FolderRefused
 from lib.path_safety import PathTraversalError, safe_join
 
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Mapping
 
-    from domain.firmware_wants import FirmwareCatalogue, FirmwarePlacement
+    from domain.firmware_wants import FirmwarePlacement
     from services.protocols import (
         FirmwareFileStore,
         FirmwarePlatformResolver,
@@ -61,12 +62,16 @@ class FirmwareDemand:
 
     # ── What the machine wants ───────────────────────────────
 
-    def platform_catalogue(self, system: str) -> FirmwareCatalogue:
+    def platform_catalogue(self, system: str | None) -> FirmwareCatalogue:
         """What *system*'s emulators want, read fresh and verified. Blocking.
 
         The question every platform-scoped answer asks, and the only one that
-        covers a standalone emulator or settles a folder declaration.
+        covers a standalone emulator or settles a folder declaration. A platform
+        with no system (``None``) has nothing to ask, and its reading did not
+        happen.
         """
+        if system is None:
+            return FirmwareCatalogue(placements=(), unread_emulators=frozenset(), resolved=False)
         return self._platform_firmware_resolver(system)
 
     def catalogue(self) -> FirmwareCatalogue:

@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _vendor import atlas
 from bootstrap import (
     AdapterBundle,
     BootstrapResult,
@@ -52,6 +53,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 from models.shortcut_launcher import ShortcutLauncher
 
+from adapters import atlas_zstd
 from adapters.gavel_native import GavelNativeAdapter
 from adapters.retrodeck_folders import RetroDeckFoldersAdapter
 from adapters.romm.http import RommHttpAdapter
@@ -550,6 +552,41 @@ class TestBootstrapWarnsWhenCertificateChecksAreOff:
         assert not [r for r in caplog.records if self._WARNING in r.getMessage()]
 
 
+class TestBootstrapRegistersTheZstdCodec:
+    """The start hands the resolver the vendored zstd backport where the
+    standard library has no codec, once — and a copy that does not load costs
+    the codec, never the start."""
+
+    @pytest.mark.skipif(sys.version_info[:2] != (3, 13), reason="the vendored build is cp313")
+    def test_on_python_3_13_the_backport_is_registered_once(self, tmp_path, monkeypatch):
+        registered: list[object] = []
+
+        def record(provider: object) -> None:
+            registered.append(provider)
+            atlas.register_zstd_provider(provider)
+
+        monkeypatch.setattr(atlas_zstd, "register_zstd_provider", record)
+
+        _bootstrap_for(tmp_path)
+
+        assert [getattr(provider, "__name__", None) for provider in registered] == [atlas_zstd.VENDORED_CODEC]
+        assert atlas.zstd_provider() == atlas.ZstdProvider(atlas_zstd.VENDORED_CODEC, True)
+
+    def test_a_copy_that_does_not_load_leaves_the_start_running(self, tmp_path, monkeypatch, caplog):
+        monkeypatch.setitem(sys.modules, atlas_zstd.STANDARD_LIBRARY_CODEC, None)
+        monkeypatch.delitem(sys.modules, atlas_zstd.VENDORED_CODEC, raising=False)
+        monkeypatch.setitem(sys.modules, f"{atlas_zstd.VENDORED_CODEC}._zstd", None)
+
+        with caplog.at_level(logging.INFO):
+            result = _bootstrap_for(tmp_path)
+
+        assert isinstance(result, BootstrapResult)
+        assert atlas.zstd_provider() is None
+        lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("atlas zstd codec:")]
+        assert len(lines) == 1
+        assert lines[0].startswith("atlas zstd codec: none — _vendor.backports.zstd does not load (")
+
+
 class TestWireServices:
     def _make_deps(self, tmp_path):
         logger = logging.getLogger("test_wire")
@@ -642,6 +679,7 @@ class TestWireServices:
                 resolve_path=deps["resolve_path"],
                 core_info_provider=deps["core_info_provider"],
                 save_locations=FakeSaveLocationReader(),
+                source_platform_systems=MagicMock(),
                 emulator_sources=FakeEmulatorSources(),
                 renderer_rss=deps["renderer_rss"],
                 renderer_gc=deps["renderer_gc"],

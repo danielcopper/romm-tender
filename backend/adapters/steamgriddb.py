@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import http.client
 import json
 import os
 import ssl
@@ -42,20 +43,34 @@ class SteamGridDbAdapter:
     def _ssl_context(self) -> ssl.SSLContext:
         return ssl.create_default_context(cafile=_ca_bundle())
 
-    def request(self, path: str) -> dict[str, Any] | None:
-        """Authenticated GET to SGDB API v2."""
-        api_key = self._settings.get("steamgriddb_api_key", "")
-        if not api_key:
-            return None
-        url = _SGDB_BASE_URL + path
+    def _get_json(self, url: str, api_key: str) -> dict[str, Any]:
+        """Authenticated GET of *url*, answering SteamGridDB's JSON object; raises as ``SteamGridDbApi`` states."""
         req = urllib.request.Request(url, method="GET")
         req.add_header("Authorization", f"Bearer {api_key}")
         req.add_header("User-Agent", self._user_agent)
+        # Outside the try: a CA bundle that cannot be loaded is an OSError of
+        # this device, not SteamGridDB out of reach.
+        ctx = self._ssl_context()
         try:
-            with urllib.request.urlopen(req, context=self._ssl_context(), timeout=30) as resp:
-                return json.loads(resp.read().decode())
+            with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
+                answer = json.loads(resp.read().decode())
         except urllib.error.HTTPError as e:
             raise SgdbApiError(status_code=e.code, message=str(e)) from e
+        except (OSError, http.client.HTTPException, json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise SgdbApiError(status_code=None, message=str(e)) from e
+        if not isinstance(answer, dict):
+            raise SgdbApiError(status_code=None, message=f"Not a JSON object: {type(answer).__name__}")
+        return answer
+
+    def request(self, path: str) -> dict[str, Any] | None:
+        """Authenticated GET to SGDB API v2; ``None`` without an API key.
+
+        Raises ``SgdbApiError`` as :meth:`_get_json` does.
+        """
+        api_key = self._settings.get("steamgriddb_api_key", "")
+        if not api_key:
+            return None
+        return self._get_json(_SGDB_BASE_URL + path, api_key)
 
     def download_image(self, url: str, dest_path: str) -> bool:
         """Download image from URL to dest_path with atomic write."""
@@ -80,17 +95,5 @@ class SteamGridDbAdapter:
             return False
 
     def verify_api_key(self, api_key: str) -> dict[str, Any]:
-        """Verify an API key against SGDB.
-
-        Raises ``SgdbApiError`` on non-2xx HTTP responses so callers can
-        react to auth failures without importing ``urllib``.
-        """
-        url = f"{_SGDB_BASE_URL}/search/autocomplete/test"
-        req = urllib.request.Request(url, method="GET")
-        req.add_header("Authorization", f"Bearer {api_key}")
-        req.add_header("User-Agent", self._user_agent)
-        try:
-            with urllib.request.urlopen(req, context=self._ssl_context(), timeout=30) as resp:
-                return json.loads(resp.read().decode())
-        except urllib.error.HTTPError as e:
-            raise SgdbApiError(status_code=e.code, message=str(e)) from e
+        """Verify an API key against SGDB; raises ``SgdbApiError`` as :meth:`_get_json` does."""
+        return self._get_json(f"{_SGDB_BASE_URL}/search/autocomplete/test", api_key)

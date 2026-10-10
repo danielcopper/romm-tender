@@ -18,9 +18,10 @@ import inspect
 import json
 import logging
 import socket
+import urllib.error
 from pathlib import Path
 from typing import Any, cast
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from _factories import (
@@ -33,6 +34,7 @@ from _factories import (
 from bootstrap import ServicesBundle
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
+from fakes.fake_cover_art_file_store import FakeCoverArtFileStore
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_event_sink import FakeEventSink
@@ -41,6 +43,7 @@ from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_game_process_control import DEFAULT_LAUNCH_PATH, FakeGameProcessControlAdapter
 from fakes.fake_journal import FakeJournal
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
+from fakes.fake_platform_systems import FakePlatformSystems
 from fakes.fake_release_download import FakeReleaseDownload
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
@@ -50,6 +53,7 @@ from fakes.fake_rom_launch_path import FakeRomLaunchPathReader
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_settings_persister import FakeSettingsPersister
+from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
 from fakes.fake_steam_interface import FakeSteamInterface
 from fakes.fake_transient_units import FakeTransientUnits
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -57,6 +61,7 @@ from fakes.library_peers import FakeArtworkManager
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.steam_config import SteamConfigAdapter
+from adapters.steamgriddb import SteamGridDbAdapter
 from adapters.update_attempt import UpdateAttemptFileAdapter
 from adapters.update_staging import UpdateStagingAdapter
 from domain.bios_file import BiosFile
@@ -88,6 +93,7 @@ from lib.errors import (
 )
 from lib.partial_failure import PartialFailure
 from main import Endpoints
+from services.artwork import ArtworkService, ArtworkServiceConfig
 from services.connection import ConnectionService, ConnectionServiceConfig
 from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
@@ -95,6 +101,7 @@ from services.library import LibraryService, LibraryServiceConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.prune import PruneService, PruneServiceConfig
 from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
+from services.steamgrid import SteamGridService, SteamGridServiceConfig
 from services.update_install import UpdateInstallService, UpdateInstallServiceConfig
 from services.update_output import UpdateOutputService, UpdateOutputServiceConfig
 from tests.services.saves._helpers import (
@@ -1360,7 +1367,7 @@ def _dispatcher_over_firmware(
             platform_firmware_resolver=FakeFirmwareResolver(),
             retrodeck_folders=FakeRetroDeckFolders(bios="/retrodeck/bios"),
             core_info=FakeCoreInfoProvider(),
-            resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
+            platform_systems=FakePlatformSystems(),
             platform_core_reader=FakePlatformCoreReader(),
             uow_factory=FakeUnitOfWorkFactory(uow),
             conflict_rules=_make_conflict_rules(),
@@ -1424,7 +1431,7 @@ class TestTheFirmwareAnswersOnTheWire:
         romm_api.list_firmware_side_effect = RommConnectionError("connection refused")
         dispatcher = _dispatcher_over_firmware(romm_api, FakeFirmwareFileStore(), FakeUnitOfWork())
 
-        message = json.loads(await dispatcher.dispatch(1, "download_all_firmware", ["dc"]))
+        message = json.loads(await dispatcher.dispatch(1, "download_all_firmware", ["dc", None]))
 
         reason, text = classify_error(RommConnectionError("connection refused"))
         assert message["type"] == TYPE_REPLY
@@ -1547,3 +1554,176 @@ class TestTheUpdaterRefusalsOnTheWire:
             "message": "The journal could not be read",
         }
         assert "s3cr3t-admission-token" not in raw
+
+
+def _dispatcher_over_steamgrid(api_key: str = "sgdb-key", uow: FakeUnitOfWork | None = None) -> CallDispatcher:
+    """The real dispatcher over ``Endpoints`` whose SteamGridDB use cases are the real ``SteamGridService``.
+
+    The service talks to SteamGridDB through the real ``SteamGridDbAdapter``, so a case patches ``urlopen``.
+    """
+    settings: dict[str, Any] = {"steamgriddb_api_key": api_key}
+    service = SteamGridService(
+        config=SteamGridServiceConfig(
+            sgdb_api=SteamGridDbAdapter(settings=settings, logger=LOGGER, user_agent="romm-tender/0.0.0-test"),
+            romm_api=FakeRommApi(),
+            steam_config=MagicMock(),
+            sgdb_artwork_cache=FakeSgdbArtworkCache(cache_root="/runtime"),
+            settings=settings,
+            loop=asyncio.get_running_loop(),
+            logger=LOGGER,
+            settings_persister=FakeSettingsPersister(),
+            get_pending_sync=dict,
+            log_debug=lambda msg: None,
+            uow_factory=FakeUnitOfWorkFactory(uow=uow),
+            conflict_rules=_make_conflict_rules(),
+        )
+    )
+    endpoints = Endpoints(_make_application(_make_services_bundle(sgdb_service=service)), HostStatus())
+    return CallDispatcher(endpoints, LOGGER)
+
+
+class TestTheSteamGridDBRefusalsOnTheWire:
+    """The key check's and the name search's refusals while SteamGridDB cannot be reached, as the wire carries them."""
+
+    @pytest.mark.parametrize(
+        ("route_name", "args"),
+        [("verify_sgdb_api_key", ["sgdb-key"]), ("search_sgdb_games", ["Zelda"])],
+    )
+    async def test_an_unreachable_steamgriddb_answers_a_fixed_message_and_nothing_else(self, route_name, args):
+        dispatcher = _dispatcher_over_steamgrid()
+        unreachable = urllib.error.URLError("[Errno -3] Temporary failure in name resolution")
+
+        with patch("urllib.request.urlopen", side_effect=unreachable):
+            raw = await dispatcher.dispatch(1, route_name, args)
+
+        message = json.loads(raw)
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {
+            "success": False,
+            "reason": "server_unreachable",
+            "message": "Could not reach SteamGridDB",
+        }
+        assert "name resolution" not in raw
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            pytest.param("fake-sgdb-key\nX-Injected: 1", id="line-feed"),
+            pytest.param("fake-sgdb-key-\u2019", id="past-latin-1"),
+        ],
+    )
+    @pytest.mark.parametrize(
+        ("route_name", "args"),
+        [
+            ("verify_sgdb_api_key", None),
+            ("search_sgdb_games", ["Zelda"]),
+            ("get_sgdb_resolution", [42]),
+            ("apply_sgdb_game_id", [42, 7]),
+            ("get_sgdb_artwork_base64", [42, 1]),
+        ],
+    )
+    async def test_a_key_no_header_can_carry_reaches_neither_the_reply_nor_a_log_line(
+        self, route_name, args, key, caplog
+    ):
+        """``verify_sgdb_api_key`` is handed the key; every other route sends the stored one."""
+        caplog.set_level(logging.DEBUG)
+        uow = FakeUnitOfWork()
+        with uow:
+            uow.roms.save(
+                Rom(
+                    rom_id=42,
+                    platform_slug="n64",
+                    name="Zelda",
+                    fs_name="Zelda.z64",
+                    shortcut_app_id=1,
+                    last_synced_at="2025-01-01T00:00:00",
+                    sgdb_id=9999,
+                )
+            )
+        dispatcher = _dispatcher_over_steamgrid(api_key=key, uow=uow)
+
+        with patch("http.client.HTTPSConnection.connect", side_effect=OSError("no network in this test")):
+            raw = await dispatcher.dispatch(1, route_name, args if args is not None else [key])
+
+        message = json.loads(raw)
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {"success": False, "reason": "auth_failed", "message": "Invalid API key"}
+        assert "fake-sgdb-key" not in raw
+        assert "Bearer" not in raw
+        assert "fake-sgdb-key" not in caplog.text
+        assert "Bearer" not in caplog.text
+
+
+def _dispatcher_over_artwork(romm_api: FakeRommApi) -> CallDispatcher:
+    """The real dispatcher over ``Endpoints`` whose artwork use cases are the real ``ArtworkService``.
+
+    ROM 42 is synced and bound, and Steam's grid directory is found.
+    """
+    uow = FakeUnitOfWork()
+    with uow:
+        uow.roms.save(
+            Rom(
+                rom_id=42,
+                platform_slug="n64",
+                name="Zelda",
+                fs_name="Zelda.z64",
+                shortcut_app_id=999,
+                last_synced_at="2025-01-01T00:00:00",
+            )
+        )
+    steam_config = MagicMock()
+    steam_config.grid_dir.return_value = "/steam/grid"
+    service = ArtworkService(
+        config=ArtworkServiceConfig(
+            romm_api=romm_api,
+            steam_config=steam_config,
+            cover_art_file_store=FakeCoverArtFileStore(),
+            cover_cache_dir="/runtime/covers",
+            loop=asyncio.get_running_loop(),
+            logger=LOGGER,
+            get_pending_sync=dict,
+            uow_factory=FakeUnitOfWorkFactory(uow=uow),
+            conflict_rules=_make_conflict_rules(),
+        )
+    )
+    endpoints = Endpoints(_make_application(_make_services_bundle(artwork_service=service)), HostStatus())
+    return CallDispatcher(endpoints, LOGGER)
+
+
+class TestTheCoverRepairRefusalsOnTheWire:
+    """A cover repair whose ROM fetch or cover download fails, as the wire carries it."""
+
+    async def test_an_unreachable_romm_answers_server_unreachable_with_the_classified_message(self):
+        romm_api = FakeRommApi()
+        romm_api.get_rom_side_effect = RommConnectionError("[Errno 111] Connection refused")
+        dispatcher = _dispatcher_over_artwork(romm_api)
+
+        raw = await dispatcher.dispatch(1, "refresh_cover_artwork", [42])
+
+        message = json.loads(raw)
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {
+            "success": False,
+            "reason": "server_unreachable",
+            "message": classify_error(romm_api.get_rom_side_effect)[1],
+        }
+
+    async def test_a_cover_this_device_cannot_save_answers_download_failed_and_nothing_else(self):
+        romm_api = FakeRommApi()
+        romm_api.roms[42] = {"id": 42, "path_cover_large": "/assets/42/cover.png"}
+        romm_api.download_cover_side_effect = PermissionError(
+            13, "Permission denied", "/home/someone/.cache/romm-tender/covers"
+        )
+        dispatcher = _dispatcher_over_artwork(romm_api)
+
+        raw = await dispatcher.dispatch(1, "refresh_cover_artwork", [42])
+
+        message = json.loads(raw)
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {
+            "success": False,
+            "reason": "download_failed",
+            "message": "The cover could not be saved on this device",
+        }
+        assert "Permission denied" not in raw
+        assert "/home/someone" not in raw

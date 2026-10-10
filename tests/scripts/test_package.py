@@ -37,7 +37,6 @@ _REQUIRED = (
     "dist/globals.js",
     "dist/index-coexistence.js",
     "bin/tender-rom-launcher",
-    "defaults/config.json",
     "install.sh",
     "version.txt",
     "LICENSE",

@@ -24,7 +24,9 @@ from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.asyncio_sleeper import AsyncioSleeper
 from adapters.atlas_catalogue import AtlasCatalogueAdapter
 from adapters.atlas_firmware import AtlasFirmwareAdapter, AtlasPlatformFirmwareAdapter
+from adapters.atlas_platforms import AtlasPlatformSystemsAdapter
 from adapters.atlas_saves import AtlasSaveLocationAdapter, describe_core_probe_interpreter
+from adapters.atlas_zstd import register_zstd_codec
 from adapters.cover_art_file_store import CoverArtFileStoreAdapter
 from adapters.database_rename import DatabaseRenameAdapter
 from adapters.debug_logger import SettingsAwareDebugLogger
@@ -118,6 +120,7 @@ if TYPE_CHECKING:
         SettingsPersister,
         SgdbArtworkCache,
         Sleeper,
+        SourcePlatformSystems,
         SteamConfigStore,
         SteamInterfaceReader,
         SteamRecoveryStore,
@@ -170,6 +173,7 @@ class AdapterBundle:
     resolve_path: ResolvedPathFn
     core_info_provider: CoreInfoProvider
     save_locations: SaveLocationReader
+    source_platform_systems: SourcePlatformSystems
     emulator_sources: EmulatorSourcesReader
     renderer_rss: RendererRssFn
     renderer_gc: RendererGcFn
@@ -416,7 +420,7 @@ def bootstrap(
     # the user reads — the root's level, and why nothing moves it, is
     # `host.logging_setup.configure_logging`'s.
     debug_logger = SettingsAwareDebugLogger(settings=settings, logger=logger)
-    http_adapter = RommHttpAdapter(settings, directories.code_dir, logger, user_agent, log_debug=debug_logger)
+    http_adapter = RommHttpAdapter(settings, logger, user_agent, log_debug=debug_logger)
     # Once, at start, rather than per request: the adapter reads the flag on
     # every call, and a line per request would drown the log it is written into.
     if settings.get("romm_allow_insecure_ssl", False):
@@ -458,6 +462,7 @@ def bootstrap(
     hostname_provider = HostnameAdapter()
     machine_id_provider = MachineIdAdapter()
     logger.info(describe_core_probe_interpreter())
+    logger.info(register_zstd_codec())
     # Built after the debug logger because the resolver never logs on its own:
     # its caveats are the whole degradation channel and reach the log through
     # this seam or not at all. That holds for both firmware questions and for
@@ -473,6 +478,7 @@ def bootstrap(
         log_debug=debug_logger,
     )
     save_locations = AtlasSaveLocationAdapter(sources=emulator_sources, log_debug=debug_logger)
+    source_platform_systems = AtlasPlatformSystemsAdapter(sources=emulator_sources, log_debug=debug_logger)
 
     adapters = AdapterBundle(
         http_adapter=http_adapter,
@@ -493,6 +499,7 @@ def bootstrap(
         resolve_path=resolve_path,
         core_info_provider=emulator_catalogue,
         save_locations=save_locations,
+        source_platform_systems=source_platform_systems,
         emulator_sources=emulator_sources,
         renderer_rss=renderer_rss,
         renderer_gc=renderer_gc,
