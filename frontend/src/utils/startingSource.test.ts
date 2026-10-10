@@ -43,6 +43,20 @@ describe("readStartingSource", () => {
     expect(vi.mocked(backend.logError)).toHaveBeenCalledWith(expect.stringContaining("detection_failed"));
   });
 
+  it.each([
+    ["nothing", undefined],
+    ["null", null],
+    ["an answer without switched_off", { answering: "retrodeck" }],
+    ["switched_off that is not a kind", { switched_off: 1 }],
+  ])("an answer outside the typed shapes reads as unchecked: %s", async (_case, answer) => {
+    vi.mocked(backend.checkStartSource).mockResolvedValue(
+      answer as unknown as Awaited<ReturnType<typeof backend.checkStartSource>>,
+    );
+
+    await expect(readStartingSource("Watcher")).resolves.toEqual({ checked: false });
+    expect(vi.mocked(backend.logError)).toHaveBeenCalledWith(expect.stringContaining("could not tell"));
+  });
+
   it("answers unchecked, never rejects, when the read gets no answer within its limit", async () => {
     vi.useFakeTimers();
     try {

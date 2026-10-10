@@ -25,16 +25,26 @@ import { withTimeout } from "./withTimeout";
  * switched off, and as "switched off" would refuse one that may not be.
  */
 export async function readStartingSource(context: string): Promise<StartingSourceAnswer> {
-  let answer: Awaited<ReturnType<typeof checkStartSource>>;
+  // Read as `unknown`: an answer outside the typed shapes must read as
+  // unchecked rather than throw, which the gate would take as a pass.
+  let answer: unknown;
   try {
     answer = await withTimeout(checkStartSource(), LOCAL_CALL_LIMIT_MS);
   } catch (e) {
     logError(`${context} start-source check got no answer: ${e}`);
     return { checked: false };
   }
-  if (!("switched_off" in answer)) {
-    logError(`${context} start-source check could not tell: ${answer.reason}`);
+  const switchedOff = switchedOffIn(answer);
+  if (switchedOff === undefined) {
+    logError(`${context} start-source check could not tell: ${JSON.stringify(answer)}`);
     return { checked: false };
   }
-  return { checked: true, switchedOff: answer.switched_off };
+  return { checked: true, switchedOff };
+}
+
+/** The `switched_off` of an answer in the endpoint's answer shape; `undefined` for every other answer. */
+function switchedOffIn(answer: unknown): string | null | undefined {
+  if (typeof answer !== "object" || answer === null || !("switched_off" in answer)) return undefined;
+  const value = answer.switched_off;
+  return value === null || typeof value === "string" ? value : undefined;
 }
