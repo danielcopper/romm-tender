@@ -748,6 +748,30 @@ describe("sessionManager reload adoption", () => {
     expect(backend.finalizeGameSession).toHaveBeenCalledWith(ROM_ID);
   });
 
+  it("adopts an attested session whose app still reads Launching", async () => {
+    // Measured: a game Steam has reported started can read Launching for a while.
+    seedSessions([{ appId: APP_ID, romId: ROM_ID, startMs: 5_000 }]);
+    stubListedWithStatus([{ appid: APP_ID, status: 1 }]);
+
+    await initDrainingAdoptionPoll();
+
+    expect(backend.recordSessionStart).not.toHaveBeenCalled();
+    expect(backend.logInfo).not.toHaveBeenCalledWith(expect.stringContaining("orphaned"));
+    const lifetime = captureLifetimeCb();
+    await stopGame(lifetime);
+    expect(backend.finalizeGameSession).toHaveBeenCalledWith(ROM_ID);
+  });
+
+  it("adopts a game still reading Launching with no breadcrumb and re-stamps the marker", async () => {
+    stubListedWithStatus([{ appid: APP_ID, status: 1 }]);
+
+    await initDrainingAdoptionPoll();
+
+    expect(backend.recordSessionStart).toHaveBeenCalledTimes(1);
+    expect(backend.recordSessionStart).toHaveBeenCalledWith(ROM_ID);
+    expect(readSessions()).toEqual([expect.objectContaining({ appId: APP_ID, romId: ROM_ID })]);
+  });
+
   it("adopts a running game with no breadcrumb and re-stamps the marker", async () => {
     stubRunningApp(APP_ID);
 

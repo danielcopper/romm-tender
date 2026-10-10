@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { readRunningApps, isAnyAppHolding } from "./runningApps";
+import { readRunningApps, readRunningOrStartingApps, isAnyAppHolding } from "./runningApps";
 
 /** A listed entry whose overview reports `status` as its display status. */
 const listed = (appid: number, status: unknown) => ({
@@ -176,6 +176,25 @@ describe("runningApps — guarded SteamUIStore reader", () => {
       const { apps, diagnostics } = readRunningApps();
       expect(apps).toEqual([]);
       expect(diagnostics).toBe("SteamUIStore.RunningApps=empty");
+    });
+  });
+
+  describe("readRunningOrStartingApps", () => {
+    it("counts an entry reading Launching or Running, and none Steam kept listed or is closing", () => {
+      // 11 ReadyToLaunch: listed after its exit; 36 Terminating: on its way out.
+      vi.stubGlobal("SteamUIStore", { RunningApps: [listed(1, 11), listed(2, 1), listed(3, 4), listed(4, 36)] });
+
+      const { apps, diagnostics } = readRunningOrStartingApps();
+      expect(apps.map((app) => app.appid)).toEqual([2, 3]);
+      expect(diagnostics).toBe("SteamUIStore.RunningApps=[1:11,2:1,3:4,4:36]");
+    });
+
+    it("counts an entry whose display status cannot be read, and names it", () => {
+      vi.stubGlobal("SteamUIStore", { RunningApps: [listed(1, 1), listed(2, undefined)] });
+
+      const reading = readRunningOrStartingApps();
+      expect(reading.apps.map((app) => app.appid)).toEqual([1, 2]);
+      expect([...reading.statusUnread]).toEqual([2]);
     });
   });
 

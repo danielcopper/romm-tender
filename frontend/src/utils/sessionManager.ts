@@ -23,7 +23,7 @@ import { saveSyncToastBody } from "./saveSyncToast";
 import { setMigrationStatus } from "./migrationStore";
 import { updatePlaytimeDisplay } from "./metadataPatches";
 import { detach } from "./detach";
-import { readRunningApps, type RunningAppsReading } from "./runningApps";
+import { readRunningApps, readRunningOrStartingApps, type RunningAppsReading } from "./runningApps";
 import { delay } from "./pacedOps";
 import { LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "./launchGate";
 import { withTimeout } from "./withTimeout";
@@ -412,7 +412,7 @@ export const ADOPTION_POLL_MAX_MS = 15_000;
 async function pollForRunningApps(wanted: Set<number>): Promise<RunningAppsReading> {
   const started = Date.now();
   for (;;) {
-    const reading = readRunningApps();
+    const reading = readRunningOrStartingApps();
     detach(debugLog(`adoption poll round: ${reading.diagnostics}`));
     const surfaced = new Set(reading.apps.map((app) => app.appid));
     if (surfaced.size > 0 && [...wanted].every((appId) => surfaced.has(appId))) return reading;
@@ -563,8 +563,8 @@ export async function initSessionManager(): Promise<void> {
   SteamClient.GameSessions.RegisterForAppLifetimeNotifications((update) => {
     if (update.bRunning) {
       stoppedSinceStart.delete(update.unAppID);
-      // Adoption does not count an entry that reads Launching; this line is where
-      // a device shows what a game reads once Steam has reported its start.
+      // A game Steam has just reported started can still read Launching, which is
+      // why adoption counts it; this line is where a device shows what it reads.
       logInfo(`App start reported: appId=${update.unAppID}, ${readRunningApps().diagnostics}`);
     } else {
       stoppedSinceStart.add(update.unAppID);

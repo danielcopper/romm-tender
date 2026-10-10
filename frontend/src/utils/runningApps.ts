@@ -36,8 +36,9 @@
  *
  * Being listed is not being running: Steam lists a game it is only starting,
  * and can keep one listed long after it exited. So an entry counts only by its
- * overview's display status, read two ways — whether a game runs
- * ({@link readRunningApps}), and whether one holds a restart of Steam
+ * overview's display status, read three ways — whether a game runs
+ * ({@link readRunningApps}), whether one runs or is starting
+ * ({@link readRunningOrStartingApps}), and whether one holds a restart of Steam
  * ({@link isAnyAppHolding}):
  * `docs/architecture/save-file-sync-architecture.md`, "Is the game running".
  */
@@ -48,7 +49,7 @@ export interface RunningApp {
 }
 
 export interface RunningAppsReading {
-  /** The listed apps that count as running this round, in store order. */
+  /** The listed apps the reading counts this round, in store order. */
   apps: RunningApp[];
   /** The appids among {@link apps} that count only because their display status could not be read. */
   statusUnread: ReadonlySet<number>;
@@ -60,7 +61,8 @@ const SOURCE_LABEL = "SteamUIStore.RunningApps";
 
 /**
  * The values of Steam's `EDisplayStatus` under which a listed entry holds a
- * restart of Steam; Running alone makes a game run. The backend's waits name
+ * restart of Steam; Running alone makes a game run, and Launching or Running a
+ * game that runs or is starting. The backend's waits name
  * the values they hold for in `backend/host/inject/recovery.py`, and
  * `tests/host/inject/test_recovery.py` holds the two equal.
  */
@@ -130,6 +132,11 @@ function countsAsRunning(entry: ListedApp): boolean {
   return entry.status === null || entry.status === DISPLAY_STATUSES_THAT_HOLD.Running;
 }
 
+/** Does a listed entry run or start? One whose status cannot be read does, as it counts as running. */
+function countsAsRunningOrStarting(entry: ListedApp): boolean {
+  return countsAsRunning(entry) || entry.status === DISPLAY_STATUSES_THAT_HOLD.Launching;
+}
+
 /** Does a listed entry hold a restart of Steam? One whose status cannot be read does, as it counts as running. */
 function holds(entry: ListedApp): boolean {
   return entry.status === null || Object.values(DISPLAY_STATUSES_THAT_HOLD).includes(entry.status);
@@ -175,8 +182,24 @@ function readListing(): Listing {
  * naming what it listed. Never throws.
  */
 export function readRunningApps(): RunningAppsReading {
+  return readCounted(countsAsRunning);
+}
+
+/**
+ * Read the store once, as the apps that run or are starting — reading Launching
+ * or Running, or a status that cannot be read — plus a diagnostic naming what it
+ * listed. Reload adoption and the stranded panel's card read it: a game Steam
+ * reports started can still read Launching, measured on the save-file-sync
+ * page's "Is the game running". Never throws.
+ */
+export function readRunningOrStartingApps(): RunningAppsReading {
+  return readCounted(countsAsRunningOrStarting);
+}
+
+/** Read the store once, keeping the listed entries `counts` admits. */
+function readCounted(counts: (entry: ListedApp) => boolean): RunningAppsReading {
   const { listed, diagnostics } = readListing();
-  const counted = listed.filter(countsAsRunning);
+  const counted = listed.filter(counts);
   return {
     apps: counted.map((entry) => entry.app),
     statusUnread: new Set(counted.filter((entry) => entry.status === null).map((entry) => entry.app.appid)),
