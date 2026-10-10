@@ -50,6 +50,13 @@ export interface PreLaunchSyncOutcome {
 }
 
 /**
+ * What the launch check learned of the source that would start the game:
+ * `switchedOff` is its kind while the user switched it off, `null` while not.
+ * `checked: false` where the check could not tell.
+ */
+export type StartingSourceAnswer = { checked: true; switchedOff: string | null } | { checked: false };
+
+/**
  * The gate's decision. Callers act on it; the gate never renders.
  *
  *   - `allow`            — every gate passed (or sync produced no blocker, or an
@@ -110,12 +117,20 @@ export interface LaunchGateOps {
   hasLaunchTarget: () => Promise<boolean>;
 
   /**
-   * The kind of the source that would start the game while it is switched off
-   * in Settings › Emulator sources, or `null`. A kind blocks with
-   * `block`/`source_switched_off`: the shortcut would start the game through
-   * that source regardless.
+   * Is the source that would start the game switched off in Settings ›
+   * Emulator sources? A kind blocks with `block`/`source_switched_off`: the
+   * shortcut would start the game through that source regardless. Where the
+   * check could not tell, the gate asks {@link confirmUncheckedStartingSource}.
+   * Answers rather than rejects on an expired limit, so this step never ends in
+   * the no-answer `sync_failed`.
    */
-  switchedOffStartingSource: () => Promise<string | null>;
+  readStartingSource: () => Promise<StartingSourceAnswer>;
+
+  /**
+   * Ask whether to start though the check could not tell whether the source is
+   * switched off. `true` runs the rest of the gate; `false` aborts.
+   */
+  confirmUncheckedStartingSource: () => Promise<boolean>;
 
   /**
    * Ensure save-slot tracking is configured for this ROM. Returns `"proceed"`
@@ -158,7 +173,8 @@ export interface LaunchGateOps {
  * Step order (each step's failure short-circuits the rest):
  *   1. migration pending      -> block / migration_pending
  *   2. hasLaunchTarget        -> block / no_launch_target
- *   3. switchedOffStartingSource -> block / source_switched_off
+ *   3. readStartingSource     -> block / source_switched_off;
+ *                                unchecked => confirmUncheckedStartingSource, cancel => abort
  *   4. ensureTrackingConfigured -> "abort" => abort
  *   5. checkCoreChange        -> cancel => abort
  *   6. checkReachability      -> online vs offline split
@@ -193,10 +209,15 @@ export async function runLaunchGate(_appId: number, _romId: number, ops: LaunchG
 
     // 3. The source that would start the game is switched off — the start
     //    would go through it anyway. Block before the save-sync work, for the
-    //    same reason as step 2.
-    const switchedOff = await ops.switchedOffStartingSource();
-    if (switchedOff !== null) {
-      return { decision: "block", reason: "source_switched_off", source: switchedOff };
+    //    same reason as step 2. Where that could not be checked, the user
+    //    decides; Cancel bails silently.
+    const source = await ops.readStartingSource();
+    if (!source.checked) {
+      if (!(await ops.confirmUncheckedStartingSource())) {
+        return { decision: "abort" };
+      }
+    } else if (source.switchedOff !== null) {
+      return { decision: "block", reason: "source_switched_off", source: source.switchedOff };
     }
 
     // 4. Save-slot tracking setup. "abort" means the user saw setup UI and

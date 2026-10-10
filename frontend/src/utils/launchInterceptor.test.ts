@@ -90,6 +90,7 @@ const prompts = {
   resolveConflicts: vi.fn<LaunchPrompts["resolveConflicts"]>(),
   askOfflineDrift: vi.fn<LaunchPrompts["askOfflineDrift"]>(),
   confirmFallbackLaunch: vi.fn<LaunchPrompts["confirmFallbackLaunch"]>(),
+  confirmUncheckedSource: vi.fn<LaunchPrompts["confirmUncheckedSource"]>(),
 };
 
 /** Register with the stub prompts — every test drives the interceptor through this. */
@@ -619,6 +620,69 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(backend.preLaunchSync).toHaveBeenCalledWith(42);
       expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
       expect(toaster.toast).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("where it could not be checked whether the source is switched off (#2269 D6)", () => {
+    const never = (): Promise<never> => new Promise<never>(() => {});
+    const unchecked: [string, () => void][] = [
+      ["the check gets no answer", () => vi.mocked(backend.checkStartSource).mockReturnValue(never())],
+      ["the check fails", () => vi.mocked(backend.checkStartSource).mockRejectedValue(new Error("bridge down"))],
+      [
+        "the detection fails",
+        () =>
+          vi.mocked(backend.checkStartSource).mockResolvedValue({
+            success: false,
+            reason: "detection_failed",
+            message: "Detecting the emulator sources failed.",
+          }),
+      ],
+    ];
+
+    beforeEach(async () => {
+      const actual = await vi.importActual<typeof import("./launchGate")>("./launchGate");
+      vi.mocked(launchGate.runLaunchGate).mockImplementation(actual.runLaunchGate);
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "slot1" });
+      vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
+      vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
+      vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "" });
+    });
+
+    it.each(unchecked)("where %s, the dialog asks and Start starts the game", async (_case, arrange) => {
+      vi.useFakeTimers();
+      try {
+        arrange();
+        prompts.confirmUncheckedSource.mockResolvedValue(true);
+        register();
+        captureHandler()(77, GAME_ID, "LaunchApp", PLAY_SOURCE);
+        await vi.advanceTimersByTimeAsync(5000);
+
+        expect(prompts.confirmUncheckedSource).toHaveBeenCalledTimes(1);
+        expect(prompts.confirmFallbackLaunch).not.toHaveBeenCalled();
+        expect(backend.preLaunchSync).toHaveBeenCalledWith(42);
+        expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it.each(unchecked)("where %s, Cancel starts nothing", async (_case, arrange) => {
+      vi.useFakeTimers();
+      try {
+        arrange();
+        prompts.confirmUncheckedSource.mockResolvedValue(false);
+        register();
+        captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+        await vi.advanceTimersByTimeAsync(5000);
+
+        expect(prompts.confirmUncheckedSource).toHaveBeenCalledTimes(1);
+        expect(prompts.confirmFallbackLaunch).not.toHaveBeenCalled();
+        expect(backend.preLaunchSync).not.toHaveBeenCalled();
+        expect(runGameMock()).not.toHaveBeenCalled();
+        expect(toaster.toast).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
@@ -1283,13 +1347,21 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(ops.migrationPending()).toBe(false);
     });
 
-    it("switchedOffStartingSource asks the backend", async () => {
+    it("readStartingSource asks the backend", async () => {
       const ops = await captureOps();
 
       vi.mocked(backend.checkStartSource).mockResolvedValueOnce({ switched_off: "retrodeck" });
-      expect(await ops.switchedOffStartingSource()).toBe("retrodeck");
+      expect(await ops.readStartingSource()).toEqual({ checked: true, switchedOff: "retrodeck" });
       vi.mocked(backend.checkStartSource).mockResolvedValueOnce({ switched_off: null });
-      expect(await ops.switchedOffStartingSource()).toBeNull();
+      expect(await ops.readStartingSource()).toEqual({ checked: true, switchedOff: null });
+    });
+
+    it("confirmUncheckedStartingSource asks the injected prompt", async () => {
+      const ops = await captureOps();
+
+      prompts.confirmUncheckedSource.mockResolvedValueOnce(false);
+      expect(await ops.confirmUncheckedStartingSource()).toBe(false);
+      expect(prompts.confirmUncheckedSource).toHaveBeenCalledTimes(1);
     });
 
     it("checkReachability: online passes through; a throw logs and treats as offline", async () => {
@@ -1444,12 +1516,6 @@ describe("launchInterceptor — full funnel watcher", () => {
           limit: 5000,
           op: "hasLaunchTarget",
           arrange: () => vi.mocked(backend.getInstalledRom).mockReturnValue(never()),
-        },
-        {
-          call: "check_start_source",
-          limit: 5000,
-          op: "switchedOffStartingSource",
-          arrange: () => vi.mocked(backend.checkStartSource).mockReturnValue(never()),
         },
         {
           call: "is_save_tracking_configured",

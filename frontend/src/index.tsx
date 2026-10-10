@@ -31,6 +31,7 @@ import { showCoreChangeModal } from "./shared/CoreChangeModal";
 import { handleConflicts } from "./shared/SyncConflictModal";
 import { showOfflineDriftModal } from "./shared/OfflineDriftModal";
 import { showFallbackLaunchModal } from "./shared/FallbackLaunchModal";
+import { showUncheckedSourceModal } from "./shared/UncheckedSourceModal";
 import { hasAnySaveConflict } from "./utils/saveStatus";
 import {
   getAppIdRomIdMap,
@@ -443,6 +444,7 @@ const tender = definePanel(() => {
     resolveConflicts: handleConflicts,
     askOfflineDrift: showOfflineDriftModal,
     confirmFallbackLaunch: showFallbackLaunchModal,
+    confirmUncheckedSource: showUncheckedSourceModal,
   });
 
   // Load metadata cache, register store patches, and populate RomM app ID set.

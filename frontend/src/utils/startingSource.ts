@@ -11,22 +11,30 @@
 
 import { checkStartSource, logError } from "../api/backend";
 import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
-import { boundedOr } from "./withTimeout";
+import type { StartingSourceAnswer } from "./launchGate";
+import { withTimeout } from "./withTimeout";
 
 /**
- * The kind of the source that would start the game while it is switched off,
- * or `null`. `context` names the caller in the error log.
+ * What the backend says of the source that would start the game. `context`
+ * names the caller in the error log.
  *
- * Fails **open**, as the launch-target probe does: a read that fails answers
- * `null` and lets the start through, because only an answer from the backend
- * establishes that the user switched the source off. A read that gets no
- * answer within {@link LOCAL_CALL_LIMIT_MS} rejects this call with its
- * `TimeoutError`, for the launch gate to answer.
+ * Unchecked — never on or off — wherever the backend did not say: a read that
+ * gets no answer within {@link LOCAL_CALL_LIMIT_MS}, one that fails, and the
+ * backend's own refusal when detecting the sources failed. Reading any of
+ * them as "switched on" would start a game through a source that may be
+ * switched off, and as "switched off" would refuse one that may not be.
  */
-export async function switchedOffStartingSource(context: string): Promise<string | null> {
-  const answer = await boundedOr(checkStartSource(), LOCAL_CALL_LIMIT_MS, (e) => {
-    logError(`${context} start-source check threw (allowing launch): ${e}`);
-    return null;
-  });
-  return answer?.switched_off ?? null;
+export async function readStartingSource(context: string): Promise<StartingSourceAnswer> {
+  let answer: Awaited<ReturnType<typeof checkStartSource>> | undefined;
+  try {
+    answer = await withTimeout(checkStartSource(), LOCAL_CALL_LIMIT_MS);
+  } catch (e) {
+    logError(`${context} start-source check got no answer: ${e}`);
+    return { checked: false };
+  }
+  if (typeof answer !== "object" || answer === null || !("switched_off" in answer)) {
+    logError(`${context} start-source check could not tell: ${answer?.reason ?? "no answer"}`);
+    return { checked: false };
+  }
+  return { checked: true, switchedOff: answer.switched_off };
 }

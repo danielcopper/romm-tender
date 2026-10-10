@@ -84,6 +84,10 @@ class EmulatorSourcesService:
         ``None`` otherwise (:func:`domain.emulator_sources.switched_off_starting_source`).
         Detects the sources and reads nothing else of them, so the launch check
         that asks it waits for no health or catalogue read.
+
+        Refuses ``detection_failed`` where detecting the sources raised: such a
+        reading detected nothing, and answering ``None`` from it would let a
+        start through a source that may be switched off.
         """
         return await self._loop.run_in_executor(None, self._start_source_io)
 
@@ -123,7 +127,10 @@ class EmulatorSourcesService:
         }
 
     def _start_source_io(self) -> dict[str, Any]:
-        return {"switched_off": switched_off_starting_source(self._sources.read().sources)}
+        reading = self._sources.read()
+        if reading.detection_failed:
+            raise Refused("detection_failed", "Detecting the emulator sources failed.")
+        return {"switched_off": switched_off_starting_source(reading.sources)}
 
     def _switch_io(self, kind: str, enabled: bool) -> dict[str, Any]:
         reading = self._sources.read()

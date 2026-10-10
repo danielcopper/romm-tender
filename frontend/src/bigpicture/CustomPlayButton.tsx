@@ -72,13 +72,14 @@ import { showCoreChangeModal } from "../shared/CoreChangeModal";
 import { handleConflicts } from "../shared/SyncConflictModal";
 import { showOfflineDriftModal } from "../shared/OfflineDriftModal";
 import { showFallbackLaunchModal } from "../shared/FallbackLaunchModal";
+import { showUncheckedSourceModal } from "../shared/UncheckedSourceModal";
 import { showStopGameModal } from "./StopGameModal";
 import { showForgetDownloadModal } from "./ForgetDownloadModal";
 import { getMigrationState } from "../utils/migrationStore";
 import { reloadGameDetail } from "../utils/gameDetailStore";
 import { runLaunchGate, markLaunchSkipped, LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "../utils/launchGate";
 import { NO_LAUNCH_TARGET_TOAST_BODY, romHasLaunchTarget } from "../utils/launchTarget";
-import { switchedOffStartingSource } from "../utils/startingSource";
+import { readStartingSource } from "../utils/startingSource";
 import { startingSourceOffSentence } from "../utils/emulatorSourceWording";
 import type { GateVerdict, LaunchGateOps, PreLaunchSyncOutcome } from "../utils/launchGate";
 import { noteAppRom, readGameRunning } from "../utils/sessionManager";
@@ -741,7 +742,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   const makePlayButtonOps = (rid: number): LaunchGateOps => ({
     migrationPending: () => getMigrationState().pending,
     hasLaunchTarget: () => romHasLaunchTarget(rid, "CustomPlayButton"),
-    switchedOffStartingSource: () => switchedOffStartingSource("CustomPlayButton"),
+    readStartingSource: () => readStartingSource("CustomPlayButton"),
+    confirmUncheckedStartingSource: showUncheckedSourceModal,
     ensureTrackingConfigured: () => ensureTrackingConfigured(rid),
     checkCoreChange: () => confirmCoreChangeIfNeeded(rid),
     checkReachability: async () => {

@@ -108,6 +108,9 @@ vi.mock("../shared/OfflineDriftModal", () => ({
 vi.mock("../shared/FallbackLaunchModal", () => ({
   showFallbackLaunchModal: vi.fn(),
 }));
+vi.mock("../shared/UncheckedSourceModal", () => ({
+  showUncheckedSourceModal: vi.fn(),
+}));
 vi.mock("../shared/SyncConflictModal", () => ({
   handleConflicts: vi.fn(),
 }));
@@ -147,6 +150,7 @@ import { getMigrationState } from "../utils/migrationStore";
 import { readGameRunning, type GameRunningReading } from "../utils/sessionManager";
 import { showOfflineDriftModal } from "../shared/OfflineDriftModal";
 import { showFallbackLaunchModal } from "../shared/FallbackLaunchModal";
+import { showUncheckedSourceModal } from "../shared/UncheckedSourceModal";
 import { handleConflicts } from "../shared/SyncConflictModal";
 import { showCoreChangeModal } from "../shared/CoreChangeModal";
 import { HostTransportError } from "../api/hostSocket";
@@ -200,9 +204,12 @@ async function openUninstallMenu(container: HTMLElement, flushes: number): Promi
 
 // Reset the shared connection store before every test (module-level state that
 // persists across tests) so the default render path is "connected" (#1345).
+// The source that would start the game is switched on unless a test says
+// otherwise: the stub's empty answer would read as one nothing could check.
 beforeEach(() => {
   setRommConnectionState("connected");
   resetBoundVanished();
+  vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: null });
 });
 
 describe("CustomPlayButton — vanished bound ROM (#1570 F20)", () => {
@@ -2136,11 +2143,9 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     // module-level state) so a mark in one test never silently affects the next.
     consumeLaunchSkip(100);
 
-    // Gate predecessors default to "pass": no migration, the starting source
-    // switched on, tracking configured, no core change. Each test overrides the
-    // branch it exercises.
+    // Gate predecessors default to "pass": no migration, tracking configured,
+    // no core change. Each test overrides the branch it exercises.
     vi.mocked(getMigrationState).mockReturnValue({ pending: false });
-    vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: null });
     vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "default" });
     vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
     vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "", synced: 0, conflicts: [] });
@@ -2261,6 +2266,65 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
       }),
     );
     expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
+  });
+
+  describe("where it could not be checked whether the source is switched off (#2269 D6)", () => {
+    const never = (): Promise<never> => new Promise<never>(() => {});
+    const unchecked: [string, () => void][] = [
+      ["the check gets no answer", () => vi.mocked(backend.checkStartSource).mockReturnValue(never())],
+      ["the check fails", () => vi.mocked(backend.checkStartSource).mockRejectedValue(new Error("bridge down"))],
+      [
+        "the detection fails",
+        () =>
+          vi.mocked(backend.checkStartSource).mockResolvedValue({
+            success: false,
+            reason: "detection_failed",
+            message: "Detecting the emulator sources failed.",
+          }),
+      ],
+    ];
+
+    async function pressPlayThroughTheLimit(): Promise<void> {
+      mockCachedDetail();
+      const { findByText } = render(<CustomPlayButton appId={100} />);
+      const playBtn = await findByText("Play");
+      vi.useFakeTimers();
+      try {
+        await act(async () => {
+          playBtn.click();
+          await vi.advanceTimersByTimeAsync(5000);
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+
+    it.each(unchecked)("where %s, the dialog asks and Start starts the game", async (_case, arrange) => {
+      arrange();
+      vi.mocked(showUncheckedSourceModal).mockResolvedValue(true);
+      vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
+
+      await pressPlayThroughTheLimit();
+
+      await waitFor(() => expect(vi.mocked(SteamClient.Apps.RunGame)).toHaveBeenCalledWith("gid-1", "", -1, 100));
+      expect(showUncheckedSourceModal).toHaveBeenCalledTimes(1);
+      expect(showFallbackLaunchModal).not.toHaveBeenCalled();
+      expect(vi.mocked(backend.preLaunchSync)).toHaveBeenCalled();
+    });
+
+    it.each(unchecked)("where %s, Cancel starts nothing", async (_case, arrange) => {
+      arrange();
+      vi.mocked(showUncheckedSourceModal).mockResolvedValue(false);
+      vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
+
+      await pressPlayThroughTheLimit();
+
+      await waitFor(() => expect(showUncheckedSourceModal).toHaveBeenCalledTimes(1));
+      expect(showFallbackLaunchModal).not.toHaveBeenCalled();
+      expect(vi.mocked(backend.preLaunchSync)).not.toHaveBeenCalled();
+      expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
+      expect(await within(document.body).findByText("Play")).toBeInTheDocument();
+    });
   });
 
   it("RetroDECK switched on → Play passes the source step and launches", async () => {

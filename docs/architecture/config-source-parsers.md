@@ -304,10 +304,10 @@ recorded. The one exception is a download while RetroDECK is switched off, which
 is the user's setting, and holds whatever the resolver answered. The refusal is its own (`retrodeck_unanswered`) and
 says **RetroDECK's folders could not be established, so Tender downloads into and removes from none of them.**; it never
 reads as RetroDECK not installed — a detection that raised is not one that found nothing, and the reading says which
-(`DetectedSourcesReading.detection_failed`, read by this adapter alone; every other reader of the sources still takes
-such a reading as one that detected none) — nor as RetroDECK naming no folder, both of which would be statements about
-an installation nobody heard from. Like a finding's refusal it also keeps the removed-game cleanup from starting
-(`EveryFolderRefused`, which both are).
+(`DetectedSourcesReading.detection_failed`, read by this adapter, by `adapters/atlas_platforms.py` and by the launch
+check's `check_start_source`; every other reader of the sources still takes such a reading as one that detected none) —
+nor as RetroDECK naming no folder, both of which would be statements about an installation nobody heard from. Like a
+finding's refusal it also keeps the removed-game cleanup from starting (`EveryFolderRefused`, which both are).
 
 A system's own ROM folder (`rom_location(system)`) is not a root: it is asked only by the questions that need it, the
 download's folder and a removal's bound. Its raise refuses those alone, with the same sentence — a game download, using

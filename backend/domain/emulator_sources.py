@@ -70,6 +70,11 @@ class SourcesReading(Protocol):
         """The source a game's questions go to, or ``None`` where none answers."""
         ...
 
+    @property
+    def detection_failed(self) -> bool:
+        """Whether detecting the sources raised, so that none detected establishes nothing about any of them."""
+        ...
+
     def no_answer_reason(self) -> str:
         """Why no source answers: :data:`NO_SOURCE_DETECTED` or :data:`ALL_SOURCES_SWITCHED_OFF`."""
         ...

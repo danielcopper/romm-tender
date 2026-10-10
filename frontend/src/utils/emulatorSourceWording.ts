@@ -204,6 +204,10 @@ export function startingSourceOffSentence(kind: string): string {
   );
 }
 
+/** The question both launch paths ask where they could not tell whether the source that would start the game is switched off. */
+export const UNCHECKED_START_SOURCE_QUESTION =
+  "Tender could not check whether the emulator source is switched on. Start anyway?";
+
 /** A source whose emulator list the resolver cannot read yet (EmuDeck's sealed catalogue). */
 export function sealedCatalogueSentence(kind: string): string {
   return `${sourceName(kind)}'s emulator list cannot be read yet.`;

@@ -659,7 +659,10 @@ export const getSystemCoreInfo = endpoint<[string], SystemCoreInfo>("get_system_
 export const getEmulatorSources = endpoint<[], EmulatorSourcesListing>("get_emulator_sources");
 
 /** The switched-off source that would start a game, which refuses the start (the launch check's read). */
-export const checkStartSource = endpoint<[], StartSourceCheck>("check_start_source");
+export const checkStartSource = endpoint<[], StartSourceCheck | StartSourceRefusal>("check_start_source");
+
+/** Why the launch check's read could not tell: detecting the emulator sources failed. */
+export type StartSourceRefusal = EndpointFailure & { reason: "detection_failed" };
 
 /** Why a switch or a move of an emulator source was refused. */
 export type EmulatorSourceRefusal = EndpointFailure & {

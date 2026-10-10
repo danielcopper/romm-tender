@@ -302,8 +302,11 @@ while the source is switched on, an empty grey ring and a grey name while it is 
 **RetroDECK switched off.** Every game starts through RetroDECK, so while RetroDECK is switched off no game starts:
 pressing **Play** on a game page, or starting a game from Steam's own library, recent games or a `steam://rungameid`
 link, starts nothing and says **RetroDECK is switched off in Settings › Emulator sources, and Tender can only start
-games through RetroDECK yet.** Switch it on again and games start as before. While Tender itself is not running, nothing
-checks the switch, and a game started from Steam's library starts through RetroDECK.
+games through RetroDECK yet.** Switch it on again and games start as before. Where Tender cannot check the switch — it
+gets no answer in time, or cannot find out which emulator sources are installed — it asks **Tender could not check
+whether the emulator source is switched on. Start anyway?**: **Start** starts the game, **Cancel** starts nothing. While
+Tender itself is not running, nothing checks the switch, and a game started from Steam's library starts through
+RetroDECK.
 
 A game page that is open while you switch or move a source shows the change at once: its emulators and its BIOS state
 are read again, and its saves too while save sync is on.

@@ -133,6 +133,19 @@ class TestTheStartCheck:
         assert await both.service.check_start_source() == {"switched_off": None}
 
     @pytest.mark.asyncio
+    async def test_a_detection_that_raised_is_refused_never_read_as_no_source(self, both):
+        def explode(home: str, machine: object) -> list[Any]:
+            raise RuntimeError("resolver blew up")
+
+        both.settings["emulator_sources_off"] = ["retrodeck"]
+        both.sources._detect = explode
+
+        with pytest.raises(Refused) as refusal:
+            await both.service.check_start_source()
+
+        assert refusal.value.reason == "detection_failed"
+
+    @pytest.mark.asyncio
     async def test_it_detects_once_and_reads_nothing_else_of_a_source(self):
         asked: list[str] = []
         rig = _Rig(_Watched("retrodeck", asked), _Watched("emudeck", asked))

@@ -1,49 +1,62 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { switchedOffStartingSource } from "./startingSource";
+import { readStartingSource } from "./startingSource";
 import * as backend from "../api/backend";
 import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
-import { TimeoutError } from "./withTimeout";
 
 vi.mock("../api/backend", () => ({
   checkStartSource: vi.fn(),
   logError: vi.fn(),
 }));
 
-describe("switchedOffStartingSource", () => {
+describe("readStartingSource", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("answers the kind the backend names as the switched-off source that would start the game", async () => {
     vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: "emudeck" });
-    await expect(switchedOffStartingSource("Watcher")).resolves.toBe("emudeck");
+    await expect(readStartingSource("Watcher")).resolves.toEqual({ checked: true, switchedOff: "emudeck" });
   });
 
-  it("answers null while the backend names none", async () => {
+  it("answers checked with no kind while the backend names none", async () => {
     vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: null });
-    await expect(switchedOffStartingSource("Watcher")).resolves.toBeNull();
+    await expect(readStartingSource("Watcher")).resolves.toEqual({ checked: true, switchedOff: null });
   });
 
-  it("fails open and logs when the read throws", async () => {
+  it("answers unchecked, and logs, when the read throws", async () => {
     vi.mocked(backend.checkStartSource).mockRejectedValue(new Error("bridge down"));
 
-    await expect(switchedOffStartingSource("CustomPlayButton")).resolves.toBeNull();
+    await expect(readStartingSource("CustomPlayButton")).resolves.toEqual({ checked: false });
     expect(vi.mocked(backend.logError)).toHaveBeenCalledWith(
-      expect.stringContaining("CustomPlayButton start-source check threw (allowing launch)"),
+      expect.stringContaining("CustomPlayButton start-source check got no answer"),
     );
   });
 
-  it("rejects with the expired limit, rather than failing open, when the read never answers", async () => {
+  it("answers unchecked when the backend could not detect the sources", async () => {
+    vi.mocked(backend.checkStartSource).mockResolvedValue({
+      success: false,
+      reason: "detection_failed",
+      message: "Detecting the emulator sources failed.",
+    });
+
+    await expect(readStartingSource("Watcher")).resolves.toEqual({ checked: false });
+    expect(vi.mocked(backend.logError)).toHaveBeenCalledWith(expect.stringContaining("detection_failed"));
+  });
+
+  it("answers unchecked, never rejects, when the read gets no answer within its limit", async () => {
     vi.useFakeTimers();
     try {
       vi.mocked(backend.checkStartSource).mockReturnValue(new Promise<never>(() => {}));
-      const answer = switchedOffStartingSource("CustomPlayButton");
-      const settled = expect(answer).rejects.toBeInstanceOf(TimeoutError);
+      let outcome: unknown = "pending";
+      void readStartingSource("CustomPlayButton").then(
+        (value) => (outcome = value),
+        (e: unknown) => (outcome = e),
+      );
 
-      await vi.advanceTimersByTimeAsync(LOCAL_CALL_LIMIT_MS);
-
-      await settled;
-      expect(vi.mocked(backend.logError)).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(LOCAL_CALL_LIMIT_MS - 1);
+      expect(outcome).toBe("pending");
+      await vi.advanceTimersByTimeAsync(1);
+      expect(outcome).toEqual({ checked: false });
     } finally {
       vi.useRealTimers();
     }

@@ -180,6 +180,12 @@ one that does not starts nothing, so it lifts no refusal. Where the starting sou
 goes ahead: a source that is not listed has no switch to turn back on. While the backend is not running there is no
 watcher, and a start from Steam's library goes through as before; the launcher reads no setting of Tender's.
 
+Where the check cannot tell — no answer within `LOCAL_CALL_LIMIT_MS`, a call that fails, or a detection of the sources
+that raised, which `check_start_source` refuses as `detection_failed` rather than answer as if nothing were detected —
+nothing starts or is refused silently: both funnels ask the question `UNCHECKED_START_SOURCE_QUESTION`
+(`frontend/src/utils/emulatorSourceWording.ts`) holds, in `frontend/src/shared/UncheckedSourceModal.tsx`, with Start and
+Cancel. Start runs the rest of the launch check and starts the game; Cancel starts nothing.
+
 **How long an answer is kept.** Sources are detected per reading, so a source installed later appears on the next call,
 and nothing outlives the call or run that asked it. A call from the panel takes a fresh reading per question. The
 library sync's launch resolution takes one reading per run (`ShortcutLaunchResolver.do_read_sources`, in the preview and
