@@ -1006,7 +1006,11 @@ describe("launchInterceptor — full funnel watcher", () => {
     });
 
     it("source_switched_off block → says why, no relaunch", async () => {
-      vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "block", reason: "source_switched_off" });
+      vi.mocked(launchGate.runLaunchGate).mockResolvedValue({
+        decision: "block",
+        reason: "source_switched_off",
+        source: "retrodeck",
+      });
 
       register();
       const handler = captureHandler();
@@ -1016,6 +1020,24 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(toaster.toast).toHaveBeenCalledWith({
         title: "Tender",
         body: "RetroDECK is switched off in Settings › Emulator sources, and Tender can only start games through RetroDECK yet.",
+      });
+      expect(runGameMock()).not.toHaveBeenCalled();
+    });
+
+    it("source_switched_off block → the sentence is the one for the source the verdict names", async () => {
+      vi.mocked(launchGate.runLaunchGate).mockResolvedValue({
+        decision: "block",
+        reason: "source_switched_off",
+        source: "emudeck",
+      });
+
+      register();
+      captureHandler()(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      await flush();
+
+      expect(toaster.toast).toHaveBeenCalledWith({
+        title: "Tender",
+        body: "EmuDeck is switched off in Settings › Emulator sources.",
       });
       expect(runGameMock()).not.toHaveBeenCalled();
     });
@@ -1261,13 +1283,13 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(ops.migrationPending()).toBe(false);
     });
 
-    it("startingSourceSwitchedOff asks the backend", async () => {
+    it("switchedOffStartingSource asks the backend", async () => {
       const ops = await captureOps();
 
       vi.mocked(backend.checkStartSource).mockResolvedValueOnce({ switched_off: "retrodeck" });
-      expect(await ops.startingSourceSwitchedOff()).toBe(true);
+      expect(await ops.switchedOffStartingSource()).toBe("retrodeck");
       vi.mocked(backend.checkStartSource).mockResolvedValueOnce({ switched_off: null });
-      expect(await ops.startingSourceSwitchedOff()).toBe(false);
+      expect(await ops.switchedOffStartingSource()).toBeNull();
     });
 
     it("checkReachability: online passes through; a throw logs and treats as offline", async () => {
@@ -1426,7 +1448,7 @@ describe("launchInterceptor — full funnel watcher", () => {
         {
           call: "check_start_source",
           limit: 5000,
-          op: "startingSourceSwitchedOff",
+          op: "switchedOffStartingSource",
           arrange: () => vi.mocked(backend.checkStartSource).mockReturnValue(never()),
         },
         {

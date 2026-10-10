@@ -2,11 +2,12 @@
 
 Owns the three use cases of Settings → Emulator sources: list every detected
 source with its health, its switch and its place in the order; switch one on
-or off; move one up or down. It also answers the launch check whether the
-source games start through is switched off. The order and the switches are stored by kind in
-``settings.json`` through its one writer; which source a game's questions go to
-follows from them (:mod:`domain.emulator_sources`), and the next reading of the
-sources takes a change into account. Refusals are raised, never returned.
+or off; move one up or down. It also answers the launch check: whether the
+source that would start a game is switched off. The order and the switches are
+stored by kind in ``settings.json`` through its one writer; which source a
+game's questions go to follows from them (:mod:`domain.emulator_sources`), and
+the next reading of the sources takes a change into account. Refusals are
+raised, never returned.
 """
 
 from __future__ import annotations
@@ -78,9 +79,9 @@ class EmulatorSourcesService:
     async def check_start_source(self) -> dict[str, Any]:
         """Whether a game may start through the sources as they stand: ``{"switched_off"}``.
 
-        ``switched_off`` is the kind of the detected source games start through
-        while the user switched it off, which refuses the start, and ``None``
-        otherwise (:func:`domain.emulator_sources.switched_off_starting_source`).
+        ``switched_off`` is the kind of the detected source that would start the
+        game while the user switched it off, which refuses the start, and
+        ``None`` otherwise (:func:`domain.emulator_sources.switched_off_starting_source`).
         Detects the sources and reads nothing else of them, so the launch check
         that asks it waits for no health or catalogue read.
         """

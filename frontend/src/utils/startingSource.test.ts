@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { startingSourceSwitchedOff } from "./startingSource";
+import { switchedOffStartingSource } from "./startingSource";
 import * as backend from "../api/backend";
 import { LOCAL_CALL_LIMIT_MS } from "./launchGate";
 import { TimeoutError } from "./withTimeout";
@@ -9,25 +9,25 @@ vi.mock("../api/backend", () => ({
   logError: vi.fn(),
 }));
 
-describe("startingSourceSwitchedOff", () => {
+describe("switchedOffStartingSource", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("is true while the backend names the source games start through as switched off", async () => {
-    vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: "retrodeck" });
-    await expect(startingSourceSwitchedOff("Watcher")).resolves.toBe(true);
+  it("answers the kind the backend names as the switched-off source that would start the game", async () => {
+    vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: "emudeck" });
+    await expect(switchedOffStartingSource("Watcher")).resolves.toBe("emudeck");
   });
 
-  it("is false while the backend names none", async () => {
+  it("answers null while the backend names none", async () => {
     vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: null });
-    await expect(startingSourceSwitchedOff("Watcher")).resolves.toBe(false);
+    await expect(switchedOffStartingSource("Watcher")).resolves.toBeNull();
   });
 
   it("fails open and logs when the read throws", async () => {
     vi.mocked(backend.checkStartSource).mockRejectedValue(new Error("bridge down"));
 
-    await expect(startingSourceSwitchedOff("CustomPlayButton")).resolves.toBe(false);
+    await expect(switchedOffStartingSource("CustomPlayButton")).resolves.toBeNull();
     expect(vi.mocked(backend.logError)).toHaveBeenCalledWith(
       expect.stringContaining("CustomPlayButton start-source check threw (allowing launch)"),
     );
@@ -37,7 +37,7 @@ describe("startingSourceSwitchedOff", () => {
     vi.useFakeTimers();
     try {
       vi.mocked(backend.checkStartSource).mockReturnValue(new Promise<never>(() => {}));
-      const answer = startingSourceSwitchedOff("CustomPlayButton");
+      const answer = switchedOffStartingSource("CustomPlayButton");
       const settled = expect(answer).rejects.toBeInstanceOf(TimeoutError);
 
       await vi.advanceTimersByTimeAsync(LOCAL_CALL_LIMIT_MS);

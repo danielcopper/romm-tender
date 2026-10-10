@@ -2248,6 +2248,21 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     expect(await within(document.body).findByText("Play")).toBeInTheDocument();
   });
 
+  it("the sentence on a refused press is the one for the source the backend names", async () => {
+    vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: "emudeck" });
+    vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
+
+    await clickPlay();
+
+    await waitFor(() =>
+      expect(toaster.toast).toHaveBeenCalledWith({
+        title: "Tender",
+        body: "EmuDeck is switched off in Settings › Emulator sources.",
+      }),
+    );
+    expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
+  });
+
   it("RetroDECK switched on → Play passes the source step and launches", async () => {
     vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: null });
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });

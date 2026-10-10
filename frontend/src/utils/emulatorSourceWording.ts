@@ -181,10 +181,28 @@ export function cannotStartNotice(kind: string): string {
   return `${sourceName(kind)} is switched on in Settings › Emulator sources, but Tender cannot start games through it yet.`;
 }
 
-/** Why a start is refused while RetroDECK, the one source Tender starts games through yet, is switched off.
- *  Both the game page's Play and a start from Steam's own library say it, as a notification. */
-export const STARTING_SOURCE_OFF_SENTENCE =
-  "RetroDECK is switched off in Settings › Emulator sources, and Tender can only start games through RetroDECK yet.";
+// Why a start is refused while the source that would start the game is
+// switched off, by that source's kind. RetroDECK is the one source Tender
+// starts games through yet, so it is the one sentence there is.
+const STARTING_SOURCE_OFF_SENTENCES: ReadonlyMap<string, string> = new Map([
+  [
+    "retrodeck",
+    "RetroDECK is switched off in Settings › Emulator sources, and Tender can only start games through RetroDECK yet.",
+  ],
+]);
+
+/**
+ * What the game page's Play and a start from Steam's own library say, as a
+ * notification, when they refuse a start because the source of kind `kind`
+ * that would start the game is switched off. A kind with no sentence of its
+ * own says only that it is switched off, and nothing about what Tender can
+ * start through.
+ */
+export function startingSourceOffSentence(kind: string): string {
+  return (
+    STARTING_SOURCE_OFF_SENTENCES.get(kind) ?? `${sourceName(kind)} is switched off in Settings › Emulator sources.`
+  );
+}
 
 /** A source whose emulator list the resolver cannot read yet (EmuDeck's sealed catalogue). */
 export function sealedCatalogueSentence(kind: string): string {

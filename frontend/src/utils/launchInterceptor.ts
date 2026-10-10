@@ -46,8 +46,8 @@ import {
   SERVER_CALL_LIMIT_MS,
 } from "./launchGate";
 import { NO_LAUNCH_TARGET_TOAST_BODY, romHasLaunchTarget } from "./launchTarget";
-import { startingSourceSwitchedOff } from "./startingSource";
-import { STARTING_SOURCE_OFF_SENTENCE } from "./emulatorSourceWording";
+import { switchedOffStartingSource } from "./startingSource";
+import { startingSourceOffSentence } from "./emulatorSourceWording";
 import type { GateVerdict, LaunchGateOps, PreLaunchSyncOutcome } from "./launchGate";
 import { reconfirmLaunchOptions } from "./launchOptionsReconcile";
 import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "./saveSetup";
@@ -188,7 +188,7 @@ function makeWatcherOps(romId: number, prompts: LaunchPrompts): LaunchGateOps {
   return {
     migrationPending: () => getMigrationState().pending,
     hasLaunchTarget: () => romHasLaunchTarget(romId, "Watcher"),
-    startingSourceSwitchedOff: () => startingSourceSwitchedOff("Watcher"),
+    switchedOffStartingSource: () => switchedOffStartingSource("Watcher"),
     ensureTrackingConfigured: async (): Promise<"proceed"> => {
       await ensureTrackingConfiguredWatcher(romId);
       return "proceed";
@@ -286,7 +286,7 @@ async function handleWatcherVerdict(
       } else if (verdict.reason === "no_launch_target") {
         showToast(NO_LAUNCH_TARGET_TOAST_BODY);
       } else if (verdict.reason === "source_switched_off") {
-        showToast(STARTING_SOURCE_OFF_SENTENCE);
+        showToast(startingSourceOffSentence(verdict.source));
       }
       return "done";
     case "conflict": {

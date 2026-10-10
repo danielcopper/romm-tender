@@ -78,8 +78,8 @@ import { getMigrationState } from "../utils/migrationStore";
 import { reloadGameDetail } from "../utils/gameDetailStore";
 import { runLaunchGate, markLaunchSkipped, LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "../utils/launchGate";
 import { NO_LAUNCH_TARGET_TOAST_BODY, romHasLaunchTarget } from "../utils/launchTarget";
-import { startingSourceSwitchedOff } from "../utils/startingSource";
-import { STARTING_SOURCE_OFF_SENTENCE } from "../utils/emulatorSourceWording";
+import { switchedOffStartingSource } from "../utils/startingSource";
+import { startingSourceOffSentence } from "../utils/emulatorSourceWording";
 import type { GateVerdict, LaunchGateOps, PreLaunchSyncOutcome } from "../utils/launchGate";
 import { noteAppRom, readGameRunning } from "../utils/sessionManager";
 import type {
@@ -741,7 +741,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   const makePlayButtonOps = (rid: number): LaunchGateOps => ({
     migrationPending: () => getMigrationState().pending,
     hasLaunchTarget: () => romHasLaunchTarget(rid, "CustomPlayButton"),
-    startingSourceSwitchedOff: () => startingSourceSwitchedOff("CustomPlayButton"),
+    switchedOffStartingSource: () => switchedOffStartingSource("CustomPlayButton"),
     ensureTrackingConfigured: () => ensureTrackingConfigured(rid),
     checkCoreChange: () => confirmCoreChangeIfNeeded(rid),
     checkReachability: async () => {
@@ -851,7 +851,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
           showToast(NO_LAUNCH_TARGET_TOAST_BODY);
         }
         if (verdict.decision === "block" && verdict.reason === "source_switched_off") {
-          showToast(STARTING_SOURCE_OFF_SENTENCE);
+          showToast(startingSourceOffSentence(verdict.source));
         }
         setState("play");
         return "done";

@@ -141,6 +141,20 @@ class TestSwitchedOffStartingSource:
     def test_nothing_detected_refuses_nothing(self):
         assert switched_off_starting_source(()) is None
 
+    def test_the_kind_named_is_that_of_the_source_that_would_start_the_game(self):
+        sources = (
+            ArrangedSource(kind="retrodeck", enabled=True, starts_games=False),
+            ArrangedSource(kind="emudeck", enabled=False, starts_games=True),
+        )
+        assert switched_off_starting_source(sources) == "emudeck"
+
+    def test_a_switched_on_source_that_starts_games_takes_over_from_a_switched_off_one(self):
+        sources = (
+            ArrangedSource(kind="emudeck", enabled=False, starts_games=True),
+            ArrangedSource(kind="retrodeck", enabled=True, starts_games=True),
+        )
+        assert switched_off_starting_source(sources) is None
+
 
 class TestMoveSource:
     def test_moving_down_swaps_with_the_next_source(self):
