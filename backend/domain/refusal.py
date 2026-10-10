@@ -26,10 +26,11 @@ class DomainRefused(Exception):
 
 
 class NamedDomainRefused(DomainRefused):
-    """A domain refusal named for its reason, as ``lib.errors.NamedRefused`` is one.
+    """A domain refusal named for its reason, like ``lib.errors.NamedRefused``.
 
-    A subclass declares ``reason``, and may word its message and details itself
-    from the values it is built from, where wording them is a domain rule.
+    A subclass declares ``reason``. Unlike ``NamedRefused``, it may word its
+    message and details itself from the values it is built from, where wording
+    them is a domain rule.
     """
 
     def __init__(self, message: str, **details: Any) -> None:

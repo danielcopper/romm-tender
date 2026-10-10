@@ -106,16 +106,28 @@ class DownloadTargetGateFn(Protocol):
     """Decide whether a download may write the content it has computed a path for.
 
     Returns ``None`` when nothing is in the way — the path is free and no file
-    elsewhere in the platform folder looks like this game, or the user chose to
-    replace what they were shown and it has been cleared. Otherwise it raises
-    the refusal: ``target_occupied`` carrying both sides of the comparison, one
-    of the three the candidate search raises (``adoption_candidates``,
-    ``unusable_namesake``, ``candidate_vanished``), ``rename_collisions`` from
-    carrying a discarded candidate's saves, or the failure of a removal the
-    replace could not complete — or, where that carry or the removal after it
-    stopped with files already renamed or set aside, returns the partial
-    failure naming them. Nothing is written and no transfer starts unless it
-    returns ``None``.
+    elsewhere in the platform folder looks like this game, what is there is this
+    ROM's own install, or the user chose to replace what they were shown and it
+    has been cleared. Otherwise it raises one of these refusals:
+
+    - ``target_occupied``, carrying both sides of the comparison;
+    - one of the three the candidate search raises: ``adoption_candidates``,
+      ``unusable_namesake`` or ``candidate_vanished``;
+    - ``invalid_candidate``, for a *candidate_path* outside this game's
+      platform folder;
+    - RetroDECK's folder refusal (``FolderRefused``), where this system's ROM
+      folder may not be used;
+    - ``unsafe_replace_target``, for content to replace outside that folder;
+    - ``rename_collisions``, for names a discarded candidate's saves would take
+      that *collision_choice* does not answer;
+    - ``replace_failed`` or ``rename_failed``, for a carry of those saves that
+      stopped before it renamed or set aside anything;
+    - ``replace_failed``, for a removal the replace could not complete with no
+      save carried before it.
+
+    Where that carry, or the removal after it, stopped with files already
+    renamed or set aside, it returns the partial failure naming them instead.
+    No transfer starts unless it returns ``None``.
 
     *candidate_path* names the entry the user was shown when it sat elsewhere in
     the folder under another name; with *replace* it is removed and its saves

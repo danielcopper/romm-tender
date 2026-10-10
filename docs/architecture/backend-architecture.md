@@ -2959,10 +2959,10 @@ the report-mode inventory grouped by classification. The routing slugs come from
 enum) plus bespoke plain-string reasons for non-server-reachability guards.
 
 The gate also carries `CONVERTED_MODULES`, the modules that build no failure shape at all: a service there raises its
-refusal and `Endpoints` answers it, and an adapter there reports an outcome its service decides on. In those (anywhere
-under `backend/`, adapters included) `--check` fails on any dict literal with a falsy `success`, any
-`error_response(...)` call and a `**spread` of a refusal helper, and on a listed path that no longer exists or does not
-parse. The list only grows; the script's docstring names what it cannot see.
+refusal, a domain module there raises `DomainRefused`, and `Endpoints` answers either; an adapter there reports an
+outcome its service decides on. In those (anywhere under `backend/`, adapters included) `--check` fails on any dict
+literal with a falsy `success`, any `error_response(...)` call and a `**spread` of a refusal helper, and on a listed
+path that no longer exists or does not parse. The list only grows; the script's docstring names what it cannot see.
 
 ### 5. Enforced: underscore prefix
 

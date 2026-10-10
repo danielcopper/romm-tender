@@ -115,7 +115,7 @@ class CandidateSearch:
     # ── The Download click's half ───────────────────────────────────
 
     def refuse_if_found(self, rom_detail: dict[str, Any], checked_path: str, *, page_saw_candidate: bool) -> None:
-        """Raise everything this search can refuse a download for, most specific first.
+        """Raise the most specific refusal this search finds for a download.
 
         Returning means proceed, which is every ordinary download. Three
         refusals, and the order is the point — a user meets the specific

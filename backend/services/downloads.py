@@ -317,10 +317,10 @@ class DownloadService:
         ``start_download``; ``resume_download`` validates the paused entry before calling here.
 
         Holds the ROM's in-progress claim from the first step and gives it back on every way out but a started
-        download, a cancelled start included, so the ROM is never stuck "Already downloading". The gate's partial
-        failure is the answer as it came. Of what the steps raise, an ``OSError`` (a disk that cannot be read or
-        prepared) is refused here with ``download_start_failed``; a RomM error and a refusal — RetroDECK's folder
-        refusal and the gate's among them — pass on unchanged, and anything else is a bug.
+        download, a cancelled start included, so the ROM is never stuck "Already downloading". A partial failure the
+        gate returns is answered as it came, with the claim given back. Of what the steps raise, an ``OSError`` (a
+        disk that cannot be read or prepared) is refused here with ``download_start_failed``; a RomM error and a
+        refusal — RetroDECK's folder refusal and the gate's among them — pass on unchanged, and anything else is a bug.
         """
         self._download_in_progress.add(rom_id)
         try:

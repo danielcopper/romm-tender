@@ -212,20 +212,9 @@ class RomAdoptionService:
     ) -> AdoptionIncomplete | None:
         """Decide whether a download may write the content it computed *checked_path* for.
 
-        ``None`` means proceed: nothing is in the way, what is there already
-        belongs to this ROM's own install, or the user chose to download over
-        whatever the gate showed them and it has been cleared. Otherwise it
-        raises — :class:`TargetOccupied` carrying both sides of the comparison,
-        one of the three the candidate search raises (``adoption_candidates``,
-        ``unusable_namesake``, ``candidate_vanished``), the ``rename_collisions``
-        refusal from carrying a discarded candidate's saves, or a removal that
-        could not be completed — or answers :class:`AdoptionIncomplete` where
-        that carry or the removal after it stopped with files already moved.
-
-        *page_saw_candidate* is what the game page told the user before they
-        pressed. It is carried this far because the search's last answer is a
-        backstop over it: a page that found a copy must never end in a silent
-        download, whatever the two searches disagree about (ADR-0028).
+        This service's :class:`~services.protocols.DownloadTargetGateFn`, which
+        states the contract: what it answers, what it raises, and what each
+        argument means.
 
         None of the legs is bounded work — describing an occupied directory walks
         it whole (a multi-file install can hold tens of thousands of files),
@@ -560,7 +549,7 @@ class RomAdoptionService:
         return path
 
     def _validate_adoption_io(self, rom_id: int, target: _Target, source_path: str) -> None:
-        """Raise every refusal this adoption can produce, decided before anything is moved.
+        """Raise the first refusal this adoption meets before anything is moved.
 
         Returning means the adoption will go through. Runs off the loop: it stats
         the content and reads the ``roms`` row in one short UoW — the row has to
