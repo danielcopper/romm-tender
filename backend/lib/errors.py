@@ -334,15 +334,3 @@ class OperationAbortedError(Exception):
     A caller that cannot distinguish this from a fault would report an
     obedient stop as an error.
     """
-
-
-def error_response(exc, fallback_message=None):
-    """Build a canonical ``{success, reason, message}`` dict from an exception.
-
-    ``reason`` is the :func:`classify_error` slug; ``message`` is the
-    human-readable detail (overridable via *fallback_message*). The legacy
-    ``error_code`` key is gone \u2014 this is the single failure shape the
-    frontend reads (``scripts/check_failure_shape.py`` enforces it).
-    """
-    reason, msg = classify_error(exc)
-    return {"success": False, "reason": reason, "message": fallback_message or msg}
