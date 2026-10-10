@@ -83,6 +83,7 @@ class TestChangedSinceLastSync:
 
     def test_a_hash_failure_reaches_the_caller(self):
         store = _HashingStore({}, raises=OSError("file vanished"))
+        files_state = {"game.srm": FileSyncState(last_sync_hash="hash-A")}
 
         with pytest.raises(OSError, match="file vanished"):
-            _changed([_SRM], {"game.srm": FileSyncState(last_sync_hash="hash-A")}, store)
+            _changed([_SRM], files_state, store)
