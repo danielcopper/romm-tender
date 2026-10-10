@@ -34,6 +34,7 @@ from _factories import (
 from bootstrap import ServicesBundle
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
+from fakes.fake_cover_art_file_store import FakeCoverArtFileStore
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_event_sink import FakeEventSink
@@ -92,6 +93,7 @@ from lib.errors import (
 )
 from lib.partial_failure import PartialFailure
 from main import Endpoints
+from services.artwork import ArtworkService, ArtworkServiceConfig
 from services.connection import ConnectionService, ConnectionServiceConfig
 from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
@@ -1650,3 +1652,78 @@ class TestTheSteamGridDBRefusalsOnTheWire:
         assert "Bearer" not in raw
         assert "fake-sgdb-key" not in caplog.text
         assert "Bearer" not in caplog.text
+
+
+def _dispatcher_over_artwork(romm_api: FakeRommApi) -> CallDispatcher:
+    """The real dispatcher over ``Endpoints`` whose artwork use cases are the real ``ArtworkService``.
+
+    ROM 42 is synced and bound, and Steam's grid directory is found.
+    """
+    uow = FakeUnitOfWork()
+    with uow:
+        uow.roms.save(
+            Rom(
+                rom_id=42,
+                platform_slug="n64",
+                name="Zelda",
+                fs_name="Zelda.z64",
+                shortcut_app_id=999,
+                last_synced_at="2025-01-01T00:00:00",
+            )
+        )
+    steam_config = MagicMock()
+    steam_config.grid_dir.return_value = "/steam/grid"
+    service = ArtworkService(
+        config=ArtworkServiceConfig(
+            romm_api=romm_api,
+            steam_config=steam_config,
+            cover_art_file_store=FakeCoverArtFileStore(),
+            cover_cache_dir="/runtime/covers",
+            loop=asyncio.get_running_loop(),
+            logger=LOGGER,
+            get_pending_sync=dict,
+            uow_factory=FakeUnitOfWorkFactory(uow=uow),
+            conflict_rules=_make_conflict_rules(),
+        )
+    )
+    endpoints = Endpoints(_make_application(_make_services_bundle(artwork_service=service)), HostStatus())
+    return CallDispatcher(endpoints, LOGGER)
+
+
+class TestTheCoverRepairRefusalsOnTheWire:
+    """A cover repair whose ROM fetch or cover download fails, as the wire carries it."""
+
+    async def test_an_unreachable_romm_answers_server_unreachable_with_the_classified_message(self):
+        romm_api = FakeRommApi()
+        romm_api.get_rom_side_effect = RommConnectionError("[Errno 111] Connection refused")
+        dispatcher = _dispatcher_over_artwork(romm_api)
+
+        raw = await dispatcher.dispatch(1, "refresh_cover_artwork", [42])
+
+        message = json.loads(raw)
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {
+            "success": False,
+            "reason": "server_unreachable",
+            "message": classify_error(romm_api.get_rom_side_effect)[1],
+        }
+
+    async def test_a_cover_this_device_cannot_save_answers_download_failed_and_nothing_else(self):
+        romm_api = FakeRommApi()
+        romm_api.roms[42] = {"id": 42, "path_cover_large": "/assets/42/cover.png"}
+        romm_api.download_cover_side_effect = PermissionError(
+            13, "Permission denied", "/home/someone/.cache/romm-tender/covers"
+        )
+        dispatcher = _dispatcher_over_artwork(romm_api)
+
+        raw = await dispatcher.dispatch(1, "refresh_cover_artwork", [42])
+
+        message = json.loads(raw)
+        assert message["type"] == TYPE_REPLY
+        assert message["result"] == {
+            "success": False,
+            "reason": "download_failed",
+            "message": "The cover could not be saved on this device",
+        }
+        assert "Permission denied" not in raw
+        assert "/home/someone" not in raw

@@ -17,7 +17,7 @@ from models.cover import CoverRevalidation
 from domain.artwork_paths import cover_meta_filename
 from domain.cover_refresh import scan_cover_refresh_candidates
 from domain.rom import Rom
-from lib.errors import RommConnectionError, RommNotFoundError
+from lib.errors import Refused, RommConnectionError, RommNotFoundError, RommServerError
 from services.artwork import ArtworkService, ArtworkServiceConfig
 
 
@@ -1651,12 +1651,12 @@ class TestRefreshCover:
         artwork_service,
         romm_api,
     ):
-        result = await artwork_service.refresh_cover(42)
-        assert result == {
-            "success": False,
-            "reason": "not_synced",
-            "message": "ROM is not synced to Steam",
-        }
+        refreshing = artwork_service.refresh_cover(42)
+
+        with pytest.raises(Refused) as refused:
+            await refreshing
+
+        assert (refused.value.reason, refused.value.message) == ("not_synced", "ROM is not synced to Steam")
         romm_api.get_rom.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1667,9 +1667,12 @@ class TestRefreshCover:
         romm_api,
     ):
         _seed_rom(uow, 42, app_id=None)
-        result = await artwork_service.refresh_cover(42)
-        assert result["success"] is False
-        assert result["reason"] == "not_synced"
+        refreshing = artwork_service.refresh_cover(42)
+
+        with pytest.raises(Refused) as refused:
+            await refreshing
+
+        assert (refused.value.reason, refused.value.message) == ("not_synced", "ROM is not synced to Steam")
         romm_api.get_rom.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1682,13 +1685,12 @@ class TestRefreshCover:
     ):
         _seed_rom(uow, 42, app_id=999)
         steam_config.grid_dir.return_value = None
+        refreshing = artwork_service.refresh_cover(42)
 
-        result = await artwork_service.refresh_cover(42)
-        assert result == {
-            "success": False,
-            "reason": "no_grid_dir",
-            "message": "Steam grid directory not found",
-        }
+        with pytest.raises(Refused) as refused:
+            await refreshing
+
+        assert (refused.value.reason, refused.value.message) == ("no_grid_dir", "Steam grid directory not found")
         romm_api.get_rom.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1703,11 +1705,11 @@ class TestRefreshCover:
         _seed_rom(uow, 42, app_id=999)
         steam_config.grid_dir.return_value = str(tmp_path)
         romm_api.get_rom.side_effect = RommConnectionError("network down")
+        refreshing = artwork_service.refresh_cover(42)
 
-        result = await artwork_service.refresh_cover(42)
-        assert result["success"] is False
-        assert result["reason"] == "server_unreachable"
-        assert result["message"] == "Could not fetch ROM from server"
+        with pytest.raises(RommConnectionError):
+            await refreshing
+
         romm_api.download_cover.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1721,18 +1723,16 @@ class TestRefreshCover:
     ):
         """A definitive 404 is the server ANSWERING — not an outage (#1570).
 
-        The message stays the same because it is already true either way;
-        only the routing slug was wrong.
+        It reaches the translator as the 404 it is, which answers ``not_found``.
         """
         _seed_rom(uow, 42, app_id=999)
         steam_config.grid_dir.return_value = str(tmp_path)
         romm_api.get_rom.side_effect = RommNotFoundError("HTTP 404: Not Found")
+        refreshing = artwork_service.refresh_cover(42)
 
-        result = await artwork_service.refresh_cover(42)
-        assert result["success"] is False
-        assert result["reason"] == "not_found"
-        assert result["reason"] != "server_unreachable"
-        assert result["message"] == "Could not fetch ROM from server"
+        with pytest.raises(RommNotFoundError):
+            await refreshing
+
         romm_api.download_cover.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1747,10 +1747,12 @@ class TestRefreshCover:
         _seed_rom(uow, 42, app_id=999)
         steam_config.grid_dir.return_value = str(tmp_path)
         romm_api.get_rom.return_value = None
+        refreshing = artwork_service.refresh_cover(42)
 
-        result = await artwork_service.refresh_cover(42)
-        assert result["success"] is False
-        assert result["reason"] == "not_found"
+        with pytest.raises(Refused) as refused:
+            await refreshing
+
+        assert (refused.value.reason, refused.value.message) == ("not_found", "Could not fetch ROM from server")
 
     @pytest.mark.asyncio
     async def test_no_cover_url_in_rom_payload(
@@ -1764,13 +1766,12 @@ class TestRefreshCover:
         _seed_rom(uow, 42, app_id=999)
         steam_config.grid_dir.return_value = str(tmp_path)
         romm_api.get_rom.return_value = {"id": 42, "name": "No Cover"}
+        refreshing = artwork_service.refresh_cover(42)
 
-        result = await artwork_service.refresh_cover(42)
-        assert result == {
-            "success": False,
-            "reason": "no_cover",
-            "message": "ROM has no cover artwork",
-        }
+        with pytest.raises(Refused) as refused:
+            await refreshing
+
+        assert (refused.value.reason, refused.value.message) == ("no_cover", "ROM has no cover artwork")
         romm_api.download_cover.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1843,14 +1844,80 @@ class TestRefreshCover:
         steam_config.grid_dir.return_value = grid
         _seed_rom(uow, 42, app_id=999, cover_path="old/path.png")
         romm_api.get_rom.return_value = {"id": 42, "path_cover_large": "/c.png"}
-        romm_api.download_cover.side_effect = Exception("disk full")
+        romm_api.download_cover.side_effect = OSError("disk full")
+        refreshing = artwork_service.refresh_cover(42)
 
-        result = await artwork_service.refresh_cover(42)
-        assert result["success"] is False
-        assert result["reason"] == "download_failed"
-        assert "disk full" in result["message"]
+        with pytest.raises(Refused) as refused:
+            await refreshing
+
+        assert (refused.value.reason, refused.value.message) == (
+            "download_failed",
+            "The cover could not be saved on this device",
+        )
+        assert "disk full" not in refused.value.message
         with uow:
             assert uow.roms.get(42).cover_path == "old/path.png"
+
+    @pytest.mark.asyncio
+    async def test_a_cover_this_device_cannot_publish_refuses_and_leaves_the_rom_row(
+        self,
+        artwork_service,
+        uow,
+        steam_config,
+        file_store,
+        romm_api,
+        cover_cache_dir,
+        tmp_path,
+    ):
+        """The rename of the downloaded ``.tmp`` over the cache file is this device's, so it refuses too."""
+        steam_config.grid_dir.return_value = str(tmp_path / "grid")
+        _seed_rom(uow, 42, app_id=999, cover_path="old/path.png", cover_source="/old.png")
+        romm_api.get_rom.return_value = {"id": 42, "path_cover_large": "/c.png"}
+        romm_api.download_cover.side_effect = _writing_download(file_store)
+        file_store.rename_failures.add(_tmp(_cache(cover_cache_dir, 42)))
+        refreshing = artwork_service.refresh_cover(42)
+
+        with pytest.raises(Refused) as refused:
+            await refreshing
+
+        assert (refused.value.reason, refused.value.message) == (
+            "download_failed",
+            "The cover could not be saved on this device",
+        )
+        assert _cache(cover_cache_dir, 42) not in refused.value.message
+        with uow:
+            assert (uow.roms.get(42).cover_path, uow.roms.get(42).cover_source) == ("old/path.png", "/old.png")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "error",
+        [
+            pytest.param(RommServerError("HTTP 503: Service Unavailable", status_code=503), id="romm-error"),
+            pytest.param(ValueError("not a cover"), id="anything-else"),
+        ],
+    )
+    async def test_a_download_failure_not_of_this_device_propagates_and_leaves_the_rom_row(
+        self,
+        artwork_service,
+        uow,
+        steam_config,
+        romm_api,
+        tmp_path,
+        error,
+    ):
+        """A RomM error reaches the translator, and anything else stays a transport error."""
+        steam_config.grid_dir.return_value = str(tmp_path / "grid")
+        _seed_rom(uow, 42, app_id=999, cover_path="old/path.png", cover_source="/old.png")
+        romm_api.get_rom.return_value = {"id": 42, "path_cover_large": "/c.png"}
+        romm_api.download_cover.side_effect = error
+        refreshing = artwork_service.refresh_cover(42)
+
+        with pytest.raises(type(error)) as raised:
+            await refreshing
+
+        assert raised.value is error
+        with uow:
+            assert (uow.roms.get(42).cover_path, uow.roms.get(42).cover_source) == ("old/path.png", "/old.png")
 
 
 # ── TestIsStagingFileOrphaned ─────────────────────────────────────────────────
@@ -2131,10 +2198,15 @@ class TestCleanupOrphanedGridImages:
         file_store.files[orphan] = b"orphan"
 
         # Live set omits the bound appId — refuse, delete nothing.
-        result = await artwork_service.cleanup_orphaned_grid_images([self.FOREIGN], dry_run=False)
-        assert result["success"] is False
-        assert result["reason"] == "incomplete_scan"
-        assert isinstance(result["message"], str) and result["message"]
+        cleaning = artwork_service.cleanup_orphaned_grid_images([self.FOREIGN], dry_run=False)
+
+        with pytest.raises(Refused) as refused:
+            await cleaning
+
+        assert (refused.value.reason, refused.value.message) == (
+            "incomplete_scan",
+            "Steam's shortcut scan is missing 1 synced shortcut(s) — the scan is incomplete, nothing was removed.",
+        )
         assert orphan in file_store.files
 
     @pytest.mark.asyncio
@@ -2156,20 +2228,23 @@ class TestCleanupOrphanedGridImages:
     @pytest.mark.asyncio
     async def test_no_grid_dir_fails(self, artwork_service, steam_config):
         steam_config.grid_dir.return_value = None
-        result = await artwork_service.cleanup_orphaned_grid_images([], dry_run=True)
-        assert result == {
-            "success": False,
-            "reason": "no_grid_dir",
-            "message": "Steam grid directory not found",
-        }
+        cleaning = artwork_service.cleanup_orphaned_grid_images([], dry_run=True)
+
+        with pytest.raises(Refused) as refused:
+            await cleaning
+
+        assert (refused.value.reason, refused.value.message) == ("no_grid_dir", "Steam grid directory not found")
 
     @pytest.mark.asyncio
     async def test_grid_not_a_directory_fails(self, artwork_service, steam_config, file_store, tmp_path):
         self._grid(steam_config, tmp_path)
         file_store.isdir_paths = set()  # grid path exists as a value but is not a dir
-        result = await artwork_service.cleanup_orphaned_grid_images([], dry_run=True)
-        assert result["success"] is False
-        assert result["reason"] == "no_grid_dir"
+        cleaning = artwork_service.cleanup_orphaned_grid_images([], dry_run=True)
+
+        with pytest.raises(Refused) as refused:
+            await cleaning
+
+        assert (refused.value.reason, refused.value.message) == ("no_grid_dir", "Steam grid directory not found")
 
     @pytest.mark.asyncio
     async def test_empty_live_set_with_zero_bindings_is_legal(

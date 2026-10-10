@@ -56,8 +56,7 @@ from domain.artwork_paths import (
 )
 from domain.cover_refresh import cover_ts_only_change, scan_cover_refresh_candidates
 from domain.sync_stage import SyncStage
-from lib.errors import RommNotFoundError, classify_error
-from lib.list_result import ErrorCode
+from lib.errors import Refused, RommNotFoundError
 
 
 @dataclass(frozen=True)
@@ -810,54 +809,30 @@ class ArtworkService:
         the grid as ``{app_id}p.png``, and records the cache path via
         ``Rom.update_cover_path`` plus the confirmed ``cover_source``
         fingerprint (#1386). ADR-0006: the read and write each own a short
-        UoW with the RomM/file I/O in between, outside any transaction. Returns
-        the canonical ``{success, reason, message}`` failure shape on every
-        failure branch — see ``lib/list_result.py``.
+        UoW with the RomM/file I/O in between, outside any transaction.
+
+        Refuses with ``not_synced``, ``no_grid_dir``, ``not_found`` (RomM
+        answered no ROM) and ``no_cover``, and with ``download_failed`` when
+        this device cannot save the downloaded cover; the ROM row is left as
+        it was. A RomM error propagates. The adapter answers everything in the
+        transfer as a RomM error, so an ``OSError`` here is this device's.
         """
         async with self._rules.hold("refresh_cover_artwork", update=True, migration=True, prune=True):
             app_id = await self._loop.run_in_executor(None, self._read_bound_app_id, rom_id)
             if app_id is None:
-                return {
-                    "success": False,
-                    "reason": "not_synced",
-                    "message": "ROM is not synced to Steam",
-                }
+                raise Refused("not_synced", "ROM is not synced to Steam")
 
             grid = self._steam_config.grid_dir()
             if not grid:
-                return {
-                    "success": False,
-                    "reason": "no_grid_dir",
-                    "message": "Steam grid directory not found",
-                }
+                raise Refused("no_grid_dir", "Steam grid directory not found")
 
-            try:
-                rom = await self._loop.run_in_executor(None, self._romm_api.get_rom, rom_id)
-            except Exception as e:
-                self._logger.warning(f"refresh_cover: failed to fetch rom {rom_id}: {e}")
-                reason, _message = classify_error(e)
-                return {
-                    "success": False,
-                    "reason": reason,
-                    # Already true for both branches (the ROM is gone / the server
-                    # is down), and more specific than the classifier's generic
-                    # string — only the routing slug was ever wrong here.
-                    "message": "Could not fetch ROM from server",
-                }
+            rom = await self._loop.run_in_executor(None, self._romm_api.get_rom, rom_id)
             if not rom:
-                return {
-                    "success": False,
-                    "reason": ErrorCode.NOT_FOUND.value,
-                    "message": "Could not fetch ROM from server",
-                }
+                raise Refused("not_found", "Could not fetch ROM from server")
 
             cover_url = rom.get("path_cover_large") or rom.get("path_cover_small")
             if not cover_url:
-                return {
-                    "success": False,
-                    "reason": "no_cover",
-                    "message": "ROM has no cover artwork",
-                }
+                raise Refused("no_cover", "ROM has no cover artwork")
 
             cache_path = self._cache_path(rom_id)
             self._cover_art_file_store.make_dirs(self._cover_cache_dir)
@@ -867,13 +842,9 @@ class ArtworkService:
                 result = await self._loop.run_in_executor(
                     None, self._fetch_and_record_cover, rom_id, cover_url, cache_path, rom.get("url_cover"), None
                 )
-            except Exception as e:
-                self._logger.warning(f"refresh_cover: failed to download cover for rom {rom_id}: {e}")
-                return {
-                    "success": False,
-                    "reason": "download_failed",
-                    "message": str(e),
-                }
+            except OSError as e:
+                self._logger.warning(f"refresh_cover: failed to save the cover for rom {rom_id}: {e}")
+                raise Refused("download_failed", "The cover could not be saved on this device") from e
 
             self.finalize_cover_path(grid, cache_path, app_id, str(rom_id))
             await self._loop.run_in_executor(None, self._persist_cover_path, rom_id, cache_path, result.applied_source)
@@ -1028,11 +999,7 @@ class ArtworkService:
         async with self._rules.hold("cleanup_orphaned_grid_images", update=True, migration=True, sync=True, prune=True):
             grid = self._steam_config.grid_dir()
             if not grid or not self._cover_art_file_store.is_dir(grid):
-                return {
-                    "success": False,
-                    "reason": "no_grid_dir",
-                    "message": "Steam grid directory not found",
-                }
+                raise Refused("no_grid_dir", "Steam grid directory not found")
             live = {int(app_id) for app_id in live_app_ids}
             return await self._loop.run_in_executor(None, self._cleanup_orphaned_grid_images_io, grid, live, dry_run)
 
@@ -1047,14 +1014,11 @@ class ArtworkService:
             bound = {rom.shortcut_app_id for rom in uow.roms.iter_all() if rom.shortcut_app_id is not None}
         missing = bound - live
         if missing:
-            return {
-                "success": False,
-                "reason": "incomplete_scan",
-                "message": (
-                    f"Steam's shortcut scan is missing {len(missing)} synced shortcut(s) — "
-                    "the scan is incomplete, nothing was removed."
-                ),
-            }
+            raise Refused(
+                "incomplete_scan",
+                f"Steam's shortcut scan is missing {len(missing)} synced shortcut(s) — "
+                "the scan is incomplete, nothing was removed.",
+            )
 
         orphans: list[str] = []
         for filename in self._cover_art_file_store.listdir(grid):
