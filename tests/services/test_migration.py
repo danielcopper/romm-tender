@@ -27,9 +27,12 @@ from fakes.running_loop import running_loop
 
 from adapters.migration_file import MigrationFileAdapter
 from domain.retrodeck_folders import MoveRoots
+from lib.errors import Refused
 from lib.prune_conflicts import PruneConflicts
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.migration import MigrationService, MigrationServiceConfig
+from services.migration._moves import MigrationIncomplete
+from services.migration.service import NeedsConfirmation
 from services.relaunch_options_resolver import RelaunchOptionsResolver, RelaunchOptionsResolverConfig
 
 
@@ -539,10 +542,13 @@ class TestMigrateRetroDeckFiles:
     @pytest.mark.asyncio
     async def test_no_migration_needed(self, migration):
         """No previous path — nothing to migrate."""
+        migrating = migration.service.migrate_retrodeck_files()
 
-        result = await migration.service.migrate_retrodeck_files()
-        assert result["success"] is False
-        assert "No path migration needed" in result["message"]
+        with pytest.raises(Refused) as refused:
+            await migrating
+
+        assert refused.value.reason == "no_migration_needed"
+        assert "No path migration needed" in refused.value.message
 
     @pytest.mark.asyncio
     async def test_migrate_roms(self, migration, tmp_path):
@@ -808,11 +814,16 @@ class TestMigrateRetroDeckFiles:
             uow.kv_config.set("retrodeck_home_path", new_home)
         _seed_install(migration.uow, 1, file_path=old_rom, system="n64")
 
-        # First call with no strategy returns conflicts
-        result = await migration.service.migrate_retrodeck_files()
-        assert result["needs_confirmation"] is True
-        assert result["conflict_count"] == 1
-        assert "zelda.z64" in result["conflicts"]
+        # First call with no strategy refuses with the conflicts
+        migrating = migration.service.migrate_retrodeck_files()
+
+        with pytest.raises(NeedsConfirmation) as refused:
+            await migrating
+
+        assert refused.value.reason == "needs_confirmation"
+        assert refused.value.details["needs_confirmation"] is True
+        assert refused.value.details["conflict_count"] == 1
+        assert "zelda.z64" in refused.value.details["conflicts"]
         # Nothing moved yet
         with open(new_rom) as f:
             assert f.read() == "new data"
@@ -1032,10 +1043,12 @@ class TestMigrateRetroDeckFiles:
     @pytest.mark.asyncio
     async def test_nothing_is_recorded_while_the_user_is_still_asked(self, migration, tmp_path):
         self._conflicting_rom(migration, tmp_path)
+        migrating = migration.service.migrate_retrodeck_files(None)
 
-        result = await migration.service.migrate_retrodeck_files(None)
+        with pytest.raises(NeedsConfirmation) as refused:
+            await migrating
 
-        assert result["reason"] == "needs_confirmation"
+        assert refused.value.reason == "needs_confirmation"
         assert migration.save_directories.calls == 0
 
     @pytest.mark.asyncio
@@ -1157,11 +1170,15 @@ class TestMigrateSaveFiles:
             uow.kv_config.set("retrodeck_home_path", new_home)
 
         migration.service._retrodeck_folders = FakeRetroDeckFolders(saves=os.path.join(new_home, "saves"))
-        result = await migration.service.migrate_retrodeck_files()
+        migrating = migration.service.migrate_retrodeck_files()
 
-        assert result["needs_confirmation"] is True
-        assert result["conflict_count"] == 1
-        assert "gba/game.srm" in result["conflicts"]
+        with pytest.raises(NeedsConfirmation) as refused:
+            await migrating
+
+        assert refused.value.reason == "needs_confirmation"
+        assert refused.value.details["needs_confirmation"] is True
+        assert refused.value.details["conflict_count"] == 1
+        assert "gba/game.srm" in refused.value.details["conflicts"]
 
     @pytest.mark.asyncio
     async def test_save_conflict_overwrite(self, migration, tmp_path):
@@ -1557,10 +1574,12 @@ class TestMigrationRelaunchOptions:
             uow.kv_config.set("retrodeck_home_path_previous", old_home)
             uow.kv_config.set("retrodeck_home_path", new_home)
         _seed_install(migration.uow, 1, file_path=old_rom, system="n64", app_id=4242)
+        migrating = migration.service.migrate_retrodeck_files()
 
-        result = await migration.service.migrate_retrodeck_files()
-        assert result["needs_confirmation"] is True
+        with pytest.raises(NeedsConfirmation) as refused:
+            await migrating
 
+        assert refused.value.details["needs_confirmation"] is True
         assert self._relaunch_emit(migration) is None
 
     @pytest.mark.asyncio
@@ -1650,14 +1669,67 @@ class TestMigrationFailureInjection:
         service = self._make_service(fake, uow=uow)
 
         roots = MoveRoots(home=new_home, bios=f"{new_home}/bios", saves=f"{new_home}/saves")
-        result = service._migrate_retrodeck_files_io([old_home], new_home, None, roots)
+        result, _relaunch_items = service._migrate_retrodeck_files_io([old_home], new_home, None, roots)
 
-        assert result["success"] is False
-        assert len(result["errors"]) == 1
-        assert "bad.z64" in result["errors"][0]
+        assert isinstance(result, MigrationIncomplete)
+        assert result.reason == "migration_incomplete"
+        assert len(result.errors) == 1
+        assert "bad.z64" in result.errors[0]
         # Good ROM was moved successfully despite the bad one failing.
-        assert result["roms_moved"] == 1
+        assert result.roms_moved == 1
         # Marker is retained so the user can retry.
+        with uow:
+            assert uow.kv_config.get("retrodeck_home_path_previous") == old_home
+
+    async def test_a_run_whose_moves_partly_fail_answers_what_it_did_and_still_rebakes(self):
+        fake = FakeMigrationFileStore()
+        old_home = "/old"
+        new_home = _DETECTED_HOME
+        bad_rom = "/old/roms/n64/bad.z64"
+        good_rom = "/old/roms/n64/good.z64"
+        fake.files[bad_rom] = b"bad"
+        fake.files[good_rom] = b"good"
+        fake.move_failures.add(bad_rom)
+        uow = FakeUnitOfWork()
+        _seed_install(uow, 1, file_path=bad_rom, system="n64")
+        _seed_install(uow, 2, file_path=good_rom, system="n64", app_id=4242)
+        with uow:
+            uow.kv_config.set("retrodeck_home_path_previous", old_home)
+            uow.kv_config.set("retrodeck_home_path", new_home)
+        items = [{"app_id": 4242, "launch_options": "relocated"}]
+        emit = RecordingEmitter()
+        save_directories = RecordingSaveDirectories()
+        service = self._make_service(
+            fake,
+            uow=uow,
+            emit=emit,
+            relaunch_options=FakeRelaunchOptionsResolver(items=items),
+            save_directories=save_directories.provide,
+        )
+
+        result = await service.migrate_retrodeck_files()
+
+        assert result == MigrationIncomplete(
+            reason="migration_incomplete",
+            message="Migrated 1 ROM(s) (1 error(s))",
+            roms_moved=1,
+            bios_moved=0,
+            saves_moved=0,
+            missing_count=0,
+            errors=[f"bad.z64: simulated move failure: {bad_rom}"],
+        )
+        # The run is re-baked, recorded and re-recorded as after a clean run.
+        [(event, payload)] = emit.calls
+        assert event == "migration_relaunch_options"
+        assert isinstance(payload, dict)
+        assert payload["items"] == items
+        assert payload["prune_lease_token"].startswith("migration_relaunch_options:")
+        with uow:
+            relocated = uow.roms.get(2)
+        assert relocated is not None
+        assert relocated.applied_launch_options == "relocated"
+        assert save_directories.calls == 1
+        # The pending move stays recorded so the user can retry.
         with uow:
             assert uow.kv_config.get("retrodeck_home_path_previous") == old_home
 
@@ -2266,7 +2338,9 @@ class TestChainedMigration:
 
         first = await migration.service.migrate_retrodeck_files()
         assert first["success"] is True
+        second = migration.service.migrate_retrodeck_files()
 
-        second = await migration.service.migrate_retrodeck_files()
-        assert second["success"] is False
-        assert second["reason"] == "no_migration_needed"
+        with pytest.raises(Refused) as refused:
+            await second
+
+        assert refused.value.reason == "no_migration_needed"

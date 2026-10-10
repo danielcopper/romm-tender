@@ -23,15 +23,47 @@ interface ConflictDetail {
   new_mtime: string;
 }
 
-export interface MigrationResult {
-  success: boolean;
+/** A run in which no move failed. */
+interface MigrationDone {
+  success: true;
   message: string;
-  needs_confirmation?: boolean;
-  conflict_count?: number;
-  conflicts?: string[] | ConflictDetail[];
+  needs_confirmation?: undefined;
   roms_moved?: number;
   bios_moved?: number;
   saves_moved?: number;
   missing_count?: number;
   errors?: string[];
 }
+
+/** Nothing was moved: some destinations are taken, and the user picks overwrite, skip or cancel. */
+interface MigrationNeedsConfirmation {
+  success: false;
+  reason: "needs_confirmation";
+  message: string;
+  needs_confirmation: true;
+  conflict_count?: number;
+  conflicts?: string[] | ConflictDetail[];
+}
+
+/** Some moves failed and the others were made; the move stays pending. */
+interface MigrationIncomplete {
+  success: false;
+  reason: "migration_incomplete";
+  message: string;
+  needs_confirmation?: undefined;
+  roms_moved: number;
+  bios_moved: number;
+  saves_moved: number;
+  missing_count: number;
+  errors: string[];
+}
+
+/** Any other refusal, in the shape every endpoint fails in. */
+interface MigrationRefused {
+  success: false;
+  reason: string;
+  message: string;
+  needs_confirmation?: undefined;
+}
+
+export type MigrationResult = MigrationDone | MigrationNeedsConfirmation | MigrationIncomplete | MigrationRefused;

@@ -3557,6 +3557,8 @@ describe("RomMPlaySection", () => {
       await setupCoreAction();
       vi.mocked(backend.setGameCore).mockResolvedValue({
         success: false,
+        reason: "core_unavailable",
+        message: "",
       });
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
@@ -3828,7 +3830,11 @@ describe("RomMPlaySection", () => {
 
     it("reset-item {success:false} → toasts result.message", async () => {
       await setupCoreAction();
-      vi.mocked(backend.clearGameCore).mockResolvedValue({ success: false, message: "clear failed" });
+      vi.mocked(backend.clearGameCore).mockResolvedValue({
+        success: false,
+        reason: "not_found",
+        message: "clear failed",
+      });
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       const coreItems = await openCoreMenuAndGetItems(testAppId);

@@ -142,7 +142,7 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId }) => {
     try {
       const result = await selectDisc(rid, data);
       await withPruneLease(
-        result.prune_lease_token,
+        result.success ? result.prune_lease_token : undefined,
         "DiscSelector",
         async (signal) => {
           if (result.success) {
