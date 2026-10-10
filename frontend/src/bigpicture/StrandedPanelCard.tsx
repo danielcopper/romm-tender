@@ -70,8 +70,9 @@ export const StrandedPanelCard: FC<{ compact?: boolean }> = ({ compact = false }
   const running = useAnyAppRunning();
   const installerStarted = useInstallerStarted();
   if (!answer) return null;
-  const runningLine =
-    running === false ? "" : running === true ? QUIT_LINE : statusUnreadSentence(running.statusUnread);
+  let runningLine = "";
+  if (running === true) runningLine = QUIT_LINE;
+  else if (running !== false) runningLine = statusUnreadSentence(running.statusUnread);
   const message = [installerStarted ? UPDATE_LINE : "", runningLine].filter(Boolean).join(" ");
   return <WarningCard title={strandedPanelSentence(answer)} message={message} compact={compact} />;
 };

@@ -144,7 +144,7 @@ function holds(entry: ListedApp): boolean {
 
 /** Diagnostic note for the list — every entry found as `appid:status` (`?` unreadable), or why none were. */
 function describeList(listed: ListedApp[], raw: unknown): string {
-  if (listed.length > 0) return `[${listed.map((e) => `${e.app.appid}:${e.status ?? "?"}`).join(",")}]`;
+  if (listed.length > 0) return "[" + listed.map((e) => `${e.app.appid}:${e.status ?? "?"}`).join(",") + "]";
   if (raw === null || raw === undefined) return "absent";
   return "empty";
 }
