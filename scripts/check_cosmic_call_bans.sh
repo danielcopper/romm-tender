@@ -144,7 +144,7 @@ check_patterns() {
         # The second grep strips lines where the match only appears inside
         # a ``...`` markdown span (docstring code reference).
         matches=$(
-            grep -rnE "$pattern" "$SERVICES_DIR" 2>/dev/null \
+            grep -rnE "$pattern" "$SERVICES_DIR" --include='*.py' 2>/dev/null \
                 | grep -vE "$DOCSTRING_BACKTICK_FILTER" \
                 || true
         )
