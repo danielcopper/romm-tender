@@ -2600,6 +2600,27 @@ class TestDiscardCandidate:
         assert refused.value.reason == "replace_failed"
         assert "already renamed" not in refused.value.message
 
+    async def test_a_save_carry_that_stops_partway_answers_what_it_left_and_removes_nothing(self, h):
+        self._stage(h)
+        h.store.files["/saves/snes/Game (U).srm"] = b"battery"
+        h.store.files["/states/Game (U).state"] = b"snapshot"
+        h.move.outcome = {
+            "moved": ["/saves/snes/Game.srm"],
+            "stranded": [],
+            "unmoved": ["/states/Game (U).state"],
+            "error": "could not move Game (U).state",
+        }
+
+        result = await h.service.check_download_target(_single_file_detail(), _NEW, replace=True, candidate_path=_OLD)
+
+        assert isinstance(result, AdoptionIncomplete)
+        assert result.reason == "rename_failed"
+        assert "could not move" not in result.message
+        assert result.renamed == ["Game.srm"]
+        assert result.still_under_old_name == ["Game (U).state"]
+        assert result.set_aside == []
+        assert h.store.files[_OLD] == b"user's own dump"
+
     async def test_a_taken_save_name_raises_the_same_collision_question(self, h):
         self._stage(h)
         h.store.files["/saves/snes/Game (U).srm"] = b"mine"
@@ -3124,6 +3145,21 @@ class TestAdoptCandidateCollisions:
         assert h.move.moves == []
         assert h.store.files[_OLD] == b"rom"
         assert h.store.files["/saves/snes/.romm-backup/Game.srm"] == b"the other version's"
+
+    async def test_a_replace_that_fails_before_setting_anything_aside_is_a_refusal(self, h):
+        self._stage(h)
+        h.quarantine.failures = {"/saves/snes/Game.srm"}
+        adopting = h.service.adopt_existing_rom(_ROM_ID, _OLD, "overwrite")
+
+        with pytest.raises(Refused) as refused:
+            await adopting
+
+        assert refused.value.reason == "replace_failed"
+        assert refused.value.message == (
+            "Could not replace Game.srm (staged quarantine failure for Game.srm). Nothing was moved."
+        )
+        assert h.quarantine.quarantined == []
+        assert h.move.moves == []
 
     async def test_an_unrecognised_answer_is_refused_rather_than_guessed(self, h):
         self._stage(h)
