@@ -137,8 +137,7 @@ class DiscService:
         """
         async with self._rules.hold("select_disc", update=True, migration=True, prune=True):
             result = await self._loop.run_in_executor(None, self._select_disc_io, rom_id, filename)
-            if result["launch_options"] is not None:
-                result["prune_lease_token"] = await self._rules.acquire_lease("disc_selection")
+            result["prune_lease_token"] = await self._rules.acquire_lease("disc_selection")
             return result
 
     def _select_disc_io(self, rom_id: int, filename: str | None) -> dict[str, Any]:
