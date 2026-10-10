@@ -8,10 +8,10 @@ keeping the copies under one root is what lets a single set of exclusions cover 
 [`CLAUDE.md`](../../CLAUDE.md).
 
 Everything here today is a third-party runtime dependency, imported as `from _vendor import <package>` — the zstd
-backport alone by name through `importlib`, so a copy that does not load costs the codec rather than the start — and
-only adapters import `_vendor.*`. They are vendored because Tender runs on the system Python, with no pip and no venv. A
-venv is tied to the Python minor version it was built with, so an OS update that moves the system Python to a new minor
-version would strand one; a pure-Python copy under the program's own code carries no such tie.
+backport alone by its dotted name through `importlib` ([backports](#backports)) — and only adapters import `_vendor.*`.
+They are vendored because Tender runs on the system Python, with no pip and no venv. A venv is tied to the Python minor
+version it was built with, so an OS update that moves the system Python to a new minor version would strand one; a
+pure-Python copy under the program's own code carries no such tie.
 [The runtime a vendored copy has to load in](#the-runtime-a-vendored-copy-has-to-load-in) states the limit that follows.
 The provenance entries below make updating any of them a deliberate diff rather than "diff and pray".
 
@@ -135,8 +135,9 @@ licence, and the update procedure below has to put it back by hand for exactly t
 ## backports
 
 `backports.zstd`, the published backport of Python 3.14's `compression.zstd`. The resolver needs a zstd codec for one
-read, EmuDeck's ES-DE catalogue sealed inside its AppImage; `adapters/atlas_zstd.py` hands this copy to it on an
-interpreter without the standard library's codec.
+read, EmuDeck's ES-DE catalogue sealed inside its AppImage; `adapters/atlas_zstd.py` hands this copy to it. Where it is
+registered and why, and what a copy that does not load costs, is
+[`docs/architecture/backend-architecture.md`](../../docs/architecture/backend-architecture.md#composition-root-bootstrap)'s.
 
 - **Upstream:** <https://github.com/rogdham/backports.zstd>, released on PyPI as `backports.zstd`
 - **Version:** 1.7.0 — PyPI's
@@ -194,7 +195,9 @@ the wheel, so where the compiled `_zstd` does not load there is no codec.
 
    `sed` reports nothing when a line does not match, so run `tests/test_vendored_backports_zstd.py` next: it names every
    absolute self-import the rule missed, and imports the copy where the interpreter can load it.
-4. Bump the **Version** bullet above, and the **Local patches** counts.
+4. Bump the **Version** bullet above and the **Local patches** counts, and the values
+   `tests/test_vendored_backports_zstd.py` holds the copy to: the version and the wheel digest it looks for in this
+   entry, and the extension module's file name, which carries the `cp313` tag.
 5. Regenerate the manifest from the patched tree with the command under [Manifests](#manifests), then re-run the gate:
    `python scripts/check_vendored_trees.py`.
 
@@ -211,11 +214,10 @@ device — when the backend starts, or the first time a question reaches the ass
 
 A compiled extension module built for one CPython minor version's ABI does not fit this model — a `cp313-cp313` wheel
 does not load under 3.14, so a copy vendored for today's system Python stops loading when an OS update moves it, the
-very event vendoring exists to survive. A stable-ABI (`abi3`) build is the exception. The one here is
-[`backports`](#backports), which ships per-version builds only (1.7.0: cp310–cp313, no abi3, no cp314): its `cp313` copy
-stops loading on the day the system Python reaches 3.14, which is also the day the standard library's `compression.zstd`
-takes its place. That is why it is registered only where `compression.zstd` does not import, and why a copy that does
-not load is no codec rather than a failed start (`adapters/atlas_zstd.py`).
+very event vendoring exists to survive. A stable-ABI (`abi3`) build is the exception. [`backports`](#backports) is a
+compiled copy without one — upstream ships per-version builds only (1.7.0: cp310–cp313, no abi3, no cp314) — so its
+`cp313` copy stops loading on the day the system Python reaches 3.14; how the wiring meets that is
+[`docs/architecture/backend-architecture.md`](../../docs/architecture/backend-architecture.md#composition-root-bootstrap)'s.
 
 Neither artifact can see any of this, and each says less than it looks like it does. The checksum gate says the copy is
 the bytes we pinned; it never imports anything. What says the copy imports is the test suite — most directly

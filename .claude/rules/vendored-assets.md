@@ -8,10 +8,11 @@ paths:
 
 **Vendored deps (`_vendor/`)**: Third-party runtime deps are vendored under `backend/_vendor/<package>/` (Tender runs on
 the system Python with no pip and no venv; why that rules a venv out, and the limit it sets for compiled extension
-modules, is [`_vendor/README.md`](../../backend/_vendor/README.md)'s) and imported as `from _vendor import <package>`.
-Only adapters import `_vendor.*`; services/domain/lib stay third-party-free (`domain-stdlib-only` contract in
-`.importlinter`). `_vendor/` is excluded from ruff, basedpyright, and Sonar. Every vendored package ships its upstream
-`LICENSE` and a provenance entry in [`_vendor/README.md`](../../backend/_vendor/README.md).
+modules, is [`_vendor/README.md`](../../backend/_vendor/README.md)'s) and imported as `from _vendor import <package>`
+(the zstd backport alone by its dotted name through `importlib`, in `adapters/atlas_zstd.py`). Only adapters import
+`_vendor.*`; services/domain/lib stay third-party-free (`domain-stdlib-only` contract in `.importlinter`). `_vendor/` is
+excluded from ruff, basedpyright, and Sonar. Every vendored package ships its upstream `LICENSE` and a provenance entry
+in [`_vendor/README.md`](../../backend/_vendor/README.md).
 
 **One manifest per tree.** `backend/_vendor/<package>/` is pinned by the `<package>.SHA256SUMS` beside it, and
 `scripts/check_vendored_trees.py` fails on a package directory that has none — the manifest is discovered, never named
