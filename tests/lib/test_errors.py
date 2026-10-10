@@ -1,3 +1,4 @@
+import logging
 import socket
 
 import pytest
@@ -25,6 +26,7 @@ from lib.errors import (
     VersionUnsupported,
     classify_error,
     error_response,
+    romm_error_log_level,
 )
 
 
@@ -308,6 +310,38 @@ class TestClassifyError:
         """RommSSLError should be classified as server_unreachable even though it's a RommApiError."""
         code, _ = classify_error(RommSSLError("cert fail"))
         assert code == "server_unreachable"
+
+
+class TestRommErrorLogLevel:
+    """A RomM error logs at info exactly where ``classify_error`` answers ``server_unreachable``."""
+
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            pytest.param(RommConnectionError("refused"), id="connection"),
+            pytest.param(RommTimeoutError("timed out"), id="timeout"),
+            pytest.param(RommSSLError("cert fail"), id="ssl"),
+            pytest.param(RommServerError("HTTP 503", status_code=503), id="server-error"),
+            pytest.param(RommApiError("unexpected"), id="generic"),
+        ],
+    )
+    def test_server_unreachable_logs_at_info(self, exc):
+        assert classify_error(exc)[0] == "server_unreachable"
+        assert romm_error_log_level(exc) == logging.INFO
+
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            pytest.param(RommNotFoundError("HTTP 404"), id="not-found"),
+            pytest.param(RommAuthError("401"), id="auth"),
+            pytest.param(RommForbiddenError("403"), id="forbidden"),
+            pytest.param(RommUnsupportedError("feature", "4.7.0"), id="unsupported"),
+            pytest.param(RommSyncDisabledError("disabled"), id="sync-disabled"),
+        ],
+    )
+    def test_every_other_reason_logs_at_warning(self, exc):
+        assert classify_error(exc)[0] != "server_unreachable"
+        assert romm_error_log_level(exc) == logging.WARNING
 
 
 class TestErrorResponse:
