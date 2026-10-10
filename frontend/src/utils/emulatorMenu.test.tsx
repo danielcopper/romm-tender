@@ -49,7 +49,7 @@ function baseConfig(overrides: Partial<EmulatorMenuConfig> = {}): EmulatorMenuCo
 
 describe("reasonCopy", () => {
   it("maps known reason slugs to distinct copy", () => {
-    expect(reasonCopy("inject")).toBe("needs setup files (launch via ES-DE once)");
+    expect(reasonCopy("inject")).toBe("Tender can't start this entry");
     expect(reasonCopy("not_installed")).toBe("emulator not installed");
     expect(reasonCopy("shortcut_script")).toBe("script/shortcut form");
   });
@@ -128,7 +128,7 @@ describe("buildEmulatorMenu", () => {
     expect(shortcut.onClick).toBeUndefined();
     const inject = its.find((i) => i.text.startsWith("Vita3K"))!;
     expect(inject.disabled).toBe(true);
-    expect(inject.text).toBe("Vita3K (Standalone) — needs setup files (launch via ES-DE once)");
+    expect(inject.text).toBe("Vita3K (Standalone) — Tender can't start this entry");
   });
 
   it("renders a not-installed standalone emulator as disabled with its reason copy", () => {

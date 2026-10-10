@@ -722,9 +722,9 @@ In **Library › Platforms**, a platform with more than one emulator shows a **c
 line — the same button a game's page carries, grey when the platform is on its default emulator and gold when you have
 picked another. It opens a menu listing every emulator ES-DE offers for that platform — both RetroArch cores and
 **standalone emulators** (e.g. PCSX2, RPCS3, Dolphin, PPSSPP). Some entries appear **disabled** with a short reason (for
-example "script/shortcut form" or "needs setup files (launch via ES-DE once)") when Tender can't launch them directly
-from Steam; those can't be picked. Picking an enabled emulator sets it as the default for all games on that platform. A
-"Switching cores may affect save compatibility" note is the first line of the menu.
+example "script/shortcut form" or "Tender can't start this entry") when Tender can't launch them directly from Steam;
+those can't be picked. Picking an enabled emulator sets it as the default for all games on that platform. A "Switching
+cores may affect save compatibility" note is the first line of the menu.
 
 1. Open **Library** from the main QAM page and move to the **Platforms** tab
 2. Move to the platform you want to change

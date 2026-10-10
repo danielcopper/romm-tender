@@ -18,7 +18,7 @@ import { emulatorDataReasonSentence } from "./emulatorSourceWording";
 export function reasonCopy(reason: string | null): string {
   switch (reason) {
     case "inject":
-      return "needs setup files (launch via ES-DE once)";
+      return "Tender can't start this entry";
     case "not_installed":
       return "emulator not installed";
     case "shortcut_script":

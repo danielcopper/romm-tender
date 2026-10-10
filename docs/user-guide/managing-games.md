@@ -13,7 +13,9 @@ When you open a RomM game in the Steam Library, you'll see the Tender panel belo
   game is active, when RomM has more than one (see below)
 - **Region / Languages** — attributes of the active version, shown in the Game Info tab when RomM has them (see below)
 - **BIOS status** — whether required BIOS files are present (see [BIOS Management](bios-management.md))
-- **Save sync status** — last sync time, conflict count, and playtime (see [Save Sync](save-sync.md))
+- **Save sync status** — on the **Saves** tab: when each save file last synced, and any conflict waiting for you (see
+  [Save Sync](save-sync.md))
+- **Playtime** — **Last Played** and **Playtime** cells next to the Play button
 - **Space required** — for a game that isn't downloaded yet, a "Space Required" cell next to the Play button shows how
   much disk space the download needs. It disappears once the game is installed (mirroring how Steam hides it for
   installed games); it's also omitted when RomM doesn't report the size.
@@ -445,10 +447,11 @@ extension, e.g. `Example Quest - Second Journey (USA).m3u/` or `Example Quest (U
 into a single game entry instead of showing a folder plus loose files.
 
 **Disc switching only applies to systems whose emulator supports it.** For the disc-swapping consoles — PS1, Saturn,
-Sega CD, PC Engine CD, Dreamcast, GameCube, Wii, and the like — a game-named `.m3u` playlist is generated so you can
-flip between discs in-game, and the folder is named after that playlist. Tender decides this by reading ES-DE's own
-per-system supported-extension list, so a game only ever gets an `.m3u` on a system where ES-DE (and the emulator behind
-it) actually understands one.
+Sega CD, PC Engine CD, Dreamcast, GameCube, Wii, and the like — a game with two or more `.cue`, `.chd` or `.iso` discs,
+or with one `.cue` disc, gets a game-named `.m3u` playlist so you can flip between discs in-game, and the folder is
+named after that playlist. Discs in any other format get no generated playlist, which includes GameCube and Wii games in
+`.rvz`, `.gcz`, `.ciso` or `.wbfs`. Tender decides this by reading ES-DE's own per-system supported-extension list, so a
+game only ever gets an `.m3u` on a system where ES-DE (and the emulator behind it) actually understands one.
 
 **Cartridge and folder systems get no playlist.** Switch (`.nsp`), Xbox 360 (`.iso`), and other systems with no disc
 concept collapse to their real game file instead — the folder is named after the cartridge/disc image (`<Game>.nsp/`,
@@ -496,9 +499,9 @@ picked.
 ### What "All discs" means
 
 On the **disc-swapping consoles** (PS1, Saturn, Sega CD, PC Engine CD, Dreamcast, GameCube, Wii, and the like) a
-multi-disc game gets a generated `.m3u` playlist, so the dropdown's default entry is **All discs (m3u)** — it launches
-through the playlist and lets you flip between discs **inside the emulator**, no relaunch needed. You can still pick a
-single disc from the same dropdown to jump straight to it.
+multi-disc game whose discs are `.cue`, `.chd` or `.iso` images gets a generated `.m3u` playlist, so the dropdown's
+default entry is **All discs (m3u)** — it launches through the playlist and lets you flip between discs **inside the
+emulator**, no relaunch needed. You can still pick a single disc from the same dropdown to jump straight to it.
 
 On systems with **no playlist concept**, there's no in-emulator disc switching, so the dropdown defaults to **Disc 1**
 and switching discs means picking a different disc here and relaunching. Either way, the picker works the same.

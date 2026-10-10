@@ -422,11 +422,13 @@ RetroDECK Paths**. Tender does not create the folder itself ([Save Sync](save-sy
 
 ### Server unreachable
 
-**Symptom**: Toast notifications say "RomM unreachable" or sync operations show in the Failed Syncs list.
+**Symptom**: The toast after a game exits says "Server offline — saves will sync next time", or a game's **Saves** tab
+shows "Server unreachable".
 
 **Fix**: Check your network connection and verify the RomM server is running. The **Connection** row on Tender's main
-QAM panel shows the live status (and names the problem when it can't connect). Failed syncs are queued and retried
-automatically when the server is reachable again.
+QAM panel shows the live status (and names the problem when it can't connect). A failed save sync is not queued: your
+local save stays as it is, and the next sync, before a game starts, after it exits or one you start yourself, carries it
+once the server answers. Playtime is queued separately and sent to RomM the next time a game starts or ends.
 
 ### Offline detection and recovery
 
@@ -517,8 +519,10 @@ nothing to sync.
 
 **Symptom**: Your save keeps reverting to an older version after syncing.
 
-**Fix**: Check your conflict resolution mode in **Save Sync** settings. If set to "Always Download", the server version
-always overwrites your local save. Switch to "Newest Wins" or "Ask Me" if you play on multiple devices.
+**Fix**: There is no conflict setting to change: Tender follows one automatic policy, described under
+[When saves conflict](save-sync.md#when-saves-conflict). It downloads the server's save over yours whenever your local
+save has not changed since the last sync, so a save that keeps reverting usually means another device uploaded a newer
+one to the same slot.
 
 Also make sure each person using RomM has their own account — shared accounts cause saves to overwrite each other.
 

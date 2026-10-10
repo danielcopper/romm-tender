@@ -828,11 +828,11 @@ names ([ADR-0042](docs/adr/0042-tender-takes-emulator-answers-starts-emulators-a
 ### Safely-bakeable
 
 An ES-DE `<command>` Tender can bake into a Steam shortcut's `-e` override: a real emulator invocation that **ends in
-`%ROM%`** and carries none of the forms the bake can't carry — no `%INJECT%` sidecar (that is _needs-setup_, not
-launchable from Steam until ES-DE has run it once), no `%ENABLESHORTCUTS%` / `%EMULATOR_OS-SHELL%` shortcut-script form,
-no embedded quoting (`"` or `\;`), no `%STARTDIR%` (RetroDECK's `run_game.sh` parses-but-drops it), and no placeholder
-outside the known whitelist. The classifier `domain/emulator_commands.py` decides this per command; anything not
-safely-bakeable is surfaced in the picker as **disabled** with a reason, never silently offered
+`%ROM%`** and carries none of the forms the bake can't carry — no `%INJECT%` form (that is _needs-setup_: the command
+injects a file's contents, and Tender cannot start it), no `%ENABLESHORTCUTS%` / `%EMULATOR_OS-SHELL%` shortcut-script
+form, no embedded quoting (`"` or `\;`), no `%STARTDIR%` (RetroDECK's `run_game.sh` parses-but-drops it), and no
+placeholder outside the known whitelist. The classifier `domain/emulator_commands.py` decides this per command; anything
+not safely-bakeable is surfaced in the picker as **disabled** with a reason, never silently offered
 ([ADR-0020](docs/adr/0020-live-es-systems-emulator-resolution.md)). The foil to **default emulator** (the first
 safely-bakeable command a system falls back to).
 
