@@ -15,12 +15,13 @@ from domain.adoption_rename import (
     SAVE,
     SAVESTATE,
     CompanionDir,
+    RenameCollisions,
     RenamePair,
-    collision_refusal,
     pairs_for_choice,
     rename_pairs,
     split_collisions,
 )
+from domain.refusal import NamedDomainRefused
 
 _OLD = "/roms/gba/Example Quest - Second Journey (U).zip"
 _NEW = "/roms/gba/Example Quest - Second Journey (USA).zip"
@@ -208,27 +209,27 @@ class TestPairsForChoice:
 
 
 class TestCollisionRefusal:
-    def test_the_refusal_carries_the_canonical_failure_shape(self) -> None:
-        refusal = collision_refusal((RenamePair("/saves/old.srm", "/saves/new.srm", SAVE),))
-        assert refusal["success"] is False
-        assert refusal["reason"] == "rename_collisions"
-        assert isinstance(refusal["message"], str)
-        assert refusal["message"]
-        assert "error" not in refusal
-        assert "error_code" not in refusal
+    def test_the_refusal_is_a_named_domain_refusal_with_its_message(self) -> None:
+        refusal = RenameCollisions((RenamePair("/saves/old.srm", "/saves/new.srm", SAVE),))
+        assert isinstance(refusal, NamedDomainRefused)
+        assert refusal.reason == "rename_collisions"
+        assert isinstance(refusal.message, str)
+        assert refusal.message
+        assert "error" not in refusal.details
+        assert "error_code" not in refusal.details
 
     def test_every_collision_is_listed_not_just_the_first(self) -> None:
-        refusal = collision_refusal(
+        refusal = RenameCollisions(
             (
                 RenamePair("/saves/a.srm", "/saves/new.srm", SAVE),
                 RenamePair("/states/a.state", "/states/new.state", SAVESTATE),
             )
         )
-        assert refusal["collisions"] == [
+        assert refusal.details["collisions"] == [
             {"name": "new.srm", "path": "/saves/new.srm", "kind": SAVE},
             {"name": "new.state", "path": "/states/new.state", "kind": SAVESTATE},
         ]
 
     def test_a_single_collision_is_named_in_the_message(self) -> None:
-        refusal = collision_refusal((RenamePair("/saves/a.srm", "/saves/new.srm", SAVE),))
-        assert "new.srm" in str(refusal["message"])
+        refusal = RenameCollisions((RenamePair("/saves/a.srm", "/saves/new.srm", SAVE),))
+        assert "new.srm" in str(refusal.message)

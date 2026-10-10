@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from domain.save_answer import SaveAnswer
     from domain.shortcut_data import EmulatorInvocation
     from domain.update_release import LatestRelease
+    from lib.partial_failure import PartialFailure
 
 
 class RomInstallRecorder(Protocol):
@@ -105,14 +106,28 @@ class DownloadTargetGateFn(Protocol):
     """Decide whether a download may write the content it has computed a path for.
 
     Returns ``None`` when nothing is in the way — the path is free and no file
-    elsewhere in the platform folder looks like this game, or the user chose to
-    replace what they were shown and it has been cleared — and a canonical
-    failure dict otherwise: the ``target_occupied`` refusal carrying both sides
-    of the comparison, one of the four the candidate search can return
-    (``adoption_candidates``, ``unusable_namesake``, ``candidate_vanished``), the
-    ``rename_collisions`` refusal from carrying a discarded candidate's saves, or
-    the failure of a removal the replace could not complete. Nothing is written
-    and no transfer starts on a non-``None`` answer.
+    elsewhere in the platform folder looks like this game, what is there is this
+    ROM's own install, or the user chose to replace what they were shown and it
+    has been cleared. Otherwise it raises one of these refusals:
+
+    - ``target_occupied``, carrying both sides of the comparison;
+    - one of the three the candidate search raises: ``adoption_candidates``,
+      ``unusable_namesake`` or ``candidate_vanished``;
+    - ``invalid_candidate``, for a *candidate_path* outside this game's
+      platform folder;
+    - RetroDECK's folder refusal (``FolderRefused``), where this system's ROM
+      folder may not be used;
+    - ``unsafe_replace_target``, for content to replace outside that folder;
+    - ``rename_collisions``, for names a discarded candidate's saves would take
+      that *collision_choice* does not answer;
+    - ``replace_failed`` or ``rename_failed``, for a carry of those saves that
+      stopped before it renamed or set aside anything;
+    - ``replace_failed``, for a removal the replace could not complete with no
+      save carried before it.
+
+    Where that carry, or the removal after it, stopped with files already
+    renamed or set aside, it returns the partial failure naming them instead.
+    No transfer starts unless it returns ``None``.
 
     *candidate_path* names the entry the user was shown when it sat elsewhere in
     the folder under another name; with *replace* it is removed and its saves
@@ -144,7 +159,7 @@ class DownloadTargetGateFn(Protocol):
         candidate_path: str | None = None,
         collision_choice: str | None = None,
         page_saw_candidate: bool = False,
-    ) -> dict[str, Any] | None: ...
+    ) -> PartialFailure | None: ...
 
 
 class AdoptionCandidateProbeFn(Protocol):

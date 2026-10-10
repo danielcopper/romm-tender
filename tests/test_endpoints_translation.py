@@ -34,9 +34,11 @@ from _factories import (
 )
 from bootstrap import ServicesBundle
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
+from fakes.fake_adoption_move import FakeAdoptionMoveStore
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
 from fakes.fake_cover_art_file_store import FakeCoverArtFileStore
 from fakes.fake_disc_resolver import FakeDiscResolver
+from fakes.fake_download_file_store import FakeDownloadFileStore
 from fakes.fake_emulator_sources import FakeEmulatorSources
 from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_firmware_file_store import FakeFirmwareFileStore
@@ -55,6 +57,7 @@ from fakes.fake_rom_file_store import FakeRomFileStore
 from fakes.fake_rom_launch_path import FakeRomLaunchPathReader
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
+from fakes.fake_save_quarantine import FakeSaveQuarantine
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
 from fakes.fake_steam_interface import FakeSteamInterface
@@ -99,12 +102,15 @@ from main import Endpoints
 from services.artwork import ArtworkService, ArtworkServiceConfig
 from services.connection import ConnectionService, ConnectionServiceConfig
 from services.cores import CoreService, CoreServiceConfig
+from services.downloads import DownloadService, DownloadServiceConfig
 from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
 from services.playtime import PlaytimeService, PlaytimeServiceConfig
 from services.prune import PruneService, PruneServiceConfig
+from services.rom_adoption import RomAdoptionService, RomAdoptionServiceConfig
+from services.rom_install_recorder import RomInstallRecorder, RomInstallRecorderConfig
 from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
 from services.update_install import UpdateInstallService, UpdateInstallServiceConfig
@@ -1885,4 +1891,273 @@ class TestTheHomeMigrationOnTheWire:
             "saves_moved": 0,
             "missing_count": 0,
             "errors": ["bad.z64: simulated move failure: /old/roms/n64/bad.z64"],
+        }
+
+
+_ADOPTED_ROM_ID = 42
+
+
+@dataclasses.dataclass
+class _AdoptionWorld:
+    """The disk, RomM and the library the adoption cases stage and read back."""
+
+    store: FakeDownloadFileStore = dataclasses.field(default_factory=FakeDownloadFileStore)
+    romm_api: FakeRommApi = dataclasses.field(default_factory=FakeRommApi)
+    uow: FakeUnitOfWork = dataclasses.field(default_factory=FakeUnitOfWork)
+    system_extensions: dict[str, frozenset[str]] = dataclasses.field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.move = FakeAdoptionMoveStore(self.store)
+
+    def stage_rom(self, *, fs_name: str = "Game.sfc", size: int = 10) -> None:
+        """The ROM's server detail, and its ``roms`` row."""
+        self.romm_api.roms[_ADOPTED_ROM_ID] = {
+            "id": _ADOPTED_ROM_ID,
+            "name": "Game",
+            "platform_slug": "snes",
+            "fs_name": fs_name,
+            "fs_size_bytes": size,
+        }
+        with self.uow:
+            self.uow.roms.save(
+                Rom.synced(
+                    rom_id=_ADOPTED_ROM_ID,
+                    platform_slug="snes",
+                    name="Game",
+                    fs_name="Game.sfc",
+                    shortcut_app_id=1042,
+                    synced_at="2026-01-01T00:00:00+00:00",
+                )
+            )
+
+
+async def _supersede_nothing(rom_id: int) -> None:
+    return None
+
+
+async def _remove_nothing(rom_id: int) -> dict[str, Any]:
+    return {"success": True}
+
+
+def _dispatcher_over_adoption(world: _AdoptionWorld) -> CallDispatcher:
+    """The real dispatcher over ``Endpoints`` whose downloads and adoptions are the real services over fakes.
+
+    The download's gate is the adoption service's own, as the composition root
+    wires it. RetroDECK's ROM folder is ``/roms``, its saves ``/saves``.
+    """
+    loop = asyncio.get_running_loop()
+    folders = FakeRetroDeckFolders(roms="/roms", saves="/saves")
+    platform_systems = FakePlatformSystems()
+    uow_factory = FakeUnitOfWorkFactory(world.uow)
+    recorder = RomInstallRecorder(
+        config=RomInstallRecorderConfig(
+            logger=LOGGER,
+            clock=FakeClock(),
+            uow_factory=uow_factory,
+            system_extensions=lambda system_name, reading=None: frozenset(),
+            active_core=FakeActiveCoreResolver(default=(None, None)),
+            disc_resolver=FakeDiscResolver(),
+        )
+    )
+    adoption = RomAdoptionService(
+        config=RomAdoptionServiceConfig(
+            romm_api=world.romm_api,
+            download_file_store=world.store,
+            adoption_move=world.move,
+            quarantine_save=FakeSaveQuarantine(world.store),
+            platform_systems=platform_systems,
+            retrodeck_folders=folders,
+            install_recorder=recorder,
+            m3u_support=lambda system_name: True,
+            system_extensions=lambda system_name, reading=None: world.system_extensions.get(system_name, frozenset()),
+            system_known=lambda system_name: None,
+            save_locations=FakeSaveLocationReader(saves_root="/saves", states_root="/states"),
+            active_core=FakeActiveCoreResolver(default=(None, None)),
+            sibling_supersede=lambda: _supersede_nothing,
+            uow_factory=uow_factory,
+            loop=loop,
+            logger=LOGGER,
+            log_debug=lambda msg: None,
+            emit=FakeEventSink().emit,
+            clock=FakeClock(),
+            conflict_rules=_make_conflict_rules(),
+        )
+    )
+    downloads = DownloadService(
+        config=DownloadServiceConfig(
+            romm_api=world.romm_api,
+            download_file_store=world.store,
+            platform_systems=platform_systems,
+            loop=loop,
+            logger=LOGGER,
+            emit=FakeEventSink().emit,
+            clock=FakeClock(),
+            sleeper=FakeSleeper(),
+            retrodeck_folders=folders,
+            install_recorder=recorder,
+            target_gate=adoption.check_download_target,
+            m3u_support=lambda system_name: True,
+            uow_factory=uow_factory,
+            rom_remover=lambda: _remove_nothing,
+            conflict_rules=_make_conflict_rules(),
+        )
+    )
+    services = _make_services_bundle(download_service=downloads, rom_adoption_service=adoption)
+    return CallDispatcher(Endpoints(_make_application(services), HostStatus()), LOGGER)
+
+
+async def _answer(dispatcher: CallDispatcher, route: str, args: list[Any]) -> Any:
+    message = json.loads(await dispatcher.dispatch(1, route, args))
+    assert message["type"] == TYPE_REPLY
+    return message["result"]
+
+
+class TestTheAdoptionRefusalsOnTheWire:
+    """The download gate's and the adoption's refusals, and an adoption's partial result, as the wire carries them.
+
+    Each answer is pinned whole.
+    """
+
+    async def test_an_occupied_target_answers_both_sides_of_the_comparison(self):
+        world = _AdoptionWorld()
+        world.stage_rom()
+        world.store.files["/roms/snes/Game.sfc"] = b"x" * 25
+        world.store.mtimes["/roms/snes/Game.sfc"] = 1_700_000_000.0
+
+        result = await _answer(_dispatcher_over_adoption(world), "start_download", [_ADOPTED_ROM_ID])
+
+        assert result == {
+            "success": False,
+            "reason": "target_occupied",
+            "message": "A file named 'Game.sfc' is already in place",
+            "existing": {
+                "name": "Game.sfc",
+                "path": "/roms/snes/Game.sfc",
+                "kind": "file",
+                "size_bytes": 25,
+                "modified_at": 1700000000.0,
+            },
+            "incoming": {"name": "Game.sfc", "size_bytes": 10},
+            "sizes_match": False,
+            "adoptable": True,
+        }
+
+    async def test_the_same_game_under_another_name_answers_the_candidates(self):
+        world = _AdoptionWorld(system_extensions={"snes": frozenset({".sfc"})})
+        world.stage_rom(fs_name="Game (USA).sfc")
+        world.store.files["/roms/snes/Game (U).sfc"] = b"x" * 10
+        world.store.mtimes["/roms/snes/Game (U).sfc"] = 1_700_000_000.0
+
+        result = await _answer(_dispatcher_over_adoption(world), "start_download", [_ADOPTED_ROM_ID])
+
+        assert result == {
+            "success": False,
+            "reason": "adoption_candidates",
+            "message": "'Game (U).sfc' is already on this device",
+            "incoming": {"name": "Game (USA).sfc", "size_bytes": 10},
+            "candidates": [
+                {
+                    "name": "Game (U).sfc",
+                    "path": "/roms/snes/Game (U).sfc",
+                    "is_dir": False,
+                    "size_bytes": 10,
+                    "modified_at": 1700000000.0,
+                    "evidence": "size",
+                    "detail": "Exactly the size the server would send",
+                }
+            ],
+            "truncated": False,
+        }
+
+    async def test_a_namesake_of_the_other_shape_answers_what_it_is(self):
+        world = _AdoptionWorld(system_extensions={"snes": frozenset({".sfc"})})
+        world.stage_rom(fs_name="Game (USA).sfc")
+        world.store.dirs.add("/roms/snes/Game (U)")
+        world.store.files["/roms/snes/Game (U)/rom.sfc"] = b"mine"
+
+        result = await _answer(_dispatcher_over_adoption(world), "start_download", [_ADOPTED_ROM_ID])
+
+        assert result == {
+            "success": False,
+            "reason": "unusable_namesake",
+            "message": (
+                "'Game (U)' has this game's name but is a folder, and the server sends this game as a single file"
+            ),
+            "incoming": {"name": "Game (USA).sfc", "size_bytes": 10},
+            "existing": [{"name": "Game (U)", "path": "/roms/snes/Game (U)", "kind": "dir"}],
+            "served_is_dir": False,
+            "truncated": False,
+        }
+
+    async def test_a_copy_only_the_page_saw_answers_the_backstop(self):
+        world = _AdoptionWorld()
+        world.stage_rom(fs_name="Game (USA).sfc")
+
+        result = await _answer(
+            _dispatcher_over_adoption(world), "start_download", [_ADOPTED_ROM_ID, False, None, None, True]
+        )
+
+        assert result == {
+            "success": False,
+            "reason": "candidate_vanished",
+            "message": "What was found on this device is no longer there, or can no longer be matched to this game",
+            "incoming": {"name": "Game (USA).sfc", "size_bytes": 10},
+        }
+
+    async def test_a_taken_save_name_answers_every_collision(self):
+        world = _AdoptionWorld()
+        world.stage_rom()
+        world.store.files["/roms/snes/Game (U).sfc"] = b"rom"
+        world.store.files["/saves/snes/Game (U).srm"] = b"mine"
+        world.store.files["/saves/snes/Game.srm"] = b"the other version's"
+
+        result = await _answer(
+            _dispatcher_over_adoption(world), "adopt_existing_rom", [_ADOPTED_ROM_ID, "/roms/snes/Game (U).sfc", None]
+        )
+
+        assert result == {
+            "success": False,
+            "reason": "rename_collisions",
+            "message": "'Game.srm' already exists",
+            "collisions": [{"name": "Game.srm", "path": "/saves/snes/Game.srm", "kind": "save"}],
+        }
+
+    async def test_a_rename_that_stopped_partway_answers_what_it_left_where(self):
+        world = _AdoptionWorld()
+        world.stage_rom()
+        world.store.files["/roms/snes/Game (U).sfc"] = b"rom"
+        world.store.files["/saves/snes/Game (U).srm"] = b"srm"
+        world.move.outcome = {
+            "moved": ["/roms/snes/Game.sfc"],
+            "stranded": [],
+            "unmoved": ["/saves/snes/Game (U).srm"],
+            "error": "could not move Game (U).srm",
+        }
+
+        result = await _answer(
+            _dispatcher_over_adoption(world), "adopt_existing_rom", [_ADOPTED_ROM_ID, "/roms/snes/Game (U).sfc", None]
+        )
+
+        assert result == {
+            "success": False,
+            "reason": "rename_failed",
+            "message": (
+                "Could not rename this game's files. Still under the old name: Game (U).srm. "
+                "These are at their new names: Game.sfc."
+            ),
+            "renamed": ["Game.sfc"],
+            "still_under_old_name": ["Game (U).srm"],
+            "set_aside": [],
+        }
+
+    async def test_a_romm_error_fetching_the_rom_answers_the_translator_s_verdict(self):
+        world = _AdoptionWorld()
+        world.romm_api.fail_on_next(RommConnectionError("no route to host"))
+
+        result = await _answer(_dispatcher_over_adoption(world), "adopt_existing_rom", [_ADOPTED_ROM_ID])
+
+        assert result == {
+            "success": False,
+            "reason": "server_unreachable",
+            "message": "Server unreachable — check your URL and ensure RomM is running",
         }

@@ -201,20 +201,41 @@ export interface RenameCollisionsResult {
 /** The user's one answer to the whole colliding set. */
 export type CollisionChoice = "overwrite" | "keep";
 
-/** Outcome of `adopt_existing_rom` — shaped like a completed download's bake. */
-export interface AdoptResult {
-  success: boolean;
+/** A completed adoption — shaped like a completed download's bake. */
+interface AdoptDone {
+  success: true;
   message: string;
-  reason?: string;
   file_path?: string;
   rom_dir?: string | null;
   /** Bound Steam `app_id`, or `null` when the ROM has no shortcut yet. */
   app_id?: number | null;
   launch_options?: string;
   prune_lease_token?: string;
-  /** Present only on a `rename_collisions` refusal. */
-  collisions?: RenameCollision[];
 }
+
+/**
+ * An adoption that stopped after it had already renamed files or set them
+ * aside: what is now at its new name, what a move left under the old one, and
+ * what was moved to `.romm-backup` to make room and is still there.
+ */
+interface AdoptionIncomplete {
+  success: false;
+  reason: "rename_failed" | "replace_failed";
+  message: string;
+  renamed: string[];
+  still_under_old_name: string[];
+  set_aside: string[];
+}
+
+/** Any other refusal, in the shape every endpoint fails in. */
+interface AdoptRefused {
+  success: false;
+  reason: string;
+  message: string;
+}
+
+/** Outcome of `adopt_existing_rom`. */
+export type AdoptResult = AdoptDone | RenameCollisionsResult | AdoptionIncomplete | AdoptRefused;
 
 /**
  * Outcome of `verify_existing_content`. A status union rather than a boolean:

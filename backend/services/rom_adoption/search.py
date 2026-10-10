@@ -2,7 +2,7 @@
 
 Owns both halves of the question and the order the answers come in. The
 game-detail page asks the cheap half (a name, a boolean); the Download click
-asks the whole of it and turns the answer into the refusal the dialog renders.
+asks the whole of it and raises the answer as the refusal the dialog renders.
 
 The two halves read the same folder from different knowledge, deliberately: the
 page holds a ``roms`` row and must stay network-free, while the click path holds
@@ -26,14 +26,14 @@ from domain.rom_adoption import is_archive_name, server_manifest
 from domain.rom_candidates import (
     DIR,
     FILE,
+    AdoptionCandidates,
+    CandidateVanished,
     LocalEntry,
     LocalName,
-    candidates_refusal,
+    UnusableNamesake,
     matching_entries,
     normalize_rom_name,
     rank_candidates,
-    unusable_namesake_refusal,
-    vanished_candidate_refusal,
 )
 from domain.rom_files import is_multi_file_download, resolve_local_file_name
 
@@ -114,15 +114,13 @@ class CandidateSearch:
 
     # ── The Download click's half ───────────────────────────────────
 
-    def refusal(
-        self, rom_detail: dict[str, Any], checked_path: str, *, page_saw_candidate: bool
-    ) -> dict[str, Any] | None:
-        """Everything this search can refuse a download for, most specific first.
+    def refuse_if_found(self, rom_detail: dict[str, Any], checked_path: str, *, page_saw_candidate: bool) -> None:
+        """Raise the most specific refusal this search finds for a download.
 
-        ``None`` means proceed, which is every ordinary download. Three answers,
-        and the order is the point — a user meets the specific explanation
-        whenever one exists, and the generic one only when nothing better is
-        known:
+        Returning means proceed, which is every ordinary download. Three
+        refusals, and the order is the point — a user meets the specific
+        explanation whenever one exists, and the generic one only when nothing
+        better is known:
 
         1. ``adoption_candidates`` — entries the dialog can offer: the shape the
            server serves, and a kind an install row may point at.
@@ -136,7 +134,7 @@ class CandidateSearch:
         platform = self._platform_systems.platform_system(rom_detail.get("platform_slug", ""), source=RETRODECK)
         system = platform.taken
         if system is None:
-            return None
+            return
         incoming_name = os.path.basename(checked_path)
         incoming_size = rom_detail.get("fs_size_bytes", 0)
         wanted = self._wanted_names(rom_detail, incoming_name)
@@ -157,12 +155,12 @@ class CandidateSearch:
         if matches.offerable:
             candidates, truncated = self._rank(matches.offerable, rom_detail)
             self._logger.info(f"Found {len(candidates)} adoption candidate(s) for rom {rom_id}")
-            return candidates_refusal(
+            raise AdoptionCandidates(
                 candidates, truncated=truncated, incoming_name=incoming_name, incoming_size=incoming_size
             )
         if matches.unusable:
             self._logger.info(f"Refusing rom {rom_id}: {len(matches.unusable)} same-named entr(ies) cannot be adopted")
-            return unusable_namesake_refusal(
+            raise UnusableNamesake(
                 matches.unusable,
                 served_dir=served_dir,
                 incoming_name=incoming_name,
@@ -170,8 +168,7 @@ class CandidateSearch:
             )
         if page_saw_candidate:
             self._logger.info(f"Refusing rom {rom_id}: the page found a copy this search cannot account for")
-            return vanished_candidate_refusal(incoming_name=incoming_name, incoming_size=incoming_size)
-        return None
+            raise CandidateVanished(incoming_name=incoming_name, incoming_size=incoming_size)
 
     def _wanted_names(self, rom_detail: dict[str, Any], incoming_name: str) -> frozenset[str]:
         """Every normalized name this ROM may be on disk under.

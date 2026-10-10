@@ -33,6 +33,7 @@ from adapters.rom_files import RomFileAdapter
 from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused, finding_refusal, switched_off
 from domain.rom import Rom
+from domain.rom_adoption import TargetOccupied
 from domain.rom_files import TMP_EXT, ZIP_TMP_EXT
 from domain.rom_install import RomInstall
 from domain.version_metadata import VersionMetadata
@@ -41,6 +42,7 @@ from lib.prune_conflicts import PruneConflicts
 from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
 from services.downloads import DownloadService, DownloadServiceConfig, _DownloadControl
 from services.rom_adoption import RomAdoptionService, RomAdoptionServiceConfig
+from services.rom_adoption.renamer import AdoptionIncomplete
 from services.rom_install_recorder import RomInstallRecorder, RomInstallRecorderConfig
 from services.rom_removal import RomRemovalService, RomRemovalServiceConfig, UninstallIncomplete
 
@@ -681,13 +683,15 @@ class TestOccupiedTargetPreFlight:
         target = os.path.join(self._roms_path(downloads, "n64"), "game1.z64")
         self._stage(downloads, _SINGLE_DETAIL, occupied_path=target)
 
-        result = await downloads.service.start_download(1)
+        starting = downloads.service.start_download(1)
 
-        assert result["success"] is False
-        assert result["reason"] == "target_occupied"
-        assert result["existing"]["path"] == target
-        assert result["incoming"] == {"name": "game1.z64", "size_bytes": 1024}
-        assert result["sizes_match"] is False
+        with pytest.raises(TargetOccupied) as refused:
+            await starting
+
+        assert refused.value.reason == "target_occupied"
+        assert refused.value.details["existing"]["path"] == target
+        assert refused.value.details["incoming"] == {"name": "game1.z64", "size_bytes": 1024}
+        assert refused.value.details["sizes_match"] is False
 
     @pytest.mark.asyncio
     async def test_a_refusal_starts_nothing_and_releases_the_claim(self, downloads):
@@ -695,8 +699,10 @@ class TestOccupiedTargetPreFlight:
         store = self._stage(downloads, _SINGLE_DETAIL, occupied_path=target)
         made_dirs = []
         store.make_dirs = made_dirs.append
+        starting = downloads.service.start_download(1)
 
-        await downloads.service.start_download(1)
+        with pytest.raises(TargetOccupied):
+            await starting
 
         assert made_dirs == []
         assert downloads.service._download_queue == {}
@@ -708,12 +714,15 @@ class TestOccupiedTargetPreFlight:
         extract_dir = os.path.join(self._roms_path(downloads, "psx"), "Game 1")
         self._stage(downloads, _MULTI_DETAIL, occupied_path=extract_dir, is_dir=True, size=2048)
 
-        result = await downloads.service.start_download(1)
+        starting = downloads.service.start_download(1)
 
-        assert result["reason"] == "target_occupied"
-        assert result["existing"]["path"] == extract_dir
-        assert result["existing"]["kind"] == "dir"
-        assert result["sizes_match"] is True
+        with pytest.raises(TargetOccupied) as refused:
+            await starting
+
+        assert refused.value.reason == "target_occupied"
+        assert refused.value.details["existing"]["path"] == extract_dir
+        assert refused.value.details["existing"]["kind"] == "dir"
+        assert refused.value.details["sizes_match"] is True
 
     @pytest.mark.asyncio
     async def test_a_free_target_proceeds(self, downloads):
@@ -761,10 +770,36 @@ class TestOccupiedTargetPreFlight:
 
         store.remove_tree = _boom
 
+        starting = downloads.service.start_download(1, True)
+
+        with pytest.raises(Refused) as refused:
+            await starting
+
+        assert refused.value.reason == "replace_failed"
+        assert downloads.service.active_download_rom_ids() == set()
+
+    @pytest.mark.asyncio
+    async def test_a_partial_answer_is_the_answer_and_releases_the_claim(self, downloads):
+        # Download Instead's removal failed after the candidate's saves were
+        # carried: the gate answers what it already did, and nothing downloads.
+        stopped = AdoptionIncomplete(
+            reason="replace_failed",
+            message="Could not remove the existing files — download aborted",
+            renamed=["Game.srm"],
+            still_under_old_name=[],
+            set_aside=[],
+        )
+
+        async def gate(rom_detail, checked_path, *, replace, resume=False, **answer):
+            return stopped
+
+        downloads.service._target_gate = gate
+        started = _stage_download_prologue(downloads)
+
         result = await downloads.service.start_download(1, True)
 
-        assert result["success"] is False
-        assert result["reason"] == "replace_failed"
+        assert result is stopped
+        assert started == []
         assert downloads.service.active_download_rom_ids() == set()
 
     @pytest.mark.asyncio
@@ -804,9 +839,12 @@ class TestOccupiedTargetPreFlight:
         downloads.service._loop.run_in_executor = _hops_answering(_SINGLE_DETAIL)
         downloads.service._loop.create_task = MagicMock(side_effect=lambda coro: (coro.close(), MagicMock())[1])
 
-        result = await downloads.service.start_download(1)
+        starting = downloads.service.start_download(1)
 
-        assert result["reason"] == "target_occupied"
+        with pytest.raises(TargetOccupied) as refused:
+            await starting
+
+        assert refused.value.reason == "target_occupied"
         assert sibling_file.read_bytes() == b"the other version"
         assert downloads.uow.rom_installs.get(2) is not None
 
@@ -869,9 +907,12 @@ class TestResumingAReplaceDownload:
         self._stage(downloads, _SINGLE_DETAIL, occupied_path=target)
         downloads.service._download_queue[1] = {"rom_id": 1, "status": "paused"}
 
-        result = await downloads.service.resume_download(1)
+        resuming = downloads.service.resume_download(1)
 
-        assert result["reason"] == "target_occupied"
+        with pytest.raises(TargetOccupied) as refused:
+            await resuming
+
+        assert refused.value.reason == "target_occupied"
 
     @pytest.mark.asyncio
     async def test_a_multi_file_replace_answer_is_spent_and_not_carried(self, downloads):
@@ -887,9 +928,12 @@ class TestResumingAReplaceDownload:
         removed: list[str] = []
         store.remove_tree = removed.append
 
-        result = await downloads.service.resume_download(1)
+        resuming = downloads.service.resume_download(1)
 
-        assert result["reason"] == "target_occupied"
+        with pytest.raises(TargetOccupied) as refused:
+            await resuming
+
+        assert refused.value.reason == "target_occupied"
         assert removed == []
 
     @pytest.mark.asyncio
@@ -6241,8 +6285,8 @@ class TestResumeSupersede:
         async def gate(rom_detail, checked_path, *, replace, resume=False, **answer):
             seen.append(resume)
             if resume:
-                return None
-            return {"success": False, "reason": "adoption_candidates", "message": "already on this device"}
+                return
+            raise Refused("adoption_candidates", "already on this device")
 
         downloads.service._target_gate = gate
         downloads.service._download_queue[1] = {"rom_id": 1, "status": "paused", "resumable": True}
@@ -6260,15 +6304,17 @@ class TestResumeSupersede:
         # still refused by the same gate.
         async def gate(rom_detail, checked_path, *, replace, resume=False, **answer):
             if resume:
-                return None
-            return {"success": False, "reason": "adoption_candidates", "message": "already on this device"}
+                return
+            raise Refused("adoption_candidates", "already on this device")
 
         downloads.service._target_gate = gate
         started = _stage_download_prologue(downloads)
+        starting = downloads.service.start_download(1, False)
 
-        result = await downloads.service.start_download(1, False)
+        with pytest.raises(Refused) as refused:
+            await starting
 
-        assert result["reason"] == "adoption_candidates"
+        assert refused.value.reason == "adoption_candidates"
         assert started == []
 
     @pytest.mark.asyncio

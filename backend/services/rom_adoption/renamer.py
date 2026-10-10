@@ -7,15 +7,17 @@ deletes the ROM and carries only the saves. Same plan, same collision question,
 same answer applied to the same whole set — which is why it is one component and
 not a rule copied into each exit.
 
-Nothing here decides *whether* to act. The service owns the dialog, the refusals
-and the ordering; this owns what a rename consists of and how far it got.
+Nothing here decides *whether* to act. The service owns the dialog, the
+validation before anything moves and the ordering; this owns what a rename
+consists of, the collision question, and how far a rename got —
+:meth:`AdoptionRenamer.move_planned` states what it raises and what it answers.
 """
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from domain.adoption_rename import (
     OVERWRITE,
@@ -23,14 +25,16 @@ from domain.adoption_rename import (
     SAVE,
     SAVESTATE,
     CompanionDir,
+    RenameCollisions,
     RenamePair,
-    collision_refusal,
     pairs_for_choice,
     rename_pairs,
     split_collisions,
 )
 from domain.rom_files import detect_launch_file
 from domain.savestate_location import NoSavestates, SavestateLocation
+from lib.errors import Refused
+from lib.partial_failure import PartialFailure
 
 if TYPE_CHECKING:
     import logging
@@ -56,6 +60,21 @@ def _travels_with(rom_source: str, directory: str) -> bool:
     of the ROM's own move, so pairing them up would move them twice.
     """
     return directory == rom_source or directory.startswith(rom_source + os.sep)
+
+
+@dataclass(frozen=True)
+class AdoptionIncomplete(PartialFailure):
+    """An adoption step that stopped after it had already renamed or set aside files.
+
+    ``renamed`` names the files now at their new names, ``still_under_old_name``
+    those a move attempted and left where they were, and ``set_aside`` those
+    moved to ``.romm-backup`` to make room and still there. A list is empty where
+    the step left nothing of its kind.
+    """
+
+    renamed: list[str]
+    still_under_old_name: list[str]
+    set_aside: list[str]
 
 
 @dataclass(frozen=True)
@@ -97,30 +116,39 @@ class AdoptionRenamer:
 
     def carry_to_canonical(
         self, rom_id: int, target: Target, source_path: str, collision_choice
-    ) -> dict[str, Any] | None:
+    ) -> AdoptionIncomplete | None:
         """Move the candidate, and everything RetroArch named after it, into place.
 
-        ``None`` means every file arrived. The whole plan is computed and every
-        target checked **before** the first file moves: renaming as you go and
-        asking at the first collision would leave half the set moved when the
-        question appears.
+        ``None`` means every file arrived; :meth:`move_planned` states the rest.
+        The whole plan is computed and every target checked **before** the first
+        file moves: renaming as you go and asking at the first collision would
+        leave half the set moved when the question appears.
         """
-        refusal, _carried = self.move_planned(self.rename_plan(rom_id, target, source_path), collision_choice)
-        return refusal
+        stopped, _carried, _set_aside = self.move_planned(
+            self.rename_plan(rom_id, target, source_path), collision_choice
+        )
+        return stopped
 
     def move_planned(
         self, pairs: tuple[RenamePair, ...], collision_choice
-    ) -> tuple[dict[str, Any] | None, tuple[RenamePair, ...]]:
+    ) -> tuple[AdoptionIncomplete | None, tuple[RenamePair, ...], tuple[str, ...]]:
         """Ask about every taken name, then carry the pairs the answer allows.
 
         Shared by both exits of the adopt dialog, so a name already taken raises
         the same question either way, with the same answer applied to the same
         whole set, and neither exit can acquire its own collision rule.
 
-        Returns ``(refusal, carried)``. A ``None`` refusal means every file the
-        answer allowed to move arrived; *carried* is which those were, so a caller
-        whose **next** step can fail is able to say what this one already did
-        rather than reporting a clean abort over files that have moved.
+        Raises :class:`RenameCollisions` for taken names *collision_choice* does
+        not answer; raises ``Refused`` with ``replace_failed`` for an Overwrite
+        that stopped before it set anything aside or a non-file it cannot replace,
+        and with ``rename_failed`` for a move that failed with nothing renamed or
+        set aside. Otherwise returns ``(stopped, carried, set_aside)``: a ``None``
+        *stopped* means every file the answer allowed to move arrived, and
+        :class:`AdoptionIncomplete` names what a step that stopped partway left
+        behind. *carried* is which files arrived and *set_aside* which an
+        Overwrite moved to ``.romm-backup``, so a caller whose **next** step can
+        fail is able to say what this one already did rather than reporting a
+        clean abort over files that have moved.
         """
         occupied = frozenset(pair.target for pair in pairs if self._adoption_move.exists(pair.target))
         clear, colliding = split_collisions(pairs, occupied)
@@ -130,16 +158,16 @@ class AdoptionRenamer:
             choice = str(collision_choice or "")
             chosen = pairs_for_choice(clear, colliding, choice)
             if chosen is None:
-                return (collision_refusal(colliding), ())
+                raise RenameCollisions(colliding)
             if choice == OVERWRITE:
-                refusal, quarantined = self._replace_occupied(colliding)
-                if refusal is not None:
-                    return (refusal, ())
+                stopped, quarantined = self._replace_occupied(colliding)
+                if stopped is not None:
+                    return (stopped, (), quarantined)
             to_move = chosen
         outcome = self._adoption_move.move_pairs(tuple((pair.source, pair.target) for pair in to_move))
-        refusal = self._report_move(outcome, quarantined)
+        stopped = self._report_move(outcome, quarantined)
         moved = frozenset(outcome["moved"])
-        return (refusal, tuple(pair for pair in to_move if pair.target in moved))
+        return (stopped, tuple(pair for pair in to_move if pair.target in moved), quarantined)
 
     def discarded_save_pairs(self, rom_id: int, target: Target, source_path: str) -> tuple[RenamePair, ...]:
         """The save and savestate pairs a discarded candidate leaves behind, ROM excluded.
@@ -180,14 +208,14 @@ class AdoptionRenamer:
             companions=self._companions(rom_id, target, source_path, launch_source, launch_target),
         )
 
-    def _replace_occupied(self, colliding: tuple[RenamePair, ...]) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
+    def _replace_occupied(self, colliding: tuple[RenamePair, ...]) -> tuple[AdoptionIncomplete | None, tuple[str, ...]]:
         """Move the files an Overwrite answers for into ``.romm-backup``, before anything else moves.
 
         Clearing first rather than replacing as each file lands keeps the two
         halves apart: one destructive phase the user answered for, then a move
         phase with no collisions left in it.
 
-        Returns ``(refusal, quarantined)``. *quarantined* holds only what the
+        Returns ``(stopped, quarantined)``. *quarantined* holds only what the
         funnel actually moved — it reports ``False`` for a target that is not a
         regular file, and a list built without reading that would name a file
         still sitting where it was. The caller carries it onward because the step
@@ -203,20 +231,18 @@ class AdoptionRenamer:
         savestate in particular is synced nowhere at all, so a replaced one exists
         in no other copy.
         """
-        unusable = self._not_a_file(colliding)
-        if unusable is not None:
-            return (unusable, ())
+        self._refuse_non_files(colliding)
         quarantined: list[str] = []
         for pair in colliding:
             try:
                 moved = self._quarantine_save(os.path.dirname(pair.target), os.path.basename(pair.target))
             except (OSError, ValueError) as e:
-                return (self._replace_refusal(quarantined, os.path.basename(pair.target), e), tuple(quarantined))
+                return (self._replace_stopped(quarantined, os.path.basename(pair.target), e), tuple(quarantined))
             if moved:
                 quarantined.append(pair.target)
         return (None, tuple(quarantined))
 
-    def _not_a_file(self, colliding: tuple[RenamePair, ...]) -> dict[str, Any] | None:
+    def _refuse_non_files(self, colliding: tuple[RenamePair, ...]) -> None:
         """Refuse, by name and before anything moves, a target the funnel cannot set aside.
 
         The funnel moves a regular file; a directory or a dangling symlink at a
@@ -230,33 +256,37 @@ class AdoptionRenamer:
             if self._adoption_move.exists(pair.target) and not self._adoption_move.is_file(pair.target)
         ]
         if not blocked:
-            return None
+            return
         names = ", ".join(os.path.basename(path) for path in blocked)
         self._logger.error(f"Refusing to replace non-file collision target(s): {names}")
-        return {
-            "success": False,
-            "reason": "replace_failed",
-            "message": f"Cannot replace {names} — a folder or link is there, not a file. Nothing was moved.",
-        }
-
-    def _replace_refusal(self, quarantined: list[str], failed: str, error: Exception) -> dict[str, Any]:
-        """Report an Overwrite that could not finish, naming what was already set aside."""
-        already = (
-            " These were already moved to .romm-backup: "
-            + ", ".join(os.path.basename(path) for path in quarantined)
-            + "."
-            if quarantined
-            else ""
+        raise Refused(
+            "replace_failed", f"Cannot replace {names} — a folder or link is there, not a file. Nothing was moved."
         )
-        self._logger.error(f"Adoption overwrite failed after backing up {len(quarantined)} file(s): {error}")
-        return {
-            "success": False,
-            "reason": "replace_failed",
-            "message": f"Could not replace {failed} ({error}). Nothing was moved.{already}",
-        }
 
-    def _report_move(self, outcome, quarantined: tuple[str, ...]) -> dict[str, Any] | None:
-        """Turn a move outcome into a refusal, or ``None`` when everything arrived.
+    def _replace_stopped(self, quarantined: list[str], failed: str, error: Exception) -> AdoptionIncomplete:
+        """Report an Overwrite that could not finish, naming what was already set aside.
+
+        Raises ``replace_failed``, naming the error, where nothing was set aside
+        yet. Once files are in ``.romm-backup`` the answer names them, and the
+        error goes to the log only.
+        """
+        self._logger.error(f"Adoption overwrite failed after backing up {len(quarantined)} file(s): {error}")
+        if not quarantined:
+            raise Refused("replace_failed", f"Could not replace {failed} ({error}). Nothing was moved.")
+        set_aside = [os.path.basename(path) for path in quarantined]
+        return AdoptionIncomplete(
+            reason="replace_failed",
+            message=(
+                f"Could not replace {failed}. Nothing was renamed. "
+                f"These were already moved to .romm-backup: {', '.join(set_aside)}."
+            ),
+            renamed=[],
+            still_under_old_name=[],
+            set_aside=set_aside,
+        )
+
+    def _report_move(self, outcome, quarantined: tuple[str, ...]) -> AdoptionIncomplete | None:
+        """Turn a move outcome into what it left behind, or ``None`` when everything arrived.
 
         A source left beside a completed target is not a failure: one inode under
         two names loses nothing and a re-run finishes it. It is logged rather than
@@ -264,33 +294,38 @@ class AdoptionRenamer:
         scary dialog about a state that harmed nothing.
 
         *quarantined* is what the Overwrite before this one set aside. It is named
-        in any refusal here, because a clear that succeeded in front of a move
-        that failed leaves the user's other-version saves in ``.romm-backup`` for
-        a replacement that never arrived — and nothing else would say so.
+        in what a stop here answers, because a clear that succeeded in front of a
+        move that failed leaves the user's other-version saves in ``.romm-backup``
+        for a replacement that never arrived — and nothing else would say so.
+
+        A move that renamed nothing, after an Overwrite that set nothing aside,
+        raises ``rename_failed``, naming the error. Once anything moved, the
+        answer names it, and the error goes to the log only.
         """
         if outcome["stranded"]:
             self._logger.warning(f"Adoption left old copies behind: {outcome['error']}")
         if not outcome["unmoved"]:
             return None
-        moved = ", ".join(os.path.basename(path) for path in outcome["moved"])
-        unmoved = ", ".join(os.path.basename(path) for path in outcome["unmoved"])
+        renamed = [os.path.basename(path) for path in outcome["moved"]]
+        unmoved = [os.path.basename(path) for path in outcome["unmoved"]]
+        set_aside = [os.path.basename(path) for path in quarantined]
         self._logger.error(f"Adoption rename failed: {outcome['error']}")
-        arrived = f" These are at their new names: {moved}." if moved else ""
-        set_aside = (
-            " These were moved to .romm-backup to make room and are still there: "
-            + ", ".join(os.path.basename(path) for path in quarantined)
-            + "."
-            if quarantined
+        still = f"Still under the old name: {', '.join(unmoved)}."
+        if not renamed and not set_aside:
+            raise Refused("rename_failed", f"Could not rename this game's files ({outcome['error']}). {still}")
+        arrived = f" These are at their new names: {', '.join(renamed)}." if renamed else ""
+        kept = (
+            f" These were moved to .romm-backup to make room and are still there: {', '.join(set_aside)}."
+            if set_aside
             else ""
         )
-        return {
-            "success": False,
-            "reason": "rename_failed",
-            "message": (
-                f"Could not rename this game's files ({outcome['error']}). "
-                f"Still under the old name: {unmoved}.{arrived}{set_aside}"
-            ),
-        }
+        return AdoptionIncomplete(
+            reason="rename_failed",
+            message=f"Could not rename this game's files. {still}{arrived}{kept}",
+            renamed=renamed,
+            still_under_old_name=unmoved,
+            set_aside=set_aside,
+        )
 
     def _launch_paths(self, target: Target, source_path: str) -> tuple[str, str]:
         """The file RetroArch names the saves after, where it is now and where it will be.

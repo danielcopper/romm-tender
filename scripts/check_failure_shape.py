@@ -47,8 +47,9 @@ Converted modules
 
 A module on :data:`CONVERTED_MODULES` builds no failure shape: a service there
 raises its refusals (``lib.errors.Refused``, or ``domain.refusal.DomainRefused``
-from a domain rule) and ``main.Endpoints`` answers them in the failure shape; an
-adapter there reports an outcome its service decides on. In such a
+from a domain rule), a domain module there raises ``DomainRefused``, and
+``main.Endpoints`` answers them in the failure shape; an adapter there reports an
+outcome its service decides on. In such a
 module ``--check`` also fails on any dict literal with a falsy ``success``
 entry, wherever it stands and whatever keys it carries, on any
 ``error_response(...)`` call, and on a ``**spread`` of a call to a refusal
@@ -107,6 +108,9 @@ VIOLATION_CLASSES = frozenset({ERROR_CODE_DIALECT, ERROR_KEY_DIALECT, AD_HOC})
 # grows (module docstring, "Converted modules").
 CONVERTED_MODULES: tuple[str, ...] = (
     "backend/adapters/steam_config.py",
+    "backend/domain/adoption_rename.py",
+    "backend/domain/rom_adoption.py",
+    "backend/domain/rom_candidates.py",
     "backend/lib/conflict_rules.py",
     "backend/services/achievements.py",
     "backend/services/artwork.py",
@@ -155,6 +159,11 @@ CONVERTED_MODULES: tuple[str, ...] = (
     "backend/services/prune/steam_actions.py",
     "backend/services/prune_leases.py",
     "backend/services/relaunch_options_resolver.py",
+    "backend/services/rom_adoption/__init__.py",
+    "backend/services/rom_adoption/_target.py",
+    "backend/services/rom_adoption/renamer.py",
+    "backend/services/rom_adoption/search.py",
+    "backend/services/rom_adoption/service.py",
     "backend/services/rom_removal.py",
     "backend/services/saves/__init__.py",
     "backend/services/saves/_config.py",
