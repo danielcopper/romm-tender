@@ -26,6 +26,7 @@ from adapters.atlas_catalogue import AtlasCatalogueAdapter
 from adapters.atlas_firmware import AtlasFirmwareAdapter, AtlasPlatformFirmwareAdapter
 from adapters.atlas_platforms import AtlasPlatformSystemsAdapter
 from adapters.atlas_saves import AtlasSaveLocationAdapter, describe_core_probe_interpreter
+from adapters.atlas_zstd import register_zstd_codec
 from adapters.cover_art_file_store import CoverArtFileStoreAdapter
 from adapters.database_rename import DatabaseRenameAdapter
 from adapters.debug_logger import SettingsAwareDebugLogger
@@ -461,6 +462,7 @@ def bootstrap(
     hostname_provider = HostnameAdapter()
     machine_id_provider = MachineIdAdapter()
     logger.info(describe_core_probe_interpreter())
+    logger.info(register_zstd_codec())
     # Built after the debug logger because the resolver never logs on its own:
     # its caveats are the whole degradation channel and reach the log through
     # this seam or not at all. That holds for both firmware questions and for
