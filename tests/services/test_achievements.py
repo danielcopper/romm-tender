@@ -465,8 +465,37 @@ class TestGetAchievements:
         assert result["achievements"][0]["title"] == "Stale"
 
     @pytest.mark.asyncio
-    async def test_api_error_no_cache_returns_error(self, svc, achievements):
-        """On API error with no cache, the RomM error propagates."""
+    @pytest.mark.parametrize(
+        ("error", "level"),
+        [
+            pytest.param(RommConnectionError("Connection refused"), logging.INFO, id="unreachable"),
+            pytest.param(RommNotFoundError("HTTP 404: Not Found"), logging.WARNING, id="not-found"),
+        ],
+    )
+    async def test_the_stale_list_is_answered_with_one_line_at_the_romm_error_level(
+        self, svc, achievements, logger, caplog, error, level
+    ):
+        svc._achievements_cache["42"] = {
+            "achievements": [{"ra_id": 1001, "title": "Stale"}],
+            "cached_at": svc._clock.time() - (25 * 3600),  # expired
+        }
+        _seed_rom(achievements.uow, 42, ra_id=9999)
+        achievements.romm_api.get_rom.side_effect = error
+
+        with caplog.at_level(logging.DEBUG, logger=logger.name):
+            result = await svc.get_achievements(42)
+
+        assert result["stale"] is True
+        assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
+            (
+                level,
+                "Failed to fetch achievements for rom_id=42, answering the stale list: "
+                f"{type(error).__name__}: {error}",
+            )
+        ]
+
+    @pytest.mark.asyncio
+    async def test_api_error_no_cache_propagates_the_romm_error(self, svc, achievements):
         _seed_rom(achievements.uow, 42, ra_id=9999)
 
         achievements.romm_api.get_rom.side_effect = RommConnectionError("Connection refused")
@@ -476,21 +505,10 @@ class TestGetAchievements:
             await fetching
 
     @pytest.mark.asyncio
-    async def test_transport_error_reason_is_server_unreachable(self, svc, achievements):
-        """A genuine transport failure reaches the translator, which answers the offline slug the tab routes on."""
-        _seed_rom(achievements.uow, 42, ra_id=9999)
+    async def test_definitive_404_propagates_as_not_found(self, svc, achievements):
+        """A 404 must not drive the achievements tab's offline line.
 
-        achievements.romm_api.get_rom.side_effect = RommConnectionError("Connection refused")
-        fetching = svc.get_achievements(42)
-
-        with pytest.raises(RommConnectionError):
-            await fetching
-
-    @pytest.mark.asyncio
-    async def test_definitive_404_reason_is_not_found(self, svc, achievements):
-        """A 404 must not drive the achievements tab's offline line (#1570).
-
-        RomMGameInfoPanel feeds the global connection store on
+        AchievementsTab feeds the global connection store on
         reason == "server_unreachable" from this very call. The 404 reaches the
         translator as the 404 it is, which answers ``not_found``.
         """
@@ -584,7 +602,7 @@ class TestGetAchievementProgress:
         assert svc._achievements_cache["_ra_user"]["username"] == "RetroPlayer"
 
     @pytest.mark.asyncio
-    async def test_no_ra_username_anywhere_returns_error(self, svc, achievements):
+    async def test_no_ra_username_anywhere_refuses_no_ra_username(self, svc, achievements):
         """When no RA username in cache and RomM user has none, refuses."""
         _seed_rom(achievements.uow, 42, ra_id=9999)
 
@@ -679,7 +697,45 @@ class TestGetAchievementProgress:
         assert result["earned"] == 2
 
     @pytest.mark.asyncio
-    async def test_api_error_no_cache_returns_error(self, svc, achievements):
+    @pytest.mark.parametrize(
+        ("error", "level"),
+        [
+            pytest.param(RommConnectionError("Network error"), logging.INFO, id="unreachable"),
+            pytest.param(RommNotFoundError("HTTP 404: Not Found"), logging.WARNING, id="not-found"),
+        ],
+    )
+    async def test_the_stale_progress_is_answered_with_one_line_at_the_romm_error_level(
+        self, svc, achievements, logger, caplog, error, level
+    ):
+        _seed_ra_username_cache(svc)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
+        svc._achievements_cache["42"] = {
+            "achievements": _sample_achievements(),
+            "cached_at": svc._clock.time(),
+            "user_progress": {
+                "earned": 2,
+                "earned_hardcore": 0,
+                "total": 10,
+                "earned_achievements": [1001, 1002],
+                "cached_at": svc._clock.time() - (2 * 3600),  # expired progress
+            },
+        }
+        achievements.romm_api.get_current_user.side_effect = error
+
+        with caplog.at_level(logging.DEBUG, logger=logger.name):
+            result = await svc.get_achievement_progress(42)
+
+        assert result["stale"] is True
+        assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
+            (
+                level,
+                "Failed to fetch achievement progress for rom_id=42, answering the stale progress: "
+                f"{type(error).__name__}: {error}",
+            )
+        ]
+
+    @pytest.mark.asyncio
+    async def test_api_error_no_cache_propagates_the_romm_error(self, svc, achievements):
         """On API error with no stale cache, the RomM error propagates."""
         _seed_ra_username_cache(svc)
         _seed_rom(achievements.uow, 42, ra_id=9999)
@@ -696,8 +752,8 @@ class TestGetAchievementProgress:
             await fetching
 
     @pytest.mark.asyncio
-    async def test_definitive_404_reason_is_not_found(self, svc, achievements):
-        """The progress call's 404 twin — same store-feed hazard (#1570)."""
+    async def test_definitive_404_propagates_as_not_found(self, svc, achievements):
+        """The progress call's 404 twin — same store-feed hazard."""
         _seed_ra_username_cache(svc)
         _seed_rom(achievements.uow, 42, ra_id=9999)
         svc._achievements_cache["42"] = {
@@ -713,17 +769,20 @@ class TestGetAchievementProgress:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        ("error", "level"),
+        "error",
         [
-            pytest.param(RommConnectionError("Connection refused"), logging.INFO, id="unreachable"),
-            pytest.param(RommNotFoundError("HTTP 404: Not Found"), logging.WARNING, id="not-found"),
+            pytest.param(RommConnectionError("Connection refused"), id="unreachable"),
+            pytest.param(RommNotFoundError("HTTP 404: Not Found"), id="not-found"),
         ],
     )
     async def test_a_list_fetch_romm_error_carries_on_with_a_total_of_zero(
-        self, svc, achievements, logger, caplog, error, level
+        self, svc, achievements, logger, caplog, error
     ):
+        """The list's failure is a debug line only: the RomM error is reported where it is answered."""
         _seed_ra_username_cache(svc)
         _seed_rom(achievements.uow, 42, ra_id=9999)
+        debug_lines: list[str] = []
+        svc._log_debug = debug_lines.append
         achievements.romm_api.get_rom.side_effect = error
         achievements.romm_api.get_current_user.return_value = {
             "ra_username": "RetroPlayer",
@@ -740,12 +799,10 @@ class TestGetAchievementProgress:
             "total": 0,
             "earned_achievements": [],
         }
-        assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
-            (
-                level,
-                f"Achievement list for rom_id=42 unavailable, progress counts it as 0: {type(error).__name__}: {error}",
-            )
+        assert debug_lines == [
+            f"Achievement list for rom_id=42 unavailable, progress counts it as 0: {type(error).__name__}: {error}"
         ]
+        assert caplog.records == []
 
     @pytest.mark.asyncio
     async def test_an_error_that_is_not_romms_propagates_past_stale_progress(self, svc, achievements):
@@ -1022,7 +1079,7 @@ class TestSyncAchievementsAfterSession:
             result = await svc.sync_achievements_after_session(42)
 
         assert result is None
-        assert debug_lines == ["Post-session achievement sync for rom_id=42 skipped: no RA username in RomM"]
+        assert debug_lines == ["Post-session achievement sync for rom_id=42 skipped: no RA username available"]
         assert caplog.records == []
 
     @pytest.mark.asyncio
@@ -1035,7 +1092,7 @@ class TestSyncAchievementsAfterSession:
         ],
     )
     async def test_a_romm_error_ends_it_with_one_line(self, svc, achievements, logger, caplog, error, level):
-        """Below warning when the server could not be reached, as the translator logs it."""
+        """Below warning where ``classify_error`` answers ``server_unreachable``, as the translator logs it."""
         _seed_ra_username_cache(svc)
         _seed_rom(achievements.uow, 42, ra_id=9999)
         svc._achievements_cache["42"] = {"achievements": _sample_achievements(), "cached_at": svc._clock.time()}
@@ -1047,6 +1104,24 @@ class TestSyncAchievementsAfterSession:
         assert result is None
         assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
             (level, f"Post-session achievement sync failed for rom_id=42: {type(error).__name__}: {error}")
+        ]
+
+    @pytest.mark.asyncio
+    async def test_offline_with_no_list_cached_logs_one_line(self, svc, achievements, logger, caplog):
+        _seed_ra_username_cache(svc)
+        _seed_rom(achievements.uow, 42, ra_id=9999)
+        error = RommConnectionError("Connection refused")
+        achievements.romm_api.get_rom.side_effect = error
+        achievements.romm_api.get_current_user.side_effect = error
+
+        with caplog.at_level(logging.DEBUG, logger=logger.name):
+            await svc.sync_achievements_after_session(42)
+
+        assert [(r.levelno, r.getMessage()) for r in caplog.records] == [
+            (
+                logging.INFO,
+                "Post-session achievement sync failed for rom_id=42: RommConnectionError: Connection refused",
+            )
         ]
 
 
