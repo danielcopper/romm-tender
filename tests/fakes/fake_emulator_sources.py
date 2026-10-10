@@ -22,6 +22,7 @@ class FakeSourcesReading:
         self._installations = installations
         self.installations = tuple(installations.values())
         self.answering = answering_source(sources)
+        self.detection_failed = False
         self._answers: dict[Hashable, Any] = {}
 
     def no_answer_reason(self) -> str:
