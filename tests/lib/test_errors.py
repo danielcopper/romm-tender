@@ -3,6 +3,7 @@ import socket
 
 import pytest
 
+from lib import errors
 from lib.errors import (
     AuthFailed,
     DeviceSyncDisabled,
@@ -309,6 +310,24 @@ class TestClassifyError:
         """RommSSLError should be classified as server_unreachable even though it's a RommApiError."""
         code, _ = classify_error(RommSSLError("cert fail"))
         assert code == "server_unreachable"
+
+
+def _not_found_classes() -> list[type[RommNotFoundError]]:
+    """``RommNotFoundError`` and every class in ``lib/errors.py`` that derives from it."""
+    return [obj for obj in vars(errors).values() if isinstance(obj, type) and issubclass(obj, RommNotFoundError)]
+
+
+class TestEveryNotFoundClassAnswersNotFound:
+    """A definitive 404 is ``not_found`` in ``classify_error``'s table, whatever branch stands above it.
+
+    Sees every not-found class declared in ``lib/errors.py``. Unseen: one declared in another
+    module, and a 404 that is not a ``RommNotFoundError`` — the pairing-code exchange's two 404
+    errors derive from ``RommApiError`` alone and answer ``server_unreachable``.
+    """
+
+    @pytest.mark.parametrize("cls", _not_found_classes(), ids=lambda cls: cls.__name__)
+    def test_it_answers_not_found(self, cls):
+        assert classify_error(cls("gone"))[0] == "not_found"
 
 
 class TestRommErrorLogLevel:

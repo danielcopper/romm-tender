@@ -10,24 +10,39 @@ catch-all ``except Exception`` that ignores the funnel and hardcodes the
 unreachable verdict for every exception it sees. The whole UI then claims "RomM
 offline" while the server is plainly answering.
 
-This class of bug was swept once before (#971) and came back, because
-``check_failure_shape.py`` inspects key *presence* only — a hardcoded
-``server_unreachable`` is a perfectly canonical failure shape, so every one of
-these sites is green there. This check inspects the slug *choice* instead.
+``check_failure_shape.py`` reads whether a failure dict is built, never which
+reason it carries, and a refusal raised with ``server_unreachable``, a status
+union's ``status`` and a partial-success flag are no failure dict at all. This
+check reads the slug *choice* instead.
 
 The rule
 ========
 
 Inside ``backend/services/``, a **catch-all** exception handler (``except
-Exception``, ``except BaseException``, or a bare ``except:``) may not *return* a
-hardcoded ``server_unreachable`` verdict. A handler returns one when a dict
-literal in its body binds a verdict key — ``reason``, ``status``, or
-``recommended_action`` — to ``ErrorCode.SERVER_UNREACHABLE`` or to the bare
-``"server_unreachable"`` string. Both spellings count: the canonical failure
-shape uses the enum, while the discriminated-status and ``recommended_action``
-carve-outs spell the slug out as a literal.
+Exception``, ``except BaseException``, or a bare ``except:``) may not decide a
+hardcoded ``server_unreachable`` verdict, whether it returns it or raises it:
 
-Binding the key to a *name* (``{"reason": reason}`` after ``reason, message =
+* **Returned** — a dict literal in its body binds a verdict key — ``reason``,
+  ``status``, or ``recommended_action`` — to ``ErrorCode.SERVER_UNREACHABLE`` or
+  to the bare ``"server_unreachable"`` string. Both spellings count: the
+  discriminated-status and ``recommended_action`` shapes spell the slug out as a
+  literal, and the enum is the other way to write it.
+* **Raised** — a ``raise`` in its body raises ``ServerUnreachable`` (called or
+  not, by its bare name or as an attribute), or raises a call whose first
+  positional argument or ``reason=`` keyword is either spelling of the slug —
+  a refusal's reason (``raise Refused("server_unreachable", …)``). The
+  entrypoint answers a raised refusal with its reason, so this is the same
+  verdict as the returned one.
+
+The scope stays ``backend/services/``: a use case is what catches a RomM error
+and decides what the user is told. Outside it, an adapter raises the RomM error
+types (which 404 is a ``RommNotFoundError`` is ``.claude/rules/romm-http.md``'s),
+the domain does no I/O, and the entrypoint classifies through
+``classify_error``, whose table answers every not-found class ``not_found``
+(``tests/lib/test_errors.py``).
+
+Binding the key, or the refusal's reason, to a *name* (``{"reason": reason}``
+or ``raise Refused(reason, message)`` after ``reason, message =
 classify_error(e)``) is the correct shape and is what this check is steering
 towards, so it is never flagged. Keying on the verdict's position — rather than
 on the mere mention of the slug anywhere in the handler — is deliberate: it
@@ -39,8 +54,9 @@ One escape clears an otherwise-flagged handler:
 
 * **A sibling handler peels the 404 off first** — the same ``try`` carries an
   ``except RommNotFoundError`` clause, so the definitive-404 case never reaches
-  the catch-all. This is the shape the partial-success carve-outs use, where the
-  verdict is a flag rather than a ``reason`` slug and there is no funnel to call.
+  the catch-all. This is the shape the status unions and partial-success flags
+  use, where the verdict is not a refusal's reason and there is no funnel to
+  call; it clears a raised verdict the same way.
 
 ``EXEMPT`` holds service modules deliberately kept out of the scan — a module
 that does not talk to RomM at all, so ``classify_error`` (a RomM-shaped funnel)
@@ -55,17 +71,22 @@ Two modes:
   * ``--check`` — enforce mode. Exit 1 on any violation.
 
 A **typed** handler is never flagged. ``except RommConnectionError`` or
-``except SaveSyncTimeoutError`` returning ``server_unreachable`` is a deliberate
+``except SaveSyncTimeoutError`` answering ``server_unreachable`` is a deliberate
 statement about a known exception type, which is exactly what this check wants
 more of.
 
 The AST heuristic is intentionally conservative, and a guardrail rather than a
 prover: it reads one ``try`` statement at a time and does not follow a verdict
 returned by a helper the handler calls, nor one assembled across statements
-(``resp = {...}; resp["reason"] = ...``). A ``try`` nested *inside* a handler is
-scanned as its own statement, with its own sibling-peel check, and its dict
-literals are NOT attributed to the enclosing handler — otherwise a nested peel
-would read as an unpeeled verdict on the outer one and false-positive.
+(``resp = {...}; resp["reason"] = ...``). Unseen on the raised side: a refusal
+a helper builds (``raise self._offline(e)``), one held in a variable and raised
+later, a subclass of ``ServerUnreachable`` under another name,
+``ServerUnreachable`` imported under an alias, and the slug in a variable or a
+module constant rather than spelled at the raise. A ``try`` nested *inside* a
+handler is scanned as its own statement, with its own sibling-peel check, and
+its dict literals and raises are NOT attributed to the enclosing handler —
+otherwise a nested peel would read as an unpeeled verdict on the outer one and
+false-positive.
 """
 
 from __future__ import annotations
@@ -89,6 +110,11 @@ UNREACHABLE_SLUG = "server_unreachable"
 # Dict keys whose value is the verdict a consumer routes on: the canonical
 # failure shape's ``reason``, plus the two documented carve-out discriminants.
 VERDICT_KEYS = frozenset({"reason", "status", "recommended_action"})
+
+# The refusal named for the unreachable verdict, and the keyword a refusal's
+# reason can be passed as instead of its first positional argument.
+UNREACHABLE_REFUSAL = "ServerUnreachable"
+REASON_KEYWORD = "reason"
 
 # The exception whose presence as a sibling clause proves the 404 was peeled off.
 NOT_FOUND_EXCEPTION = "RommNotFoundError"
@@ -170,22 +196,59 @@ def _walk_outside_nested_try(node: ast.AST) -> Iterator[ast.AST]:
         yield from _walk_outside_nested_try(child)
 
 
+def _returned_verdict_spelling(node: ast.Dict) -> str | None:
+    """Return how the dict literal *node* binds a verdict key to the slug, or None."""
+    for key, value in zip(node.keys, node.values, strict=True):
+        if not (isinstance(key, ast.Constant) and key.value in VERDICT_KEYS):
+            continue
+        spelling = _hardcoded_verdict_spelling(value)
+        if spelling is not None:
+            return spelling
+    return None
+
+
+def _name_of(node: ast.expr) -> str | None:
+    """The name *node* is reached through — ``X`` or ``module.X`` — or None."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
+
+
+def _raised_verdict_spelling(exc: ast.expr) -> str | None:
+    """Return how the raised expression *exc* hardcodes the verdict, or None."""
+    if _name_of(exc) == UNREACHABLE_REFUSAL:
+        return UNREACHABLE_REFUSAL
+    if not isinstance(exc, ast.Call):
+        return None
+    if _name_of(exc.func) == UNREACHABLE_REFUSAL:
+        return UNREACHABLE_REFUSAL
+    reasons = exc.args[:1] + [keyword.value for keyword in exc.keywords if keyword.arg == REASON_KEYWORD]
+    for reason in reasons:
+        spelling = _hardcoded_verdict_spelling(reason)
+        if spelling is not None:
+            return spelling
+    return None
+
+
 def _unreachable_spelling(handler: ast.ExceptHandler) -> str | None:
     """Return how *handler* hardcodes the unreachable verdict, or None.
 
-    Only a verdict *key* counts (see :data:`VERDICT_KEYS`) — mentioning the slug
-    anywhere else in the handler (a log line, a comparison against a classified
-    reason) is not a hardcoded verdict.
+    Only a verdict *key* (see :data:`VERDICT_KEYS`) or a raised refusal's reason
+    counts — mentioning the slug anywhere else in the handler (a log line, a
+    comparison against a classified reason, a refusal's message) is not a
+    hardcoded verdict.
     """
     for node in _walk_outside_nested_try(handler):
-        if not isinstance(node, ast.Dict):
+        if isinstance(node, ast.Dict):
+            spelling = _returned_verdict_spelling(node)
+        elif isinstance(node, ast.Raise) and node.exc is not None:
+            spelling = _raised_verdict_spelling(node.exc)
+        else:
             continue
-        for key, value in zip(node.keys, node.values, strict=True):
-            if not (isinstance(key, ast.Constant) and key.value in VERDICT_KEYS):
-                continue
-            spelling = _hardcoded_verdict_spelling(value)
-            if spelling is not None:
-                return spelling
+        if spelling is not None:
+            return spelling
     return None
 
 
@@ -277,12 +340,12 @@ def _print_violations(findings: list[Finding]) -> None:
         print(f"  {finding.render()}")
     print()
     print(
-        "ERROR: a catch-all 'except Exception' in backend/services/ must not hardcode "
-        "ErrorCode.SERVER_UNREACHABLE — a definitive 404 is the server ANSWERING, and must "
-        "reach the frontend as 'not_found'. Route the exception through classify_error() "
-        "(lib/errors.py), or peel the 404 off with a sibling 'except RommNotFoundError' "
-        "clause when the verdict is a partial-success flag rather than a reason slug "
-        "(CLAUDE.md → invariant register)."
+        "ERROR: a catch-all 'except Exception' in backend/services/ must not return or raise "
+        "a hardcoded server_unreachable verdict — a definitive 404 is the server ANSWERING, and "
+        "must reach the frontend as 'not_found'. Let the RomM error reach the entrypoint, route "
+        "it through classify_error() (lib/errors.py), or peel the 404 off with a sibling "
+        "'except RommNotFoundError' clause when the verdict is a status or a partial-success "
+        "flag rather than a refusal's reason (CLAUDE.md → invariant register)."
     )
 
 
