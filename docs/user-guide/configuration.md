@@ -5,7 +5,7 @@ pick **Settings** from the menu at the bottom of the panel.
 
 ## The Settings page
 
-Settings is a wide page split in two: a list of seven sections on the left, and the focused section's controls on the
+Settings is a wide page split in two: a list of eight sections on the left, and the focused section's controls on the
 right. Move onto a section in the list and the right-hand side changes at once — there is nothing to confirm.
 
 | Section              | What is in it                                                                                                                                                              |
@@ -16,12 +16,14 @@ right. Move onto a section in the list and the right-hand side changes at once �
 | **Steam Library**    | preferred region, collection games in platform groups, collection types in Steam names                                                                                     |
 | **Emulator sources** | every emulator setup Tender found — RetroDECK, EmuDeck, a RetroArch of its own — as a numbered card with its health, **Use this source**, and arrows to move it up or down |
 | **Updates**          | the version you have and the release the last successful check found, an update that was rolled back or refused, the daily update check, and **Check now**                 |
+| **Interface**        | whether Tender's Quick Access entry sits above or below Decky Loader's                                                                                                     |
 | **Advanced**         | log level                                                                                                                                                                  |
 
 If you used an earlier version, everything is still here — the eight blocks the panel used to stack are grouped into
-five of those seven; **Emulator sources** and **Updates** are new. Registered Devices is now inside **Save Sync**, the
-SteamGridDB key is inside **Connections**, and the section that used to be called **Library** is now **Steam Library**:
-the Library _page_ is about what gets synced out of RomM, this section is about how it looks once it is in Steam.
+five of those eight; **Emulator sources**, **Updates** and **Interface** are new. Registered Devices is now inside
+**Save Sync**, the SteamGridDB key is inside **Connections**, and the section that used to be called **Library** is now
+**Steam Library**: the Library _page_ is about what gets synced out of RomM, this section is about how it looks once it
+is in Steam.
 
 **Signing in to RetroAchievements is not here yet.** When it arrives it will live under Connections, with the other
 accounts.
@@ -332,6 +334,15 @@ emulator, which concern nothing Tender does, and every problem of a source you s
 emulator list, the platform page, the emulator menu and a game's BIOS tab say why — no source found, every source
 switched off, a broken systems file, a RetroDECK that has not been set up yet, a list that cannot be read yet — rather
 than showing an empty list.
+
+## Tender's place in the Quick Access Menu
+
+A toggle in **Settings › Interface**: **Place Tender above Decky Loader**. Where Decky Loader is installed too, both add
+an entry to the strip of icons down the side of the Quick Access Menu. On (the default), Tender's entry sits above Decky
+Loader's; off, below it.
+
+It applies only where Decky Loader is installed — without it, Tender's entry sits at the end of the strip either way. A
+change shows the next time the Quick Access Menu redraws its strip, at the latest when you close it and open it again.
 
 ## Log Level
 

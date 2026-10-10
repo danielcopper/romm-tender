@@ -573,10 +573,11 @@ Format: **invariant** — tier — enforced by.
 - **Tender's Quick Access entry composes with Decky's rather than going through it, and everything it binds to the Quick
   Access window is bound from inside that window's React tree** — test + prompt-only —
   `frontend/src/qam/quickAccessEntry.test.ts` pins what a render pass does to a tab array (added once, added again to
-  the replacement array a remount builds, moved to the end whenever a pass finds it higher up, and recognised by its
-  marker alone in an array this module has never seen), each case mutation-checked. **Everything above that line is
-  device-only**: whether the two renderers are found, patched and hand back a tree the resolver can walk was measured in
-  #1897 and nothing here re-measures it — a suite that faked it would assert against a tree it wrote itself. The rule
+  the replacement array a remount builds, put back before the first `decky`-marked entry under `"above_decky"` and at
+  the end under `"below_decky"` or where no entry carries that mark whenever a pass finds it elsewhere, and recognised
+  by its marker alone in an array this module has never seen), each case mutation-checked. **Everything above that line
+  is device-only**: whether the two renderers are found, patched and hand back a tree the resolver can walk was measured
+  in #1897 and nothing here re-measures it — a suite that faked it would assert against a tree it wrote itself. The rule
   spans the frontend entry and the backend injector, and nothing joins them. **Three halves fail green.** (1) The entry
   carries `tender` as its marker and its key and never `decky`, and nothing writes `window.__TABS_HOOK_INSTANCE` or
   calls `__TABS_HOOK_INSTANCE.add()`: Decky's own render counts its `decky`-marked entries against its list length, so a
@@ -584,30 +585,32 @@ Format: **invariant** — tier — enforced by.
   `deinit()` on whatever it finds in that global. **Both are read off Decky's source rather than measured** — the
   `add()` route was deliberately never taken, so its runaway was never observed, and observing the `deinit()` would mean
   breaking Decky's boot on purpose. Neither is a presence check and neither may become one; which bundle is loaded was
-  already decided from the machine (`backend/host/inject/machine.py`). (2) **No tab array is held anywhere**, which is
-  available only because there is no unpatch: the injector refuses to load the panel into a context already carrying
-  `window.__tender_panel__` (`backend/host/inject/bootstrap.py`), and what clears that marker is a JS-context rebuild,
-  which takes the module, its patches and every array with it. Re-adding an unpatch is therefore also re-adding a reason
-  to retain arrays, and the spike's shape — a `Set` of every array ever pushed into — leaks one dead array per Quick
-  Access remount, with the strip's entries and their React elements, for the life of the JS context. (3) The placement
-  is re-asserted on EVERY pass rather than set at creation, because `afterPatch` runs the previous handler first:
-  whoever patches last lands lowest, measured both ways, and install order is a property of which program starts first.
-  A handler that pushed once and trusted the order goes green here and comes out above Decky on exactly the machines
-  where TENDER started first — it pushes first and Decky pushes under it. Where Decky started first the single push
-  already lands lowest, which is the case re-assertion does not have to fix and the one a developer is most likely to
-  test. The third rule's own half — **nothing binds to the Quick Access window at module scope** — is unmechanized and
-  unpinned: that window is replaced by every remount, so a listener, observer or stylesheet held across one is bound to
-  a document nothing renders. What holds today was measured rather than assumed — an unfiltered grep over `frontend/src`
-  (tests aside) for `addEventListener(`, `ResizeObserver`, `MutationObserver`, `ownerDocument`, `defaultView` and
-  `createElement(`, with the enclosing function of every hit read. **Neither observer term is prefixed with `new`**, and
-  that is what makes it find anything: this repo's realm rule takes the constructor off the node's own view, so every
-  observer here is spelled `new view.ResizeObserver` or `new panelView.MutationObserver`, and a pattern anchored on
-  `new ResizeObserver` matches nothing in `frontend/src` at all. The sweep's own boundary is worth stating, because a
-  reader re-deriving it meets the other kind first: a `globalThis` listener binds SharedJSContext's window, which the
-  menu's remount does not touch, so those are out of scope however many of them there are. Every binding into the MENU's
-  window sits inside an effect or an event handler of a component the menu mounts: `utils/qamExpansion.ts`'s stylesheet
-  and `MutationObserver`, `utils/entryFocus.ts`'s focus listeners, `bigpicture/layout/WidePage.tsx`'s `ResizeObserver`,
-  and `bigpicture/layout/ScrollRegion.tsx`, which reads the view per event and retains nothing. The glyph binds nothing
+  already decided from the machine (`backend/host/inject/machine.py`). A `decky`-marked entry is read only to place
+  Tender's entry, never as a sign Decky is present: finding none puts the entry last and decides nothing else. (2) **No
+  tab array is held anywhere**, which is available only because there is no unpatch: the injector refuses to load the
+  panel into a context already carrying `window.__tender_panel__` (`backend/host/inject/bootstrap.py`), and what clears
+  that marker is a JS-context rebuild, which takes the module, its patches and every array with it. Re-adding an unpatch
+  is therefore also re-adding a reason to retain arrays, and the spike's shape — a `Set` of every array ever pushed into
+  — leaks one dead array per Quick Access remount, with the strip's entries and their React elements, for the life of
+  the JS context. (3) The placement is re-asserted on EVERY pass rather than set at creation, because `afterPatch` runs
+  the previous handler first: whoever patches last lands lowest, measured both ways, and install order is a property of
+  which program starts first. A handler that pushed once and trusted the order goes green here and comes out wherever
+  install order put it: above Decky on the machines where TENDER started first — it pushes first and Decky pushes under
+  it — and below Decky where Decky did. Whichever position the setting asks for, one of the two start orders already
+  lands there by itself, and that is the one a developer is most likely to test. The third rule's own half — **nothing
+  binds to the Quick Access window at module scope** — is unmechanized and unpinned: that window is replaced by every
+  remount, so a listener, observer or stylesheet held across one is bound to a document nothing renders. What holds
+  today was measured rather than assumed — an unfiltered grep over `frontend/src` (tests aside) for `addEventListener(`,
+  `ResizeObserver`, `MutationObserver`, `ownerDocument`, `defaultView` and `createElement(`, with the enclosing function
+  of every hit read. **Neither observer term is prefixed with `new`**, and that is what makes it find anything: this
+  repo's realm rule takes the constructor off the node's own view, so every observer here is spelled
+  `new view.ResizeObserver` or `new panelView.MutationObserver`, and a pattern anchored on `new ResizeObserver` matches
+  nothing in `frontend/src` at all. The sweep's own boundary is worth stating, because a reader re-deriving it meets the
+  other kind first: a `globalThis` listener binds SharedJSContext's window, which the menu's remount does not touch, so
+  those are out of scope however many of them there are. Every binding into the MENU's window sits inside an effect or
+  an event handler of a component the menu mounts: `utils/qamExpansion.ts`'s stylesheet and `MutationObserver`,
+  `utils/entryFocus.ts`'s focus listeners, `bigpicture/layout/WidePage.tsx`'s `ResizeObserver`, and
+  `bigpicture/layout/ScrollRegion.tsx`, which reads the view per event and retains nothing. The glyph binds nothing
   there: its update dot reads stores that are module state of the window the panel's code runs in, and subscribes to
   them from the tree through `useSyncExternalStore`. (`utils/styleInjector.ts` writes into `findSP()`'s document, which
   is the game page's and not the menu's.) One added at module scope would work perfectly until the first
