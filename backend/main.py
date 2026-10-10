@@ -243,6 +243,10 @@ class Endpoints:
         return await self._services.emulator_sources_service.get_emulator_sources()
 
     @route
+    async def check_start_source(self):
+        return await self._services.emulator_sources_service.check_start_source()
+
+    @route
     async def set_emulator_source_enabled(self, kind, enabled):
         return await self._services.emulator_sources_service.set_emulator_source_enabled(kind, enabled)
 

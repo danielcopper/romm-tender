@@ -120,6 +120,19 @@ def answering_source(sources: Sequence[ArrangedSource]) -> ArrangedSource | None
     return enabled[0] if enabled else None
 
 
+def switched_off_starting_source(sources: Sequence[ArrangedSource]) -> str | None:
+    """The kind of the detected source games start through while it is switched off, or ``None``.
+
+    A start is refused while this answers a kind. ``None`` while a switched-on
+    source starts games, and also where no source that starts games is detected
+    at all: that start goes ahead and fails on its own, because a source that is
+    not listed has no switch to turn back on.
+    """
+    if any(source.enabled and source.starts_games for source in sources):
+        return None
+    return next((source.kind for source in sources if source.starts_games), None)
+
+
 # Why an emulator list could not be given: no source answers at all (the first
 # two), or the answering source's catalogue was refused — sealed (EmuDeck's,
 # which the resolver cannot read yet), a systems file ES-DE refuses to load, a

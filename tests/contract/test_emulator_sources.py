@@ -108,3 +108,22 @@ async def test_a_retrodeck_that_is_not_set_up_is_listed_and_answers_why_it_has_n
         "not_set_up",
     )
     assert info["emulator_source"] == {"kind": "retrodeck", "starts_games": True}
+
+
+async def test_the_start_check_names_retrodeck_while_it_is_switched_off(harness):
+    seed_es_systems(harness)
+    on = await harness.endpoints.check_start_source()
+
+    await harness.endpoints.set_emulator_source_enabled("retrodeck", False)
+    off = await harness.endpoints.check_start_source()
+    await harness.endpoints.set_emulator_source_enabled("retrodeck", True)
+
+    assert on == {"switched_off": None}
+    assert off == {"switched_off": "retrodeck"}
+    assert await harness.endpoints.check_start_source() == {"switched_off": None}
+
+
+async def test_the_start_check_refuses_nothing_where_no_retrodeck_is_detected(harness):
+    harness.settings["emulator_sources_off"] = ["retrodeck"]
+
+    assert await harness.endpoints.check_start_source() == {"switched_off": None}
