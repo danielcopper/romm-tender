@@ -7,7 +7,8 @@
  * walking Steam's live React tree to find the array, which exists nowhere in
  * this environment. So these cases drive it with arrays of their own, and what
  * they establish is what a render pass does to a tab array — added once, added
- * again to a replacement array, moved to the end on every pass.
+ * again to a replacement array, and put above Decky's entries or last on every
+ * pass, as the setting and the array say.
  *
  * **What they cannot establish** is that the handler is ever called: that the
  * renderers are found, patched, and hand back a tree the resolver can walk was
@@ -42,39 +43,113 @@ const tenderEntry = (): QuickAccessTabEntry => ({
   tender: true,
 });
 
-/** Somebody else's entry — Decky's, or Steam's own. */
+/** Steam's own entry, or another provider's: no marker Tender reads. */
 const foreign = (key: string) => ({ key, title: key, tab: null, panel: null });
 
-const keys = (tabs: unknown[]) => tabs.map((tab) => (tab as { key: string }).key);
+/** An entry the way Decky Loader's tabs hook pushes one: a numeric key and the `decky` marker. */
+const decky = (key: number | string = 999) => ({ key, title: "Decky", tab: null, panel: null, decky: true });
+
+const keys = (tabs: unknown[]) => tabs.map((tab) => (tab as { key: string | number }).key);
 
 describe("syncEntry", () => {
-  it("adds the entry once, at the end", () => {
+  it("adds the entry once, directly above Decky's, by default", () => {
     const entry = tenderEntry();
-    const tabs: unknown[] = [foreign("notifications"), foreign("decky")];
+    const tabs: unknown[] = [foreign("notifications"), foreign("friends"), decky()];
 
-    syncEntry(tabs, entry);
+    syncEntry(tabs, entry, "above_decky");
 
-    expect(keys(tabs)).toEqual(["notifications", "decky", TENDER_TAB_KEY]);
+    expect(keys(tabs)).toEqual(["notifications", "friends", TENDER_TAB_KEY, 999]);
+  });
+
+  it("goes above the first of several entries Decky marked, so all of them stay below", () => {
+    const entry = tenderEntry();
+    const tabs: unknown[] = [foreign("notifications"), decky(999), foreign("friends"), decky("another")];
+
+    syncEntry(tabs, entry, "above_decky");
+
+    expect(keys(tabs)).toEqual(["notifications", TENDER_TAB_KEY, 999, "friends", "another"]);
+  });
+
+  it("goes last above nothing when no entry carries Decky's marker", () => {
+    // An entry KEYED like Decky's but unmarked is not Decky's: the marker is
+    // what its own guard counts by, and the only thing read here.
+    const entry = tenderEntry();
+    const tabs: unknown[] = [foreign("notifications"), foreign("decky"), foreign("friends")];
+
+    syncEntry(tabs, entry, "above_decky");
+
+    expect(keys(tabs)).toEqual(["notifications", "decky", "friends", TENDER_TAB_KEY]);
+  });
+
+  it("goes last below Decky's entry when asked to", () => {
+    const entry = tenderEntry();
+    const tabs: unknown[] = [foreign("notifications"), decky(), foreign("friends")];
+
+    syncEntry(tabs, entry, "below_decky");
+
+    expect(keys(tabs)).toEqual(["notifications", 999, "friends", TENDER_TAB_KEY]);
+  });
+
+  it("goes last below with no Decky entry too", () => {
+    const entry = tenderEntry();
+    const tabs: unknown[] = [foreign("notifications"), foreign("friends")];
+
+    syncEntry(tabs, entry, "below_decky");
+
+    expect(keys(tabs)).toEqual(["notifications", "friends", TENDER_TAB_KEY]);
+  });
+
+  it("moves the entry back above Decky's when a later pass finds it elsewhere", () => {
+    // Whoever patches last pushes last, and anything else may move an entry
+    // between passes; the placement is re-asserted on every pass.
+    const entry = tenderEntry();
+    const below: unknown[] = [foreign("notifications"), decky(), foreign("friends"), entry];
+    const top: unknown[] = [entry, foreign("notifications"), decky(), foreign("friends")];
+
+    syncEntry(below, entry, "above_decky");
+    syncEntry(top, entry, "above_decky");
+
+    expect(keys(below)).toEqual(["notifications", TENDER_TAB_KEY, 999, "friends"]);
+    expect(keys(top)).toEqual(["notifications", TENDER_TAB_KEY, 999, "friends"]);
+  });
+
+  it("moves the entry back to the end when a later pass finds it higher up and the setting is below", () => {
+    const entry = tenderEntry();
+    const tabs: unknown[] = [entry, decky(), foreign("friends")];
+
+    syncEntry(tabs, entry, "below_decky");
+
+    expect(keys(tabs)).toEqual([999, "friends", TENDER_TAB_KEY]);
+  });
+
+  it("follows a changed setting at the next pass over the same array", () => {
+    const entry = tenderEntry();
+    const tabs: unknown[] = [foreign("notifications"), decky()];
+
+    syncEntry(tabs, entry, "above_decky");
+    syncEntry(tabs, entry, "below_decky");
+
+    expect(keys(tabs)).toEqual(["notifications", 999, TENDER_TAB_KEY]);
   });
 
   it("adds nothing on a second pass over the same array", () => {
     const entry = tenderEntry();
-    const tabs: unknown[] = [foreign("decky")];
+    const tabs: unknown[] = [decky()];
 
-    syncEntry(tabs, entry);
-    syncEntry(tabs, entry);
-    syncEntry(tabs, entry);
+    syncEntry(tabs, entry, "above_decky");
+    syncEntry(tabs, entry, "above_decky");
+    syncEntry(tabs, entry, "above_decky");
 
-    expect(keys(tabs)).toEqual(["decky", TENDER_TAB_KEY]);
+    expect(keys(tabs)).toEqual([TENDER_TAB_KEY, 999]);
   });
 
   it("recognises an entry it did not put there, by the marker alone", () => {
     // What a re-injection leaves behind: an entry marked as ours, in an array
     // this module has no memory of. The marker is the whole of the idempotence,
     // so it has to answer for an entry that is not the one in hand.
-    const tabs: unknown[] = [foreign("decky"), tenderEntry()];
+    const tabs: unknown[] = [decky(), tenderEntry()];
 
-    syncEntry(tabs, tenderEntry());
+    syncEntry(tabs, tenderEntry(), "above_decky");
 
     expect(tabs.filter((tab) => (tab as { tender?: boolean }).tender)).toHaveLength(1);
   });
@@ -83,55 +158,44 @@ describe("syncEntry", () => {
     // Every Quick Access remount builds a new tabs array. The first one is not
     // held anywhere, so the pass over the second has to add the entry again.
     const entry = tenderEntry();
-    const first: unknown[] = [foreign("decky")];
-    syncEntry(first, entry);
+    const first: unknown[] = [decky()];
+    syncEntry(first, entry, "above_decky");
 
-    const second: unknown[] = [foreign("decky")];
-    syncEntry(second, entry);
+    const second: unknown[] = [decky()];
+    syncEntry(second, entry, "above_decky");
 
-    expect(keys(second)).toEqual(["decky", TENDER_TAB_KEY]);
-    expect(keys(first)).toEqual(["decky", TENDER_TAB_KEY]);
-  });
-
-  it("moves the entry back to the end when a later pass finds it higher up", () => {
-    // Whoever patches last pushes last, so a pass can leave Tender above Decky.
-    // The placement is re-asserted on every pass rather than set at creation.
-    const entry = tenderEntry();
-    const tabs: unknown[] = [entry, foreign("decky"), foreign("friends")];
-
-    syncEntry(tabs, entry);
-
-    expect(keys(tabs)).toEqual(["decky", "friends", TENDER_TAB_KEY]);
+    expect(keys(second)).toEqual([TENDER_TAB_KEY, 999]);
+    expect(keys(first)).toEqual([TENDER_TAB_KEY, 999]);
   });
 
   it("leaves the order of everyone else's entries alone", () => {
     const entry = tenderEntry();
-    const tabs: unknown[] = [foreign("a"), entry, foreign("b"), foreign("c")];
+    const tabs: unknown[] = [foreign("a"), entry, foreign("b"), decky(), foreign("c")];
 
-    syncEntry(tabs, entry);
+    syncEntry(tabs, entry, "above_decky");
 
-    expect(keys(tabs)).toEqual(["a", "b", "c", TENDER_TAB_KEY]);
+    expect(keys(tabs)).toEqual(["a", "b", TENDER_TAB_KEY, 999, "c"]);
   });
 
   it("survives a pass over an array holding nothing at all", () => {
     const entry = tenderEntry();
     const tabs: unknown[] = [];
 
-    syncEntry(tabs, entry);
+    syncEntry(tabs, entry, "above_decky");
 
     expect(keys(tabs)).toEqual([TENDER_TAB_KEY]);
   });
 
   it("is unbothered by a hole or a primitive in the array", () => {
     // The array is Steam's, read off a prop of a tree we do not own, so the
-    // marker test has to answer for whatever is in it rather than assume objects.
+    // marker tests have to answer for whatever is in it rather than assume objects.
     const entry = tenderEntry();
-    const tabs: unknown[] = [null, undefined, 0, "decky", entry];
+    const tabs: unknown[] = [entry, null, undefined, 0, "decky", decky()];
 
-    syncEntry(tabs, entry);
+    syncEntry(tabs, entry, "above_decky");
 
-    expect(tabs[tabs.length - 1]).toBe(entry);
-    expect(tabs).toHaveLength(5);
+    expect(tabs[4]).toBe(entry);
+    expect(tabs).toHaveLength(6);
   });
 });
 

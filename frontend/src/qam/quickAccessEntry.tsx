@@ -15,7 +15,9 @@
  * did not take that route, so its runaway never ran. Our entry carries our own marker and our
  * own key and is invisible to that count. Neither is a presence check: the
  * bundle switch already asked whether Decky is serving
- * (`backend/host/inject/machine.py`) and the frontend does not re-ask.
+ * (`backend/host/inject/machine.py`) and the frontend does not re-ask. Decky's
+ * `decky` marker is read for one thing only, to place our entry before its
+ * entries ({@link placeEntry}) — never as a sign that Decky is there.
  *
  * ## The three lifetime rules
  *
@@ -31,7 +33,7 @@
  *    nothing to take back out here ({@link installQuickAccessEntry} states why),
  *    so the strongest form of the rule is available: this module holds no array,
  *    and every dead one is collectable the moment its view is.
- * 2. **Re-assert the position on every pass** ({@link keepLast}).
+ * 2. **Re-assert the position on every pass** ({@link placeEntry}).
  * 3. **Anything bound to the menu's own window is bound from inside the menu's
  *    React tree**, so the remount re-binds it. Nothing in this module binds
  *    anything there, and neither does the glyph — the stores its update dot
@@ -45,6 +47,7 @@
 
 import type { ReactNode } from "react";
 import type { PanelDefinition } from "../api/host";
+import type { QamEntryPosition } from "../types";
 import { quickAccessMenuClasses } from "../utils/deckyUiInternals";
 import { PanelErrorBoundary } from "./PanelErrorBoundary";
 
@@ -75,13 +78,23 @@ export interface QuickAccessTabEntry {
   [TENDER_TAB_MARK]: true;
 }
 
-const isOurs = (tab: unknown): tab is QuickAccessTabEntry =>
-  typeof tab === "object" && tab !== null && (tab as Record<string, unknown>)[TENDER_TAB_MARK] === true;
+/** The property Decky Loader's tabs hook sets on every entry it pushes (decky-loader's `frontend/src/tabs-hook.tsx`). */
+const DECKY_TAB_MARK = "decky";
+
+const carriesMark = (tab: unknown, mark: string): boolean =>
+  typeof tab === "object" && tab !== null && (tab as Record<string, unknown>)[mark] === true;
+
+const isOurs = (tab: unknown): tab is QuickAccessTabEntry => carriesMark(tab, TENDER_TAB_MARK);
+
+const isDeckys = (tab: unknown): boolean => carriesMark(tab, DECKY_TAB_MARK);
 
 /**
- * Move our entry to the end of the array, on every pass rather than at creation.
+ * Put our entry where `position` says, on every pass rather than at creation:
+ * before the first `decky`-marked entry for `"above_decky"`, so every entry
+ * Decky pushed stays below ours, and at the end of the array for
+ * `"below_decky"` or where no entry carries that mark.
  *
- * **Where the entry sits is not ours to choose.** `afterPatch` runs the previous
+ * **Where a push lands is not ours to choose.** `afterPatch` runs the previous
  * handler first and the new one second, so whoever patches LAST pushes last and
  * lands lowest. Measured both ways in #1897: patched before Decky booted, Tender
  * came out above it; re-patched beside a running Decky, below. Install order is
@@ -91,25 +104,30 @@ const isOurs = (tab: unknown): tab is QuickAccessTabEntry =>
  * pass put it back at the end. Moving an entry is invisible to Decky's own
  * guard, which counts marked entries and never asks where they sit.
  *
- * Reads no marker but our own: "last" is a statement about our entry, so it
- * holds against any number of other tab providers rather than against Decky
- * specifically.
+ * Decky's marker is the one its own guard counts by, so it names every entry
+ * Decky put there however many it registered. Finding none is not read as
+ * Decky being absent — the entry simply has nothing to sit above, and goes
+ * last.
  */
-function keepLast(tabs: unknown[]): void {
-  for (let i = tabs.length - 2; i >= 0; i--) {
-    if (isOurs(tabs[i])) tabs.push(...tabs.splice(i, 1));
+function placeEntry(tabs: unknown[], position: QamEntryPosition): void {
+  const ours: unknown[] = [];
+  for (let i = tabs.length - 1; i >= 0; i--) {
+    if (isOurs(tabs[i])) ours.unshift(...tabs.splice(i, 1));
   }
+  const firstDecky = position === "above_decky" ? tabs.findIndex(isDeckys) : -1;
+  tabs.splice(firstDecky === -1 ? tabs.length : firstDecky, 0, ...ours);
 }
 
 /**
- * Put the entry in `tabs` if it is not there, and put it last either way.
+ * Put the entry in `tabs` if it is not there, and put it where `position` says
+ * either way.
  *
  * Exported for the suite, which is the only thing that can drive it with an
  * array of its own — in Steam it is reached from the tree patcher below.
  */
-export function syncEntry(tabs: unknown[], entry: QuickAccessTabEntry): void {
+export function syncEntry(tabs: unknown[], entry: QuickAccessTabEntry, position: QamEntryPosition): void {
   if (!tabs.some(isOurs)) tabs.push(entry);
-  keepLast(tabs);
+  placeEntry(tabs, position);
 }
 
 /**

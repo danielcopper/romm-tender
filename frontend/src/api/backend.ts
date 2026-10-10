@@ -13,6 +13,7 @@ import type {
   CollectionKind,
   CollectionOwnerScope,
   CollectionNamingMode,
+  QamEntryPosition,
   RegistryPlatform,
   FirmwareStatus,
   PlatformFirmwareStatus,
@@ -446,6 +447,12 @@ export const setCollectionNamingMode = endpoint<
   [CollectionNamingMode],
   { success: boolean; reason?: string; message?: string }
 >("set_collection_naming_mode");
+// Read via getSettings().qam_entry_position; applies at the Quick Access menu's
+// next render pass (utils/qamEntryPositionStore.ts).
+export const setQamEntryPosition = endpoint<
+  [QamEntryPosition],
+  { success: boolean; reason?: string; message?: string }
+>("set_qam_entry_position");
 export const getRegistryPlatforms = endpoint<[], { platforms: RegistryPlatform[] }>("get_registry_platforms");
 export const removePlatformShortcuts = endpoint<
   [string],
