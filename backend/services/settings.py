@@ -228,6 +228,7 @@ class SettingsService:
             "collection_create_platform_groups": self._settings.get("collection_create_platform_groups", False),
             "collection_owner_scope": self._settings.get("collection_owner_scope", "all"),
             "collection_naming_mode": self._settings.get("collection_naming_mode", "merge"),
+            "qam_entry_position": self._settings.get("qam_entry_position", "above_decky"),
             "preferred_region": self._settings.get("preferred_region", AUTO_REGION),
             "skip_preview": self._settings.get("skip_preview", False),
             "romm_custom_header_names": [
@@ -413,6 +414,23 @@ class SettingsService:
         if mode not in ("merge", "by_label"):
             raise Refused("invalid_mode", f"Invalid naming mode: {mode}")
         self._settings["collection_naming_mode"] = mode
+        self._settings_persister.save_settings()
+        return {"success": True}
+
+    # ── Quick Access entry ──────────────────────────────────────────────
+
+    def set_qam_entry_position(self, position: object) -> dict[str, Any]:
+        """Validate and persist where Tender's Quick Access entry sits (``"above_decky"`` / ``"below_decky"``).
+
+        The panel reads it on every render pass of the Quick Access menu; what
+        each value places the entry before is described in
+        ``docs/architecture/qam-panel.md`` § The entry. An unrecognised value from
+        the untrusted frontend wire is refused with ``invalid_position`` so a bad
+        call cannot corrupt the setting.
+        """
+        if position not in ("above_decky", "below_decky"):
+            raise Refused("invalid_position", f"Invalid Quick Access entry position: {position}")
+        self._settings["qam_entry_position"] = position
         self._settings_persister.save_settings()
         return {"success": True}
 

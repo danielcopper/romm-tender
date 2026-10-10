@@ -137,6 +137,19 @@ class TestSettingsSchema:
         # by_label is opt-in; a fresh install keeps today's merge behaviour (#1539).
         assert DEFAULT_SETTINGS["collection_naming_mode"] == "merge"
 
+    def test_default_qam_entry_position_is_above_decky(self):
+        assert DEFAULT_SETTINGS["qam_entry_position"] == "above_decky"
+
+    def test_a_settings_file_without_the_qam_entry_position_reads_as_above_decky(self, adapter):
+        settings_path = os.path.join(adapter._settings_dir, "settings.json")
+        with open(settings_path, "w") as f:
+            json.dump({"version": 13, "collection_naming_mode": "by_label"}, f)
+        os.chmod(settings_path, 0o600)
+        result = adapter.load_settings()
+        assert result["qam_entry_position"] == "above_decky"
+        assert result["collection_naming_mode"] == "by_label"
+        assert result["version"] == 13
+
     def test_mutable_default_is_not_aliased_to_template(self, adapter):
         """A missing key is backfilled with a COPY of its mutable default.
 

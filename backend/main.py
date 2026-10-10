@@ -396,6 +396,10 @@ class Endpoints:
         return self._services.settings_service.set_collection_naming_mode(mode)
 
     @route
+    def set_qam_entry_position(self, position):
+        return self._services.settings_service.set_qam_entry_position(position)
+
+    @route
     async def start_sync(self):
         return await self._services.sync_service.start_sync()
 
