@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from _vendor import vdf
+from models.prune import MutationOutcome
 
 from adapters.descriptor_paths import (
     hold_writer_exclusion,
@@ -24,7 +25,7 @@ from domain.artwork_paths import grid_image_filenames
 if TYPE_CHECKING:
     import logging
 
-    from models.prune import MutationOutcome, RecoveryArtifact, SourceClaim, SourceIdentity, SteamRecoverySnapshot
+    from models.prune import RecoveryArtifact, SourceClaim, SourceIdentity, SteamRecoverySnapshot
 
 _LOCALCONFIG_NAME = "localconfig.vdf"
 
@@ -114,7 +115,7 @@ class SteamRecoveryAdapter:
                 if not outcome["success"]:
                     return {**outcome, "changed": changed, "ambiguous": ambiguous}
         except Exception as exc:
-            return {"success": False, "changed": changed, "ambiguous": ambiguous, "message": str(exc)}
+            return MutationOutcome(success=False, changed=changed, ambiguous=ambiguous, message=str(exc))
         return {"success": True, "changed": changed, "ambiguous": ambiguous, "message": "Steam state removed"}
 
     def _resolve_user(self) -> tuple[str, str, str]:
@@ -238,15 +239,15 @@ class SteamRecoveryAdapter:
             if cleanup_outcome is not None:
                 return cleanup_outcome
             if rewrite.replacement_installed:
-                return {
-                    "success": False,
-                    "changed": True,
-                    "ambiguous": True,
-                    "message": (
+                return MutationOutcome(
+                    success=False,
+                    changed=True,
+                    ambiguous=True,
+                    message=(
                         "Controller setting changed but cleanup was incomplete; "
                         f"the newer source was preserved as {os.path.join(config_dir, rewrite.claimed)}: {exc}"
                     ),
-                }
+                )
             raise
 
     @staticmethod
@@ -338,21 +339,21 @@ class SteamRecoveryAdapter:
             retained_claim = SteamRecoveryAdapter._stat_at(config_fd, rewrite.claimed)
             os.close(source_fd)
             if retained_claim is not None:
-                return {
-                    "success": False,
-                    "changed": True,
-                    "ambiguous": True,
-                    "message": (
+                return MutationOutcome(
+                    success=False,
+                    changed=True,
+                    ambiguous=True,
+                    message=(
                         "Controller setting changed but writer exclusion failed; the source was preserved "
                         f"as {os.path.join(rewrite.config_dir, rewrite.claimed)}: {exc}"
                     ),
-                }
-            return {
-                "success": False,
-                "changed": True,
-                "ambiguous": True,
-                "message": f"Controller setting changed but durability is uncertain: {exc}",
-            }
+                )
+            return MutationOutcome(
+                success=False,
+                changed=True,
+                ambiguous=True,
+                message=f"Controller setting changed but durability is uncertain: {exc}",
+            )
         os.close(source_fd)
         return {
             "success": True,
@@ -393,12 +394,12 @@ class SteamRecoveryAdapter:
         try:
             claim_stat = SteamRecoveryAdapter._stat_at(config_fd, rewrite.claimed) if rewrite.source_claimed else None
             if rewrite.source_claimed and claim_stat is None:
-                return {
-                    "success": False,
-                    "changed": True,
-                    "ambiguous": True,
-                    "message": f"Controller source claim removal is uncertain: {exc}",
-                }
+                return MutationOutcome(
+                    success=False,
+                    changed=True,
+                    ambiguous=True,
+                    message=f"Controller source claim removal is uncertain: {exc}",
+                )
             if rewrite.source_claimed:
                 if rewrite.replacement_installed:
                     # The claimed inode may contain a newer unrelated Steam edit.
@@ -412,15 +413,15 @@ class SteamRecoveryAdapter:
                 if preserved is not None:
                     return SteamRecoveryAdapter._preserved_controller_outcome(rewrite.config_dir, preserved, cause=exc)
         except Exception as cleanup_exc:
-            return {
-                "success": False,
-                "changed": rewrite.source_claimed,
-                "ambiguous": True,
-                "message": (
+            return MutationOutcome(
+                success=False,
+                changed=rewrite.source_claimed,
+                ambiguous=True,
+                message=(
                     "Controller rewrite rollback is uncertain; the claimed source was preserved as "
                     f"{os.path.join(rewrite.config_dir, rewrite.claimed)}: {cleanup_exc}"
                 ),
-            }
+            )
         return None
 
     @staticmethod
@@ -467,15 +468,15 @@ class SteamRecoveryAdapter:
         config_dir: str, claimed: str, *, cause: BaseException | None = None
     ) -> MutationOutcome:
         suffix = f": {cause}" if cause is not None else ""
-        return {
-            "success": False,
-            "changed": True,
-            "ambiguous": True,
-            "message": (
+        return MutationOutcome(
+            success=False,
+            changed=True,
+            ambiguous=True,
+            message=(
                 "Controller rewrite collided with concurrent Steam state; the newer source was preserved as "
                 f"{os.path.join(config_dir, claimed)}{suffix}"
             ),
-        }
+        )
 
     @staticmethod
     def _stat_at(directory_fd: int, name: str) -> os.stat_result | None:
