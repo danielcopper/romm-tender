@@ -580,11 +580,11 @@ class SessionAchievementSync(Protocol):
 
     The composition root satisfies this with ``AchievementsService``'s
     ``sync_achievements_after_session``. The lifecycle service kicks
-    this off as a background task — its result and any failure are
-    logged backend-side; the frontend never observes the outcome.
+    this off as a background task and logs what it raises; the frontend
+    never observes the outcome.
     """
 
-    async def sync_achievements_after_session(self, rom_id: int) -> dict[str, Any]: ...
+    async def sync_achievements_after_session(self, rom_id: int) -> None: ...
 
 
 class SessionMigrationReader(Protocol):

@@ -255,7 +255,8 @@ export const AchievementsTab: FC<AchievementsTabProps> = ({ romId, raId, isActiv
         // and self-corrects a wrong "connected". A "no_ra_username" config gap and
         // a stale-cache fallback are neither verdict — leave the store untouched.
         const unreachable =
-          listResult.reason === "server_unreachable" || progressResult.reason === "server_unreachable";
+          (!listResult.success && listResult.reason === "server_unreachable") ||
+          (!progressResult.success && progressResult.reason === "server_unreachable");
         if (unreachable) {
           reportServerReachable(false);
           // Mirror the slot lane's failure reset: release the gate so a reconnect

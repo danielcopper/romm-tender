@@ -83,21 +83,18 @@ class FakeAchievementSync:
     def __init__(
         self,
         *,
-        payload: dict[str, Any] | None = None,
         side_effect: BaseException | None = None,
         completion_event: asyncio.Event | None = None,
     ) -> None:
-        self.payload: dict[str, Any] = payload if payload is not None else {"success": True}
         self.side_effect = side_effect
         self.completion_event = completion_event
         self.calls: list[int] = []
 
-    async def sync_achievements_after_session(self, rom_id: int) -> dict[str, Any]:
+    async def sync_achievements_after_session(self, rom_id: int) -> None:
         self.calls.append(rom_id)
         try:
             if self.side_effect is not None:
                 raise self.side_effect
-            return self.payload
         finally:
             if self.completion_event is not None:
                 self.completion_event.set()
@@ -1170,9 +1167,8 @@ class TestBackgroundTaskTracking:
         blocker = asyncio.Event()
 
         class BlockingAchievementSync:
-            async def sync_achievements_after_session(self, rom_id: int) -> dict[str, Any]:
+            async def sync_achievements_after_session(self, rom_id: int) -> None:
                 await blocker.wait()
-                return {"success": True}
 
         service = _make_service(
             playtime_recorder=FakePlaytimeRecorder(),
@@ -1223,9 +1219,8 @@ class TestBackgroundTaskTracking:
         blocker = asyncio.Event()
 
         class BlockingAchievementSync:
-            async def sync_achievements_after_session(self, rom_id: int) -> dict[str, Any]:
+            async def sync_achievements_after_session(self, rom_id: int) -> None:
                 await blocker.wait()
-                return {"success": True}
 
         service = _make_service(
             playtime_recorder=FakePlaytimeRecorder(),

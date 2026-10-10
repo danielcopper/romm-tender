@@ -2507,16 +2507,11 @@ describe("RomMGameInfoPanel", () => {
       });
       vi.mocked(backend.getAchievements).mockResolvedValue({
         success: false,
-        achievements: [],
-        total: 0,
         reason: "server_unreachable",
         message: "down",
       });
       vi.mocked(backend.getAchievementProgress).mockResolvedValue({
         success: false,
-        earned: 0,
-        total: 0,
-        earned_achievements: [],
         reason: "server_unreachable",
         message: "down",
       });
@@ -2555,9 +2550,6 @@ describe("RomMGameInfoPanel", () => {
       vi.mocked(backend.getAchievements).mockResolvedValue({ success: true, achievements: [], total: 0 });
       vi.mocked(backend.getAchievementProgress).mockResolvedValue({
         success: false,
-        earned: 0,
-        total: 0,
-        earned_achievements: [],
         reason: "no_ra_username",
         message: "No RA username configured in RomM",
       });

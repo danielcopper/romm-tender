@@ -1523,5 +1523,7 @@ export const savesRollbackToVersion = endpoint<[number, string, number], Rollbac
 export const copySaveToSlot = endpoint<[number, number, string], CopySaveToSlotStatus>("copy_save_to_slot");
 
 // Achievements endpoints
-export const getAchievements = endpoint<[number], AchievementList>("get_achievements");
-export const getAchievementProgress = endpoint<[number], AchievementProgress>("get_achievement_progress");
+export const getAchievements = endpoint<[number], AchievementList | EndpointFailure>("get_achievements");
+export const getAchievementProgress = endpoint<[number], AchievementProgress | EndpointFailure>(
+  "get_achievement_progress",
+);

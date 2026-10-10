@@ -1,9 +1,11 @@
 """Exception types raised across layers, and the reason a RomM error answers with.
 
 The RomM and SteamGridDB API errors, a cooperative abort, and ``Refused`` —
-and ``classify_error``, which turns a RomM error into a wire reason.
+and ``classify_error``, which turns a RomM error into a wire reason, with
+``romm_error_log_level``, the level such an error is logged at.
 """
 
+import logging
 import socket
 from typing import Any
 
@@ -230,6 +232,16 @@ def classify_error(exc):
         # the same class of lie as reporting a 404 that way.
         return ErrorCode.SERVER_UNREACHABLE.value, f"Server unreachable — {exc}"
     return ErrorCode.UNKNOWN.value, str(exc)
+
+
+def romm_error_log_level(exc: RommApiError) -> int:
+    """The level a RomM error is logged at.
+
+    Info where :func:`classify_error` answers ``server_unreachable``, because an
+    offline handheld is an expected state, and warning otherwise.
+    """
+    reason, _message = classify_error(exc)
+    return logging.INFO if reason == ErrorCode.SERVER_UNREACHABLE.value else logging.WARNING
 
 
 class Refused(Exception):

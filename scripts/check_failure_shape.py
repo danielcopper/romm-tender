@@ -108,6 +108,8 @@ VIOLATION_CLASSES = frozenset({ERROR_CODE_DIALECT, ERROR_KEY_DIALECT, AD_HOC})
 CONVERTED_MODULES: tuple[str, ...] = (
     "backend/adapters/steam_config.py",
     "backend/lib/conflict_rules.py",
+    "backend/services/achievements.py",
+    "backend/services/artwork.py",
     "backend/services/connection.py",
     "backend/services/downloads.py",
     "backend/services/emulator_sources.py",
