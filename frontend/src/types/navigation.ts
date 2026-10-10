@@ -22,6 +22,7 @@ export const SETTINGS_SECTIONS = [
   "steam-library",
   "emulator-sources",
   "updates",
+  "interface",
   "advanced",
 ] as const;
 
