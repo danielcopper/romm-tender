@@ -25,15 +25,15 @@ import { withTimeout } from "./withTimeout";
  * switched off, and as "switched off" would refuse one that may not be.
  */
 export async function readStartingSource(context: string): Promise<StartingSourceAnswer> {
-  let answer: Awaited<ReturnType<typeof checkStartSource>> | undefined;
+  let answer: Awaited<ReturnType<typeof checkStartSource>>;
   try {
     answer = await withTimeout(checkStartSource(), LOCAL_CALL_LIMIT_MS);
   } catch (e) {
     logError(`${context} start-source check got no answer: ${e}`);
     return { checked: false };
   }
-  if (typeof answer !== "object" || answer === null || !("switched_off" in answer)) {
-    logError(`${context} start-source check could not tell: ${answer?.reason ?? "no answer"}`);
+  if (!("switched_off" in answer)) {
+    logError(`${context} start-source check could not tell: ${answer.reason}`);
     return { checked: false };
   }
   return { checked: true, switchedOff: answer.switched_off };
