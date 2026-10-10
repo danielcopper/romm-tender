@@ -10,19 +10,27 @@ is the one to correct.
 
 Format: **invariant** — tier — enforced by.
 
-- **Endpoint failures use `{success, reason, message}` (never `error` / `error_code`); a module on `CONVERTED_MODULES`
-  builds no failure shape — a service there raises its refusal, which `Endpoints` answers; anything an endpoint raises
-  but a refusal or a `RommApiError` stays a transport error** — check + test + prompt-only —
-  `scripts/check_failure_shape.py --check` (returned dicts in `services/`, and every literal, `error_response` call or
-  refusal-helper spread in a listed module), `tests/test_endpoints_translation.py` (on every route, a raised `Refused` /
-  `DomainRefused` answers that shape and any other exception stays `backend_exception`; on one `def` and one `async def`
-  route, a `RommApiError` answers `classify_error`'s reason and a returned `PartialFailure` is serialized into it; every
-  route is the translating wrapper). Prompt-only: no entry is ever taken off `CONVERTED_MODULES`, and a further type
-  joins `main._TRANSLATED` only by decision
-- **A definitive 404 is `not_found`, never `server_unreachable` — a catch-all `except Exception` in `services/` may not
-  bind a verdict key (`reason` / `status` / `recommended_action`) to a hardcoded `SERVER_UNREACHABLE`; route the
-  exception through `classify_error`, or peel the 404 off with a sibling `except RommNotFoundError` where the verdict is
-  a partial-success flag** — check — `scripts/check_404_not_unreachable.py --check`
+- **Endpoint failures use `{success, reason, message}` (never `error` / `error_code`), and `main.py` is the one place
+  that builds that shape — a service raises its refusal, which `Endpoints` answers; anything an endpoint raises but a
+  refusal or a `RommApiError` stays a transport error** — check + test + prompt-only —
+  `scripts/check_failure_shape.py --check` (every module under `backend/` but `main.py`, `_vendor/` and `native/`: a
+  dict literal with a literal falsy `success`, an `error_response` call or a refusal-helper spread, event payloads
+  included; unseen: a computed `success` such as the save-sync results' and `prune_complete`'s, a failure without a
+  `success` key, a failure dict built without a literal), `tests/test_endpoints_translation.py` (on every route, a
+  raised `Refused` / `DomainRefused` answers that shape and any other exception stays `backend_exception`; on one `def`
+  and one `async def` route, a `RommApiError` answers `classify_error`'s reason and a returned `PartialFailure` is
+  serialized into it; every route is the translating wrapper). Prompt-only: the keys `main.py` builds the shape with —
+  no refusal's details carry `error` or `error_code` — and a further type joins `main._TRANSLATED` only by decision
+- **A definitive 404 is `not_found`, never `server_unreachable` — `classify_error`'s table answers every not-found class
+  `not_found`, and a catch-all `except Exception` in `services/` may neither bind a verdict key (`reason` / `status` /
+  `recommended_action`) to a hardcoded `SERVER_UNREACHABLE` nor raise `ServerUnreachable` or a refusal whose reason is
+  that slug; let the RomM error reach the entrypoint or route it through `classify_error`, or peel the 404 off with a
+  sibling `except RommNotFoundError` where the verdict is a status or a partial-success flag** — check + test —
+  `scripts/check_404_not_unreachable.py --check` (unseen: a verdict or refusal a helper builds or a variable holds,
+  `ServerUnreachable` under another name, the slug held in a variable or a constant) and
+  `tests/lib/test_errors.py::TestEveryNotFoundClassAnswersNotFound` (`RommNotFoundError` and every class in
+  `lib/errors.py` deriving from it; unseen: one declared in another module, and a 404 that is no `RommNotFoundError` —
+  the pairing-code exchange's two 404 errors answer `server_unreachable`)
 - **A 404 becomes `RommNotFoundError` only when RomM's entity layer is proven to have answered it; only the three
   byte-stream fetches opt out** — test + prompt-only — `TestNotFoundDiscrimination` plus the per-call-site
   `test_generic_route_404_still_raises_not_found` trio in `tests/adapters/romm/test_http.py`; a fourth byte-stream

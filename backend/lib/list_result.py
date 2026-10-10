@@ -34,8 +34,9 @@ shape is::
 Three required fields:
 
 * ``success: False`` — binary success discriminant.
-* ``reason`` — coarse routing slug. For server-reachability failures use
-  :data:`ErrorCode.SERVER_UNREACHABLE`; the rest of the small Lean enum
+* ``reason`` — coarse routing slug. For server-reachability failures it is
+  ``server_unreachable`` (:data:`ErrorCode.SERVER_UNREACHABLE`, raised as
+  ``lib.errors.ServerUnreachable``); the rest of the small Lean enum
   (auth/not-found/unsupported/unknown plus the frontend-routed
   ``version_error`` / ``stale_conflict``) covers the categories a consumer
   branches on, and ``stale_preview`` refuses a preview that can no longer be
@@ -50,15 +51,18 @@ Three required fields:
   ``AUTH_FAILED`` but explain different remedies).
 
 The legacy ``error_code`` key and a second ``error`` key are **forbidden**.
-``scripts/check_failure_shape.py --check`` enforces this: every
-``success: False`` return in ``backend/services/`` must carry ``reason``
-and ``message`` and must not carry ``error`` or ``error_code``.
+
+``main.Endpoints`` is the one place that builds this shape — from a refusal a
+use case raises, a partial failure it returns, or a RomM error it lets through.
+``scripts/check_failure_shape.py --check`` fails on a failure dict built
+anywhere else under ``backend/``; it does not read the keys of the one
+``main.Endpoints`` builds.
 
 Optional payload-shape extras (``slot``, ``saves``, ``active_slot``, …) may
 appear alongside on a per-endpoint basis when the frontend needs to render
 fallback UI on failure.
 
-Two carve-outs (also recognised by the gate):
+Two carve-outs, which carry no ``success`` key and are not read by the gate:
 
 * **Discriminated-status unions** (e.g. ``versions.rollback_to_version``,
   ``versions.list_file_versions``) keep the ``status: "ok" | "..."``
