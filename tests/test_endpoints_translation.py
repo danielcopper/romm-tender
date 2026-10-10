@@ -1839,7 +1839,7 @@ def _install_at(uow: FakeUnitOfWork, rom_id: int, file_path: str) -> None:
 
 
 class TestTheHomeMigrationOnTheWire:
-    """A home migration that stops for the user or partway, as the wire carries it."""
+    """A home migration that waits for the user, or whose moves partly fail, as the wire carries it."""
 
     async def test_a_taken_destination_answers_needs_confirmation_with_the_conflicts(self):
         store = FakeMigrationFileStore()

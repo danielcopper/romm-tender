@@ -624,8 +624,8 @@ export const setSystemCore = endpoint<
  * `launch_options` (the `-e`-wrapped command for a pin, the plain command for a
  * clear) plus the shortcut's `app_id` — the frontend confirm-sets them via
  * `setLaunchOptionsConfirmed`. Both are absent/None when the ROM is uninstalled
- * or unbound (no shortcut to update). An unresolvable label is refused with
- * `core_unavailable`.
+ * or unbound (no shortcut to update). Its refusals:
+ * docs/architecture/core-emulator-selection.md.
  */
 export type GameCoreApplyResult =
   | {
@@ -700,8 +700,7 @@ export interface DiscSelection {
  * the pick (or NULL when clearing back to the default) and re-bakes the
  * `launch_options` for the now-selected disc — the frontend confirm-sets it via
  * `setLaunchOptionsConfirmed`. `selected` echoes the now-effective pin (null when
- * cleared). A refusal is `not_found` for an unknown filename, `not_installed` /
- * `unsupported` when the ROM is not a multi-disc install.
+ * cleared). Its refusals: docs/architecture/core-emulator-selection.md.
  */
 export type SelectDiscResult =
   | {

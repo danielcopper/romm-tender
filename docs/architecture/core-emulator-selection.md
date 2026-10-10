@@ -548,6 +548,9 @@ The frontend CPU-button menu on the game detail page drives two backend endpoint
   resolves to `(None, None)`. There is no separate "Reset" item — selecting the default-marked entry is the clear path;
   any other entry pins that core.
 
+Both refuse a ROM Tender does not track with `not_found`; a pin also refuses with `not_found` when the ROM is retired
+while its label is resolved, and with `core_unavailable` when its platform changed meanwhile.
+
 For an installed + bound ROM the response carries `launch_options` + `app_id`; the frontend then **awaits
 `setLaunchOptionsConfirmed`** (the fire-then-poll `AppDetails` confirm from
 [ADR-0009](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0009-launcher-pure-exec-wrapper-baked-launch-options.md))
@@ -564,7 +567,7 @@ so standalone emulators and disabled un-bakeable entries render identically (#12
 
 1. It writes the choice into `settings["platform_cores"]` — storing the LABEL under the slug, or popping the slug when
    the label is empty (revert to the es_systems default) — and persists `settings.json` through the injected
-   `SettingsPersister`. The es_systems cache is reset so the next resolution re-reads from disk.
+   `SettingsPersister`.
 2. It then **fans out a re-bake**: it iterates every ROM on the platform and, for each that is **installed and
    shortcut-bound** but does **not** carry a per-game `emulator_override` (the pin wins over the platform default),
    resolves the ROM's full active core and appends `{app_id, launch_options}` to a `rebake_items` list. ROMs with a
@@ -572,10 +575,10 @@ so standalone emulators and disabled un-bakeable entries render identically (#12
    already wins.
 3. It returns `{success: true, rebake_items}`. A `settings.json` that cannot be written gives the previous choice back
    to the live settings, so memory and file agree, and refuses with `save_failed` ("Save failed: …"). Any other failure
-   is a transport error, and one in the fan-out after step 1 leaves the new choice stored and in effect while no
-   shortcut is re-baked: the frontend re-bakes only on success. The write checks no BIOS, so a firmware read cannot add
-   a second way to report a stored switch as failed. The platform detail re-reads the platform once the re-bake is done,
-   and that read answers for the new core's firmware.
+   in either step is a transport error, and one in the fan-out after step 1 leaves the new choice stored and in effect
+   while no shortcut is re-baked: the frontend re-bakes only on success. The write checks no BIOS, so a firmware read
+   cannot add a second way to report a stored switch as failed. The platform detail re-reads the platform once the
+   re-bake is done, and that read answers for the new core's firmware.
 
 The frontend confirm-sets each `rebake_items` entry on its live Steam shortcut the same way the per-game flow does, so a
 per-platform core change applies **immediately** to every installed game on the platform — no sync required. Because the

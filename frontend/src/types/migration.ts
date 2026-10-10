@@ -23,7 +23,7 @@ interface ConflictDetail {
   new_mtime: string;
 }
 
-/** A run that made every move it found. */
+/** A run in which no move failed. */
 interface MigrationDone {
   success: true;
   message: string;
@@ -35,7 +35,7 @@ interface MigrationDone {
   errors?: string[];
 }
 
-/** Nothing was moved: some destinations are taken, and the user picks overwrite or skip. */
+/** Nothing was moved: some destinations are taken, and the user picks overwrite, skip or cancel. */
 interface MigrationNeedsConfirmation {
   success: false;
   reason: "needs_confirmation";

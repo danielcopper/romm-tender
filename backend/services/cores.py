@@ -217,10 +217,6 @@ class CoreService:
         so a multi-disc ROM keeps its persisted ``selected_disc`` rather than
         reverting to disc 1 / the m3u (a single-disc ROM bakes its ``file_path``
         unchanged).
-
-        A settings file that cannot be written gives the previous selection back
-        to the live settings, so memory and file agree, and refuses with
-        ``save_failed``.
         """
         platform_cores = self._settings["platform_cores"]
         previous = platform_cores.get(platform_slug)
@@ -334,7 +330,7 @@ class CoreService:
         options = self._emulator_options(self._platform_systems.rom_system(platform_slug, install))
         invocation = label_to_invocation(options["options"], label)
         if invocation is None:
-            # Hard-fail BEFORE any write — never persist a label that does not
+            # Refuse BEFORE any write — never persist a label that does not
             # resolve to a bakeable emulator (unknown / needs_setup / un-bakeable).
             raise Refused("core_unavailable", f"Emulator '{label}' is not available for {platform_slug}")
         with self._uow_factory() as uow:
