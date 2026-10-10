@@ -1585,12 +1585,9 @@ class TestVerifyLocatesFilesExactly:
         def frames() -> list[object]:
             return [payload for name, payload in h.events if name == "verify_progress"]
 
-        try:
-            async with asyncio.timeout(2.0):
-                while not frames():
-                    await asyncio.sleep(0.01)
-        except TimeoutError:
-            pytest.fail("no verify_progress frame was emitted")
+        async with asyncio.timeout(2.0):
+            while not frames():
+                await asyncio.sleep(0.01)
         assert frames()[-1] == {"rom_id": _ROM_ID, "bytes_done": 10, "bytes_total": 10}
 
 
