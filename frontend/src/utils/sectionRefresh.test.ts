@@ -328,8 +328,6 @@ describe("refreshAchievementsInBackground", () => {
   it("skips the setter when success=false", async () => {
     vi.mocked(backend.getAchievementProgress).mockResolvedValueOnce({
       success: false,
-      earned: 0,
-      total: 0,
     } as unknown as Awaited<ReturnType<typeof backend.getAchievementProgress>>);
     const setter = vi.fn();
     refreshAchievementsInBackground(1, () => false, setter);
