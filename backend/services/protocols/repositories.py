@@ -95,6 +95,13 @@ class RomRepository(Protocol):
         """Return the number of ROMs that carry a Steam-shortcut binding. (library/reporter.py sync totals)"""
         ...
 
+    def get_bound_platform_slugs(self) -> set[str]:
+        """Return the platform slugs with at least one ROM bound to a Steam shortcut, an empty slug left out.
+
+        (firmware/status.py synced platforms)
+        """
+        ...
+
     def set_emulator_override(self, rom_id: int, label: str | None) -> None:
         """Pin (or clear with ``None``) the per-game emulator override for *rom_id*.
 

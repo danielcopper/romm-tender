@@ -381,11 +381,7 @@ class FirmwareStatusReader:
         platforms get unbound on the next sync (ADR-0007) and drop out.
         """
         with self._uow_factory() as uow:
-            return {
-                rom.platform_slug
-                for rom in uow.roms.iter_all()
-                if rom.platform_slug and rom.shortcut_app_id is not None
-            }
+            return uow.roms.get_bound_platform_slugs()
 
     def _stamp_deletable(self, plat: dict[str, Any], platform_slug: str, records: list[BiosFile]) -> None:
         """Stamp what a delete would take — per row, and for the platform.
