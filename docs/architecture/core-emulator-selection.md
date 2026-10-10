@@ -168,6 +168,16 @@ answers, and every answer says it is not set up. Without it, the first switched-
 `starts_games` false, and the panel says Tender cannot start games through it yet. Until Tender chooses among every
 source's emulators, the order decides only while RetroDECK is absent or switched off.
 
+**A switched-off RetroDECK starts nothing.** A shortcut's launch command starts RetroDECK whatever its switch says, so
+the shared launch gate refuses the start instead: while RetroDECK is detected and switched off, `check_start_source`
+answers its kind (`domain/emulator_sources.py::switched_off_starting_source`, over a detection and nothing else of the
+sources), and both funnels — the game page's Play and the launch watcher — refuse before any save-sync work and say
+**"RetroDECK is switched off in Settings › Emulator sources, and Tender can only start games through RetroDECK yet."**
+as a notification. Another source switched on does not lift the refusal, since none of them starts games yet. Where
+RetroDECK is not detected at all, the start goes ahead: a source that is not listed has no switch to turn back on. While
+the backend is not running there is no watcher, and a start from Steam's library goes through as before; the launcher
+reads no setting of Tender's.
+
 **How long an answer is kept.** Sources are detected per reading, so a source installed later appears on the next call,
 and nothing outlives the call or run that asked it. A call from the panel takes a fresh reading per question. The
 library sync's launch resolution takes one reading per run (`ShortcutLaunchResolver.do_read_sources`, in the preview and

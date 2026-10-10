@@ -34,6 +34,7 @@ function makeOps(overrides: Partial<LaunchGateOps> = {}): LaunchGateOps {
   return {
     migrationPending: vi.fn(() => false),
     hasLaunchTarget: vi.fn(async () => true),
+    startingSourceSwitchedOff: vi.fn(async () => false),
     ensureTrackingConfigured: vi.fn(async (): Promise<"proceed" | "abort"> => "proceed"),
     checkCoreChange: vi.fn(async () => true),
     checkReachability: vi.fn(async () => true),
@@ -68,6 +69,33 @@ describe("runLaunchGate — verdict branches", () => {
     expect(ops.ensureTrackingConfigured).not.toHaveBeenCalled();
     expect(ops.preLaunchSync).not.toHaveBeenCalled();
     expect(ops.checkReachability).not.toHaveBeenCalled();
+  });
+
+  it("blocks with source_switched_off when the source games start through is switched off", async () => {
+    const ops = makeOps({ startingSourceSwitchedOff: vi.fn(async () => true) });
+    await expect(runLaunchGate(100, 42, ops)).resolves.toEqual({
+      decision: "block",
+      reason: "source_switched_off",
+    });
+    // Refused before the save-sync work: no sync for a start that never happens.
+    expect(ops.ensureTrackingConfigured).not.toHaveBeenCalled();
+    expect(ops.checkCoreChange).not.toHaveBeenCalled();
+    expect(ops.checkReachability).not.toHaveBeenCalled();
+    expect(ops.preLaunchSync).not.toHaveBeenCalled();
+    expect(ops.checkLocalDrift).not.toHaveBeenCalled();
+  });
+
+  it("does not ask about the source for a ROM with no launch target", async () => {
+    const ops = makeOps({ hasLaunchTarget: vi.fn(async () => false) });
+    await runLaunchGate(100, 42, ops);
+    expect(ops.startingSourceSwitchedOff).not.toHaveBeenCalled();
+  });
+
+  it("proceeds past the source step while the source is switched on", async () => {
+    const ops = makeOps();
+    await expect(runLaunchGate(100, 42, ops)).resolves.toEqual({ decision: "allow" });
+    expect(ops.startingSourceSwitchedOff).toHaveBeenCalled();
+    expect(ops.preLaunchSync).toHaveBeenCalled();
   });
 
   it("proceeds past the launch-target step when the ROM has one", async () => {
@@ -168,6 +196,7 @@ describe("runLaunchGate — a step that gets no answer in time", () => {
 
   it.each([
     ["the launch-target read", { hasLaunchTarget: noAnswer }],
+    ["the start-source read", { startingSourceSwitchedOff: noAnswer }],
     ["the tracking setup", { ensureTrackingConfigured: noAnswer }],
     ["the core-change check", { checkCoreChange: noAnswer }],
     ["the reachability probe", { checkReachability: noAnswer }],

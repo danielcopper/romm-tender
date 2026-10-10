@@ -47,6 +47,7 @@ import type {
   MigrationResult,
   EmulatorSourcesListing,
   EmulatorSourceDirection,
+  StartSourceCheck,
   RollbackStatus,
   ListFileVersionsResult,
   CopySaveToSlotStatus,
@@ -656,6 +657,9 @@ export const getSystemCoreInfo = endpoint<[string], SystemCoreInfo>("get_system_
 
 /** Every detected emulator source, in the user's order, with its health and its switch. */
 export const getEmulatorSources = endpoint<[], EmulatorSourcesListing>("get_emulator_sources");
+
+/** Whether the source games start through is switched off, which refuses a start (the launch check's read). */
+export const checkStartSource = endpoint<[], StartSourceCheck>("check_start_source");
 
 /** Why a switch or a move of an emulator source was refused. */
 export type EmulatorSourceRefusal = EndpointFailure & {

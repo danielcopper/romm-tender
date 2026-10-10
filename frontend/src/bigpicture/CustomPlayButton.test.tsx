@@ -2136,9 +2136,11 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     // module-level state) so a mark in one test never silently affects the next.
     consumeLaunchSkip(100);
 
-    // Gate predecessors default to "pass": no migration, tracking configured,
-    // no core change. Each test overrides the branch it exercises.
+    // Gate predecessors default to "pass": no migration, the starting source
+    // switched on, tracking configured, no core change. Each test overrides the
+    // branch it exercises.
     vi.mocked(getMigrationState).mockReturnValue({ pending: false });
+    vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: null });
     vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "default" });
     vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
     vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "", synced: 0, conflicts: [] });
@@ -2225,6 +2227,35 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     await clickPlay();
 
     await waitFor(() => expect(vi.mocked(SteamClient.Apps.RunGame)).toHaveBeenCalledWith("gid-1", "", -1, 100));
+  });
+
+  it("RetroDECK switched off → pressing Play starts nothing and says why (#2269)", async () => {
+    vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: "retrodeck" });
+    vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
+
+    await clickPlay();
+
+    await waitFor(() =>
+      expect(toaster.toast).toHaveBeenCalledWith({
+        title: "Tender",
+        body: "RetroDECK is switched off in Settings › Emulator sources, and Tender can only start games through RetroDECK yet.",
+      }),
+    );
+    expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
+    // Refused before the save-sync work: no sync for a start that never happens.
+    expect(vi.mocked(backend.preLaunchSync)).not.toHaveBeenCalled();
+    expect(vi.mocked(backend.probeReachability)).not.toHaveBeenCalled();
+    expect(await within(document.body).findByText("Play")).toBeInTheDocument();
+  });
+
+  it("RetroDECK switched on → Play passes the source step and launches", async () => {
+    vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: null });
+    vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
+
+    await clickPlay();
+
+    await waitFor(() => expect(vi.mocked(SteamClient.Apps.RunGame)).toHaveBeenCalledWith("gid-1", "", -1, 100));
+    expect(vi.mocked(backend.checkStartSource)).toHaveBeenCalled();
   });
 
   it("offline + local drift → OfflineDriftModal; start_anyway launches", async () => {

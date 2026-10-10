@@ -1403,7 +1403,9 @@ Runs before a RomM game starts (if `sync_before_launch` is enabled), through one
 `runLaunchGate` (`frontend/src/utils/launchGate.ts`). Tender's Play button runs it from `CustomPlayButton.handlePlay()`
 before it starts the game itself; the launch watcher (`frontend/src/utils/launchInterceptor.ts`) gates the starts that
 do not come through the Play button — Steam's own Play and a `steam://rungameid` link. Pre-launch sync is **not**
-triggered via `RegisterForAppLifetimeNotifications`.
+triggered via `RegisterForAppLifetimeNotifications`. A start the gate refuses before the save work — a ROM with no
+launch target, or RetroDECK switched off
+([Which emulator source answers](core-emulator-selection.md#which-emulator-source-answers)) — runs no sync at all.
 
 The watcher listens on `SteamClient.Apps.RegisterForGameActionStart`, which reports a start with `action` `"LaunchApp"`
 before Steam creates the game's process. Its second argument is **not the appId but the 64-bit game ID** in decimal: for

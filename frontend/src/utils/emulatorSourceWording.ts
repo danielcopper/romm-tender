@@ -181,6 +181,11 @@ export function cannotStartNotice(kind: string): string {
   return `${sourceName(kind)} is switched on in Settings › Emulator sources, but Tender cannot start games through it yet.`;
 }
 
+/** Why a start is refused while RetroDECK, the one source Tender starts games through yet, is switched off.
+ *  Both the game page's Play and a start from Steam's own library say it, as a notification. */
+export const STARTING_SOURCE_OFF_SENTENCE =
+  "RetroDECK is switched off in Settings › Emulator sources, and Tender can only start games through RetroDECK yet.";
+
 /** A source whose emulator list the resolver cannot read yet (EmuDeck's sealed catalogue). */
 export function sealedCatalogueSentence(kind: string): string {
   return `${sourceName(kind)}'s emulator list cannot be read yet.`;

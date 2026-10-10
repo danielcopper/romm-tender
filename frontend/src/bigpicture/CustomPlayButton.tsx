@@ -78,6 +78,8 @@ import { getMigrationState } from "../utils/migrationStore";
 import { reloadGameDetail } from "../utils/gameDetailStore";
 import { runLaunchGate, markLaunchSkipped, LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "../utils/launchGate";
 import { NO_LAUNCH_TARGET_TOAST_BODY, romHasLaunchTarget } from "../utils/launchTarget";
+import { startingSourceSwitchedOff } from "../utils/startingSource";
+import { STARTING_SOURCE_OFF_SENTENCE } from "../utils/emulatorSourceWording";
 import type { GateVerdict, LaunchGateOps, PreLaunchSyncOutcome } from "../utils/launchGate";
 import { noteAppRom, readGameRunning } from "../utils/sessionManager";
 import type {
@@ -739,6 +741,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   const makePlayButtonOps = (rid: number): LaunchGateOps => ({
     migrationPending: () => getMigrationState().pending,
     hasLaunchTarget: () => romHasLaunchTarget(rid, "CustomPlayButton"),
+    startingSourceSwitchedOff: () => startingSourceSwitchedOff("CustomPlayButton"),
     ensureTrackingConfigured: () => ensureTrackingConfigured(rid),
     checkCoreChange: () => confirmCoreChangeIfNeeded(rid),
     checkReachability: async () => {
@@ -843,8 +846,12 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
         // the QAM/page already surfaces it. Both bail silently to "play".
         // block/no_launch_target has no such standing surface at the moment of the
         // press — the page states it, but the press must not read as a dead button.
+        // block/source_switched_off has none at all, so the press says why.
         if (verdict.decision === "block" && verdict.reason === "no_launch_target") {
           showToast(NO_LAUNCH_TARGET_TOAST_BODY);
+        }
+        if (verdict.decision === "block" && verdict.reason === "source_switched_off") {
+          showToast(STARTING_SOURCE_OFF_SENTENCE);
         }
         setState("play");
         return "done";

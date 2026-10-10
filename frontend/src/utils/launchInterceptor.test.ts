@@ -15,6 +15,7 @@ import { TimeoutError } from "./withTimeout";
 vi.mock("../api/backend", () => ({
   refreshMigrationState: vi.fn(),
   getInstalledRom: vi.fn(),
+  checkStartSource: vi.fn(),
   getCachedGameDetail: vi.fn(),
   isSaveTrackingConfigured: vi.fn(),
   getSaveSetupInfo: vi.fn(),
@@ -166,6 +167,8 @@ describe("launchInterceptor — full funnel watcher", () => {
       installed_at: "2026-01-01T00:00:00Z",
       launchable: true,
     });
+    // Default: the source games start through is switched on.
+    vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: null });
     // Skip-set empty by default — a marked appId is set per-test.
     vi.mocked(sessionManager.getAppIdRomIdMapSnapshot).mockReturnValue({ [String(APP_ID)]: 42 });
     vi.mocked(sessionManager.refreshAppIdMap).mockResolvedValue(undefined);
@@ -575,6 +578,50 @@ describe("launchInterceptor — full funnel watcher", () => {
     });
   });
 
+  describe("with RetroDECK switched off (#2269)", () => {
+    beforeEach(async () => {
+      const actual = await vi.importActual<typeof import("./launchGate")>("./launchGate");
+      vi.mocked(launchGate.runLaunchGate).mockImplementation(actual.runLaunchGate);
+      vi.mocked(backend.isSaveTrackingConfigured).mockResolvedValue({ configured: true, active_slot: "slot1" });
+      vi.mocked(backend.checkCoreChange).mockResolvedValue({ changed: false });
+      vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
+      vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: true, message: "" });
+    });
+
+    it.each([
+      ["Steam's own Play", PLAY_SOURCE],
+      ["a steam://rungameid link", DEEP_LINK_SOURCE],
+    ])("a start through %s is cancelled and the notification says why", async (_how, source) => {
+      vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: "retrodeck" });
+
+      register();
+      captureHandler()(77, GAME_ID, "LaunchApp", source);
+      await flush();
+
+      expect(SteamClient.Apps.CancelGameAction).toHaveBeenCalledWith(77);
+      expect(toaster.toast).toHaveBeenCalledWith({
+        title: "Tender",
+        body: "RetroDECK is switched off in Settings › Emulator sources, and Tender can only start games through RetroDECK yet.",
+      });
+      expect(runGameMock()).not.toHaveBeenCalled();
+      // Refused before the save-sync work: no sync for a start that never happens.
+      expect(backend.probeReachability).not.toHaveBeenCalled();
+      expect(backend.preLaunchSync).not.toHaveBeenCalled();
+    });
+
+    it("switched on again, the same start is gated as before and relaunched", async () => {
+      vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: null });
+
+      register();
+      captureHandler()(77, GAME_ID, "LaunchApp", PLAY_SOURCE);
+      await flush();
+
+      expect(backend.preLaunchSync).toHaveBeenCalledWith(42);
+      expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
+      expect(toaster.toast).not.toHaveBeenCalled();
+    });
+  });
+
   describe("a later wait that gets no answer", () => {
     beforeEach(async () => {
       const actual = await vi.importActual<typeof import("./launchGate")>("./launchGate");
@@ -958,6 +1005,21 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(runGameMock()).not.toHaveBeenCalled();
     });
 
+    it("source_switched_off block → says why, no relaunch", async () => {
+      vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "block", reason: "source_switched_off" });
+
+      register();
+      const handler = captureHandler();
+      handler(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
+      await flush();
+
+      expect(toaster.toast).toHaveBeenCalledWith({
+        title: "Tender",
+        body: "RetroDECK is switched off in Settings › Emulator sources, and Tender can only start games through RetroDECK yet.",
+      });
+      expect(runGameMock()).not.toHaveBeenCalled();
+    });
+
     it("abort → no toast, no relaunch", async () => {
       vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "abort" });
 
@@ -1199,6 +1261,15 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(ops.migrationPending()).toBe(false);
     });
 
+    it("startingSourceSwitchedOff asks the backend", async () => {
+      const ops = await captureOps();
+
+      vi.mocked(backend.checkStartSource).mockResolvedValueOnce({ switched_off: "retrodeck" });
+      expect(await ops.startingSourceSwitchedOff()).toBe(true);
+      vi.mocked(backend.checkStartSource).mockResolvedValueOnce({ switched_off: null });
+      expect(await ops.startingSourceSwitchedOff()).toBe(false);
+    });
+
     it("checkReachability: online passes through; a throw logs and treats as offline", async () => {
       const ops = await captureOps();
 
@@ -1351,6 +1422,12 @@ describe("launchInterceptor — full funnel watcher", () => {
           limit: 5000,
           op: "hasLaunchTarget",
           arrange: () => vi.mocked(backend.getInstalledRom).mockReturnValue(never()),
+        },
+        {
+          call: "check_start_source",
+          limit: 5000,
+          op: "startingSourceSwitchedOff",
+          arrange: () => vi.mocked(backend.checkStartSource).mockReturnValue(never()),
         },
         {
           call: "is_save_tracking_configured",
