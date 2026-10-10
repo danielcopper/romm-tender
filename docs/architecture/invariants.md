@@ -559,10 +559,10 @@ Format: **invariant** — tier — enforced by.
   `readRunningApps` for whether a game runs (Running alone, for `readGameRunning`), `readRunningOrStartingApps` for
   whether one runs or is starting (Launching or Running, for the stranded card and reload adoption, because a game Steam
   has reported started can still read Launching), and `isAnyAppHolding` for the session-budget banner's restart, which
-  closes a game on its way in or out as well. The backend's expression is the second reading, and both waits — the
-  reload and an update's install — read it. An unreadable status counts as running or holding on both sides, because a
-  field Steam renamed hits every entry at once, and read as "not running" it would gate a link on a running game, let a
-  restart close one, and lose every running session at a JS-context rebuild.
+  closes a game on its way in or out as well. The backend's expression is the third reading, `isAnyAppHolding`'s, and
+  both waits — the reload and an update's install — read it. An unreadable status counts as running or holding on both
+  sides, because a field Steam renamed hits every entry at once, and read as "not running" it would gate a link on a
+  running game, let a restart close one, and lose every running session at a JS-context rebuild.
   `tests/host/inject/test_recovery.py::TestTheStatusHomesAgree` reads `runningApps.ts` and holds its
   `DISPLAY_STATUSES_THAT_HOLD` equal to the backend's; `TestWhichEntriesHold` runs the expression under node over
   Launching, Running, ReadyToLaunch and Terminating and four unreadable shapes; `frontend/src/utils/runningApps.test.ts`

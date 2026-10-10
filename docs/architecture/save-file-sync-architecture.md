@@ -1950,13 +1950,14 @@ still answers "running" under rule 1 — only when two games run at once, becaus
 second game's start waits in the same chain, so its session is not open yet. After a JS-context rebuild the record is
 empty, so the store answers unopposed until the next stop is observed.
 
-**An entry of `RunningApps` counts as running only while its overview's display status reads Running.** The status is
-`local_per_client_data.display_status` on the entry itself, which is the app store's overview object (the list maps its
-appids through `appStore.GetAppOverviewByAppID`), and its values are Steam's `EDisplayStatus`: Launching 1, Running 4,
-ReadyToLaunch 11, Terminating 36. An entry whose status cannot be read — no `local_per_client_data`, a status that is
-not a number, a getter that throws — counts as running, so a Steam build that moves the field falls back to counting
-every listed entry rather than to "nothing runs" under every reader at once. Being listed is not enough, because of two
-things Steam's own interface code does (read in the Steam client's webpack modules):
+**An entry of `RunningApps` counts only by its overview's display status: Running alone for `readGameRunning`, Launching
+or Running for reload adoption and the stranded panel's card.** The status is `local_per_client_data.display_status` on
+the entry itself, which is the app store's overview object (the list maps its appids through
+`appStore.GetAppOverviewByAppID`), and its values are Steam's `EDisplayStatus`: Launching 1, Running 4, ReadyToLaunch
+11, Terminating 36. An entry whose status cannot be read — no `local_per_client_data`, a status that is not a number, a
+getter that throws — counts as running, so a Steam build that moves the field falls back to counting every listed entry
+rather than to "nothing runs" under every reader at once. Being listed is not enough, because of two things Steam's own
+interface code does (read in the Steam client's webpack modules):
 
 - **It lists a game it is only starting.** Steam's own Play calls `SteamUIStore.SetRunningApp(appId)` right after
   `RunGame`, and where another app is already listed that puts the new one at the head of the list — before
@@ -1971,25 +1972,27 @@ things Steam's own interface code does (read in the Steam client's webpack modul
 
 Measured on the Deck on 2026-10-10, in Desktop Mode with windowed Big Picture and the desktop client both in use: a
 start from Play in the desktop client while another game ran read ReadyToLaunch (11), at the head of the list, when
-`RegisterForGameActionStart` reported it, with the running game reading Running (4), and the watcher gated it. When the
-lifetime notification reported the start, both games read Launching (1), and one of them read Running at most about 22 s
-later. A start the watcher cancelled left no entry in the list. A game started in Big Picture and quit with the desktop
-client in front no longer held the stranded panel's reload, which came about 10 s after both games had exited.
+`RegisterForGameActionStart` reported it, with the running game reading Running (4), and the watcher gated it. In each
+of two starts, the started game read Launching (1) when the lifetime notification reported its start, while the game
+already running read Running (4); the first read Running at most about 22 s after its start was reported. A start the
+watcher cancelled left no entry in the list. A game started in Big Picture and quit with the desktop client in front no
+longer held the stranded panel's reload, which came about 10 s after both games had exited.
 
 So a game Steam has reported started can still read Launching, and reload adoption and the stranded panel's card count
-an entry that reads Launching as well as Running (`readRunningOrStartingApps`). The launch guards count Running alone:
-the start they decide on read ReadyToLaunch, not Launching, but only Play in the desktop client was measured, and a
-start that read Launching at that moment would be let through without the pre-launch sync. The guard's log line names
-every entry's status, and so does the line the session manager logs the moment Steam reports a start
-(`App start reported: …`, at `info`); those are where a device shows it.
+an entry that reads Launching as well as Running (`readRunningOrStartingApps`) — including one Steam has not yet
+reported started, a state that was not measured. The launch guards count Running alone: the start they decide on read
+ReadyToLaunch, not Launching, but only Play in the desktop client was measured, and a start that read Launching at that
+moment would be let through without the pre-launch sync. The guard's log line names every entry's status, and so does
+the line the session manager logs the moment Steam reports a start (`App start reported: …`, at `info`); those are where
+a device shows it.
 
-The same rule stands in `readGameRunning` and, with Launching counted as well, in the stranded panel's card and at
-reload adoption. The session-budget banner's **Restart Steam now** asks the list a second question, with no stop rule,
-twice — the banner to disable the button (`SessionBudgetBanner.tsx`) and `restartSteam` at the press
-(`utils/steamRestart.ts`): does any listed game read Launching, Running or Terminating, or a status that cannot be read
-(`isAnyAppHolding`)? A restart closes Steam and any game with it, and a game on its way in or out is one it would close;
-an entry left behind after its exit reads ReadyToLaunch and does not refuse the restart that would clear it. The backend
-reads the list the same way — Launching and Terminating hold as well as Running, written out under
+`readGameRunning` applies it with Running alone; the stranded panel's card and reload adoption count Launching as well.
+The session-budget banner's **Restart Steam now** asks the list another question, with no stop rule, twice — the banner
+to disable the button (`SessionBudgetBanner.tsx`) and `restartSteam` at the press (`utils/steamRestart.ts`): does any
+listed game read Launching, Running or Terminating, or a status that cannot be read (`isAnyAppHolding`)? A restart
+closes Steam and any game with it, and a game on its way in or out is one it would close; an entry left behind after its
+exit reads ReadyToLaunch and does not refuse the restart that would clear it. The backend reads the list the same way —
+Launching and Terminating hold as well as Running, written out under
 [the stranded panel's reload](loading-the-panel.md#a-panel-an-earlier-backend-left-behind) — and two waits share that
 reading: the reload and an update's install
 ([UpdateInstallService notes](backend-architecture.md#updateinstallservice-notes)). Each side names the values once

@@ -189,8 +189,9 @@ export function readRunningApps(): RunningAppsReading {
  * Read the store once, as the apps that run or are starting — reading Launching
  * or Running, or a status that cannot be read — plus a diagnostic naming what it
  * listed. Reload adoption and the stranded panel's card read it: a game Steam
- * reports started can still read Launching, measured on the save-file-sync
- * page's "Is the game running". Never throws.
+ * reports started can still read Launching (measured;
+ * `docs/architecture/save-file-sync-architecture.md`, "Is the game running").
+ * Never throws.
  */
 export function readRunningOrStartingApps(): RunningAppsReading {
   return readCounted(countsAsRunningOrStarting);

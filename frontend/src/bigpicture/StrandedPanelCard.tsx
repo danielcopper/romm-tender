@@ -21,8 +21,9 @@ type AnyAppRunning = boolean | { statusUnread: string[] };
  *  lifetime notification per app answering first. In which order Steam calls
  *  the card's callback and the session manager's is not known, so the card does
  *  not count on a stop having reached the session manager yet; and a start it
- *  saw counts before the store lists the app. An app whose status could not be read is named whatever stop
- *  was seen for it: the backend's reload waits on it all the same. */
+ *  saw counts before the store lists the app. An app whose status could not be
+ *  read is named whatever stop was seen for it: the backend's reload waits on
+ *  it all the same. */
 function anyAppRunning(observed: ReadonlyMap<number, boolean>): AnyAppRunning {
   for (const running of observed.values()) if (running) return true;
   const reading = readRunningOrStartingApps();
@@ -60,9 +61,10 @@ function useAnyAppRunning(): AnyAppRunning {
  *  game page's section below the play row. Where an update attempt has started
  *  the installer, the reload or restart the sentence names is what shows its
  *  result. Tender's Stop cannot reach the backend, so while any game runs or is
- *  starting the card says to quit it another way; where none is seen to run but the store
- *  lists apps whose status could not be read, which hold the reload all the
- *  same, it says what to do about them (`utils/runningAppsWording.ts`). */
+ *  starting the card says to quit it another way; where none is seen to run
+ *  but the store lists apps whose status could not be read, which hold the
+ *  reload all the same, it says what to do about them
+ *  (`utils/runningAppsWording.ts`). */
 export const StrandedPanelCard: FC<{ compact?: boolean }> = ({ compact = false }) => {
   const answer = useStrandedAnswer();
   const running = useAnyAppRunning();
