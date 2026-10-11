@@ -248,9 +248,10 @@ class Refused(Exception):
     """An operation the service layer will not carry out, raised rather than answered.
 
     ``main.Endpoints`` builds the wire answer from it; a service raising it
-    never builds that dict itself. ``reason`` is a literal at the raise site:
-    the first argument, or the class attribute of a :class:`NamedRefused`.
-    ``details`` travel beside ``reason`` and ``message``.
+    never builds that dict itself. ``reason`` is the first argument, or the
+    class attribute of a :class:`NamedRefused`, spelled as
+    ``.claude/rules/endpoints.md`` says. ``details`` travel beside ``reason``
+    and ``message``.
 
     A refusal is a decision, never a bug: a broken invariant raises
     ``ValueError`` and its kind.

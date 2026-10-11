@@ -55,10 +55,10 @@ if TYPE_CHECKING:
     )
 
 
-def _rom(rom_id: int) -> Rom:
+def _rom(rom_id: int, *, platform: str = "snes") -> Rom:
     return Rom(
         rom_id=rom_id,
-        platform_slug="snes",
+        platform_slug=platform,
         name=f"Game {rom_id}",
         fs_name=f"game_{rom_id}.sfc",
         shortcut_app_id=1000 + rom_id,
@@ -149,6 +149,15 @@ class TestFakeRomRepository:
         reloaded = repo.get(1)
         assert reloaded is not None
         assert reloaded.cover_path is None
+
+    def test_bound_platform_slugs_leave_out_unbound_and_empty_slug_rows(self):
+        repo = FakeRomRepository()
+        unbound = _rom(3, platform="psx")
+        unbound.unbind_shortcut()
+        for rom in (_rom(1), _rom(2), unbound, _rom(4, platform=""), _rom(5, platform="gba")):
+            repo.save(rom)
+
+        assert repo.get_bound_platform_slugs() == {"snes", "gba"}
 
 
 class TestFakeRomInstallRepository:

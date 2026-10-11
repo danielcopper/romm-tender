@@ -1039,7 +1039,7 @@ describe("SettingsPage", () => {
       vi.mocked(backend.signOut).mockResolvedValue({
         success: false,
         message: "Could not save settings.",
-        reason: "config_error",
+        reason: "save_failed",
       });
       renderPage();
       await flushAsync();

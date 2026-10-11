@@ -4,6 +4,9 @@
  * migration handshake between Tender and the user lives here.
  */
 
+import type { EndpointFailure } from "./api";
+import type { WireReasonSubset } from "./reasons";
+
 export interface MigrationStatus {
   pending: boolean;
   old_path?: string;
@@ -38,7 +41,7 @@ interface MigrationDone {
 /** Nothing was moved: some destinations are taken, and the user picks overwrite, skip or cancel. */
 interface MigrationNeedsConfirmation {
   success: false;
-  reason: "needs_confirmation";
+  reason: WireReasonSubset<"needs_confirmation">;
   message: string;
   needs_confirmation: true;
   conflict_count?: number;
@@ -48,7 +51,7 @@ interface MigrationNeedsConfirmation {
 /** Some moves failed and the others were made; the move stays pending. */
 interface MigrationIncomplete {
   success: false;
-  reason: "migration_incomplete";
+  reason: WireReasonSubset<"migration_incomplete">;
   message: string;
   needs_confirmation?: undefined;
   roms_moved: number;
@@ -59,10 +62,7 @@ interface MigrationIncomplete {
 }
 
 /** Any other refusal, in the shape every endpoint fails in. */
-interface MigrationRefused {
-  success: false;
-  reason: string;
-  message: string;
+interface MigrationRefused extends EndpointFailure {
   needs_confirmation?: undefined;
 }
 

@@ -8,6 +8,8 @@
  * cannot know.
  */
 
+import type { WireReason } from "../types/reasons";
+
 /** The note under the split button, and the title of its arrow's menu. */
 export const FILE_MISSING_LABEL = "File missing";
 
@@ -31,7 +33,7 @@ export function forgetConfirmDescription(romName: string, path: string): string 
  * folder is on disk — after a missing file, most likely because the drive or
  * folder came back — so the sentence says where it is, not that it failed.
  */
-export function forgetRefusedToast(result: { reason?: string; message?: string; path?: string }): string {
+export function forgetRefusedToast(result: { reason?: WireReason; message?: string; path?: string }): string {
   if (result.reason === "file_present" && result.path) {
     return `The file is back at ${result.path}.`;
   }

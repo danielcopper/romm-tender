@@ -1,4 +1,4 @@
-import type { RommErrorCode } from "./api";
+import type { RommErrorReason } from "./reasons";
 
 /**
  * Emulator sources as the backend answers them: what the resolver detected,
@@ -51,9 +51,9 @@ export type EmulatorSourceDirection = "up" | "down";
  *  `switched_off`), the answering source's catalogue was refused, the
  *  platform has no switched-on system there (`no_platform_system`,
  *  `platform_system_off`), or RomM could not be read for the platform's ids
- *  (one of {@link RommErrorCode}, `server_unreachable` while it is offline). */
+ *  (one of {@link RommErrorReason}, `server_unreachable` while it is offline). */
 export type EmulatorDataReason =
-  | RommErrorCode
+  | RommErrorReason
   | "no_source"
   | "switched_off"
   | "sealed"

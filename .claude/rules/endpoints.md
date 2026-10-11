@@ -7,11 +7,13 @@ paths:
 # Endpoint response shapes `[ours]`
 
 Endpoints returning a plain `dict` that can fail use `{success: False, reason: ErrorCode | str, message: str}`. Both
-`reason` and `message` are **required**. Reuse `lib.list_result.ErrorCode` for coarse categories, and spell the slug as
-a string literal where a refusal is raised (`Refused("unknown", …)`), so a check that reads reasons off raise sites can
-read it; bespoke guards (`config_error`, `sync_disabled`, `not_installed`, …) stay plain-string reasons. Transport
-failures collapse onto `SERVER_UNREACHABLE`; 401 and 403 collapse onto `AUTH_FAILED` (same slug, distinct `message`).
-The legacy `error_code` key and a second `error` key are **forbidden**.
+`reason` and `message` are **required**. Reuse `lib.list_result.ErrorCode` for coarse categories; bespoke guards
+(`config_error`, `sync_disabled`, `not_installed`, …) stay plain-string reasons. Where a refusal is raised, its reason
+is a literal, a module constant or a `StrEnum` value — what `scripts/check_reason_parity.py` reads; anything else fails
+it. Transport failures collapse onto `SERVER_UNREACHABLE`; 401 and 403 collapse onto `AUTH_FAILED` (same slug, distinct
+`message`). The legacy `error_code` key and a second `error` key are **forbidden**. A reason added or dropped lands in
+the panel's `WireReason` union (`frontend/src/types/reasons.ts`) in the same change; `scripts/check_reason_parity.py`
+fails until it does.
 
 **`main.py` builds the shape** from what a use case raises or returns (below), and no other module builds it from a
 literal; `scripts/check_failure_shape.py --check` fails on one that does. The gate reads where the shape is built, not

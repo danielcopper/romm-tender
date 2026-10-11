@@ -229,6 +229,9 @@ jobs:
       - name: Check emit↔listener event parity (backend ↔ frontend)
         run: python scripts/check_event_parity.py
 
+      - name: Check wire-reason parity (backend ↔ frontend)
+        run: python scripts/check_reason_parity.py
+
       - name: Check settings-owner confinement
         run: python scripts/check_settings_owner.py
 

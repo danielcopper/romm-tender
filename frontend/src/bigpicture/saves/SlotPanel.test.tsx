@@ -606,7 +606,7 @@ describe("SlotPanel", () => {
       });
       vi.mocked(backend.getSlotDeleteInfo).mockResolvedValue({
         success: false,
-        reason: "active_slot",
+        reason: "sync_disabled",
         message: "Cannot delete the active slot. Switch to a different slot first.",
       });
       const { container, getByText } = render(<SlotPanel {...defaultProps()} />);

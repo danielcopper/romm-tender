@@ -47,6 +47,17 @@ Format: **invariant** — tier — enforced by.
   `.claude/rules/romm-http.md`)
 - **Frontend↔backend endpoint parity (names + arity)** — check — `scripts/check_endpoint_parity.py`
 - **Every backend `emit` event name has a frontend listener, and vice versa** — check — `scripts/check_event_parity.py`
+- **The panel's `WireReason` union (`frontend/src/types/reasons.ts`) holds exactly the reasons an endpoint's failure
+  answer can carry — refusals, partial failures and `classify_error`'s table — and its `RommErrorReason` sub-union
+  exactly that table** — check + prompt-only — `scripts/check_reason_parity.py`. The backend spells a reason where it
+  refuses and the panel compares it with values of its own, so without the gate a reason renamed or added on one side
+  reaches the other as a value no comparison matches, and nothing fails. The gate reads the backend's refusal
+  constructions, named refusal classes, partial failures and the classifier by AST, resolving module constants,
+  `StrEnum` values and a refusal class reached through an import alias or its module itself; a reason passed on from
+  another refusal is accepted unread only where its `PASS_THROUGHS` list names it, and any other reason it cannot read
+  fails. Its docstring is the one list of what it does not see and of what stays out of the union. That a literal-typed
+  reason field in the panel goes through `WireReasonSubset`, so a reason outside the union does not compile, is a
+  convention, unchecked
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`
 - **The backend never writes or removes `update-failure.json`; only the installer does — `install.sh` writes it on an
@@ -1195,9 +1206,9 @@ Format: **invariant** — tier — enforced by.
   whole-page tests compose through a local helper that would reproduce a composition bug rather than catch it. **The
   rule spans three frontend modules and one backend split, and nothing joins them.** `services/firmware/status.py`
   answers `get_firmware_status` (which platforms the page can speak for) and `get_platform_firmware_status` (one
-  platform's whole entry — 199-314 ms each, 5.3 s across the reference library's 25 platforms, against 171 ms for the
-  overview, measured at emu-atlas 0.22); `usePlatformsPage` owns the walk, the per-slug ordering counter and the
-  four-valued `firmwareState`; `PlatformsTab` draws the dot; `PlatformDetail` words the pane. Every failure here is
+  platform's whole entry, which pays a live per-system reading — measured in
+  [qam-panel.md, "Library"](qam-panel.md#library)); `usePlatformsPage` owns the walk, the per-slug ordering counter and
+  the four-valued `firmwareState`; `PlatformsTab` draws the dot; `PlatformDetail` words the pane. Every failure here is
   silent and looks like an answer. A state-bearing field creeping back onto the overview payload gets rendered over a
   platform nobody has asked about yet. A fifth rendering path reading `firmware === null` instead of the state says
   "nothing could be established" about most of the list for the first seconds of every visit — which is the confusion
