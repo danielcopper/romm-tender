@@ -305,10 +305,9 @@ _Avoid_: **plugin** for either — Tender is not a plugin ([What Tender is](#wha
 ### Refusal / partial failure
 
 - **Refusal** — an operation a use case will not carry out, for a reason the panel is told:
-  `{success: False, reason, message}` on the wire. A converted service raises it (`Refused`, `lib/errors.py`; from a
-  domain rule `DomainRefused`, `domain/refusal.py`) and **Endpoints** builds the answer; a module not yet converted
-  still returns that dict. Not a **transport error** (`error.reason`, such as `backend_exception`), which is what a bug
-  arrives as.
+  `{success: False, reason, message}` on the wire. A use case raises it (`Refused`, `lib/errors.py`; from a domain rule
+  `DomainRefused`, `domain/refusal.py`), and **Endpoints** (`main.py`) builds the answer. Not a **transport error**
+  (`error.reason`, such as `backend_exception`), which is what a bug arrives as.
 - **Partial failure** — an operation that stopped after doing part of its work: a returned result (`PartialFailure`,
   `lib/partial_failure.py`) that carries a reason, a message and what was done; never raised. Not a **partial-success**
   response, which is a full payload beside an additive failure flag (`server_query_failed`), and not a firmware

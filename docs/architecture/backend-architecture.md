@@ -76,7 +76,7 @@ event  {type, name, payload}
 `error.reason` is the **transport** layer — `method_unknown`, `payload_too_large`, `backend_exception`,
 `malformed_message`, `connection_lost`, `stranded_panel`; the last two are the panel's own socket's answer, never sent
 by a backend. An endpoint's own failure is a successful transport and arrives inside `result` in the
-`{success, reason, message}` shape only `main.py` builds. `scripts/check_failure_shape.py` reads `host/` too, but the
+`{success, reason, message}` shape `main.py` builds. `scripts/check_failure_shape.py` reads `host/` too, but the
 transport's error frame carries no `success` key, so the gate cannot tell the two apart; keeping them apart is prose and
 review. Reachable methods are exactly the endpoints on `Endpoints`: the public methods marked `@route`, `def` or
 `async def` alike. An endpoint's answer is awaited only when it is awaitable. The set is the one
@@ -93,9 +93,9 @@ line, its type and message without a stack: at info when `classify_error` answer
 offline handheld is an expected state, and at warning otherwise. A refusal is a decision and is not logged. A `def`
 endpoint stays a `def`, and an awaitable it hands back is translated when the dispatcher awaits it. The conflict rules
 refuse this way too: `hold` and `hold_start` raise the refusal of the first rule that holds, so the use case's block
-does not run (GLOSSARY.md → Conflict rules). Nothing else builds the failure shape: the gate in
-[§4 of Boundary Enforcement](#4-failure-shape-dialect-gate) fails on a failure dict built anywhere under `backend/` but
-`main.py`.
+does not run (GLOSSARY.md → Conflict rules). No other module builds the failure shape from a literal;
+[§4 of Boundary Enforcement](#4-failure-shape-dialect-gate) holds that rule and names the two results that compute a
+failing `success` outside `main.py`.
 
 **Two size caps, two purposes.** ~12 MiB on one call's encoded answer, refused as an ordinary error for that call alone;
 16 MiB on the connection's frames, judged on the **announced** length before a byte is buffered, whose breach closes the
@@ -2952,16 +2952,19 @@ for `<aggregate>.<field> = ...` assignments and fails CI on any it finds. The es
 ### 4. Failure-shape dialect gate
 
 `scripts/check_failure_shape.py --check` (also bundled into `mise run lint`) is a small custom AST linter that holds the
-**canonical failure shape** to its one home, `main.py`: the wrapper around every endpoint builds
-`{success: False, reason, message}` from a raised refusal, a returned `PartialFailure` or a raised `RommApiError` ("A
-refusal can be raised", above), and every other module under `backend/` but the upstream copies in `_vendor/` and
-`native/` fails the gate if it builds a dict literal with a literal falsy `success`, calls `error_response(...)` or
-spreads a refusal helper's answer — event payloads included — or does not parse. A result with a `success` field of its
-own that never reaches the wire is built through its type (`MutationOutcome(success=False, …)`) and passes. The two
-documented carve-outs (discriminated-status unions — a `status` key with no `success`; and partial-success payloads
-carrying an additive `server_query_failed` / `recommended_action` flag) carry no `success` key and are not read. The
-routing slugs come from `lib.list_result.ErrorCode` (the Lean enum) plus bespoke plain-string reasons for
-non-server-reachability guards. The script's docstring names what it cannot see, a computed `success` first.
+**canonical failure shape** to `main.py`: the wrapper around every endpoint builds `{success: False, reason, message}`
+from a raised refusal, a returned `PartialFailure` or a raised `RommApiError` ("A refusal can be raised", above), and
+every other module under `backend/` but the upstream copies in `_vendor/` and `native/` fails the gate if it builds a
+dict literal with a literal `False`, `0` or `None` `success`, calls `error_response(...)` or spreads a refusal helper's
+answer — event payloads included — or does not parse. A result with a `success` field of its own that never reaches the
+wire: a failed one is built through its type (`MutationOutcome(success=False, …)`) and passes. Two results compute a
+failing `success` outside `main.py`, and the gate does not see them: the save-sync results — a completed sync with
+per-file errors answers `"success": len(errors) == 0` (#2205 D10) — and the removed-game cleanup's `prune_complete`
+event; no third one is added. The two documented carve-outs (discriminated-status unions — a `status` key with no
+`success`; and partial-success payloads carrying an additive `server_query_failed` / `recommended_action` flag) carry no
+`success` key, so the gate passes them. The routing slugs come from `lib.list_result.ErrorCode` (the Lean enum) plus
+bespoke plain-string reasons for non-server-reachability guards. The script's docstring names what it cannot see, a
+computed `success` first.
 
 ### 5. Enforced: underscore prefix
 

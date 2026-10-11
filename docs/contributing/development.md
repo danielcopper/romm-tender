@@ -424,9 +424,8 @@ services may not call `datetime.now()` / `asyncio.sleep()` / `time.time()` / `ti
 list from `backend/services/` and fails if `.importlinter`'s `service-independence` contract drifts — omitting a service
 or carrying a stale entry — keeping the hand-maintained `modules` list self-healing.
 
-`mise run lint` (and CI) also runs `scripts/check_failure_shape.py --check`, which fails on the failure shape built
-anywhere under `backend/` but `main.py` — a dict literal with a literal falsy `success`, an `error_response` call or a
-refusal helper's spread (`docs/architecture/backend-architecture.md`, §4).
+`mise run lint` (and CI) also runs `scripts/check_failure_shape.py --check`, which holds the failure shape to `main.py`;
+what it reads and what fails it is `docs/architecture/backend-architecture.md`, §4.
 
 `mise run lint` (and CI) also runs `scripts/check_endpoint_parity.py`, which pins the frontend↔backend endpoint surface
 to one source of truth: it derives the frontend names + arities from every `endpoint<[Args], Return>("name")` in

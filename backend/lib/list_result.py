@@ -52,17 +52,18 @@ Three required fields:
 
 The legacy ``error_code`` key and a second ``error`` key are **forbidden**.
 
-``main.Endpoints`` is the one place that builds this shape — from a refusal a
-use case raises, a partial failure it returns, or a RomM error it lets through.
-``scripts/check_failure_shape.py --check`` fails on a failure dict built
-anywhere else under ``backend/``; it does not read the keys of the one
-``main.Endpoints`` builds.
+``main.py`` builds this shape — from a refusal a use case raises, a partial
+failure it returns, or a RomM error it lets through — and no other module
+builds it from a literal. ``scripts/check_failure_shape.py --check`` holds
+that rule; what it reads, and the two results that compute a failing
+``success`` outside ``main.py``, are
+``docs/architecture/backend-architecture.md``, §4.
 
 Optional payload-shape extras (``slot``, ``saves``, ``active_slot``, …) may
 appear alongside on a per-endpoint basis when the frontend needs to render
 fallback UI on failure.
 
-Two carve-outs, which carry no ``success`` key and are not read by the gate:
+Two carve-outs, which carry no ``success`` key, so the gate passes them:
 
 * **Discriminated-status unions** (e.g. ``versions.rollback_to_version``,
   ``versions.list_file_versions``) keep the ``status: "ok" | "..."``
