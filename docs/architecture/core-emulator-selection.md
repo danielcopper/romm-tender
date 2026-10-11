@@ -274,7 +274,8 @@ enumeration for a catalogue-less arrangement, and such an entry carries an empty
 A command is `bakeable` only when it is a real emulator invocation Tender can carry verbatim into a Steam shortcut's
 `-e`. `classify_command` applies these rules in order, first match wins:
 
-1. contains `%INJECT%` → `needs_setup` (`"inject"`) — needs ES-DE to generate a sidecar first (Vita3K, Xemu);
+1. contains `%INJECT%` → `needs_setup` (`"inject"`) — the command injects a file's contents, and Tender cannot start a
+   command in that form;
 2. contains `%ENABLESHORTCUTS%` or `%EMULATOR_OS-SHELL%` → `unbakeable` (`"shortcut_script"`);
 3. does not end in `%ROM%` → `unbakeable` (`"no_rom_target"`) — trailing args after `%ROM%` break the bake;
 4. contains `"` or `\;` → `unbakeable` (`"quoting"`);

@@ -1,72 +1,57 @@
 #!/usr/bin/env python3
-"""Failure-shape dialect gate — canonical-response enforcement.
+"""Failure-shape dialect gate — the wire's failure shape is built from a literal only at the entrypoint.
 
-Endpoints that return a plain ``dict`` and can fail use the canonical
-failure shape ``{"success": False, "reason": ErrorCode | str, "message": str}``
-(plus per-endpoint payload extras). The convention — documented in
-``backend/lib/list_result.py`` and ``.claude/rules/endpoints.md`` → "Endpoint
-response shapes" — forbids a second ``error`` field and the legacy
-``error_code`` key.
+An endpoint that fails answers ``{"success": False, "reason": str, "message":
+str}`` with any details beside them (``.claude/rules/endpoints.md`` owns the
+shape). ``backend/main.py`` builds it: a use case raises its refusal
+(``lib.errors.Refused``, or ``domain.refusal.DomainRefused`` from a domain
+rule) or returns a ``lib.partial_failure.PartialFailure`` for work that stopped
+partway, a RomM error stays a raised ``RommApiError``, and the class decorator
+that wraps every endpoint on ``main.Endpoints`` turns each into the shape — a
+RomM error through ``lib.errors.classify_error``. A failure dict built
+anywhere else is a second dialect of it; the two known ones compute their
+``success`` and are named below, under what this check does not see.
 
-This check walks ``backend/services/`` (and, under "Converted modules" below,
-every module on its list) and classifies every failure-shaped
-``return`` against a **required-key rule**: a failure shape must carry both
-``reason`` and ``message`` and must NOT carry ``error`` or ``error_code``.
+The rule
+========
 
-Classification of each failure-shaped return (a ``return`` of a dict literal
-with a falsy ``success`` entry):
+Every ``*.py`` under ``backend/`` is read except the entrypoint
+``backend/main.py`` and the upstream copies under ``backend/_vendor/`` and
+``backend/native/``. It fails on:
 
-  * CANONICAL — has ``reason`` and ``message``, no ``error`` / ``error_code``.
-    (Extra/additive payload keys are allowed.)
-  * ERROR_CODE_DIALECT — carries the forbidden ``error_code`` key.
-  * ERROR_KEY_DIALECT — carries the forbidden ``error`` key.
-  * AD_HOC — ``success: False`` but missing ``reason`` and/or ``message``
-    (an extra-keys-only or message-only stray with no routing slug).
-  * CARVE_OUT_CANDIDATE — a documented carve-out shape, pattern-exempt and
-    never flagged: a discriminated-status union (``status`` discriminant, no
-    ``success``) or a partial-success payload (a full data payload alongside
-    an additive failure flag from :data:`PARTIAL_SUCCESS_FLAGS`).
+* a dict literal whose ``success`` key is a literal ``False``, ``0`` or
+  ``None``, whatever other keys it carries and wherever it stands — a return,
+  an assignment, an argument, an event payload;
+* a call to ``error_response(...)``, by its bare name or as an attribute;
+* a ``**spread`` of a call to a refusal helper — a callee whose name contains
+  ``refusal`` or ``failure``;
+* a file that does not parse, since nothing in it could be checked.
 
-Two modes:
+A result that never reaches the wire but has a ``success`` field of its own:
+a failed one is built through its type — ``MutationOutcome(success=False, …)``
+— which is a call, not a dict literal, and passes.
 
-  * report (default) — print every site grouped by classification with a count
-    summary, then exit 0. Report mode never fails; it is the inventory.
-  * ``--check`` — enforce mode. Exit 1 on any ERROR_CODE_DIALECT,
-    ERROR_KEY_DIALECT, or AD_HOC finding (the three collapsed dialects).
-    CANONICAL and the pattern-exempt CARVE_OUT_CANDIDATE sites pass.
+What it does not see
+====================
 
-The dict-literal heuristic is intentionally conservative: it only inspects
-``return {...}`` literals. A failure dict built across several statements
-(``resp = {...}; resp["x"] = y; return resp``) or returned from a helper is not
-caught — a guardrail, not a prover. A ``**spread`` or computed key hides the
-full key set; such returns are flagged for manual review (AD_HOC) unless they
-look like a carve-out, so the heuristic never silently passes an unknown shape.
+* A ``success`` that is computed rather than a literal: the save-sync results'
+  ``"success": len(errors) == 0`` and the removed-game cleanup's
+  ``prune_complete`` event, whose ``success`` is a variable — and
+  ``adapters/descriptor_paths.py``'s ``_outcome``, which builds a failed
+  ``MutationOutcome`` as a dict from the ``success`` it is passed.
+* A falsy ``success`` the list above does not name, such as ``""``.
+* A failure without a ``success`` key: a status union's ``status`` (the save
+  version history), a partial-success flag (``server_query_failed``,
+  ``recommended_action``), and the host's ``{type, reason, message}`` error
+  frame — which transport failure is not an endpoint's is
+  ``.claude/rules/host.md``'s rule.
+* A failure dict built without a literal (``dict(success=False, ...)``,
+  ``answer["success"] = False``), under a key that is not a literal
+  (``{SUCCESS_KEY: False}``), or by a helper the call goes through; a spread
+  of a variable holding a refusal, and a refusal helper named any other way.
 
-Converted modules
------------------
-
-A module on :data:`CONVERTED_MODULES` builds no failure shape: a service there
-raises its refusals (``lib.errors.Refused``, or ``domain.refusal.DomainRefused``
-from a domain rule), a domain module there raises ``DomainRefused``, and
-``main.Endpoints`` answers them in the failure shape; an adapter there reports an
-outcome its service decides on. In such a
-module ``--check`` also fails on any dict literal with a falsy ``success``
-entry, wherever it stands and whatever keys it carries, on any
-``error_response(...)`` call, and on a ``**spread`` of a call to a refusal
-helper (a callee whose name contains ``refusal`` or ``failure``). A listed path
-that is not a file, or does not parse, fails too, so a module renamed without
-its entry fails rather than dropping off the list.
-
-**The list only grows.** Each conversion adds its modules and none is ever
-taken off; a module that falls back to building a failure dict fails the
-check instead.
-
-What it cannot see in a listed module: a failure dict built without a literal
-(``dict(success=False, ...)``, ``answer["success"] = False``), a ``success``
-key or value that is not a literal (``{SUCCESS_KEY: False}``), a dict a helper
-in another module builds, a spread of a variable that holds a refusal, and a
-refusal helper named any other way. Nothing outside the list is read by these
-rules, and nothing notices an entry taken off the list.
+Every run enforces; ``--check``, which ``mise run lint`` and CI pass, changes
+nothing.
 """
 
 from __future__ import annotations
@@ -77,155 +62,24 @@ from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SERVICES_DIR = REPO_ROOT / "backend" / "services"
+BACKEND_DIR = REPO_ROOT / "backend"
 
-REASON_KEY = "reason"
-MESSAGE_KEY = "message"
+# Paths relative to the backend directory: the one file that builds the shape,
+# and the upstream copies, which are not ours to change.
+ENTRYPOINT = Path("main.py")
+UPSTREAM_DIRS = frozenset({"_vendor", "native"})
+
 SUCCESS_KEY = "success"
-STATUS_KEY = "status"
-ERROR_CODE_KEY = "error_code"
-ERROR_KEY = "error"
-
-# Classification labels (also the report group order).
-CANONICAL = "CANONICAL"
-ERROR_CODE_DIALECT = "ERROR_CODE_DIALECT"
-ERROR_KEY_DIALECT = "ERROR_KEY_DIALECT"
-CARVE_OUT_CANDIDATE = "CARVE_OUT_CANDIDATE"
-AD_HOC = "AD_HOC"
-
-REPORT_ORDER = (
-    ERROR_CODE_DIALECT,
-    ERROR_KEY_DIALECT,
-    AD_HOC,
-    CARVE_OUT_CANDIDATE,
-    CANONICAL,
-)
-
-# Findings in these classifications fail enforce mode (``--check``).
-VIOLATION_CLASSES = frozenset({ERROR_CODE_DIALECT, ERROR_KEY_DIALECT, AD_HOC})
-
-# Repo-relative paths of the modules that build no failure shape; the list only
-# grows (module docstring, "Converted modules").
-CONVERTED_MODULES: tuple[str, ...] = (
-    "backend/adapters/steam_config.py",
-    "backend/domain/adoption_rename.py",
-    "backend/domain/rom_adoption.py",
-    "backend/domain/rom_candidates.py",
-    "backend/lib/conflict_rules.py",
-    "backend/services/achievements.py",
-    "backend/services/artwork.py",
-    "backend/services/connection.py",
-    "backend/services/cores.py",
-    "backend/services/disc.py",
-    "backend/services/downloads.py",
-    "backend/services/emulator_sources.py",
-    "backend/services/firmware/__init__.py",
-    "backend/services/firmware/deletion.py",
-    "backend/services/firmware/demand.py",
-    "backend/services/firmware/downloads.py",
-    "backend/services/firmware/listing.py",
-    "backend/services/firmware/service.py",
-    "backend/services/firmware/status.py",
-    "backend/services/game_process.py",
-    "backend/services/library/__init__.py",
-    "backend/services/library/_state.py",
-    "backend/services/library/chunk_dispatcher.py",
-    "backend/services/library/cover_preparer.py",
-    "backend/services/library/fetcher.py",
-    "backend/services/library/local_library_reader.py",
-    "backend/services/library/reporter.py",
-    "backend/services/library/service.py",
-    "backend/services/library/session_budget.py",
-    "backend/services/library/shortcut_launch_resolver.py",
-    "backend/services/library/sync_orchestrator.py",
-    "backend/services/library/sync_run_recorder.py",
-    "backend/services/migration/__init__.py",
-    "backend/services/migration/_moves.py",
-    "backend/services/migration/service.py",
-    "backend/services/playtime.py",
-    "backend/services/prune/__init__.py",
-    "backend/services/prune/_models.py",
-    "backend/services/prune/executor.py",
-    "backend/services/prune/finalize.py",
-    "backend/services/prune/liveness.py",
-    "backend/services/prune/planning.py",
-    "backend/services/prune/preview.py",
-    "backend/services/prune/recovery.py",
-    "backend/services/prune/registry.py",
-    "backend/services/prune/requests.py",
-    "backend/services/prune/results.py",
-    "backend/services/prune/save_locks.py",
-    "backend/services/prune/service.py",
-    "backend/services/prune/steam_actions.py",
-    "backend/services/prune_leases.py",
-    "backend/services/relaunch_options_resolver.py",
-    "backend/services/rom_adoption/__init__.py",
-    "backend/services/rom_adoption/_target.py",
-    "backend/services/rom_adoption/renamer.py",
-    "backend/services/rom_adoption/search.py",
-    "backend/services/rom_adoption/service.py",
-    "backend/services/rom_removal.py",
-    "backend/services/saves/__init__.py",
-    "backend/services/saves/_config.py",
-    "backend/services/saves/_helpers.py",
-    "backend/services/saves/_messages.py",
-    "backend/services/saves/_refusals.py",
-    "backend/services/saves/_save_state.py",
-    "backend/services/saves/_settings.py",
-    "backend/services/saves/copies.py",
-    "backend/services/saves/prune_support.py",
-    "backend/services/saves/rom_info.py",
-    "backend/services/saves/save_directory.py",
-    "backend/services/saves/service.py",
-    "backend/services/saves/slots/__init__.py",
-    "backend/services/saves/slots/deletion.py",
-    "backend/services/saves/slots/listing.py",
-    "backend/services/saves/slots/service.py",
-    "backend/services/saves/slots/setup.py",
-    "backend/services/saves/slots/switching.py",
-    "backend/services/saves/status/__init__.py",
-    "backend/services/saves/status/service.py",
-    "backend/services/saves/sync_engine/__init__.py",
-    "backend/services/saves/sync_engine/_gate.py",
-    "backend/services/saves/sync_engine/_shape_refusal.py",
-    "backend/services/saves/sync_engine/_sweep_stop.py",
-    "backend/services/saves/sync_engine/devices.py",
-    "backend/services/saves/sync_engine/engine.py",
-    "backend/services/saves/sync_engine/matrix.py",
-    "backend/services/saves/sync_engine/rollback.py",
-    "backend/services/saves/versions.py",
-    "backend/services/session_lifecycle.py",
-    "backend/services/settings.py",
-    "backend/services/shortcut_removal.py",
-    "backend/services/startup_healing.py",
-    "backend/services/steamgrid.py",
-    "backend/services/update_check.py",
-    "backend/services/update_install.py",
-    "backend/services/update_outcome.py",
-    "backend/services/update_output.py",
-    "backend/services/version_switch.py",
-)
-
-# What the paths above are relative to — a name of its own, apart from
-# ``REPO_ROOT``, which the services walk's own tests move.
-CONVERTED_ROOT = REPO_ROOT
-
 ERROR_RESPONSE = "error_response"
 REFUSAL_HELPER_MARKERS = ("refusal", "failure")
-
-# Additive failure-flag keys that mark a partial-success payload (carve-out 2).
-# A return carrying one of these alongside a full payload keeps the flag.
-PARTIAL_SUCCESS_FLAGS = frozenset({"server_query_failed", "recommended_action"})
 
 
 @dataclass(frozen=True)
 class Finding:
-    """One failure-shaped return site and its classification."""
+    """One place outside the entrypoint that builds the wire's failure shape."""
 
     path: Path
     lineno: int
-    classification: str
-    keys: tuple[str, ...]
     detail: str
 
     @property
@@ -233,160 +87,19 @@ class Finding:
         return str(self.path.relative_to(REPO_ROOT))
 
     def render(self) -> str:
-        key_set = "{" + ", ".join(self.keys) + "}" if self.keys else "{}"
-        suffix = f" — {self.detail}" if self.detail else ""
-        return f"{self.rel}:{self.lineno}  {key_set}{suffix}"
+        return f"{self.rel}:{self.lineno}  {self.detail}"
 
 
-def _is_falsy_success(value: ast.expr) -> bool:
-    """Return True when *value* is a literal falsy ``success`` value (False/0/None)."""
-    if isinstance(value, ast.Constant):
-        return value.value in (False, 0, None)
-    return False
-
-
-def _literal_keys(node: ast.Dict) -> list[str] | None:
-    """Return the string keys of a dict literal, or None if any key is non-constant.
-
-    A ``**spread`` entry (key is None) or a computed key means the literal's full
-    key set is unknown at parse time — return None so the caller treats it as
-    unclassifiable-by-keys rather than guessing.
-    """
-    keys: list[str] = []
-    for key in node.keys:
-        if key is None:  # ``**other`` spread
-            return None
-        if not (isinstance(key, ast.Constant) and isinstance(key.value, str)):
-            return None
-        keys.append(key.value)
-    return keys
-
-
-def _classify_keys(keys: list[str]) -> str:
-    """Classify a failure-shaped dict literal by its key set (required-key rule).
-
-    Precondition: the caller has already confirmed this dict is failure-shaped
-    (a falsy ``success`` entry, a ``status`` discriminant, or a partial-success
-    flag). Order matters: carve-outs are recognised first so they never fall
-    through to the dialect/ad-hoc checks.
-    """
-    key_set = set(keys)
-
-    # Carve-out 1: discriminated-status union (status discriminant, no success).
-    if STATUS_KEY in key_set and SUCCESS_KEY not in key_set:
-        return CARVE_OUT_CANDIDATE
-    # Carve-out 2: partial-success payload (additive failure flag).
-    if key_set & PARTIAL_SUCCESS_FLAGS:
-        return CARVE_OUT_CANDIDATE
-
-    # Forbidden keys — the two legacy dialects.
-    if ERROR_CODE_KEY in key_set:
-        return ERROR_CODE_DIALECT
-    if ERROR_KEY in key_set:
-        return ERROR_KEY_DIALECT
-
-    # Required-key rule: a canonical failure carries both reason and message.
-    if REASON_KEY in key_set and MESSAGE_KEY in key_set:
-        return CANONICAL
-
-    # success: False but missing reason and/or message — an ad-hoc stray.
-    return AD_HOC
+def _is_falsy_constant(value: ast.expr) -> bool:
+    return isinstance(value, ast.Constant) and value.value in (False, 0, None)
 
 
 def _has_falsy_success_entry(node: ast.Dict) -> bool:
-    """Return True when the dict literal has a ``"success"`` key with a falsy value."""
-    for key, value in zip(node.keys, node.values, strict=True):
-        if isinstance(key, ast.Constant) and key.value == SUCCESS_KEY and _is_falsy_success(value):
-            return True
-    return False
-
-
-def _has_status_entry(node: ast.Dict) -> bool:
-    """Return True when the dict literal has a literal ``"status"`` key."""
-    return any(isinstance(key, ast.Constant) and key.value == STATUS_KEY for key in node.keys)
-
-
-def _has_partial_success_flag(node: ast.Dict) -> bool:
-    """Return True when the dict literal carries an additive partial-success flag."""
-    return any(isinstance(key, ast.Constant) and key.value in PARTIAL_SUCCESS_FLAGS for key in node.keys)
-
-
-def _finding_for_return(path: Path, node: ast.Return) -> Finding | None:
-    """Classify one ``return`` statement. None = not a failure-shaped return."""
-    value = node.value
-    if not isinstance(value, ast.Dict):
-        return None
-
-    keys = _literal_keys(value)
-    is_failure = _has_falsy_success_entry(value)
-    is_status = _has_status_entry(value)
-    is_partial = _has_partial_success_flag(value)
-
-    if not (is_failure or is_status or is_partial):
-        return None
-
-    if keys is None:
-        # A ``**spread`` or computed key hid the full key set. Flag it so a
-        # reviewer can eyeball it; treat an obvious carve-out shape as exempt,
-        # everything else as AD_HOC (an unknown shape never silently passes).
-        looks_like_carve_out = (is_status and not is_failure) or is_partial
-        classification = CARVE_OUT_CANDIDATE if looks_like_carve_out else AD_HOC
-        return Finding(
-            path=path,
-            lineno=node.lineno,
-            classification=classification,
-            keys=("<dynamic keys>",),
-            detail="dict with spread/computed keys — verify by hand",
-        )
-
-    classification = _classify_keys(keys)
-    return Finding(
-        path=path,
-        lineno=node.lineno,
-        classification=classification,
-        keys=tuple(keys),
-        detail="",
+    """True when the dict literal binds ``"success"`` to a literal ``False``, ``0`` or ``None``."""
+    return any(
+        isinstance(key, ast.Constant) and key.value == SUCCESS_KEY and _is_falsy_constant(value)
+        for key, value in zip(node.keys, node.values, strict=True)
     )
-
-
-def scan_file(path: Path) -> list[Finding]:
-    """Parse *path* and return every failure-shaped return finding in it."""
-    try:
-        source = path.read_text(encoding="utf-8")
-    except OSError:
-        return []
-    try:
-        tree = ast.parse(source, filename=str(path))
-    except SyntaxError:
-        return []
-    findings: list[Finding] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Return):
-            finding = _finding_for_return(path, node)
-            if finding is not None:
-                findings.append(finding)
-    return findings
-
-
-def collect_findings(services_dir: Path = SERVICES_DIR) -> list[Finding]:
-    """Walk *services_dir* and return every failure-shape finding."""
-    findings: list[Finding] = []
-    if services_dir.is_dir():
-        for path in sorted(services_dir.rglob("*.py")):
-            findings.extend(scan_file(path))
-    return findings
-
-
-@dataclass(frozen=True)
-class ConvertedFinding:
-    """One way a converted module still builds the wire's failure shape."""
-
-    rel: str
-    lineno: int
-    detail: str
-
-    def render(self) -> str:
-        return f"{self.rel}:{self.lineno}  {self.detail}"
 
 
 def _callee_name(call: ast.Call) -> str | None:
@@ -403,97 +116,44 @@ def _is_refusal_helper(call: ast.Call) -> bool:
     return name is not None and any(marker in name for marker in REFUSAL_HELPER_MARKERS)
 
 
-def _converted_findings_in(rel: str, node: ast.AST) -> list[ConvertedFinding]:
-    """What *node* itself does that a converted module may not."""
-    found: list[ConvertedFinding] = []
+def _findings_in(path: Path, node: ast.AST) -> list[Finding]:
+    """What *node* itself does that only the entrypoint may."""
+    found: list[Finding] = []
     if isinstance(node, ast.Dict):
         if _has_falsy_success_entry(node):
-            found.append(ConvertedFinding(rel, node.lineno, "a failure dict literal"))
+            found.append(Finding(path, node.lineno, "a failure dict literal"))
         for key, value in zip(node.keys, node.values, strict=True):
             if key is None and isinstance(value, ast.Call) and _is_refusal_helper(value):
-                found.append(ConvertedFinding(rel, value.lineno, f"a spread of {_callee_name(value)}()"))
+                found.append(Finding(path, value.lineno, f"a spread of {_callee_name(value)}()"))
     elif isinstance(node, ast.Call) and _callee_name(node) == ERROR_RESPONSE:
-        found.append(ConvertedFinding(rel, node.lineno, f"a call to {ERROR_RESPONSE}()"))
+        found.append(Finding(path, node.lineno, f"a call to {ERROR_RESPONSE}()"))
     return found
 
 
-def scan_converted_module(root: Path, rel: str) -> list[ConvertedFinding]:
-    """Every way the converted module at *root*/*rel* still builds the failure shape."""
-    path = root / rel
-    if not path.is_file():
-        return [ConvertedFinding(rel, 0, "listed as converted but not a file — follow a rename, never drop the entry")]
+def scan_file(path: Path) -> list[Finding]:
+    """Every way the module at *path* builds the failure shape."""
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     except SyntaxError as exc:
-        return [ConvertedFinding(rel, exc.lineno or 0, "does not parse, so nothing in it could be checked")]
-    found: list[ConvertedFinding] = []
+        return [Finding(path, exc.lineno or 0, "does not parse, so nothing in it could be checked")]
+    found: list[Finding] = []
     for node in ast.walk(tree):
-        found.extend(_converted_findings_in(rel, node))
+        found.extend(_findings_in(path, node))
     return sorted(found, key=lambda finding: finding.lineno)
 
 
-def collect_converted_findings() -> list[ConvertedFinding]:
-    """Scan every module on :data:`CONVERTED_MODULES`."""
-    found: list[ConvertedFinding] = []
-    for rel in CONVERTED_MODULES:
-        found.extend(scan_converted_module(CONVERTED_ROOT, rel))
+def _in_scope(backend_dir: Path, path: Path) -> bool:
+    rel = path.relative_to(backend_dir)
+    return rel != ENTRYPOINT and rel.parts[0] not in UPSTREAM_DIRS
+
+
+def collect_findings(backend_dir: Path) -> list[Finding]:
+    """Scan every module under *backend_dir* but the entrypoint and the upstream copies."""
+    found: list[Finding] = []
+    for path in sorted(backend_dir.rglob("*.py")):
+        if _in_scope(backend_dir, path):
+            found.extend(scan_file(path))
     return found
-
-
-def _group_by_class(findings: list[Finding]) -> dict[str, list[Finding]]:
-    by_class: dict[str, list[Finding]] = {label: [] for label in REPORT_ORDER}
-    for finding in findings:
-        by_class.setdefault(finding.classification, []).append(finding)
-    return by_class
-
-
-def _print_report(findings: list[Finding]) -> None:
-    """Print findings grouped by classification with a count summary."""
-    by_class = _group_by_class(findings)
-
-    for label in REPORT_ORDER:
-        group = by_class.get(label, [])
-        print(f"=== {label} ({len(group)}) ===")
-        for finding in group:
-            print(f"  {finding.render()}")
-        print()
-
-    print("=== SUMMARY ===")
-    for label in REPORT_ORDER:
-        print(f"  {label}: {len(by_class.get(label, []))}")
-    print(f"  TOTAL: {len(findings)}")
-
-
-def _print_violations(findings: list[Finding]) -> None:
-    """Print only the enforce-mode violations, grouped, with a fix hint."""
-    violations = [f for f in findings if f.classification in VIOLATION_CLASSES]
-    by_class = _group_by_class(violations)
-    for label in REPORT_ORDER:
-        group = by_class.get(label, [])
-        if not group:
-            continue
-        print(f"=== {label} ({len(group)}) ===")
-        for finding in group:
-            print(f"  {finding.render()}")
-        print()
-    print(
-        "ERROR: failure-shaped returns in backend/services/ must carry "
-        "'reason' + 'message' and must not carry 'error' / 'error_code' "
-        "(.claude/rules/endpoints.md → Endpoint response shapes; lib/list_result.py)."
-    )
-
-
-def _print_converted(found: list[ConvertedFinding]) -> None:
-    """Print what the converted modules still build, with a fix hint."""
-    print(f"=== CONVERTED_MODULE ({len(found)}) ===")
-    for finding in found:
-        print(f"  {finding.render()}")
-    print()
-    print(
-        "ERROR: a converted module builds no failure shape — a service raises its refusal "
-        "(lib.errors.Refused / domain.refusal.DomainRefused) or returns a lib.partial_failure.PartialFailure "
-        "for partial work, and main.Endpoints builds the shape."
-    )
 
 
 def main(argv: list[str]) -> int:
@@ -501,25 +161,21 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 0
 
-    enforce = "--check" in argv
-    findings = collect_findings(SERVICES_DIR)
-
-    if enforce:
-        violations = [f for f in findings if f.classification in VIOLATION_CLASSES]
-        converted = collect_converted_findings()
-        if violations:
-            _print_violations(findings)
-        if converted:
-            _print_converted(converted)
-        if violations or converted:
-            return 1
+    found = collect_findings(BACKEND_DIR)
+    if found:
+        print(f"=== FAILURE SHAPE BUILT OUTSIDE THE ENTRYPOINT ({len(found)}) ===")
+        for finding in found:
+            print(f"  {finding.render()}")
+        print()
         print(
-            f"OK: no failure-shape dialect violations in {SERVICES_DIR.relative_to(REPO_ROOT)}, "
-            f"and no failure shape built in the {len(CONVERTED_MODULES)} converted module(s)."
+            "ERROR: only backend/main.py builds the failure shape — a use case raises its refusal "
+            "(lib.errors.Refused / domain.refusal.DomainRefused) or returns a "
+            "lib.partial_failure.PartialFailure for partial work, and a failed result that never "
+            "reaches the wire is built through its own type."
         )
-        return 0
-
-    _print_report(findings)
+        return 1
+    rel = BACKEND_DIR.relative_to(REPO_ROOT)
+    print(f"OK: no failure shape built in {rel}/ outside {rel / ENTRYPOINT}.")
     return 0
 
 

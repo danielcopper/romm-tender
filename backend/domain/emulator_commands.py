@@ -65,11 +65,12 @@ class EmulatorOption:
 
     - ``"bakeable"`` — a real emulator invocation ending in ``%ROM%`` Tender
       can bake into a shortcut ``-e`` override (``reason`` is ``None``).
-    - ``"needs_setup"`` — a command that is well-formed but not yet launchable
-      from Steam as-is: a ``%INJECT%`` form that needs ES-DE to generate a
-      sidecar first (reason ``"inject"``), or a standalone emulator that is not
-      installed in RetroDECK (reason ``"not_installed"``, applied post-hoc by
-      :func:`downgrade_if_not_installed` from the adapter's on-disk probe).
+    - ``"needs_setup"`` — a command that is well-formed but not launchable from
+      Steam as it stands: a ``%INJECT%`` form, which injects a file's contents
+      into the command and which Tender cannot start (reason ``"inject"``), or a
+      standalone emulator that is not installed in RetroDECK (reason
+      ``"not_installed"``, applied post-hoc by :func:`downgrade_if_not_installed`
+      from the adapter's on-disk probe).
     - ``"unbakeable"`` — cannot be baked; ``reason`` says why.
 
     ``reason`` is ``None`` when bakeable, else one of ``"inject"``,

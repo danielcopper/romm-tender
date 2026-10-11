@@ -7,9 +7,10 @@ walks, passing that directory to ``collect_findings`` directly.
 
 Coverage centres on the positional rule — a catch-all handler is flagged
 only when a *verdict key* (``reason`` / ``status`` / ``recommended_action``)
-is bound to a hardcoded ``server_unreachable`` — plus the two ways a
-handler stays clean (binding the key to the classified slug, or peeling
-the 404 off with a sibling ``except RommNotFoundError``).
+is bound to a hardcoded ``server_unreachable``, or when it raises
+``ServerUnreachable`` or a refusal whose reason is that slug — plus the two
+ways a handler stays clean (binding the key or the reason to the classified
+slug, or peeling the 404 off with a sibling ``except RommNotFoundError``).
 """
 
 from __future__ import annotations
@@ -166,6 +167,72 @@ class TestHardcodedVerdictIsFlagged:
         assert len(findings) == 1
 
 
+class TestRaisedVerdictIsFlagged:
+    """A refusal raised with the unreachable verdict is the same verdict the entrypoint answers."""
+
+    def test_refused_with_the_bare_slug(self):
+        findings = _scan("""
+            def f():
+                try:
+                    fetch()
+                except Exception as e:
+                    raise Refused("server_unreachable", str(e)) from e
+        """)
+        assert len(findings) == 1
+        assert findings[0].spelling == '"server_unreachable"'
+        assert findings[0].function == "f"
+
+    def test_refused_with_the_enum(self):
+        findings = _scan("""
+            def f():
+                try:
+                    fetch()
+                except Exception:
+                    raise Refused(ErrorCode.SERVER_UNREACHABLE.value, "m")
+        """)
+        assert [finding.spelling for finding in findings] == ["ErrorCode.SERVER_UNREACHABLE"]
+
+    def test_the_reason_passed_as_a_keyword(self):
+        findings = _scan("""
+            def f():
+                try:
+                    fetch()
+                except Exception:
+                    raise DomainRefused(reason="server_unreachable", message="m")
+        """)
+        assert len(findings) == 1
+
+    def test_server_unreachable_called(self):
+        findings = _scan("""
+            def f():
+                try:
+                    fetch()
+                except Exception as e:
+                    raise ServerUnreachable("Could not reach RomM") from e
+        """)
+        assert [finding.spelling for finding in findings] == ["ServerUnreachable"]
+
+    def test_server_unreachable_reached_through_its_module(self):
+        findings = _scan("""
+            def f():
+                try:
+                    fetch()
+                except BaseException:
+                    raise errors.ServerUnreachable("m")
+        """)
+        assert len(findings) == 1
+
+    def test_server_unreachable_raised_without_a_call(self):
+        findings = _scan("""
+            def f():
+                try:
+                    fetch()
+                except:
+                    raise ServerUnreachable
+        """)
+        assert len(findings) == 1
+
+
 # ── Clean: the shapes the check is steering towards ──────────────────────
 
 
@@ -298,6 +365,81 @@ class TestCorrectShapesAreClean:
         assert findings == []
 
 
+class TestRaisedVerdictBoundaries:
+    """Where a raised ``server_unreachable`` is not the catch-all's own hardcoded verdict."""
+
+    def test_a_sibling_not_found_handler_clears_a_raised_verdict(self):
+        findings = _scan("""
+            def f():
+                try:
+                    fetch()
+                except RommNotFoundError:
+                    raise Refused("not_found", "gone")
+                except Exception as e:
+                    raise ServerUnreachable(str(e)) from e
+        """)
+        assert findings == []
+
+    def test_a_raise_outside_a_handler_passes(self):
+        findings = _scan("""
+            def f(online):
+                if not online:
+                    raise ServerUnreachable("offline")
+                try:
+                    raise Refused("server_unreachable", "m")
+                except Exception:
+                    log("failed")
+                    raise
+        """)
+        assert findings == []
+
+    def test_a_typed_handler_raising_it_passes(self):
+        findings = _scan("""
+            def f():
+                try:
+                    fetch()
+                except (RommConnectionError, RommTimeoutError) as e:
+                    raise ServerUnreachable("Server offline") from e
+        """)
+        assert findings == []
+
+    def test_a_refusal_raised_with_the_classified_reason_passes(self):
+        findings = _scan("""
+            def f():
+                try:
+                    fetch()
+                except Exception as e:
+                    reason, message = classify_error(e)
+                    raise Refused(reason, message) from e
+        """)
+        assert findings == []
+
+    def test_the_slug_in_a_refusals_message_passes(self):
+        findings = _scan("""
+            def f():
+                try:
+                    fetch()
+                except Exception:
+                    raise Refused("not_found", "server_unreachable")
+        """)
+        assert findings == []
+
+    def test_a_nested_try_peeling_the_404_does_not_flag_the_outer_handler(self):
+        findings = _scan("""
+            def f():
+                try:
+                    outer()
+                except Exception:
+                    try:
+                        fetch()
+                    except RommNotFoundError:
+                        raise Refused("not_found", "gone")
+                    except Exception:
+                        raise ServerUnreachable("m")
+        """)
+        assert findings == []
+
+
 # ── Tree walking, EXEMPT, and the CLI ────────────────────────────────────
 
 
@@ -367,6 +509,25 @@ class TestCli:
         """Report mode is the inventory — it never fails."""
         assert check.main([]) == 0
         assert "SUMMARY" in capsys.readouterr().out
+
+    def test_check_mode_fails_on_a_raised_verdict(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys):
+        services_dir = _make_services_tree(
+            tmp_path,
+            {
+                "saves/dirty.py": (
+                    "def g():\n"
+                    "    try:\n"
+                    "        fetch()\n"
+                    "    except Exception as e:\n"
+                    "        raise ServerUnreachable(str(e)) from e\n"
+                ),
+            },
+        )
+        monkeypatch.setattr(check, "REPO_ROOT", tmp_path)
+        monkeypatch.setattr(check, "SERVICES_DIR", services_dir)
+
+        assert check.main(["--check"]) == 1
+        assert "backend/services/saves/dirty.py:4  in g()  [ServerUnreachable]" in capsys.readouterr().out
 
     def test_check_mode_passes_on_the_real_tree(self, capsys):
         """The production services tree must satisfy the invariant."""

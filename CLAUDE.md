@@ -66,8 +66,8 @@ than editing, so the entries below lead with what goes wrong unnoticed. Read the
 new code in it.
 
 - `services.md` — a new service takes **one `config: XxxServiceConfig` kwarg** (frozen, all deps inside); debug logging
-  is the injected `DebugLogger`. Neither is checked. A converted module (on the shape check's list) refuses by raising
-  `Refused`; the check catches a failure dict built there, not a missing raise.
+  is the injected `DebugLogger`. Neither is checked. A service refuses by raising `Refused`; the shape check catches a
+  failure dict built from a literal outside `main.py`, not a missing raise.
 - `python-conventions.md` — Protocol suffixes by shape, `do_<verb>` vs. `_<verb>_io`, docstrings stating the contract
   rather than the behavior, and when a subfolder is justified. **No mechanical check exists for any of it.**
 - `adapters-domain.md` — adapters own I/O, domain is pure, aggregate mutations are verb-named after the event
@@ -82,8 +82,8 @@ new code in it.
   token's one deliberate exception, the order of the three admission checks, claim-bearing events, where the size cap is
   judged, the served root, and what the injected expression may carry. **None of its seven rules has a mechanical check;
   each fails green** — the redaction one did exactly that, and only an assertion on stderr's own output caught it.
-- `endpoints.md` — the `{success, reason, message}` failure shape and its two carve-outs, checked; and what makes a
-  method an endpoint; which endpoints must be `def` is **not checked**.
+- `endpoints.md` — the `{success, reason, message}` failure shape, built from a literal only in `main.py` (checked), and
+  its two carve-outs; and what makes a method an endpoint; which endpoints must be `def` is **not checked**.
 - `vendored-assets.md` — `_vendor/` and `native/` are checksum-pinned upstream copies — verbatim, or verbatim plus a
   documented local patch — and every vendored tree carries its own manifest. The checksums are checked; the reflex to
   fix the upstream artifact instead of the copy is not.
@@ -365,19 +365,31 @@ Format: **invariant** — tier — enforced by. Each entry here is the binding s
 entry — why the rule exists, what breaks without it, and where it lives — is on
 [docs/architecture/invariants.md](docs/architecture/invariants.md), in the same order.
 
-- **Endpoint failures use `{success, reason, message}` (never `error` / `error_code`); a module on `CONVERTED_MODULES`
-  builds no failure shape — a service there raises its refusal, which `Endpoints` answers; anything an endpoint raises
-  but a refusal or a `RommApiError` stays a transport error** — check + test + prompt-only —
-  `scripts/check_failure_shape.py --check` (returned dicts in `services/`, and every literal, `error_response` call or
-  refusal-helper spread in a listed module), `tests/test_endpoints_translation.py` (on every route, a raised `Refused` /
+- **Endpoint failures use `{success, reason, message}` (never `error` / `error_code`), and no module but `main.py`
+  builds that shape — a service raises its refusal, which `Endpoints` answers — with two known exceptions that compute a
+  failing `success` outside it: the save-sync results (a completed sync with per-file errors,
+  `"success": len(errors) == 0`, #2205 D10) and the removed-game cleanup's `prune_complete` event; anything an endpoint
+  raises but a refusal or a `RommApiError` stays a transport error** — check + test + prompt-only —
+  `scripts/check_failure_shape.py --check` (every module under `backend/` but `main.py`, `_vendor/` and `native/`: a
+  dict literal with a literal `False`, `0` or `None` `success`, an `error_response` call or a refusal-helper spread,
+  event payloads included; unseen: a computed `success`, the two exceptions among it, a failure without a `success` key,
+  a failure dict built without a literal), `tests/test_endpoints_translation.py` (on every route, a raised `Refused` /
   `DomainRefused` answers that shape and any other exception stays `backend_exception`; on one `def` and one `async def`
   route, a `RommApiError` answers `classify_error`'s reason and a returned `PartialFailure` is serialized into it; every
-  route is the translating wrapper). Prompt-only: no entry is ever taken off `CONVERTED_MODULES`, and a further type
-  joins `main._TRANSLATED` only by decision
-- **A definitive 404 is `not_found`, never `server_unreachable` — a catch-all `except Exception` in `services/` may not
-  bind a verdict key (`reason` / `status` / `recommended_action`) to a hardcoded `SERVER_UNREACHABLE`; route the
-  exception through `classify_error`, or peel the 404 off with a sibling `except RommNotFoundError` where the verdict is
-  a partial-success flag** — check — `scripts/check_404_not_unreachable.py --check`
+  route is the translating wrapper). Prompt-only: no failure beyond those two computes its `success`; the keys `main.py`
+  builds the shape with — no refusal's details carry `error` or `error_code` — and a further type joins
+  `main._TRANSLATED` only by decision
+- **A definitive 404 is `not_found`, never `server_unreachable` — `classify_error`'s table answers every not-found class
+  `not_found`, and a catch-all `except Exception` in `services/` may neither bind a verdict key (`reason` / `status` /
+  `recommended_action`) to a hardcoded `SERVER_UNREACHABLE` nor raise `ServerUnreachable` or a refusal whose reason is
+  that slug; let the RomM error reach the entrypoint or route it through `classify_error`, or peel the 404 off with a
+  sibling `except RommNotFoundError` where the verdict is a status or a partial-success flag** — check + test —
+  `scripts/check_404_not_unreachable.py --check` (unseen: a verdict or refusal a helper builds or a variable holds,
+  `ServerUnreachable` under another name, the slug held in a variable, or in a constant other than an attribute named
+  `SERVER_UNREACHABLE`) and `tests/lib/test_errors.py::TestEveryNotFoundClassAnswersNotFound` (`RommNotFoundError` and
+  every class defined in or imported into `lib/errors.py` deriving from it; unseen: one `lib/errors.py` neither defines
+  nor imports, and a 404 that is no `RommNotFoundError` — the pairing-code exchange's two 404 errors answer
+  `server_unreachable` in the table (the connection service catches both first))
 - **A 404 becomes `RommNotFoundError` only when RomM's entity layer is proven to have answered it; only the three
   byte-stream fetches opt out** — test + prompt-only — `TestNotFoundDiscrimination` plus the per-call-site
   `test_generic_route_404_still_raises_not_found` trio in `tests/adapters/romm/test_http.py`; a fourth byte-stream

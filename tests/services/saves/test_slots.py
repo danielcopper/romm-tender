@@ -2562,7 +2562,7 @@ class TestDeleteSlot:
 
     @pytest.mark.asyncio
     async def test_delete_slot_sync_disabled(self, tmp_path):
-        """Save sync disabled refuses with disabled."""
+        """Save sync disabled refuses with sync_disabled."""
         svc, _fake = make_service(tmp_path)
         # save_sync_enabled defaults to False
         deletion = svc.delete_slot(42, "default")
@@ -2570,7 +2570,18 @@ class TestDeleteSlot:
         with pytest.raises(Refused) as refused:
             await deletion
 
-        assert (refused.value.reason, refused.value.message) == ("disabled", "Save sync is disabled")
+        assert (refused.value.reason, refused.value.message) == ("sync_disabled", "Save sync is disabled")
+
+    @pytest.mark.asyncio
+    async def test_get_slot_delete_info_sync_disabled(self, tmp_path):
+        """The delete dialog's read refuses with the same reason as every other save-sync refusal."""
+        svc, _fake = make_service(tmp_path)
+        info = svc.get_slot_delete_info(42, "default")
+
+        with pytest.raises(Refused) as refused:
+            await info
+
+        assert (refused.value.reason, refused.value.message) == ("sync_disabled", "Save sync is disabled")
 
 
 class TestSlotMutationLocking:

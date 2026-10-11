@@ -26,14 +26,16 @@ assumption, this page reflects the audit.
 
 ## When save sync does nothing, and why
 
-Where Tender cannot carry a game's saves it now says so instead of quietly finding nothing. There are four reasons, and
-they mean different things:
+Where Tender cannot carry a game's saves, it says so when you start a sync yourself: **Sync Save Files**, a slot switch,
+copying a save to another slot and restoring an older version all answer with the reason. The sync before a game starts
+and the one after it exits pass such a game over without a message, and the game's **Saves** tab reads "No saves found".
+There are four reasons, and they mean different things:
 
 - **The emulator keeps one save card that all games share.** Standalone PCSX2 is the common case. Syncing it per game
   would copy other games' progress onto this one's record, so Tender leaves it alone.
 - **The save is written inside the game file itself.** There is no separate file to carry.
-- **The emulator files saves under the game's own identity**, which Tender cannot read yet — in the file name for
-  Dreamcast, in the folder name for GameCube. Dreamcast, GameCube, Nintendo 3DS and Wii U are here.
+- **The emulator files saves under the game's own identity**, which Tender cannot read yet — in the file name, for
+  Dreamcast and GameCube alike. Dreamcast, GameCube, Nintendo 3DS and Wii U are here.
 - **What the emulator writes could not be established** — either nobody has audited that core yet, or the folder is
   known and the names inside it are not.
 
@@ -98,7 +100,7 @@ release.
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Dreamcast      | Flycast ships with **Per-Game VMUs off**, so every game shares `vmu_save_A1.bin` and its siblings in RetroDECK's system folder. The core _can_ write per-game VMUs; the names it uses then aren't pinned down yet.      |
 | PlayStation 2  | The LRPS2 core ships with **shared memory cards on** (`Mcd001.ps2` / `Mcd002.ps2`). With that option off it writes one `<game>.ps2` card per game — which would fit per-game sync.                                      |
-| GameCube / Wii | The Dolphin core appears to keep saves under its own subtree rather than the per-game save folder. Not confirmed on-device yet.                                                                                         |
+| GameCube / Wii | RetroDECK runs both on Dolphin (Standalone). Wii: the save folder is known, not which title folder is the game's. GameCube: the card path holds a region placeholder, and the GCI files are not named after the game.   |
 | Neo Geo CD     | Ships writing one shared save. The core has a per-content mode; which one wins when loading isn't confirmed.                                                                                                            |
 | Nintendo 3DS   | The Azahar core appears to use its own save subtree. Not confirmed on-device yet.                                                                                                                                       |
 | PSP            | Where the PPSSPP core keeps its saves, and whether they are per game, hasn't been established.                                                                                                                          |
@@ -140,7 +142,7 @@ states still work locally). See the full table for specifics.
     | `gamate` | ❌ | Saves are stored separately by the emulator (MAME) |
     | `gameandwatch` | ❌ | Saves are stored separately by the emulator (MAME) |
     | `gamecom` | ❌ | Saves are stored separately by the emulator (MAME) |
-    | `gc` | ❌ | Dolphin core's own save subtree — not confirmed on-device |
+    | `gc` | ❌ | Dolphin (Standalone): the card path holds a region placeholder, and the GCI files are not named after the game |
     | `gmaster` | ❌ | Saves are stored separately by the emulator (MAME) |
     | `gx4000` | ❌ | Not synced |
     | `laserdisc` | ❌ | Saves are stored separately by the emulator (MAME) |
@@ -161,7 +163,7 @@ states still work locally). See the full table for specifics.
     | `scv` | ❌ | Saves are stored separately by the emulator (MAME) |
     | `supracan` | ❌ | Saves are stored separately by the emulator (MAME) |
     | `vsmile` | ❌ | Saves are stored separately by the emulator (MAME) |
-    | `wii` | ❌ | Dolphin core's own save subtree — not confirmed on-device |
+    | `wii` | ❌ | Dolphin (Standalone): the save folder is known, not which title folder in it is the game's |
     | `x68000` | ❌ | Not synced |
     | `amiga1200` | 🔜 | Planned |
     | `amiga600` | 🔜 | Planned |

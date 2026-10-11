@@ -55,14 +55,18 @@ Tender.
 
 ## Supported Systems
 
-Save sync works on the **per-game save files RetroArch writes** for the systems RetroDECK supports. Standard cartridge
-saves (SRAM) sync automatically; several systems also sync their own formats — RTC, EEPROM, and console-specific backup
-RAM — so it is not limited to a single file type. Exactly what syncs varies by system: for the current per-system
-breakdown of what carries across devices today and what's planned, see the
+Save sync works on the **per-game save files written by the emulator a game launches with**, on the systems RetroDECK
+supports. Standard cartridge saves (SRAM) sync automatically; several systems also sync their own formats — RTC, EEPROM,
+and console-specific backup RAM — so it is not limited to a single file type. Exactly what syncs varies by system: for
+the current per-system breakdown of what carries across devices today and what's planned, see the
 [save sync support matrix](save-sync-support-matrix.md).
 
-Standalone emulator saves (PCSX2, DuckStation, Dolphin, PPSSPP, melonDS, etc.) are **not yet supported** and are planned
-for a future update.
+That includes standalone emulators (PCSX2, DuckStation, Dolphin, PPSSPP, melonDS and the like): Tender asks the emulator
+a game launches with where that game's saves are, and syncs them whenever the answer names files that belong to that one
+game. Whether that works from start to finish with a particular standalone emulator has not been established, so treat a
+standalone emulator's saves as untested. The answers that keep save sync off, standalone PCSX2's shared memory card
+among them, are listed under
+[When save sync does nothing, and why](save-sync-support-matrix.md#when-save-sync-does-nothing-and-why).
 
 ## Settings
 
@@ -245,7 +249,7 @@ RomM to resume. This is separate from Tender's own **Save Sync** toggle in the Q
 
 Tender tracks playtime per game. Session start and end times are recorded, and time the device spent suspended (asleep)
 during a session is excluded, so a game left running overnight in sleep does not inflate its playtime. Playtime is
-displayed on the game detail page next to the save sync status.
+displayed on the game detail page, in the **Playtime** cell next to the Play button.
 
 Each finished session is sent to RomM's built-in play-session store, so your `last_played` time shows correctly in the
 RomM web UI. This is separate from save sync — playtime is recorded for **every** game on every exit, even when save

@@ -21,9 +21,9 @@ would become wire contract the moment the other side spelled one.
 message names something that went wrong carrying the call — the method does not
 exist, the answer is too large to send, the method raised. An endpoint's own
 failure is a perfectly successful transport and arrives in ``result``, in the
-``{success, reason, message}`` shape ``scripts/check_failure_shape.py`` guards.
-Reading one as the other shows a user a sentence about their game where a
-programming error stands.
+``{success, reason, message}`` shape ``main.py`` builds
+(``.claude/rules/host.md``, rule 1). Reading one as the other shows a user a
+sentence about their game where a programming error stands.
 """
 
 from __future__ import annotations

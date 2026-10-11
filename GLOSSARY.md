@@ -305,10 +305,9 @@ _Avoid_: **plugin** for either — Tender is not a plugin ([What Tender is](#wha
 ### Refusal / partial failure
 
 - **Refusal** — an operation a use case will not carry out, for a reason the panel is told:
-  `{success: False, reason, message}` on the wire. A converted service raises it (`Refused`, `lib/errors.py`; from a
-  domain rule `DomainRefused`, `domain/refusal.py`) and **Endpoints** builds the answer; a module not yet converted
-  still returns that dict. Not a **transport error** (`error.reason`, such as `backend_exception`), which is what a bug
-  arrives as.
+  `{success: False, reason, message}` on the wire. A use case raises it (`Refused`, `lib/errors.py`; from a domain rule
+  `DomainRefused`, `domain/refusal.py`), and **Endpoints** (`main.py`) builds the answer. Not a **transport error**
+  (`error.reason`, such as `backend_exception`), which is what a bug arrives as.
 - **Partial failure** — an operation that stopped after doing part of its work: a returned result (`PartialFailure`,
   `lib/partial_failure.py`) that carries a reason, a message and what was done; never raised. Not a **partial-success**
   response, which is a full payload beside an additive failure flag (`server_query_failed`), and not a firmware
@@ -829,11 +828,11 @@ names ([ADR-0042](docs/adr/0042-tender-takes-emulator-answers-starts-emulators-a
 ### Safely-bakeable
 
 An ES-DE `<command>` Tender can bake into a Steam shortcut's `-e` override: a real emulator invocation that **ends in
-`%ROM%`** and carries none of the forms the bake can't carry — no `%INJECT%` sidecar (that is _needs-setup_, not
-launchable from Steam until ES-DE has run it once), no `%ENABLESHORTCUTS%` / `%EMULATOR_OS-SHELL%` shortcut-script form,
-no embedded quoting (`"` or `\;`), no `%STARTDIR%` (RetroDECK's `run_game.sh` parses-but-drops it), and no placeholder
-outside the known whitelist. The classifier `domain/emulator_commands.py` decides this per command; anything not
-safely-bakeable is surfaced in the picker as **disabled** with a reason, never silently offered
+`%ROM%`** and carries none of the forms the bake can't carry — no `%INJECT%` form (that is _needs-setup_: the command
+injects a file's contents, and Tender cannot start it), no `%ENABLESHORTCUTS%` / `%EMULATOR_OS-SHELL%` shortcut-script
+form, no embedded quoting (`"` or `\;`), no `%STARTDIR%` (RetroDECK's `run_game.sh` parses-but-drops it), and no
+placeholder outside the known whitelist. The classifier `domain/emulator_commands.py` decides this per command; anything
+not safely-bakeable is surfaced in the picker as **disabled** with a reason, never silently offered
 ([ADR-0020](docs/adr/0020-live-es-systems-emulator-resolution.md)). The foil to **default emulator** (the first
 safely-bakeable command a system falls back to).
 

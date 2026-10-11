@@ -1,17 +1,16 @@
 """Tests for ``scripts/check_failure_shape.py``.
 
 The check is loaded via ``importlib`` because ``scripts/`` is not on
-``sys.path`` (and is excluded from ruff/basedpyright). Fixtures use
-``tmp_path`` to lay out a small ``backend/`` tree the check walks,
-monkeypatching the script's ``SERVICES_DIR`` / ``REPO_ROOT`` (and, for the
-converted-modules list, ``CONVERTED_ROOT`` / ``CONVERTED_MODULES``) constants
-for the duration of the test.
+``sys.path`` (and is excluded from ruff/basedpyright). Fixtures lay out a small
+``backend/`` tree under ``tmp_path`` and monkeypatch the script's
+``BACKEND_DIR`` / ``REPO_ROOT`` constants for the duration of the test.
 
-Coverage centres on the required-key rule (a ``success: False`` failure
-return must carry both ``reason`` and ``message`` and must not carry
-``error`` / ``error_code``) and the two pattern-exempt carve-outs
-(discriminated-status unions and partial-success payloads), and on the
-converted-modules list, in which no failure shape may be built at all.
+Coverage centres on the one rule — the failure shape is built nowhere under
+``backend/`` but the entrypoint: a failure dict literal in any layer and in an
+event payload, an ``error_response`` call and a refusal helper's spread fail,
+and so does a module that does not parse — and on its boundaries: the
+entrypoint and the upstream copies are not read, a result type built through
+its own constructor passes, and a computed ``success`` is not seen.
 """
 
 from __future__ import annotations
@@ -22,10 +21,10 @@ import textwrap
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
+
 if TYPE_CHECKING:
     from types import ModuleType
-
-    import pytest
 
 _SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "check_failure_shape.py"
 
@@ -43,180 +42,154 @@ def _load_check_module() -> ModuleType:
 check = _load_check_module()
 
 
-def _make_services_tree(tmp_path: Path, files: dict[str, str]) -> Path:
-    """Build a fake ``backend/services/`` tree: ``name -> source``."""
-    services_dir = tmp_path / "backend" / "services"
-    services_dir.mkdir(parents=True)
-    for name, source in files.items():
-        path = services_dir / name
+def _backend(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, files: dict[str, str]) -> None:
+    """Lay out ``backend/<rel> -> source`` under *tmp_path* and point the check at it."""
+    backend = tmp_path / "backend"
+    for rel, source in files.items():
+        path = backend / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(textwrap.dedent(source), encoding="utf-8")
-    return services_dir
+    monkeypatch.setattr(check, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(check, "BACKEND_DIR", backend)
 
 
-def _wrap_return(body: str) -> str:
-    """Wrap a single ``return {...}`` body in a tiny function module."""
-    return f"def f():\n    return {body}\n"
+def _found(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, files: dict[str, str]) -> list[str]:
+    _backend(monkeypatch, tmp_path, files)
+    return [finding.render() for finding in check.collect_findings(check.BACKEND_DIR)]
 
 
-def _classify_single(tmp_path: Path, body: str) -> str:
-    """Scan a one-return module and return that return's classification."""
-    services_dir = _make_services_tree(tmp_path, {"mod.py": _wrap_return(body)})
-    findings = check.collect_findings(services_dir)
-    assert len(findings) == 1, f"expected exactly one finding, got {findings}"
-    return findings[0].classification
+_FAILURE_RETURN = 'def f():\n    return {"success": False, "reason": "x", "message": "m"}\n'
 
 
-# ── Required-key rule: classification ────────────────────────────────────
+class TestTheShapeBuiltOutsideTheEntrypointFails:
+    @pytest.mark.parametrize("rel", ["adapters/mod.py", "domain/mod.py", "lib/mod.py", "host/mod.py", "check.py"])
+    def test_a_failure_dict_in_any_layer(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, rel: str):
+        assert _found(monkeypatch, tmp_path, {rel: _FAILURE_RETURN}) == [f"backend/{rel}:2  a failure dict literal"]
+
+    def test_a_failure_dict_in_a_nested_service_package(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        found = _found(monkeypatch, tmp_path, {"services/saves/slots/mod.py": _FAILURE_RETURN})
+
+        assert found == ["backend/services/saves/slots/mod.py:2  a failure dict literal"]
+
+    def test_a_failure_dict_in_an_event_payload(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        source = """\
+            async def finish(self):
+                await self._emit("prune_complete", {"success": False, "reason": "aborted"})
+        """
+
+        found = _found(monkeypatch, tmp_path, {"services/mod.py": source})
+
+        assert found == ["backend/services/mod.py:2  a failure dict literal"]
+
+    @pytest.mark.parametrize("falsy", ["0", "None"])
+    def test_any_literal_falsy_success(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, falsy: str):
+        source = f'answer = {{"message": "m", "success": {falsy}}}\n'
+
+        assert _found(monkeypatch, tmp_path, {"lib/mod.py": source}) == ["backend/lib/mod.py:1  a failure dict literal"]
+
+    def test_a_call_to_error_response(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        source = """\
+            import lib.errors
+            from lib.errors import error_response
 
 
-class TestCanonicalShape:
-    def test_reason_and_message_is_canonical(self, tmp_path: Path):
-        assert _classify_single(tmp_path, '{"success": False, "reason": "x", "message": "m"}') == check.CANONICAL
-
-    def test_reason_message_plus_extras_is_canonical(self, tmp_path: Path):
-        body = '{"success": False, "reason": "x", "message": "m", "synced": 0, "files": []}'
-        assert _classify_single(tmp_path, body) == check.CANONICAL
-
-    def test_key_order_does_not_matter(self, tmp_path: Path):
-        assert _classify_single(tmp_path, '{"message": "m", "success": False, "reason": "x"}') == check.CANONICAL
-
-    def test_falsy_success_none_still_classified(self, tmp_path: Path):
-        # ``success: None`` is falsy — still a failure shape under the rule.
-        assert _classify_single(tmp_path, '{"success": None, "reason": "x", "message": "m"}') == check.CANONICAL
+            def f(e):
+                return error_response(e)
 
 
-class TestForbiddenKeys:
-    def test_error_code_key_is_dialect(self, tmp_path: Path):
-        body = '{"success": False, "message": "m", "error_code": "x"}'
-        assert _classify_single(tmp_path, body) == check.ERROR_CODE_DIALECT
+            def g(e):
+                return lib.errors.error_response(e)
+        """
 
-    def test_error_key_is_dialect(self, tmp_path: Path):
-        body = '{"success": False, "message": "m", "error": "x"}'
-        assert _classify_single(tmp_path, body) == check.ERROR_KEY_DIALECT
+        found = _found(monkeypatch, tmp_path, {"services/mod.py": source})
 
-    def test_error_code_flagged_even_with_reason_present(self, tmp_path: Path):
-        # A forbidden key is a violation regardless of whether reason/message exist.
-        body = '{"success": False, "reason": "x", "message": "m", "error_code": "x"}'
-        assert _classify_single(tmp_path, body) == check.ERROR_CODE_DIALECT
+        assert found == [
+            "backend/services/mod.py:6  a call to error_response()",
+            "backend/services/mod.py:10  a call to error_response()",
+        ]
 
-
-class TestAdHoc:
-    def test_message_only_no_reason_is_ad_hoc(self, tmp_path: Path):
-        assert _classify_single(tmp_path, '{"success": False, "message": "m"}') == check.AD_HOC
-
-    def test_reason_only_no_message_is_ad_hoc(self, tmp_path: Path):
-        assert _classify_single(tmp_path, '{"success": False, "reason": "x"}') == check.AD_HOC
-
-    def test_success_only_is_ad_hoc(self, tmp_path: Path):
-        assert _classify_single(tmp_path, '{"success": False}') == check.AD_HOC
-
-    def test_extras_only_no_reason_no_message_is_ad_hoc(self, tmp_path: Path):
-        assert _classify_single(tmp_path, '{"success": False, "synced": 0, "errors": []}') == check.AD_HOC
+    def test_a_spread_of_a_refusal_or_failure_helper(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        source = """\
+            def f(self):
+                return {**busy_refusal(), "synced": 0}
 
 
-# ── Carve-outs (pattern-exempt) ──────────────────────────────────────────
+            def g(self):
+                return {**self._failure("x", "m"), "claimed": 0}
+        """
+
+        found = _found(monkeypatch, tmp_path, {"services/mod.py": source})
+
+        assert found == [
+            "backend/services/mod.py:2  a spread of busy_refusal()",
+            "backend/services/mod.py:6  a spread of _failure()",
+        ]
+
+    def test_a_module_that_does_not_parse(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        found = _found(monkeypatch, tmp_path, {"adapters/broken.py": "def broken(:\n"})
+
+        assert found == ["backend/adapters/broken.py:1  does not parse, so nothing in it could be checked"]
 
 
-class TestDiscriminatedStatusCarveOut:
-    def test_status_without_success_is_carve_out(self, tmp_path: Path):
-        body = '{"status": "server_unreachable", "message": "m"}'
-        assert _classify_single(tmp_path, body) == check.CARVE_OUT_CANDIDATE
+class TestWhatPasses:
+    def test_the_entrypoint_is_not_read(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        assert _found(monkeypatch, tmp_path, {"main.py": _FAILURE_RETURN}) == []
 
-    def test_status_with_only_versions_is_carve_out(self, tmp_path: Path):
-        assert _classify_single(tmp_path, '{"status": "ok", "versions": []}') == check.CARVE_OUT_CANDIDATE
+    @pytest.mark.parametrize("rel", ["_vendor/pkg/mod.py", "native/mod.py"])
+    def test_the_upstream_copies_are_not_read(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, rel: str):
+        assert _found(monkeypatch, tmp_path, {rel: _FAILURE_RETURN}) == []
 
-    def test_status_with_success_false_is_not_carve_out(self, tmp_path: Path):
-        # A dict carrying BOTH status and a falsy success is not the union shape —
-        # it falls through to the required-key rule (AD_HOC here, no reason/message).
-        assert _classify_single(tmp_path, '{"success": False, "status": "x"}') == check.AD_HOC
+    @pytest.mark.parametrize("rel", ["services/main.py", "adapters/native/mod.py", "lib/_vendor/mod.py"])
+    def test_the_same_names_below_the_backend_root_are_read(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, rel: str
+    ):
+        assert _found(monkeypatch, tmp_path, {rel: _FAILURE_RETURN}) == [f"backend/{rel}:2  a failure dict literal"]
 
-
-class TestPartialSuccessCarveOut:
-    def test_server_query_failed_flag_is_carve_out(self, tmp_path: Path):
-        body = '{"total_seconds": 0, "session_count": 0, "server_query_failed": True}'
-        assert _classify_single(tmp_path, body) == check.CARVE_OUT_CANDIDATE
-
-    def test_recommended_action_flag_is_carve_out(self, tmp_path: Path):
-        body = '{"has_local_saves": False, "recommended_action": "server_unreachable"}'
-        assert _classify_single(tmp_path, body) == check.CARVE_OUT_CANDIDATE
-
-    def test_partial_flag_wins_over_falsy_success(self, tmp_path: Path):
-        # Partial-success payloads may carry success: False alongside the flag;
-        # the carve-out still applies (the flag is checked before the dialects).
-        body = '{"success": False, "server_query_failed": True, "data": []}'
-        assert _classify_single(tmp_path, body) == check.CARVE_OUT_CANDIDATE
+    def test_a_result_built_through_its_own_type(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        source = """\
+            from models.prune import MutationOutcome
 
 
-# ── Non-failure returns are ignored ──────────────────────────────────────
+            def remove(exc):
+                return MutationOutcome(success=False, changed=False, ambiguous=False, message=str(exc))
+        """
+
+        assert _found(monkeypatch, tmp_path, {"adapters/mod.py": source}) == []
+
+    def test_a_computed_success_is_not_seen(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        """A documented blind spot: the save-sync results and ``prune_complete`` compute theirs."""
+        source = """\
+            def result(errors, success):
+                synced = {"success": len(errors) == 0, "errors": errors}
+                return {**synced, "event": {"success": success}}
+        """
+
+        assert _found(monkeypatch, tmp_path, {"services/mod.py": source}) == []
+
+    def test_what_the_entrypoint_takes_over(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        source = """\
+            from lib.errors import Refused
 
 
-class TestNonFailureReturnsIgnored:
-    def test_success_true_dict_not_a_finding(self, tmp_path: Path):
-        services_dir = _make_services_tree(tmp_path, {"mod.py": _wrap_return('{"success": True, "message": "ok"}')})
-        assert check.collect_findings(services_dir) == []
+            def f(done):
+                if not done:
+                    raise Refused("nothing_to_fix", "No fix needed")
+                return {"success": True, **dict(done)}
+        """
 
-    def test_non_dict_return_not_a_finding(self, tmp_path: Path):
-        services_dir = _make_services_tree(tmp_path, {"mod.py": "def f():\n    return []\n"})
-        assert check.collect_findings(services_dir) == []
+        assert _found(monkeypatch, tmp_path, {"services/mod.py": source}) == []
 
-    def test_bare_return_not_a_finding(self, tmp_path: Path):
-        services_dir = _make_services_tree(tmp_path, {"mod.py": "def f():\n    return\n"})
-        assert check.collect_findings(services_dir) == []
-
-
-# ── Dynamic-key heuristic (spread / computed keys) ───────────────────────
+    def test_a_status_union_and_a_partial_success_flag(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        source = """\
+            def versions():
+                return {"status": "server_unreachable", "message": "m"}
 
 
-class TestDynamicKeys:
-    def test_spread_failure_dict_flagged_ad_hoc(self, tmp_path: Path):
-        # A ``**base`` spread hides the full key set on a falsy-success dict —
-        # flagged AD_HOC for manual review (never silently passed).
-        body = '{**base, "success": False}'
-        services_dir = _make_services_tree(tmp_path, {"mod.py": f"def f(base):\n    return {body}\n"})
-        findings = check.collect_findings(services_dir)
-        assert len(findings) == 1
-        assert findings[0].classification == check.AD_HOC
+            def status():
+                return {"files": [], "server_query_failed": True}
+        """
 
-    def test_spread_status_union_flagged_carve_out(self, tmp_path: Path):
-        body = '{**base, "status": "ok"}'
-        services_dir = _make_services_tree(tmp_path, {"mod.py": f"def f(base):\n    return {body}\n"})
-        findings = check.collect_findings(services_dir)
-        assert len(findings) == 1
-        assert findings[0].classification == check.CARVE_OUT_CANDIDATE
-
-
-# ── Robustness ───────────────────────────────────────────────────────────
-
-
-class TestScanRobustness:
-    def test_syntax_error_file_skipped(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-        monkeypatch.setattr(check, "REPO_ROOT", tmp_path)
-        services_dir = _make_services_tree(
-            tmp_path,
-            {
-                "broken.py": "def(\n",
-                "good.py": _wrap_return('{"success": False, "message": "m"}'),
-            },
-        )
-        findings = check.collect_findings(services_dir)
-        assert len(findings) == 1
-        assert findings[0].rel.endswith("good.py")
-
-    def test_missing_services_dir_returns_empty(self, tmp_path: Path):
-        assert check.collect_findings(tmp_path / "nope") == []
-
-    def test_nested_package_files_scanned(self, tmp_path: Path):
-        services_dir = _make_services_tree(
-            tmp_path,
-            {"saves/sync_engine/devices.py": _wrap_return('{"success": False, "error": "list_failed"}')},
-        )
-        findings = check.collect_findings(services_dir)
-        assert len(findings) == 1
-        assert findings[0].classification == check.ERROR_KEY_DIALECT
-
-
-# ── main() entry point ───────────────────────────────────────────────────
+        assert _found(monkeypatch, tmp_path, {"services/mod.py": source}) == []
 
 
 class TestMainEntryPoint:
@@ -228,192 +201,32 @@ class TestMainEntryPoint:
     def test_short_help_flag_returns_zero(self):
         assert check.main(["-h"]) == 0
 
-    def test_real_repo_report_is_clean(self, capsys: pytest.CaptureFixture[str]):
-        # Report mode never fails; it prints the inventory + summary.
-        rc = check.main([])
-        assert rc == 0
-        out = capsys.readouterr().out
-        assert "=== SUMMARY ===" in out
-
     def test_real_repo_enforce_is_clean(self, capsys: pytest.CaptureFixture[str]):
-        # The real services/ tree must be fully collapsed onto the canonical
-        # shape — enforce mode passes (the whole point of the migration).
+        # No module in the real backend but backend/main.py builds the shape from a literal.
         rc = check.main(["--check"])
         assert rc == 0
         assert "OK:" in capsys.readouterr().out
 
-    def test_enforce_fails_on_dialect(
+    def test_check_fails_and_names_each_site(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ):
-        services_dir = _make_services_tree(
-            tmp_path,
-            {"mod.py": _wrap_return('{"success": False, "message": "m", "error_code": "x"}')},
-        )
-        monkeypatch.setattr(check, "REPO_ROOT", tmp_path)
-        monkeypatch.setattr(check, "SERVICES_DIR", services_dir)
-        rc = check.main(["--check"])
-        assert rc == 1
-        out = capsys.readouterr().out
-        assert "ERROR:" in out
-        assert "error_code" not in out or "mod.py" in out
-
-    def test_enforce_fails_on_ad_hoc(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
-        services_dir = _make_services_tree(
-            tmp_path,
-            {"mod.py": _wrap_return('{"success": False, "message": "m"}')},
-        )
-        monkeypatch.setattr(check, "REPO_ROOT", tmp_path)
-        monkeypatch.setattr(check, "SERVICES_DIR", services_dir)
-        rc = check.main(["--check"])
-        assert rc == 1
-        assert "ERROR:" in capsys.readouterr().out
-
-    def test_enforce_passes_on_canonical_and_carve_outs(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
-        services_dir = _make_services_tree(
-            tmp_path,
-            {
-                "canonical.py": _wrap_return('{"success": False, "reason": "x", "message": "m"}'),
-                "status.py": _wrap_return('{"status": "server_unreachable", "message": "m"}'),
-                "partial.py": _wrap_return('{"data": [], "server_query_failed": True}'),
-                "ok.py": _wrap_return('{"success": True, "message": "ok"}'),
-            },
-        )
-        monkeypatch.setattr(check, "REPO_ROOT", tmp_path)
-        monkeypatch.setattr(check, "SERVICES_DIR", services_dir)
-        rc = check.main(["--check"])
-        assert rc == 0
-        assert "OK:" in capsys.readouterr().out
-
-    def test_report_groups_and_summarises(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
-        services_dir = _make_services_tree(
-            tmp_path,
-            {
-                "a.py": _wrap_return('{"success": False, "reason": "x", "message": "m"}'),
-                "b.py": _wrap_return('{"success": False, "error": "x"}'),
-            },
-        )
-        monkeypatch.setattr(check, "REPO_ROOT", tmp_path)
-        monkeypatch.setattr(check, "SERVICES_DIR", services_dir)
-        rc = check.main([])
-        assert rc == 0
-        out = capsys.readouterr().out
-        assert f"=== {check.CANONICAL} (1) ===" in out
-        assert f"=== {check.ERROR_KEY_DIALECT} (1) ===" in out
-        assert "TOTAL: 2" in out
-
-
-# ── Converted modules: the ratchet ───────────────────────────────────────
-
-_CONVERTED_SOURCE = """\
-from lib.errors import error_response
-from lib.example import busy_refusal
-
-
-def refuse():
-    answer = {"success": False, "message": "m"}
-    return answer
-
-
-def translate(exc):
-    return error_response(exc)
-
-
-def spread():
-    return {**busy_refusal(), "synced": 0}
-"""
-
-
-def _converted_tree(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, source: str, *, listed: bool) -> None:
-    """Lay out ``backend/adapters/mod.py`` under *tmp_path*, on the converted list or off it."""
-    module = tmp_path / "backend" / "adapters" / "mod.py"
-    module.parent.mkdir(parents=True)
-    module.write_text(source, encoding="utf-8")
-    monkeypatch.setattr(check, "CONVERTED_ROOT", tmp_path)
-    monkeypatch.setattr(check, "CONVERTED_MODULES", ("backend/adapters/mod.py",) if listed else ())
-    monkeypatch.setattr(check, "SERVICES_DIR", tmp_path / "backend" / "services")
-    monkeypatch.setattr(check, "REPO_ROOT", tmp_path)
-
-
-class TestConvertedModules:
-    def test_a_listed_module_building_the_failure_shape_fails_the_check(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
-        _converted_tree(monkeypatch, tmp_path, _CONVERTED_SOURCE, listed=True)
+        _backend(monkeypatch, tmp_path, {"adapters/mod.py": _FAILURE_RETURN, "main.py": _FAILURE_RETURN})
 
         assert check.main(["--check"]) == 1
         out = capsys.readouterr().out
-        assert "backend/adapters/mod.py:6  a failure dict literal" in out
-        assert "backend/adapters/mod.py:11  a call to error_response()" in out
-        assert "backend/adapters/mod.py:15  a spread of busy_refusal()" in out
+        assert "  backend/adapters/mod.py:2  a failure dict literal" in out
+        assert "main.py:" not in out
+        assert "ERROR:" in out
 
-    def test_the_same_module_off_the_list_passes(
+    def test_a_run_without_check_enforces_too(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        _backend(monkeypatch, tmp_path, {"lib/mod.py": _FAILURE_RETURN})
+
+        assert check.main([]) == 1
+
+    def test_check_passes_on_a_tree_that_builds_no_shape(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ):
-        _converted_tree(monkeypatch, tmp_path, _CONVERTED_SOURCE, listed=False)
+        _backend(monkeypatch, tmp_path, {"main.py": _FAILURE_RETURN, "services/mod.py": "def f():\n    return {}\n"})
 
         assert check.main(["--check"]) == 0
-        assert "OK:" in capsys.readouterr().out
-
-    def test_a_failure_dict_carrying_reason_and_message_still_fails(self, tmp_path: Path):
-        """In a converted module the shape is the entrypoint's, however canonical the dict."""
-        (tmp_path / "mod.py").write_text(_wrap_return('{"success": False, "reason": "x", "message": "m"}'))
-
-        found = check.scan_converted_module(tmp_path, "mod.py")
-
-        assert [finding.detail for finding in found] == ["a failure dict literal"]
-
-    def test_an_error_response_reached_through_its_module_fails(self, tmp_path: Path):
-        (tmp_path / "mod.py").write_text("import lib.errors\n\ndef f(e):\n    lib.errors.error_response(e)\n")
-
-        found = check.scan_converted_module(tmp_path, "mod.py")
-
-        assert [finding.detail for finding in found] == ["a call to error_response()"]
-
-    def test_a_spread_of_a_failure_helper_fails(self, tmp_path: Path):
-        (tmp_path / "mod.py").write_text("def f(self):\n    return {**self._failure('x', 'm'), 'claimed': 0}\n")
-
-        found = check.scan_converted_module(tmp_path, "mod.py")
-
-        assert [finding.detail for finding in found] == ["a spread of _failure()"]
-
-    def test_what_the_entrypoint_takes_over_passes(self, tmp_path: Path):
-        source = (
-            "from lib.errors import Refused\n\n"
-            "def f(done):\n"
-            "    if not done:\n"
-            "        raise Refused('nothing_to_fix', 'No fix needed')\n"
-            "    return {'success': True, **dict(done)}\n"
-        )
-        (tmp_path / "mod.py").write_text(source)
-
-        assert check.scan_converted_module(tmp_path, "mod.py") == []
-
-    def test_a_listed_path_that_is_not_a_file_fails(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ):
-        monkeypatch.setattr(check, "CONVERTED_ROOT", tmp_path)
-        monkeypatch.setattr(check, "CONVERTED_MODULES", ("backend/services/renamed.py",))
-        monkeypatch.setattr(check, "SERVICES_DIR", tmp_path / "backend" / "services")
-        monkeypatch.setattr(check, "REPO_ROOT", tmp_path)
-
-        assert check.main(["--check"]) == 1
-        assert "backend/services/renamed.py:0  listed as converted but not a file" in capsys.readouterr().out
-
-    def test_a_listed_module_that_does_not_parse_fails(self, tmp_path: Path):
-        (tmp_path / "mod.py").write_text("def broken(:\n")
-
-        found = check.scan_converted_module(tmp_path, "mod.py")
-
-        assert [finding.detail for finding in found] == ["does not parse, so nothing in it could be checked"]
-
-    def test_every_listed_module_of_the_real_repo_is_clean(self):
-        assert check.collect_converted_findings() == []
-
-    def test_the_real_list_names_repo_relative_python_files(self):
-        assert all(rel.startswith("backend/") and rel.endswith(".py") for rel in check.CONVERTED_MODULES)
+        assert "OK: no failure shape built in backend/ outside backend/main.py." in capsys.readouterr().out

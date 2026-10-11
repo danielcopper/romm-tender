@@ -18,9 +18,10 @@ None of the seven below has a mechanical check. Each of them fails green.
 
 `error.reason` (`method_unknown`, `payload_too_large`, `backend_exception`, `malformed_message`, `connection_lost`,
 `stranded_panel`) names something that went wrong **carrying** a call. An endpoint's own failure is a perfectly
-successful transport and arrives inside `result`, in the `{success, reason, message}` shape
-`scripts/check_failure_shape.py` guards — **and that gate does not see `host/` at all.** Collapse the two and a user is
-shown a sentence about their game where a programming error stands.
+successful transport and arrives inside `result`, in the `{success, reason, message}` shape `main.py` builds — **and no
+gate tells the two apart.** `scripts/check_failure_shape.py` reads `host/` too, but the transport's
+`{type, reason, message}` carries no `success` key, so whatever it says passes. Collapse the two and a user is shown a
+sentence about their game where a programming error stands.
 
 ## 2. An address with a token in it never reaches the log file
 

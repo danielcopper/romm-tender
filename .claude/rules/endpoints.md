@@ -11,10 +11,15 @@ Endpoints returning a plain `dict` that can fail use `{success: False, reason: E
 a string literal where a refusal is raised (`Refused("unknown", …)`), so a check that reads reasons off raise sites can
 read it; bespoke guards (`config_error`, `sync_disabled`, `not_installed`, …) stay plain-string reasons. Transport
 failures collapse onto `SERVER_UNREACHABLE`; 401 and 403 collapse onto `AUTH_FAILED` (same slug, distinct `message`).
-The legacy `error_code` key and a second `error` key are **forbidden**. Enforced by
-`scripts/check_failure_shape.py --check`.
+The legacy `error_code` key and a second `error` key are **forbidden**.
 
-Two carve-outs (pattern-exempt in the gate):
+**`main.py` builds the shape** from what a use case raises or returns (below), and no other module builds it from a
+literal; `scripts/check_failure_shape.py --check` fails on one that does. The gate reads where the shape is built, not
+its keys. The full rule — what the gate reads and what fails it, and the two results that compute a failing `success`
+outside `main.py` — is the invariant register's entry in `CLAUDE.md` and `docs/architecture/backend-architecture.md`,
+§4.
+
+Two carve-outs, which carry no `success` key, so the gate passes them:
 
 - **Discriminated-status unions** (`status: "ok" | "server_unreachable" | …`, used by the saves version-history
   endpoints) keep the `status` discriminant instead of `success` — more than two outcomes. Failure branches still carry

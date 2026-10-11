@@ -5,11 +5,13 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
+from models.prune import MutationOutcome
+
 from adapters.descriptor_paths import claim_source, remove_claimed
 from domain.artwork_paths import cache_filename, cover_meta_filename
 
 if TYPE_CHECKING:
-    from models.prune import MutationOutcome, RecoveryArtifact, SourceClaim
+    from models.prune import RecoveryArtifact, SourceClaim
 
 _SGDB_TYPES = ("hero", "logo", "grid", "icon")
 
@@ -45,21 +47,21 @@ class PruneArtifactAdapter:
                         claim = claim_source(path, self._cache_dir)
                     outcome = remove_claimed(path, self._cache_dir, claim)
                 except Exception as exc:
-                    return {
-                        "success": False,
-                        "changed": changed,
-                        "ambiguous": ambiguous,
-                        "message": str(exc),
-                    }
+                    return MutationOutcome(
+                        success=False,
+                        changed=changed,
+                        ambiguous=ambiguous,
+                        message=str(exc),
+                    )
                 changed |= outcome["changed"]
                 ambiguous |= outcome["ambiguous"]
                 if not outcome["success"]:
-                    return {
-                        "success": False,
-                        "changed": changed,
-                        "ambiguous": ambiguous,
-                        "message": outcome["message"],
-                    }
+                    return MutationOutcome(
+                        success=False,
+                        changed=changed,
+                        ambiguous=ambiguous,
+                        message=outcome["message"],
+                    )
         return {"success": True, "changed": changed, "ambiguous": ambiguous, "message": "Artifacts removed"}
 
     def _paths(self, rom_id: int) -> list[tuple[str, str]]:

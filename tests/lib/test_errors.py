@@ -3,6 +3,7 @@ import socket
 
 import pytest
 
+from lib import errors
 from lib.errors import (
     AuthFailed,
     DeviceSyncDisabled,
@@ -25,7 +26,6 @@ from lib.errors import (
     TokenHostMismatchError,
     VersionUnsupported,
     classify_error,
-    error_response,
     romm_error_log_level,
 )
 
@@ -312,6 +312,25 @@ class TestClassifyError:
         assert code == "server_unreachable"
 
 
+def _not_found_classes() -> list[type[RommNotFoundError]]:
+    """``RommNotFoundError`` and every class defined in or imported into ``lib/errors.py`` that derives from it."""
+    return [obj for obj in vars(errors).values() if isinstance(obj, type) and issubclass(obj, RommNotFoundError)]
+
+
+class TestEveryNotFoundClassAnswersNotFound:
+    """A definitive 404 is ``not_found`` in ``classify_error``'s table, whatever branch stands above it.
+
+    Sees every not-found class defined in or imported into ``lib/errors.py``. Unseen: one that
+    module neither defines nor imports, and a 404 that is not a ``RommNotFoundError`` — the
+    pairing-code exchange's two 404 errors derive from ``RommApiError`` alone and answer
+    ``server_unreachable`` in the table (the connection service catches both first).
+    """
+
+    @pytest.mark.parametrize("cls", _not_found_classes(), ids=lambda cls: cls.__name__)
+    def test_it_answers_not_found(self, cls):
+        assert classify_error(cls("gone"))[0] == "not_found"
+
+
 class TestRommErrorLogLevel:
     """A RomM error logs at info exactly where ``classify_error`` answers ``server_unreachable``."""
 
@@ -342,76 +361,6 @@ class TestRommErrorLogLevel:
     def test_every_other_reason_logs_at_warning(self, exc):
         assert classify_error(exc)[0] != "server_unreachable"
         assert romm_error_log_level(exc) == logging.WARNING
-
-
-class TestErrorResponse:
-    """error_response returns a proper {success, reason, message} dict."""
-
-    def test_structure(self):
-        resp = error_response(RommAuthError("401"))
-        assert resp["success"] is False
-        assert "message" in resp
-        assert "reason" in resp
-        assert "error_code" not in resp
-        assert "error" not in resp
-
-    def test_auth_error_code(self):
-        resp = error_response(RommAuthError("unauthorized"))
-        assert resp["reason"] == "auth_failed"
-        assert resp["success"] is False
-
-    def test_connection_error_code(self):
-        resp = error_response(RommConnectionError("refused"))
-        assert resp["reason"] == "server_unreachable"
-
-    def test_ssl_error_code(self):
-        resp = error_response(RommSSLError("cert fail"))
-        assert resp["reason"] == "server_unreachable"
-
-    def test_timeout_error_code(self):
-        resp = error_response(RommTimeoutError("timed out"))
-        assert resp["reason"] == "server_unreachable"
-
-    def test_server_error_code(self):
-        resp = error_response(RommServerError("500", status_code=500))
-        assert resp["reason"] == "server_unreachable"
-
-    def test_unknown_error_code(self):
-        resp = error_response(ValueError("bad"))
-        assert resp["reason"] == "unknown"
-
-    def test_fallback_message_override(self):
-        resp = error_response(RommAuthError("401"), fallback_message="Custom message")
-        assert resp["message"] == "Custom message"
-        assert resp["reason"] == "auth_failed"
-
-    def test_fallback_message_none_uses_default(self):
-        resp = error_response(RommAuthError("401"), fallback_message=None)
-        assert "Authentication failed" in resp["message"]
-
-    def test_not_found_error_response(self):
-        resp = error_response(RommNotFoundError("missing"))
-        assert resp["reason"] == "not_found"
-        assert resp["success"] is False
-
-    def test_forbidden_error_response(self):
-        resp = error_response(RommForbiddenError("forbidden"))
-        assert resp["reason"] == "auth_failed"
-        assert "Access denied" in resp["message"]
-
-    def test_unsupported_error_response(self):
-        resp = error_response(RommUnsupportedError("save content download", "4.7.0"))
-        assert resp["reason"] == "unsupported"
-        assert resp["success"] is False
-        assert "4.7.0" in resp["message"]
-
-    def test_token_host_mismatch_error_response(self):
-        resp = error_response(TokenHostMismatchError("mismatch"))
-        assert resp["success"] is False
-        assert resp["reason"] == "config_error"
-        assert "different server" in resp["message"]
-        assert "error" not in resp
-        assert "error_code" not in resp
 
 
 class TestTheNamedRefusals:
