@@ -4,7 +4,7 @@
  */
 
 import type { EndpointFailure } from "./api";
-import type { WireReasonSubset } from "./reasons";
+import type { WireReason, WireReasonSubset } from "./reasons";
 
 export interface DownloadItem {
   rom_id: number;
@@ -219,11 +219,13 @@ interface AdoptDone {
 /**
  * An adoption that stopped after it had already renamed files or set them
  * aside: what is now at its new name, what a move left under the old one, and
- * what was moved to `.romm-backup` to make room and is still there.
+ * what was moved to `.romm-backup` to make room and is still there. `reason`
+ * is the refusal that stopped it — a rename or replace that failed, or any
+ * refusal of the removal that followed.
  */
 interface AdoptionIncomplete {
   success: false;
-  reason: WireReasonSubset<"rename_failed" | "replace_failed">;
+  reason: WireReason;
   message: string;
   renamed: string[];
   still_under_old_name: string[];

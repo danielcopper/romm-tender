@@ -1068,7 +1068,7 @@ export const resolveSyncConflict = endpoint<
   {
     success: boolean;
     message?: string;
-    reason?: WireReasonSubset<"stale_conflict">;
+    reason?: WireReason;
     action?: "keep_local" | "use_server";
   }
 >("resolve_sync_conflict");
