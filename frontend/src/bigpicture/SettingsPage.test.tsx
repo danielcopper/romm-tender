@@ -1304,17 +1304,20 @@ describe("SettingsPage", () => {
         onCancel?: () => void;
       }>();
       expect(props?.strTitle).toBe("Enable Save Sync?");
-      expect(props?.strDescription).toContain("RetroArch game saves");
-      // #1189: the copy must not claim only .srm files sync, and points at the support matrix instead.
-      expect(props?.strDescription).not.toContain("(.srm)");
-      expect(props?.strDescription).toContain("support matrix");
-      // No save-sorting setting is required any more: the copy says save sync
-      // follows RetroArch's sorting and no longer asks for a particular one.
-      expect(props?.strDescription).toContain("follows RetroArch's own save sorting");
-      expect(props?.strDescription).toContain("the next time Tender touches that game's saves");
-      expect(props?.strDescription).not.toContain("the next time that game syncs");
-      expect(props?.strDescription).not.toContain("Sort Saves into Folders");
-      expect(props?.strDescription).not.toContain("will not find your save files");
+      const paragraphs = [
+        "Tender keeps a game's saves in step with your RomM server: before a game starts it fetches a newer save " +
+          "from the server, after you quit it uploads yours, and if both sides changed you choose which one wins. " +
+          "Which files make up a game's save is asked of the emulator that launches it, game by game; a game whose " +
+          "save it cannot tell apart from others, such as a shared memory card or a save inside the game file, is " +
+          "left alone.",
+        "Before a save on this device is overwritten, Tender keeps a copy of the old file.",
+        "Use this with your own RomM account, not a shared one such as admin or guest: saves on the server belong " +
+          "to the user who uploaded them.",
+      ];
+      for (const paragraph of paragraphs) {
+        expect(props?.strDescription).toContain(paragraph);
+      }
+      expect(props?.strDescription).toBe(paragraphs.join("\n\n"));
       expect(props?.strOKButtonText).toBe("I am sure");
       expect(props?.strCancelButtonText).toBe("Cancel");
     });

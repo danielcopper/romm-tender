@@ -267,7 +267,8 @@ and the row you focus is the one the right-hand pane describes.
    it has on RomM, how many are in Steam, and the system its games are in your emulator source ("RetroDECK system:
    psx"). If it reads **RetroDECK decides**, Tender could not pin any of this platform's emulators — they may need
    setting up, or ES-DE's command for them is not one Tender can bake — so RetroDECK chooses one itself when a game
-   starts. If it reads **no emulator installed** in red, the emulator RetroDECK would have fallen back to is not on this
+   starts, and a game's BIOS tab reads the same words in its Emulator column when nothing can be pinned for that game.
+   If it reads **no emulator installed** in red, the emulator RetroDECK would have fallen back to is not on this
    machine, and the sentence below names it. If it reads **no emulator** in red, RetroDECK has none for this platform at
    all. The sentence below the line says which of the three it is
 6. The **chip button** at the right of the name opens a menu of the platform's emulators — the same button, in the same

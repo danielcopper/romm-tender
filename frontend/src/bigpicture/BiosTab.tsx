@@ -515,7 +515,7 @@ export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isA
       Emulator
     </div>,
     <div key="core" className="romm-panel-value">
-      {coreInfo?.active_core_label ? coreInfo.active_core_label : "Default"}
+      {coreInfo?.active_core_label ? coreInfo.active_core_label : "RetroDECK decides"}
     </div>,
   ];
 

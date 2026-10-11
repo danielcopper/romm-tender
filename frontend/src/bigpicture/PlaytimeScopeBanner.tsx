@@ -6,7 +6,7 @@ import { setPlaytimeScopeState } from "../utils/playtimeScopeStore";
 export const PLAYTIME_SCOPE_TITLE = "Cross-device playtime";
 
 /** Body text prompting the user to re-mint a scoped Client API Token. */
-export const PLAYTIME_SCOPE_MESSAGE = "Sign in again to enable cross-device playtime sync.";
+export const PLAYTIME_SCOPE_MESSAGE = "Your saved login cannot read cross-device playtime. A fresh sign-in enables it.";
 
 /**
  * QAM PanelSection shown while the Client API Token lacks the `roms.user.read`
@@ -36,16 +36,6 @@ export const PlaytimeScopeBanner: FC<{ onOpenConnections: () => void }> = ({ onO
             borderRadius: "4px",
           }}
         >
-          <div
-            style={{
-              fontSize: "13px",
-              fontWeight: "bold",
-              color: "#d4a72c",
-              marginBottom: "6px",
-            }}
-          >
-            {"⚠️"} {PLAYTIME_SCOPE_TITLE}
-          </div>
           <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.85)", lineHeight: 1.5 }}>
             {PLAYTIME_SCOPE_MESSAGE}
           </div>

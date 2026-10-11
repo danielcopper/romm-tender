@@ -52,7 +52,7 @@ function metadataRows(meta: RomMetadata, platformName: string): ReactElement[] {
   }
 
   if (meta.companies.length > 0) {
-    rows.push(infoRow("companies", "Developer / Publisher", meta.companies.join(", ")));
+    rows.push(infoRow("companies", "Companies", meta.companies.join(", ")));
   }
 
   if (meta.genres.length > 0) {
@@ -84,7 +84,7 @@ function metadataRows(meta: RomMetadata, platformName: string): ReactElement[] {
   }
 
   if (meta.average_rating != null && meta.average_rating > 0) {
-    rows.push(infoRow("rating", "Rating", `${Math.round(meta.average_rating)}%`));
+    rows.push(infoRow("rating", "Metadata rating", `${Math.round(meta.average_rating)}%`));
   }
 
   return rows;

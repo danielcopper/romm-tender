@@ -808,7 +808,7 @@ describe("BiosTab", () => {
     expect(container.textContent).not.toContain("Active Core");
   });
 
-  it("falls back to 'Default' when no launching emulator is resolved", () => {
+  it("reads 'RetroDECK decides' when no launching emulator is resolved", () => {
     const { container } = render(
       <BiosTab
         biosStatus={biosStatus}
@@ -817,7 +817,11 @@ describe("BiosTab", () => {
         isActive={true}
       />,
     );
-    expect(container.textContent).toContain("Default");
+    const emulatorHeading = [...container.querySelectorAll(".romm-panel-section-title")].find(
+      (el) => el.textContent === "Emulator",
+    );
+    expect(emulatorHeading?.nextElementSibling?.textContent).toBe("RetroDECK decides");
+    expect(container.textContent).not.toContain("Default");
   });
 
   describe("a core's line", () => {
