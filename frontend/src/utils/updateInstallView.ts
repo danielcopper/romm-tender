@@ -9,6 +9,7 @@
  */
 
 import type { UpdateInstallAttempt, UpdateInstallFailure, UpdateWaitReason } from "../api/backend";
+import type { WireReasonSubset } from "../types/reasons";
 import { statusUnreadSentence } from "./runningAppsWording";
 
 export const WAITING_FOR = "Waiting for:";
@@ -46,7 +47,8 @@ export const TAKING_LONG_LINE = `The installer is taking unusually long. ${INSTA
 export const INSTALLER_OVERDUE_MS = 7 * 60 * 1000;
 
 /** A press the backend refused for something other than a wait, and a press the connection did not carry. */
-export type InstallRefusalReason = "update_in_progress" | "not_offered" | "version_changed" | "request_failed";
+export type InstallRefusalReason =
+  WireReasonSubset<"update_in_progress" | "not_offered" | "version_changed"> | "request_failed";
 
 export const INSTALL_REFUSAL_SENTENCES: Record<InstallRefusalReason, string> = {
   update_in_progress: "An update is already being installed.",

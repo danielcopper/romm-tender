@@ -177,6 +177,7 @@ import { registerConnectionHeartbeat } from "../utils/connectionHeartbeat";
 import { useMigrationStatus } from "../utils/migrationStore";
 import { useStrandedAnswer } from "../utils/strandedPanelStore";
 import { detach } from "../utils/detach";
+import type { WireReason } from "../types/reasons";
 
 // S3776 is raised on the declaration line, so its NOSONAR must stay there. prettier-ignore stops
 // Prettier from relocating the trailing comment into the body (which would break the suppression).
@@ -524,7 +525,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       // patch cover_path on the registry row so the game info panel can
       // render the refreshed image.
       const coverResult = await refreshCoverArtwork(romId).catch(
-        (e): { success: boolean; reason?: string; message: string; cover_path?: string } => {
+        (e): { success: boolean; reason?: WireReason | "exception"; message: string; cover_path?: string } => {
           detach(debugLog(`refreshCoverArtwork rejected: ${e}`));
           return { success: false, reason: "exception", message: String(e) };
         },

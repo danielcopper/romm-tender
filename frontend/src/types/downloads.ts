@@ -3,6 +3,9 @@
  * for individual ROM file downloads triggered from the UI.
  */
 
+import type { EndpointFailure } from "./api";
+import type { WireReasonSubset } from "./reasons";
+
 export interface DownloadItem {
   rom_id: number;
   rom_name: string;
@@ -83,7 +86,7 @@ export type EntryKind = "file" | "dir" | "link";
  */
 export interface TargetOccupiedResult {
   success: false;
-  reason: "target_occupied";
+  reason: WireReasonSubset<"target_occupied">;
   message: string;
   existing: {
     name: string;
@@ -131,7 +134,7 @@ export interface AdoptionCandidate {
  */
 export interface CandidatesFoundResult {
   success: false;
-  reason: "adoption_candidates";
+  reason: WireReasonSubset<"adoption_candidates">;
   message: string;
   incoming: { name: string; size_bytes: number };
   candidates: AdoptionCandidate[];
@@ -155,7 +158,7 @@ export interface CandidatesFoundResult {
  */
 export interface UnusableNamesakeResult {
   success: false;
-  reason: "unusable_namesake";
+  reason: WireReasonSubset<"unusable_namesake">;
   message: string;
   incoming: { name: string; size_bytes: number };
   existing: Array<{ name: string; path: string; kind: EntryKind }>;
@@ -173,7 +176,7 @@ export interface UnusableNamesakeResult {
  */
 export interface CandidateVanishedResult {
   success: false;
-  reason: "candidate_vanished";
+  reason: WireReasonSubset<"candidate_vanished">;
   message: string;
   incoming: { name: string; size_bytes: number };
 }
@@ -193,7 +196,7 @@ export interface RenameCollision {
  */
 export interface RenameCollisionsResult {
   success: false;
-  reason: "rename_collisions";
+  reason: WireReasonSubset<"rename_collisions">;
   message: string;
   collisions: RenameCollision[];
 }
@@ -220,22 +223,15 @@ interface AdoptDone {
  */
 interface AdoptionIncomplete {
   success: false;
-  reason: "rename_failed" | "replace_failed";
+  reason: WireReasonSubset<"rename_failed" | "replace_failed">;
   message: string;
   renamed: string[];
   still_under_old_name: string[];
   set_aside: string[];
 }
 
-/** Any other refusal, in the shape every endpoint fails in. */
-interface AdoptRefused {
-  success: false;
-  reason: string;
-  message: string;
-}
-
-/** Outcome of `adopt_existing_rom`. */
-export type AdoptResult = AdoptDone | RenameCollisionsResult | AdoptionIncomplete | AdoptRefused;
+/** Outcome of `adopt_existing_rom`; any other refusal comes in the shape every endpoint fails in. */
+export type AdoptResult = AdoptDone | RenameCollisionsResult | AdoptionIncomplete | EndpointFailure;
 
 /**
  * Outcome of `verify_existing_content`. A status union rather than a boolean:

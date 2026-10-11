@@ -4,7 +4,6 @@
  * belongs here; rendering helpers live alongside their components.
  */
 
-import type { EndpointFailure } from "../../api/backend";
 import type { DeviceSyncInfo, RollbackStatus, SaveStatus, SyncConflict } from "../../types";
 
 export const MUTED_COLOR = "#8f98a0";
@@ -86,14 +85,6 @@ export function formatAttributionSegment(
     return showCheck ? "✓" : null;
   }
   return null;
-}
-
-/** The toast for a failed `get_slot_delete_info`. */
-export function slotDeleteFailureToast(info: EndpointFailure): string {
-  if (info.reason === "active_slot") {
-    return "Cannot delete the active slot. Switch to a different slot first.";
-  }
-  return info.message;
 }
 
 /** The toast for a restore refused as unsupported — the backend's own explanation where it gave one. */

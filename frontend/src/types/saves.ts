@@ -4,7 +4,7 @@
  * Anything related to RomM save synchronization lives here.
  */
 
-import type { RommErrorCode } from "./api";
+import type { RommErrorReason } from "./reasons";
 
 export interface SaveSyncSettings {
   save_sync_enabled: boolean;
@@ -115,7 +115,7 @@ export interface SaveStatus {
   /** Why it failed (`null` when it didn't). The flag says the server's view is
    *  unknown — true for a 404 as much as for an outage; this says why, so only
    *  `"server_unreachable"` may drive the connection store (#1570). */
-  server_query_reason?: RommErrorCode | null;
+  server_query_reason?: RommErrorReason | null;
   /** True when the active slot's current save spans more than one distinct
    *  file (e.g. Sega Saturn `.bkr`/`.bcr`/`.smpc`). Those siblings are
    *  components of one game state, not prior versions — so the frontend

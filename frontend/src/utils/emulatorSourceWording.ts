@@ -19,7 +19,7 @@ import type {
   PlatformSystemAnswer,
   SourceHealthFinding,
 } from "../types/emulatorSources";
-import type { RommErrorCode } from "../types/api";
+import type { RommErrorReason } from "../types/reasons";
 
 const SOURCE_NAMES: ReadonlyMap<string, string> = new Map([
   ["retrodeck", "RetroDECK"],
@@ -222,18 +222,15 @@ const ROMM_UNREACHABLE_SENTENCE = "RomM cannot be reached, so Tender does not kn
 /** Why a platform has no system yet: its ids are not kept, and RomM refused the read that gives them. */
 const ROMM_REFUSED_SENTENCE = "RomM did not give this platform's ids, so Tender does not know its system yet.";
 
-/** Every reason a RomM read can fail with: a `Record` so that a code added to {@link RommErrorCode} must be added here. */
-const ROMM_READ_FAILURES: Record<RommErrorCode, true> = {
+/** Every reason a RomM read can fail with: a `Record` so that a reason added to {@link RommErrorReason} must be added here. */
+const ROMM_READ_FAILURES: Record<RommErrorReason, true> = {
   server_unreachable: true,
   auth_failed: true,
   not_found: true,
   unsupported: true,
   unknown: true,
-  version_error: true,
-  stale_conflict: true,
-  stale_preview: true,
   config_error: true,
-  in_progress: true,
+  device_sync_disabled: true,
 };
 const ROMM_READ_FAILURE_CODES: ReadonlySet<string> = new Set(Object.keys(ROMM_READ_FAILURES));
 
