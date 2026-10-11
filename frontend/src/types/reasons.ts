@@ -1,13 +1,10 @@
 /**
- * The `reason` an endpoint's failure answer can carry, and nothing else: the
- * panel's own reasons (`request_failed`, `exception`, the launch gate's
- * verdicts) and other vocabularies read under a `reason` key (transport
- * failures, status unions, update wait reasons, prune frames) keep their own
- * types. `scripts/check_reason_parity.py` holds both unions below equal to the
- * backend, reading them from this file.
+ * The `reason` an endpoint's failure answer can carry, and nothing else.
+ * `scripts/check_reason_parity.py` holds both unions below equal to the
+ * backend, reading them from this file; its docstring lists what stays out.
  */
 
-/** Every reason `classify_error` (backend/lib/errors.py) answers a RomM error with. */
+/** Every reason `classify_error` (backend/lib/errors.py) returns. */
 export type RommErrorReason =
   | "auth_failed"
   | "config_error"
@@ -20,7 +17,7 @@ export type RommErrorReason =
 /**
  * Some of {@link WireReason}, for a type that names the reasons its endpoint
  * answers with: a reason outside the union fails to compile, where
- * `Extract<WireReason, …>` would quietly answer `never`.
+ * `Extract<WireReason, …>` would quietly drop it.
  */
 export type WireReasonSubset<R extends WireReason> = R;
 

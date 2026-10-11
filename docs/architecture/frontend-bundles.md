@@ -315,8 +315,7 @@ Five properties are worth knowing before changing anything there:
   `{success, reason,
   message}`. The frontend keeps them apart by throwing `HostTransportError` for the first, so it
   cannot reach a reader of the second. The second's `reason` is a `WireReason` (`frontend/src/types/reasons.ts`), held
-  equal to the backend's reasons by `scripts/check_reason_parity.py`; a transport failure's reasons and the panel's own
-  are not in it, and a site that adds one of its own declares it beside the union.
+  equal to the backend's reasons by `scripts/check_reason_parity.py`, whose docstring lists what stays out of it.
 - **There is no timeout, deliberately** — what a call does while the socket is down, and why adding one is not a local
   change, is stated at the top of `frontend/src/api/hostSocket.ts`.
 - **A dropped connection fails the calls that were already sent, and only those.** A frame still queued never left, so

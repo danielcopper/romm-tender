@@ -443,9 +443,11 @@ frontend side via a text scan of bare `addEventListener` calls. Static sibling o
 event channel. The same parity assertion is surfaced inside the pytest run by `tests/contract/test_event_parity.py`.
 
 `mise run lint` (and CI) also runs `scripts/check_reason_parity.py`, which fails if a reason an endpoint's failure
-answer can carry is missing from the panel's `WireReason` union in `frontend/src/types/reasons.ts`, or the union holds
-one no backend refusal answers with. Its tests are `tests/scripts/test_check_reason_parity.py`; what it reads and what
-it cannot see is the invariant register's entry.
+answer can carry — a refusal's, a partial failure's or one `classify_error` returns — is missing from the panel's
+`WireReason` union in `frontend/src/types/reasons.ts`, or the union holds one none of them answers with; if the union's
+`RommErrorReason` part differs from `classify_error`'s reasons; and on a backend site whose reason it cannot read. Its
+tests are `tests/scripts/test_check_reason_parity.py`; what it reads and what it cannot see is its docstring, and why it
+exists is [the invariant's entry](../architecture/invariants.md).
 
 `mise run lint` (and CI) also runs `scripts/check_settings_owner.py`, which fails if the `settings.json` filename
 literal appears anywhere except its owning adapter (`adapters/persistence.py`); confining the literal to one module

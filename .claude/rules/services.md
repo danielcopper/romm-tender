@@ -35,11 +35,11 @@ utilities) / `models/` (data shapes). `import-linter` enforces direction. `[CP]`
 - `[ours]` **Debug logging: inject the `DebugLogger` Protocol.** No per-service `_log_debug` that re-reads settings at
   call time, and no reaching for a module-level logger to bypass log-level filtering — a service is handed its logger.
 - `[ours]` **A service refuses by raising, never by returning the failure shape** — `Refused` (`lib/errors.py`), with
-  the reason a literal at the raise site, or a `NamedRefused` subclass that declares only `reason = "…"`; a domain rule
-  raises `DomainRefused` or a `NamedDomainRefused` subclass (`domain/refusal.py`). Work that stopped partway returns a
-  `PartialFailure` (`lib/partial_failure.py`) subclass that carries what was done. No module but `main.py` builds the
-  shape from a literal; `scripts/check_failure_shape.py --check` fails on one built anywhere else
-  (`.claude/rules/endpoints.md`), not on a missing raise.
+  the reason spelled as `.claude/rules/endpoints.md` says, or a `NamedRefused` subclass that declares only
+  `reason = "…"`; a domain rule raises `DomainRefused` or a `NamedDomainRefused` subclass (`domain/refusal.py`). Work
+  that stopped partway returns a `PartialFailure` (`lib/partial_failure.py`) subclass that carries what was done. No
+  module but `main.py` builds the shape from a literal; `scripts/check_failure_shape.py --check` fails on one built
+  anywhere else (`.claude/rules/endpoints.md`), not on a missing raise.
 - `[ours]` God-class signal: services > ~1000 LOC — decompose into sub-services with constructor injection
   (`services/saves/` is the reference). Enforced by `scripts/check_module_size.py`: a new module may not cross the
   threshold at all, and the modules that predate the gate are pinned at their exact size and may not grow. A pin goes up
