@@ -8,7 +8,9 @@ describe("InterfaceSection", () => {
     render(<InterfaceSection qamEntryPosition="above_decky" onQamEntryPositionChange={vi.fn()} />);
 
     expect(screen.getByText("Place Tender above Decky Loader")).toBeInTheDocument();
-    expect(screen.getByTestId("toggle-desc")).toHaveTextContent("Applies only where Decky Loader is installed.");
+    expect(screen.getByTestId("toggle-desc")).toHaveTextContent(
+      "Applies only where Decky Loader is installed. Takes effect the next time you open the Quick Access Menu.",
+    );
   });
 
   it("is on for above and off for below", () => {

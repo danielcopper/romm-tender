@@ -101,9 +101,9 @@ const isDeckys = (tab: unknown): boolean => carriesMark(tab, DECKY_TAB_MARK);
  * a property of which program starts first, which nothing here decides — so the
  * placement is re-asserted instead of relied upon. #1897 showed that a pass
  * follows a move: the entry was shoved to index 0 by hand and the next pass moved
- * it again (measured with the handler that put it last; placement before Decky's
- * entry is not yet seen on the device). Moving an entry is invisible to Decky's
- * own guard, which counts marked entries and never asks where they sit.
+ * it again (measured with the handler that put it last). Moving an entry is
+ * invisible to Decky's own guard, which counts marked entries and never asks
+ * where they sit.
  *
  * Decky's marker is the one its own guard counts by, so it names every entry
  * Decky put there however many it registered.

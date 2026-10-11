@@ -79,7 +79,9 @@ invisible to Decky's guard, which counts marked entries and never asks where the
 `frontend/src/utils/qamEntryPositionStore.ts` synchronously: the panel fills that store from `get_settings` when it
 loads, and the Settings page writes it once the backend has taken a change. Until the load answers, the default places
 the entry. The value has no home but `settings.json` — no copy in local storage, nothing carried in the injected
-expression — and a change reaches the strip at the menu's next render pass, because nothing forces one.
+expression — and a change reaches the strip at the menu's next render pass, because nothing forces one. On the device
+that is the next time the menu opens: switched while the menu was open, the entry did not move, and it stood in its new
+place once the menu was opened again.
 
 **Every Quick Access remount builds a new tab array** — Gaming Mode to Desktop and back, or Big Picture opening in a
 window, replaces the menu's browser view and with it the React tree, the array and the document. Three consequences, and

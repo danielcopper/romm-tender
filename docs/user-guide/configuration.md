@@ -342,7 +342,7 @@ an entry to the strip of icons down the side of the Quick Access Menu. On (the d
 Loader's; off, below it.
 
 It applies only where Decky Loader is installed — without it, Tender's entry sits at the end of the strip either way. A
-change shows the next time the Quick Access Menu redraws its strip, at the latest when you close it and open it again.
+change takes effect the next time you open the Quick Access Menu.
 
 ## Log Level
 

@@ -22,7 +22,7 @@ export const InterfaceSection: FC<InterfaceSectionProps> = ({ qamEntryPosition, 
       <PanelSectionRow>
         <ToggleField
           label="Place Tender above Decky Loader"
-          description="Applies only where Decky Loader is installed."
+          description="Applies only where Decky Loader is installed. Takes effect the next time you open the Quick Access Menu."
           checked={qamEntryPosition === "above_decky"}
           onChange={(above) => onQamEntryPositionChange(above ? "above_decky" : "below_decky")}
         />
