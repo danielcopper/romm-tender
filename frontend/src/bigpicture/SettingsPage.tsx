@@ -576,7 +576,8 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
 
   // --- Interface handler ---
   // The store the Quick Access render handler reads is written only once the
-  // backend has taken the value, so it never holds one `settings.json` does not.
+  // backend has taken the value, so a change the backend refused or never
+  // received never reaches it.
   const handleQamEntryPositionChange = (position: QamEntryPosition) => {
     const previous = qamEntryPosition;
     setQamEntryPositionValue(position);
@@ -585,6 +586,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
         try {
           const result = await setQamEntryPosition(position);
           if (result.success) setQamEntryPositionState(position);
+          else setQamEntryPositionValue(previous);
         } catch {
           setQamEntryPositionValue(previous);
         }

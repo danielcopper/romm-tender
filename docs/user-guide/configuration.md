@@ -20,10 +20,10 @@ right. Move onto a section in the list and the right-hand side changes at once â
 | **Advanced**         | log level                                                                                                                                                                  |
 
 If you used an earlier version, everything is still here â€” the eight blocks the panel used to stack are grouped into
-five of those eight; **Emulator sources**, **Updates** and **Interface** are new. Registered Devices is now inside
-**Save Sync**, the SteamGridDB key is inside **Connections**, and the section that used to be called **Library** is now
-**Steam Library**: the Library _page_ is about what gets synced out of RomM, this section is about how it looks once it
-is in Steam.
+five of the eight sections; **Emulator sources**, **Updates** and **Interface** are new. Registered Devices is now
+inside **Save Sync**, the SteamGridDB key is inside **Connections**, and the section that used to be called **Library**
+is now **Steam Library**: the Library _page_ is about what gets synced out of RomM, this section is about how it looks
+once it is in Steam.
 
 **Signing in to RetroAchievements is not here yet.** When it arrives it will live under Connections, with the other
 accounts.

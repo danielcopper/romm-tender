@@ -589,8 +589,8 @@ const tender = definePanel(() => {
     })(),
   );
 
-  // Where the Quick Access entry sits. Until this answers, the render handler
-  // places it by the store's default.
+  // Fills the store the Quick Access render handler reads
+  // (utils/qamEntryPositionStore.ts).
   detach(
     (async () => {
       try {

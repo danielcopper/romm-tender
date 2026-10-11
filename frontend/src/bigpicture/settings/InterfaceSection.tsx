@@ -1,6 +1,6 @@
 /**
- * Where Tender shows up in Steam's own interface: today, whether its Quick
- * Access entry sits above or below Decky Loader's. Pure renderer: parent owns
+ * Where Tender shows up in Steam's own interface — whether its Quick Access
+ * entry sits above or below Decky Loader's. Pure renderer: parent owns
  * the value and the save.
  *
  * Shown whether or not Decky Loader is installed — the panel does not ask —

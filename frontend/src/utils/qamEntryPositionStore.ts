@@ -1,12 +1,8 @@
 /**
  * Where Tender's Quick Access entry sits beside Decky Loader's, as the render
- * handler in `qam/installEntry.tsx` reads it on every pass of the menu.
- *
- * The handler runs inside Steam's render and cannot wait for the backend, so
- * it reads this synchronously, and until the backend has answered it reads the
- * default. `settings.json` is the value's only home: this holds what the
- * backend last said, nothing writes it anywhere else, and a change reaches the
- * strip at the menu's next render pass rather than by forcing one.
+ * handler in `qam/installEntry.tsx` reads it synchronously on every pass of the
+ * menu. What it holds before the backend answers, and why it is no second home
+ * of the value: `docs/architecture/qam-panel.md` § The entry.
  *
  * Updated by:
  *   - panel load (`fetchQamEntryPositionState`, in `index.tsx`)

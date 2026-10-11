@@ -447,8 +447,7 @@ export const setCollectionNamingMode = endpoint<
   [CollectionNamingMode],
   { success: boolean; reason?: string; message?: string }
 >("set_collection_naming_mode");
-// Read via getSettings().qam_entry_position; applies at the Quick Access menu's
-// next render pass (utils/qamEntryPositionStore.ts).
+// Read via getSettings().qam_entry_position; docs/architecture/qam-panel.md § The entry.
 export const setQamEntryPosition = endpoint<
   [QamEntryPosition],
   { success: boolean; reason?: string; message?: string }

@@ -78,7 +78,7 @@ export interface QuickAccessTabEntry {
   [TENDER_TAB_MARK]: true;
 }
 
-/** The property Decky Loader's tabs hook sets on every entry it pushes (decky-loader's `frontend/src/tabs-hook.tsx`). */
+/** The property Decky Loader's tabs hook sets on every entry it pushes (decky-loader `frontend/src/tabs-hook.tsx` at v3.2.9). */
 const DECKY_TAB_MARK = "decky";
 
 const carriesMark = (tab: unknown, mark: string): boolean =>
@@ -99,15 +99,14 @@ const isDeckys = (tab: unknown): boolean => carriesMark(tab, DECKY_TAB_MARK);
  * lands lowest. Measured both ways in #1897: patched before Decky booted, Tender
  * came out above it; re-patched beside a running Decky, below. Install order is
  * a property of which program starts first, which nothing here decides — so the
- * placement is re-asserted instead of relied upon. #1897 proved the re-assertion
- * rather than assuming it: the entry was shoved to index 0 by hand and the next
- * pass put it back at the end. Moving an entry is invisible to Decky's own
- * guard, which counts marked entries and never asks where they sit.
+ * placement is re-asserted instead of relied upon. #1897 showed that a pass
+ * follows a move: the entry was shoved to index 0 by hand and the next pass moved
+ * it again (measured with the handler that put it last; placement before Decky's
+ * entry is not yet seen on the device). Moving an entry is invisible to Decky's
+ * own guard, which counts marked entries and never asks where they sit.
  *
  * Decky's marker is the one its own guard counts by, so it names every entry
- * Decky put there however many it registered. Finding none is not read as
- * Decky being absent — the entry simply has nothing to sit above, and goes
- * last.
+ * Decky put there however many it registered.
  */
 function placeEntry(tabs: unknown[], position: QamEntryPosition): void {
   const ours: unknown[] = [];

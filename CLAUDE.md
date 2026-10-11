@@ -606,9 +606,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `frontend/src/qam/quickAccessEntry.test.ts`; finding and patching the renderers is device-only. Prompt-only: marker
   and key are `tender`, never `decky`; nothing writes `window.__TABS_HOOK_INSTANCE` or calls its `add()`, and neither it
   nor a `decky`-marked entry is read as a sign Decky is present — a `decky`-marked entry is read only to place Tender's
-  entry; no tab array held, no unpatch added; on every render pass the entry goes before the first `decky`-marked entry
-  under `qam_entry_position: "above_decky"` (the default), and to the tab array's end under `"below_decky"` or where no
-  entry carries that mark; nothing binds to the Quick Access window at module scope
+  entry; no tab array held, no unpatch added; on every render pass the handler places the entry by the stored
+  `qam_entry_position` (before the first `decky`-marked entry under `"above_decky"`, the default; last under
+  `"below_decky"` or with no such entry); nothing binds to the Quick Access window at module scope
 - **Tender's section reaches Steam's game page through the ROUTE component's `renderFunc`, and never through the page
   component's own `type`** — test + prompt-only — `frontend/src/bigpicture/patches/gamePageSeam.test.ts`; the install
   (`installGamePagePatch.ts`) is device-only. Prompt-only: the install patches every memo export whose `type` is a

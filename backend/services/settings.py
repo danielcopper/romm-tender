@@ -422,8 +422,8 @@ class SettingsService:
     def set_qam_entry_position(self, position: object) -> dict[str, Any]:
         """Validate and persist where Tender's Quick Access entry sits (``"above_decky"`` / ``"below_decky"``).
 
-        The panel reads it on every render pass of the Quick Access menu; what
-        each value places the entry before is described in
+        The panel places its Quick Access entry by it at every render pass of
+        the menu; what each value places the entry before is described in
         ``docs/architecture/qam-panel.md`` § The entry. An unrecognised value from
         the untrusted frontend wire is refused with ``invalid_position`` so a bad
         call cannot corrupt the setting.

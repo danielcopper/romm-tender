@@ -61,7 +61,8 @@ its own list length, and a foreign entry desynchronises that guard into re-pushi
 entry carries Tender's own marker and Tender's own key (`tender`), so it is invisible to that count. None of this is a
 presence check: the choice of bundle already asked whether Decky Loader is serving, from the machine rather than from
 the window ([loading-the-panel.md](loading-the-panel.md)), and the frontend does not re-ask. Decky's `decky` marker is
-read for one thing only, to place Tender's entry before Decky's entries (below), never as a sign that Decky is there.
+read for one thing only, to place Tender's entry before Decky's entries (next paragraph), never as a sign that Decky is
+there.
 
 **Where the entry sits is the user's choice, and it is not ours to set once.** The setting is **Settings › Interface ›
 Place Tender above Decky Loader** (`qam_entry_position`). On, `"above_decky"` and the default, the handler puts the

@@ -1625,7 +1625,7 @@ describe("SettingsPage", () => {
       expect(getQamEntryPositionState()).toBe("above_decky");
     });
 
-    it("leaves the store alone when the backend refuses the value", async () => {
+    it("reverts the toggle and leaves the store alone when the backend refuses the value", async () => {
       vi.mocked(backend.setQamEntryPosition).mockResolvedValue({
         success: false,
         reason: "invalid_position",
@@ -1636,8 +1636,11 @@ describe("SettingsPage", () => {
       await act(async () => {
         lastInterface()?.onQamEntryPositionChange("below_decky");
         await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
       });
       expect(vi.mocked(backend.setQamEntryPosition)).toHaveBeenCalledWith("below_decky");
+      expect(lastInterface()?.qamEntryPosition).toBe("above_decky");
       expect(getQamEntryPositionState()).toBe("above_decky");
     });
   });

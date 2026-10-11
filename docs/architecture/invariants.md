@@ -573,11 +573,11 @@ Format: **invariant** — tier — enforced by.
 - **Tender's Quick Access entry composes with Decky's rather than going through it, and everything it binds to the Quick
   Access window is bound from inside that window's React tree** — test + prompt-only —
   `frontend/src/qam/quickAccessEntry.test.ts` pins what a render pass does to a tab array (added once, added again to
-  the replacement array a remount builds, put back before the first `decky`-marked entry under `"above_decky"` and at
-  the end under `"below_decky"` or where no entry carries that mark whenever a pass finds it elsewhere, and recognised
-  by its marker alone in an array this module has never seen), each case mutation-checked. **Everything above that line
-  is device-only**: whether the two renderers are found, patched and hand back a tree the resolver can walk was measured
-  in #1897 and nothing here re-measures it — a suite that faked it would assert against a tree it wrote itself. The rule
+  the replacement array a remount builds, put back — before the first `decky`-marked entry under `"above_decky"`, at the
+  end under `"below_decky"` or where no entry carries that mark — whenever a pass finds it elsewhere, and recognised by
+  its marker alone in an array this module has never seen), each case mutation-checked. **Everything above that line is
+  device-only**: whether the two renderers are found, patched and hand back a tree the resolver can walk was measured in
+  #1897 and nothing here re-measures it — a suite that faked it would assert against a tree it wrote itself. The rule
   spans the frontend entry and the backend injector, and nothing joins them. **Three halves fail green.** (1) The entry
   carries `tender` as its marker and its key and never `decky`, and nothing writes `window.__TABS_HOOK_INSTANCE` or
   calls `__TABS_HOOK_INSTANCE.add()`: Decky's own render counts its `decky`-marked entries against its list length, so a
@@ -594,10 +594,13 @@ Format: **invariant** — tier — enforced by.
   — leaks one dead array per Quick Access remount, with the strip's entries and their React elements, for the life of
   the JS context. (3) The placement is re-asserted on EVERY pass rather than set at creation, because `afterPatch` runs
   the previous handler first: whoever patches last lands lowest, measured both ways, and install order is a property of
-  which program starts first. A handler that pushed once and trusted the order goes green here and comes out wherever
-  install order put it: above Decky on the machines where TENDER started first — it pushes first and Decky pushes under
-  it — and below Decky where Decky did. Whichever position the setting asks for, one of the two start orders already
-  lands there by itself, and that is the one a developer is most likely to test. The third rule's own half — **nothing
+  which program starts first. A handler that placed the entry once and trusted the order goes green here and is wrong in
+  exactly one case: where TENDER started first under `"below_decky"`. Its pass over a fresh array runs before Decky has
+  pushed, finds no `decky`-marked entry, puts the entry last, and Decky pushes under it. Where Decky started first,
+  Decky's entries are already in the array when Tender's pass runs, so a single placement lands right under either
+  setting. That is the case re-assertion does not have to fix, and the one a developer is most likely to test. In the
+  Tender-first order even the re-asserting handler leaves the entry above Decky for the first pass over a fresh array,
+  until the next pass moves it; that is worked out from the code, not measured. The third rule's own half — **nothing
   binds to the Quick Access window at module scope** — is unmechanized and unpinned: that window is replaced by every
   remount, so a listener, observer or stylesheet held across one is bound to a document nothing renders. What holds
   today was measured rather than assumed — an unfiltered grep over `frontend/src` (tests aside) for `addEventListener(`,

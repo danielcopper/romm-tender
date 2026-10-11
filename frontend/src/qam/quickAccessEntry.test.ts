@@ -44,7 +44,7 @@ const tenderEntry = (): QuickAccessTabEntry => ({
 });
 
 /** Steam's own entry, or another provider's: no marker Tender reads. */
-const foreign = (key: string) => ({ key, title: key, tab: null, panel: null });
+const foreign = (key: string | number) => ({ key, title: String(key), tab: null, panel: null });
 
 /** An entry the way Decky Loader's tabs hook pushes one: a numeric key and the `decky` marker. */
 const decky = (key: number | string = 999) => ({ key, title: "Decky", tab: null, panel: null, decky: true });
@@ -52,7 +52,7 @@ const decky = (key: number | string = 999) => ({ key, title: "Decky", tab: null,
 const keys = (tabs: unknown[]) => tabs.map((tab) => (tab as { key: string | number }).key);
 
 describe("syncEntry", () => {
-  it("adds the entry once, directly above Decky's, by default", () => {
+  it("adds the entry once, directly above Decky's, under above_decky", () => {
     const entry = tenderEntry();
     const tabs: unknown[] = [foreign("notifications"), foreign("friends"), decky()];
 
@@ -70,15 +70,15 @@ describe("syncEntry", () => {
     expect(keys(tabs)).toEqual(["notifications", TENDER_TAB_KEY, 999, "friends", "another"]);
   });
 
-  it("goes last above nothing when no entry carries Decky's marker", () => {
+  it("goes last under above_decky when no entry carries Decky's marker", () => {
     // An entry KEYED like Decky's but unmarked is not Decky's: the marker is
     // what its own guard counts by, and the only thing read here.
     const entry = tenderEntry();
-    const tabs: unknown[] = [foreign("notifications"), foreign("decky"), foreign("friends")];
+    const tabs: unknown[] = [foreign("notifications"), foreign(999), foreign("friends")];
 
     syncEntry(tabs, entry, "above_decky");
 
-    expect(keys(tabs)).toEqual(["notifications", "decky", "friends", TENDER_TAB_KEY]);
+    expect(keys(tabs)).toEqual(["notifications", 999, "friends", TENDER_TAB_KEY]);
   });
 
   it("goes last below Decky's entry when asked to", () => {
