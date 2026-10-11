@@ -71,6 +71,7 @@ export type WireReason =
   | "invalid_options"
   | "invalid_page"
   | "invalid_payload"
+  | "invalid_position"
   | "invalid_preview_id"
   | "invalid_region"
   | "invalid_request"

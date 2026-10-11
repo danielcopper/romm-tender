@@ -450,7 +450,7 @@ export const setCollectionNamingMode = endpoint<
 // Read via getSettings().qam_entry_position; docs/architecture/qam-panel.md § The entry.
 export const setQamEntryPosition = endpoint<
   [QamEntryPosition],
-  { success: boolean; reason?: string; message?: string }
+  { success: boolean; reason?: WireReason; message?: string }
 >("set_qam_entry_position");
 export const getRegistryPlatforms = endpoint<[], { platforms: RegistryPlatform[] }>("get_registry_platforms");
 export const removePlatformShortcuts = endpoint<
