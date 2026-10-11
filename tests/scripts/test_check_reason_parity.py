@@ -319,6 +319,40 @@ class TestWhatTheBackendSideReads:
         _write(tree, "services/a.py", 'from lib.errors import Refused\nRefused(found.problem.value, "m")\n')
         assert {"problem_one", "problem_two"} <= self._reasons()
 
+    def test_a_refusal_called_through_its_module(self, tree: Path):
+        _write(tree, "services/a.py", 'import lib.errors\n\nlib.errors.Refused("qualified_reason", "m")\n')
+        assert "qualified_reason" in self._reasons()
+
+    @pytest.mark.parametrize(
+        "import_line",
+        ["import lib.errors as errs", "from lib import errors as errs"],
+        ids=["import-as", "from-import-as"],
+    )
+    def test_a_refusal_called_through_a_module_alias(self, tree: Path, import_line: str):
+        _write(tree, "services/a.py", f'{import_line}\n\nerrs.Refused("aliased_reason", "m")\n')
+        assert "aliased_reason" in self._reasons()
+
+    def test_a_refusal_class_whose_base_is_written_through_its_module(self, tree: Path):
+        _write(
+            tree,
+            "services/a.py",
+            """\
+            from lib import errors
+
+
+            class Busy(errors.Refused):
+                pass
+
+
+            class Named(errors.NamedRefused):
+                reason = "named_qualified_reason"
+
+
+            Busy("base_qualified_reason", "m")
+            """,
+        )
+        assert {"base_qualified_reason", "named_qualified_reason"} <= self._reasons()
+
 
 class TestWhatFails:
     def _problems(self) -> list[str]:
@@ -334,6 +368,12 @@ class TestWhatFails:
         problems = self._problems()
         assert len(problems) == 1
         assert problems[0].startswith("services/a.py:2: Refused(...)")
+
+    def test_a_name_reached_through_a_backend_module_that_does_not_define_it(self, tree: Path):
+        _write(tree, "services/a.py", 'from lib import errors as errs\n\nerrs.Refusal("x", "m")\n')
+        problems = self._problems()
+        assert len(problems) == 1
+        assert problems[0].startswith("services/a.py:3: `errs.Refusal` names Refusal")
 
     def test_a_pass_through_not_on_the_list(self, tree: Path):
         _write(

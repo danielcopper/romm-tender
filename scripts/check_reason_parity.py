@@ -14,7 +14,7 @@ and ``native/``:
 
   * the reason of every construction of a refusal class that takes it as an
     argument — ``Refused``, ``DomainRefused`` and every subclass of either
-    outside the named branches (``FolderRefused`` and its subclasses today):
+    outside the named branches (e.g. ``FolderRefused`` and its subclasses):
     the first positional argument, or ``reason=``;
   * the ``reason`` class attribute of every subclass of ``NamedRefused`` and
     ``NamedDomainRefused``;
@@ -23,12 +23,18 @@ and ``native/``:
   * every reason ``classify_error`` (``lib/errors.py``) returns — the first
     element of each returned tuple.
 
+A refusal class is found by name — imported by name, under an ``import … as``
+alias, or through its module (``lib.errors.Refused``, ``errs.Refused`` after
+``from lib import errors as errs``), at a call and in a class's bases alike. A
+name reached through a backend module that does not define it FAILS, since
+whether it is a refusal is then unknown.
+
 A reason it reads is a string literal, a module-level string constant (in the
 module, or imported by name from another backend module), a member of a
 backend ``StrEnum`` (``Enum.MEMBER`` or ``Enum.MEMBER.value``), or
 ``<expr>.<field>.value`` where every backend class declaring ``<field>``
 annotates it with the same ``StrEnum`` — which stands for every member of that
-enum. A reason passed on from another refusal is read only where
+enum. A reason passed on from another refusal is accepted unread only where
 ``PASS_THROUGHS`` names it, by file and source text, with why its values are
 already counted elsewhere. Anything else — an f-string, a call, a parameter,
 ``*args``, a pass-through not on that list — FAILS, and so does a
@@ -46,22 +52,29 @@ sub-union claims to be.
 
 What it does not see:
 
-  * a refusal class reached under another name — an alias, ``getattr``, a
-    class passed as a value and called later (``cls(...)``);
+  * a refusal class reached under another name — an assignment alias
+    (``R = Refused``), ``getattr``, a class passed as a value and called later
+    (``cls(...)``);
+  * another site in a ``PASS_THROUGHS`` file whose reason has the same source
+    text as a listed one — it is accepted unread too;
   * a module constant shadowed by a local of the same name — the constant is
     read;
   * whether a reason the backend spells can reach the wire at all (a
     refusal caught and handled before the entrypoint is counted);
-  * reasons inside a refusal's details, and every other vocabulary the panel
-    reads under a ``reason`` key: transport reasons (``host/protocol.py``),
-    status unions, update wait reasons, emulator option reasons, prune frames;
   * whether a frontend type that narrows ``WireReason`` names the reasons its
     endpoint really sends — only the union as a whole is held.
+
+What stays out of ``WireReason``, and so out of this check: reasons inside a
+refusal's details; the reasons the panel invents itself (``request_failed``,
+``exception``, the launch gate's verdicts), which the site that uses one
+declares beside the union; and every other vocabulary the panel reads under a
+``reason`` key — transport reasons (``host/protocol.py``), status unions,
+update wait reasons, emulator option reasons, prune frames.
 
 ``EXEMPT`` holds reasons deliberately kept out of the check. It is empty; a
 genuine drift is a finding to triage, never an exemption.
 
-Exit 0 when the two sets match, 1 (one line per discrepancy) otherwise.
+Exit 0 when nothing above fails, 1 (one line per discrepancy) otherwise.
 """
 
 from __future__ import annotations
@@ -87,7 +100,8 @@ EXEMPT: frozenset[str] = frozenset()
 # are first spelled.
 PASS_THROUGHS: dict[tuple[str, str], str] = {
     ("domain/platform_system.py", "self.unasked"): (
-        "the platform's unasked refusal, re-raised with the reason and message the source question was refused with"
+        "classify_error's reason for the failed RomM listing read (services/platform_systems.py), kept on the "
+        "platform as a value with its message and counted in the classifier's table"
     ),
     ("services/rom_adoption/service.py", "refused.reason"): (
         "the reason of the refusal that stopped the removal, kept on the partial result that reports the saves "
@@ -114,7 +128,9 @@ class _Module:
     source: str
     constants: dict[str, ast.expr] = field(default_factory=dict)
     imports: dict[str, tuple[str, str]] = field(default_factory=dict)
+    module_imports: dict[str, str] = field(default_factory=dict)
     classes: dict[str, ast.ClassDef] = field(default_factory=dict)
+    defined: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -159,8 +175,38 @@ def _load_modules(backend_dir: Path) -> dict[str, _Module]:
                 source_module = _import_source(name, is_package, node)
                 for alias in node.names:
                     module.imports[alias.asname or alias.name] = (source_module, alias.name)
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.asname is not None:
+                        module.module_imports[alias.asname] = alias.name
+                    else:
+                        top = alias.name.split(".")[0]
+                        module.module_imports[top] = top
+        module.defined = _bound_names(tree.body) | set(module.imports) | set(module.module_imports)
         modules[name] = module
     return modules
+
+
+def _bound_names(body: list[ast.stmt]) -> set[str]:
+    """Every name *body* binds at its own level, looking into ``if`` / ``try`` / ``with`` / loops but not into defs."""
+    names: set[str] = set()
+    for node in body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+            continue
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Store):
+                names.add(child.id)
+            elif isinstance(child, (ast.Tuple, ast.List)):
+                names |= {n.id for n in ast.walk(child) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)}
+        for nested in ("body", "orelse", "finalbody", "handlers"):
+            block = getattr(node, nested, None)
+            if isinstance(block, list):
+                names |= _bound_names([b for b in block if isinstance(b, ast.stmt)])
+                for handler in block:
+                    if isinstance(handler, ast.ExceptHandler):
+                        names |= _bound_names(handler.body)
+    return names
 
 
 def _import_source(module_name: str, is_package: bool, node: ast.ImportFrom) -> str:
@@ -176,6 +222,8 @@ class _Resolver:
 
     def __init__(self, modules: dict[str, _Module]) -> None:
         self.modules = modules
+        self.packages = {".".join(m.split(".")[:i]) for m in modules for i in range(1, m.count(".") + 1)}
+        self.unresolved: list[tuple[str, ast.Attribute, str]] = []
         self.class_index: dict[tuple[str, str], ast.ClassDef] = {
             (m.name, cname): cdef for m in modules.values() for cname, cdef in m.classes.items()
         }
@@ -194,11 +242,41 @@ class _Resolver:
             return self.symbol(target_module, target_name, depth + 1)
         return None
 
+    def module_of(self, module: str, expr: ast.expr) -> str | None:
+        """The backend module or package *expr* in *module* names (``lib``, ``lib.errors``, an alias of one)."""
+        if isinstance(expr, ast.Name):
+            mod = self.modules.get(module)
+            if mod is None:
+                return None
+            if expr.id in mod.module_imports:
+                candidate = mod.module_imports[expr.id]
+            elif expr.id in mod.imports:
+                source, name = mod.imports[expr.id]
+                candidate = f"{source}.{name}" if source else name
+            else:
+                return None
+        elif isinstance(expr, ast.Attribute):
+            base = self.module_of(module, expr.value)
+            if base is None:
+                return None
+            candidate = f"{base}.{expr.attr}"
+        else:
+            return None
+        return candidate if candidate in self.modules or candidate in self.packages else None
+
     def class_of(self, module: str, expr: ast.expr) -> tuple[str, str] | None:
         if isinstance(expr, ast.Name):
             key = self.symbol(module, expr.id)
         elif isinstance(expr, ast.Attribute):
-            key = self.symbol(module, expr.attr)
+            owner = self.module_of(module, expr.value)
+            if owner is None:
+                key = self.symbol(module, expr.attr)
+            elif owner in self.modules:
+                key = self.symbol(owner, expr.attr)
+                if expr.attr not in self.modules[owner].defined and self.module_of(module, expr) is None:
+                    self.unresolved.append((module, expr, owner))
+            else:
+                key = None
         else:
             return None
         return key if key is not None and key in self.class_index else None
@@ -397,6 +475,15 @@ def parse_backend_reasons() -> BackendReasons:
                 continue
             found.classifier |= read(classifier_module, node.value.elts[0], _CLASSIFIER[1], node.lineno)
         found.reasons |= found.classifier
+
+    for module_name, expr, owner in resolver.unresolved:
+        module = modules[module_name]
+        problem = (
+            f"{module.rel}:{expr.lineno}: `{_segment(module, expr)}` names {expr.attr}, which {owner} does not "
+            f"define, so the gate cannot tell whether it is a refusal"
+        )
+        if problem not in found.problems:
+            found.problems.append(problem)
 
     for rel, text in sorted(set(pass_throughs) - matched_pass_throughs):
         found.problems.append(
