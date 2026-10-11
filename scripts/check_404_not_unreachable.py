@@ -50,6 +50,13 @@ catches the sharpest form of this bug, a handler that calls ``classify_error``
 and then **discards** its verdict in favour of the hardcoded one, which a
 "does the handler call the funnel?" test would wave through.
 
+A raised ``ServerUnreachable`` is flagged even where it is correct: a
+catch-all that classifies first and raises it only on that verdict
+(``reason, message = classify_error(e)``, then ``raise ServerUnreachable(…)``
+under ``if reason == ErrorCode.SERVER_UNREACHABLE``) reads here like the
+hardcoded one. Catch the unreachable types in a typed handler instead, or peel
+the 404 off with a sibling ``except RommNotFoundError``.
+
 One escape clears an otherwise-flagged handler:
 
 * **A sibling handler peels the 404 off first** — the same ``try`` carries an
@@ -81,12 +88,12 @@ returned by a helper the handler calls, nor one assembled across statements
 (``resp = {...}; resp["reason"] = ...``). Unseen on the raised side: a refusal
 a helper builds (``raise self._offline(e)``), one held in a variable and raised
 later, a subclass of ``ServerUnreachable`` under another name,
-``ServerUnreachable`` imported under an alias, and the slug in a variable or a
-module constant rather than spelled at the raise. A ``try`` nested *inside* a
-handler is scanned as its own statement, with its own sibling-peel check, and
-its dict literals and raises are NOT attributed to the enclosing handler —
-otherwise a nested peel would read as an unpeeled verdict on the outer one and
-false-positive.
+``ServerUnreachable`` imported under an alias, and the slug in a variable, or in
+a constant other than an attribute named ``SERVER_UNREACHABLE``, rather than
+spelled at the raise. A ``try`` nested *inside* a handler is scanned as its own
+statement, with its own sibling-peel check, and its dict literals and raises are
+NOT attributed to the enclosing handler — otherwise a nested peel would read as
+an unpeeled verdict on the outer one and false-positive.
 """
 
 from __future__ import annotations

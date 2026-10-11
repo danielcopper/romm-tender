@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Failure-shape dialect gate — the wire's failure shape is built only at the entrypoint.
+"""Failure-shape dialect gate — the wire's failure shape is built from a literal only at the entrypoint.
 
 An endpoint that fails answers ``{"success": False, "reason": str, "message":
 str}`` with any details beside them (``.claude/rules/endpoints.md`` owns the
-shape). ``backend/main.py`` is the one place that builds it: a use case raises
-its refusal (``lib.errors.Refused``, or ``domain.refusal.DomainRefused`` from a
-domain rule) or returns a ``lib.partial_failure.PartialFailure`` for work that
-stopped partway, a RomM error stays a raised ``RommApiError``, and the class
-decorator that wraps every endpoint on ``main.Endpoints`` turns each into the
-shape — a RomM error through ``lib.errors.classify_error``. A failure dict built
-anywhere else is a second dialect of it.
+shape). ``backend/main.py`` builds it: a use case raises its refusal
+(``lib.errors.Refused``, or ``domain.refusal.DomainRefused`` from a domain
+rule) or returns a ``lib.partial_failure.PartialFailure`` for work that stopped
+partway, a RomM error stays a raised ``RommApiError``, and the class decorator
+that wraps every endpoint on ``main.Endpoints`` turns each into the shape — a
+RomM error through ``lib.errors.classify_error``. A failure dict built
+anywhere else is a second dialect of it; the two known ones compute their
+``success`` and are named below, under what this check does not see.
 
 The rule
 ========
@@ -18,24 +19,27 @@ Every ``*.py`` under ``backend/`` is read except the entrypoint
 ``backend/main.py`` and the upstream copies under ``backend/_vendor/`` and
 ``backend/native/``. It fails on:
 
-* a dict literal whose ``success`` key is a literal falsy constant (``False``,
-  ``0``, ``None``), whatever other keys it carries and wherever it stands — a
-  return, an assignment, an argument, an event payload;
+* a dict literal whose ``success`` key is a literal ``False``, ``0`` or
+  ``None``, whatever other keys it carries and wherever it stands — a return,
+  an assignment, an argument, an event payload;
 * a call to ``error_response(...)``, by its bare name or as an attribute;
 * a ``**spread`` of a call to a refusal helper — a callee whose name contains
   ``refusal`` or ``failure``;
 * a file that does not parse, since nothing in it could be checked.
 
-A result that never reaches the wire but has a ``success`` field of its own is
-built through its type — ``MutationOutcome(success=False, …)`` — which is a
-call, not a dict literal, and passes.
+A result that never reaches the wire but has a ``success`` field of its own:
+a failed one is built through its type — ``MutationOutcome(success=False, …)``
+— which is a call, not a dict literal, and passes.
 
 What it does not see
 ====================
 
 * A ``success`` that is computed rather than a literal: the save-sync results'
   ``"success": len(errors) == 0`` and the removed-game cleanup's
-  ``prune_complete`` event, whose ``success`` is a variable.
+  ``prune_complete`` event, whose ``success`` is a variable — and
+  ``adapters/descriptor_paths.py``'s ``_outcome``, which builds a failed
+  ``MutationOutcome`` as a dict from the ``success`` it is passed.
+* A falsy ``success`` the list above does not name, such as ``""``.
 * A failure without a ``success`` key: a status union's ``status`` (the save
   version history), a partial-success flag (``server_query_failed``,
   ``recommended_action``), and the host's ``{type, reason, message}`` error
@@ -91,7 +95,7 @@ def _is_falsy_constant(value: ast.expr) -> bool:
 
 
 def _has_falsy_success_entry(node: ast.Dict) -> bool:
-    """True when the dict literal binds ``"success"`` to a literal falsy value."""
+    """True when the dict literal binds ``"success"`` to a literal ``False``, ``0`` or ``None``."""
     return any(
         isinstance(key, ast.Constant) and key.value == SUCCESS_KEY and _is_falsy_constant(value)
         for key, value in zip(node.keys, node.values, strict=True)
@@ -166,8 +170,8 @@ def main(argv: list[str]) -> int:
         print(
             "ERROR: only backend/main.py builds the failure shape — a use case raises its refusal "
             "(lib.errors.Refused / domain.refusal.DomainRefused) or returns a "
-            "lib.partial_failure.PartialFailure for partial work, and a result that never reaches the "
-            "wire is built through its own type."
+            "lib.partial_failure.PartialFailure for partial work, and a failed result that never "
+            "reaches the wire is built through its own type."
         )
         return 1
     rel = BACKEND_DIR.relative_to(REPO_ROOT)

@@ -202,7 +202,7 @@ class TestMainEntryPoint:
         assert check.main(["-h"]) == 0
 
     def test_real_repo_enforce_is_clean(self, capsys: pytest.CaptureFixture[str]):
-        # The real backend builds the shape nowhere but backend/main.py.
+        # No module in the real backend but backend/main.py builds the shape from a literal.
         rc = check.main(["--check"])
         assert rc == 0
         assert "OK:" in capsys.readouterr().out

@@ -313,16 +313,17 @@ class TestClassifyError:
 
 
 def _not_found_classes() -> list[type[RommNotFoundError]]:
-    """``RommNotFoundError`` and every class in ``lib/errors.py`` that derives from it."""
+    """``RommNotFoundError`` and every class defined in or imported into ``lib/errors.py`` that derives from it."""
     return [obj for obj in vars(errors).values() if isinstance(obj, type) and issubclass(obj, RommNotFoundError)]
 
 
 class TestEveryNotFoundClassAnswersNotFound:
     """A definitive 404 is ``not_found`` in ``classify_error``'s table, whatever branch stands above it.
 
-    Sees every not-found class declared in ``lib/errors.py``. Unseen: one declared in another
-    module, and a 404 that is not a ``RommNotFoundError`` — the pairing-code exchange's two 404
-    errors derive from ``RommApiError`` alone and answer ``server_unreachable``.
+    Sees every not-found class defined in or imported into ``lib/errors.py``. Unseen: one that
+    module neither defines nor imports, and a 404 that is not a ``RommNotFoundError`` — the
+    pairing-code exchange's two 404 errors derive from ``RommApiError`` alone and answer
+    ``server_unreachable`` in the table (the connection service catches both first).
     """
 
     @pytest.mark.parametrize("cls", _not_found_classes(), ids=lambda cls: cls.__name__)
