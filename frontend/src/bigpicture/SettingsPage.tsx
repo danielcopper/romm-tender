@@ -182,7 +182,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   const [namingMode, setNamingMode] = useState<CollectionNamingMode>("merge");
 
   // Interface state
-  const [qamEntryPosition, setQamEntryPositionValue] = useState<QamEntryPosition>("above_decky");
+  const [qamPosition, setQamPosition] = useState<QamEntryPosition>("above_decky");
 
   // Emulator sources: `undefined` until the listing answers, `null` where it failed.
   const [emulatorSources, setEmulatorSources] = useState<EmulatorSourcesListing | null | undefined>(undefined);
@@ -202,7 +202,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
         setPreferredRegion(s.preferred_region ?? AUTO_REGION);
         setPlatformGroups(!!s.collection_create_platform_groups);
         setNamingMode(s.collection_naming_mode ?? "merge");
-        setQamEntryPositionValue(s.qam_entry_position ?? "above_decky");
+        setQamPosition(s.qam_entry_position ?? "above_decky");
       })
       .catch((e) => {
         logError(`Failed to load settings: ${e}`);
@@ -579,16 +579,16 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   // backend has taken the value, so a change the backend refused or never
   // received never reaches it.
   const handleQamEntryPositionChange = (position: QamEntryPosition) => {
-    const previous = qamEntryPosition;
-    setQamEntryPositionValue(position);
+    const previous = qamPosition;
+    setQamPosition(position);
     detach(
       (async () => {
         try {
           const result = await setQamEntryPosition(position);
           if (result.success) setQamEntryPositionState(position);
-          else setQamEntryPositionValue(previous);
+          else setQamPosition(previous);
         } catch {
-          setQamEntryPositionValue(previous);
+          setQamPosition(previous);
         }
       })(),
     );
@@ -737,10 +737,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
         );
       case "interface":
         return (
-          <InterfaceSection
-            qamEntryPosition={qamEntryPosition}
-            onQamEntryPositionChange={handleQamEntryPositionChange}
-          />
+          <InterfaceSection qamEntryPosition={qamPosition} onQamEntryPositionChange={handleQamEntryPositionChange} />
         );
       case "advanced":
         return <AdvancedSection logLevel={logLevel} onLogLevelChange={handleLogLevelChange} />;
