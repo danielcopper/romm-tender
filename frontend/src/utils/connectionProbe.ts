@@ -20,7 +20,7 @@
  */
 
 import { useEffect, useState } from "react";
-import type { RommErrorCode } from "../types";
+import type { WireReason } from "../types";
 import { getSettings, testConnection } from "../api/backend";
 import { isStrandedPanelFailure } from "../api/host";
 import { setVersionError } from "./connectionState";
@@ -43,7 +43,7 @@ export type BackendFailed = "backend_failed";
  *  connected"; both are absent when the probe never resolved (an unreachable
  *  server that hung past every deadline), which reads as the generic label. */
 export interface ConnectionFailure {
-  reason: RommErrorCode | undefined;
+  reason: WireReason | undefined;
   message: string;
 }
 

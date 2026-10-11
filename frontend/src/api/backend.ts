@@ -29,7 +29,10 @@ import type {
   SaveStatus,
   SaveSyncDisplay,
   SyncConflict,
-  RommErrorCode,
+  EndpointFailure,
+  RommErrorReason,
+  WireReason,
+  WireReasonSubset,
   SyncPreview,
   PendingPreviewAnswer,
   SessionBudgetStatus,
@@ -63,10 +66,12 @@ import type {
   CustomHeaderEntry,
 } from "../types";
 
+export type { EndpointFailure };
+
 export interface BackendResult {
   success: boolean;
   message: string;
-  reason?: RommErrorCode;
+  reason?: WireReason;
   romm_version?: string;
   prune_lease_token?: string;
 }
@@ -78,14 +83,8 @@ export interface BackendResult {
  */
 export interface CustomHeadersResult {
   success: boolean;
-  reason?: string;
+  reason?: WireReason;
   message?: string;
-}
-
-export interface EndpointFailure {
-  success: false;
-  reason: string;
-  message: string;
 }
 
 export function isEndpointFailure(value: object): value is EndpointFailure {
@@ -367,7 +366,7 @@ export const getInstalledRom = endpoint<[number], InstalledRom | null>("get_inst
 export const checkLocalDrift = endpoint<[number], { drifted: boolean; rom_id: number }>("check_local_drift");
 export type RelaunchOptionsResult =
   | { success: true; app_id: number; launch_options: string; prune_lease_token: string }
-  | { success: false; reason: string; message: string }
+  | { success: false; reason: WireReason; message: string }
   | null;
 export const getRomRelaunchOptions = endpoint<[number], RelaunchOptionsResult>("get_rom_relaunch_options");
 /**
@@ -382,7 +381,7 @@ export const getRomRelaunchOptions = endpoint<[number], RelaunchOptionsResult>("
  */
 export interface StopGameResult {
   success: boolean;
-  reason?: string;
+  reason?: WireReason;
   message?: string;
   stopped?: number;
   force_killed?: number;
@@ -400,7 +399,7 @@ export const removeRom = endpoint<[number], BackendResult>("remove_rom");
 export interface ForgetDownloadResult {
   success: boolean;
   message: string;
-  reason?: string;
+  reason?: WireReason;
   /** With `file_present`: the recorded file or folder found on disk. */
   path?: string;
   prune_lease_token?: string;
@@ -410,25 +409,26 @@ export const getPlatforms = endpoint<[], { success: boolean; platforms: Platform
 // `reason` and `message` only come with a failure: both answer a bare
 // `{success: true}`, so a caller reading either on the success shape reads
 // `undefined`.
-export const savePlatformSync = endpoint<[number, boolean], { success: boolean; reason?: string; message?: string }>(
-  "save_platform_sync",
-);
-export const setAllPlatformsSync = endpoint<[boolean], { success: boolean; reason?: string; message?: string }>(
+export const savePlatformSync = endpoint<
+  [number, boolean],
+  { success: boolean; reason?: WireReason; message?: string }
+>("save_platform_sync");
+export const setAllPlatformsSync = endpoint<[boolean], { success: boolean; reason?: WireReason; message?: string }>(
   "set_all_platforms_sync",
 );
 export const getCollections = endpoint<
   [],
-  { success: boolean; collections: CollectionSyncSetting[]; message?: string; reason?: RommErrorCode }
+  { success: boolean; collections: CollectionSyncSetting[]; message?: string; reason?: WireReason }
 >("get_collections");
 export const saveCollectionSync = endpoint<
   [string, CollectionKind, boolean],
-  { success: boolean; reason?: string; message?: string }
+  { success: boolean; reason?: WireReason; message?: string }
 >("save_collection_sync");
 // One settings write stamping these ids into one kind's bucket — the
 // Collections tab's Enable all / Disable all, over the ids its table lists.
 export const saveCollectionsSync = endpoint<
   [string[], CollectionKind, boolean],
-  { success: boolean; reason?: string; message?: string }
+  { success: boolean; reason?: WireReason; message?: string }
 >("save_collections_sync");
 export const saveCollectionPlatformGroups = endpoint<[boolean], { success: boolean }>(
   "save_collection_platform_groups",
@@ -437,14 +437,14 @@ export const saveCollectionPlatformGroups = endpoint<[boolean], { success: boole
 // the signed-in user's own collections). Read via getSettings().collection_owner_scope.
 export const setCollectionOwnerScope = endpoint<
   [CollectionOwnerScope],
-  { success: boolean; reason?: string; message?: string }
+  { success: boolean; reason?: WireReason; message?: string }
 >("set_collection_owner_scope");
 // Steam-collection naming mode (#1539), described in
 // docs/architecture/steam-non-steam-shortcuts.md § Collection naming mode.
 // Read via getSettings().collection_naming_mode; applies on the next sync.
 export const setCollectionNamingMode = endpoint<
   [CollectionNamingMode],
-  { success: boolean; reason?: string; message?: string }
+  { success: boolean; reason?: WireReason; message?: string }
 >("set_collection_naming_mode");
 export const getRegistryPlatforms = endpoint<[], { platforms: RegistryPlatform[] }>("get_registry_platforms");
 export const removePlatformShortcuts = endpoint<
@@ -460,7 +460,7 @@ export const removePlatformShortcuts = endpoint<
     rom_ids?: (string | number)[];
     platform_name?: string;
     prune_lease_token?: string;
-    reason?: string;
+    reason?: WireReason;
     message?: string;
   }
 >("remove_platform_shortcuts");
@@ -473,7 +473,7 @@ export const removeAllShortcuts = endpoint<
     // migration, sync or prune rule answers success/reason/message, omitting
     // app_ids/rom_ids. Every field below the discriminant is therefore
     // path-dependent.
-    reason?: string;
+    reason?: WireReason;
     message?: string;
     app_ids?: number[];
     rom_ids?: (string | number)[];
@@ -490,7 +490,7 @@ export const getArtworkBase64 = endpoint<[number], { base64: string | null }>("g
 export const fetchCoverBase64 = endpoint<[number], { base64: string | null }>("fetch_cover_base64");
 export const refreshCoverArtwork = endpoint<
   [number],
-  { success: boolean; reason?: string; message: string; cover_path?: string }
+  { success: boolean; reason?: WireReason; message: string; cover_path?: string }
 >("refresh_cover_artwork");
 // Orphaned grid-image cleanup (Data Management › Grid images). Args: the frontend's full scan of
 // live non-Steam shortcut appIds (the keep-set — RomM-owned AND foreign) and a
@@ -504,7 +504,7 @@ export const cleanupOrphanedGridImages = endpoint<
     success: boolean;
     candidate_count?: number;
     removed_count?: number;
-    reason?: string;
+    reason?: WireReason;
     message?: string;
   }
 >("cleanup_orphaned_grid_images");
@@ -550,11 +550,11 @@ export const releasePruneConflictLease = endpoint<[string], { success: boolean; 
 );
 export const renewPruneConflictLease = endpoint<
   [string],
-  { success: boolean; reason?: "stale_lease"; message: string }
+  { success: boolean; reason?: WireReasonSubset<"stale_lease">; message: string }
 >("renew_prune_conflict_lease");
 export const reconcileShortcuts = endpoint<
   [number[]],
-  { success: boolean; reason?: string; message: string; unbound_count?: number }
+  { success: boolean; reason?: WireReason; message: string; unbound_count?: number }
 >("reconcile_shortcuts");
 export const uninstallAllRoms = endpoint<
   [],
@@ -568,7 +568,7 @@ export const uninstallAllRoms = endpoint<
     removed_count?: number;
     errors?: { rom_id: string; error: string }[];
     app_ids?: number[];
-    reason?: string;
+    reason?: WireReason;
     message?: string;
     prune_lease_token?: string | null;
   }
@@ -662,11 +662,11 @@ export const getEmulatorSources = endpoint<[], EmulatorSourcesListing>("get_emul
 export const checkStartSource = endpoint<[], StartSourceCheck | StartSourceRefusal>("check_start_source");
 
 /** Why the launch check's read could not tell: detecting the emulator sources failed. */
-export type StartSourceRefusal = EndpointFailure & { reason: "detection_failed" };
+export type StartSourceRefusal = EndpointFailure & { reason: WireReasonSubset<"detection_failed"> };
 
 /** Why a switch or a move of an emulator source was refused. */
 export type EmulatorSourceRefusal = EndpointFailure & {
-  reason: "unknown_source" | "cannot_move" | "invalid_direction" | "invalid_value";
+  reason: WireReasonSubset<"unknown_source" | "cannot_move" | "invalid_direction" | "invalid_value">;
 };
 
 /** Switch a detected source on or off; answers the listing as it now stands. */
@@ -805,7 +805,7 @@ export interface SwitchVersionSuccess {
  */
 export interface SwitchVersionUnsyncedSaves {
   success: false;
-  reason: "unsynced_saves";
+  reason: WireReasonSubset<"unsynced_saves">;
   message: string;
   server_reachable: boolean;
   unsynced_rom_id: number;
@@ -817,22 +817,26 @@ export interface SwitchVersionUnsyncedSaves {
  * appId), `not_in_group` (the target's metadata match conflicts with this game's),
  * `bound_elsewhere` (a grandfathered duplicate),
  * `invalid_target` (a server-only target the aggregate rejects),
- * `download_in_progress` (a group download is running — cancel it first), or
- * `version_vanished` (RomM definitively no longer has the target), or
- * `server_unreachable`. All surface via the picker's toast fallback
- * (`result.message`). The literal reason union excludes `unsynced_saves` so the
- * soft-block variant narrows cleanly.
+ * `download_in_progress` (a group download is running — cancel it first),
+ * `version_vanished` (RomM definitively no longer has the target), a refusal by
+ * the update, migration or prune rule, or a RomM error the server fetch raised.
+ * All surface via the picker's toast fallback (`result.message`). The reason
+ * union excludes `unsynced_saves` so the soft-block variant narrows cleanly.
  */
 export interface SwitchVersionFailure {
   success: false;
   reason:
-    | "not_found"
-    | "not_in_group"
-    | "bound_elsewhere"
-    | "invalid_target"
-    | "download_in_progress"
-    | "version_vanished"
-    | "server_unreachable";
+    | WireReasonSubset<
+        | "not_in_group"
+        | "bound_elsewhere"
+        | "invalid_target"
+        | "download_in_progress"
+        | "version_vanished"
+        | "blocked_by_update"
+        | "blocked_by_migration"
+        | "prune_active"
+      >
+    | RommErrorReason;
   message: string;
 }
 
@@ -870,7 +874,7 @@ export interface PrunePreviewItem {
 
 export interface PrunePreviewResult {
   success: boolean;
-  reason?: string;
+  reason?: WireReason;
   message?: string;
   preview_id?: string;
   scope?: PruneScope;
@@ -906,7 +910,7 @@ export interface StartPruneResult {
   success: boolean;
   run_id?: string;
   status?: "running";
-  reason?: string;
+  reason?: WireReason;
   message?: string;
 }
 
@@ -953,7 +957,7 @@ export const stagePruneInstalledSelection = endpoint<
     selection_id?: string;
     selected_count?: number;
     finalized?: boolean;
-    reason?: string;
+    reason?: WireReason;
     message?: string;
   }
 >("stage_prune_installed_selection");
@@ -961,13 +965,13 @@ export const startPrune = endpoint<[StartPruneRequest], StartPruneResult>("start
 /** Stop a run before its next group; the group already executing still finishes. */
 export const cancelPrune = endpoint<
   [string],
-  { success: boolean; reason?: string; message: string; already_cancelling?: boolean }
+  { success: boolean; reason?: WireReason; message: string; already_cancelling?: boolean }
 >("cancel_prune");
 export const reportPruneAction = endpoint<
   [ReportPruneActionRequest],
-  { success: boolean; ignored?: boolean; reason?: string; message: string }
+  { success: boolean; ignored?: boolean; reason?: WireReason; message: string }
 >("report_prune_action");
-export const waitForPruneRelease = endpoint<[string], { success: boolean; reason?: string; message: string }>(
+export const waitForPruneRelease = endpoint<[string], { success: boolean; reason?: WireReason; message: string }>(
   "wait_for_prune_release",
 );
 
@@ -1005,7 +1009,7 @@ export type InstalledRelaunchOptionsResult =
       items: { app_id: number; launch_options: string }[];
       prune_lease_token: string | null;
     }
-  | { success: false; reason: string; message: string };
+  | { success: false; reason: WireReason; message: string };
 export const getInstalledRelaunchOptions = endpoint<[], InstalledRelaunchOptionsResult>(
   "get_installed_relaunch_options",
 );
@@ -1039,7 +1043,7 @@ export const preLaunchSync = endpoint<
     downloaded?: number;
     errors?: string[];
     conflicts?: SyncConflict[];
-    reason?: string;
+    reason?: WireReason;
   }
 >("pre_launch_sync");
 export const syncRomSaves = endpoint<
@@ -1052,16 +1056,21 @@ export const syncRomSaves = endpoint<
     downloaded?: number;
     errors?: string[];
     conflicts?: SyncConflict[];
-    reason?: string;
+    reason?: WireReason;
   }
 >("sync_rom_saves");
 export const syncAllSaves = endpoint<
   [],
-  { success: boolean; message: string; synced: number; conflicts: number; reason?: string }
+  { success: boolean; message: string; synced: number; conflicts: number; reason?: WireReason }
 >("sync_all_saves");
 export const resolveSyncConflict = endpoint<
   [number, string, number, "keep_local" | "use_server"],
-  { success: boolean; message?: string; reason?: "stale_conflict"; action?: "keep_local" | "use_server" }
+  {
+    success: boolean;
+    message?: string;
+    reason?: WireReason;
+    action?: "keep_local" | "use_server";
+  }
 >("resolve_sync_conflict");
 export const recordSessionStart = endpoint<[number], { success: boolean }>("record_session_start");
 export const getSaveSyncSettings = endpoint<[], SaveSyncSettings>("get_save_sync_settings");
@@ -1129,7 +1138,7 @@ export const getAllPlaytime = endpoint<
 export const reconcilePlaytime = endpoint<
   [number],
   | { total_seconds: number; session_count: number; last_played: string | null; server_query_failed: boolean }
-  | { success: false; reason: string; message: string }
+  | { success: false; reason: WireReason; message: string }
 >("reconcile_playtime");
 
 // RetroDECK path migration
@@ -1384,8 +1393,8 @@ export const getUpdateInstallState = endpoint<[], UpdateInstallState>("get_updat
 
 /** Why a press of Install was refused; `update_waiting` carries every reason it waits for. */
 export type UpdateInstallRefusal =
-  | (EndpointFailure & { reason: "update_waiting"; wait_reasons: UpdateWaitReason[] })
-  | (EndpointFailure & { reason: "update_in_progress" | "not_offered" | "version_changed" });
+  | (EndpointFailure & { reason: WireReasonSubset<"update_waiting">; wait_reasons: UpdateWaitReason[] })
+  | (EndpointFailure & { reason: WireReasonSubset<"update_in_progress" | "not_offered" | "version_changed"> });
 
 /** Install the named version, which must be the stored one; answers once the attempt has started. */
 export const installUpdate = endpoint<[string], { success: true } | UpdateInstallRefusal>("install_update");

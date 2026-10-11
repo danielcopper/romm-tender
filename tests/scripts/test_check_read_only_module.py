@@ -43,6 +43,7 @@ _EXPECTED_READS = frozenset(
         "count_bound",
         "get",
         "get_all_emulator_overrides",
+        "get_bound_platform_slugs",
         "get_by_app_id",
         "get_cache_epoch",
         "get_latest_completed",

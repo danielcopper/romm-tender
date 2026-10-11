@@ -400,6 +400,14 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   talk to RomM (`.claude/rules/romm-http.md`)
 - **Frontend↔backend endpoint parity (names + arity)** — check — `scripts/check_endpoint_parity.py`
 - **Every backend `emit` event name has a frontend listener, and vice versa** — check — `scripts/check_event_parity.py`
+- **The panel's `WireReason` union (`frontend/src/types/reasons.ts`) holds exactly the reasons an endpoint's failure
+  answer can carry — refusals, partial failures and `classify_error`'s table — and its `RommErrorReason` sub-union
+  exactly that table** — check + prompt-only — `scripts/check_reason_parity.py` (a reason it cannot read fails, except
+  the pass-throughs on its `PASS_THROUGHS` list, which it accepts unread; what stays out of the union is its docstring's
+  list); unseen by it: a refusal class reached through an assignment alias (`R = Refused`), `getattr` or as a value,
+  another site in a `PASS_THROUGHS` file with a listed site's source text, a module constant shadowed by a local,
+  whether a counted reason can reach the wire, and whether a type that narrows the union names its endpoint's reasons
+  truly. Prompt-only: a literal-typed endpoint-failure reason in the panel goes through `WireReasonSubset`
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`
 - **The backend never writes or removes `update-failure.json`; only the installer does — `install.sh` writes it on an

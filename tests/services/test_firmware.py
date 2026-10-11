@@ -1459,6 +1459,30 @@ class TestOnePlatformsOwnEntry:
         assert resolver.calls == ["dc"]
 
     @pytest.mark.asyncio
+    async def test_it_does_not_read_every_rom_to_answer_has_games(self, firmware):
+        """Which platforms are synced is one repository read, not a scan of the library."""
+        _seed_rom(firmware.uow, rom_id=42, platform_slug="dc", app_id=1)
+        _seed_rom(firmware.uow, rom_id=43, platform_slug="psx", app_id=None)
+        fw = self._service(firmware, core_info=_test_core_info())
+
+        with (
+            patch.object(firmware.uow.roms, "iter_all", side_effect=AssertionError("read every ROM row")),
+            patch.object(
+                firmware.romm_api,
+                "list_firmware",
+                return_value=[
+                    {"id": 1, "file_name": "a.bin", "file_path": "bios/dc/a.bin", "file_size_bytes": 1},
+                    {"id": 2, "file_name": "b.bin", "file_path": "bios/psx/b.bin", "file_size_bytes": 1},
+                ],
+            ),
+        ):
+            dc = await fw.get_platform_firmware_status("dc")
+            psx = await fw.get_platform_firmware_status("psx")
+
+        assert dc["platform"]["has_games"] is True
+        assert psx["platform"]["has_games"] is False
+
+    @pytest.mark.asyncio
     async def test_it_takes_only_its_own_platforms_rows_from_the_listing(self, firmware):
         """The listing is the library's whole firmware; an entry is one key's slice."""
         fw = self._service(firmware, core_info=_test_core_info())

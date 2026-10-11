@@ -312,6 +312,8 @@ _Avoid_: **plugin** for either — Tender is not a plugin ([What Tender is](#wha
   `lib/partial_failure.py`) that carries a reason, a message and what was done; never raised. Not a **partial-success**
   response, which is a full payload beside an additive failure flag (`server_query_failed`), and not a firmware
   **partial**.
+- **Wire reason** — the `reason` either one carries; every one is held in the panel's `WireReason` union
+  (`frontend/src/types/reasons.ts`). Not a transport error's reason, and not one the panel invents for itself.
 
 ### Persistence boundary (settings.json / SQLite)
 

@@ -272,3 +272,9 @@ class SqliteRomRepository(BaseRepository):
 
     def count_bound(self) -> int:
         return int(self._conn.execute("SELECT COUNT(*) FROM roms WHERE shortcut_app_id IS NOT NULL").fetchone()[0])
+
+    def get_bound_platform_slugs(self) -> set[str]:
+        cursor = self._conn.execute(
+            "SELECT DISTINCT platform_slug FROM roms WHERE shortcut_app_id IS NOT NULL AND platform_slug != ''"
+        )
+        return {row["platform_slug"] for row in cursor}

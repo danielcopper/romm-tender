@@ -5,25 +5,13 @@
  * (sync, saves, firmware, downloads, achievements) live in their own files.
  */
 
-/**
- * Canonical failure-`reason` slugs the backend emits on the `{success: false,
- * reason, message}` shape (see backend/lib/list_result.py `ErrorCode` + the
- * gate scripts/check_failure_shape.py). The Lean enum plus the bespoke
- * plain-string reasons the frontend actually routes on. Transport failures
- * collapse onto `server_unreachable`; 401/403 onto `auth_failed` (distinguished
- * by `message`, not slug).
- */
-export type RommErrorCode =
-  | "server_unreachable"
-  | "auth_failed"
-  | "not_found"
-  | "unsupported"
-  | "unknown"
-  | "version_error"
-  | "stale_conflict"
-  | "stale_preview"
-  | "config_error"
-  | "in_progress";
+import type { WireReason } from "./reasons";
+
+export interface EndpointFailure {
+  success: false;
+  reason: WireReason;
+  message: string;
+}
 
 /**
  * Payload of the `server_retry_progress` event (#1345). Emitted once per retry

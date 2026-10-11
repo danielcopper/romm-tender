@@ -239,6 +239,40 @@ class TestIteration:
         assert uow.roms.count() == 3
 
 
+class TestBoundPlatformSlugs:
+    """``get_bound_platform_slugs`` — the platforms the firmware overview calls synced.
+
+    ``platform_slug`` is ``TEXT NOT NULL`` (``001_initial.sql``), so a NULL slug
+    cannot be stored; the empty slug can, and is left out.
+    """
+
+    @staticmethod
+    def _seed_mixed(uow: SqliteUnitOfWork) -> None:
+        unbound = _rom(4, platform="psx", app_id=6004)
+        unbound.unbind_shortcut()
+        uow.roms.save(_rom(1, platform="snes", app_id=5001))
+        uow.roms.save(_rom(2, platform="snes", app_id=5002))
+        uow.roms.save(_rom(3, platform="gba", app_id=5003))
+        uow.roms.save(unbound)
+        uow.roms.save(_rom(5, platform="", app_id=5005))
+
+    def test_it_names_each_platform_with_a_bound_rom_once(self, uow: SqliteUnitOfWork):
+        self._seed_mixed(uow)
+
+        assert uow.roms.get_bound_platform_slugs() == {"snes", "gba"}
+
+    def test_it_is_empty_on_an_empty_registry(self, uow: SqliteUnitOfWork):
+        assert uow.roms.get_bound_platform_slugs() == set()
+
+    def test_it_answers_what_a_scan_over_every_row_answers(self, uow: SqliteUnitOfWork):
+        self._seed_mixed(uow)
+
+        scanned = {
+            rom.platform_slug for rom in uow.roms.iter_all() if rom.platform_slug and rom.shortcut_app_id is not None
+        }
+        assert uow.roms.get_bound_platform_slugs() == scanned
+
+
 class TestIterByGroupKey:
     """``iter_by_group_key`` — the sibling-group resolution seam (ADR-0021 #1297)."""
 

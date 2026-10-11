@@ -104,7 +104,7 @@ describe("LibraryPage", () => {
   });
 
   describe("the Platforms list line on entering the tab again", () => {
-    const REFUSED = { success: false, reason: "blocked_by_migration", message: "Migration pending" };
+    const REFUSED = { success: false, reason: "blocked_by_migration" as const, message: "Migration pending" };
     const listStatus = (c: HTMLElement) => c.querySelector('[data-testid="status-list"]')?.textContent ?? null;
     const toggle = (c: HTMLElement) => c.querySelector<HTMLInputElement>('[data-testid="toggle-input"]')!;
 

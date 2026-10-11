@@ -4,6 +4,8 @@
  * RomM→Steam shortcut sync flow lives here.
  */
 
+import type { WireReason } from "./reasons";
+
 export interface PlatformSyncSetting {
   id: number;
   name: string;
@@ -375,7 +377,7 @@ export interface SyncPreview {
   new_names: string[];
   changed_names: string[];
   preview_id: string;
-  reason?: string;
+  reason?: WireReason;
   message?: string;
   /**
    * Post-preview session-budget prognosis (#1383): ``true`` when the backend

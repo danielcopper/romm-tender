@@ -28,7 +28,7 @@ import { removeShortcut, setLaunchOptionsConfirmed } from "../../utils/steamShor
 import { clearPlatformCollection } from "../../utils/collections";
 import { setSyncProgress } from "../../utils/syncProgress";
 import { biosColorForLevel } from "../../utils/biosColor";
-import type { CoreInfo, FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo } from "../../types";
+import type { CoreInfo, FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo, WireReason } from "../../types";
 import { NOTE_FONT, SECONDARY_FONT } from "../layout/pane";
 
 // `scrollFocusedToCenter` is the game page tab's, not this page's: one test
@@ -259,7 +259,7 @@ async function press(el: HTMLElement): Promise<void> {
   });
 }
 
-type WriteAnswer = { success: boolean; reason?: string; message?: string };
+type WriteAnswer = { success: boolean; reason?: WireReason; message?: string };
 
 /** A sync write held open until the test answers it. */
 function held(): { promise: Promise<WriteAnswer>; answer: (value: WriteAnswer) => Promise<void> } {
@@ -386,7 +386,7 @@ describe("Library › Platforms", () => {
       platform({ id: 2, name: "Game Boy Advance", slug: "gba", sync_enabled: true }),
       platform({ id: 3, name: "Dreamcast", slug: "dc", sync_enabled: true }),
     ];
-    const REFUSED = { success: false, reason: "blocked_by_migration", message: "Migration pending" };
+    const REFUSED = { success: false, reason: "blocked_by_migration" as const, message: "Migration pending" };
 
     it("groups Synced above Available, alphabetical inside each", async () => {
       vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: threePlatforms });
@@ -1873,7 +1873,7 @@ describe("Library › Platforms", () => {
     it("shows a refused switch instead of leaving the old label standing", async () => {
       vi.mocked(backend.setSystemCore).mockResolvedValue({
         success: false,
-        reason: "not_installed",
+        reason: "save_failed",
         message: "RetroDECK is not installed",
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
@@ -1954,7 +1954,7 @@ describe("Library › Platforms", () => {
       // "Switching to …" line stands under a switch that is over.
       vi.mocked(backend.setSystemCore).mockResolvedValueOnce({
         success: false,
-        reason: "not_installed",
+        reason: "save_failed",
         message: "RetroDECK is not installed",
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
@@ -2009,7 +2009,7 @@ describe("Library › Platforms", () => {
     it("gives the page back when the switch is refused", async () => {
       vi.mocked(backend.setSystemCore).mockResolvedValue({
         success: false,
-        reason: "not_installed",
+        reason: "save_failed",
         message: "RetroDECK is not installed",
       });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);

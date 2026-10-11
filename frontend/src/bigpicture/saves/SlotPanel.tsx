@@ -11,7 +11,7 @@ import { getSlotSaves, switchSlot, debugLog, getSlotDeleteInfo, deleteSlot } fro
 import type { SaveStatus, SyncConflict, SaveSlotSummary, SlotSaveFile } from "../../types";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { reportServerReachable } from "../../utils/connectionState";
-import { MUTED_COLOR, computeSyncSummary, displaySlot, slotDeleteFailureToast } from "./helpers";
+import { MUTED_COLOR, computeSyncSummary, displaySlot } from "./helpers";
 import { renderSaveFileRow } from "./SaveFileRow";
 import { InactiveSlotBody } from "./InactiveSlotBody";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
@@ -220,7 +220,7 @@ export const SlotPanel: FC<SlotPanelProps> = ({
     try {
       const info = await getSlotDeleteInfo(romId, slotName);
       if (!info.success) {
-        showToast(slotDeleteFailureToast(info));
+        showToast(info.message);
         return;
       }
 

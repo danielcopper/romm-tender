@@ -1671,11 +1671,11 @@ describe("CustomPlayButton — pre-launch failure shapes without an errors array
   // to `sync_failed` → the shared fallback confirm.
   const FAILURE_SHAPES = [
     {
-      reason: "device_not_registered",
+      reason: "device_not_registered" as const,
       message: "Device is not registered with RomM. Open the Saves tab to set it up.",
     },
     {
-      reason: "blocked_by_migration",
+      reason: "blocked_by_migration" as const,
       message: "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
     },
   ];
@@ -3869,7 +3869,7 @@ describe("CustomPlayButton — Stop Game", () => {
   it("toasts and keeps the overlay up when the backend reports a real failure", async () => {
     vi.mocked(backend.stopRunningGame).mockResolvedValue({
       success: false,
-      reason: "permission_denied",
+      reason: "already_stopping",
       message: "Couldn't signal the emulator",
     });
     const { utils, menu } = await renderRunningWithMenu();

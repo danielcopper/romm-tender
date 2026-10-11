@@ -19,7 +19,7 @@ import type { ReactElement } from "react";
 import { showModal } from "@decky/ui";
 import { LibraryPage } from "../LibraryPage";
 import * as backend from "../../api/backend";
-import type { CollectionSyncSetting, Settings } from "../../types";
+import type { WireReason, CollectionSyncSetting, Settings } from "../../types";
 import { COLLECTION_RENDER_CAP } from "./CollectionsDetail";
 import { CONFIRM_ABOVE } from "./collectionKinds";
 import { ENTRY_FOCUS_DELAY_MS, ENTRY_STOP_ATTR } from "../../utils/entryFocus";
@@ -160,7 +160,7 @@ function lastModal(): Record<string, unknown> | null {
   return el?.props ?? null;
 }
 
-type WriteAnswer = { success: boolean; reason?: string; message?: string };
+type WriteAnswer = { success: boolean; reason?: WireReason; message?: string };
 
 /** A write held open until the test answers it. */
 function held(): { promise: Promise<WriteAnswer>; answer: (value: WriteAnswer) => Promise<void> } {
@@ -981,7 +981,7 @@ describe("Library › Collections", () => {
   });
 
   describe("a control whose writes answer late", () => {
-    const REFUSED = { success: false, reason: "blocked_by_migration", message: "Migration pending" };
+    const REFUSED = { success: false, reason: "blocked_by_migration" as const, message: "Migration pending" };
 
     it("shows what is stored after a row is switched twice and both writes are refused", async () => {
       const on = held();
@@ -1127,7 +1127,7 @@ describe("Library › Collections", () => {
   });
 
   describe("a refused write after one that was stored", () => {
-    const REFUSED = { success: false, reason: "blocked_by_migration", message: "Migration pending" };
+    const REFUSED = { success: false, reason: "blocked_by_migration" as const, message: "Migration pending" };
 
     it("leaves a row at the value a later Enable all gave it when an earlier single switch is refused", async () => {
       const single = held();
