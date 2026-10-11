@@ -47,6 +47,18 @@ Format: **invariant** — tier — enforced by.
   `.claude/rules/romm-http.md`)
 - **Frontend↔backend endpoint parity (names + arity)** — check — `scripts/check_endpoint_parity.py`
 - **Every backend `emit` event name has a frontend listener, and vice versa** — check — `scripts/check_event_parity.py`
+- **The panel's `WireReason` union (`frontend/src/types/reasons.ts`) holds exactly the reasons an endpoint's failure
+  answer can carry — refusals, partial failures and `classify_error`'s table — and its `RommErrorReason` sub-union
+  exactly that table** — check — `scripts/check_reason_parity.py`. The backend spells a reason where it refuses and the
+  panel branches on it as a string, so a reason renamed or added on one side reaches the other as a value no branch
+  matches, and nothing fails. The gate reads the backend's refusal constructions, named refusal classes, partial
+  failures and the classifier by AST, resolving module constants and `StrEnum` values itself; a reason passed on from
+  another refusal is read only where its `PASS_THROUGHS` list names it, and any other reason it cannot read fails.
+  Literal-typed reason fields in the panel go through `WireReasonSubset`, so a reason outside the union does not
+  compile. Unseen by the gate (its docstring is the full list): a refusal class reached under another name, a module
+  constant shadowed by a local, whether a counted reason can reach the wire, reasons in a refusal's details and every
+  other vocabulary under a `reason` key (transport, status unions, update wait reasons, emulator option reasons, prune
+  frames), and whether a type that narrows the union names its endpoint's reasons truly
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`
 - **The backend never writes or removes `update-failure.json`; only the installer does — `install.sh` writes it on an

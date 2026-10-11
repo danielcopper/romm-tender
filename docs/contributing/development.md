@@ -442,6 +442,11 @@ the gate matches the two surfaces by literal event name — the backend side par
 frontend side via a text scan of bare `addEventListener` calls. Static sibling of the endpoint parity gate, for the
 event channel. The same parity assertion is surfaced inside the pytest run by `tests/contract/test_event_parity.py`.
 
+`mise run lint` (and CI) also runs `scripts/check_reason_parity.py`, which fails if a reason an endpoint's failure
+answer can carry is missing from the panel's `WireReason` union in `frontend/src/types/reasons.ts`, or the union holds
+one no backend refusal answers with. Its tests are `tests/scripts/test_check_reason_parity.py`; what it reads and what
+it cannot see is the invariant register's entry.
+
 `mise run lint` (and CI) also runs `scripts/check_settings_owner.py`, which fails if the `settings.json` filename
 literal appears anywhere except its owning adapter (`adapters/persistence.py`); confining the literal to one module
 keeps all settings writes in the single crash-safe owner.
