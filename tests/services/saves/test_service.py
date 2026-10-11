@@ -1741,7 +1741,7 @@ class TestBadPathDeleteSavesPartialFailure:
         return fake
 
     @pytest.mark.asyncio
-    async def test_delete_local_saves_partial_failure_returns_error_response(self, tmp_path):
+    async def test_delete_local_saves_partial_failure_returns_save_deletion_incomplete(self, tmp_path):
         """One ``remove`` failure answers ``delete_incomplete`` but counts the rest."""
         svc, _ = make_service(tmp_path)
         _install_rom(svc, tmp_path)
@@ -1766,7 +1766,7 @@ class TestBadPathDeleteSavesPartialFailure:
         assert good_path not in fake.files
 
     @pytest.mark.asyncio
-    async def test_delete_platform_saves_partial_failure_returns_error_response(self, tmp_path):
+    async def test_delete_platform_saves_partial_failure_returns_save_deletion_incomplete(self, tmp_path):
         """One ``remove`` failure across the platform answers ``delete_incomplete``."""
         svc, _ = make_service(tmp_path)
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
