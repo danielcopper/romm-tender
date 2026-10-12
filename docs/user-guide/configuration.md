@@ -288,8 +288,8 @@ while the source is switched on, an empty grey ring and a grey name while it is 
   sources are used in; the first card's up arrow and the last card's down arrow do nothing. The card slides into its new
   place and the arrow you pressed keeps the focus — the other arrow takes it once the source reaches the top or the
   bottom — so press again to move the source further;
-- the folder it lives in — left out while the source's own settings file is missing or broken, or while the source has
-  not been set up yet, because the folder Tender would show is then only a default;
+- the folder it lives in — shown only where the source's own settings file names it, because otherwise the folder Tender
+  would show is only the source's usual place;
 - what its health says, one line per problem, each led by a warning sign; with none, a green check and **No problems
   found.** where Tender read the source's emulator list;
 - where it could not, **_Source_'s emulator list is not established.**, with a warning sign, unless a line already says
@@ -326,15 +326,20 @@ no emulator list.
 
 **Problems.** Every problem a switched-on source reports also shows as a card on the main panel, named after the source
 — a RetroDECK that is installed but has not been set up yet (**RetroDECK is installed but has not been set up yet. Start
-RetroDECK once and finish its first-run setup.**), a settings file that is missing, unreadable or damaged, a folder that
-does not exist (an SD card that is not inserted), a saves, BIOS or ROM folder that does not exist, ES-DE's ROM folder
-setting that is not a full path, ES-DE's systems file that does not load (ES-DE then shows no systems, and Tender cannot
-tell which emulators the source offers), EmuDeck's RetroArch settings that cannot be read, or RetroDECK's RetroArch
-settings file that is missing (RetroArch then uses its built-in default folders). Two kinds stay on the source's card
-here only: texture packs or mods that do not reach an emulator, which concern nothing Tender does, and every problem of
-a source you switched off. Where Tender cannot get an emulator list, the platform page, the emulator menu and a game's
-BIOS tab say why — no source found, every source switched off, a broken systems file, a RetroDECK that has not been set
-up yet, a list that cannot be read yet — rather than showing an empty list.
+RetroDECK once and finish its first-run setup.**), a settings file that is missing, unreadable or damaged, a settings
+file that does not name some of the source's folders (**RetroDECK: its settings file _file_ does not name its BIOS
+folder, so Tender does not use it.**, all such folders in one sentence, left out where a notice about the settings file
+already explains them), a folder that does not exist (an SD card that is not inserted), a saves, BIOS or ROM folder that
+does not exist — only for a folder the source's settings name, since another folder is only its usual place — ES-DE's
+ROM folder setting that is not a full path, ES-DE's systems file that does not load (ES-DE then shows no systems, and
+Tender cannot tell which emulators the source offers), EmuDeck's RetroArch settings that cannot be read, or RetroDECK's
+RetroArch settings file that is missing (RetroArch then uses its built-in default folders). Three kinds stay on the
+source's card here only: texture packs or mods that do not reach an emulator, which concern nothing Tender does, a
+RetroDECK settings file whose version alone cannot be read (**RetroDECK: its settings file _path_ holds no version
+Tender can read; its folders are still read from it.**), and every problem of a source you switched off. Where Tender
+cannot get an emulator list, the platform page, the emulator menu and a game's BIOS tab say why — no source found, every
+source switched off, a broken systems file, a RetroDECK that has not been set up yet, a list that cannot be read yet —
+rather than showing an empty list.
 
 ## Tender's place in the Quick Access Menu
 

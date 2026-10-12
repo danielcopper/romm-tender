@@ -749,22 +749,26 @@ Tender stays a card without a jump, with Dismiss where the condition has a sensi
 
 **The emulator source notices are Tender's wording, per finding code**, never the resolver's message text
 (`utils/emulatorSourceWording.ts` is the one home of those sentences and of the sources' names): a notice per finding of
-every switched-on source, except `content-tree-unwired`, which concerns nothing Tender does and is stated only on the
-source's card under Settings › Emulator sources, as is every finding of a switched-off source; a code with no sentence
-yet, or a known code whose finding lacks a fact its sentence needs, reads "Problem with _source_: _code_". Where the
-answering source gives no emulator list, the platform page, the emulator menu and a game's BIOS tab say why from the
-answer's `reason` — no source detected, every source switched off, a broken ES-DE systems file, a RetroDECK that has not
-been set up yet, EmuDeck's list that cannot be read yet, a platform the source has no system for (`no_platform_system`),
-a platform whose systems are all switched off there (`platform_system_off`), a platform whose system is not known
-because RomM, which gives its ids, cannot be reached (`server_unreachable`) or refused the read (any other of RomM's
-failure reasons, worded as one), or any other refusal — and never "no emulator". **_Source_ is switched on in Settings ›
-Emulator sources, but Tender cannot start games through it yet.** stands on Main once for every switched-on source
-Tender cannot start games through, whether or not it is the one that answers, and is the one source notice drawn smaller
-and without the warning sign: it states a fact about Tender rather than something wrong. The source's card under
-Settings › Emulator sources says **Tender cannot start games through _source_ yet.**, switched on or off, and a
-switched-off source says it only there. Where such a source answers, the platform page, the emulator menu and a game's
-BIOS tab keep saying why there is no emulator list — today no such source gives one. Showing **Tender cannot start games
-through _source_ yet.** there beside a list such a source does give is #2222's work; no code does it today.
+every switched-on source, except `content-tree-unwired`, which concerns nothing Tender does, and a `marker-invalid` on
+the `version` key alone, which leaves every folder read; both are stated only on the source's card under Settings ›
+Emulator sources, as is every finding of a switched-off source. One code is Tender's own, `roots-assumed`, naming the
+roots the resolver only assumed in one notice per source (`domain/source_roots.py`); the backend leaves it out where a
+`marker-*` or `not-set-up` finding already explains them, and leaves out a missing-root finding about such a root
+([#2294](https://github.com/danielcopper/romm-tender/issues/2294) D6, D7, D8). A code with no sentence yet, or a known
+code whose finding lacks a fact its sentence needs, reads "Problem with _source_: _code_". Where the answering source
+gives no emulator list, the platform page, the emulator menu and a game's BIOS tab say why from the answer's `reason` —
+no source detected, every source switched off, a broken ES-DE systems file, a RetroDECK that has not been set up yet,
+EmuDeck's list that cannot be read yet, a platform the source has no system for (`no_platform_system`), a platform whose
+systems are all switched off there (`platform_system_off`), a platform whose system is not known because RomM, which
+gives its ids, cannot be reached (`server_unreachable`) or refused the read (any other of RomM's failure reasons, worded
+as one), or any other refusal — and never "no emulator". **_Source_ is switched on in Settings › Emulator sources, but
+Tender cannot start games through it yet.** stands on Main once for every switched-on source Tender cannot start games
+through, whether or not it is the one that answers, and is the one source notice drawn smaller and without the warning
+sign: it states a fact about Tender rather than something wrong. The source's card under Settings › Emulator sources
+says **Tender cannot start games through _source_ yet.**, switched on or off, and a switched-off source says it only
+there. Where such a source answers, the platform page, the emulator menu and a game's BIOS tab keep saying why there is
+no emulator list — today no such source gives one. Showing **Tender cannot start games through _source_ yet.** there
+beside a list such a source does give is #2222's work; no code does it today.
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did

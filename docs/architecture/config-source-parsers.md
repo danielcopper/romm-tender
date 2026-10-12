@@ -266,13 +266,12 @@ the [parser layout template](#parser-layout-template) above (pure parse in `doma
 
 Every folder Tender uses in RetroDECK is the resolver's answer, asked through RetroDECK's handle in one reading of the
 emulator sources (`adapters/retrodeck_folders.py`, behind the `RetroDeckFolders` Protocol): a system's ROM folder is
-`rom_location(system).dir`, the ROM root ES-DE's `ROMDirectory` (`roms_dir()`), and the BIOS folder, saves root and home
-the handle's `bios_dir()`, `saves_root()` and `root()`. Tender reads no RetroDECK file of its own, builds no folder from
-a root, and has no fallback folder: where the resolver names none, nothing that depends on it runs and the answer says
-why. The ROM root, BIOS folder and saves root are whole-source roots, which not every source has; they are used only as
-RetroDECK's, and only by what still lies in RetroDECK's folders — whether the removed-game cleanup may start, the BIOS
-download destination and its bound, the cleanup's save backups, the start-up removal of leftover `.tmp` files, and the
-move code.
+`rom_location(system).dir`, and the ROM root (ES-DE's `ROMDirectory`), the home, the BIOS folder and the saves root are
+the handle's `roots()`. Tender reads no RetroDECK file of its own, builds no folder from a root, and has no fallback
+folder: where the resolver names none, nothing that depends on it runs and the answer says why. The ROM root, BIOS
+folder and saves root are whole-source roots, which not every source has; they are used only as RetroDECK's, and only by
+what still lies in RetroDECK's folders — whether the removed-game cleanup may start, the BIOS download destination and
+its bound, the cleanup's save backups, the start-up removal of leftover `.tmp` files, and the move code.
 
 **A removal of a game's files is bounded by its system's own ROM folder**, never by the ROM root: uninstalling,
 "Uninstall all", the removed-game cleanup's removal of a game's files and its recovery bundle, an archive's extraction,
@@ -281,37 +280,56 @@ system's folder (`lib/path_safety.is_inside_folder`). A system's folder may be a
 downloads land; resolved, it is the bound those downloads are removed by, where the ROM root would leave them outside
 it. Nothing falls back to the ROM root ([#2285](https://github.com/danielcopper/romm-tender/issues/2285) D1).
 
-Which rule a folder answers by:
+**A root the resolver only assumed is used for nothing.** The roots answer gives each root a provenance: `read` where
+the source's settings name it, `frontend-default` where ES-DE's own default ROM folder applies, and `assumed` where
+nothing on the machine names it and the resolver fell back on RetroDECK's usual layout under the home (`~/retrodeck/…`)
+— a `retrodeck.json` without its `paths` section or with one key unset, or one that is missing, unreadable or damaged.
+Tender uses a root that was read or is ES-DE's own default, and none that was only assumed: nothing is downloaded into
+it, no removal is bounded by it, and the move code moves nothing. Each root is judged by its own provenance alone, also
+under a `marker-*` finding, so with a damaged `retrodeck.json` a game still downloads into, and is removed from, the ROM
+folder ES-DE's settings name, while every BIOS press is refused. A system's ROM folder lies below the ROM root and goes
+with it. The rule is the source-agnostic `domain/source_roots.py`, so every later caller of an EmuDeck folder asks the
+same one ([#2294](https://github.com/danielcopper/romm-tender/issues/2294) D1, D3, D4, D5).
 
-| Asked for                                                                  | Needs RetroDECK               | Refused while RetroDECK reports                                                       |
-| -------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------- |
-| a download (`download_folder`, `bios_download_folder`)                     | detected **and** switched on  | `marker-missing`, `marker-unreadable`, `marker-invalid`, `not-set-up`, `root-missing` |
-| a removal's bound (`rom_folders`, `rom_root`, `bios_folder`, `saves_root`) | detected, whatever its switch | `marker-missing`, `marker-unreadable`, `marker-invalid`, `not-set-up`                 |
-| the move code (`move_roots`)                                               | detected, whatever its switch | the same four, as no move and a refused migrate press                                 |
+Which root a folder answers by:
 
-Under the four `marker-*` / `not-set-up` findings the resolver's root, BIOS and saves folders are its defaults
-(`~/retrodeck/…`), not where RetroDECK lies, so Tender uses none of RetroDECK's folders then; the refusal carries the
-finding, and the panel words it with the sentence the finding's notice shows (`withFindingSentence` in
-`frontend/src/utils/emulatorSourceWording.ts`, applied to every endpoint answer in `frontend/src/api/host.ts`). A
-download also stops on `root-missing`, because everything it would land in lies below a folder that is not there. No
-folder rule reads `bios-root-missing`, `roms-root-missing`, `roms-root-not-absolute` or `emulator-config-missing`; the
-folders they name are still checked on their own, as before — a missing ROM or BIOS folder, a ROM root `roms_dir()` does
-not answer.
+| Asked for                                       | Needs RetroDECK               | Refused where this root is not usable                                               |
+| ----------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------- |
+| a game download (`download_folder`)             | detected **and** switched on  | the ROM root; also on `root-missing` for a home that was read                       |
+| a BIOS download (`bios_download_folder`)        | detected **and** switched on  | the BIOS folder; also on `root-missing` for a home that was read                    |
+| a removal's bound (`rom_folders`, `rom_root`)   | detected, whatever its switch | the ROM root                                                                        |
+| a removal's bound (`bios_folder`, `saves_root`) | detected, whatever its switch | the BIOS folder, the saves root                                                     |
+| the move code (`move_roots`)                    | detected, whatever its switch | any of the home, BIOS folder and saves root, as no move and a refused migrate press |
 
-**A question that fails is treated like one of the four `marker-*` / `not-set-up` findings.** RetroDECK's health and its
-four roots — home, ROM root, BIOS folder and saves root — are asked together, up front, for every folder question. Where
-detecting the emulator sources raises, or any one of those five questions does, nothing established that the folders are
-not defaults, so every folder question refuses — a removal's bound as well as a download's — the start-up removal of
-`.tmp` files removes nothing, the move code sees no move, and the migrate press is refused before anything moves, the
-pending move left recorded. The one exception is a download while RetroDECK is switched off, which says so as it would
-anyway: the switch is the user's setting, and holds whatever the resolver answered. The refusal is its own
-(`retrodeck_unanswered`) and says **RetroDECK's folders could not be established, so Tender downloads into and removes
-from none of them.**; it never reads as RetroDECK not installed — a detection that raised is not one that found nothing,
-and the reading says which (`DetectedSourcesReading.detection_failed`, read by this adapter, by
-`adapters/atlas_platforms.py` and by the launch check's `check_start_source`; every other reader of the sources still
-takes such a reading as one that detected none) — nor as RetroDECK naming no folder, both of which would be statements
-about an installation nobody heard from. Like a finding's refusal it also keeps the removed-game cleanup from starting
-(`EveryFolderRefused`, which both are).
+The refusal carries a finding, and the panel words it with the sentence that finding's notice shows
+(`withFindingSentence` in `frontend/src/utils/emulatorSourceWording.ts`, applied to every endpoint answer in
+`frontend/src/api/host.ts`): the resolver's `marker-*` or `not-set-up` finding where one explains why the root was not
+read, and Tender's own `roots-assumed` otherwise. The resolver states no finding for an assumed root
+([emu-atlas#612](https://github.com/danielcopper/emu-atlas/issues/612)), so `roots-assumed` is Tender's code; its data
+are the settings file (`path`) and the assumed roots by name (`roots`), and the source report carries it too, for Main's
+notice and the source's card. `not-set-up` refuses everything, since its ROM root has no path; a `marker-invalid` on the
+`version` key alone leaves every root read and refuses nothing. A download also stops on `root-missing` for a home that
+was read, because everything it would land in lies below a folder that is not there; a BIOS folder that is not there yet
+is created only inside a home that was read. The resolver states `root-missing`, `bios-root-missing` and
+`saves-root-missing` for an assumed root too, so they count — here and on Main and the card — only for a root that was
+read (D6). No folder rule reads `roms-root-missing`, `roms-root-not-absolute` or `emulator-config-missing`; the folders
+they name are still checked on their own, as before — a missing ROM or BIOS folder, a ROM root the roots answer gives no
+path for.
+
+**A question that fails establishes no folder.** The roots answer — home, ROM root, BIOS folder and saves root, with the
+findings beside them — is asked once, up front, for every folder question; it carries every finding a folder rule reads,
+so `health()` and the four single-root questions are not asked. Where detecting the emulator sources raises, or the
+roots question does, nothing established where the folders are, so every folder question refuses — a removal's bound as
+well as a download's — the start-up removal of `.tmp` files removes nothing, the move code sees no move, and the migrate
+press is refused before anything moves, the pending move left recorded. The one exception is a download while RetroDECK
+is switched off, which says so as it would anyway: the switch is the user's setting, and holds whatever the resolver
+answered. The refusal is its own (`retrodeck_unanswered`) and says **RetroDECK's folders could not be established, so
+Tender downloads into and removes from none of them.**; it never reads as RetroDECK not installed — a detection that
+raised is not one that found nothing, and the reading says which (`DetectedSourcesReading.detection_failed`, read by
+this adapter, by `adapters/atlas_platforms.py` and by the launch check's `check_start_source`; every other reader of the
+sources still takes such a reading as one that detected none) — nor as RetroDECK naming no folder, both of which would
+be statements about an installation nobody heard from. Like a finding's refusal it also keeps the removed-game cleanup
+from starting (`EveryFolderRefused`, which both are).
 
 A system's own ROM folder (`rom_location(system)`) is not a root: it is asked only by the questions that need it, the
 download's folder and a removal's bound. Its raise refuses those alone, with the same sentence — a game download, using
