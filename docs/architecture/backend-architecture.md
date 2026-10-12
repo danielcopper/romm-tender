@@ -1734,7 +1734,9 @@ The frontend pulls this on mount, once the backend is proven reachable (it reuse
 retry/backoff, not a second loop), and confirm-sets each entry via the existing `setLaunchOptionsConfirmed`
 fire-then-poll. The pass is **idempotent and appId-safe**: re-confirming a correct command matches the read-back
 instantly, and a `launch_options` write does not change the shortcut's appId, so artwork, collections, and the shortcut
-identity survive. This heals drift from every cause at the next panel load.
+identity survive. This heals drift from every cause at the next panel load. A confirm that fails logs a warning naming
+what Steam's re-read of the shortcut saw — no details within its bound, or another value, carried in full beside the
+value written — ahead of the reconcile's own failure line.
 
 #### UpdateCheckService notes
 
