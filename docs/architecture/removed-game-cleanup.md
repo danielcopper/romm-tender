@@ -34,13 +34,14 @@ where their detail lives. Save-side path resolution and quarantine mechanics bel
 
 ## Deletion authority
 
-Only a `RommNotFoundError` from a fresh, single-attempt, exact-id request authorizes deleting anything. A live response,
-a wrong or malformed payload, a timeout, a transport or auth failure, a 5xx, a cancellation, or an unknown exception all
-retain local data. Liveness is proven before work begins, again around Steam actions, and once more immediately before
-local finalization, so a source that comes back to life — or a replacement that disappears — stops that group.
+Only a `RommNotFoundError` from a fresh, single-attempt, exact-id request (`GET /api/roms/{id}/simple`, whose 404 is the
+same entity answer as the detail endpoint's) authorizes deleting anything. A live response, a wrong or malformed
+payload, a timeout, a transport or auth failure, a 5xx, a cancellation, or an unknown exception all retain local data.
+Liveness is proven before work begins, again around Steam actions, and once more immediately before local finalization,
+so a source that comes back to life — or a replacement that disappears — stops that group.
 
-A dropped ROM does **not** 404 the saves endpoint; `GET /api/saves?rom_id=<dead>` answers `200 []`. Only `get_rom`
-distinguishes a dead id, so every liveness probe goes through it.
+A dropped ROM does **not** 404 the saves endpoint; `GET /api/saves?rom_id=<dead>` answers `200 []`. Only a read of the
+ROM itself distinguishes a dead id, so every liveness probe is one (`get_rom_once`).
 
 ### The 404 has to come from RomM
 

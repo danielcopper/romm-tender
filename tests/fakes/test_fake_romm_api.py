@@ -131,6 +131,21 @@ class TestSeededReads:
         assert api.get_rom_once(42) == {"id": 42, "name": "Zelda"}
         assert api.call_log == [("get_rom_once", (42,), {})]
 
+    def test_get_rom_simple_answers_what_get_rom_answers_under_its_own_name(self) -> None:
+        api = FakeRommApi()
+        api.roms[42] = {"id": 42, "name": "Zelda", "files": [{"file_name": "Zelda.sfc"}]}
+
+        assert api.get_rom_simple(42) == api.get_rom(42)
+        assert api.call_log == [("get_rom_simple", (42,), {}), ("get_rom", (42,), {})]
+
+    def test_get_rom_simple_raises_its_own_injected_failure(self) -> None:
+        api = FakeRommApi()
+        api.get_rom_simple_side_effect = OSError("down")
+
+        with pytest.raises(OSError, match="down"):
+            api.get_rom_simple(42)
+        assert api.get_rom(42) == {"id": 42}
+
     def test_get_rom_once_supports_per_id_mixed_failures(self) -> None:
         api = FakeRommApi()
         api.get_rom_once_side_effect_by_id[41] = OSError("missing")

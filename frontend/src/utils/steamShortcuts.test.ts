@@ -8,6 +8,7 @@ import {
   removeShortcutConfirmedOutcome,
   setLaunchOptionsConfirmed,
 } from "./steamShortcuts";
+import type { ShortcutFileReading } from "./shortcutFile";
 import type { SyncAddItem } from "../types";
 
 const ROM_LAUNCHER = "/home/deck/.local/bin/tender-rom-launcher";
@@ -201,7 +202,8 @@ describe("setLaunchOptionsConfirmed", () => {
       await expect(promise).resolves.toBe(false);
       expect(logWarnSpy).toHaveBeenCalledTimes(1);
       expect(logWarnSpy).toHaveBeenCalledWith(
-        "setLaunchOptionsConfirmed: appId 5 not confirmed: the re-read delivered no details within 2000ms",
+        "setLaunchOptionsConfirmed: appId 5 not confirmed: the re-read delivered no details within 2000ms; " +
+          "the file could not be read (no answer)",
       );
     });
 
@@ -220,7 +222,7 @@ describe("setLaunchOptionsConfirmed", () => {
       expect(logWarnSpy).toHaveBeenCalledTimes(1);
       expect(logWarnSpy).toHaveBeenCalledWith(
         `setLaunchOptionsConfirmed: appId 5 not confirmed: the re-read shows ${JSON.stringify(HELD_BEFORE)}, ` +
-          `the write was ${JSON.stringify(WRITTEN)}`,
+          `the write was ${JSON.stringify(WRITTEN)}; the file could not be read (no answer)`,
       );
     });
 
@@ -238,9 +240,212 @@ describe("setLaunchOptionsConfirmed", () => {
       await expect(promise).resolves.toBe(false);
       expect(logWarnSpy).toHaveBeenCalledTimes(1);
       expect(logWarnSpy).toHaveBeenCalledWith(
-        `setLaunchOptionsConfirmed: appId 5 not confirmed: the re-read shows "", the write was ${JSON.stringify(WRITTEN)}`,
+        `setLaunchOptionsConfirmed: appId 5 not confirmed: the re-read shows "", the write was ${JSON.stringify(WRITTEN)}; ` +
+          "the file could not be read (no answer)",
       );
     });
+  });
+});
+
+/** The endpoint is one `vi.fn` for the whole file: start each test from its suite default. */
+function resetFileEndpoint() {
+  vi.mocked(backend.getShortcutLaunchOptions)
+    .mockReset()
+    .mockResolvedValue(undefined as unknown as backend.ShortcutLaunchOptions);
+}
+
+describe("setLaunchOptionsConfirmed's reading of Steam's shortcut file", () => {
+  const WRITTEN = "flatpak run net.retrodeck.retrodeck '/games/psx/Some Game (USA).chd'";
+  const HELD_BEFORE = 'flatpak run net.retrodeck.retrodeck "/games/psx/Some Game (USA).chd"';
+
+  beforeEach(resetFileEndpoint);
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    resetFileEndpoint();
+  });
+
+  /** Steam's report and re-read both show `reread`, or deliver nothing when it is `undefined`. */
+  function stubSteamShowing(reread: string | undefined) {
+    const { fn } = makeRegisterForAppDetails(() => (reread === undefined ? undefined : { strLaunchOptions: reread }));
+    vi.stubGlobal("SteamClient", { Apps: { SetAppLaunchOptions: vi.fn(), RegisterForAppDetails: fn } });
+  }
+
+  function fileHolding(entries: [number, string][]): ShortcutFileReading {
+    return { status: "read", launchOptions: new Map(entries) };
+  }
+
+  /** A reader that answers `reading` after `ms` of (fake) time. */
+  function answeringAfter(ms: number, reading: ShortcutFileReading) {
+    return () => new Promise<ShortcutFileReading>((resolve) => setTimeout(() => resolve(reading), ms));
+  }
+
+  async function confirmWith(readFile: () => Promise<ShortcutFileReading>): Promise<boolean> {
+    vi.useFakeTimers();
+    const promise = setLaunchOptionsConfirmed(5, WRITTEN, 2000, readFile);
+    await vi.advanceTimersByTimeAsync(4000);
+    return promise;
+  }
+
+  it("confirms a write the re-read shows another value for when the file holds the value written", async () => {
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    const logInfoSpy = vi.spyOn(backend, "logInfo").mockImplementation(() => {});
+    stubSteamShowing(HELD_BEFORE);
+
+    await expect(confirmWith(answeringAfter(87, fileHolding([[5, WRITTEN]])))).resolves.toBe(true);
+    expect(logInfoSpy).toHaveBeenCalledTimes(1);
+    expect(logInfoSpy).toHaveBeenCalledWith(
+      `setLaunchOptionsConfirmed: appId 5 confirmed by Steam's shortcut file after the re-read shows ${JSON.stringify(HELD_BEFORE)}; ` +
+        "waited 87ms for the file",
+    );
+    expect(logWarnSpy).not.toHaveBeenCalled();
+  });
+
+  it("confirms a write whose re-read delivered no details when the file holds the value written", async () => {
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    const logInfoSpy = vi.spyOn(backend, "logInfo").mockImplementation(() => {});
+    stubSteamShowing(undefined);
+
+    await expect(confirmWith(() => Promise.resolve(fileHolding([[5, WRITTEN]])))).resolves.toBe(true);
+    expect(logInfoSpy).toHaveBeenCalledWith(
+      "setLaunchOptionsConfirmed: appId 5 confirmed by Steam's shortcut file after the re-read delivered no details " +
+        "within 2000ms; waited 0ms for the file",
+    );
+    expect(logWarnSpy).not.toHaveBeenCalled();
+  });
+
+  it("stays a failure when the file shows another value too, and the warning names it", async () => {
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    const logInfoSpy = vi.spyOn(backend, "logInfo").mockImplementation(() => {});
+    stubSteamShowing(HELD_BEFORE);
+
+    await expect(confirmWith(() => Promise.resolve(fileHolding([[5, "a third value"]])))).resolves.toBe(false);
+    expect(logWarnSpy).toHaveBeenCalledTimes(1);
+    expect(logWarnSpy).toHaveBeenCalledWith(
+      `setLaunchOptionsConfirmed: appId 5 not confirmed: the re-read shows ${JSON.stringify(HELD_BEFORE)}, ` +
+        `the write was ${JSON.stringify(WRITTEN)}; the file shows "a third value"`,
+    );
+    expect(logInfoSpy).not.toHaveBeenCalled();
+  });
+
+  it("names the value written beside the file's value when the re-read delivered no details", async () => {
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    stubSteamShowing(undefined);
+
+    await expect(confirmWith(() => Promise.resolve(fileHolding([[5, HELD_BEFORE]])))).resolves.toBe(false);
+    expect(logWarnSpy).toHaveBeenCalledTimes(1);
+    expect(logWarnSpy).toHaveBeenCalledWith(
+      "setLaunchOptionsConfirmed: appId 5 not confirmed: the re-read delivered no details within 2000ms, " +
+        `the write was ${JSON.stringify(WRITTEN)}; the file shows ${JSON.stringify(HELD_BEFORE)}`,
+    );
+  });
+
+  it("stays a failure when the file holds the value for another shortcut only", async () => {
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    stubSteamShowing(HELD_BEFORE);
+
+    await expect(confirmWith(() => Promise.resolve(fileHolding([[6, WRITTEN]])))).resolves.toBe(false);
+    expect(logWarnSpy.mock.calls[0]![0]).toMatch(/; the file holds no such shortcut$/);
+  });
+
+  it("stays a failure when the file could not be read", async () => {
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    stubSteamShowing(HELD_BEFORE);
+
+    await expect(
+      confirmWith(() => Promise.resolve({ status: "unreadable", why: "Steam's shortcut file could not be read." })),
+    ).resolves.toBe(false);
+    expect(logWarnSpy.mock.calls[0]![0]).toMatch(
+      /; the file could not be read \(Steam's shortcut file could not be read\.\)$/,
+    );
+  });
+
+  it("stays a failure when the file does not answer within its bound, and the warning names the bound", async () => {
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    stubSteamShowing(HELD_BEFORE);
+    vi.useFakeTimers();
+    let outcome: boolean | undefined;
+    void setLaunchOptionsConfirmed(5, WRITTEN, 2000, () => new Promise<ShortcutFileReading>(() => {})).then(
+      (confirmed) => {
+        outcome = confirmed;
+      },
+    );
+
+    // The report wait runs its 2000ms out; the re-read answers at once.
+    await vi.advanceTimersByTimeAsync(2000 + 4999);
+    expect(outcome).toBeUndefined();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(outcome).toBe(false);
+    expect(logWarnSpy).toHaveBeenCalledTimes(1);
+    expect(logWarnSpy.mock.calls[0]![0]).toMatch(/; the file could not be read \(no answer within 5000ms\)$/);
+  });
+
+  it("stays a failure when the reader rejects", async () => {
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    stubSteamShowing(HELD_BEFORE);
+
+    await expect(confirmWith(() => Promise.reject(new Error("boom")))).resolves.toBe(false);
+    expect(logWarnSpy.mock.calls[0]![0]).toMatch(/; the file could not be read \(Error: boom\)$/);
+  });
+
+  it("asks the backend for this shortcut alone when no reader is passed", async () => {
+    vi.spyOn(backend, "logInfo").mockImplementation(() => {});
+    const ask = vi
+      .spyOn(backend, "getShortcutLaunchOptions")
+      .mockResolvedValue({ success: true, launch_options: [{ app_id: 5, launch_options: WRITTEN }] });
+    stubSteamShowing(HELD_BEFORE);
+    vi.useFakeTimers();
+
+    const promise = setLaunchOptionsConfirmed(5, WRITTEN, 2000);
+    await vi.advanceTimersByTimeAsync(4000);
+
+    await expect(promise).resolves.toBe(true);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(ask).toHaveBeenCalledWith([5]);
+  });
+
+  it.each([
+    {
+      case: "the backend refuses the reading",
+      answer: () => Promise.resolve({ success: false, reason: "shortcut_file_unreadable", message: "no" }),
+    },
+    { case: "the call rejects", answer: () => Promise.reject(new Error("socket closed")) },
+    { case: "the call answers nothing", answer: () => Promise.resolve(undefined) },
+  ])("stays a failure when $case", async ({ answer }) => {
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    vi.mocked(backend.getShortcutLaunchOptions).mockImplementation(
+      answer as unknown as typeof backend.getShortcutLaunchOptions,
+    );
+    stubSteamShowing(HELD_BEFORE);
+    vi.useFakeTimers();
+
+    const promise = setLaunchOptionsConfirmed(5, WRITTEN, 2000);
+    await vi.advanceTimersByTimeAsync(4000);
+
+    await expect(promise).resolves.toBe(false);
+    expect(logWarnSpy).toHaveBeenCalledTimes(1);
+    expect(logWarnSpy.mock.calls[0]![0]).toContain("; the file could not be read (");
+  });
+
+  it.each([
+    { case: "the first report shows the value", reports: ["new-value"] },
+    { case: "the re-read shows the value", reports: ["old-value", "new-value"] },
+  ])("never reads the file when $case", async ({ reports }) => {
+    vi.spyOn(backend, "logInfo").mockImplementation(() => {});
+    let registrations = 0;
+    const { fn } = makeRegisterForAppDetails(() => ({
+      strLaunchOptions: reports[Math.min(registrations++, reports.length - 1)]!,
+    }));
+    vi.stubGlobal("SteamClient", { Apps: { SetAppLaunchOptions: vi.fn(), RegisterForAppDetails: fn } });
+    const readFile = vi.fn(() => Promise.resolve(fileHolding([])));
+    vi.useFakeTimers();
+
+    const promise = setLaunchOptionsConfirmed(5, "new-value", 2000, readFile);
+    await vi.advanceTimersByTimeAsync(4000);
+
+    await expect(promise).resolves.toBe(true);
+    expect(readFile).not.toHaveBeenCalled();
   });
 });
 

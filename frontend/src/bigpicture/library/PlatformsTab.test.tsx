@@ -1861,7 +1861,12 @@ describe("Library › Platforms", () => {
         await pickFromCoreMenu("VBA Next");
         await flushAsync();
 
-        expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(7, "flatpak run … -e vba_next_libretro");
+        expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(
+          7,
+          "flatpak run … -e vba_next_libretro",
+          undefined,
+          expect.any(Function),
+        );
         expect(vi.mocked(backend.getPlatformFirmwareStatus).mock.calls.length).toBeGreaterThan(firmwareReadsBefore);
         expect(vi.mocked(backend.getSystemCoreInfo)).toHaveBeenCalledTimes(2);
         expect(events.map((e) => e.detail.type)).toContain("core_changed");

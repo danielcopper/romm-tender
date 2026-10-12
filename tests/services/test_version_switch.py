@@ -295,6 +295,16 @@ class TestGetVersionList:
         assert by_id[5]["label"] == "Game (Japan)"
         assert by_id[5]["regions"] == ["Japan"]
 
+    def test_the_bound_and_per_sibling_reads_ask_the_simple_reader(self, event_loop, service, uow, romm):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID, regions=("USA",))
+        romm.roms[1] = {"id": 1, "sibling_roms": [{"id": 5, "name": "Game (Japan)"}]}
+        romm.roms[5] = {"id": 5, "platform_id": 57, "regions": ["Japan"]}
+
+        _run(event_loop, service.get_version_list(_APP_ID))
+
+        assert _romm_call_ids(romm, "get_rom_simple") == [1, 5]
+        assert _romm_call_ids(romm, "get_rom") == []
+
     def test_local_members_are_switchable(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID, regions=("USA",))
         _seed_rom(uow, rom_id=2, app_id=None, regions=("Japan",))
@@ -411,7 +421,7 @@ class TestGetVersionList:
     def test_server_unreachable_degrades_to_local_only(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
         _seed_rom(uow, rom_id=2, app_id=None)
-        romm.get_rom_side_effect = ConnectionError("down")
+        romm.get_rom_simple_side_effect = ConnectionError("down")
 
         result = _run(event_loop, service.get_version_list(_APP_ID))
         assert result["multi_version"] is True
@@ -429,7 +439,7 @@ class TestGetVersionList:
         """
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
         _seed_rom(uow, rom_id=2, app_id=None)
-        romm.get_rom_side_effect = RommNotFoundError("HTTP 404: Not Found")
+        romm.get_rom_simple_side_effect = RommNotFoundError("HTTP 404: Not Found")
 
         result = _run(event_loop, service.get_version_list(_APP_ID))
         assert result["multi_version"] is True
@@ -506,7 +516,7 @@ class TestGetVersionList:
     def test_falsy_bound_200_fails_open_and_probes_other_local_ids(self, event_loop, service, uow, romm, monkeypatch):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
         _seed_rom(uow, rom_id=2, app_id=None)
-        monkeypatch.setattr(romm, "get_rom", lambda _rom_id: None)
+        monkeypatch.setattr(romm, "get_rom_simple", lambda _rom_id: None)
         romm.roms[2] = {"id": 2}
 
         result = _run(event_loop, service.get_version_list(_APP_ID))
@@ -522,7 +532,7 @@ class TestGetVersionList:
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
         _seed_rom(uow, rom_id=2, app_id=None)
         _seed_rom(uow, rom_id=3, app_id=None)
-        romm.get_rom_side_effect = RommNotFoundError("bound gone")
+        romm.get_rom_simple_side_effect = RommNotFoundError("bound gone")
         romm.get_rom_once_side_effect_by_id[2] = RommNotFoundError("sibling gone")
         romm.roms[3] = {"id": 3}
 
@@ -537,7 +547,7 @@ class TestGetVersionList:
 
     def test_single_bound_404_preserves_bound_verdict_in_non_multi_shape(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
-        romm.get_rom_side_effect = RommNotFoundError("bound gone")
+        romm.get_rom_simple_side_effect = RommNotFoundError("bound gone")
 
         result = _run(event_loop, service.get_version_list(_APP_ID))
 
@@ -1070,13 +1080,13 @@ class TestSwitchVersion:
     def test_vanished_bound_id_can_recover_to_live_local_target(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
         _seed_rom(uow, rom_id=2, app_id=None)
-        romm.get_rom_side_effect = RommNotFoundError("bound gone")
+        romm.get_rom_simple_side_effect = RommNotFoundError("bound gone")
 
         before = _run(event_loop, service.get_version_list(_APP_ID))
         assert before["bound_vanished"] is True
 
         romm.call_log.clear()
-        romm.get_rom_side_effect = None
+        romm.get_rom_simple_side_effect = None
         result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
 
         _assert_success(result, rom_id=2, installed=False, launch_options="")
@@ -1087,12 +1097,12 @@ class TestSwitchVersion:
 
     def test_vanished_bound_id_can_recover_to_live_server_only_target(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
-        romm.get_rom_side_effect = RommNotFoundError("bound gone")
+        romm.get_rom_simple_side_effect = RommNotFoundError("bound gone")
         before = _run(event_loop, service.get_version_list(_APP_ID))
         assert before["bound_vanished"] is True
 
         romm.call_log.clear()
-        romm.get_rom_side_effect = None
+        romm.get_rom_simple_side_effect = None
         romm.roms[3] = {
             "id": 3,
             "name": "Game 3",

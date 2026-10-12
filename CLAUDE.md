@@ -658,8 +658,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `__call__`-only seam's bound attribute); one `# pragma: no uow-check` suppresses the line for both families.
   Unchecked: a seam that list does not name — `SteamConfigStore.grid_dir()`, `set_steam_input_config()` and
   `write_shortcut_icon()` today — or whose implementation later grows a file read; a seam passed as a bound method (how
-  `read_shortcut_exes` is reached), behind a helper or a local alias, or inside a nested `def`/`lambda`; a UoW opened
-  through a factory attribute not ending in `uow_factory`
+  `read_shortcut_exes` and `read_shortcut_launch_options` are reached), behind a helper or a local alias, or inside a
+  nested `def`/`lambda`; a UoW opened through a factory attribute not ending in `uow_factory`
 - **A shell function whose value is taken with `$(...)` never reaches `exit` — it answers, and its caller aborts** —
   check — `scripts/check_shell_answer_functions.py` over `install.sh`, `scripts/package.sh`, `bin/tender-rom-launcher`
   and every `*.sh` under `scripts/` and `bin/`; its blind spots are listed in its docstring
@@ -694,6 +694,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   check** — check — `frontend/scripts/check-package-budgets.mjs` (`pnpm -C frontend check:packages`), over the record
   the build writes to `frontend/bundle-packages.json`, refused when it is older than `dist/`; the panel's own code has
   no budget of its own and only `frontend/.size-limit.json`'s total watches it
+- **Every package `frontend/package-budgets.json` lists, in any bundle, has a `## <package>` section of its own in
+  `THIRD-PARTY-NOTICES.md`** — check — `scripts/check_third_party_notices.py`; unseen by it: whether a section is true,
+  a section for a package no bundle carries any more, a `## <package>` line inside a code fence (it counts), and content
+  under another licence inside a package (Font Awesome inside react-icons), which no check sees
 - **Tender's three React globals are spelled exactly the way Decky Loader spells them** — test —
   `frontend/src/boot/steamGlobals.test.ts` against the pinned `decky-globals-block.txt`; the pinned copy itself is held
   by hand, its provenance header naming the upstream commit

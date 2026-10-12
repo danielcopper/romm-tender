@@ -47,6 +47,7 @@ from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
 from services.saves import SaveService, SaveServiceConfig
 from services.session_lifecycle import SessionLifecycleService, SessionLifecycleServiceConfig
 from services.settings import SettingsService, SettingsServiceConfig
+from services.shortcut_file import ShortcutFileService, ShortcutFileServiceConfig
 from services.shortcut_relocation import ShortcutRelocationService, ShortcutRelocationServiceConfig
 from services.shortcut_removal import ShortcutRemovalService, ShortcutRemovalServiceConfig
 from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
@@ -134,6 +135,7 @@ class ServicesBundle:
     connection_service: ConnectionService
     startup_healing_service: StartupHealingService
     shortcut_relocation_service: ShortcutRelocationService
+    shortcut_file_service: ShortcutFileService
     update_check_service: UpdateCheckService
     update_outcome_service: UpdateOutcomeService
     update_install_service: UpdateInstallService
@@ -618,6 +620,13 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         ),
     )
 
+    shortcut_file_service = ShortcutFileService(
+        config=ShortcutFileServiceConfig(
+            steam_config=cfg.adapters.steam_config,
+            loop=cfg.runtime.loop,
+        ),
+    )
+
     # Built after SaveService + ConnectionService: the version-switch
     # save-stranding gate draws drift from SaveService.check_local_drift and
     # reachability from ConnectionService.probe_reachability, and re-bakes a
@@ -803,6 +812,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         connection_service=connection_service,
         startup_healing_service=startup_healing_service,
         shortcut_relocation_service=shortcut_relocation_service,
+        shortcut_file_service=shortcut_file_service,
         update_check_service=update_check_service,
         update_outcome_service=update_outcome_service,
         update_install_service=update_install_service,

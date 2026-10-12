@@ -313,6 +313,9 @@ class FakeSaveApi:
     def get_rom(self, rom_id: int) -> dict[str, Any]:
         raise NotImplementedError
 
+    def get_rom_simple(self, rom_id: int) -> dict[str, Any]:
+        raise NotImplementedError
+
     def get_rom_once(self, rom_id: int) -> dict[str, Any]:
         raise NotImplementedError
 

@@ -136,6 +136,7 @@ export type WireReason =
   | "saves_root_missing"
   | "selection_finalized"
   | "service_stopping"
+  | "shortcut_file_unreadable"
   | "stale_action"
   | "stale_conflict"
   | "stale_lease"

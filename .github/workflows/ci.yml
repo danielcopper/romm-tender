@@ -125,6 +125,11 @@ jobs:
           bash scripts/package.sh --source . --out build
           python3 scripts/check_release_tarball.py build/romm-tender-*.tar.gz
 
+      # What the release job attaches beside the tarball (scripts/decky_ui_source.py
+      # says why), fetched and verified here too, so a release is not its first run.
+      - name: Fetch the @decky/ui source package and verify it against the lock
+        run: python3 scripts/decky_ui_source.py --out build
+
       - name: Type check
         run: pnpm -C frontend typecheck
 
@@ -255,6 +260,9 @@ jobs:
 
       - name: Check stated RomM minimum matches the enforced one
         run: python scripts/check_romm_min_version.py
+
+      - name: Check every budgeted package has its third-party notice
+        run: python scripts/check_third_party_notices.py
       # The compiled gavel core ships with Tender and has no source in
       # this repo — a silently swapped binary must fail CI. Verify the vendored
       # .so against its checksum (bumped only by a deliberate native/README.md

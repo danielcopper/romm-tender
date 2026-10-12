@@ -708,13 +708,14 @@ Format: **invariant** — tier — enforced by.
   uncached so a component installed mid-session is seen), `SandboxLauncherFn` (re-probes the flatpak roots for
   `es_find_rules.xml` and re-stats it before it may use the parse cache), `SystemSupportedExtensionsFn` /
   `SystemKnownFn` (two more questions to the same catalogue, asked afresh from the panel and once per reading within a
-  run), `SteamConfigStore.read_shortcut_exes` (parses Steam's whole `shortcuts.vdf` — 315 KB and 828 entries on the
-  reference machine — for the one-time shortcut relocation. **Listing it changes nothing at its only call site**: the
-  service reaches it through `run_in_executor` as a bound method, which is this checker's documented blind spot, so the
-  entry is a statement of the rule rather than an enforcement of it. It is also not the store's only real I/O —
-  `grid_dir()` is called from `services/artwork.py` (six sites), `services/shortcut_removal.py` and
-  `services/library/reporter.py`, `set_steam_input_config()` from `services/settings.py`, `services/shortcut_removal.py`
-  and `services/library/reporter.py`, and `write_shortcut_icon()` from `services/steamgrid.py` — those are unlisted, and
+  run), `SteamConfigStore.read_shortcut_exes` and `.read_shortcut_launch_options` (each parses Steam's whole
+  `shortcuts.vdf`, for the one-time shortcut relocation and for a launch-options confirm that Steam's reports did not
+  settle. **Listing them changes nothing at their call sites**: each service reaches its reading through
+  `run_in_executor` as a bound method, which is this checker's documented blind spot, so the entries are a statement of
+  the rule rather than an enforcement of it. They are also not the store's only real I/O — `grid_dir()` is called from
+  `services/artwork.py` (six sites), `services/shortcut_removal.py` and `services/library/reporter.py`,
+  `set_steam_input_config()` from `services/settings.py`, `services/shortcut_removal.py` and
+  `services/library/reporter.py`, and `write_shortcut_icon()` from `services/steamgrid.py` — those are unlisted, and
   their being unlisted is a gap, not a judgement), `FirmwarePlatformResolver` (reads what one system's emulators want
   WITH content verification: it opens each candidate in a declared folder and reads it the way the emulator does —
   59-173 ms per system on the reference machine at emu-atlas 0.22) and its whole-machine sibling `FirmwareResolver`, the
@@ -835,6 +836,18 @@ Format: **invariant** — tier — enforced by.
   file stays the list of what the bundles carry. **The panel's own code is not budgeted**, and only
   `frontend/.size-limit.json`'s total watches it. How the record is made, what counts as own code and how a package is
   given a budget: [frontend-bundles.md](frontend-bundles.md#third-party-package-budgets)
+- **Every package `frontend/package-budgets.json` lists, in any bundle, has a `## <package>` section of its own in
+  `THIRD-PARTY-NOTICES.md`** — check — `scripts/check_third_party_notices.py`. A package a bundle carries is distributed
+  with Tender, and its licence asks for a notice that travels with it; a bundle carries a package's code but not its
+  LICENSE file, so the notice lives in that file, and nothing about adding a package to a bundle touches it. The budgets
+  file is the list that does move with a bundle — the package check above fails until a carried package has a budget —
+  so holding the notices against it means a package cannot join a bundle unnamed. A package named only in running text
+  or under a heading of another level counts as missing. **What it cannot see is whether a section is true**: the
+  licence, the source and the bundles it names are read only in review. A section for a package no bundle carries any
+  more passes, because a stale notice claims too much rather than too little. A `## <package>` line inside a code fence
+  counts as a section, since the check reads lines and not Markdown. And content under another licence inside a package
+  — the Font Awesome icons inside react-icons, CC BY 4.0 inside an MIT package — is seen by no check at all; its
+  subsection is held only in review
 - **Tender's three React globals are spelled exactly the way Decky Loader spells them** — test —
   `frontend/src/boot/steamGlobals.test.ts`, which reads `steamGlobals.ts` and the pinned `decky-globals-block.txt` as
   TEXT and compares the four search predicates, which global each answer is assigned to, and the JSX stand-in's keys and

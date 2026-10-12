@@ -554,6 +554,16 @@ class TestAdopt:
         assert install.rom_dir is None
         assert install.system == "snes"
 
+    async def test_the_rom_is_read_from_rom_m_s_detail_answer(self, h):
+        h.seed_rom()
+        h.stage_detail(_single_file_detail())
+        h.store.files["/roms/snes/Game.sfc"] = b"x"
+
+        await h.service.adopt_existing_rom(_ROM_ID)
+
+        rom_reads = [(name, args) for name, args, _kwargs in h.romm_api.call_log if name.startswith("get_rom")]
+        assert rom_reads == [("get_rom", (_ROM_ID,))]
+
     async def test_multi_file_records_the_directory_and_detects_the_launch_file(self, h):
         h.seed_rom()
         h.stage_detail(_multi_file_detail())

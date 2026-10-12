@@ -33,6 +33,7 @@ class SteamConfigStore(Protocol):
     def grid_dir(self) -> str | None: ...
     def read_shortcuts(self) -> dict[str, Any]: ...
     def read_shortcut_exes(self) -> dict[int, str] | None: ...
+    def read_shortcut_launch_options(self) -> dict[int, str] | None: ...
     def write_shortcuts(self, data: dict[str, Any]) -> None: ...
     def set_steam_input_config(self, app_ids: list[int], mode: str = "default") -> SteamInputApply: ...
     def write_shortcut_icon(self, app_id: int, icon_bytes: bytes) -> str: ...
@@ -144,12 +145,29 @@ class RommRomReader(Protocol):
     def get_rom(self, rom_id: int) -> dict[str, Any]:
         """Fetch a single ROM by ID.
 
-        Returns the ROM dict from /api/roms/{rom_id}.
+        Returns RomM's detail answer from /api/roms/{rom_id}, which adds the
+        user's saves, states, screenshots, notes and collections to what
+        :meth:`get_rom_simple` answers.
+        """
+        ...
+
+    def get_rom_simple(self, rom_id: int) -> dict[str, Any]:
+        """Fetch a single ROM by ID over the simple schema, with retries.
+
+        Returns the ROM dict from /api/roms/{rom_id}/simple: the file list and
+        the siblings with their ``is_main_sibling``, without the user's saves,
+        states, screenshots, notes and collections. For a reader that needs
+        the ROM's own fields, files and siblings and none of the user's arrays.
+        Its 404 is the same entity answer as :meth:`get_rom`'s.
         """
         ...
 
     def get_rom_once(self, rom_id: int) -> dict[str, Any]:
-        """Fetch a single ROM by ID once with the short probe timeout."""
+        """Fetch a single ROM by ID from /api/roms/{rom_id}/simple once, with the short probe timeout.
+
+        For liveness probes: one attempt, so a verdict comes back fast, and a
+        404 that is RomM's entity answer raises ``RommNotFoundError``.
+        """
         ...
 
     def list_roms(self, platform_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0) -> dict[str, Any]:
