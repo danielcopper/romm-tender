@@ -1043,12 +1043,21 @@ On a successful resolution the modal closes and surfaces a branch-specific confi
 the local save was uploaded to the server, **Use Server** confirms the server save is now in use and the prior local
 save was backed up to `.romm-backup`. Failure and stale branches stay inline in the modal instead (no toast).
 
-`showSyncConflictModal(conflict)` shows it for one conflict and returns a Promise resolving to
-`"keep_local" | "use_server" | "cancel"`; `handleConflicts(conflicts)` shows it for each conflict in turn and stops at
-the first cancel. Four callers reach it:
+The dialog draws and asks; what it says and what a resolution does live in `frontend/src/utils/saveConflictFlow.ts`, for
+any surface that shows a conflict:
 
-- `CustomPlayButton`, through `handleConflicts` — on the launch gate's `conflict` verdict, and when the user resolves
-  the conflict the button is already showing.
+- the dialog's wording — its title, explanation, the two saves' lines and the stale-conflict sentence;
+- `resolveOneConflict`, one resolution: it sends the chosen side through `resolve_sync_conflict` and answers either the
+  toast to show once the dialog closes or the message to keep in it;
+- `resolveConflictsSequentially`, the walk: one conflict at a time, stopping at the first cancel;
+- `resolveKnownConflicts`, the conflict a surface is already showing: it reads it through `get_save_status`, never a
+  re-sync, hands it to the surface's own walk and tells the other surfaces once it is resolved.
+
+`showSyncConflictModal(conflict)` shows the dialog for one conflict and returns a Promise resolving to
+`"keep_local" | "use_server" | "cancel"`; `handleConflicts(conflicts)` runs the walk with it. Four callers reach it:
+
+- `CustomPlayButton`, through `handleConflicts` — on the launch gate's `conflict` verdict, and through
+  `resolveKnownConflicts` when the user resolves the conflict the button is already showing.
 - The launch watcher (`frontend/src/utils/launchInterceptor.ts`), through `handleConflicts` — on a `conflict` verdict
   for a start it caught. It does not import the modal: `index.tsx` hands it `handleConflicts` as
   `LaunchPrompts.resolveConflicts`.
@@ -1397,9 +1406,9 @@ user action, so when it moves nothing and hits no conflicts it acknowledges with
 rather than staying silent; the automatic surfaces (pre-launch, post-exit) keep the silent zero-case. The wording lives
 in exactly one place: the frontend helper `saveSyncToastBody` (`frontend/src/utils/saveSyncToast.ts`), which every
 surface renders through — pre-launch (`CustomPlayButton`), post-exit (`sessionManager`, from the counts on the
-`finalize_game_session` payload), and the manual per-game sync (`RomMPlaySection`). The backend delivers the counts as
-data, never the directional copy (#1481); the offline/failure body it still owns rides a separate `failure_toast` field
-on `SessionFinalizeSyncResult`.
+`finalize_game_session` payload), and the manual per-game sync (`RomMPlaySection`, through
+`frontend/src/utils/manualSaveSync.ts`). The backend delivers the counts as data, never the directional copy (#1481);
+the offline/failure body it still owns rides a separate `failure_toast` field on `SessionFinalizeSyncResult`.
 
 ### Pre-launch sync
 
