@@ -7,27 +7,18 @@
  *  narrows this with `Exclude<Page, "...">` rather than restating the union. */
 export type Page = "main" | "sync" | "settings" | "library" | "data" | "downloads";
 
-/**
- * The Settings page's sections, in the order its list shows them — the first is
- * the one a navigation that names none opens on.
- *
- * The order and the union are one declaration so they cannot drift: a section
- * added here is a section the page's list has to label, and the type stops a
- * navigation naming one that does not exist.
- */
-export const SETTINGS_SECTIONS = [
-  "connections",
-  "save-sync",
-  "controller",
-  "steam-library",
-  "emulator-sources",
-  "updates",
-  "interface",
-  "advanced",
-] as const;
-
-/** One section of the Settings page, as a navigation may name it. */
-export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
+/** One section of the Settings page, as a navigation may name it. The order the
+ *  page lists them in is `SETTINGS_SECTIONS` (`utils/settingsSections.ts`),
+ *  which is checked against this union there. */
+export type SettingsSection =
+  | "connections"
+  | "save-sync"
+  | "controller"
+  | "steam-library"
+  | "emulator-sources"
+  | "updates"
+  | "interface"
+  | "advanced";
 
 /**
  * Where a navigation lands: a page, or the Settings page opened on one of its

@@ -53,7 +53,7 @@ import type {
   EmulatorSourceDirection,
   EmulatorSourcesListing,
 } from "../types";
-import { SETTINGS_SECTIONS } from "../types";
+import { SETTINGS_SECTIONS } from "../utils/settingsSections";
 import { detach } from "../utils/detach";
 import { setQamEntryPositionState } from "../utils/qamEntryPositionStore";
 import {
