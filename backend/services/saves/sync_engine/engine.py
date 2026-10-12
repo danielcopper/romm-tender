@@ -769,10 +769,11 @@ class SyncEngine:
 
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
                 await self.follow_save_directory(rom_id, save_answer)
-                refuse_unsyncable(save_answer)
-
+                # Before the refusal: a launch is never asked about a sync the
+                # user switched off, as the post-exit sync is never toasted for one.
                 if not sync_before_launch(self._settings):
                     return {"success": True, "message": "Pre-launch sync disabled", "synced": 0}
+                refuse_unsyncable(save_answer)
 
                 # Pre-probe reachability before any sync work — mirror post_exit_sync.
                 try:

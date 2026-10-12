@@ -217,11 +217,8 @@ export interface SyncStats {
    * not skip authority. That is what makes this fall to zero after a
    * remove-all, where the rows (and their recorded commands) deliberately
    * survive.
-   *
-   * Absent from an older backend, which reads as no recorded games — the safe
-   * direction, since the offer then understates rather than promises.
    */
-  resumable_games?: number;
+  resumable_games: number;
   /**
    * Whether ANY platform or collection still carries a completion stamp — the
    * other kind of durable progress, which makes the next run pass over a whole
@@ -233,7 +230,7 @@ export interface SyncStats {
    * NULL recorded value while its platform's stamp survives, so an upgraded
    * install can hold stamps and no recorded games. Both are genuine resumes.
    */
-  has_completion_stamp?: boolean;
+  has_completion_stamp: boolean;
 }
 
 /**

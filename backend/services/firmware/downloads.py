@@ -21,7 +21,7 @@ from domain.emulator_commands import resolve_platform_option
 from domain.firmware_groups import fetched_as_required
 from domain.retrodeck_folders import BIOS_DOWNLOAD
 from domain.rom_files import TMP_EXT
-from lib.errors import Refused, RommApiError
+from lib.errors import Refused, RommApiError, romm_error_log_level
 from lib.path_safety import PathTraversalError
 
 if TYPE_CHECKING:
@@ -158,8 +158,9 @@ class FirmwareDownloader:
         The index is a parameter rather than a per-call read so a batch pays for
         the machine-wide question once instead of once per file.
 
-        A RomM error propagates. Where this device cannot create the folder, the
-        ``.tmp`` is removed and the download refuses with
+        A RomM error propagates unlogged: whoever answers it logs it. Every
+        refusal raised here is logged here. Where this device cannot create the
+        folder, the ``.tmp`` is removed and the download refuses with
         ``bios_download_failed``. The adapter answers everything in the transfer
         as a RomM error, including a ``.tmp`` it could not open or write, so an
         ``OSError`` here is this device's.
@@ -180,7 +181,8 @@ class FirmwareDownloader:
             await self._loop.run_in_executor(None, self._romm_api.download_firmware, firmware_id, file_name, tmp_path)
         except Exception as e:
             await self._loop.run_in_executor(None, self._firmware_file_store.remove_file, tmp_path)
-            self._logger.error(f"Failed to download firmware {file_name}: {e}")
+            if not isinstance(e, RommApiError):
+                self._logger.error(f"Failed to download firmware {file_name}: {e}")
             if isinstance(e, OSError):
                 raise Refused(
                     "bios_download_failed",
@@ -253,8 +255,9 @@ class FirmwareDownloader:
         A folder declaration is skipped whatever is at its destination: the
         emulator lists that name, so there is no file to fetch into it.
 
-        A file whose download this service refuses (``Refused``) or that meets a
-        RomM error is logged, named in the errors and passed over; anything else
+        A file whose download this service refuses (``Refused``, logged where it
+        is refused) or that meets a RomM error (logged here, at the RomM error's
+        level) is named in the errors and passed over; anything else
         ends the batch, RetroDECK's folder refusal included — no later file could
         land either.
         """
@@ -270,8 +273,13 @@ class FirmwareDownloader:
             name = fw.get("file_name", str(fw["id"]))
             try:
                 await self._download_one(fw["id"], placements)
-            except (Refused, RommApiError) as e:
-                self._logger.error(f"Failed to download firmware {name}: {e}")
+            except Refused:
+                errors.append(name)
+                continue
+            except RommApiError as e:
+                self._logger.log(
+                    romm_error_log_level(e), f"Failed to download firmware {name}: {type(e).__name__}: {e}"
+                )
                 errors.append(name)
                 continue
             downloaded += 1

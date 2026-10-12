@@ -49,7 +49,8 @@ import type { ReactNode } from "react";
 import type { PanelDefinition } from "../api/host";
 import type { QamEntryPosition } from "../types";
 import { quickAccessMenuClasses } from "../utils/deckyUiInternals";
-import { PanelErrorBoundary } from "./PanelErrorBoundary";
+import { PanelErrorBoundary } from "../shared/PanelErrorBoundary";
+import { panelFailureCard } from "./PanelFailureCard";
 
 /**
  * The key Steam files the entry's panel under, and the property that marks the
@@ -158,7 +159,7 @@ export function buildEntry(definition: PanelDefinition): QuickAccessTabEntry {
     // takes the menu down whatever we do. That is the whole of the reason, and
     // it is why the icon guards the answer it works out for its dot rather than
     // relying on a boundary.
-    panel: <PanelErrorBoundary>{definition.content}</PanelErrorBoundary>,
+    panel: <PanelErrorBoundary fallback={panelFailureCard}>{definition.content}</PanelErrorBoundary>,
     [TENDER_TAB_MARK]: true,
   };
 }

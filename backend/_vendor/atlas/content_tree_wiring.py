@@ -7,13 +7,15 @@ it cannot live on the texture or mods cards: a card states where the emulator
 reads, and the installer's link target is provably not always that path
 (Citra's card derives ``citra-emu/load/textures`` while the installer links
 ``saves/Citra/load/textures`` — issue #98's gap). The table here records the
-pairs one arrangement version promises, with citations into its shipped
-scripts, so :meth:`atlas.installations.RetroDeck.health` can state when a hub
-tree exists that no emulator-side link reaches — the upgraded-without-reset
-state, where content filed in the hub never reaches an emulator.
+pairs each arrangement version it was read at promises, with citations into
+that version's shipped scripts, so :meth:`atlas.installations.RetroDeck.health`
+can state when a hub tree exists that no emulator-side link reaches — the
+upgraded-without-reset state, where content filed in the hub never reaches an
+emulator.
 
-The knowledge is version-pinned and the check fails closed: a machine whose
-marker names any other version is measured against nothing, because the
+The knowledge is version-pinned — one row set per version it was read at,
+each citing that version's scripts — and the check fails closed: a machine
+whose marker names any other version is measured against nothing, because the
 promise of that version was never read.
 """
 
@@ -25,7 +27,7 @@ from typing import Any
 
 from ._data import packaged_text
 
-WIRING_SCHEMA = 1
+WIRING_SCHEMA = 2
 
 # The two content-tree families retrodeck.json declares hub roots for. A row
 # outside them would name a hub the health check never resolves.
@@ -90,8 +92,7 @@ def _row(entry: Any, where: str) -> WiringRow:
     )
 
 
-def _arrangement(kind: str, entry: Any) -> ArrangementWiring:
-    where = f"content-tree wiring {kind!r}"
+def _row_set(where: str, entry: Any) -> ArrangementWiring:
     if not isinstance(entry, dict) or set(entry) != {"version", "rows"}:
         raise ValueError(f"{where}: expected exactly 'version' and 'rows', got {entry!r}")
     rows_raw = entry["rows"]
@@ -104,8 +105,24 @@ def _arrangement(kind: str, entry: Any) -> ArrangementWiring:
     return ArrangementWiring(version=_expect_str(entry["version"], f"{where}: version"), rows=rows)
 
 
-def load_content_tree_wiring(text: str | None = None) -> dict[str, ArrangementWiring]:
-    """Load the packaged wiring table (or *text* when supplied, for tests)."""
+def _arrangement(kind: str, entry: Any) -> dict[str, ArrangementWiring]:
+    where = f"content-tree wiring {kind!r}"
+    if not isinstance(entry, list) or not entry:
+        raise ValueError(f"{where}: expected a non-empty list of row sets, got {entry!r}")
+    versions: dict[str, ArrangementWiring] = {}
+    for i, raw in enumerate(entry):
+        wiring = _row_set(f"{where}[{i}]", raw)
+        if wiring.version in versions:
+            raise ValueError(f"{where}: version {wiring.version!r} has two row sets")
+        versions[wiring.version] = wiring
+    return versions
+
+
+def load_content_tree_wiring(text: str | None = None) -> dict[str, dict[str, ArrangementWiring]]:
+    """Load the packaged wiring table (or *text* when supplied, for tests).
+
+    Arrangement kind → version read at → that version's wiring.
+    """
     if text is None:
         text = packaged_text("content_tree_wiring.json")
     raw = json.loads(text)
@@ -121,12 +138,16 @@ def load_content_tree_wiring(text: str | None = None) -> dict[str, ArrangementWi
     return {kind: _arrangement(kind, entry) for kind, entry in arrangements.items()}
 
 
-_PACKAGED: dict[str, ArrangementWiring] | None = None
+_PACKAGED: dict[str, dict[str, ArrangementWiring]] | None = None
 
 
-def lookup_content_tree_wiring(kind: str) -> ArrangementWiring | None:
-    """The packaged wiring for one arrangement kind, or ``None`` — no fuzzy matching."""
+def lookup_content_tree_wiring(kind: str, version: str) -> ArrangementWiring | None:
+    """The packaged wiring one arrangement kind promised at *version*, or ``None``.
+
+    Exact on both: a version the table was never read at has no wiring, however
+    close it is to one that was.
+    """
     global _PACKAGED
     if _PACKAGED is None:
         _PACKAGED = load_content_tree_wiring()
-    return _PACKAGED.get(kind)
+    return _PACKAGED.get(kind, {}).get(version)

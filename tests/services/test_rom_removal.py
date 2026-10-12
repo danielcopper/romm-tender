@@ -30,7 +30,7 @@ from domain.rom import Rom
 from domain.rom_install import RomInstall
 from lib.errors import NotInstalled, Refused
 from models.prune import InstalledContentRemoval
-from services.rom_removal import RomRemovalService, RomRemovalServiceConfig, UninstallIncomplete
+from services.rom_removal import FilePresent, RomRemovalService, RomRemovalServiceConfig, UninstallIncomplete
 
 # Synthetic roms-base path used by the fake fs throughout this module.
 _ROMS_BASE = "/retrodeck/roms"
@@ -1780,6 +1780,17 @@ class TestForgetDownload:
         assert uow.rom_installs.get(42) is not None
         assert rom_path in rom_files.files
         assert prune_conflicts.conflicting_operations == 0
+
+    async def test_the_refusal_is_the_named_file_present(self, service, uow, rom_files):
+        # The panel branches on file_present, so it is raised through its own class.
+        rom_path = _seed_installed_file(uow, rom_files, 42)
+
+        forget = service.forget_download(42)
+        with pytest.raises(FilePresent) as refused:
+            await forget
+
+        assert FilePresent.reason == "file_present"
+        assert refused.value.details == {"path": rom_path}
 
     async def test_a_folder_that_is_there_refuses_it(self, service, uow, rom_files):
         rom_dir = f"{_ROMS_BASE}/psx/FF7"

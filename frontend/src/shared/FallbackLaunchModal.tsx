@@ -13,9 +13,7 @@ import { ConfirmModal, showModal } from "@decky/ui";
  * `ConfirmModal` routes through `onCancel`).
  */
 export function showFallbackLaunchModal(message?: string): Promise<boolean> {
-  const description = message?.trim()
-    ? `${message} — launch with local saves?`
-    : "Couldn't sync saves with RomM server. Launch with local saves?";
+  const description = describe(message?.trim());
   return new Promise<boolean>((resolve) => {
     showModal(
       <ConfirmModal
@@ -28,4 +26,10 @@ export function showFallbackLaunchModal(message?: string): Promise<boolean> {
       />,
     );
   });
+}
+
+function describe(message: string | undefined): string {
+  if (!message) return "Couldn't sync saves with RomM server. Launch with local saves?";
+  if (/[.!?]$/.test(message)) return `${message} Launch with local saves?`;
+  return `${message} — launch with local saves?`;
 }

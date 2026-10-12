@@ -90,7 +90,7 @@ def no_rom_folder(system: str) -> FolderRefused:
 
 
 def rom_root_missing(path: str) -> FolderRefused:
-    """The refusal of a download whose ROM folder lies below *path*, which does not exist and no finding names."""
+    """The refusal of a download whose ROM folder lies below *path*, which does not exist."""
     return FolderRefused(
         ROM_ROOT_MISSING,
         f"RetroDECK's ROM folder {path} does not exist. If it is on an SD card or another drive, insert it.",

@@ -21,7 +21,8 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { buildEntry, syncEntry, TENDER_TAB_KEY, type QuickAccessTabEntry } from "./quickAccessEntry";
-import { PanelErrorBoundary } from "./PanelErrorBoundary";
+import { PanelErrorBoundary } from "../shared/PanelErrorBoundary";
+import { panelFailureCard } from "./PanelFailureCard";
 import type { PanelDefinition } from "../api/host";
 
 // The class map is a webpack probe, so the suite-wide `@decky/ui` stub answers
@@ -252,5 +253,11 @@ describe("buildEntry", () => {
 
     expect((entry.panel as { type: unknown }).type).toBe(PanelErrorBoundary);
     expect(entry.tab).toBe("the-glyph");
+  });
+
+  it("hands the boundary the Quick Access card, with Reload, as what it draws on a throw", () => {
+    const entry = buildEntry(definition());
+
+    expect((entry.panel as { props: { fallback: unknown } }).props.fallback).toBe(panelFailureCard);
   });
 });

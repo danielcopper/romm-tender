@@ -27,6 +27,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from domain.emulator_sources import RETRODECK
+from domain.refusal import DomainRefused
 from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused, folder_of
 from domain.rom_adoption import (
     DigestRequest,
@@ -52,7 +53,7 @@ from domain.rom_files import (
     resolve_local_file_name,
     synthetic_rom_name,
 )
-from lib.errors import Refused, RommApiError, classify_error
+from lib.errors import Refused, RommApiError, classify_error, romm_error_log_level
 from lib.path_safety import PathTraversalError, coerce_safe_component, is_inside_folder, safe_join
 from services.rom_adoption._target import Target as _Target
 from services.rom_adoption.renamer import AdoptionIncomplete, AdoptionRenamer, AdoptionRenamerConfig
@@ -408,13 +409,14 @@ class RomAdoptionService:
         would mean a failed carry leaves the saves orphaned under a name whose ROM
         is already gone — the exact outcome the rename exists to prevent.
 
-        A removal that fails **after** the carry is the one abort that is not
-        clean: the file the user keeps can no longer find its saves, which now sit
-        under the canonical name. It answers :class:`AdoptionIncomplete` naming
-        them, and whatever an Overwrite set aside in ``.romm-backup`` to make room
-        for them, rather than moving them back — a retry of the same download
-        finds the saves already in place and re-plans to nothing, where an undo
-        would have to be undone again. A carry that moved nothing set nothing
+        A removal that fails or is refused **after** the carry — RetroDECK's
+        folder refusal included, asked again for the removal — is the one abort
+        that is not clean: the file the user keeps can no longer find its saves,
+        which now sit under the canonical name. It answers
+        :class:`AdoptionIncomplete` naming them, and whatever an Overwrite set
+        aside in ``.romm-backup`` to make room for them, rather than moving them
+        back — a retry of the same download finds the saves already in place
+        and re-plans to nothing, where an undo would have to be undone again. A carry that moved nothing set nothing
         aside either: an Overwrite clears a name only for a file that then lands
         on it, or the carry stops first.
 
@@ -440,7 +442,7 @@ class RomAdoptionService:
             return stopped
         try:
             self._remove_under_roms(source_path, target.system, is_dir=existing["kind"] == DIR)
-        except Refused as refused:
+        except (Refused, DomainRefused) as refused:
             if not carried:
                 raise
             renamed = [os.path.basename(pair.target) for pair in carried]
@@ -684,16 +686,19 @@ class RomAdoptionService:
         user's request — the dialog opens on cheap evidence and never waits for
         this.
 
-        A RomM error fetching the ROM answers ``error``, worded as the
-        entrypoint words that error; any other exception propagates.
+        A RomM error fetching the ROM answers ``error`` with the reason and
+        message the entrypoint would answer it with, and is logged at the level
+        the entrypoint logs it at; any other exception propagates.
         """
         rom_id = int(rom_id)
         try:
             rom_detail, target = await self._loop.run_in_executor(None, self._detail_and_target_io, rom_id)
         except RommApiError as e:
-            self._logger.error(f"Failed to fetch ROM {rom_id} for verification: {e}")
-            _reason, message = classify_error(e)
-            return {"status": "error", "message": message, "differences": []}
+            self._logger.log(
+                romm_error_log_level(e), f"Failed to fetch ROM {rom_id} for verification: {type(e).__name__}: {e}"
+            )
+            reason, message = classify_error(e)
+            return {"status": "error", "reason": reason, "message": message, "differences": []}
         if isinstance(target, FolderRefused):
             return {
                 "status": "error",

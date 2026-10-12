@@ -40,10 +40,12 @@ Three required fields:
   (auth/not-found/unsupported/unknown plus the frontend-routed
   ``version_error`` / ``stale_conflict``) covers the categories a consumer
   branches on, and ``stale_preview`` refuses a preview that can no longer be
-  acted on. For bespoke static guards
-  (``sync_disabled``, ``not_installed``, ``active_slot``,
-  ``config_error``, ``blocked_by_migration``, …) a plain string literal is
-  fine — the ``ErrorCode | str`` union allows it.
+  acted on. A bespoke guard's reason is spelled where it is raised: as the
+  ``reason`` of a named refusal class where a caller catches it or the panel
+  branches on it (``config_error`` through ``lib.errors.NotConfigured``,
+  ``not_installed`` through ``lib.errors.NotInstalled``), otherwise as the
+  first argument of ``lib.errors.Refused`` (``sync_disabled``,
+  ``blocked_by_migration``, …) — the ``ErrorCode | str`` union allows both.
 * ``message: str`` — human-readable detail for logs and UI. Carries the
   exception text on transport-layer failures. Two transport failures may
   share one ``reason`` slug but carry distinct messages (e.g. a 403
@@ -59,9 +61,12 @@ that rule; what it reads, and the two results that compute a failing
 ``success`` outside ``main.py``, are
 ``docs/architecture/backend-architecture.md``, §4.
 
-Optional payload-shape extras (``slot``, ``saves``, ``active_slot``, …) may
-appear alongside on a per-endpoint basis when the frontend needs to render
-fallback UI on failure.
+The ``**extras`` beside a refusal are its details — the keyword arguments it
+was raised with, such as the ``path`` of ``file_present``. A payload's empty
+defaults are not sent beside a failure, because the panel reads a payload only
+on success — with one exception: every save-sync refusal carries
+``synced=0``, and the sweep's also ``conflicts=0`` (#2205 D2). A partial
+failure's extras are what was done.
 
 Two carve-outs, which carry no ``success`` key, so the gate passes them:
 
@@ -91,9 +96,9 @@ class ErrorCode(StrEnum):
     vs. surface auth prompt vs. show "unknown error"), so each addition is a
     new branch downstream. Free-form detail goes in the failure dict's
     ``message`` (or :attr:`FailedListResult.error_message`), not here.
-    Bespoke non-server-reachability failures stay plain-string ``reason``
-    values (``config_error``, ``sync_disabled``, ``not_installed``,
-    ``active_slot``, …) — the ``reason: ErrorCode | str`` union allows it.
+    Bespoke non-server-reachability failures stay string ``reason`` values
+    outside this enum, which the ``reason: ErrorCode | str`` union allows; how
+    one is raised is the module docstring's.
 
     The transport categories collapse several exception types onto one slug:
     ``SERVER_UNREACHABLE`` folds connection/timeout/SSL/5xx/generic-API

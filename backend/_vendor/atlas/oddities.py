@@ -40,6 +40,7 @@ from .placement import (
     ROOT_CONTENT_DIRECTORY,
     ROOT_KINDS,
     ROOT_SAVEFILE_DIRECTORY,
+    SAVE_ID_SPELLINGS,
     SUBDIR_TEMPLATE_HOLES,
     TEMPLATE_ROM_STEM,
     TEMPLATE_SAVE_ID,
@@ -183,6 +184,22 @@ def _expect_file_names(value: object, where: str) -> tuple[str, ...]:
 
 
 @dataclass(frozen=True, slots=True)
+class SaveIdFill:
+    """What fills a group's ``<save_id>``, and how that value is spelled.
+
+    ``fill`` is the sentence a person reads — the disc's product number, its
+    serial — and ``spelling`` the word from
+    :data:`~atlas.placement.SAVE_ID_SPELLINGS` a caller checks a value
+    against before filling the hole. Both reach the answer as the
+    ``filenames-content-conditional`` caveat's ``save_id`` and
+    ``save_id_spelling``.
+    """
+
+    fill: str
+    spelling: str
+
+
+@dataclass(frozen=True, slots=True)
 class SaveGroup:
     """One directory's worth of a mode's save, with what it is and whom it belongs to.
 
@@ -234,6 +251,10 @@ class SaveGroup:
     ``file-set-spans-roots`` caveat, whose data names the resolved directory
     and the files — the caveat is what survives an observed answer, exactly
     the way ``file-names-unestablished`` carries MAME's unnamed tree.
+
+    ``save_id`` is what fills the ``<save_id>`` hole in ``files``, stated
+    wherever a name carries it and nowhere else (:class:`SaveIdFill`), so the
+    hole never reaches a caller without its fill and spelling beside it.
     """
 
     subdir: str | None
@@ -248,6 +269,7 @@ class SaveGroup:
     files_citation: str | None = None
     unnamed: str | None = None
     root: str | None = None
+    save_id: SaveIdFill | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -340,6 +362,11 @@ class SaveMode:
             raise ValueError(
                 "SaveMode: two groups in one directory both scope their file list — the mode "
                 "cannot say which scope its answer carries"
+            )
+        if sum(1 for group in here if group.save_id is not None) > 1:
+            raise ValueError(
+                "SaveMode: two groups in one directory both state a save_id fill — the answer "
+                "states one, and the other would be dropped from it"
             )
 
     def _check_stated_form(self) -> None:
@@ -489,6 +516,10 @@ class SaveMode:
     def files_citation(self) -> str | None:
         return next((g.files_citation for g in self.here if g.files_citation), None)
 
+    @property
+    def save_id(self) -> SaveIdFill | None:
+        return next((g.save_id for g in self.here if g.save_id is not None), None)
+
 
 @dataclass(frozen=True, slots=True)
 class RetiredOption:
@@ -610,6 +641,7 @@ def _save_mode(mode: Any, where: str) -> SaveMode:
     )
     for index, group in enumerate(groups):
         _check_group_root(group, index=index, mode_root=root, where=where)
+        _check_save_id_filled(group, at=f"{where}: groups[{index}]")
     if any(
         (group.root or root) != ROOT_SAVEFILE_DIRECTORY and segment in _KNOWN_SUBDIR_TEMPLATES
         for group in groups
@@ -677,10 +709,11 @@ def _check_group_root(group: SaveGroup, *, index: int, mode_root: str, where: st
         group.files_without_save_id is not None
         or group.files_established_for is not None
         or group.files_established_note is not None
+        or group.save_id is not None
     ):
         raise ValueError(
-            f"{at}: the file-list scopes answer for the mode's own directory — none is "
-            "established on a cross-root group"
+            f"{at}: the file-list scopes and the save_id fill answer for the mode's own "
+            "directory — none is established on a cross-root group"
         )
 
 
@@ -700,6 +733,50 @@ def _id_less_alternative(alternative: Any, files: Any, where: str) -> tuple[str,
             f"name one with {TEMPLATE_SAVE_ID}"
         )
     return names
+
+
+def _carries_save_id(files: tuple[str, ...] | None) -> bool:
+    return files is not None and any(TEMPLATE_SAVE_ID in name for name in files)
+
+
+def _check_save_id_filled(group: SaveGroup, *, at: str) -> None:
+    """A group whose names carry ``<save_id>`` states what fills it.
+
+    Checked after the cross-root refusal, so a cross-root group carrying the
+    hole is refused as one, the way its other file-list scopes are.
+    """
+    if group.save_id is None and _carries_save_id(group.files):
+        raise ValueError(
+            f"{at}: 'files' names a {TEMPLATE_SAVE_ID} and the group states no 'save_id' — the "
+            "hole would reach the caller with nothing saying what fills it"
+        )
+
+
+def _save_id_fill(raw: Any, files: tuple[str, ...] | None, where: str) -> SaveIdFill | None:
+    """What fills the group's ``<save_id>``, stated only where a name carries one.
+
+    That every such group states it is the mode's check, made once the
+    cross-root groups have been refused their own way
+    (:func:`_check_save_id_filled`).
+    """
+    if raw is None:
+        return None
+    if not _carries_save_id(files):
+        raise ValueError(
+            f"{where}: 'save_id' states the fill of a {TEMPLATE_SAVE_ID} that no name in "
+            "'files' carries"
+        )
+    if not isinstance(raw, dict) or set(raw) != {"fill", "spelling"}:
+        raise ValueError(f"{where}: save_id is an object of exactly 'fill' and 'spelling', got {raw!r}")
+    fill = _expect_str(raw["fill"], f"{where}: save_id.fill")
+    if not fill.strip():
+        raise ValueError(f"{where}: save_id.fill says what fills the hole, not an empty string")
+    spelling = _expect_str(raw["spelling"], f"{where}: save_id.spelling")
+    if spelling not in SAVE_ID_SPELLINGS:
+        raise ValueError(
+            f"{where}: save_id.spelling must be one of {list(SAVE_ID_SPELLINGS)}, got {spelling!r}"
+        )
+    return SaveIdFill(fill=fill, spelling=spelling)
 
 
 @dataclass(frozen=True, slots=True)
@@ -790,19 +867,22 @@ def _save_group(mode: Any, where: str) -> SaveGroup:
         raise ValueError(
             f"{where}: root must be one of {sorted(_KNOWN_MODE_ROOTS)}, got {group_root!r}"
         )
+    names = _expect_file_names(files, f"{where}: files") if files is not None else None
+    observed = _expect_file_names(observe, f"{where}: observe") if observe is not None else None
     return SaveGroup(
         root=group_root,
         subdir=_expect_subdir(mode.get("subdir"), f"{where}: subdir"),
-        files=_expect_file_names(files, f"{where}: files") if files is not None else None,
+        files=names,
         granularity=granularity,
         role=role,
-        observe=_expect_file_names(observe, f"{where}: observe") if observe is not None else None,
+        observe=observed,
         complete=complete,
         files_without_save_id=alternative_names,
         files_established_for=scope.token,
         files_established_note=scope.note,
         files_citation=scope.citation,
         unnamed=unnamed,
+        save_id=_save_id_fill(mode.get("save_id"), names, where),
     )
 
 

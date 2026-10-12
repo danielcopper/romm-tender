@@ -1507,7 +1507,7 @@ export interface SessionFinalizeResult {
   migration: SessionFinalizeMigration | null;
 }
 
-export const finalizeGameSession = endpoint<[number], SessionFinalizeResult>("finalize_game_session");
+export const finalizeGameSession = endpoint<[number], SessionFinalizeResult | EndpointFailure>("finalize_game_session");
 
 // Delete operations
 export const deleteLocalSaves = endpoint<[number], { success: boolean; deleted_count: number; message: string }>(

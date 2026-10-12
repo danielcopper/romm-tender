@@ -39,7 +39,7 @@ from fakes.system_time import FakeClock
 
 from domain.adoption_rename import RenameCollisions
 from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
-from domain.retrodeck_folders import FolderRefused
+from domain.retrodeck_folders import FolderRefused, no_rom_root
 from domain.rom import Rom
 from domain.rom_adoption import TargetOccupied
 from domain.rom_candidates import CANDIDATE_LIMIT, AdoptionCandidates, CandidateVanished, UnusableNamesake
@@ -926,7 +926,25 @@ class TestVerify:
 
         result = await h.service.verify_existing_content(_ROM_ID)
 
-        assert result == {"status": "error", "message": classify_error(error)[1], "differences": []}
+        assert result == {
+            "status": "error",
+            "reason": classify_error(error)[0],
+            "message": classify_error(error)[1],
+            "differences": [],
+        }
+
+    @pytest.mark.parametrize(
+        ("error", "level"),
+        [(RommConnectionError("no route to host"), logging.INFO), (RommAuthError("401"), logging.WARNING)],
+    )
+    async def test_a_romm_error_is_logged_once_at_the_classifier_s_level(self, h, caplog, error, level):
+        h.romm_api.fail_on_next(error)
+        caplog.set_level(logging.DEBUG)
+
+        await h.service.verify_existing_content(_ROM_ID)
+
+        lines = [(r.levelno, r.getMessage()) for r in caplog.records if "for verification" in r.getMessage()]
+        assert lines == [(level, f"Failed to fetch ROM {_ROM_ID} for verification: {type(error).__name__}: {error}")]
 
     async def test_any_other_failure_fetching_the_rom_is_not_answered(self, h):
         bug = KeyError("platform_slug")
@@ -2618,6 +2636,31 @@ class TestDiscardCandidate:
         )
         assert h.store.files["/saves/snes/.romm-backup/Game.srm"] == b"the other version's"
         assert h.store.files[_OLD] == b"user's own dump"
+
+    async def test_a_folder_refusal_after_the_carry_says_the_saves_have_already_moved(self, h):
+        # RetroDECK's folder is asked again for the removal, after the carry: an
+        # SD card taken out in between refuses it there, over saves that moved.
+        self._stage(h)
+        h.store.files["/saves/snes/Game (U).srm"] = b"battery"
+        answered = h.paths.rom_folders
+        asked: list[int] = []
+
+        def rom_folders(systems):
+            asked.append(1)
+            return answered(systems) if len(asked) == 1 else no_rom_root()
+
+        h.paths.rom_folders = rom_folders
+
+        result = await h.service.check_download_target(_single_file_detail(), _NEW, replace=True, candidate_path=_OLD)
+
+        assert isinstance(result, AdoptionIncomplete)
+        assert result.reason == no_rom_root().reason
+        assert result.renamed == ["Game.srm"]
+        assert result.message == (
+            f"{no_rom_root().message} This game's saves were already renamed and are now at: Game.srm."
+        )
+        assert h.store.files[_OLD] == b"user's own dump"
+        assert h.store.files["/saves/snes/Game.srm"] == b"battery"
 
     async def test_a_failed_removal_with_no_saves_says_nothing_about_them(self, h):
         self._stage(h)

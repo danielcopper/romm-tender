@@ -509,6 +509,18 @@ CAVEAT_FIRMWARE_PATH_INACCESSIBLE = "firmware-path-inaccessible"
 CAVEAT_FIRMWARE_SCAN_INCOMPLETE = "firmware-scan-incomplete"
 CAVEAT_CORE_ENUMERATION_INCOMPLETE = "core-enumeration-incomplete"
 CAVEAT_FIRMWARE_PATH_ESCAPES_ROOT = "firmware-path-escapes-root"
+# A file the core opens — at a declared place, or one its folder listing or
+# directory search keeps — lies inside the firmware root and is a link whose
+# chain ends outside it. Not a refusal: the core opens that place, the kernel
+# follows the link, and the bytes it reads are the target's — so its content
+# is judged there, and a file at a declared place is stated at the target,
+# while a file a listing or search found is stated under the entry it listed,
+# which is the ``link``. This names the ``link`` and its ``target``, the one
+# fact the rest of the answer cannot show. Stated by the libretro routes,
+# which have a firmware root to leave, once per route that read the link, and
+# by the unclaimed scan for a link in the root nothing claims; a directory on
+# the way out of the root is still refused under the code above.
+CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT = "firmware-file-linked-outside-root"
 CAVEAT_FIRMWARE_PATH_UNRESOLVABLE = "firmware-path-unresolvable"
 CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE = "firmware-path-names-no-file"
 # The configured value is relative and the emulator resolves it against the
@@ -524,7 +536,9 @@ CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE = "firmware-path-names-no-file"
 # Distinct from ``firmware-root-unusable`` (a relative *root* refusing every
 # declaration resolved against it) and from ``firmware-path-names-no-file``
 # (a value naming no file at all): this value names its file perfectly well —
-# where it lands is what only the launch decides.
+# where it lands is what only the launch decides. A question asked with
+# ``cwd=`` has that decision in hand, so the file is an ordinary requirement
+# there and this caveat is not stated.
 CAVEAT_FIRMWARE_PATH_LAUNCH_DEPENDENT = "firmware-path-launch-dependent"
 # Distinct from CAVEAT_FIRMWARE_ROOT_MISSING, which says the root is not there:
 # this one says the configured value cannot name a place at all, so no
@@ -2054,8 +2068,16 @@ class FirmwareRequirement:
     per-file system override is looked up under.
     """
     path: str
-    """The absolute, resolved destination — where the file lands once every symlink on
-    the way is followed, stated whether or not one is there.
+    """The absolute destination — where the file lands once every symlink on the way is
+    followed, stated whether or not one is there. Where the declared place is a link
+    leading out of the firmware root, this is the link's target and
+    ``firmware-file-linked-outside-root`` on the core names the link as its ``link``.
+
+    A file a directory search picked (SwanStation's, and DuckStation's on its card) is
+    the one exception, and a deliberate one: it is stated under the entry the search
+    listed — the name the emulator lists and opens through any link there — so where
+    that entry is a link leading out of the root, this is the statement's ``link``
+    rather than its ``target``.
     """
     declared: str
     """The string the core spelled for this file, which is the name it will open —
@@ -2919,7 +2941,7 @@ class CoreFirmware:
         The tri-state is the point, and it is the one number a client renders:
         ``None`` when the declaration could not be read, when a required file
         could not be judged — including one that was simply never verified — or
-        when a required declaration was refused for leaving the firmware root.
+        when a required declaration was refused.
         ``True`` is never reached with a required file whose bytes are known to
         be wrong. The system-level reading only ever narrows this: it can turn a
         ``True`` into ``False`` or ``None``, and it makes nothing true that was
@@ -3038,8 +3060,10 @@ class UnclaimedFile:
     """
 
     path: str
-    """The absolute path of the file in the firmware tree that no installed emulator asks
-    for or claims.
+    """The absolute, resolved path of a file found in the firmware tree that no installed
+    emulator asks for or claims — where its bytes are, which for an entry that is a link
+    leading out of the tree is the link's target outside it, stated beside it under
+    ``firmware-file-linked-outside-root``.
     """
     identity: FirmwareIdentity | None
     """What the packaged tables say these bytes are, matched by content and never by name
@@ -3253,6 +3277,12 @@ class FirmwareContext:
     # source paths it states are the distribution's own spellings.
     distribution: str | None = None
     distribution_sandbox: SandboxTranslation | None = None
+    # The working folder the launch will use, where the question was asked
+    # with one: not a read of the machine but the asker's own fact, riding
+    # here so it reaches a standalone emulator that opens a relative
+    # configured path from its own working directory (xemu). ``None`` leaves
+    # that path a launch-dependent statement.
+    cwd: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -3886,13 +3916,23 @@ def _stays_under(root: str, path: str) -> bool:
     purpose: RetroDECK links ``bios/pcsx2/bios`` back to the firmware root so
     LRPS2 finds its folder, and that declaration resolves to the root exactly.
 
-    Every read, hash and report atlas makes **inside the firmware root** is
-    bounded by this one predicate, so the bound cannot drift between the
-    declaration side and the scan side. The one read outside it is the
-    provenance check's, which opens the distribution's own shipped tree
-    (:func:`_shipped_file`); that side is bounded where its paths come from
-    instead — the copy list's loader refuses a source that is not a clean
-    relative path, so nothing a card states can climb out of the extras root.
+    Every place atlas *looks* in the firmware tree is bounded by this one
+    predicate, so the bound cannot drift between the declaration side and the
+    scan side: a libretro declaration's directory — the folder a core lists
+    among them — and every directory the unclaimed scan lists stay inside the
+    root or are not looked in, and the directory a core searches is the root
+    itself. It does not bound where a **file link** in such a place leads. The
+    kernel follows that link when the emulator opens the file, so a declared
+    file, a listed or searched candidate and a scanned entry are each read at
+    their target, inside the root or not, and a target outside it is stated
+    under :data:`CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT`
+    (:func:`_destination_of`, :func:`_directory_contents`,
+    :func:`_searched_directory`, :func:`_unclaimed_in`). The other read
+    outside it is the provenance check's, which opens the distribution's own
+    shipped tree (:func:`_shipped_file`); that side is bounded where its paths
+    come from instead — the copy list's loader refuses a source that is not a
+    clean relative path, so nothing a card states can climb out of the extras
+    root.
     """
     prefix = root if root.endswith("/") else f"{root}/"
     return path == root or path.startswith(prefix)
@@ -3910,16 +3950,29 @@ class Destination:
     last one is also of a different *scope*: the first three are about the
     declaration in hand, while an unusable root refuses every declaration of
     every core alike.
+
+    ``link`` is set beside ``path`` and nowhere else: where the declared place
+    lies inside the root and is a file link whose chain ends outside it, it is
+    that place — the one the core opens — while ``path`` is where the chain
+    lands (:func:`_destination_of`). A landing place inside the root has no
+    ``link``, however many links led to it, and a refusal never has one, so a
+    destination is still a landing place or a refusal and never both.
     """
 
     path: str | None = None
     refusal: str | None = None
+    link: str | None = None
 
     def __post_init__(self) -> None:
         if (self.path is None) == (self.refusal is None):
             raise ValueError(
                 "Destination: exactly one of path and refusal is set — a landing place without a refusal, "
                 f"or a refusal without one, got path={self.path!r} refusal={self.refusal!r}"
+            )
+        if self.link is not None and self.path is None:
+            raise ValueError(
+                "Destination: a link is stated only beside the landing place it leads to, "
+                f"got link={self.link!r} without a path"
             )
 
 
@@ -3939,16 +3992,25 @@ def _join_under(root: str, declared: str) -> str:
     return f"{root}{declared}" if root.endswith("/") else f"{root}/{declared}"
 
 
-def destination_under(machine: Machine, root: str, declared: str) -> Destination:
+def destination_under(
+    machine: Machine, root: str, declared: str, *, declared_kind: DeclaredKind = DECLARED_FILE
+) -> Destination:
     """Where a declared path lands under *root* — resolved, in the kernel's order.
 
     ``firmwareN_path`` is a relative path by contract, and it is read from a
-    config file a user (or anything writing that file) can edit, so every read
-    atlas then does — presence, size, digest, and the directories the unclaimed
-    scan walks — is bounded by the root. An absolute declaration is not the way
+    config file a user (or anything writing that file) can edit, so where
+    atlas looks — the declared place, and the directories the unclaimed scan
+    walks — is bounded by the root. An absolute declaration is not the way
     out of that bound it looks like: RetroArch composes it with the system
     directory like any other (:func:`_join_under`), and so does atlas. What
-    still leaves the root is a climb (``../``), and that is refused.
+    still leaves the root is a climb (``../``) or a directory linked out of
+    it, and that is refused. A declared *file* that is itself a link out of
+    the root is followed instead, because that is the file the core opens
+    (:func:`_destination_of`); *declared_kind* says whether the core opens
+    the declared place as a file or lists it as a folder, and a folder is a
+    directory on the way to every file the core reads from it, so a folder
+    linked out of the root is refused like any other directory. It defaults
+    to a file because every route but the ``.info`` declaration names one.
 
     Everything else is decided on **resolved** paths, and nothing is normalized
     first. Collapsing ``..`` lexically before resolving would eat the component
@@ -3987,10 +4049,12 @@ def destination_under(machine: Machine, root: str, declared: str) -> Destination
     """
     if not os.path.isabs(root):
         return Destination(refusal=CAVEAT_FIRMWARE_ROOT_UNUSABLE)
-    return _destination_of(machine, root, _join_under(root, declared))
+    return _destination_of(machine, root, _join_under(root, declared), declared_kind=declared_kind)
 
 
-def _destination_of(machine: Machine, root: str, composed: str) -> Destination:
+def _destination_of(
+    machine: Machine, root: str, composed: str, *, declared_kind: DeclaredKind
+) -> Destination:
     """The tail of a resolution: one already-composed path, held against *root*.
 
     Split out because two compositions reach it and only one of them is
@@ -4007,6 +4071,21 @@ def _destination_of(machine: Machine, root: str, composed: str) -> Destination:
     for a combine: the combine strips its own trailing separators, so a value
     spelled ``x/`` is ``<dir>/x`` by the time the core opens it and names a
     file perfectly well.
+
+    "Stays inside" is decided on two ends of the resolution, never on a
+    count of links. A composed path that resolves inside the root lands
+    there, with no link stated, whatever it passed through on the way. One
+    that resolves outside is held against its **directory part**: resolved
+    outside too, a directory took it out of the root — a climb, or a linked
+    folder — and that is refused. Resolved inside, the place the core opens
+    lies in the firmware tree and only the file there leads out: its last
+    component is a link, the kernel follows it to wherever the chain ends,
+    and the destination is that target, with the place itself as
+    :attr:`Destination.link`. How many hops the chain takes — out at once,
+    or first to another name inside the root and out from there — changes
+    neither end, so it changes nothing about the answer. A folder the core
+    lists (*declared_kind* ``directory``) never takes that branch: it is the
+    directory part of every file the core opens below it.
     """
     if os.path.basename(composed) in ("", ".", ".."):
         return Destination(refusal=CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE)
@@ -4016,13 +4095,21 @@ def _destination_of(machine: Machine, root: str, composed: str) -> Destination:
         return Destination(refusal=CAVEAT_FIRMWARE_PATH_UNRESOLVABLE)
     if _stays_under(resolved_root, resolved):
         return Destination(path=resolved)
+    if declared_kind == DECLARED_FILE:
+        # A prefix of a walk that settled settles too, so this resolves.
+        directory = resolve_links(machine, os.path.dirname(composed))
+        if directory is not None and _stays_under(resolved_root, directory):
+            return Destination(path=resolved, link=os.path.join(directory, os.path.basename(composed)))
     return Destination(refusal=CAVEAT_FIRMWARE_PATH_ESCAPES_ROOT)
 
 
 def _why_refused(refusal: str, root: str) -> str:
     """The prose behind one refusal code — one sentence fragment per fact."""
     if refusal == CAVEAT_FIRMWARE_PATH_ESCAPES_ROOT:
-        return f"does not stay under the firmware root {root} once symlinks are resolved"
+        return (
+            f"does not stay under the firmware root {root} once symlinks are resolved — a directory "
+            "on the way leaves it, by a climb or through a link"
+        )
     if refusal == CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE:
         return "ends in a directory step ('.', '..', or nothing at all) and so names no file"
     return "cannot be resolved at all — a symlink loop, or a chain longer than the kernel follows"
@@ -4061,6 +4148,49 @@ def _refusal_caveat(core: CoreDeclarations, declaration: FirmwareDeclaration, re
     )
 
 
+def _opened_through_a_link(core_so: str, opened: str, *, link: str, target: str) -> str:
+    """The sentence behind :data:`CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT` on a route that composes a destination.
+
+    One sentence for every such route; the data stays written out at each
+    construction site, because each one carries the keys its own refusal
+    caveat carries, so a consumer finds the same subject under the same keys
+    whether the name was refused or followed.
+    """
+    return (
+        f"{core_so} opens {opened!r} at {link}, which is a link leading out of the firmware root "
+        f"to {target} — the core reads the target, so the destination stated is the target and "
+        "what is there is judged there"
+    )
+
+
+def _declaration_linked_out(
+    core: CoreDeclarations, declaration: FirmwareDeclaration, destination: Destination, root: str
+) -> list[Caveat]:
+    """A declared file reached through a link out of the root, stated — or nothing, for any other destination.
+
+    On the core, where the declaration's refusal would have stood, and with
+    the keys :func:`_refusal_caveat` gives it.
+    """
+    if destination.link is None or destination.path is None:
+        return []
+    return [
+        Caveat(
+            CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT,
+            _opened_through_a_link(
+                core.core_so, declaration.path, link=destination.link, target=destination.path
+            ),
+            {
+                "core_so": core.core_so,
+                "declared": declaration.path,
+                "need": declaration.need,
+                "root": root,
+                "link": destination.link,
+                "target": destination.path,
+            },
+        )
+    ]
+
+
 @dataclass(frozen=True, slots=True)
 class _DirectoryContents:
     """What listing a folder declaration's folder established, and the statements behind it.
@@ -4083,6 +4213,12 @@ class _DirectoryContents:
     verdict: bool | None
     caveats: tuple[Caveat, ...]
     claimed: tuple[str, ...] = ()
+    core_caveats: tuple[Caveat, ...] = ()
+    """What the listing states on the core rather than on the answer: each candidate it
+    keeps that is a link leading out of the firmware root
+    (:data:`CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT`), where a declared file reached
+    through such a link is stated too.
+    """
 
 
 # One answer's folder reads, keyed by (resolved path, core_so): a catalogue
@@ -4093,8 +4229,10 @@ class _DirectoryContents:
 # the verdict without restating what the first stated: a read cache, one
 # listing and one hashing per resolved path and core per answer. It covers
 # the folder read alone; what the other observations do on a doubled entry
-# is their own matter.
-_FolderReads = dict[tuple[str, str], bool | None]
+# is their own matter. Beside the verdict it keeps the read's core caveats,
+# which each row restates because a consumer reads one core's entry whole —
+# the way a doubled entry restates its refused declarations.
+_FolderReads = dict[tuple[str, str], tuple[bool | None, tuple[Caveat, ...]]]
 
 
 def _directory_candidates(
@@ -4447,6 +4585,7 @@ def _directory_contents(
     declaration, and a folder whose candidates all fail it is unmet.
     """
     kept, unreadable = _directory_candidates(machine, row, directory)
+    linked = _candidates_linked_out(machine, context, kept, core_so=core_so, need=need)
     caveats: list[Caveat] = []
     if unreadable:
         caveats.append(
@@ -4495,9 +4634,48 @@ def _directory_contents(
                 {"dir": directory, "candidates": str(len(kept)), "need": need, "core_so": core_so},
             )
         )
-        return _DirectoryContents(None, tuple(caveats))
+        return _DirectoryContents(None, tuple(caveats), core_caveats=linked)
     read = _directory_identified(machine, context, row, kept, directory=directory, core_so=core_so)
-    return _DirectoryContents(read.verdict, (*caveats, *read.caveats), read.claimed)
+    return _DirectoryContents(read.verdict, (*caveats, *read.caveats), read.claimed, linked)
+
+
+def _candidates_linked_out(
+    machine: Machine,
+    context: FirmwareContext,
+    kept: tuple[str, ...],
+    *,
+    core_so: str,
+    need: FirmwareNeed,
+) -> tuple[Caveat, ...]:
+    """Each kept candidate that is a link leading out of the firmware root, stated.
+
+    The folder itself never leads out — a folder declaration linked out of
+    the root is refused before it is listed (:func:`_destination_of`) — so
+    what does is a file the listing found, and the core reads it at its
+    target the way it reads a declared file linked out. The kept files only:
+    the size test is the core's own first filter, and on a folder linked onto
+    the whole BIOS root a link the core drops at that test is another
+    system's file, which this core's entry has no business naming.
+    """
+    root = context.root
+    resolved_root = None if root is None else resolve_links(machine, root)
+    if resolved_root is None:
+        return ()
+    linked: list[Caveat] = []
+    for path in kept:
+        target = resolve_links(machine, path)
+        if target is None or _stays_under(resolved_root, target):
+            continue
+        linked.append(
+            Caveat(
+                CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT,
+                f"{core_so} lists {path} in its folder, and it is a link leading out of the firmware "
+                f"root to {target} — the core reads the target's bytes through it, and this answer "
+                "states the file under the name the core lists",
+                {"core_so": core_so, "link": path, "target": target, "need": need},
+            )
+        )
+    return tuple(linked)
 
 
 def _contents_of_a_listed_folder(
@@ -4528,7 +4706,8 @@ def _contents_of_a_listed_folder(
         return _DirectoryContents(None, ())
     key = (path, core.core_so)
     if key in folders:
-        return _DirectoryContents(folders[key], ())
+        verdict, core_caveats = folders[key]
+        return _DirectoryContents(verdict, (), core_caveats=core_caveats)
     read = _directory_contents(
         machine,
         context,
@@ -4538,7 +4717,7 @@ def _contents_of_a_listed_folder(
         need=declaration.need,
         verify=verify,
     )
-    folders[key] = read.verdict
+    folders[key] = (read.verdict, read.core_caveats)
     return read
 
 
@@ -4797,8 +4976,10 @@ def _configured_image(
     kernel's answer. A value that climbs is therefore FOLLOWED where it
     stays under the firmware root — ``path`` then names a file outside the
     declared folder while ``declared`` stays the folder, which is what the
-    core would open — and refused only where it leaves the root, which is
-    the bound every read in this module is held to.
+    core would open — and refused only where its directory leaves the
+    root: the place a value names is bounded, while a file there that is a
+    link leading out of the root is followed to its target and stated under
+    :data:`CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT`.
 
     The core's own test for "is the configured file there" is
     ``path_is_valid``, and that is a **stat that succeeded** and nothing more:
@@ -4844,12 +5025,26 @@ def _configured_image(
     if not name:
         return _ConfiguredImage(core_caveats=tuple(caveats), answer_caveats=chain)
     composed = qt_ini.path_combine(path, name)
-    destination = _destination_of(machine, root, composed)
+    destination = _destination_of(machine, root, composed, declared_kind=DECLARED_FILE)
     if destination.path is None:
         refusal = destination.refusal or CAVEAT_FIRMWARE_PATH_ESCAPES_ROOT
         caveats.append(_configured_refusal(core, key, refusal, name, root=root))
         return _ConfiguredImage(core_caveats=tuple(caveats), answer_caveats=chain)
     named = destination.path
+    if destination.link is not None:
+        caveats.append(
+            Caveat(
+                CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT,
+                _opened_through_a_link(core.core_so, name, link=destination.link, target=named),
+                {
+                    "core_so": core.core_so,
+                    "declared": name,
+                    "key": key,
+                    "link": destination.link,
+                    "target": named,
+                },
+            )
+        )
     if machine.path_kind(named) == KIND_MISSING:
         caveats.append(_configured_image_missing(core, key, name, directory=path))
         return _ConfiguredImage(core_caveats=tuple(caveats), answer_caveats=chain)
@@ -4906,7 +5101,9 @@ def _requirements_for(
     answer_caveats: list[Caveat] = []
     claims: list[str] = []
     for declaration in core.firmware:
-        destination = destination_under(machine, root, declaration.path)
+        destination = destination_under(
+            machine, root, declaration.path, declared_kind=declaration.declared_kind
+        )
         if destination.path is None:
             refusal = destination.refusal or CAVEAT_FIRMWARE_PATH_ESCAPES_ROOT
             refused.append(
@@ -4915,6 +5112,7 @@ def _requirements_for(
             core_caveats.append(_refusal_caveat(core, declaration, refusal, root))
             continue
         path = destination.path
+        core_caveats.extend(_declaration_linked_out(core, declaration, destination, root))
         identity = context.hashes.for_path(declaration.path)
         found, checked, caveat, here = _observe(
             machine,
@@ -4964,6 +5162,7 @@ def _requirements_for(
             machine, context, core, declaration, path=path, found=found, verify=verify, folders=folders
         )
         answer_caveats.extend(contents.caveats)
+        core_caveats.extend(contents.core_caveats)
         claims.extend(contents.claimed)
         requirements.append(
             FirmwareRequirement(
@@ -5314,7 +5513,7 @@ def _spoken_for_by_the_route(
     :attr:`CoreFirmware.requirements_met` withholds its verdict over a refused
     row that says ``required`` (a file it could not judge might be the missing
     one). Where the route's lists name that row the group already answers for
-    it — a name leaving the firmware root is one spelling out of three, six or
+    it — a name atlas would not follow is one spelling out of three, six or
     nine — so a satisfied group would otherwise be talked down to ``None`` by
     a declaration the entry beside it has replaced.
     """
@@ -6074,6 +6273,7 @@ def _melonds_standalone_core(
     sandbox: SandboxTranslation | None,
     xdg_pinned: bool,
     verify: bool,
+    cwd: str | None = None,
 ) -> tuple[CoreFirmware, list[Caveat]]:
     """melonDS's expectations: ``verifySetup`` performed as reads.
 
@@ -6180,6 +6380,7 @@ def _pcsx2_standalone_core(
     sandbox: SandboxTranslation | None,
     xdg_pinned: bool,
     verify: bool,
+    cwd: str | None = None,
 ) -> tuple[CoreFirmware, list[Caveat]]:
     """PCSX2's expectation: the image named inside the directory named.
 
@@ -6433,6 +6634,53 @@ def _xemu_unreadable_core(entry: CatalogueEntry, path: str, why: str) -> CoreFir
     )
 
 
+def _xemu_file_host(
+    sandbox: SandboxTranslation | None,
+    entry: CatalogueEntry,
+    card: StandaloneFirmwareCard,
+    key: str,
+    value: str,
+    cwd: str | None,
+) -> tuple[str | None, Caveat | None]:
+    """Where one ``[sys.files]`` value lands on this host — or the caveat saying why nowhere.
+
+    An absolute value goes through the sandbox map. A relative one opens from
+    the launch's working directory: *cwd*, the folder the caller names, is a
+    host path already and completes it with nothing to translate; without one
+    there is no destination to state.
+    """
+    if os.path.isabs(value):
+        return _sandbox_host_path(sandbox, entry, card, key, value)
+    if cwd is not None:
+        return os.path.join(cwd, value), None
+    # xemu opens the value relative to its own process's working directory
+    # (verbatim into the QEMU options, system/vl.c:2983-3095; probed with
+    # plain fopen/access, vl.c:2527-2535 and :2918 with osdep.h:645-653; no
+    # launch step chdirs, ui/xemu.c:1278-1379, all at v0.8.135) — a fact of
+    # the launch no read of this machine can establish, so no destination is
+    # stated and the caveat carries the anchor as data instead of a
+    # requirement carrying an invented one.
+    return None, Caveat(
+        CAVEAT_FIRMWARE_PATH_LAUNCH_DEPENDENT,
+        f"{entry.label}'s {key} is the relative value {value!r}, which xemu "
+        "opens relative to the working directory of the launching process "
+        "(the configured string is passed verbatim into the QEMU options, "
+        "system/vl.c:2983-3095, and opened with plain fopen/access, "
+        "vl.c:2527-2535 and :2918 with osdep.h:645-653, at v0.8.135) — a "
+        "property of the launch, not of the machine, so no destination is "
+        f"stated for a file the emulator does ask for; fill '{HOLE_CWD}' with "
+        "the launcher's working directory to complete the path",
+        {
+            "label": entry.label,
+            "token": card.token,
+            "key": key,
+            "declared": value,
+            "need": NEED_REQUIRED,
+            "path": os.path.join(TEMPLATE_CWD, value),
+        },
+    )
+
+
 def _xemu_standalone_core(
     machine: Machine,
     entry: CatalogueEntry,
@@ -6445,6 +6693,7 @@ def _xemu_standalone_core(
     sandbox: SandboxTranslation | None,
     xdg_pinned: bool,
     verify: bool,
+    cwd: str | None = None,
 ) -> tuple[CoreFirmware, list[Caveat]]:
     """xemu's expectations: the three files in ``[sys.files]`` its documentation asks for.
 
@@ -6456,7 +6705,10 @@ def _xemu_standalone_core(
     disk does, and is claimed by both answers on purpose: xemu asks for one,
     and every save lives inside it. What ``need`` does not say is how hard
     each launch gate is, which is why the empty-setting caveat states the
-    consequence per file rather than once for all three.
+    consequence per file rather than once for all three. A relative value
+    opens from the launch's working directory: *cwd*, the host path the caller
+    names, completes it into a destination read like any other, and without
+    it the value is stated as launch-dependent instead.
     """
     del xdg_pinned  # xemu states one base, so no launch has a root to pick
     # Which home the file sits under is the settings table's to say — xemu's
@@ -6497,40 +6749,10 @@ def _xemu_standalone_core(
                 )
             )
             continue
-        if not os.path.isabs(value):
-            # xemu opens the value relative to its own process's working
-            # directory (verbatim into the QEMU options, system/vl.c:2983-3095;
-            # probed with plain fopen/access, vl.c:2527-2535 and :2918 with
-            # osdep.h:645-653; no launch step chdirs, ui/xemu.c:1278-1379, all
-            # at v0.8.135) — a fact of the launch no read of this machine can
-            # establish, so no destination is stated and the caveat carries the
-            # anchor as data instead of a requirement carrying an invented one.
-            caveats.append(
-                Caveat(
-                    CAVEAT_FIRMWARE_PATH_LAUNCH_DEPENDENT,
-                    f"{entry.label}'s {key} is the relative value {value!r}, which xemu "
-                    "opens relative to the working directory of the launching process "
-                    "(the configured string is passed verbatim into the QEMU options, "
-                    "system/vl.c:2983-3095, and opened with plain fopen/access, "
-                    "vl.c:2527-2535 and :2918 with osdep.h:645-653, at v0.8.135) — a "
-                    "property of the launch, not of the machine, so no destination is "
-                    f"stated for a file the emulator does ask for; fill '{HOLE_CWD}' with "
-                    "the launcher's working directory to complete the path",
-                    {
-                        "label": entry.label,
-                        "token": card.token,
-                        "key": key,
-                        "declared": value,
-                        "need": NEED_REQUIRED,
-                        "path": os.path.join(TEMPLATE_CWD, value),
-                    },
-                )
-            )
-            continue
-        host, untranslated = _sandbox_host_path(sandbox, entry, card, key, value)
+        host, unplaced = _xemu_file_host(sandbox, entry, card, key, value, cwd)
         if host is None:
-            assert untranslated is not None
-            caveats.append(untranslated)
+            assert unplaced is not None
+            caveats.append(unplaced)
             continue
         path = resolve_links(machine, host) or host
         found, checked, observed, _ = _observe(
@@ -7217,6 +7439,7 @@ def _duckstation_standalone_core(
     sandbox: SandboxTranslation | None,
     xdg_pinned: bool,
     verify: bool,
+    cwd: str | None = None,
 ) -> tuple[CoreFirmware, list[Caveat]]:
     """DuckStation's expectation: a directory, and whatever in it is a BIOS.
 
@@ -7835,6 +8058,19 @@ def _searched_directory(
                 },
             )
         )
+    # *directory* is the resolved firmware root itself, so a kept file whose
+    # resolution leaves it is a link leading out, read at its target.
+    caveats.extend(
+        Caveat(
+            CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT,
+            f"{core_so} searches {directory} and keeps {path}, which is a link leading out of the "
+            f"firmware root to {target} — the core reads the target's bytes through it, and this "
+            "answer states the file under the name the search listed",
+            {"core_so": core_so, "link": path, "target": target, "dir": directory},
+        )
+        for path, _ in kept
+        if (target := resolve_links(machine, path)) is not None and not _stays_under(directory, target)
+    )
     if not kept or not verify:
         return _SearchedDirectory(
             (),
@@ -7997,6 +8233,23 @@ def _named_image(
             (),
         )
     path = destination.path
+    linked = (
+        ()
+        if destination.link is None
+        else (
+            Caveat(
+                CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT,
+                _opened_through_a_link(core.core_so, name, link=destination.link, target=path),
+                {
+                    "core_so": core.core_so,
+                    "declared": name,
+                    "key": key.key,
+                    "link": destination.link,
+                    "target": path,
+                },
+            ),
+        )
+    )
     found, checked, observed, _ = _observe(
         machine, path, None, verify=verify, file_name=os.path.basename(name)
     )
@@ -8024,7 +8277,7 @@ def _named_image(
     return (
         requirement,
         outcome,
-        () if stated is None else (stated,),
+        linked if stated is None else (*linked, stated),
         () if observed is None else (observed,),
     )
 
@@ -8403,7 +8656,12 @@ def _refused_spelling(core: CoreDeclarations, spelling: str, refusal: str, root:
     is stated is what the launch reaches beyond this name, and the refusal says
     which one was left unfollowed. It overstates nothing about the file — a
     name atlas would not follow may well be one the core opens — and it is the
-    only reading available, because following it is what the bound forbids.
+    only reading available, because no place was reached to look at. Every
+    packaged spelling is a bare file name — the loader refuses any other
+    (:mod:`atlas.core_firmware`) — so the refusal this route meets is
+    a link chain that never settles: leaving the root through a directory
+    takes a name with a directory in it, and a bare name linked out of the
+    root is followed (:func:`_destination_of`).
     """
     return Caveat(
         refusal,
@@ -8503,7 +8761,7 @@ def _first_spelling(
     ``declared`` is the list's own first name — the one the core reports as
     missing and shows on screen (libretro.cpp:305-318) — while ``file_name``
     and ``path`` are the first name atlas would follow, which differ only where
-    a name ahead of it leaves the firmware root.
+    a name ahead of it is refused.
     """
     declared = names.spellings[0]
     answer: FirmwareRequirement | None = None
@@ -8522,6 +8780,23 @@ def _first_spelling(
             # The walk is over; this name is composed for the claim alone and
             # not looked at, which is also what the launch does with it.
             continue
+        # Only a name the walk looks at is stated as reached through a link,
+        # the way only such a name is observed.
+        if destination.link is not None:
+            stated.append(
+                Caveat(
+                    CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT,
+                    _opened_through_a_link(
+                        core.core_so, spelling, link=destination.link, target=destination.path
+                    ),
+                    {
+                        "core_so": core.core_so,
+                        "declared": spelling,
+                        "link": destination.link,
+                        "target": destination.path,
+                    },
+                )
+            )
         found, checked, seen, _ = _observe(
             machine, destination.path, None, verify=verify, file_name=spelling
         )
@@ -8966,8 +9241,10 @@ def _claiming_what_it_read(machine: Machine, core: CoreFirmware) -> CoreFirmware
     whatever the route already put there — a search's kept candidates, the
     files the emulator's own recognition runs over. Resolved, because the
     unclaimed scan compares resolved spellings and an arrangement routinely
-    links a card's destination into the firmware tree; a path outside that tree
-    resolves the same way and is simply never met by a scan bounded to it.
+    links a card's destination into the firmware tree. A destination outside
+    that tree is met only through a link in it — the scan lists the tree's
+    directories alone, and follows a file link in them to its target — and
+    then this claim is what keeps it out of ``unclaimed``.
 
     Here rather than in each resolver because it is the same statement for all
     of them, and a claim carried at four sites and forgotten at the fifth is
@@ -8993,6 +9270,7 @@ def _carded_standalone_core(
     sandbox: SandboxTranslation | None,
     xdg_pinned: bool,
     verify: bool,
+    cwd: str | None = None,
 ) -> tuple[CoreFirmware, list[Caveat]]:
     """A carded standalone entry, routed by the shape its card states.
 
@@ -9044,6 +9322,7 @@ def _carded_standalone_core(
             sandbox=sandbox,
             xdg_pinned=xdg_pinned,
             verify=verify,
+            cwd=cwd,
         )
     located = cast(CoreFirmware, replace(core, locating=locating_of_card(card)))
     return _claiming_what_it_read(machine, located), observed
@@ -9103,6 +9382,7 @@ def _standalone_entry_core(
             sandbox=sandbox,
             xdg_pinned=xdg_pinned,
             verify=verify,
+            cwd=context.cwd,
         )
     return (
         CoreFirmware(
@@ -9679,10 +9959,20 @@ def _unclaimed_in(
     claimed: set[str],
     artifacts: set[str],
     *,
+    resolved_root: str,
     recognisers: Mapping[str, tuple[str, ...]],
     verify: bool,
 ) -> tuple[list[UnclaimedFile], list[Caveat]]:
     """The files in one directory that no installed emulator asks for or claims.
+
+    *directory* lies inside the firmware root (:func:`_unclaimed_files`
+    clamps it), but an entry in it may be a file link leading out of the root.
+    Such an entry is followed like any other, because a file link is where
+    the bytes are and not a directory the scan widens into: it is listed
+    under its target, read there, and stated under
+    :data:`CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT` with the ``link`` it was
+    met as, since the listed path alone no longer says it was found in the
+    firmware tree.
 
     An entry that cannot be looked at is stated, not dropped: whether it is a
     file nobody declared is then unknown, and an unknown is the one thing this
@@ -9734,6 +10024,15 @@ def _unclaimed_in(
                 )
             )
             continue
+        if not _stays_under(resolved_root, resolved_entry):
+            caveats.append(
+                Caveat(
+                    CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT,
+                    f"{entry} lies in the firmware tree, is claimed by no core, and is a link leading out "
+                    f"of it to {resolved_entry} — listed below under its target, which is where its bytes are",
+                    {"link": entry, "target": resolved_entry},
+                )
+            )
         read, caveat = _unclaimed_read(machine, entry, verify=verify)
         if caveat is not None:
             caveats.append(caveat)
@@ -9778,13 +10077,14 @@ def _unclaimed_files(
     because what the bytes are does not depend on who is installed.
 
     Every scanned directory is clamped to the root's subtree, and the root
-    itself is the only one that may equal it. A claimed path is resolved and
-    inside the root, but that is not enough: a folder declaration is allowed to
-    land on the root exactly (LRPS2's ``pcsx2/bios``, which RetroDECK links
-    back to it), and the *parent* of that landing is one level above the
-    firmware tree. Without the clamp a stock RetroDECK scans it, and whatever
-    sits there is reported — and with ``verify`` hashed — as unclaimed
-    firmware.
+    itself is the only one that may equal it. A claimed path is resolved, but
+    that is not enough. A declared file linked out of the root claims its
+    target, whose directory lies outside the tree. And a folder declaration is
+    allowed to land on the root exactly (LRPS2's ``pcsx2/bios``, which
+    RetroDECK links back to it), and the *parent* of that landing is one level
+    above the firmware tree. Without the clamp a stock RetroDECK scans it,
+    and whatever sits there is reported — and with ``verify`` hashed — as
+    unclaimed firmware.
 
     Names beginning with a dot never appear in this list, and that is a
     decision rather than an oversight: a wildcard in the seam's glob does not
@@ -9821,6 +10121,7 @@ def _unclaimed_files(
             directory,
             claimed | accounted,
             artifacts,
+            resolved_root=resolved_root,
             recognisers=recognisers,
             verify=verify,
         )
@@ -10031,12 +10332,17 @@ def firmware_inventory(
     # observations the other.
     caveats = [*carded.status, *observed, *carded.observations]
     cores = (*installed, *carded.cores)
-    # Only declarations that stay under the root define the scan, so a config
-    # pointing outside it can never widen where atlas reads or hashes.
+    # Only a declaration with a destination claims anything, and only claimed
+    # directories inside the root are listed (_unclaimed_files), so a config
+    # pointing outside it can never widen where atlas lists. A declared file
+    # linked out of the root claims its target, which is how the scan, meeting
+    # the link, knows the file is spoken for.
     claimed: set[str] = set()
     for core in context.cores:
         for declaration in core.firmware:
-            landing = destination_under(machine, context.root, declaration.path).path
+            landing = destination_under(
+                machine, context.root, declaration.path, declared_kind=declaration.declared_kind
+            ).path
             if landing is not None:
                 claimed.add(landing)
     # What an entry's own read already stated is that entry's, not the scan's —
@@ -10181,6 +10487,41 @@ def _destination_for(
     return row is not None and hashes.for_content_under(row.identities, identity.md5) is not None
 
 
+def _travelling_with(
+    cores: Sequence[CoreFirmware], wanted: Sequence[FirmwareRequirement]
+) -> list[Caveat]:
+    """The core caveats an identification carries beside the requirements it hands back.
+
+    An identification hands back requirements without their emulator, so a
+    caveat about one of them has to travel with it or it is lost. Only about
+    *these* requirements, though, and two rules say which those are.
+
+    A requirement whose system was derived takes its core's caveats along,
+    because a caveat about how it got its system names no file to match on;
+    attaching them because some other file of the same core was derived would
+    put warnings about files that are not in this answer, so a core with only
+    an override-filed requirement here carries none.
+
+    :data:`CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT` names its file, so it is
+    matched by that instead, whatever the requirement's system source: it
+    travels exactly where its ``target`` is the ``path`` of a requirement in
+    this answer — which is how a client finds the link behind a ``path``
+    outside the root — and never by the derived rule, so no link statement
+    about a file outside this answer rides along and none is carried twice.
+    """
+    paths = {requirement.path for requirement in wanted}
+    derived = {r.core_so for r in wanted if r.system_source != SOURCE_OVERRIDE}
+    carried: list[Caveat] = []
+    for core in cores:
+        for caveat in core.caveats:
+            if caveat.code == CAVEAT_FIRMWARE_FILE_LINKED_OUTSIDE_ROOT:
+                if caveat.data.get("target") in paths:
+                    carried.append(caveat)
+            elif core.core_so in derived:
+                carried.append(caveat)
+    return carried
+
+
 def identify_firmware(
     machine: Machine,
     context: FirmwareContext,
@@ -10286,15 +10627,7 @@ def identify_firmware(
                 data={"md5": identity.md5},
             )
         )
-    # An identification hands back requirements without their emulator, so a
-    # caveat about how one of them got its system has to travel with it or it is
-    # lost. Only about *these* requirements, though: a core's caveat names the
-    # files it is about, and attaching it because some other file of the same
-    # core was derived puts warnings about files that are not in this answer.
-    derived_in_answer = {r.core_so for r in wanted if r.system_source != SOURCE_OVERRIDE}
-    for core in cores:
-        if core.core_so in derived_in_answer:
-            caveats.extend(core.caveats)
+    caveats.extend(_travelling_with(cores, wanted))
     return FirmwareIdentification(
         identity=identity, requirements=wanted, sources=context.sources, caveats=tuple(caveats)
     )

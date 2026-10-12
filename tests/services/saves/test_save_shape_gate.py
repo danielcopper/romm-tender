@@ -2,9 +2,10 @@
 
 Five of the six states refuse, and a refusal has to be a real one: no file is
 probed for, no sync state is written, and the result is the benign-skip shape
-rather than a failure. Probing anyway is not merely wasted work — it is how
-Tender used to search forever for an Amiga ``.nvr`` that no core writes, and how
-a PS2 memory card many games share would be carried onto one game's record.
+rather than a failure — except a missing saves root, which a sync refuses as
+one. Probing anyway is not merely wasted work — it is how Tender used to
+search forever for an Amiga ``.nvr`` that no core writes, and how a PS2 memory
+card many games share would be carried onto one game's record.
 
 Every case here runs beside a **control** in the same class that asserts the
 same probe DOES happen for a syncable answer. That is what makes the absence
@@ -19,7 +20,15 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
-from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, SaveAnswer, SaveComponent, build_save_answer
+from domain.save_answer import (
+    BENIGN_SYNC_SKIP_REASONS,
+    SAVE_SHAPE_UNSUPPORTED_REASON,
+    SaveAnswer,
+    SaveComponent,
+    build_save_answer,
+    saves_root_missing_answer,
+)
+from lib.errors import Refused
 from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
 
 if TYPE_CHECKING:
@@ -149,9 +158,12 @@ class TestARefusalWritesNoState:
         svc, _store, _fake = _service(tmp_path, _refusing(state))
         sync = svc.sync_rom_saves(42)
 
-        with pytest.raises(SaveShapeUnsupported) as refused:
+        with pytest.raises(Refused) as refused:
             await sync
 
+        assert refused.value.reason == (
+            "saves_root_missing" if state == "saves_root_missing" else SAVE_SHAPE_UNSUPPORTED_REASON
+        )
         assert refused.value.details == {"synced": 0}
         assert _uow(svc).rom_save_sync_states.get(42) is None
 
@@ -485,6 +497,39 @@ _NOT_SYNCABLE_BESIDE_THE_ROM = [
         id="atari-st-write-protected",
     ),
 ]
+
+
+class TestAMissingSavesRootIsAFailureAndNotASkip:
+    """The sync refuses with its own reason, which no surface may read as a benign skip."""
+
+    _MISSING = "/run/media/deck/sd/retrodeck/saves"
+
+    def _answer(self) -> SaveAnswer:
+        return saves_root_missing_answer(path=self._MISSING, emulator="mGBA", content_installed=True)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("entry", ["pre_launch_sync", "post_exit_sync", "sync_rom_saves"])
+    async def test_every_per_rom_entry_point_refuses_with_saves_root_missing(self, tmp_path, entry: str):
+        svc, _store, _fake = _service(tmp_path, self._answer())
+        sync = getattr(svc, entry)(42)
+
+        with pytest.raises(Refused) as refused:
+            await sync
+
+        assert refused.value.reason == "saves_root_missing"
+        assert refused.value.reason not in BENIGN_SYNC_SKIP_REASONS
+        assert self._MISSING in refused.value.message
+        assert refused.value.details == {"synced": 0}
+
+    @pytest.mark.asyncio
+    async def test_a_launch_with_pre_launch_sync_off_is_not_refused(self, tmp_path):
+        svc, _store, _fake = _service(tmp_path, self._answer())
+        svc._config.settings["sync_before_launch"] = False
+
+        result = await svc.pre_launch_sync(42)
+
+        assert result["success"] is True
+        assert result["synced"] == 0
 
 
 class TestOnlyBesideTheContentGetsTheContentDirectorySkip:

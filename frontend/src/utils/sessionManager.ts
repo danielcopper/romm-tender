@@ -14,6 +14,7 @@ import {
   recordSessionStart,
   getAppIdRomIdMap,
   finalizeGameSession,
+  isEndpointFailure,
   logInfo,
   logWarn,
   logError,
@@ -353,11 +354,20 @@ async function handleGameStop(stoppedAppId: number): Promise<void> {
   );
 }
 
+const PRUNE_ACTIVE_FINALIZE_TOAST_BODY =
+  "Playtime and saves for this session were not synced — a removed-game cleanup was running";
+
 function applyFinalizeResult(
   appId: number,
   romId: number,
   result: Awaited<ReturnType<typeof finalizeGameSession>>,
 ): void {
+  if (isEndpointFailure(result)) {
+    logWarn(`Finalize for romId=${romId} refused (${result.reason}): ${result.message}`);
+    showToast(result.reason === "prune_active" ? PRUNE_ACTIVE_FINALIZE_TOAST_BODY : result.message);
+    return;
+  }
+
   // Playtime display update — appStore mutation must stay frontend.
   if (result.total_seconds != null) {
     updatePlaytimeDisplay(appId, result.total_seconds);

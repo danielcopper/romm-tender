@@ -413,6 +413,8 @@ listed under [Steam Input Mode](configuration.md#steam-input-mode).
 
 ### RetroDECK's saves folder does not exist
 
+**Symptom**: A game's save sync says **Save sync is unavailable: RetroDECK's saves folder _path_ does not exist.**
+
 **Fix**: Insert the SD card or drive the saves folder is on. If it is there, repair the folder with RetroDECK's **Repair
 RetroDECK Paths**. Tender does not create the folder itself ([Save Sync](save-sync.md#save-file-location)).
 

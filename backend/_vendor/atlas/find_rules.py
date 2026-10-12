@@ -30,8 +30,9 @@ the reasons :mod:`atlas.esde` states.
 
 The vocabulary the catalogue entry's launch answer speaks lives here too,
 beside the file it is read from, so that :mod:`atlas.placement` can close the
-one data key that is a word (``find-rules-unreadable``'s ``layer``) without
-importing the evaluation that builds the caveats.
+data keys that are words (``find-rules-unreadable``'s ``layer``,
+``launch-command-shell-syntax``'s ``construct``) without importing the
+evaluations that build the caveats.
 """
 
 from __future__ import annotations
@@ -98,6 +99,135 @@ CAVEAT_LAUNCH_PATH_UNESTABLISHED = "launch-path-unestablished"
 # A note beside ``startable``: RetroDECK's own direct start would run
 # something else, or nothing.
 CAVEAT_RUN_GAME_DIFFERS = "run-game-differs"
+
+# Why a launch command is not taken apart (#573), each a refusal of the whole
+# command: shell syntax beyond plain words, a value a second shell would not
+# read as itself, an ``env`` option, a ``.desktop`` file the command would
+# parse, a ``%STARTDIR%`` or ``%INJECT%`` entry ES-DE itself refuses as
+# invalid, an ``%INJECT%`` file atlas cannot read or one that injects itself
+# again, a ``%ROMPATH%`` whose ROM root is not established, a command that
+# reads as no words at all, a command larger than atlas follows, a label the
+# catalogue does not carry for the system, and a frontend build no reading of
+# ES-DE is pinned for.
+CAVEAT_LAUNCH_COMMAND_SHELL_SYNTAX = "launch-command-shell-syntax"
+CAVEAT_LAUNCH_COMMAND_SECOND_SHELL_UNSAFE = "launch-command-second-shell-unsafe"
+CAVEAT_LAUNCH_COMMAND_ENV_OPTION = "launch-command-env-option"
+CAVEAT_LAUNCH_COMMAND_DESKTOP_FILE = "launch-command-desktop-file"
+CAVEAT_LAUNCH_COMMAND_ENTRY_INVALID = "launch-command-entry-invalid"
+CAVEAT_LAUNCH_COMMAND_INJECT_UNREADABLE = "launch-command-inject-unreadable"
+CAVEAT_LAUNCH_COMMAND_INJECT_LOOP = "launch-command-inject-loop"
+CAVEAT_LAUNCH_COMMAND_ROM_ROOT_UNESTABLISHED = "launch-command-rom-root-unestablished"
+CAVEAT_LAUNCH_COMMAND_NO_PROGRAM = "launch-command-no-program"
+CAVEAT_LAUNCH_COMMAND_BEYOND_LIMITS = "launch-command-beyond-limits"
+CAVEAT_LAUNCH_COMMAND_LABEL_UNKNOWN = "launch-command-label-unknown"
+CAVEAT_FRONTEND_BUILD_UNPINNED = "frontend-build-unpinned"
+# The two notes beside a command that is answered: a placeholder ES-DE leaves
+# in the command as written, and a value ES-DE's own substitution would break,
+# answered as the value instead.
+CAVEAT_LAUNCH_COMMAND_PLACEHOLDER_UNKNOWN = "launch-command-placeholder-unknown"
+CAVEAT_LAUNCH_COMMAND_ARGUMENT_BROKEN = "launch-command-argument-broken"
+
+LaunchCommandLimit = Literal["command-length", "substitutions", "rescans", "injections", "inject-file-size"]
+
+LIMIT_COMMAND_LENGTH: LaunchCommandLimit = "command-length"
+"""The command, with everything spliced into it, would be longer than atlas reads."""
+LIMIT_SUBSTITUTIONS: LaunchCommandLimit = "substitutions"
+"""ES-DE would substitute more values into the command than atlas follows."""
+LIMIT_RESCANS: LaunchCommandLimit = "rescans"
+"""One of ES-DE's replacements would rescan the command more often than atlas follows."""
+LIMIT_INJECTIONS: LaunchCommandLimit = "injections"
+"""The command, with what its injections splice in, holds more ``%INJECT%`` entries than atlas follows."""
+LIMIT_INJECT_FILE_SIZE: LaunchCommandLimit = "inject-file-size"
+"""An ``%INJECT%`` file is larger than atlas reads to learn what ES-DE would make of it."""
+
+# The closed vocabulary of the ``limit`` a ``launch-command-beyond-limits``
+# refusal names: each bound atlas puts on taking one command apart.
+LAUNCH_COMMAND_LIMITS = (
+    LIMIT_COMMAND_LENGTH,
+    LIMIT_SUBSTITUTIONS,
+    LIMIT_RESCANS,
+    LIMIT_INJECTIONS,
+    LIMIT_INJECT_FILE_SIZE,
+)
+
+ShellConstruct = Literal[
+    "pipe",
+    "and-or",
+    "list",
+    "background",
+    "redirection",
+    "subshell",
+    "expansion",
+    "substitution",
+    "glob",
+    "brace",
+    "comment",
+    "tilde",
+    "assignment",
+    "reserved-word",
+    "unterminated-quote",
+    "trailing-escape",
+    "nul",
+]
+
+CONSTRUCT_PIPE: ShellConstruct = "pipe"
+"""An unquoted ``|``: the shell starts a second command and feeds it the first one's output."""
+CONSTRUCT_AND_OR: ShellConstruct = "and-or"
+"""An unquoted ``&&`` or ``||``: a second command runs depending on how the first one ends."""
+CONSTRUCT_LIST: ShellConstruct = "list"
+"""An unquoted ``;`` or line break: the shell runs a second command after the first."""
+CONSTRUCT_BACKGROUND: ShellConstruct = "background"
+"""An unquoted single ``&`` inside the command: the shell sends what precedes it to the background."""
+CONSTRUCT_REDIRECTION: ShellConstruct = "redirection"
+"""An unquoted ``<`` or ``>``: the shell opens a file for the command rather than passing a word."""
+CONSTRUCT_SUBSHELL: ShellConstruct = "subshell"
+"""An unquoted ``(`` or ``)``: a grouping or a syntax error, never a word."""
+CONSTRUCT_EXPANSION: ShellConstruct = "expansion"
+"""A ``$`` outside single quotes that starts a parameter, an arithmetic or a command substitution the shell
+evaluates — a ``$`` before anything else is an ordinary character.
+"""
+CONSTRUCT_SUBSTITUTION: ShellConstruct = "substitution"
+"""A backtick outside single quotes: a command the shell runs and splices its output in for."""
+CONSTRUCT_GLOB: ShellConstruct = "glob"
+"""An unquoted ``*``, ``?`` or ``[``: a pattern the shell matches against file names in the working folder."""
+CONSTRUCT_BRACE: ShellConstruct = "brace"
+"""An unquoted ``{…,…}`` or ``{…..…}``: a brace expansion the frontend's shell (bash) performs."""
+CONSTRUCT_COMMENT: ShellConstruct = "comment"
+"""An unquoted ``#`` that starts a word: the shell drops it and the rest of the line."""
+CONSTRUCT_TILDE: ShellConstruct = "tilde"
+"""An unquoted ``~`` that starts a word: the shell replaces it with a home folder of its own choosing."""
+CONSTRUCT_ASSIGNMENT: ShellConstruct = "assignment"
+"""A first word of the form ``NAME=value``: the shell sets a variable rather than running a program."""
+CONSTRUCT_RESERVED_WORD: ShellConstruct = "reserved-word"
+"""A first word the shell reads as its own grammar (``if``, ``!``, ``time`` …) rather than a program."""
+CONSTRUCT_UNTERMINATED_QUOTE: ShellConstruct = "unterminated-quote"
+"""A quote that never closes, so the shell reads ES-DE's own suffix into it."""
+CONSTRUCT_TRAILING_ESCAPE: ShellConstruct = "trailing-escape"
+"""A backslash that ends the command, so the shell escapes the space ES-DE appends after it."""
+CONSTRUCT_NUL: ShellConstruct = "nul"
+"""A NUL character: the C string ES-DE hands the shell ends there, and the rest of the command never reaches it."""
+
+# The closed vocabulary of the ``construct`` a ``launch-command-shell-syntax``
+# refusal names: every reading of the command that is more than a plain word.
+SHELL_CONSTRUCTS = (
+    CONSTRUCT_PIPE,
+    CONSTRUCT_AND_OR,
+    CONSTRUCT_LIST,
+    CONSTRUCT_BACKGROUND,
+    CONSTRUCT_REDIRECTION,
+    CONSTRUCT_SUBSHELL,
+    CONSTRUCT_EXPANSION,
+    CONSTRUCT_SUBSTITUTION,
+    CONSTRUCT_GLOB,
+    CONSTRUCT_BRACE,
+    CONSTRUCT_COMMENT,
+    CONSTRUCT_TILDE,
+    CONSTRUCT_ASSIGNMENT,
+    CONSTRUCT_RESERVED_WORD,
+    CONSTRUCT_UNTERMINATED_QUOTE,
+    CONSTRUCT_TRAILING_ESCAPE,
+    CONSTRUCT_NUL,
+)
 
 
 @dataclass(frozen=True, slots=True)

@@ -232,6 +232,10 @@ The after-exit sync is skipped the same way while Tender is installing an update
 "Tender is installing an update — saves sync with the next sync that runs". Your local save is untouched, and the first
 sync after the update picks it up.
 
+A game that exits while a cleanup of games removed from RomM is running gets no after-exit sync, and neither its
+session's playtime nor its saves are synced — the toast says "Playtime and saves for this session were not synced — a
+removed-game cleanup was running". The saves stay on your Deck, and the next sync takes them.
+
 After a failed sync the game-detail save panel reflects the honest state right away: a file whose upload failed shows a
 yellow **Local changes** badge (not a green "synced"), and its "Last synced" line keeps the time of the last
 _successful_ sync — a green checkmark appears only once a sync actually succeeds. A separate "Checked" line shows when
@@ -253,8 +257,10 @@ displayed on the game detail page, in the **Playtime** cell next to the Play but
 
 Each finished session is sent to RomM's built-in play-session store, so your `last_played` time shows correctly in the
 RomM web UI. This is separate from save sync — playtime is recorded for **every** game on every exit, even when save
-sync is off. If RomM is unreachable, the session is queued locally and uploaded automatically the next time you launch a
-game or reconnect (nothing is lost).
+sync is off. The one exception is a game that exits while a cleanup of games removed from RomM is running: that
+session's playtime and saves are not synced, and a notification says so; the saves stay on your Deck for the next sync.
+If RomM is unreachable, the session is queued locally and uploaded automatically the next time you launch a game or
+reconnect (nothing is lost).
 
 The displayed playtime refreshes live: when you finish a session the PLAYTIME value updates on the same detail page
 without needing to navigate away and back. Opening a game's detail page also reconciles playtime with RomM — if you
@@ -290,9 +296,12 @@ observed on a device.
 
 Tender never creates RetroDECK's saves folder itself. While it does not exist — on an SD card that is not inserted, say
 — no save of RetroDECK's emulators is synced, and a game's save sync says **Save sync is unavailable: RetroDECK's saves
-folder _path_ does not exist.**; the main panel's notice for that folder says the same. Created anyway, the folder would
-land on internal storage, and the SD card would hide what was synced into it once it is back. Folders below an existing
-saves folder, for one emulator or one game, are still created as the emulator would create them.
+folder _path_ does not exist.**; the main panel's notice for that folder says the same. Starting a game asks first
+whether to launch with the saves on this device, while "Sync before launch" is on and RomM can be reached; a game's exit
+shows that sentence as a notification while "Sync after exit" is on, because the saves you just made were not synced.
+Created anyway, the folder would land on internal storage, and the SD card would hide what was synced into it once it is
+back. Folders below an existing saves folder, for one emulator or one game, are still created as the emulator would
+create them.
 
 ## RetroArch Save Sorting
 

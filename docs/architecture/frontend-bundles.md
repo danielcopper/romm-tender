@@ -386,6 +386,11 @@ Steam's game page is not ours to compose: `bigpicture/patches/gameDetailPatch.ts
 overview panel for Tender's play section and game-info panel, on RomM shortcuts only. Where that patch is INSTALLED is
 `bigpicture/patches/installGamePagePatch.ts`, and the seam it uses is the one thing about it worth reading twice.
 
+The block itself is built by `bigpicture/patches/rommOverviewBlock.tsx`, inside the boundary the Quick Access panel uses
+too (`shared/PanelErrorBoundary.tsx`): a throw while it renders leaves the game page standing, with the line "Tender
+could not show this game's section." in the block's place and a `debugLog` entry carrying the failure and its component
+stack.
+
 **The seam is the route component's `renderFunc`, never the page component's own `type`.** Steam's gamepad router
 renders the library route inline —
 `<Route path="/library/app/:appid">{<RouteComponent renderFunc={renderPage} />}</Route>` — so the page is reached

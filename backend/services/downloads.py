@@ -259,7 +259,7 @@ class DownloadService:
                 await remove_rom(sibling_id)
             except NotInstalled:
                 continue  # raced clean — nothing to supersede
-            except Refused as refused:
+            except (Refused, FolderRefused) as refused:
                 self._logger.error(
                     f"Superseding install of rom {sibling_id} (group of rom {rom_id}) failed: {refused.message}"
                 )
@@ -319,7 +319,7 @@ class DownloadService:
         download, a cancelled start included, so the ROM is never stuck "Already downloading". A partial failure the
         gate returns is answered as it came, with the claim given back. Of what the steps raise, an ``OSError`` (a
         disk that cannot be read or prepared) is refused here with ``download_start_failed``; a RomM error and a
-        refusal — RetroDECK's folder refusal and the gate's among them — pass on unchanged, and anything else is a bug.
+        refusal pass on unchanged (which: ``docs/architecture/backend-architecture.md``), and anything else is a bug.
         """
         self._download_in_progress.add(rom_id)
         try:

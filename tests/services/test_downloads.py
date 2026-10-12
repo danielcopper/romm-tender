@@ -6196,6 +6196,20 @@ class TestSiblingSupersedeRemoval:
             for r in caplog.records
         )
 
+    @pytest.mark.asyncio
+    async def test_supersede_logs_a_folder_refusal_as_it_logs_a_refusal(self, downloads, caplog):
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        refusal = FolderRefused("no_rom_root", "RetroDECK names no ROM folder.")
+        downloads.service._rom_remover = lambda: AsyncMock(side_effect=refusal)
+
+        coro = downloads.service.supersede_sibling_installs(1)
+        with caplog.at_level(logging.INFO), pytest.raises(FolderRefused):
+            await coro
+        assert [(r.levelno, r.getMessage()) for r in caplog.records if "Superseding" in r.getMessage()] == [
+            (logging.ERROR, "Superseding install of rom 2 (group of rom 1) failed: RetroDECK names no ROM folder.")
+        ]
+
 
 class TestResumeSupersede:
     """`resume_download` — the #1298 S1 stale-resume refusal + supersede-on-resume."""

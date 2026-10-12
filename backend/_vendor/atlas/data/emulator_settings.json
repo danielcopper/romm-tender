@@ -312,7 +312,7 @@
     "VITA3K": {
       "flatpak": {
         "app_id": null,
-        "citation": "[V-script] EmuDeck installs it as an executable it unpacks below $emusFolder rather than a flatpak (emuDeckVita3K.sh:5-6; at EmuDeck 863ab69 and acc45fc, where the lines are identical), so no app id is established for it — a flatpak a user installed by hand is not this arrangement's install and names no id atlas has read"
+        "citation": "[V-script] EmuDeck installs it as a binary below $emusFolder rather than a flatpak (emuDeckVita3K.sh:5-6; at EmuDeck 863ab69 and acc45fc, where the lines are identical): the AppImage it downloads, moved unopened to $emusFolder/Vita3K/Vita3K (emuDeckVita3K.sh:18-24 with installEmuBI.sh:27 at 863ab69). So no app id is established for it, and a flatpak a user installed by hand is not this arrangement's install and names no id atlas has read"
       },
       "directory": {
         "name": "Vita3K",
