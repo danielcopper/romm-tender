@@ -6,7 +6,7 @@
 import type { ReactElement } from "react";
 import type { SlotSaveFile } from "../../types";
 import { formatBytes } from "../../utils/formatters";
-import { formatRelativeTime } from "../../utils/saveHelpers";
+import { formatSaveTimeAgo } from "../../utils/saveHelpers";
 import { renderCopyToSlotButton, type CopyToSlotRowProps } from "./CopyToSlotButton";
 
 export function renderServerSaveRow(f: SlotSaveFile, copy?: CopyToSlotRowProps): ReactElement {
@@ -14,7 +14,7 @@ export function renderServerSaveRow(f: SlotSaveFile, copy?: CopyToSlotRowProps):
   // header style, so a specific save can be identified across slots.
   const details: string[] = [`#${f.id}`];
   if (f.size != null) details.push(formatBytes(f.size));
-  if (f.updated_at) details.push(`Updated ${formatRelativeTime(f.updated_at)}`);
+  if (f.updated_at) details.push(`Updated ${formatSaveTimeAgo(f.updated_at)}`);
 
   return (
     <div

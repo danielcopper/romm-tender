@@ -14,7 +14,7 @@ import { copySaveToSlot, debugLog } from "../../api/backend";
 import type { CopySaveToSlotStatus, SaveSlotSummary } from "../../types";
 import { showSyncConflictModal } from "../../shared/SyncConflictModal";
 import { detach } from "../../utils/detach";
-import { formatCopySaveToSlotFeedback } from "../../utils/saveHelpers";
+import { copyToSlotFeedback } from "../../utils/saveSlotWording";
 import { CopyToSlotModal } from "./CopyToSlotModal";
 import type { CopyToSlotHandler } from "./CopyToSlotButton";
 
@@ -24,7 +24,7 @@ function dispatchDataChanged(romId: number): void {
 }
 
 async function handleResult(result: CopySaveToSlotStatus, target: string, romId: number): Promise<void> {
-  const feedback = formatCopySaveToSlotFeedback(result, target);
+  const feedback = copyToSlotFeedback(result, target);
   if (feedback.kind === "conflict") {
     await showSyncConflictModal(feedback.conflict);
     return;
