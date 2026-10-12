@@ -62,9 +62,11 @@ that rule; what it reads, and the two results that compute a failing
 ``docs/architecture/backend-architecture.md``, §4.
 
 The ``**extras`` beside a refusal are its details — the keyword arguments it
-was raised with, such as the ``path`` of ``file_present`` — and nothing else.
-A payload's empty defaults are never sent beside a failure: the panel reads a
-payload only on success.
+was raised with, such as the ``path`` of ``file_present``. A payload's empty
+defaults are not sent beside a failure, because the panel reads a payload only
+on success — with one exception: every save-sync refusal carries
+``synced=0``, and the sweep's also ``conflicts=0`` (#2205 D2). A partial
+failure's extras are what was done.
 
 Two carve-outs, which carry no ``success`` key, so the gate passes them:
 
@@ -95,11 +97,8 @@ class ErrorCode(StrEnum):
     new branch downstream. Free-form detail goes in the failure dict's
     ``message`` (or :attr:`FailedListResult.error_message`), not here.
     Bespoke non-server-reachability failures stay string ``reason`` values
-    outside this enum — raised through a named refusal class where one exists
-    (``config_error`` as ``NotConfigured``, ``not_installed`` as
-    ``NotInstalled``), otherwise as ``Refused``'s first argument
-    (``sync_disabled``, ``active_slot``, …); the ``reason: ErrorCode | str``
-    union allows it.
+    outside this enum, which the ``reason: ErrorCode | str`` union allows; how
+    one is raised is the module docstring's.
 
     The transport categories collapse several exception types onto one slug:
     ``SERVER_UNREACHABLE`` folds connection/timeout/SSL/5xx/generic-API
