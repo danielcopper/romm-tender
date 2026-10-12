@@ -502,8 +502,8 @@ class FakeSaveApi:
         self._record_device_sync(save_id, device_id)
         return {"status": "ok"}
 
-    def get_save_summary(self, rom_id: int, device_id: str | None = None) -> dict[str, Any]:
-        self.call_log.append(("get_save_summary", (rom_id,), {"device_id": device_id}))
+    def get_save_summary(self, rom_id: int) -> dict[str, Any]:
+        self.call_log.append(("get_save_summary", (rom_id,), {}))
         self._check_fail()
         slots: dict[str | None, list[dict[str, Any]]] = {}
         for s in self.saves.values():

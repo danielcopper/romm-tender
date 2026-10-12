@@ -1090,12 +1090,6 @@ class LibraryFetcher:
         try:
             # Typed ``object`` so the isinstance guard below is genuine narrowing —
             # the RomM API return type is a JSON-shape promise the server can break.
-            #
-            # Known limitation (rommapp/romm#3836): a RomM filesystem scan re-stamps
-            # every member ROM's updated_at, so this probe reports > 0 and the skip
-            # yields a full fetch after each nightly scan — the same limitation the
-            # platform skip has. The design is correct regardless and becomes fully
-            # effective once that upstream fix lands.
             delta_resp: object = await self._loop.run_in_executor(
                 None,
                 self._romm_api.list_collection_roms_updated_after,
