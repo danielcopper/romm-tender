@@ -131,8 +131,9 @@ function wordedFinding(kind: string, { code, data }: SourceHealthFinding): strin
 /** The reason a press is refused with while a finding of RetroDECK's stands in the way of its folders. */
 export const RETRODECK_FINDING_REASON = "retrodeck_finding";
 
-/** The reason a save action is refused with, which carries a finding where the save's place was not read. */
-const SAVE_SHAPE_UNSUPPORTED_REASON = "save_shape_unsupported";
+/** The two reasons a save action is refused with that carry a source's finding: a place not read from the
+ *  emulator's settings, and a missing saves folder, which a sync refuses as a failure of its own. */
+const SAVE_FINDING_REASONS: ReadonlySet<unknown> = new Set(["save_shape_unsupported", "saves_root_missing"]);
 
 function isFinding(value: unknown): value is SourceHealthFinding {
   if (typeof value !== "object" || value === null) return false;
@@ -163,7 +164,7 @@ function settingsFileSentence(finding: SourceHealthFinding, emulator: string): s
 function refusalSentence(answer: Record<string, unknown>, finding: SourceHealthFinding): string | null {
   const { reason, source, emulator } = answer;
   if (reason === RETRODECK_FINDING_REASON) return findingSentence("retrodeck", finding);
-  if (reason !== SAVE_SHAPE_UNSUPPORTED_REASON || typeof source !== "string") return null;
+  if (!SAVE_FINDING_REASONS.has(reason) || typeof source !== "string") return null;
   const settingsFile = typeof emulator === "string" ? settingsFileSentence(finding, emulator) : null;
   return settingsFile ?? findingSentence(source, finding);
 }
@@ -172,8 +173,8 @@ function refusalSentence(answer: Record<string, unknown>, finding: SourceHealthF
  * An endpoint's answer, with the message of a refusal for a source's finding
  * replaced by the sentence Main's notice shows for that finding, so a refused
  * press and the notice say the same thing: a refused folder press for one of
- * RetroDECK's findings, and a refused save action whose place was not read,
- * which names the kind of its source. A save refused for an emulator's own
+ * RetroDECK's findings, and a refused save action whose place was not read or
+ * whose saves folder is missing, which names the kind of its source. A save refused for an emulator's own
  * settings file, for which Main shows no notice, says so in a sentence of its
  * own. Every other answer comes back as it is.
  */

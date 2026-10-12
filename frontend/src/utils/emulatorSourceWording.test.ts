@@ -295,6 +295,19 @@ describe("withFindingSentence", () => {
       );
     });
 
+    it.each(["saves_root_missing", "save_shape_unsupported"])(
+      "words a missing saves folder refused with %s with Main's sentence",
+      (reason) => {
+        const finding = { code: "saves-root-missing", data: { path: "/sd/saves" } };
+        const answer = withFindingSentence({ ...saveRefusal(finding, "emudeck", "mGBA"), reason });
+
+        expect(answer.message).toBe(
+          "EmuDeck: its saves folder /sd/saves does not exist, so saves of its emulators cannot be synced.",
+        );
+        expect(answer.reason).toBe(reason);
+      },
+    );
+
     it("leaves a save refusal that names no source as it came", () => {
       const answer = saveRefusal({ code: "not-set-up", data: { path: "/m" } }, null);
 
