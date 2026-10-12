@@ -23,6 +23,7 @@ import { biosFileDescription, biosFileNote } from "../../utils/biosFileNote";
 import { oneOfRowLine } from "../../utils/biosGroup";
 import { biosHeldRatio } from "../../utils/biosHeldRatio";
 import { biosSummary } from "../../utils/biosSummary";
+import { emulatorClause } from "../../utils/emulatorClause";
 import { buildEmulatorMenu } from "../../utils/emulatorMenu";
 import { emulatorDataReasonSentence, platformSystemClause } from "../../utils/emulatorSourceWording";
 import { getEventTarget } from "../../utils/events";
@@ -638,21 +639,14 @@ function removeShortcutsTitle(row: PlatformRow): string {
  * The colour the header's core clause and its chip both take.
  *
  * Three outcomes in priority order, which is what the nested form obscured:
- * nothing can be pinned at all is red, an override the user chose is gold, and
- * everything else — including a platform running its default — is muted. Both
- * callers read it from here so the icon and the words beside it cannot disagree.
+ * a state the games cannot start in is red, an override the user chose is gold,
+ * and everything else — including a platform running its default — is muted.
+ * Both callers read it from here so the icon and the words beside it cannot
+ * disagree.
  */
-function coreClauseColour(unpinnable: boolean, isOverride: boolean): string {
-  if (unpinnable) return RED;
+function coreClauseColour(gamesCannotStart: boolean, isOverride: boolean): string {
+  if (gamesCannotStart) return RED;
   return isOverride ? AMBER : MUTED;
-}
-
-/** What the header's core clause reads where no option can be pinned: which of
- *  the three unpinnable states the platform is in, said in the fewest words the
- *  state supports. */
-function fallbackLabel(noEmulator: boolean, fallbackMissing: boolean): string {
-  if (noEmulator) return "no emulator";
-  return fallbackMissing ? "no emulator installed" : "RetroDECK decides";
 }
 
 /** The label a download button carries right now — its own word unless its run
@@ -1003,35 +997,8 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
   // answer lands. That, and a failed shortcut-count read dropping "· N in
   // Steam", are the two ways this line loses a piece; both failures now say so
   // on the pane, and the in-flight one is a beat rather than a state.
-  //
-  // The clause NAMES the core, and "Default" is not one of the names it can
-  // take: `resolve_platform_label` answers with the real label in both ordinary
-  // cases — the per-platform override where it still resolves, else the
-  // es_systems default. Printing "Default" said the opposite of what was true.
-  //
-  // `null` splits in two, and only one half is a failure. With options on the
-  // menu it means none is BAKEABLE, and `select_default_option` says what
-  // follows: the plain RetroDECK launch is baked and RetroDECK resolves the
-  // emulator itself, so the games still start and the clause says who is
-  // choosing. With NO options there is nothing for RetroDECK to resolve either
-  // — its own launch exits 1 — and the clause says so, in red.
   const activeLabel = core ? core.active_core_label : null;
-  // Everything the clause says rests on the emulator list having been READ.
-  // `get_emulator_options` answers `available: false` with an EMPTY list when
-  // the answering source gives no emulator list, so a clause keyed on the
-  // list's length alone said "no emulator" in red over a state where nothing
-  // was established — the definite failure claim this pane keeps having to
-  // remove, and beside a sentence saying why the list was not established. One
-  // premise, named once, so the two readings below cannot drift apart.
-  // S6582 is raised on the declaration line, so its NOSONAR must sit there; prettier-ignore keeps
-  // the formatter from wrapping the trailing comment onto its own line, which would unsuppress it.
-  // prettier-ignore
-  const emulatorsKnown = core != null && core.emulator_data_available; // NOSONAR(typescript:S6582) — `core?.emulator_data_available` loses the aliased narrowing TypeScript takes from this form, and `core.emulators` two lines below then fails TS18049 twice. The optional chain is shorter and does not type-check.
-  const noEmulator = emulatorsKnown && core.emulators.length === 0;
-  // The fallback RetroDECK would use is missing, so the clause says that rather
-  // than naming a core nothing can run. Same shape as the empty menu: a state
-  // the games do not start in, in red.
-  const fallbackMissing = emulatorsKnown && activeLabel === null && core.emulators[0]?.reason === "not_installed";
+  const clause = emulatorClause(core ?? null);
   // The platform-level twin of the game page's `activeCoreIsDefault`, read off
   // the payload's own `is_default`, which marks the single option
   // `select_default_option` picks. One expression feeds the clause AND the
@@ -1039,12 +1006,8 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
   // gold, because `find` on a null label returns nothing and "not the default"
   // is not the same statement as "an override".
   const activeIsDefault = core?.emulators.find((option) => option.label === activeLabel)?.is_default ?? false;
-  const coreColor = coreClauseColour(noEmulator || fallbackMissing, activeLabel !== null && !activeIsDefault);
-  // No clause at all where the list could not be read — the same silence a
-  // failed or in-flight core read gets, and for the same reason.
-  const coreClause = !emulatorsKnown
-    ? null
-    : { text: activeLabel ?? fallbackLabel(noEmulator, fallbackMissing), color: coreColor };
+  const coreColor = coreClauseColour(clause?.gamesCannotStart ?? false, activeLabel !== null && !activeIsDefault);
+  const coreClause = clause === null ? null : { text: clause.text, color: coreColor };
   const systemClause = core?.platform_system ? platformSystemClause(core.platform_system) : null;
 
   return (

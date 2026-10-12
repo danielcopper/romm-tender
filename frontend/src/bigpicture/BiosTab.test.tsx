@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/react";
 import { BiosTab } from "./BiosTab";
 import { libretroEmu, standaloneEmu } from "../test-utils/coreFixtures";
+import { BIOS_MISSING_RED } from "../utils/biosColor";
 import type { BiosFileStatus, BiosStatus, CoreInfo, EmulatorOption, MissingConfiguredImage } from "../types";
 
 const coreInfo: CoreInfo = {
@@ -808,20 +809,61 @@ describe("BiosTab", () => {
     expect(container.textContent).not.toContain("Active Core");
   });
 
-  it("reads 'RetroDECK decides' when no launching emulator is resolved", () => {
-    const { container } = render(
-      <BiosTab
-        biosStatus={biosStatus}
-        biosLevel="missing"
-        coreInfo={{ ...coreInfo, active_core: null, active_core_label: null }}
-        isActive={true}
-      />,
-    );
-    const emulatorHeading = [...container.querySelectorAll(".romm-panel-section-title")].find(
-      (el) => el.textContent === "Emulator",
-    );
-    expect(emulatorHeading?.nextElementSibling?.textContent).toBe("RetroDECK decides");
-    expect(container.textContent).not.toContain("Default");
+  describe("the Emulator column where no emulator is resolved", () => {
+    // The column takes the Platforms header's words for the same payload
+    // (`emulatorClause`), so each of the three unpinnable states reads its own
+    // way, and the two the games cannot start in are red.
+    const underTheEmulatorHeading = (core: CoreInfo | null) => {
+      const { container } = render(
+        <BiosTab biosStatus={biosStatus} biosLevel="missing" coreInfo={core} isActive={true} />,
+      );
+      const heading = [...container.querySelectorAll(".romm-panel-section-title")].find(
+        (el) => el.textContent === "Emulator",
+      );
+      expect(heading).toBeTruthy();
+      return { container, value: heading?.nextElementSibling as HTMLElement | null };
+    };
+    const unresolved = (emulators: EmulatorOption[]): CoreInfo => ({
+      ...coreInfo,
+      active_core: null,
+      active_core_label: null,
+      emulators,
+    });
+
+    it("reads 'RetroDECK decides', not in red, where the fallback can run", () => {
+      const { container, value } = underTheEmulatorHeading({ ...coreInfo, active_core: null, active_core_label: null });
+      expect(value?.textContent).toBe("RetroDECK decides");
+      expect(value?.style.color).toBe("");
+      expect(container.textContent).not.toContain("Default");
+    });
+
+    it("reads 'no emulator installed' in red where the fallback is not installed", () => {
+      const { value } = underTheEmulatorHeading(
+        unresolved([standaloneEmu("mGBA (Standalone)", false, { bakeable: false, reason: "not_installed" })]),
+      );
+      expect(value?.textContent).toBe("no emulator installed");
+      expect(value?.style.color).toBe(BIOS_MISSING_RED);
+    });
+
+    it("reads 'no emulator' in red where the platform lists none", () => {
+      const { value } = underTheEmulatorHeading(unresolved([]));
+      expect(value?.textContent).toBe("no emulator");
+      expect(value?.style.color).toBe(BIOS_MISSING_RED);
+    });
+
+    it("renders no value under the heading while the core answer is not there", () => {
+      const { value } = underTheEmulatorHeading(null);
+      expect(value).toBeNull();
+    });
+
+    it("renders no value under the heading where the emulator list could not be read", () => {
+      const { value } = underTheEmulatorHeading({
+        ...unresolved([]),
+        emulator_data_available: false,
+        emulator_data_reason: "no_platform_system",
+      });
+      expect(value).toBeNull();
+    });
   });
 
   describe("a core's line", () => {

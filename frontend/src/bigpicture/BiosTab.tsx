@@ -37,12 +37,13 @@
 
 import { FC, type ReactElement } from "react";
 import type { BiosFileStatus, BiosLevel, BiosStatus, CoreInfo, FirmwareWanted, OneOfMembership } from "../types";
-import { biosColorForLevel } from "../utils/biosColor";
+import { BIOS_MISSING_RED, biosColorForLevel } from "../utils/biosColor";
 import { isFetchable } from "../utils/biosFetchable";
 import { biosFileDescription, biosFileNote } from "../utils/biosFileNote";
 import { oneOfWords, type GroupLineTone } from "../utils/biosGroup";
 import { biosHeldRatio } from "../utils/biosHeldRatio";
 import { biosSummary, groupBlocks } from "../utils/biosSummary";
+import { emulatorClause } from "../utils/emulatorClause";
 import { emulatorDataReasonSentence } from "../utils/emulatorSourceWording";
 import { section } from "./panelSection";
 
@@ -510,14 +511,23 @@ export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isA
   // `BIOS` the same way. A label here is the road not to take twice over: the
   // heading already names the subject, so it would be a second name for the
   // same thing, and the one it carried called a standalone emulator a core.
+  const clause = emulatorClause(coreInfo);
   const coreColumn = [
     <div key="core-title" className="romm-panel-section-title" style={{ marginBottom: "8px" }}>
       Emulator
     </div>,
-    <div key="core" className="romm-panel-value">
-      {coreInfo?.active_core_label ? coreInfo.active_core_label : "RetroDECK decides"}
-    </div>,
   ];
+  if (clause !== null) {
+    coreColumn.push(
+      <div
+        key="core"
+        className="romm-panel-value"
+        style={clause.gamesCannotStart ? { color: BIOS_MISSING_RED } : undefined}
+      >
+        {clause.text}
+      </div>,
+    );
+  }
 
   return section(
     "bios-core",
