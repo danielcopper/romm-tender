@@ -1507,7 +1507,6 @@ export interface SessionFinalizeResult {
   migration: SessionFinalizeMigration | null;
 }
 
-/** Refused with `prune_active` while a removed-game cleanup runs: the session's playtime is then not recorded. */
 export const finalizeGameSession = endpoint<[number], SessionFinalizeResult | EndpointFailure>("finalize_game_session");
 
 // Delete operations

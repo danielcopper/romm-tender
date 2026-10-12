@@ -705,7 +705,7 @@ describe("sessionManager post-exit save-sync toast (#1481)", () => {
     expect(bodies).toContain("2 save conflicts need resolution");
   });
 
-  it("says the playtime was not saved when the finalize is refused, and logs the refusal", async () => {
+  it("says playtime and saves were not synced when a cleanup refuses the finalize, and logs the refusal", async () => {
     vi.mocked(backend.finalizeGameSession).mockResolvedValue({
       success: false,
       reason: "prune_active",
@@ -715,11 +715,27 @@ describe("sessionManager post-exit save-sync toast (#1481)", () => {
     expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
       expect.objectContaining({
         title: "Tender",
-        body: "This session's playtime was not saved — a removed-game cleanup was running",
+        body: "Playtime and saves for this session were not synced — a removed-game cleanup was running",
       }),
     );
     expect(backend.logWarn).toHaveBeenCalledWith(
       `Finalize for romId=${ROM_ID} refused (prune_active): A removed-game cleanup is in progress`,
+    );
+    expect(backend.logError).not.toHaveBeenCalled();
+    expect(updatePlaytimeDisplay).not.toHaveBeenCalled();
+  });
+
+  it("shows any other refusal of the finalize in its own words, and logs it", async () => {
+    vi.mocked(backend.finalizeGameSession).mockResolvedValue({
+      success: false,
+      reason: "blocked_by_update",
+      message: "An update is being installed",
+    });
+    await runStop();
+    const bodies = vi.mocked(toaster.toast).mock.calls.map((c) => c[0].body);
+    expect(bodies).toEqual(["An update is being installed"]);
+    expect(backend.logWarn).toHaveBeenCalledWith(
+      `Finalize for romId=${ROM_ID} refused (blocked_by_update): An update is being installed`,
     );
     expect(backend.logError).not.toHaveBeenCalled();
     expect(updatePlaytimeDisplay).not.toHaveBeenCalled();

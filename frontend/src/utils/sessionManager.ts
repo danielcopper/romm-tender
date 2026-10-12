@@ -354,8 +354,8 @@ async function handleGameStop(stoppedAppId: number): Promise<void> {
   );
 }
 
-/** The only rule `finalize_game_session` checks is the removed-game cleanup's, so a refusal is always that one. */
-const FINALIZE_REFUSED_TOAST_BODY = "This session's playtime was not saved — a removed-game cleanup was running";
+const PRUNE_ACTIVE_FINALIZE_TOAST_BODY =
+  "Playtime and saves for this session were not synced — a removed-game cleanup was running";
 
 function applyFinalizeResult(
   appId: number,
@@ -364,7 +364,7 @@ function applyFinalizeResult(
 ): void {
   if (isEndpointFailure(result)) {
     logWarn(`Finalize for romId=${romId} refused (${result.reason}): ${result.message}`);
-    showToast(FINALIZE_REFUSED_TOAST_BODY);
+    showToast(result.reason === "prune_active" ? PRUNE_ACTIVE_FINALIZE_TOAST_BODY : result.message);
     return;
   }
 
