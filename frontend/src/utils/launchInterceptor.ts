@@ -42,6 +42,7 @@ import {
   runLaunchGate,
   markLaunchSkipped,
   consumeLaunchSkip,
+  BENIGN_SYNC_SKIP_REASONS,
   LOCAL_CALL_LIMIT_MS,
   SERVER_CALL_LIMIT_MS,
 } from "./launchGate";
@@ -51,7 +52,7 @@ import { startingSourceOffSentence } from "./emulatorSourceWording";
 import type { GateVerdict, LaunchGateOps, PreLaunchSyncOutcome } from "./launchGate";
 import { reconfirmLaunchOptions } from "./launchOptionsReconcile";
 import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "./saveSetup";
-import { BENIGN_SYNC_SKIP_REASONS, type SyncConflict } from "../types";
+import type { SyncConflict } from "../types";
 import { detach } from "./detach";
 import { tellStrandedPress } from "./strandedPanelStore";
 import { strandedPanelSentence } from "./strandedPanelWording";

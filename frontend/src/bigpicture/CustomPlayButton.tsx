@@ -77,7 +77,13 @@ import { showStopGameModal } from "./StopGameModal";
 import { showForgetDownloadModal } from "./ForgetDownloadModal";
 import { getMigrationState } from "../utils/migrationStore";
 import { reloadGameDetail } from "../utils/gameDetailStore";
-import { runLaunchGate, markLaunchSkipped, LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "../utils/launchGate";
+import {
+  runLaunchGate,
+  markLaunchSkipped,
+  BENIGN_SYNC_SKIP_REASONS,
+  LOCAL_CALL_LIMIT_MS,
+  SERVER_CALL_LIMIT_MS,
+} from "../utils/launchGate";
 import { NO_LAUNCH_TARGET_TOAST_BODY, romHasLaunchTarget } from "../utils/launchTarget";
 import { readStartingSource } from "../utils/startingSource";
 import { startingSourceOffSentence } from "../utils/emulatorSourceWording";
@@ -89,7 +95,6 @@ import type {
   DownloadFailedEvent,
   UninstallProgressEvent,
 } from "../types";
-import { BENIGN_SYNC_SKIP_REASONS } from "../types";
 import { detach } from "../utils/detach";
 import { setLaunchOptionsConfirmed } from "../utils/steamShortcuts";
 import {

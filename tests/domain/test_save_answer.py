@@ -362,7 +362,7 @@ class TestTheBenignSkipListsAgreeAcrossTheWire:
     """
 
     def _frontend_slugs(self) -> set[str]:
-        source = (_REPO_ROOT / "frontend" / "src" / "types" / "saves.ts").read_text(encoding="utf-8")
+        source = (_REPO_ROOT / "frontend" / "src" / "utils" / "launchGate.ts").read_text(encoding="utf-8")
         block = re.search(
             r"BENIGN_SYNC_SKIP_REASONS:\s*readonly\s+string\[\]\s*=\s*\[(.*?)\]",
             source,
