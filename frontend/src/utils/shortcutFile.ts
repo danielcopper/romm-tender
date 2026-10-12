@@ -16,7 +16,7 @@ export type ShortcutFileReader = () => Promise<ShortcutFileReading>;
  * threw rejects, which the confirm counts the same way.
  */
 export async function readShortcutFile(appIds: number[]): Promise<ShortcutFileReading> {
-  const answer: ShortcutLaunchOptions | undefined = await getShortcutLaunchOptions(appIds);
+  const answer = (await getShortcutLaunchOptions(appIds)) as ShortcutLaunchOptions | undefined;
   if (answer?.status === "read") {
     return {
       status: "read",
