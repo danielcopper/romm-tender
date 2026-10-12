@@ -205,6 +205,79 @@ class TestReadShortcutExes:
         assert adapter.read_shortcut_exes() is None
 
 
+class TestReadShortcutLaunchOptions:
+    """The reading a launch-options confirm falls back on when Steam's reports have not shown the write."""
+
+    _write = staticmethod(TestReadShortcutExes._write)
+
+    def test_reads_every_shortcut_app_id_and_launch_options(self, tmp_path):
+        self._write(
+            tmp_path,
+            {
+                "0": {"appid": 1, "AppName": "One", "LaunchOptions": "flatpak run net.retrodeck.retrodeck '/a.chd'"},
+                "1": {"appid": 2, "AppName": "Two", "LaunchOptions": ""},
+            },
+        )
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_launch_options() == {
+            1: "flatpak run net.retrodeck.retrodeck '/a.chd'",
+            2: "",
+        }
+
+    def test_reads_the_keys_whatever_case_steam_wrote_them_in(self, tmp_path):
+        self._write(tmp_path, {"0": {"AppId": 7, "launchoptions": "written"}})
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_launch_options() == {7: "written"}
+
+    def test_converts_the_signed_app_id_the_file_stores(self, tmp_path):
+        self._write(tmp_path, {"0": {"appid": -949288395, "LaunchOptions": "written"}})
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_launch_options() == {3345678901: "written"}
+
+    def test_a_record_with_no_launch_options_reads_as_empty(self, tmp_path):
+        self._write(tmp_path, {"0": {"appid": 1, "AppName": "One"}})
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_launch_options() == {1: ""}
+
+    def test_skips_an_entry_with_no_app_id(self, tmp_path):
+        self._write(tmp_path, {"0": {"LaunchOptions": "written"}, "1": "not a dict"})
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_launch_options() == {}
+
+    def test_a_machine_with_no_shortcut_file_reads_as_no_shortcuts(self, tmp_path):
+        (tmp_path / ".local" / "share" / "Steam" / "userdata" / "123").mkdir(parents=True)
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_launch_options() == {}
+
+    def test_an_unlocatable_steam_directory_reads_as_nothing_established(self, tmp_path):
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_launch_options() is None
+
+    def test_a_file_that_will_not_parse_reads_as_nothing_established(self, tmp_path):
+        config_dir = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123" / "config"
+        config_dir.mkdir(parents=True)
+        (config_dir / "shortcuts.vdf").write_bytes(b"not a vdf file at all")
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_launch_options() is None
+
+    def test_a_file_holding_no_shortcut_list_reads_as_nothing_established(self, tmp_path):
+        config_dir = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123" / "config"
+        config_dir.mkdir(parents=True)
+        with open(str(config_dir / "shortcuts.vdf"), "wb") as f:
+            f.write(vdf.binary_dumps({"something_else": {}}))
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_launch_options() is None
+
+
 class TestWriteShortcuts:
     def test_writes_vdf_file(self, tmp_path):
         userdata = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123"

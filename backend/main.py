@@ -1084,13 +1084,26 @@ class Endpoints:
         launcher that is not there stops its game from starting.
 
         The reading is the backend's because ``shortcuts.vdf`` holds every
-        shortcut's ``exe`` and one 315 KB parse answers for all of them; the
+        shortcut's ``exe`` and one parse answers for all of them; the
         frontend's own route to the same fact is a ``RegisterForAppDetails``
         per shortcut, which loads and caches a fat details object each time
         (ADR-0032). Answered without reading anything at all once the transition
         is stamped complete.
         """
         return await self._services.shortcut_relocation_service.get_shortcut_relocation()
+
+    @route
+    async def get_shortcut_launch_options(self, app_ids):
+        """Report the launch options Steam's ``shortcuts.vdf`` holds for *app_ids*.
+
+        Returns a discriminated status union: ``{"status": "read",
+        "launch_options": [{"app_id", "launch_options"}]}`` for those of the
+        app IDs the file holds, or ``{"status": "unreadable", "message"}``.
+        Read only, and the file is parsed afresh on every call — the frontend
+        asks it once for a whole batch of confirms rather than once per
+        shortcut.
+        """
+        return await self._services.shortcut_file_service.get_shortcut_launch_options(app_ids)
 
     @route
     def get_host_status(self):

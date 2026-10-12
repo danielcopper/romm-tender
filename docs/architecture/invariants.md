@@ -708,13 +708,14 @@ Format: **invariant** — tier — enforced by.
   uncached so a component installed mid-session is seen), `SandboxLauncherFn` (re-probes the flatpak roots for
   `es_find_rules.xml` and re-stats it before it may use the parse cache), `SystemSupportedExtensionsFn` /
   `SystemKnownFn` (two more questions to the same catalogue, asked afresh from the panel and once per reading within a
-  run), `SteamConfigStore.read_shortcut_exes` (parses Steam's whole `shortcuts.vdf` — 315 KB and 828 entries on the
-  reference machine — for the one-time shortcut relocation. **Listing it changes nothing at its only call site**: the
-  service reaches it through `run_in_executor` as a bound method, which is this checker's documented blind spot, so the
-  entry is a statement of the rule rather than an enforcement of it. It is also not the store's only real I/O —
-  `grid_dir()` is called from `services/artwork.py` (six sites), `services/shortcut_removal.py` and
-  `services/library/reporter.py`, `set_steam_input_config()` from `services/settings.py`, `services/shortcut_removal.py`
-  and `services/library/reporter.py`, and `write_shortcut_icon()` from `services/steamgrid.py` — those are unlisted, and
+  run), `SteamConfigStore.read_shortcut_exes` and `.read_shortcut_launch_options` (each parses Steam's whole
+  `shortcuts.vdf`, for the one-time shortcut relocation and for a launch-options confirm that Steam's reports did not
+  settle. **Listing them changes nothing at their call sites**: each service reaches its reading through
+  `run_in_executor` as a bound method, which is this checker's documented blind spot, so the entries are a statement of
+  the rule rather than an enforcement of it. They are also not the store's only real I/O — `grid_dir()` is called from
+  `services/artwork.py` (six sites), `services/shortcut_removal.py` and `services/library/reporter.py`,
+  `set_steam_input_config()` from `services/settings.py`, `services/shortcut_removal.py` and
+  `services/library/reporter.py`, and `write_shortcut_icon()` from `services/steamgrid.py` — those are unlisted, and
   their being unlisted is a gap, not a judgement), `FirmwarePlatformResolver` (reads what one system's emulators want
   WITH content verification: it opens each candidate in a declared folder and reads it the way the emulator does —
   59-173 ms per system on the reference machine at emu-atlas 0.22) and its whole-machine sibling `FirmwareResolver`, the

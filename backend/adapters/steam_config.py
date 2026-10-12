@@ -103,6 +103,42 @@ class SteamConfigAdapter:
         in this session may not be in it yet. Every caller here is asking about
         shortcuts written by earlier sessions.
         """
+        records = self._read_shortcut_records()
+        if records is None:
+            return None
+        exes: dict[int, str] = {}
+        for fields in records:
+            app_id, exe = fields.get("appid"), fields.get("exe")
+            if isinstance(app_id, int) and isinstance(exe, str):
+                exes[to_unsigned_app_id(app_id)] = exe
+        return exes
+
+    def read_shortcut_launch_options(self) -> dict[int, str] | None:
+        """Every non-Steam shortcut's app ID and current ``LaunchOptions``, read off ``shortcuts.vdf``.
+
+        The same reading as :meth:`read_shortcut_exes`, with the same answers —
+        ``None`` when nothing could be read, ``{}`` for a machine with no file —
+        and the same handling of key case and signed app ids. A record with no
+        ``LaunchOptions`` field reads as ``""``, the value Steam shows for a
+        shortcut that has none.
+
+        Unlike that reading's callers, this one's asks about a write made
+        seconds earlier in this session, which rests on Steam rewriting the file
+        promptly after a launch-options write — measured, and what the file
+        still cannot tell, in docs/architecture/steam-non-steam-shortcuts.md.
+        """
+        records = self._read_shortcut_records()
+        if records is None:
+            return None
+        launch_options: dict[int, str] = {}
+        for fields in records:
+            app_id, value = fields.get("appid"), fields.get("launchoptions", "")
+            if isinstance(app_id, int) and isinstance(value, str):
+                launch_options[to_unsigned_app_id(app_id)] = value
+        return launch_options
+
+    def _read_shortcut_records(self) -> list[dict[str, Any]] | None:
+        """Every shortcut record in ``shortcuts.vdf``, its keys lower-cased; ``None`` when nothing could be read."""
         path = self.shortcuts_vdf_path()
         if not path:
             self._logger.warning("Could not locate Steam's userdata directory; no shortcut was read")
@@ -110,7 +146,7 @@ class SteamConfigAdapter:
         if not os.path.exists(path):
             # A machine that has never had a non-Steam shortcut has no file, and
             # that is a finished reading of nothing rather than a failed one.
-            return {}
+            return []
         try:
             with open(path, "rb") as handle:
                 raw = vdf.binary_loads(handle.read())
@@ -121,15 +157,11 @@ class SteamConfigAdapter:
         if not isinstance(entries, dict):
             self._logger.warning(f"{path} holds no shortcut list")
             return None
-        exes: dict[int, str] = {}
-        for entry in entries.values():
-            if not isinstance(entry, dict):
-                continue
-            fields = {key.lower(): value for key, value in entry.items()}
-            app_id, exe = fields.get("appid"), fields.get("exe")
-            if isinstance(app_id, int) and isinstance(exe, str):
-                exes[to_unsigned_app_id(app_id)] = exe
-        return exes
+        return [
+            {key.lower(): value for key, value in entry.items()}
+            for entry in entries.values()
+            if isinstance(entry, dict)
+        ]
 
     def write_shortcuts(self, data: dict[str, Any]) -> None:
         path = self.shortcuts_vdf_path()

@@ -230,13 +230,14 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # the implementation's own method name.
         "resolve_sandbox_launcher",
         "_sandbox_launcher",
-        # SteamConfigStore.read_shortcut_exes (services/protocols/transport.py) —
-        # parses Steam's whole shortcuts.vdf (315 KB and 828 entries on the
-        # reference machine) to answer which shortcuts of ours still name a
-        # launcher other than the bin root's. Object-shaped, so the method name is
-        # the whole entry — but its one consumer reaches it through run_in_executor
-        # as a BOUND METHOD, the blind spot documented above, so this entry catches
-        # nothing today and is here for the call site that writes it plainly.
+        # SteamConfigStore.read_shortcut_exes and .read_shortcut_launch_options
+        # (services/protocols/transport.py) — each parses Steam's whole
+        # shortcuts.vdf, to answer which shortcuts of ours still name a launcher
+        # other than the bin root's and what a shortcut's launch options are in
+        # the file. Object-shaped, so the method name is the whole entry — but
+        # each one consumer reaches it through run_in_executor as a BOUND
+        # METHOD, the blind spot documented above, so these entries catch
+        # nothing today and are here for the call site that writes one plainly.
         # The store's other I/O is unlisted and that is a gap rather than a
         # judgement: grid_dir() is called from services/artwork.py (six sites),
         # services/shortcut_removal.py and services/library/reporter.py,
@@ -244,6 +245,7 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # services/shortcut_removal.py and services/library/reporter.py, and
         # write_shortcut_icon() from services/steamgrid.py.
         "read_shortcut_exes",
+        "read_shortcut_launch_options",
         # FirmwarePlatformResolver (services/protocols/paths.py) — reads what
         # one system's emulators want, with content verification: it opens each
         # candidate in a declared folder and reads it the way the emulator does,
