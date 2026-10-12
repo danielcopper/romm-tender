@@ -21,6 +21,7 @@ import { announceSaveSync } from "../../utils/saveSyncEvents";
 
 async function handleResult(result: CopySaveToSlotStatus, target: string, romId: number): Promise<void> {
   const feedback = copyToSlotFeedback(result, target);
+  if (feedback === null) return;
   if (feedback.kind === "conflict") {
     await showSyncConflictModal(feedback.conflict);
     return;

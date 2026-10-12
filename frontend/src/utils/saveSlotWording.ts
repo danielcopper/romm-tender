@@ -33,7 +33,7 @@ export function unsupportedCopyMessage(result: Extract<CopySaveToSlotStatus, { s
 export type CopyToSlotFeedback = { kind: "toast"; message: string } | { kind: "conflict"; conflict: SyncConflict };
 
 /** Map a CopySaveToSlotStatus to user-facing toast feedback or conflict modal requirement. */
-export function copyToSlotFeedback(result: CopySaveToSlotStatus, targetSlot: string): CopyToSlotFeedback {
+export function copyToSlotFeedback(result: CopySaveToSlotStatus, targetSlot: string): CopyToSlotFeedback | null {
   switch (result.status) {
     case "ok":
       return { kind: "toast", message: `Save copied to slot '${displaySlot(targetSlot)}'` };
@@ -72,13 +72,19 @@ export function copyToSlotFeedback(result: CopySaveToSlotStatus, targetSlot: str
       return { kind: "toast", message: `Couldn't copy the save: ${result.message}` };
     case "invalid_slot_name":
       return { kind: "toast", message: "Enter a valid slot name." };
+    default:
+      // A refusal carries no status: the save rules' hold refuses a copy while an
+      // update installs, a RetroDECK migration is pending or a removed-game
+      // cleanup runs (`SaveService.copy_save_to_slot`), and the endpoint's type does not
+      // say so. Nothing is shown, as before.
+      return null;
   }
 }
 
 export type RollbackFeedback = { kind: "toast"; message: string } | { kind: "conflict"; conflict: SyncConflict };
 
 /** Map a RollbackStatus to user-facing toast feedback or conflict modal requirement. */
-export function rollbackFeedback(result: RollbackStatus, versionUpdatedAt: string | null): RollbackFeedback {
+export function rollbackFeedback(result: RollbackStatus, versionUpdatedAt: string | null): RollbackFeedback | null {
   switch (result.status) {
     case "ok":
       return { kind: "toast", message: `Save restored from ${formatSaveTimeAgo(versionUpdatedAt)}` };
@@ -109,6 +115,12 @@ export function rollbackFeedback(result: RollbackStatus, versionUpdatedAt: strin
       return { kind: "toast", message: "RomM couldn't find this game's save data — nothing was restored." };
     case "unsupported":
       return { kind: "toast", message: unsupportedRestoreMessage(result) };
+    default:
+      // A refusal carries no status: the save rules' hold refuses a restore while an
+      // update installs, a RetroDECK migration is pending or a removed-game
+      // cleanup runs (`SaveService.rollback_to_version`), and the endpoint's type does not
+      // say so. Nothing is shown, as before.
+      return null;
   }
 }
 

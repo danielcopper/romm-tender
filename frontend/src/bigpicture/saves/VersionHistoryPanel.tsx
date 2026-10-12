@@ -104,6 +104,7 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
     try {
       const result: RollbackStatus = await savesRollbackToVersion(romId, slot, version.id);
       const feedback = rollbackFeedback(result, version.updated_at);
+      if (feedback === null) return;
       if (feedback.kind === "conflict") {
         await showSyncConflictModal(feedback.conflict);
       } else {

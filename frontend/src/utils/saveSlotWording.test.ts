@@ -293,3 +293,11 @@ describe("formatSlotDeleteLines and formatSlotDeleteDescription", () => {
     expect(formatSlotDeleteLines(info)).toEqual(["This will remove slot 'localonly' from your local configuration."]);
   });
 });
+
+describe("a refusal with no status", () => {
+  it("is no feedback for a copy or a restore", () => {
+    const refusal = { success: false, reason: "blocked_by_update", message: "An update is being installed" } as never;
+    expect(copyToSlotFeedback(refusal, "backup")).toBeNull();
+    expect(rollbackFeedback(refusal, null)).toBeNull();
+  });
+});
