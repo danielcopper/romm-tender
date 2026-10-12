@@ -236,6 +236,7 @@ describe("setLaunchOptionsConfirmed", () => {
       await vi.advanceTimersByTimeAsync(2000);
 
       await expect(promise).resolves.toBe(false);
+      expect(logWarnSpy).toHaveBeenCalledTimes(1);
       expect(logWarnSpy).toHaveBeenCalledWith(
         `setLaunchOptionsConfirmed: appId 5 not confirmed: the re-read shows "", the write was ${JSON.stringify(WRITTEN)}`,
       );
