@@ -64,7 +64,8 @@ so doing so needs nothing from us: change the pin in `frontend/package.json` (or
 - **Source:** <https://github.com/react-icons/react-icons>
 - **Where the text is:** below. The bundles are minified, so this file is where the notice travels with them
 
-`dist/index.js` and `dist/index-coexistence.js` each carry it, as the icons the panel draws. `dist/globals.js` does not.
+`dist/index.js` and `dist/index-coexistence.js` each carry the icons the panel imports from it. `dist/globals.js` does
+not.
 
 ```text
 Copyright 2018 kamijin_fanta <kamijin@live.jp>

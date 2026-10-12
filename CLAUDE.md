@@ -302,10 +302,10 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   `.github/workflows/release.yml` builds the tagged tree, packs it with the same `scripts/package.sh`, checks the result
   and attaches `romm-tender-<V>.tar.gz` plus its `.sha256` to the release — it builds from the tag rather than carrying
   an artifact over from CI. Beside them it attaches `decky-ui-<V>.tgz`, the source of the bundled `@decky/ui`
-  (`scripts/decky_ui_source.py`; why: `THIRD-PARTY-NOTICES.md`). What it proposes is normally computed from
-  `.release-please-manifest.json` plus the commits since — but **not today**: `release-as: "1.0.0"` overrides that
-  computation on every run, so every release PR proposes 1.0.0 until the key is removed. **Take it out once 1.0.0 has
-  shipped**, or the version stops moving and nothing says so.
+  (`scripts/decky_ui_source.py`; the notice that offers it: `THIRD-PARTY-NOTICES.md`). What it proposes is normally
+  computed from `.release-please-manifest.json` plus the commits since — but **not today**: `release-as: "1.0.0"`
+  overrides that computation on every run, so every release PR proposes 1.0.0 until the key is removed. **Take it out
+  once 1.0.0 has shipped**, or the version stops moving and nothing says so.
 
   Two files carry the version and each is written by a different mechanism: `version.txt` at the repository root is the
   `simple` strategy's own version file, and `backend/domain/identity.py`'s `VERSION` line is an extra file, found by the
