@@ -1190,17 +1190,19 @@ path that ends a preview, and the only one the page takes rather than the reader
 
 Force Full Sync is rendered and disabled, never hidden, and the line under it says which state it is in rather than
 describing a press: while a run is in flight; while a clear already made is waiting for its run, since pressing again
-would clear nothing (that state ends when a run has been and gone); while the stats say nothing has been synced; and
-while the stats have not answered yet. Those last two are both a `null` snapshot and they part here. A read still on its
-way disables the button, since not knowing is not evidence that there IS something to clear. A read that **failed**
+would clear nothing (that state ends when a run has been and gone); while the stats hold nothing the press would remove;
+and while the stats have not answered yet. Those last two are both a `null` snapshot and they part here. A read still on
+its way disables the button, since not knowing is not evidence that there IS something to clear. A read that **failed**
 leaves it live and says the reading is missing, because a failure is not an absence. The page's one unconditional stats
 read is the one on mount — every other is conditional on something happening (a run ending, a clear, a poll while the
 last run is paused) — so a mount read that never answered used to leave the button dead for as long as the page stayed
-open, which is what a cancelled preview left behind on the device (#1814). Skip preview stays live throughout: the
-setting is read by the next press of a start button, so flipping it during a run changes nothing about that run. **Steam
-memory** — the reading now and the last run's delta, saying "unavailable" and "not recorded" rather than showing a zero.
-**Last runs** — the ten newest, newest first, each a focus stop with the start time, what the run covered and how it
-ended.
+open, which is what a cancelled preview left behind on the device (#1814). What the press removes is read from the two
+fields that describe it, `has_completion_stamp` and `resumable_games`, and the run history is not consulted: the clear
+keeps it on purpose, so it says nothing about whether there is anything left to clear. Skip preview stays live
+throughout: the setting is read by the next press of a start button, so flipping it during a run changes nothing about
+that run. **Steam memory** — the reading now and the last run's delta, saying "unavailable" and "not recorded" rather
+than showing a zero. **Last runs** — the ten newest, newest first, each a focus stop with the start time, what the run
+covered and how it ended.
 
 **Working out a preview is this page's call, and only this page's.** Nothing computes one on open — not this page's own
 mount and not Main, which starts no run and computes nothing; its one sync control is the Cancel that ends a run already

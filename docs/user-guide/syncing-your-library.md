@@ -72,12 +72,12 @@ Steam's memory now and how much the last run added to it, and your last ten sync
 covered and how it ended.
 
 **Force Full Sync** stays on the page whether or not you can press it, and the line under it tells you why when you
-cannot: a run is going, the clear has already been made and is waiting for its next run, or nothing has been synced yet
-so there is nothing to forget. If a change table is up when you confirm it, that table goes — the clear has just thrown
-away what the table was worked out against, so applying it afterwards would skip the very platforms the clear asked to
-be re-fetched. Work out a fresh preview, or start the run. And if Tender could not read what has already been synced,
-the button stays pressable and says so rather than going quiet: not being able to check is not the same as there being
-nothing to clear.
+cannot: a run is going, the clear has already been made and is waiting for its next run, or no sync progress is
+recorded, so there is nothing to forget. If a change table is up when you confirm it, that table goes — the clear has
+just thrown away what the table was worked out against, so applying it afterwards would skip the very platforms the
+clear asked to be re-fetched. Work out a fresh preview, or start the run. And if Tender could not read what has already
+been synced, the button stays pressable and says so rather than going quiet: not being able to check is not the same as
+there being nothing to clear.
 
 ![Tender QAM panel showing connection status, a Sync Library button with Skip Preview and Force Full Sync, and a menu of
 Library, Settings and Data Management](../assets/screenshot-qam.jpg)

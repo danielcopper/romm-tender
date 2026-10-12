@@ -126,6 +126,10 @@ export const SyncControls: FC<{ state: SyncPageState }> = ({ state }) => (
 /**
  * Whether the stats say there is nothing for Force Full Sync to forget.
  *
+ * What the press removes is every completion stamp and every recorded launch
+ * command, so the two fields that report those are the answer. The run history
+ * is not: the clear keeps it on purpose, so it is still there after a clear.
+ *
  * A read that has not answered says neither thing, and the two ways it can be
  * unanswered part here. While one is still coming the button waits for it —
  * not knowing is not evidence that there IS something to clear. Once one has
@@ -135,7 +139,7 @@ export const SyncControls: FC<{ state: SyncPageState }> = ({ state }) => (
  * a reason for.
  */
 function nothingToClear(stats: SyncStats | null, statsFailed: boolean): boolean {
-  if (stats !== null) return !stats.last_sync && !stats.last_attempt;
+  if (stats !== null) return !stats.has_completion_stamp && stats.resumable_games === 0;
   return !statsFailed;
 }
 
@@ -148,14 +152,14 @@ function nothingToClear(stats: SyncStats | null, statsFailed: boolean): boolean 
  */
 function forceFullSyncNote(state: SyncPageState): string {
   if (state.run.running) return "Not while a run is in flight.";
-  if (state.fullSyncCleared !== null) return `${state.fullSyncCleared}. Pressing again would clear nothing.`;
+  if (state.fullSyncCleared !== null) return `${state.fullSyncCleared}.`;
   if (state.stats === null) {
     return state.statsFailed
       ? "Could not read what has already been synced — this still clears it."
       : "Reading what has already been synced…";
   }
   if (nothingToClear(state.stats, state.statsFailed))
-    return "Nothing has been synced yet, so there is nothing to forget.";
+    return "No sync progress is recorded, so there is nothing to forget.";
   return "Forgets what was synced and rebuilds everything next run.";
 }
 

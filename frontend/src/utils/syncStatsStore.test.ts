@@ -37,6 +37,8 @@ function stats(overrides: Partial<SyncStats> = {}): SyncStats {
     platforms: 3,
     roms: 42,
     total_shortcuts: 42,
+    resumable_games: 0,
+    has_completion_stamp: false,
     ...overrides,
   };
 }
