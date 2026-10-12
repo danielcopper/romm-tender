@@ -248,6 +248,13 @@ class TestTheFilesAnInstallStartsFrom:
 
         assert f"{_ROOT}/{relative}: missing" in _findings(archive)
 
+    def test_the_bundled_decky_ui_licence_text_is_missed(self, good, tmp_path):
+        """``dist/index.js`` and ``dist/globals.js`` carry ``@decky/ui``, whose LGPL-2.1 text travels with them."""
+        licence = f"{_ROOT}/dist/LICENSE-@decky-ui.txt"
+        archive = _repack(good, tmp_path / "out", drop=[licence])
+
+        assert _one(_findings(archive), "LICENSE-@decky-ui.txt") == f"{licence}: missing"
+
     def test_the_launcher_without_its_mode_is_a_finding(self, good, tmp_path):
         """Why the shipped mode is asserted at all — the fallback path runs this copy — is at ``EXECUTABLE_FILES``."""
         launcher = f"{_ROOT}/bin/tender-rom-launcher"
