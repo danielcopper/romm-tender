@@ -22,6 +22,14 @@ commit  3e4302e2e58f39d6289d95a64edbb931f3831668  (2026-07-25, the last commit
 read at f75dc1df134daf53b1ec02c351b12313c1696a7e  (main, 2026-09-14)
 fetched 2026-09-16
 
+LICENCE
+-------
+The block between the two markers is Decky Loader's code, by the
+SteamDeckHomebrew project, and is licensed GPL-2.0 (the LICENSE file at the
+root of the repository above, at the commit pinned there). It is copied here
+as a test fixture: `steamGlobals.test.ts` reads it as text, no bundle imports
+it, and nothing under `frontend/` is in the release tarball.
+
 REFRESHING IT
 -------------
 Re-fetch the file at the commit you are pinning, replace everything between the
