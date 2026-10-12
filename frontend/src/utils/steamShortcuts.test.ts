@@ -420,7 +420,7 @@ describe("setLaunchOptionsConfirmed's reading of Steam's shortcut file", () => {
     vi.spyOn(backend, "logInfo").mockImplementation(() => {});
     let registrations = 0;
     const { fn } = makeRegisterForAppDetails(() => ({
-      strLaunchOptions: reports[Math.min(registrations++, reports.length - 1)],
+      strLaunchOptions: reports[Math.min(registrations++, reports.length - 1)]!,
     }));
     vi.stubGlobal("SteamClient", { Apps: { SetAppLaunchOptions: vi.fn(), RegisterForAppDetails: fn } });
     const readFile = vi.fn(() => Promise.resolve(fileHolding([])));
