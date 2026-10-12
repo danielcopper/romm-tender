@@ -214,6 +214,8 @@ locally with `mise run docs`.
 - **RomM API quirks**: Filter param is `platform_ids` (plural). Cover URLs have unencoded spaces (must URL-encode).
   Paginated: `{"items": [...], "total": N}`. List calls page via `lib/romm_paging.py` and append
   `&with_char_index=false&with_filter_values=false` to skip aggregations the server otherwise computes on every request.
+  Every `/api/roms` walk that pages with `offset` also sends `order_by=id`; a walk without it is not stable under a
+  concurrent scan (why: `_WALK_ORDER` in `adapters/romm/romm_api.py`).
 - **RomM minimum version**: Requires RomM >= 5.3.0, hard-rejected in `test_connection()` (`MIN_ROMM_VERSION` in
   `domain/identity.py`) — Tender is inert until the server is updated.
 - **User-Agent on outgoing HTTP**: SteamGridDB **and** RomM behind Cloudflare Tunnel reject the default `Python-urllib`

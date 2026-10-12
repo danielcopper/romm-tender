@@ -52,10 +52,9 @@ class SlotListing:
         self._loop = loop
         self._log_debug = log_debug
 
-    def _read_inputs(self, rom_id: int) -> tuple[RomSaveSyncState | None, str | None]:
+    def _read_state(self, rom_id: int) -> RomSaveSyncState | None:
         with self._uow_factory() as uow:
-            state = uow.rom_save_sync_states.get(rom_id)
-        return state, self._device_registry.get_device_id()
+            return uow.rom_save_sync_states.get(rom_id)
 
     async def get_save_slots(self, rom_id: int) -> dict[str, Any]:
         """List available save slots for a ROM.
@@ -75,7 +74,7 @@ class SlotListing:
         if not save_sync_enabled(self._settings):
             raise Refused("sync_disabled", SAVE_SYNC_DISABLED)
 
-        rom_state, device_id = await self._loop.run_in_executor(None, self._read_inputs, rom_id)
+        rom_state = await self._loop.run_in_executor(None, self._read_state, rom_id)
         default_slot = resolve_default_slot(self._settings)
         # ROM not tracked → fall back to the global default slot. ROM
         # tracked with ``active_slot=None`` → preserve legacy mode (None
@@ -95,7 +94,7 @@ class SlotListing:
             summary = await self._loop.run_in_executor(
                 None,
                 lambda: self._retry.with_retry(
-                    lambda: self._romm_api.get_save_summary(rom_id, device_id=device_id),
+                    lambda: self._romm_api.get_save_summary(rom_id),
                 ),
             )
         except RommApiError as e:

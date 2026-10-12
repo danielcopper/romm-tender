@@ -109,7 +109,7 @@ class TestListRoms:
         client.request.return_value = {"items": [], "total": 0}
         api.list_roms(5, limit=25, offset=10)
         client.request.assert_called_once_with(
-            "/api/roms?platform_ids=5&limit=25&offset=10&with_char_index=false&with_filter_values=false"
+            "/api/roms?platform_ids=5&limit=25&offset=10&order_by=id&with_char_index=false&with_filter_values=false"
         )
 
     def test_default_page_size_and_disabled_aggregations(self):
@@ -119,7 +119,7 @@ class TestListRoms:
         client.request.return_value = {"items": [], "total": 0}
         api.list_roms(5)
         client.request.assert_called_once_with(
-            "/api/roms?platform_ids=5&limit=500&offset=0&with_char_index=false&with_filter_values=false"
+            "/api/roms?platform_ids=5&limit=500&offset=0&order_by=id&with_char_index=false&with_filter_values=false"
         )
 
 
@@ -574,6 +574,16 @@ class TestListRomsUpdatedAfter:
         assert "with_char_index=false" in url
         assert "with_filter_values=false" in url
 
+    def test_query_string_is_pinned_without_order_by(self):
+        """The probe reads only ``total`` from one row, so it carries no walk order."""
+        api, client = _make_api()
+        client.request.return_value = {"items": [], "total": 0}
+        api.list_roms_updated_after(5, "2024-01-15T10:30:00+00:00")
+        client.request.assert_called_once_with(
+            "/api/roms?platform_ids=5&limit=1&offset=0&updated_after=2024-01-15T10%3A30%3A00%2B00%3A00"
+            "&with_char_index=false&with_filter_values=false"
+        )
+
 
 class TestListCollectionRomsUpdatedAfter:
     def test_user_collection_uses_collection_id_param(self):
@@ -607,6 +617,17 @@ class TestListCollectionRomsUpdatedAfter:
         url = client.request.call_args[0][0]
         assert "limit=10" in url
         assert "offset=5" in url
+
+    @pytest.mark.parametrize(("kind", "param"), [("standard", "collection_id"), ("smart", "smart_collection_id")])
+    def test_query_string_is_pinned_without_order_by(self, kind, param):
+        """The probe reads only ``total`` from one row, so it carries no walk order."""
+        api, client = _make_api()
+        client.request.return_value = {"items": [], "total": 0}
+        api.list_collection_roms_updated_after(7, kind, "2024-01-15T10:30:00+00:00")
+        client.request.assert_called_once_with(
+            f"/api/roms?{param}=7&limit=1&offset=0&updated_after=2024-01-15T10%3A30%3A00%2B00%3A00"
+            "&with_char_index=false&with_filter_values=false"
+        )
 
 
 class TestDownloadRomContent:
@@ -694,7 +715,7 @@ class TestListRomsByCollection:
         client.request.return_value = {"items": [], "total": 0}
         api.list_roms_by_collection(7, limit=25, offset=10)
         client.request.assert_called_once_with(
-            "/api/roms?collection_id=7&limit=25&offset=10&with_char_index=false&with_filter_values=false"
+            "/api/roms?collection_id=7&limit=25&offset=10&order_by=id&with_char_index=false&with_filter_values=false"
         )
 
 
@@ -706,6 +727,7 @@ class TestListRomsByVirtualCollection:
         url = client.request.call_args[0][0]
         assert "virtual_collection_id=Genre%2FAction%20RPG" in url
         assert "limit=500" in url  # shared default page size
+        assert "&order_by=id" in url
         assert "with_char_index=false" in url
         assert "with_filter_values=false" in url
 
@@ -716,6 +738,7 @@ class TestListRomsByVirtualCollection:
         url = client.request.call_args[0][0]
         assert "limit=10" in url
         assert "offset=5" in url
+        assert "&order_by=id" in url
         assert "with_char_index=false" in url
         assert "with_filter_values=false" in url
 
@@ -759,7 +782,8 @@ class TestListRomsBySmartCollection:
         client.request.return_value = {"items": [], "total": 0}
         api.list_roms_by_smart_collection(7, limit=25, offset=10)
         client.request.assert_called_once_with(
-            "/api/roms?smart_collection_id=7&limit=25&offset=10&with_char_index=false&with_filter_values=false"
+            "/api/roms?smart_collection_id=7&limit=25&offset=10&order_by=id"
+            "&with_char_index=false&with_filter_values=false"
         )
 
     def test_default_pagination(self):
@@ -767,7 +791,8 @@ class TestListRomsBySmartCollection:
         client.request.return_value = {"items": [], "total": 0}
         api.list_roms_by_smart_collection(1)
         client.request.assert_called_once_with(
-            "/api/roms?smart_collection_id=1&limit=500&offset=0&with_char_index=false&with_filter_values=false"
+            "/api/roms?smart_collection_id=1&limit=500&offset=0&order_by=id"
+            "&with_char_index=false&with_filter_values=false"
         )
 
     def test_propagates_http_error(self):
@@ -846,27 +871,12 @@ class TestConfirmDownload:
 
 
 class TestGetSaveSummary:
-    def test_without_device_id(self):
+    def test_asks_by_rom_id_alone(self):
         api, client = _make_api()
         client.request.return_value = {"total": 3}
         result = api.get_save_summary(42)
         client.request.assert_called_once_with("/api/saves/summary?rom_id=42")
         assert result["total"] == 3
-
-    def test_with_device_id(self):
-        api, client = _make_api()
-        client.request.return_value = {"total": 1}
-        api.get_save_summary(42, device_id="abc-123")
-        client.request.assert_called_once_with("/api/saves/summary?rom_id=42&device_id=abc-123")
-
-    def test_url_encodes_device_id_with_special_chars(self):
-        """device_id is encoded defensively even though it's normally a UUID."""
-        api, client = _make_api()
-        client.request.return_value = {"total": 0}
-        api.get_save_summary(42, device_id="abc&xyz=1")
-        url = client.request.call_args[0][0]
-        assert "device_id=abc%26xyz%3D1" in url
-        assert "device_id=abc&xyz=1" not in url
 
 
 class TestDeleteServerSaves:

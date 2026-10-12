@@ -52,6 +52,14 @@ _MAX_PLAY_SESSION_PAGES = 50
 # that server-side work. Appended to every list-endpoint query string.
 _LIST_AGGREGATIONS_DISABLED = "&with_char_index=false&with_filter_values=false"
 
+# RomM orders ``/api/roms`` by ``name_sort_key`` unless told otherwise (5.3.0
+# ``handler/database/roms_handler.py``), and offset paging over that order shifts
+# every later page when a concurrent scan inserts a ROM earlier in name order: one
+# row comes back twice and another not at all. In ``id`` order a new ROM appends
+# at the end. Appended to every ``/api/roms`` walk that pages with ``offset``;
+# the ``updated_after`` probes read only ``total`` and go without it.
+_WALK_ORDER = "&order_by=id"
+
 # Public pairing-code exchange endpoint (unauthenticated — the code is the credential).
 _PAIRING_CODE_ENDPOINT = "/api/client-tokens/exchange"
 # Case-folded needle identifying the exchange 404 raised when the token a pairing
@@ -134,7 +142,8 @@ class RommApiAdapter:
 
     def list_roms(self, platform_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0) -> dict[str, Any]:
         return self._client.request(
-            f"/api/roms?platform_ids={platform_id}&limit={limit}&offset={offset}{_LIST_AGGREGATIONS_DISABLED}"
+            f"/api/roms?platform_ids={platform_id}&limit={limit}&offset={offset}"
+            f"{_WALK_ORDER}{_LIST_AGGREGATIONS_DISABLED}"
         )
 
     def list_roms_updated_after(
@@ -207,7 +216,8 @@ class RommApiAdapter:
         self, collection_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0
     ) -> dict[str, Any]:
         return self._client.request(
-            f"/api/roms?collection_id={collection_id}&limit={limit}&offset={offset}{_LIST_AGGREGATIONS_DISABLED}"
+            f"/api/roms?collection_id={collection_id}&limit={limit}&offset={offset}"
+            f"{_WALK_ORDER}{_LIST_AGGREGATIONS_DISABLED}"
         )
 
     def list_collection_roms_updated_after(
@@ -234,14 +244,16 @@ class RommApiAdapter:
     ) -> dict[str, Any]:
         encoded_id = urllib.parse.quote(str(virtual_id), safe="")
         return self._client.request(
-            f"/api/roms?virtual_collection_id={encoded_id}&limit={limit}&offset={offset}{_LIST_AGGREGATIONS_DISABLED}"
+            f"/api/roms?virtual_collection_id={encoded_id}&limit={limit}&offset={offset}"
+            f"{_WALK_ORDER}{_LIST_AGGREGATIONS_DISABLED}"
         )
 
     def list_roms_by_smart_collection(
         self, smart_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0
     ) -> dict[str, Any]:
         return self._client.request(
-            f"/api/roms?smart_collection_id={smart_id}&limit={limit}&offset={offset}{_LIST_AGGREGATIONS_DISABLED}"
+            f"/api/roms?smart_collection_id={smart_id}&limit={limit}&offset={offset}"
+            f"{_WALK_ORDER}{_LIST_AGGREGATIONS_DISABLED}"
         )
 
     # ── Firmware / BIOS ───────────────────────────────────────────────
@@ -328,11 +340,8 @@ class RommApiAdapter:
             {"device_id": device_id},
         )
 
-    def get_save_summary(self, rom_id: int, device_id: str | None = None) -> dict[str, Any]:
-        query = f"/api/saves/summary?rom_id={rom_id}"
-        if device_id is not None:
-            query += f"&device_id={urllib.parse.quote(device_id, safe='')}"
-        return self._client.request(query)
+    def get_save_summary(self, rom_id: int) -> dict[str, Any]:
+        return self._client.request(f"/api/saves/summary?rom_id={rom_id}")
 
     def delete_server_saves(self, save_ids: list[int]) -> dict[str, Any]:
         return self._client.post_json("/api/saves/delete", {"saves": save_ids})

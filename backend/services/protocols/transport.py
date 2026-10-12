@@ -336,8 +336,11 @@ class RommSaveApi(Protocol):
         """Acknowledge a deferred-sync save download (paired with ``optimistic=False``)."""
         ...
 
-    def get_save_summary(self, rom_id: int, device_id: str | None = None) -> dict[str, Any]:
-        """Return ``/api/saves/summary`` grouped by slot; ``device_id`` includes per-device sync status."""
+    def get_save_summary(self, rom_id: int) -> dict[str, Any]:
+        """Return ``/api/saves/summary``, which takes ``rom_id`` alone and answers the ROM's saves grouped by slot.
+
+        Each slot carries its save count and its newest save (RomM 5.3.0 ``SlotSummarySchema``).
+        """
         ...
 
     def download_save(self, save_id: int, dest_path: str) -> None:
