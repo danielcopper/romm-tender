@@ -17,7 +17,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from domain.retrodeck_folders import FolderRefused, folder_of
-from lib.errors import NotInstalled, Refused
+from lib.errors import NamedRefused, NotInstalled, Refused
 from lib.partial_failure import PartialFailure
 from lib.path_safety import is_inside_folder
 from models.prune import InstalledContentRemoval
@@ -41,6 +41,12 @@ if TYPE_CHECKING:
 # Seconds between ``uninstall_progress`` frames while a multi-file removal runs.
 # The terminal frame is never throttled.
 _PROGRESS_INTERVAL_S = 0.5
+
+
+class FilePresent(NamedRefused):
+    """A forget refused because the recorded file or folder exists; ``path`` names it."""
+
+    reason = "file_present"
 
 
 @dataclass(frozen=True)
@@ -352,8 +358,7 @@ class RomRemovalService:
 
         Raises :class:`NotInstalled` for a ROM with no install record,
         ``in_progress`` while another removal holds the ROM, and
-        ``file_present`` -- the ``path`` found among its details -- while the
-        recorded folder or file exists. It removes no file, so it has no
+        :class:`FilePresent` while the recorded folder or file exists. It removes no file, so it has no
         failure of its own to refuse: anything the record drop raises, a
         database error included, propagates.
         """
@@ -369,7 +374,7 @@ class RomRemovalService:
             present = await asyncio.shield(forget)
         if present is not None:
             self._logger.info(f"Forget download refused: rom_id={rom_id}: {present} exists")
-            raise Refused("file_present", f"The recorded download exists: {present}", path=present)
+            raise FilePresent(f"The recorded download exists: {present}", path=present)
         self._complete_removal(rom_id, "Forget download", started)
         return {"success": True, "message": "Download forgotten"}
 
