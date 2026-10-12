@@ -1,20 +1,22 @@
 """What a game's save consists of, where it lives, and whether Tender may sync it.
 
 The vocabulary the resolver's savefile answer is translated into, and the rule
-that turns one such answer into exactly one of six states. Adapters read the
+that turns one such answer into exactly one of seven states. Adapters read the
 machine; this module decides what the reading MEANS, so the decision is pure and
 testable without a machine, and so ``services/`` never sees a resolver type.
 
-The six states are the whole point. Save sync copies a per-game file to a
+The seven states are the whole point. Save sync copies a per-game file to a
 per-ROM record on the server, and that model is simply wrong for most of what
 emulators actually write — a card many games share, a directory whose contents
 nobody enumerated, a path or a name half of which is the game's own identity.
 Only
-:data:`SAVE_STATE_PER_GAME_FILES` is a save Tender can carry; the other five
-are refusals, and each says something different about why. The sixth is about
-the emulator source rather than the emulator: its saves root does not exist, and
-a sync would create it — on internal storage while an SD card is out. Every one of them is
-an honest "we are not touching this", never "there is nothing here".
+:data:`SAVE_STATE_PER_GAME_FILES` is a save Tender can carry; the other six
+are refusals, and each says something different about why. Two of them are about
+the reading rather than the emulator's shape: the source's saves root does not
+exist, and a sync would create it — on internal storage while an SD card is out;
+or the place the answer names was not read from the emulator's own settings, so
+it is a default the emulator may not use. Every one of them is an honest "we are
+not touching this", never "there is nothing here".
 
 **Scope is the emulator, never the platform.** Two emulators for one system
 answer differently — the same PS2 game is a shared memory card under standalone
@@ -30,19 +32,24 @@ rather than silently classifying everything as a refusal.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Literal
+
+from domain.emulator_sources import EMUDECK, RETRODECK
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-# The six states. Exactly one holds for any ROM.
+    from domain.emulator_sources import SourceFinding
+
+# The seven states. Exactly one holds for any ROM.
 SAVE_STATE_PER_GAME_FILES = "per_game_files"
 SAVE_STATE_SHARED = "shared"
 SAVE_STATE_INSIDE_CONTENT = "inside_content"
 SAVE_STATE_HOLE = "hole"
 SAVE_STATE_UNESTABLISHED = "unestablished"
 SAVE_STATE_SAVES_ROOT_MISSING = "saves_root_missing"
+SAVE_STATE_PLACE_NOT_READ = "place_not_read"
 
 SaveState = Literal[
     "per_game_files",
@@ -51,6 +58,7 @@ SaveState = Literal[
     "hole",
     "unestablished",
     "saves_root_missing",
+    "place_not_read",
 ]
 
 # The three shapes inside ``unestablished``. They are kept apart because they
@@ -84,6 +92,32 @@ UnestablishedShape = Literal["nothing_established", "directory_known", "not_aske
 # carry inverts exactly that: it drops every file the vocabulary has not named
 # yet, silently, on the day upstream adds one.
 CONFIGURATION_ROLES = frozenset({"settings", "notes"})
+
+# The resolver's codes for a place an answer names that was not read from the
+# settings that would name it — the file is missing, could not be read, or the
+# source is not set up — so a default stands in (its ``PLACE_NOT_READ_CODES``).
+PLACE_NOT_READ_CODES = frozenset(
+    {
+        "emulator-config-missing",
+        "emulator-config-unreadable",
+        "config-unreadable",
+        "companion-config-missing",
+        "marker-missing",
+        "marker-unreadable",
+        "marker-invalid",
+        "not-set-up",
+    }
+)
+
+# A source's marker findings. RetroDECK's and EmuDeck's marker names the source's
+# own folders and never where an emulator writes, so its findings alone leave
+# every save place read; a bare RetroArch's marker IS its ``retroarch.cfg``.
+_MARKER_CODES = frozenset({"marker-missing", "marker-unreadable", "marker-invalid"})
+_MARKER_NAMES_NO_SAVE_PLACE = frozenset({RETRODECK, EMUDECK})
+
+# The states that are the emulator's save shape and that no reading of the
+# settings changes, so they are named ahead of a finding about the reading.
+_PERMANENT_SHAPES = frozenset({"shared", "inside_content"})
 
 # Granularities where one file holds many games' progress.
 _SHARED_GRANULARITIES = frozenset({"shared-card", "shared-file"})
@@ -215,6 +249,13 @@ class SaveAnswer:
     ``missing_saves_root`` is the saves root the source names and that does not
     exist, set on :data:`SAVE_STATE_SAVES_ROOT_MISSING` alone.
 
+    ``finding`` is the resolver's finding that the place was not read from the
+    emulator's settings, and ``source`` the kind of the source whose answer it
+    is; both are set on :data:`SAVE_STATE_PLACE_NOT_READ` alone. Such an answer
+    keeps the directory and the files the resolver named, because the rename on
+    adoption still carries the files there; every sync and write refuses it,
+    and the directory follow moves nothing into it.
+
     ``content_installed`` says whether this ROM's content is on disk. It is
     ``False`` for a ROM the library holds but has not installed — the question
     was then about the path the ROM WOULD occupy, so every name in the answer is
@@ -239,6 +280,8 @@ class SaveAnswer:
     root_kind: str | None = None
     fallback_directory: str | None = None
     missing_saves_root: str | None = None
+    finding: SourceFinding | None = None
+    source: str | None = None
 
     @property
     def syncable(self) -> bool:
@@ -297,8 +340,10 @@ class SaveAnswer:
 
 
 # One sentence per refusing state about the emulator, for the skip result's
-# ``message``. Neutral by design: none of these is an error, and three of the
-# four are permanent facts about the emulator rather than anything the user did.
+# ``message``. Neutral by design: none of these is an error, and three of them
+# are permanent facts about the emulator rather than anything the user did. The
+# panel words a refusal for a place not read from its finding instead
+# (:func:`save_finding_details`), so that sentence stands only where it does not.
 # The missing saves root names a folder, so ``save_shape_message`` words it.
 _STATE_MESSAGES: dict[str, str] = {
     SAVE_STATE_SHARED: "Save sync is unavailable: this emulator keeps one save card that all games share.",
@@ -307,6 +352,9 @@ _STATE_MESSAGES: dict[str, str] = {
         "Save sync is unavailable: this emulator files saves under an identity of the game that Tender cannot read."
     ),
     SAVE_STATE_UNESTABLISHED: "Save sync is unavailable: what this emulator writes could not be established.",
+    SAVE_STATE_PLACE_NOT_READ: (
+        "Save sync is unavailable: where this emulator keeps saves was not read from its settings."
+    ),
 }
 
 
@@ -321,6 +369,70 @@ def save_shape_message(answer: SaveAnswer) -> str:
         return f"Save sync is unavailable: RetroDECK's saves folder {answer.missing_saves_root} does not exist."
     sentence = _STATE_MESSAGES.get(answer.state, _STATE_MESSAGES[SAVE_STATE_UNESTABLISHED])
     return f"{sentence} ({answer.emulator})" if answer.emulator else sentence
+
+
+def save_finding_details(answer: SaveAnswer) -> dict[str, object]:
+    """What a refusal of *answer* carries beside its reason and message, for the panel to word it.
+
+    The finding, the kind of the source whose answer it is, and the emulator's
+    label, on an answer refused because its place was not read; nothing on any
+    other.
+    """
+    if answer.state != SAVE_STATE_PLACE_NOT_READ or answer.finding is None:
+        return {}
+    return {
+        "finding": {"code": answer.finding.code, "data": dict(answer.finding.data)},
+        "source": answer.source,
+        "emulator": answer.emulator,
+    }
+
+
+def place_not_read_finding(findings: Sequence[SourceFinding], source: str | None) -> SourceFinding | None:
+    """The first of *findings* saying that a save place was not read from the emulator's settings, or ``None``.
+
+    The answer's own findings, never the source's health: a source's health
+    states findings about files no save of this emulator is placed by (ES-DE's
+    settings, EmuDeck's RetroArch beside a standalone emulator). A marker
+    finding counts only where the marker is the emulator's settings, which is a
+    bare RetroArch's and no other kind's.
+    """
+    return next(
+        (
+            finding
+            for finding in findings
+            if finding.code in PLACE_NOT_READ_CODES
+            and not (finding.code in _MARKER_CODES and source in _MARKER_NAMES_NO_SAVE_PLACE)
+        ),
+        None,
+    )
+
+
+def with_source_findings(
+    answer: SaveAnswer,
+    *,
+    source: str | None,
+    findings: Sequence[SourceFinding],
+    missing_saves_root: str | None,
+) -> SaveAnswer:
+    """*answer*, or the refusal a finding about the reading behind it stands for.
+
+    Where several reasons apply, the first in this order is the one named: a
+    shape no reading changes (a shared card, a save inside the game), then a
+    missing saves root (*missing_saves_root*, the root the source read from its
+    settings and found absent), then a place not read from the emulator's
+    settings (:func:`place_not_read_finding` over *findings*), then what the
+    answer itself could not establish.
+    """
+    if answer.state in _PERMANENT_SHAPES:
+        return answer
+    if missing_saves_root is not None:
+        return saves_root_missing_answer(
+            path=missing_saves_root, emulator=answer.emulator, content_installed=answer.content_installed
+        )
+    finding = place_not_read_finding(findings, source)
+    if finding is None:
+        return answer
+    return replace(answer, state=SAVE_STATE_PLACE_NOT_READ, unestablished=None, finding=finding, source=source)
 
 
 def pick_download_name(known_names: Sequence[str], computed: str) -> str:

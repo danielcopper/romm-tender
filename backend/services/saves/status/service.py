@@ -218,7 +218,7 @@ class StatusService:
         misleading "ready to upload" indicator on what is in fact a
         connectivity blip.
         """
-        # What this ROM's emulator actually writes, read live. Five of the six
+        # What this ROM's emulator actually writes, read live. Six of the seven
         # states refuse the sync, and so does a save written beside the ROM's
         # content, which the sync leaves alone: no ``info`` means no local probe
         # and no baseline-adopt write, so nothing is looked for and nothing is

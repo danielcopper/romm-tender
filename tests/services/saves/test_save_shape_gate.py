@@ -1,6 +1,6 @@
 """A save Tender cannot carry per game is refused, and the refusal costs nothing.
 
-Five of the six states refuse, and a refusal has to be a real one: no file is
+Six of the seven states refuse, and a refusal has to be a real one: no file is
 probed for, no sync state is written, and the result is the benign-skip shape
 rather than a failure — except a missing saves root, which a sync refuses as
 one. Probing anyway is not merely wasted work — it is how Tender used to
@@ -16,10 +16,12 @@ all.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from dataclasses import replace
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import pytest
 
+from domain.emulator_sources import SourceFinding
 from domain.save_answer import (
     BENIGN_SYNC_SKIP_REASONS,
     SAVE_SHAPE_UNSUPPORTED_REASON,
@@ -46,7 +48,7 @@ from tests.services.saves._helpers import (
 
 
 def _refusing(state: str, **overrides: Any) -> SaveAnswer:
-    """One of the five refusing answers, as the resolver's translation produces it."""
+    """One of the six refusing answers, as the resolver's translation produces it."""
     kwargs: dict[str, Any] = {
         "state": state,
         "unestablished": "nothing_established" if state == "unestablished" else None,
@@ -116,11 +118,11 @@ def _saved_files(svc) -> dict[str, object]:
     return dict(state.files) if state is not None else {}
 
 
-_REFUSING_STATES = ["shared", "inside_content", "hole", "unestablished", "saves_root_missing"]
+_REFUSING_STATES = ["shared", "inside_content", "hole", "unestablished", "saves_root_missing", "place_not_read"]
 
 
 class TestARefusalProbesNothing:
-    """States two to five look for no file on disk."""
+    """No refusing state looks for a file on disk."""
 
     @pytest.mark.parametrize("state", _REFUSING_STATES)
     def test_no_path_is_probed(self, tmp_path, state: str):
@@ -150,7 +152,7 @@ class TestARefusalProbesNothing:
 
 
 class TestARefusalWritesNoState:
-    """States two to five leave the per-ROM save state exactly as they found it."""
+    """No refusing state changes the per-ROM save state."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("state", _REFUSING_STATES)
@@ -530,6 +532,100 @@ class TestAMissingSavesRootIsAFailureAndNotASkip:
 
         assert result["success"] is True
         assert result["synced"] == 0
+
+
+class TestAPlaceNotReadIsRefusedWithItsFinding:
+    """A save place not read from the emulator's settings: every sync, write and move refuses, and nothing lands."""
+
+    _FINDING = SourceFinding(code="emulator-config-missing", data={"token": "CEMU", "config": "/cfg/Cemu/settings.xml"})
+    _DETAILS: ClassVar[dict[str, Any]] = {
+        "finding": {"code": "emulator-config-missing", "data": {"token": "CEMU", "config": "/cfg/Cemu/settings.xml"}},
+        "source": "retrodeck",
+        "emulator": "Cemu (Standalone)",
+    }
+
+    def _service(self, tmp_path) -> tuple[Any, Any]:
+        directory = str(self._directory(tmp_path))
+        answer = replace(
+            _syncable(directory),
+            state="place_not_read",
+            emulator="Cemu (Standalone)",
+            finding=self._FINDING,
+            source="retrodeck",
+        )
+        svc, _store, fake = _service(tmp_path, answer)
+        _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
+        for slot in ("default", "other", None):
+            save_id = {"default": 100, "other": 101, None: 102}[slot]
+            fake.saves[save_id] = _server_save(save_id=save_id, slot=slot)
+            fake.set_server_save_content(save_id, b"server progress")
+        return svc, fake
+
+    @staticmethod
+    def _directory(tmp_path) -> Any:
+        return tmp_path / "defaults" / "saves"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("entry", ["pre_launch_sync", "post_exit_sync", "sync_rom_saves"])
+    async def test_every_sync_refuses_with_the_finding_and_creates_no_folder(self, tmp_path, entry: str):
+        svc, fake = self._service(tmp_path)
+        sync = getattr(svc, entry)(42)
+
+        with pytest.raises(SaveShapeUnsupported) as refused:
+            await sync
+
+        assert refused.value.reason in BENIGN_SYNC_SKIP_REASONS
+        assert refused.value.details == {**self._DETAILS, "synced": 0}
+        assert not self._directory(tmp_path).exists()
+        assert not [call for call in fake.call_log if call[0] in ("upload_save", "download_save")]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "call",
+        [
+            pytest.param(lambda svc: svc.switch_slot(42, "other"), id="switch-slot"),
+            pytest.param(lambda svc: svc.confirm_slot_choice(42, "default", True, None), id="confirm-migrate"),
+            pytest.param(lambda svc: svc.resolve_sync_conflict(42, "pokemon.srm", 100, "use_server"), id="conflict"),
+        ],
+    )
+    async def test_every_slot_write_refuses_with_the_finding_and_creates_no_folder(self, tmp_path, call):
+        svc, _fake = self._service(tmp_path)
+        writing = call(svc)
+
+        with pytest.raises(SaveShapeUnsupported) as refused:
+            await writing
+
+        assert {key: refused.value.details[key] for key in self._DETAILS} == self._DETAILS
+        assert not self._directory(tmp_path).exists()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "call",
+        [
+            pytest.param(lambda svc: svc.copy_save_to_slot(42, 100, "other"), id="copy-to-slot"),
+            pytest.param(lambda svc: svc.rollback_to_version(42, "default", 100), id="rollback"),
+        ],
+    )
+    async def test_every_version_write_refuses_with_the_finding_and_creates_no_folder(self, tmp_path, call):
+        svc, _fake = self._service(tmp_path)
+
+        result = await call(svc)
+
+        assert result["status"] == "unsupported"
+        assert result["reason"] == SAVE_SHAPE_UNSUPPORTED_REASON
+        assert {key: result[key] for key in self._DETAILS} == self._DETAILS
+        assert not self._directory(tmp_path).exists()
+
+    @pytest.mark.asyncio
+    async def test_the_control_syncs_the_same_answer_read_from_the_settings(self, tmp_path):
+        svc, _fake = self._service(tmp_path)
+        cast("FakeSaveLocationReader", svc._rom_info._save_locations).answer_with(
+            "gba", _syncable(str(self._directory(tmp_path)))
+        )
+
+        await svc.sync_rom_saves(42)
+
+        assert self._directory(tmp_path).exists()
 
 
 class TestOnlyBesideTheContentGetsTheContentDirectorySkip:

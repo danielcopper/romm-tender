@@ -6,7 +6,15 @@ names the reasons): it subclasses ``lib.errors.Refused`` rather than
 refusals as ``Refused`` and answers a benign one with no toast.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from domain.save_answer import save_finding_details, save_shape_message
 from lib.errors import NamedRefused
+
+if TYPE_CHECKING:
+    from domain.save_answer import SaveAnswer
 
 
 class SaveShapeUnsupported(NamedRefused):
@@ -18,6 +26,11 @@ class SaveShapeUnsupported(NamedRefused):
     """
 
     reason = "save_shape_unsupported"
+
+
+def shape_refusal(answer: SaveAnswer, **details: Any) -> SaveShapeUnsupported:
+    """The refusal of *answer*, worded for it and carrying what the panel words it from."""
+    return SaveShapeUnsupported(save_shape_message(answer), **save_finding_details(answer), **details)
 
 
 class SavefilesInContentDir(NamedRefused):

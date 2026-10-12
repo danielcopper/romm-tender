@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import epoch_to_iso, parse_iso_to_epoch
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_answer import save_shape_message
 from domain.save_slot import save_in_slot
 from lib.errors import NotInstalled, Refused, RommNotFoundError
 from services.saves._helpers import newest_server_saves_by_target
@@ -26,7 +25,7 @@ from services.saves._messages import (
     MIGRATION_LOCAL_FILES_FAILED,
     SAVE_SYNC_IN_CONTENT_DIR,
 )
-from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
+from services.saves._refusals import SavefilesInContentDir, shape_refusal
 from services.saves._save_state import read_save_state, write_save_state
 from services.saves._settings import autocleanup_limit, resolve_default_slot
 
@@ -354,7 +353,7 @@ class SetupWizard:
                 self._log_debug(f"confirm_slot_choice: rom {rom_id} has no save a sync could carry; skipping migration")
                 save_state.confirm_slot(normalized_slot)
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
-                raise SaveShapeUnsupported(save_shape_message(info["save_answer"]))
+                raise shape_refusal(info["save_answer"])
 
             # Confirm in memory so the migration uploads resolve to the chosen
             # slot, but persist only once the migration reaches the apply phase

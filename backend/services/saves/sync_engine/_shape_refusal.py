@@ -1,7 +1,7 @@
 """The refusal a per-ROM sync entry point performs before it syncs.
 
-Two things refuse a sync outright, and both are read off one live answer: five
-of the six save states (:mod:`domain.save_answer`), and a save the emulator
+Two things refuse a sync outright, and both are read off one live answer: six
+of the seven save states (:mod:`domain.save_answer`), and a save the emulator
 writes beside the game's content. The three per-ROM entry points all handle
 them identically: take one live reading of the machine, follow a moved save
 directory with it, and where either holds, raise the refusal instead of
@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 from domain.save_answer import SAVE_STATE_SAVES_ROOT_MISSING, save_shape_message
 from lib.errors import Refused
 from services.saves._messages import SAVE_SYNC_IN_CONTENT_DIR
-from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
+from services.saves._refusals import SavefilesInContentDir, shape_refusal
 
 if TYPE_CHECKING:
     from domain.save_answer import SaveAnswer
@@ -72,7 +72,7 @@ def refuse_unsyncable(answer: SaveAnswer | None) -> None:
     if answer.state == SAVE_STATE_SAVES_ROOT_MISSING:
         raise Refused("saves_root_missing", save_shape_message(answer), synced=0)
     if not answer.syncable:
-        raise SaveShapeUnsupported(save_shape_message(answer), synced=0)
+        raise shape_refusal(answer, synced=0)
 
 
 @dataclass
