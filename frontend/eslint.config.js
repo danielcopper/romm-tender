@@ -151,9 +151,9 @@ export default tseslint.config(
             },
             {
               target: "./src/qam",
-              from: ["./src/bigpicture", "./src/desktop", "./src/shared"],
+              from: ["./src/bigpicture", "./src/desktop"],
               message:
-                "qam/ sits below the surfaces: it mounts the panel through the factory index.tsx hands it, and never reaches into a surface or shared/ itself.",
+                "qam/ sits below the surfaces: it mounts the panel through the factory index.tsx hands it, and never reaches into a surface itself. UI it shares with a surface belongs in shared/.",
             },
             {
               target: "./src/types",

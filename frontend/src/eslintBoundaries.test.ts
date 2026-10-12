@@ -159,7 +159,7 @@ describe("frontend direction rules", () => {
   it.each([
     ["qam/ reaching into bigpicture/", "qam/__eslint_fixtures__/reachesUp.ts", REACHES_BIGPICTURE],
     ["qam/ reaching into desktop/", "qam/__eslint_fixtures__/reachesDesktop.ts", REACHES_DESKTOP],
-    ["qam/ reaching into shared/", "qam/__eslint_fixtures__/reachesShared.ts", REACHES_SHARED],
+
     ["utils/ reaching into qam/", "utils/__eslint_fixtures__/reachesQam.ts", REACHES_QAM],
     ["bigpicture/ reaching into boot/", "bigpicture/__eslint_fixtures__/reachesBoot.ts", REACHES_BOOT],
     ["boot/ reaching into qam/", "boot/__eslint_fixtures__/reachesQam.ts", REACHES_QAM],
@@ -187,6 +187,10 @@ describe("frontend direction rules", () => {
     expect(await rulesReportedFor("entryProbe.ts", REACHES_QAM_AND_BOOT_FROM_SRC)).toContain(
       "import-x/no-restricted-paths",
     );
+  });
+
+  it("leaves qam/ reaching down into shared/ alone", async () => {
+    expect(await rulesReportedFor("qam/__eslint_fixtures__/reachesDown.ts", REACHES_SHARED)).toEqual([]);
   });
 
   it("leaves qam/ reaching into qam/ alone", async () => {

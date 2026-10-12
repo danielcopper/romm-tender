@@ -672,11 +672,11 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   (`frontend/src/bigpicture/`, `frontend/src/desktop/`) or `frontend/src/shared/`; `shared/` never imports either
   surface; the two surfaces never import each other; only `frontend/src/index.tsx` and its test import
   `frontend/src/qam/` or `frontend/src/boot/`, and neither of those two imports the other; `qam/` never imports either
-  surface or `shared/`; `frontend/src/types/` imports nothing else from `frontend/src/`; and no `frontend/src/` module
-  takes part in an import cycle** — check — `frontend/eslint.config.js` (`import-x/no-restricted-paths`,
-  `import-x/no-cycle`), kept live by `frontend/src/eslintBoundaries.test.ts`; code both surfaces need moves DOWN — UI
-  into `shared/`, the rest into `api/`, `utils/` or `types/` — never sideways; `boot/` sits beside `index.tsx` and may
-  import a surface; a type-only import is no edge for the cycle rule, while a zone reports it like any other import
+  surface; `frontend/src/types/` imports nothing else from `frontend/src/`; and no `frontend/src/` module takes part in
+  an import cycle** — check — `frontend/eslint.config.js` (`import-x/no-restricted-paths`, `import-x/no-cycle`), kept
+  live by `frontend/src/eslintBoundaries.test.ts`; code both surfaces need moves DOWN — UI into `shared/`, the rest into
+  `api/`, `utils/` or `types/` — never sideways; `boot/` sits beside `index.tsx` and may import a surface; a type-only
+  import is no edge for the cycle rule, while a zone reports it like any other import
 - **No bare `# type: ignore` / blanket suppressions** — check — `scripts/check_no_bare_ignores.sh`
 - **A transport failure and an endpoint's own failure never arrive in the same shape, on either end** — test +
   prompt-only — `hostSocket.test.ts` for the frontend half (`frontend/src/api/hostSocket.ts`); the backend half is

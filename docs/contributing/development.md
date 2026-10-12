@@ -503,14 +503,13 @@ rules, in `frontend/eslint.config.js` via `eslint-plugin-import-x`: `frontend/sr
 not import either surface (`frontend/src/bigpicture/` or `frontend/src/desktop/`) or `frontend/src/shared/`, the UI that
 belongs to both surfaces; `frontend/src/shared/` may not import either surface; the two surfaces may not import each
 other; only `frontend/src/index.tsx` and its test may import `frontend/src/qam/` or `frontend/src/boot/`, and neither of
-those two the other; `frontend/src/qam/` may not import either surface or `frontend/src/shared/`; `frontend/src/types/`
-may import nothing else from `frontend/src/`; and no module in `frontend/src/` may take part in an import cycle.
-`frontend/src/boot/` sits beside `index.tsx` and may import a surface, because its start-up check has to see every Steam
-lookup the panel relies on, a surface's included. The cycle rule is the one that matters most, because a cycle is the
-signature of a split whose two halves still call each other — the wrong seam, detectable without judgment. What none of
-them catch is a helper imported by exactly one parent that takes a dozen parameters and does nothing on its own: it is
-neither a cycle nor a direction violation. These rules make the worst seam fail; they do not certify that a seam is
-right.
+those two the other; `frontend/src/qam/` may not import either surface; `frontend/src/types/` may import nothing else
+from `frontend/src/`; and no module in `frontend/src/` may take part in an import cycle. `frontend/src/boot/` sits
+beside `index.tsx` and may import a surface, because its start-up check has to see every Steam lookup the panel relies
+on, a surface's included. The cycle rule is the one that matters most, because a cycle is the signature of a split whose
+two halves still call each other — the wrong seam, detectable without judgment. What none of them catch is a helper
+imported by exactly one parent that takes a dozen parameters and does nothing on its own: it is neither a cycle nor a
+direction violation. These rules make the worst seam fail; they do not certify that a seam is right.
 
 By default the plugin reads the imports of JavaScript files only, so until the config names `.ts`/`.tsx` for it,
 `no-cycle` finds no cycle among the frontend's modules; the comment at `import-x/extensions` in that file says which
@@ -646,7 +645,7 @@ backend/
 frontend/src/                        # Frontend TypeScript
   index.tsx                          # The panel's entry module: event listeners, QAM router, the Quick Access entry's install
   qam/                               # Tender's own Quick Access entry: the patch, the tab glyph, the panel's boundary;
-                                     #   imported only by index.tsx and its test, imports no surface or shared/
+                                     #   imported only by index.tsx and its test, imports no surface
   boot/                              # Start-up: Steam's React globals, the check of what the panel takes from Steam, the failure page;
                                      #   imported only by index.tsx and its test, may import a surface
   bigpicture/                        # The gamepad surface: React components (QAM pages, game detail UI)

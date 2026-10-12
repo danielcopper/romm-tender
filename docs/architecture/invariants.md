@@ -790,23 +790,23 @@ Format: **invariant** — tier — enforced by.
   (`frontend/src/bigpicture/`, `frontend/src/desktop/`) or `frontend/src/shared/`; `shared/` never imports either
   surface; the two surfaces never import each other; only `frontend/src/index.tsx` and its test import
   `frontend/src/qam/` or `frontend/src/boot/`, and neither of those two imports the other; `qam/` never imports either
-  surface or `shared/`; `frontend/src/types/` imports nothing else from `frontend/src/`; and no `frontend/src/` module
-  takes part in an import cycle** — check — `frontend/eslint.config.js` (`import-x/no-restricted-paths`,
-  `import-x/no-cycle`). The surface pair is a peer rule, not a layer rule: the two share data and logic and almost
-  nothing visual, so anything that turns out to belong to both moves DOWN, never sideways — UI into `shared/`, which
-  both surfaces may import and which imports neither, and the rest into `api/`, `utils/` or `types/`. `qam/`, Tender's
-  Quick Access entry, sits below the surfaces: it mounts the panel through the factory `index.tsx` hands it. `boot/`
-  sits beside `index.tsx` instead, and may import a surface, because its start-up check has to see every Steam lookup
-  the panel relies on, a surface's included — `boot/steamModules.ts` reads `AppDetailsRoute` from
-  `bigpicture/patches/installGamePagePatch.ts`. The `qam/` and `boot/` zones name every directory under `frontend/src/`
-  but their own, and every file directly in it but `index.tsx` and its test, by glob, so a directory or a module added
-  there is covered without a change to them. These rules go inert rather than loud when misconfigured: until the config
-  names `.ts`/`.tsx` for the plugin to read, `no-cycle` finds no cycle among the frontend's modules (the comment at
-  `import-x/extensions` in `frontend/eslint.config.js` says how). `frontend/src/eslintBoundaries.test.ts` lints
-  known-bad fixtures through the real config and fails if any of the rules stops reporting — a green `pnpm lint` alone
-  proves nothing. For the cycle rule a type-only import is not an edge (erased at runtime), which is why the
-  `api/backend.ts` ⇄ `utils/cachedGameDetailStore.ts` back-reference is not a cycle; a zone reports an `import type`
-  like any other import
+  surface; `frontend/src/types/` imports nothing else from `frontend/src/`; and no `frontend/src/` module takes part in
+  an import cycle** — check — `frontend/eslint.config.js` (`import-x/no-restricted-paths`, `import-x/no-cycle`). The
+  surface pair is a peer rule, not a layer rule: the two share data and logic and almost nothing visual, so anything
+  that turns out to belong to both moves DOWN, never sideways — UI into `shared/`, which both surfaces may import and
+  which imports neither, and the rest into `api/`, `utils/` or `types/`. `qam/`, Tender's Quick Access entry, sits below
+  the surfaces: it mounts the panel through the factory `index.tsx` hands it, and may import `shared/` like either
+  surface — the panel's error boundary is there. `boot/` sits beside `index.tsx` instead, and may import a surface,
+  because its start-up check has to see every Steam lookup the panel relies on, a surface's included —
+  `boot/steamModules.ts` reads `AppDetailsRoute` from `bigpicture/patches/installGamePagePatch.ts`. The `qam/` and
+  `boot/` zones name every directory under `frontend/src/` but their own, and every file directly in it but `index.tsx`
+  and its test, by glob, so a directory or a module added there is covered without a change to them. These rules go
+  inert rather than loud when misconfigured: until the config names `.ts`/`.tsx` for the plugin to read, `no-cycle`
+  finds no cycle among the frontend's modules (the comment at `import-x/extensions` in `frontend/eslint.config.js` says
+  how). `frontend/src/eslintBoundaries.test.ts` lints known-bad fixtures through the real config and fails if any of the
+  rules stops reporting — a green `pnpm lint` alone proves nothing. For the cycle rule a type-only import is not an edge
+  (erased at runtime), which is why the `api/backend.ts` ⇄ `utils/cachedGameDetailStore.ts` back-reference is not a
+  cycle; a zone reports an `import type` like any other import
 - **No bare `# type: ignore` / blanket suppressions** — check — `scripts/check_no_bare_ignores.sh`
 - **A transport failure and an endpoint's own failure never arrive in the same shape, on either end** — test +
   prompt-only — `backend/host/protocol.py` states the vocabulary and `.claude/rules/host.md` holds the backend half; the
