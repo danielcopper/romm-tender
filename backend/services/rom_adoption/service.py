@@ -415,9 +415,8 @@ class RomAdoptionService:
         which now sit under the canonical name. It answers
         :class:`AdoptionIncomplete` naming them, and whatever an Overwrite set
         aside in ``.romm-backup`` to make room for them, rather than moving them
-        back — a retry of the same download
-        finds the saves already in place and re-plans to nothing, where an undo
-        would have to be undone again. A carry that moved nothing set nothing
+        back — a retry of the same download finds the saves already in place
+        and re-plans to nothing, where an undo would have to be undone again. A carry that moved nothing set nothing
         aside either: an Overwrite clears a name only for a file that then lands
         on it, or the carry stops first.
 

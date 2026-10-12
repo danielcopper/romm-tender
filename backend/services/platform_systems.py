@@ -79,9 +79,9 @@ class PlatformSystemService:
         listing and kept; with *ask_romm* false they count as none instead. A
         read that fails answers :data:`~domain.platform_system.UNASKED` with the
         reason every RomM read is classified by, and keeps nothing. It is logged
-        here, at the level the entrypoint logs a RomM error at, because the
-        refusal it becomes reaches the entrypoint as a refusal, which is not
-        logged.
+        here, at the level the entrypoint logs a RomM error at, because what
+        it becomes reaches the entrypoint as a refusal, or as an answer that
+        something is unavailable, and neither is logged.
         """
         try:
             ids, name = self._ids_and_name(platform_slug, ask_romm=ask_romm)

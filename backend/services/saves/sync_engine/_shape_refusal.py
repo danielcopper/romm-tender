@@ -9,7 +9,7 @@ syncing — a benign skip, except for a missing saves root.
 
 It lives beside the engine rather than inside it because nothing is added to the
 engine's own module, and because these are the whole refusal: one reading and the
-skips it raises, with no engine state between them.
+refusals it raises, with no engine state between them.
 
 **The reading happens before the heartbeat, deliberately.** A PS2 game needs no
 server to establish that its saves live on a shared card, and a device that is
@@ -59,10 +59,11 @@ def refuse_unsyncable(answer: SaveAnswer | None) -> None:
 
     A save beside the content is checked first: its files may be a perfectly
     syncable per-game set, so the shape would let it through. No answer at all
-    returns — an uninstalled ROM is the runner's own case. Those two refusals
-    are benign skips: nothing went wrong, and the game still launches. A missing
-    saves root is not one: the game's saves are not synced until the folder is
-    back, so the launch asks first and the exit says so.
+    returns — an uninstalled ROM is the runner's own case. A save beside the
+    content and an unsyncable shape are benign skips: nothing went wrong. A
+    missing saves root is a failure, ``saves_root_missing``: the game's saves
+    are not synced until the folder is back. What a reader is told of each is
+    ``docs/architecture/save-sync-coverage.md``'s.
     """
     if answer is None:
         return

@@ -1561,7 +1561,7 @@ won't re-download a version the picker has already left. The in-progress claim i
 and given back on every way out but a started download, a cancelled start included, so a concurrent `start_download` for
 the same rom is rejected rather than racing past it and a failed start never leaves the ROM "Already downloading". Of
 what the start's steps raise, an `OSError` (a disk that cannot be read or prepared) is refused there with
-`download_start_failed`; a RomM error and a refusal pass on to `Endpoints` unchanged — among them the platform's system
+`download_start_failed`; a RomM error and a refusal pass on to `Endpoints` unchanged — such as the platform's system
 refusal (`no_platform_system`, `platform_system_off`, or the RomM classifier's reason where the platform listing could
 not be read) and RetroDECK's folder refusal — and anything else is a bug.
 
@@ -2964,8 +2964,8 @@ per-file errors answers `"success": len(errors) == 0` (#2205 D10) — and the re
 event; no third one is added. The two documented carve-outs (discriminated-status unions — a `status` key with no
 `success`; and partial-success payloads carrying an additive `server_query_failed` / `recommended_action` flag) carry no
 `success` key, so the gate passes them. The routing slugs come from `lib.list_result.ErrorCode` (the Lean enum) plus
-bespoke plain-string reasons for non-server-reachability guards. The script's docstring names what it cannot see, a
-computed `success` first.
+bespoke plain-string reasons for non-server-reachability guards, raised as the `lib/list_result.py` module docstring
+says. The script's docstring names what it cannot see, a computed `success` first.
 
 ### 5. Enforced: underscore prefix
 
