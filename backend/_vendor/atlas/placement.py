@@ -57,11 +57,19 @@ the results in.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Iterable, Literal, Mapping, Sequence, TypeAlias, TypeVar
 
-from .find_rules import CAVEAT_FIND_RULES_UNREADABLE, FIND_RULES_LAYERS
+from .find_rules import (
+    CAVEAT_FIND_RULES_UNREADABLE,
+    CAVEAT_LAUNCH_COMMAND_BEYOND_LIMITS,
+    CAVEAT_LAUNCH_COMMAND_SHELL_SYNTAX,
+    FIND_RULES_LAYERS,
+    LAUNCH_COMMAND_LIMITS,
+    SHELL_CONSTRUCTS,
+)
 from .machine import CORE_UNANSWERED_STATUSES
 from .retroarch_cfg import CFG_LAYER_KINDS, RetroArchCfg
 from .system_firmware import CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE, STATED_EVIDENCE_WORDS
@@ -123,7 +131,8 @@ or a ``system_directory`` left blank or set to the literal ``default``, moves su
 ROOT_WORKING_DIRECTORY: RootKind = "working_directory"
 """The working directory of the launching process — a property of the launch rather than of the
 machine, which is why the answer is a ``<cwd>`` template with a hole rather than a refusal: a
-hole is something the caller fills, and the caller often is the launcher.
+hole is something the caller fills, and the caller often is the launcher. A question asked with
+``cwd=`` answers the directory filled in and read like any other.
 """
 # The root a standalone emulator owns: its user tree below the XDG base the
 # arrangement pins. No frontend hands these emulators a save directory — the
@@ -440,6 +449,21 @@ CAVEAT_FILE_SET_SPANS_ROOTS = "file-set-spans-roots"
 # would be the failure this project exists to avoid. `data` carries `dir` and a
 # `citation` for the reading behind it.
 CAVEAT_FILE_NAMES_UNESTABLISHED = "file-names-unestablished"
+# The title directories an emulator's NAND holds, each spelled the way the
+# answer's ``save_id`` hole is filled (``"<hi>/<lo>"``), so a caller whose
+# source knows a game by part of its title id — a Wii disc's low word — can
+# match it here: one entry with that word fills the hole, two leave it
+# ambiguous, and none means no title of that word was ever started on this
+# machine. Dolphin creates a disc's ``title/<hi>/<lo>/data`` the moment it
+# boots the disc, so a started game is listed before it saves anything.
+# ``data`` carries the ``dir`` listed, the ``titles`` found there (only the
+# names of the shape the emulator creates, eight lowercase hex digits at both
+# levels), the ``citation`` for that creation, and ``unreadable``: where the
+# listing stopped, empty where it read the whole tree. That rides on this
+# code rather than a code of its own, so that the code's absence keeps
+# meaning "the tree is empty or not there" and a listing that holds nothing
+# because nothing could be read is never mistaken for one.
+CAVEAT_SAVE_ID_CANDIDATES = "save-id-candidates"
 # A directory under this answer's own root that the card states and the
 # observation did not read. An observed set's groups describe the one directory
 # that was read, so a mode whose parts lie in sibling subdirectories — Kronos's
@@ -589,7 +613,7 @@ CAVEAT_SAVE_DIR_UNLISTABLE = "save-dir-unlistable"
 # The working_directory root's rider: the directory is a property of how the
 # emulator is launched, not of anything on disk, so no read of the machine can
 # resolve it — the answer stays a template whose one hole only the launcher
-# can fill.
+# can fill. A question asked with ``cwd=`` has it filled and states no rider.
 CAVEAT_SAVE_DIR_LAUNCH_DEPENDENT = "save-dir-launch-dependent"
 # No separate save file exists: the loaded content file itself takes the
 # writes. The file set is a declared emptiness — true as stated — and this
@@ -669,6 +693,20 @@ REASON_CONFIGURED_USER_REACH_UNESTABLISHED = "configured-user-reach-unestablishe
 # instead of opening the user manager, and the tree named is the one that id
 # composes.
 REASON_UNSET_USER_ID_IS_LISTED = "unset-user-id-is-listed"
+# The configuration records no user the listing holds — none at all, the empty
+# value, or an id nothing listed answers to — and the emulator opens the first
+# user its own listing holds, the smallest id, rather than asking: the tree
+# named is the one that id composes. Vita3K build 4103.
+REASON_FIRST_LISTED_USER_OPENED = "first-listed-user-opened"
+# The emulator's own listing holds no user at all, so the start creates the
+# first one and opens it: the tree named is the one that user writes, which the
+# start creates rather than one found here. Vita3K build 4103.
+REASON_FIRST_USER_CREATED = "first-user-created"
+# Which rule picks the user turns on the emulator's build, and the build that
+# runs here is not one atlas reads — ``build`` carries the value read, and is
+# absent where nothing on this machine states a build at all. The user trees
+# both read builds compose alike are still stated.
+REASON_EMULATOR_BUILD_UNESTABLISHED = "emulator-build-unestablished"
 # Which console a launch is, and where the emulator's own root comes from.
 # ``region-decided-by-disc`` rides ``regions``, the regions found side by side.
 REASON_REGION_DECIDED_BY_DISC = "region-decided-by-disc"
@@ -784,6 +822,9 @@ CORE_MODE_UNESTABLISHED_REASONS = (
     REASON_CONFIGURED_USER_ID_UNREAD,
     REASON_CONFIGURED_USER_REACH_UNESTABLISHED,
     REASON_UNSET_USER_ID_IS_LISTED,
+    REASON_FIRST_LISTED_USER_OPENED,
+    REASON_FIRST_USER_CREATED,
+    REASON_EMULATOR_BUILD_UNESTABLISHED,
     REASON_REGION_DECIDED_BY_DISC,
     REASON_DATA_ROOT_DECIDED_BY_LAUNCH,
     REASON_SLOT_HOLDS_AGP_DEVICE,
@@ -828,7 +869,9 @@ CAVEAT_SAVE_ROOT_REDIRECTED = "save-root-redirected"
 # read, this one states the relative trees that would hang off the
 # unknowable anchor, in ``data``, so a caller sees what to look for once it
 # knows the anchor atlas refuses to guess. The placement itself falls back to
-# the standard answer, marked as where the frontend would look.
+# the standard answer, marked as where the frontend would look. A question
+# asked with ``cwd=`` has the working directory in hand, so a tree it settles
+# is a redirect instead; one carrying an environment variable stays here.
 CAVEAT_SAVE_ROOT_UNRESOLVABLE = "save-root-unresolvable"
 CAVEAT_SANDBOX_PATH_UNTRANSLATED = "sandbox-path-untranslated"
 CAVEAT_APP_RELATIVE_PATH_UNEXPANDED = "app-relative-path-unexpanded"
@@ -939,6 +982,11 @@ class Caveat:
     def __post_init__(self) -> None:
         if not self.code:
             raise ValueError("Caveat: code must be a non-empty stable identifier")
+        if ("save_id" in self.data) != ("save_id_spelling" in self.data):
+            raise ValueError(
+                "Caveat: a 'save_id' fill and its 'save_id_spelling' are stated together or not "
+                f"at all ({self.code})"
+            )
         _check_enumerations("Caveat", self.code, self.data)
         object.__setattr__(
             self,
@@ -964,7 +1012,8 @@ HOLE_ROM_STEM = "rom_stem"
 HOLE_CONTENT_DIR_NAME = "content_dir_name"
 # The one hole no content can fill: the working directory of the process that
 # will load the core. It exists for the ``working_directory`` root and is
-# genuinely the caller's to fill — a frontend knows what cwd it launches with.
+# genuinely the caller's to fill — a frontend knows what cwd it launches with,
+# and hands it to the question as ``cwd=`` (:func:`checked_cwd`).
 HOLE_CWD = "cwd"
 # The hole a region-keyed answer keeps: which of an emulator's per-region
 # trees this game's save lands in is decided by the disc's own region field,
@@ -1053,6 +1102,115 @@ def file_set_holes(files: Iterable[str]) -> tuple[str, ...]:
 def needs_with_file_set(needs: Iterable[str], files: Iterable[str]) -> tuple[str, ...]:
     """Every hole of an answer: the directory template's, then the file names'."""
     return _holes([*needs, *file_set_holes(files)])
+
+
+def checked_cwd(cwd: str | None) -> str | None:
+    """*cwd* as a question takes it: an absolute host path, or ``None`` for not given.
+
+    The value fills the ``cwd`` hole, so it has to name a place by itself: a
+    relative one would need a working folder of its own to mean anything, and
+    the empty string names none. Either is the caller's mistake rather than a
+    fact of the machine, so it raises at the call instead of being answered.
+    """
+    if cwd is not None and not os.path.isabs(cwd):
+        raise ValueError(f"cwd must be an absolute path, got {cwd!r}")
+    return cwd
+
+
+# How a ``save_id`` fill is spelled, under ``data["save_id_spelling"]`` beside
+# the sentence under ``data["save_id"]`` that says what fills it. The two ride
+# together — the constructor refuses either without the other — and an answer
+# whose ``needs`` holds the hole carries a caveat stating both, so a caller
+# never has to fill ``<save_id>`` from prose. A closed vocabulary, because a
+# caller checks its value against it before filling (:func:`checked_save_id`):
+# a source that hands over a Wii disc's low word alone is caught as one word
+# short instead of naming a folder the emulator never opens.
+SaveIdSpelling = Literal["title-id-words", "path-segment"]
+SAVE_ID_SPELLING_TITLE_ID_WORDS: SaveIdSpelling = "title-id-words"
+"""The title id as its two words: eight lowercase hex digits for the high word, ``/``, and
+eight for the low word, such as ``00010000/524d4745`` — two path segments, composed the way
+the emulator composes them.
+"""
+SAVE_ID_SPELLING_PATH_SEGMENT: SaveIdSpelling = "path-segment"
+"""One path segment naming an entry of its own: a serial, a product number or a game's title,
+spelled the way the emulator spells it. Never empty, ``.`` or ``..``, and never holding ``/`` or
+a NUL — a value that would leave the directory it is joined below, or end the path early.
+"""
+SAVE_ID_SPELLINGS = (SAVE_ID_SPELLING_TITLE_ID_WORDS, SAVE_ID_SPELLING_PATH_SEGMENT)
+_TITLE_ID_WORD = re.compile(r"[0-9a-f]{8}")
+# The segments that name no entry of their own: nothing, this directory, its parent.
+_NOT_AN_ENTRY = ("", ".", "..")
+
+
+def checked_save_id(spelling: str, value: str) -> str:
+    """*value* as a ``save_id`` fill of *spelling* takes it, or :class:`ValueError`.
+
+    *spelling* is the ``save_id_spelling`` the answer states beside its
+    ``save_id`` fill. A value that does not have that shape names no folder
+    the emulator opens — a low word without its high word, an uppercase id,
+    a serial with a ``/`` in it — and a caller joins the value into a path it
+    then writes below, so ``..`` or a NUL would send that write elsewhere. It
+    raises rather than being filled in.
+    """
+    if spelling == SAVE_ID_SPELLING_TITLE_ID_WORDS:
+        words = value.split("/")
+        if len(words) != 2 or not all(_TITLE_ID_WORD.fullmatch(word) for word in words):
+            raise ValueError(
+                f"save_id spelled {spelling!r} is two words of eight lowercase hex digits "
+                f"joined by '/', got {value!r}"
+            )
+    elif spelling == SAVE_ID_SPELLING_PATH_SEGMENT:
+        if value in _NOT_AN_ENTRY or "/" in value or "\0" in value:
+            raise ValueError(
+                f"save_id spelled {spelling!r} is one path segment naming an entry of its own — "
+                f"not empty, '.' or '..', and without '/' or a NUL — got {value!r}"
+            )
+    else:
+        raise ValueError(f"save_id spelling must be one of {list(SAVE_ID_SPELLINGS)}, got {spelling!r}")
+    return value
+
+
+def _check_save_id_stated(what: str, needs: tuple[str, ...], caveats: tuple["Caveat", ...]) -> None:
+    """Refuse an answer whose ``save_id`` hole and its stated fill disagree.
+
+    The hole and the fill are one fact told twice: ``needs`` — or a caveat
+    naming ``<save_id>`` in a path or file name it states — says there is an
+    id to fill, and a caveat's ``save_id`` and ``save_id_spelling`` say with
+    what and in which shape. Either without the other leaves a caller filling
+    a hole nobody described, or reading a description of a hole the answer
+    does not have. The caveat's names count because an answer can carry the
+    hole there alone: Flycast's and SwanStation's per-game modes, asked
+    without content under a content-sorted save root, leave the file set
+    unknown and ``needs`` holding ``content_dir`` only, while their card's
+    caveat names ``<save_id>.A1.bin`` — so ``needs`` alone would refuse an
+    answer that states its fill exactly where its hole is.
+    """
+    held = HOLE_SAVE_ID in needs or any(_names_save_id(caveat) for caveat in caveats)
+    stated = any(HOLE_SAVE_ID in caveat.data for caveat in caveats)
+    if held != stated:
+        raise ValueError(
+            f"{what}: the answer {'carries' if held else 'carries no'} {TEMPLATE_SAVE_ID} and "
+            f"{'no' if held else 'a'} caveat states its fill — the hole and its spelling ride together"
+        )
+
+
+def _names_save_id(caveat: "Caveat") -> bool:
+    """Does a path or name this caveat states keep the ``<save_id>`` template?"""
+    return any(
+        TEMPLATE_SAVE_ID in word
+        for key, value in caveat.data.items()
+        if key not in (HOLE_SAVE_ID, "save_id_spelling")
+        for word in _data_words(value)
+    )
+
+
+def _data_words(value: "DataValue") -> tuple[str, ...]:
+    """Every string one data value states — a mapping's subjects as well as its words."""
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, Mapping):
+        return (*value.keys(), *value.values())
+    return tuple(value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1412,8 +1570,9 @@ class SavefilePlacement:
     holes, not the directory's alone. ``root_kind``
     names the anchor (:data:`ROOT_SAVEFILE_DIRECTORY`,
     :data:`ROOT_CONTENT_DIRECTORY`, :data:`ROOT_SYSTEM_DIRECTORY`,
-    :data:`ROOT_WORKING_DIRECTORY` — the launch's own directory, always a
-    ``<cwd>`` template with its hole in ``needs`` — or
+    :data:`ROOT_WORKING_DIRECTORY` — the launch's own directory, a ``<cwd>``
+    template with its hole in ``needs`` unless the question named it with
+    ``cwd=`` — or
     :data:`ROOT_EMULATOR_DIRECTORY`, a standalone emulator's own tree).
     ``file_set`` is observed or unknown, never guessed. ``sources`` is the
     provenance trail; ``caveats`` states every degradation explicitly.
@@ -1483,6 +1642,7 @@ class SavefilePlacement:
             raise ValueError("SavefilePlacement: dir must be non-empty (an unanswerable placement is Unresolved)")
         if self.root_kind not in ROOT_KINDS:
             raise ValueError(f"SavefilePlacement: root_kind must be one of {ROOT_KINDS}, got {self.root_kind!r}")
+        _check_save_id_stated("SavefilePlacement", self.needs, self.caveats)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1598,21 +1758,58 @@ UNRESOLVED_MOD_WIRING_UNESTABLISHED = "mod-wiring-unestablished"
 # there atlas has no wiring for the emulator, here it does and the machine
 # would not let it look.
 UNRESOLVED_EMULATOR_CONFIG_UNREADABLE = "emulator-config-unreadable"
+# The settings file that would name the place does not exist — the emulator was
+# never started, or its file was removed — so its compiled defaults decide. One
+# fact, one code on both shapes, the sharing ``core-not-installed`` has: where
+# the defaults name a place the answer stands and says so with the caveat of
+# this spelling (:data:`CAVEAT_EMULATOR_CONFIG_MISSING`), and where they name
+# none the question refuses with this outcome. ``data`` names the ``token`` of
+# the emulator and the ``config`` file that is missing — the file alone where
+# no card names the emulator (RetroDECK's RetroArch), and the core under
+# ``core`` where a libretro core reads a file of its own (ScummVM's
+# scummvm.ini, MAME's mame.ini, PUAE's WHDLoad.prefs). Distinct from
+# ``emulator-config-unreadable``: there the file exists and could not be read,
+# here there is nothing to read. A standalone emulator nobody has started yet
+# is no broken installation, so for one the code rides the save and savestate
+# answers it qualifies and never a health report; the one file it is a health
+# finding about is the arrangement's own RetroArch configuration
+# (:data:`atlas.installations.HEALTH_ISSUE_EMULATOR_CONFIG_MISSING`).
+UNRESOLVED_EMULATOR_CONFIG_MISSING = "emulator-config-missing"
+CAVEAT_EMULATOR_CONFIG_MISSING = UNRESOLVED_EMULATOR_CONFIG_MISSING
 # Why the read did not settle the question, under ``data["reason"]``, where the
-# refusal has one to state. Two sources, one vocabulary: the scalar reader's own
-# refusal codes (:data:`~atlas.yaml_scalars.REFUSAL_CODES`) say which construct
-# stopped the whole file, and two more say the file parsed and the one key this
-# answer hangs on settled nothing all the same, with ``data["key"]`` naming it.
-# ``key-unread`` is a key stated as a construct the reader does not read.
-# ``key-repeated`` is a key the file states more than once, where the program
-# reading it keeps a statement this reader does not: the reader holds the first
-# statement, the way a yaml-cpp lookup answers, and RPCS3 instead applies every
-# statement in turn and keeps the last it reads as a scalar — so which of them
-# governs is not this reader's to say. A refusal that simply could not open the
-# file states no reason at all; the file is in ``data["config"]`` either way.
+# code has one to state — on a refusal, or on the caveat of the same spelling
+# where the answer still stands. Three sources, one vocabulary: the scalar
+# reader's own refusal codes (:data:`~atlas.yaml_scalars.REFUSAL_CODES`) say
+# which construct stopped the whole file; ``unparseable`` is a file the
+# emulator's own parser rejects, where the emulator then runs on its defaults
+# and the answer stands on them with the caveat (melonDS, which catches the
+# syntax error and keeps its factory settings); and two more say the file
+# parsed and the one key this answer hangs on settled nothing all the same,
+# with ``data["key"]`` naming it. ``key-unread`` is a key stated as a construct
+# the reader does not read. ``key-repeated`` is a key the file states more than
+# once, where the program reading it keeps a statement this reader does not:
+# the reader holds the first statement, the way a yaml-cpp lookup answers, and
+# RPCS3 instead applies every statement in turn and keeps the last it reads as
+# a scalar — so which of them governs is not this reader's to say. A refusal
+# that simply could not open the file states no reason at all; the file is in
+# ``data["config"]`` either way.
 REASON_KEY_UNREAD = "key-unread"
 REASON_KEY_REPEATED = "key-repeated"
-EMULATOR_CONFIG_UNREADABLE_REASONS = (*REFUSAL_CODES, REASON_KEY_UNREAD, REASON_KEY_REPEATED)
+REASON_UNPARSEABLE = "unparseable"
+EMULATOR_CONFIG_UNREADABLE_REASONS = (
+    *REFUSAL_CODES,
+    REASON_KEY_UNREAD,
+    REASON_KEY_REPEATED,
+    REASON_UNPARSEABLE,
+)
+# The two outcomes of an emulator's own settings file that leave the place an
+# answer names unread — not there, or there and not read. The installations
+# module composes the published set of such codes from this pair
+# (:data:`atlas.installations.PLACE_NOT_READ_CODES`).
+SETTINGS_FILE_NOT_READ_CODES = (
+    UNRESOLVED_EMULATOR_CONFIG_MISSING,
+    UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
+)
 
 # Every file a BIOS search kept and hashed, keyed by path, beside what the
 # emulator's own table made of each one's bytes. Built by
@@ -1656,6 +1853,10 @@ ENUMERATED_DATA: "Mapping[tuple[str, str], tuple[str, ...]]" = MappingProxyType(
         (CAVEAT_FILENAMES_CONTENT_CONDITIONAL, "files_established_for"): (
             FILES_ESTABLISHED_FOR_TOKENS
         ),
+        # The two codes a ``save_id`` fill rides on: a card's or an emulator's
+        # file names keyed by the content's id, and a per-title directory.
+        (CAVEAT_FILENAMES_CONTENT_CONDITIONAL, "save_id_spelling"): SAVE_ID_SPELLINGS,
+        (CAVEAT_FILE_NAMES_UNESTABLISHED, "save_id_spelling"): SAVE_ID_SPELLINGS,
         # A mapping-valued pair: the listing states one reading per kept file,
         # keyed by its path, so the vocabulary closes the mapped words rather
         # than the mapping as a whole.
@@ -1664,6 +1865,10 @@ ENUMERATED_DATA: "Mapping[tuple[str, str], tuple[str, ...]]" = MappingProxyType(
         # verdict hangs on, or the custom one ES-DE skips beside it.
         (CAVEAT_FIND_RULES_UNREADABLE, "layer"): FIND_RULES_LAYERS,
         (CAVEAT_INVALID_SAVE_DIRECTORY, "layer"): CFG_LAYER_KINDS,
+        # Which reading of a launch command made it more than plain words.
+        (CAVEAT_LAUNCH_COMMAND_SHELL_SYNTAX, "construct"): SHELL_CONSTRUCTS,
+        # Which bound atlas puts on taking one command apart was reached.
+        (CAVEAT_LAUNCH_COMMAND_BEYOND_LIMITS, "limit"): LAUNCH_COMMAND_LIMITS,
         # The world-knowledge mark carries two keys and only one of them is
         # closed: the evidence level, as the contract spells it rather than in
         # the bracket notation the research pages use. The system it is about
@@ -1854,7 +2059,7 @@ class SavestateAbsence:
     serializer, the Ryujinx lineage never had one. ``citation`` is the
     evidence for the no (the spans and scans that establish it, contractual —
     a client repeating the claim repeats its source); ``sources`` is the
-    card's provenance prose, non-contractual like every provenance.
+    card's provenance prose, non-contractual like all provenance prose.
 
     ``caveats`` carries what qualifies the *claim*, never what qualifies a
     tree: the card's own ``unverified-version`` where no shipped build pins
@@ -1976,6 +2181,7 @@ class TexturePlacement:
             )
         if self.keying is not None and self.keying not in KEYINGS:
             raise ValueError(f"TexturePlacement: keying must be one of {KEYINGS}, got {self.keying!r}")
+        _check_save_id_stated("TexturePlacement", self.needs, self.caveats)
 
 
 @dataclass(frozen=True, slots=True)

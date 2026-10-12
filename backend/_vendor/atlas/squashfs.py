@@ -28,12 +28,11 @@ The zstd codec arrives in the stdlib with Python 3.14 (PEP 784,
 ``backports.zstd``. A provider is looked for three ways, in this order: the
 object a host handed over through :func:`register_zstd_provider`, then each
 of those two names. The registration is the seam for a host that vendors the
-backport under its own root, which satisfies neither name — it hands over the
-module object itself, and atlas calls ``decompress`` on it without importing
-anything. Aliasing that module into ``sys.modules`` under a probed name keeps
-working beside the registration, because the probe goes through the import
-machinery and the import machinery consults ``sys.modules`` before it
-searches. None of the three is a dependency: atlas requires none of them.
+backport under its own root, which satisfies neither name — the host makes
+the copy's absolute self-imports relative, without which it does not import
+under that root, and hands over the module object itself; atlas calls
+``decompress`` on it without importing anything. None of the three is a
+dependency: atlas requires none of them.
 Where no provider answers, an image compressed with zstd raises
 :class:`CodecUnavailable`, which the machine seam reports as the capability
 being absent — never as the file being absent. gzip images decompress
@@ -114,7 +113,8 @@ _registered_provider: Any = None
 def register_zstd_provider(provider: Any) -> None:
     """Hand atlas the zstd codec this process already has — or ``None`` to forget it.
 
-    A host that vendors ``backports.zstd`` under its own root imports it as
+    A host that vendors ``backports.zstd`` under its own root makes the
+    copy's absolute self-imports relative and imports it as
     ``_vendor.backports.zstd``, which is neither name the probe tries; this
     hands over the module object instead, and it is tried before both names.
     Anything exposing a callable ``decompress(bytes) -> bytes`` is accepted —

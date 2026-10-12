@@ -34,6 +34,7 @@ import pytest
 from _vendor.atlas import (
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_FILE_NAMES_UNESTABLISHED,
+    CAVEAT_FILENAMES_CONTENT_CONDITIONAL,
     CAVEAT_SAVE_INSIDE_CONTENT,
     CAVEAT_SAVE_INSIDE_IMAGE,
     CAVEAT_SORTED_DIR_MISSING,
@@ -51,6 +52,7 @@ from _vendor.atlas import (
     ROLE_UNKNOWN,
     ROLES,
     ROOT_CONTENT_DIRECTORY,
+    SAVE_ID_SPELLING_PATH_SEGMENT,
     STATE_ROOT_CONTENT_DIRECTORY,
     SavestateAbsence,
     SavestatePlacement,
@@ -93,6 +95,15 @@ def _caveat(code: str) -> Caveat:
     return Caveat(code=code, message="prose that may change freely", data={})
 
 
+# What fills a ``<save_id>`` hole, stated the way the resolver states it for
+# Flycast's per-game cards: the resolver refuses a hole without it.
+_SAVE_ID_STATED = Caveat(
+    code=CAVEAT_FILENAMES_CONTENT_CONDITIONAL,
+    message="prose that may change freely",
+    data={"save_id": "the disc's product number", "save_id_spelling": SAVE_ID_SPELLING_PATH_SEGMENT},
+)
+
+
 def _granularity(value: str) -> Granularity:
     return Granularity(value=value, mode=None, readings=(), alternatives=(), provenance="test")
 
@@ -105,6 +116,7 @@ def _placement(
     needs: tuple[str, ...] = (),
     granularity: str | None = GRANULARITY_PER_GAME_FILE,
     caveats: tuple[str, ...] = (),
+    stated: tuple[Caveat, ...] = (),
     physical_dir: str | None = None,
     root_kind: str = "savefile_directory",
     fallback_dir: str | None = None,
@@ -122,7 +134,7 @@ def _placement(
             groups=groups,
         ),
         sources=(),
-        caveats=tuple(_caveat(code) for code in caveats),
+        caveats=(*(_caveat(code) for code in caveats), *stated),
         granularity=None if granularity is None else _granularity(granularity),
         physical_dir=physical_dir,
         fallback_dir=fallback_dir,
@@ -277,7 +289,12 @@ class TestTheFiveStates:
 
     def test_a_hole_in_the_name_refuses(self, traces):
         answer = _ask(
-            _placement(files=("<save_id>.A1.bin",), needs=("save_id",), granularity=GRANULARITY_PER_GAME_FILES),
+            _placement(
+                files=("<save_id>.A1.bin",),
+                needs=("save_id",),
+                stated=(_SAVE_ID_STATED,),
+                granularity=GRANULARITY_PER_GAME_FILES,
+            ),
             traces,
         )
 
@@ -292,6 +309,7 @@ class TestTheFiveStates:
             _placement(
                 files=("<save_id>.A1.bin",),
                 needs=("save_id",),
+                stated=(_SAVE_ID_STATED,),
                 granularity=GRANULARITY_PER_GAME_FILES,
                 groups=(
                     FileGroup(

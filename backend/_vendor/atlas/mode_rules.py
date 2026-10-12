@@ -41,6 +41,7 @@ from .placement import (
     CAVEAT_CORE_GENERATION_MISMATCH,
     CAVEAT_CORE_MODE_UNESTABLISHED,
     CAVEAT_CORE_OPTION_VALUE_UNESTABLISHED,
+    CAVEAT_EMULATOR_CONFIG_MISSING,
     CAVEAT_SAVE_ROOT_REDIRECTED,
     CAVEAT_SAVE_ROOT_UNRESOLVABLE,
     REASON_ARCHIVE_CONTENT_AMBIGUOUS,
@@ -92,7 +93,7 @@ class FileLookup:
 
 @dataclass(frozen=True, slots=True)
 class RuleReading:
-    """Everything the resolver hands a rule to decide with — all machine reads.
+    """Everything the resolver hands a rule: what it read, and what the question states.
 
     ``option_values`` maps the card's declared rule options to their live
     values (``None`` where nothing on the machine states one and the core
@@ -134,6 +135,13 @@ class RuleReading:
     keys, so the resolver's option recorder cannot see them, and an answer
     that named a directory without saying where the name came from would be
     the silent kind of claim this project refuses.
+
+    ``cwd`` is the working folder the launch will use where the asker named
+    one — like ``content_path``, a value the caller states rather than a
+    read — and ``None`` where it was not named. The MAME rule with its own
+    paths anchors a relative tree there instead of leaving it unresolvable;
+    PUAE's member check resolves against the same directory and does not
+    take it yet (``_puae_class_of``, #597).
     """
 
     option_values: Mapping[str, str | None]
@@ -149,6 +157,7 @@ class RuleReading:
     content_is_directory: Callable[[], bool]
     archive_members: Callable[[], ArchiveListResult]
     whdload_slave: Callable[[], WhdloadSlaveResult]
+    cwd: str | None = None
 
 
 # What a rule fills no template with — the state of every mode whose names
@@ -402,18 +411,21 @@ def _scummvm(reading: RuleReading) -> ModeChoice:
                 ),
             ),
         )
-    savepath = _scummvm_ini_savepath(ini.text) if ini.status == FILE_READ and ini.text else None
+    if ini.status == FILE_ABSENT:
+        return _scummvm_ini_absent(ini)
+    savepath = _scummvm_ini_savepath(ini.text) if ini.text else None
     if savepath is None:
-        provenance = (
-            "scummvm.ini states no savepath — the registered default is the frontend's save "
-            "directory, flat (libretro-os-utils.cpp:212-216 at 686cdd1)"
-            if ini.status == FILE_READ
-            else "no scummvm.ini exists yet — the registered default is the frontend's save "
-            "directory, flat (libretro-os-utils.cpp:212-216 at 686cdd1)"
-        )
         return ModeChoice(
             _SCUMMVM_DEFAULT_MODE,
-            readings=(OptionReading("savepath", None, provenance, ini.path),),
+            readings=(
+                OptionReading(
+                    "savepath",
+                    None,
+                    "scummvm.ini states no savepath — the registered default is the frontend's "
+                    "save directory, flat (libretro-os-utils.cpp:212-216 at 686cdd1)",
+                    ini.path,
+                ),
+            ),
         )
     a_directory = reading.is_directory(savepath)
     if a_directory is None:
@@ -482,6 +494,38 @@ def _scummvm(reading: RuleReading) -> ModeChoice:
         ),
         readings=(
             OptionReading("savepath", savepath, f'scummvm.ini: savepath = "{savepath}"', ini.path),
+        ),
+    )
+
+
+def _scummvm_ini_absent(ini: FileLookup) -> ModeChoice:
+    """No scummvm.ini: the registered default governs, and the answer says it was not read.
+
+    The frontend's save directory is then the place by default rather than by
+    a reading of the setting, which the caveat states the way every route
+    states a settings file that is not there. The core is named under
+    ``core``, as every caveat this module writes names it.
+    """
+    assert ini.path is not None  # an absent file is one a resolved root was asked for
+    return ModeChoice(
+        _SCUMMVM_DEFAULT_MODE,
+        caveats=(
+            Caveat(
+                CAVEAT_EMULATOR_CONFIG_MISSING,
+                f"ScummVM's configuration ({ini.path}) does not exist, so the registered default "
+                "decides where saves land — the frontend's save directory, flat "
+                "(libretro-os-utils.cpp:212-216 at 686cdd1), not a reading of 'savepath'",
+                {"core": "scummvm", "config": ini.path},
+            ),
+        ),
+        readings=(
+            OptionReading(
+                "savepath",
+                None,
+                "no scummvm.ini exists yet — the registered default is the frontend's save "
+                "directory, flat (libretro-os-utils.cpp:212-216 at 686cdd1)",
+                ini.path,
+            ),
         ),
     )
 
@@ -915,12 +959,44 @@ def _mame_unresolvable(
     )
 
 
+def _mame_at_cwd(target: str, cwd: str | None) -> str | None:
+    """A relative tree resolved against the working folder the caller named — or ``None``.
+
+    The frontend process opens a relative tree from its own working
+    directory, so a named *cwd* (a host path) completes it, normalised the
+    way MAME's other working-directory joins are. A tree carrying ``$VAR``
+    is expanded from the process's environment first (options.cpp:531-569),
+    which no working folder settles, so it stays unresolved.
+    """
+    if cwd is None or "$" in target:
+        return None
+    return posixpath.normpath(posixpath.join(cwd, target))
+
+
 def _mame_redirected(key: str, path: str, options_file: str | None) -> Caveat:
     return Caveat(
         CAVEAT_SAVE_ROOT_REDIRECTED,
         f"MAME's own configuration routes its {key} to {path!r}, read along its ini search "
         "path the way the emulator reads it — the standard answer below is where the frontend "
         "would look, not where this emulator writes",
+        {"core": "mame", "key": key, "path": path, "options_file": options_file or ""},
+    )
+
+
+def _mame_redirected_at_cwd(key: str, tree: str, path: str, options_file: str | None) -> Caveat:
+    """The redirect a relative tree makes once the caller names the working folder.
+
+    The same statement as an absolute tree's (:func:`_mame_redirected`), code
+    and data alike, because it is the same fact: the emulator writes at
+    ``path``, not under the frontend's save root. Only the sentence says
+    where the place came from.
+    """
+    return Caveat(
+        CAVEAT_SAVE_ROOT_REDIRECTED,
+        f"MAME's own paths leave its {key} relative ({tree!r}), which the frontend process "
+        f"opens from its working directory — the folder this question names — so it lands at "
+        f"{path!r}; the standard answer below is where the frontend would look, not where this "
+        "emulator writes",
         {"core": "mame", "key": key, "path": path, "options_file": options_file or ""},
     )
 
@@ -1003,9 +1079,13 @@ def _mame_ini_readings(
 
 
 def _mame_tree_caveats(
-    values: dict[str, str], sources: dict[str, "str | None"]
+    values: dict[str, str], sources: dict[str, "str | None"], cwd: str | None
 ) -> tuple[Caveat, ...]:
-    """What the effective values say per tree: a redirect each, or the unresolvable rest."""
+    """What the effective values say per tree: a redirect each, or the unresolvable rest.
+
+    A relative tree the caller's working folder resolves (:func:`_mame_at_cwd`)
+    is a redirect like an absolute one.
+    """
     caveats: list[Caveat] = []
     unresolved: list[tuple[str, str]] = []
     unresolved_file: str | None = None
@@ -1014,8 +1094,11 @@ def _mame_tree_caveats(
         # element. A value carrying `$VAR` is expanded from the process's
         # environment (options.cpp:531-569) — process state, like the cwd.
         target = values.get(key, default).split(";")[0].strip()
+        at_cwd = _mame_at_cwd(target, cwd)
         if target.startswith("/"):
             caveats.append(_mame_redirected(key, target, sources.get(key)))
+        elif at_cwd is not None:
+            caveats.append(_mame_redirected_at_cwd(key, target, at_cwd, sources.get(key)))
         else:
             unresolved.append((key, target))
             if unresolved_file is None:
@@ -1049,7 +1132,36 @@ def _mame_own_ini(reading: RuleReading) -> ModeChoice:
             ),
         )
     values, sources = _mame_ini_readings(main, driver)
-    return ModeChoice(None, caveats=_mame_tree_caveats(values, sources))
+    return ModeChoice(
+        None,
+        caveats=(
+            *_mame_main_ini_missing(main, values),
+            *_mame_tree_caveats(values, sources, reading.cwd),
+        ),
+    )
+
+
+def _mame_main_ini_missing(main: FileLookup, values: dict[str, str]) -> list[Caveat]:
+    """The missing-settings statement, where no mame.ini was found and a tree fell to its default.
+
+    A tree the driver's ini states is a reading like any other; one nothing
+    states takes the fork's compiled-in default because no mame.ini stands
+    along the search path to name it. The data names the file by its name,
+    not a path: the search runs ``$HOME/.mame`` and then ``<system
+    dir>/mame/ini`` and the first find wins, so no one path is the file the
+    emulator would read — the spelling the standalone MAME route uses too.
+    """
+    if main.status != FILE_ABSENT or all(key in values for key, _ in _MAME_DEFAULT_TREES):
+        return []
+    return [
+        Caveat(
+            CAVEAT_EMULATOR_CONFIG_MISSING,
+            "MAME's own paths and ini reading are both on, and no mame.ini was found along its "
+            "search path, so the compiled-in defaults decide the save trees no ini names — the "
+            "answer states those defaults, not a reading of the file",
+            {"core": "mame", "config": _MAME_MAIN_INI},
+        )
+    ]
 
 
 def _mame(reading: RuleReading) -> ModeChoice:
@@ -1067,6 +1179,11 @@ def _mame(reading: RuleReading) -> ModeChoice:
         return ModeChoice(None, caveats=(_value_unestablished("mame", _MAME_READ_CONFIG),))
     if read_config not in _MAME_TOGGLES:
         return ModeChoice(None, caveats=(_unknown_value("mame", _MAME_READ_CONFIG, read_config),))
+    if read_config == "disabled" and reading.cwd is not None:
+        # No ini is read, so the compiled-in defaults are the effective
+        # values — and none carries a variable, so the named folder settles
+        # every one of them.
+        return ModeChoice(None, caveats=_mame_tree_caveats({}, {}, reading.cwd))
     if read_config == "disabled":
         return ModeChoice(
             None,
@@ -1665,7 +1782,15 @@ def _puae_whdload_body(
     prefs = _puae_save_path(core, reading, slave)
     if isinstance(prefs, ModeChoice):
         return prefs
-    return _puae_whdload_choice(value, slave, (prefs, _puae_slave_reading(slave)), switched_off)
+    choice = _puae_whdload_choice(value, slave, (prefs, _puae_slave_reading(slave)), switched_off)
+    # The baked default decides only where no file states SavePath: neither the
+    # prefs, which are not there, nor a ``custom`` file at the mounted root,
+    # whose SavePath outranks them (README.md:364 at 0043cf9).
+    absent = reading.system_file(whdload.PREFS)
+    custom_states = slave.custom is not None and whdload.save_redirect(slave.custom)[0] is not None
+    if absent.status != FILE_ABSENT or custom_states:
+        return choice
+    return cast(ModeChoice, _dc_replace(choice, caveats=(_puae_prefs_missing(core, absent.path),)))
 
 
 def _puae_switch_alternatives(
@@ -1866,6 +1991,24 @@ def _puae_redirect_because(save_path: str | None, save_dir: str | None) -> str:
         "SaveDir, into a sub directory it is told rather than one it derives from the slave "
         f"(WHDLoad manual, opt.html) — and every mode here is built on {volume}, so none of them "
         "states where these writes go"
+    )
+
+
+def _puae_prefs_missing(core: str, path: str | None) -> Caveat:
+    """No prefs in the system directory: the copy the core bakes in sets SavePath.
+
+    The core writes that copy only when no file is there
+    (libretro-core.c:6568-6588 at 0043cf9), so its absence is the core never
+    having run WHDLoad here, and the save place is the baked default rather
+    than a reading of the file the core keeps.
+    """
+    assert path is not None  # an absent file is one a resolved system directory was asked for
+    return Caveat(
+        CAVEAT_EMULATOR_CONFIG_MISSING,
+        f"WHDLoad.prefs ({path}) does not exist, so the copy the core bakes in "
+        "(libretro-core.c:6568-6588 at 0043cf9) decides where WHDLoad saves — the answer states "
+        "that default, not a reading of the file",
+        {"core": core, "config": path},
     )
 
 
@@ -2097,7 +2240,8 @@ def _puae_class_of(name: str) -> str | None:
     name (libretro-core.c:6324-6332 at 0043cf9), so its ``path_is_directory``
     arm resolves against the emulator's own working directory rather than the
     extracted tree: a member that is a directory answers no class here, which
-    is what leaves such an archive in the extracted-tree branch. [D]
+    is what leaves such an archive in the extracted-tree branch. [D] A named
+    ``cwd`` is not used here yet; #597 covers it.
     """
     extension = name.rpartition(".")[2].lower() if "." in name else None
     return next((token for token, group in _PUAE_ARCHIVE_BY_EXTENSION if extension in group), None)
