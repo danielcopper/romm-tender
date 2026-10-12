@@ -524,10 +524,11 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   of `tests/contract/test_prune.py`, with Uninstall all's one-system case in `tests/contract/test_retrodeck_folders.py`
   (`test_where_one_system_s_folder_question_raises_uninstall_all_goes_on_for_every_other_system`). A save's folder and a
   firmware file's place take the other route, the save and firmware answers (`adapters/atlas_saves.py`,
-  `adapters/atlas_firmware.py`), and this entry does not cover them: under the three `marker-*` findings a save is still
-  synced where the save answer places it, which is then RetroDECK's default — keeping saves out of it is #2286's. Unseen
-  by them: a folder joined onto a root under another name, and a caller that puts the question to RetroDECK's handle
-  itself. Prompt-only: a new caller that downloads into, removes from or bounds a removal by a RetroDECK folder asks
+  `adapters/atlas_firmware.py`), and this entry does not cover them: a save's place comes from the emulator's own
+  settings rather than from `retrodeck.json`, so under the three `marker-*` findings a save still syncs where the
+  emulator keeps it, and a place those settings did not name is the save-answer entry's to refuse. Unseen by them: a
+  folder joined onto a root under another name, and a caller that puts the question to RetroDECK's handle itself.
+  Prompt-only: a new caller that downloads into, removes from or bounds a removal by a RetroDECK folder asks
   `RetroDeckFolders` and raises the refusal it answers with
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (the file's own calls only: a write behind a helper, a write passed as a
@@ -852,22 +853,26 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — prompt-only — sync
   paths, `get_save_status`, and the three slot mutations hold the lock; mechanize via a `rom_save_sync_states.save`
   call-site audit
-- **Which files a game's save consists of is the EMULATOR's answer, read live, and five of its six states refuse the
-  sync — no probe, no state written** — test + prompt-only — `tests/adapters/test_atlas_saves.py`,
-  `tests/domain/test_save_answer.py` and `tests/services/saves/test_save_shape_gate.py`, where each absence test stands
-  beside a control that asserts the probe does happen, and every per-system pin names the extension it asked with
-  (`(system, extension)`). The answered save directory is not sync state: its own table (`answered_save_directories`)
-  may record it for a refusing answer. Prompt-only: every per-ROM entry point refuses through
-  `sync_engine/_shape_refusal.py` and every sync path crosses the `MatrixExecutor.sync_rom_saves` backstop; the five
-  write paths (`slots/switching.py`, `copies.py`, `versions.py`, `slots/setup.py`, `sync_engine/rollback.py`) each
-  refuse on the answer's `sync_directory`, never on `saves_dir` — `test_save_shape_gate.py` pins those five, not the
-  list; the sync, write, delete, count and status paths that `docs/architecture/save-file-sync-architecture.md` lists
-  call `SyncEngine.follow_save_directory` before they look at local files; configuration-role files are held back
-  through `SaveAnswer.synced_files` by the denial `CONFIGURATION_ROLES`, never an allow-list, a directory move carries
-  `owned_files`, and nothing reads `components` directly; a rendering reads `unestablished`'s shape and
-  `content_installed` beside the state; the question carries the ROM's real content path, and system and path are
-  decided only at `RomInfoService._installed_answer`, `._uninstalled_answer` and `services/rom_adoption/renamer.py`;
-  nothing caches an answer
+- **Which files a game's save consists of is the EMULATOR's answer, read live, and six of its seven states refuse the
+  sync — no probe, no state written; a place not read from the emulator's own settings is one of them** — test +
+  prompt-only — `tests/adapters/test_atlas_saves.py`, `tests/domain/test_save_answer.py` and
+  `tests/services/saves/test_save_shape_gate.py`, where each absence test stands beside a control that asserts the probe
+  does happen, and every per-system pin names the extension it asked with (`(system, extension)`). The answered save
+  directory is not sync state: its own table (`answered_save_directories`) may record it for a refusing answer.
+  Prompt-only: every per-ROM entry point refuses through `sync_engine/_shape_refusal.py` and every sync path crosses the
+  `MatrixExecutor.sync_rom_saves` backstop; the five write paths (`slots/switching.py`, `copies.py`, `versions.py`,
+  `slots/setup.py`, `sync_engine/rollback.py`) each refuse on the answer's `sync_directory`, never on `saves_dir` —
+  `test_save_shape_gate.py` pins those five, not the list; the sync, write, delete, count and status paths that
+  `docs/architecture/save-file-sync-architecture.md` lists call `SyncEngine.follow_save_directory` before they look at
+  local files; configuration-role files are held back through `SaveAnswer.synced_files` by the denial
+  `CONFIGURATION_ROLES`, never an allow-list, a directory move carries `owned_files`, and nothing reads `components`
+  directly; a rendering reads `unestablished`'s shape and `content_installed` beside the state; the question carries the
+  ROM's real content path, and system and path are decided only at `RomInfoService._installed_answer`,
+  `._uninstalled_answer` and `services/rom_adoption/renamer.py`; nothing caches an answer; a place not read is decided
+  from the answer's own findings (`domain/save_answer.py::place_not_read_finding`), never from the source's health, and
+  a missing saves root refuses only where the source's roots answer states it `read`; such a refusal keeps the
+  resolver's directory for the rename on adoption, so anything else that moves files by `SaveAnswer.directory` checks
+  the state first, as `services/saves/save_directory.py::_followable_directory` does
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`
   use `slot_query_param` + `save_in_slot`; a legacy delete is refused up-front

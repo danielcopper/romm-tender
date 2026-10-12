@@ -908,12 +908,12 @@ path it WOULD occupy, because `roms.fs_name` carries the extension the answer tu
 a prediction. `content_installed` says which it is, and a surface that renders the names without reading it tells a user
 their uninstalled game already has save files.
 
-### Save state: per-game files / shared / inside the content / hole / not established / saves root missing
+### Save state: per-game files / shared / inside the content / hole / not established / saves root missing / place not read
 
-The six values a save answer classifies a ROM into, **exactly one of which holds**. Only the first is a save Tender can
-carry; the other five **refuse** — the sync probes no path and writes no sync state. Four refuse with the benign skip;
-saves root missing refuses as a failure, `saves_root_missing`. A refusing answer can still have its directory recorded
-as the [answered save directory](#answered-save-directory), which is not sync state.
+The seven values a save answer classifies a ROM into, **exactly one of which holds**. Only the first is a save Tender
+can carry; the other six **refuse** — the sync probes no path and writes no sync state. Five refuse with the benign
+skip; saves root missing refuses as a failure, `saves_root_missing`. A refusing answer can still have its directory
+recorded as the [answered save directory](#answered-save-directory), which is not sync state.
 
 - **per-game files** — the answer names concrete files with no hole. Sync as usual, any number of files.
 - **shared** — the emulator's granularity is a shared card or a shared file, so one file holds many games' progress and
@@ -925,9 +925,12 @@ as the [answered save directory](#answered-save-directory), which is not sync st
   not, or no question reached the resolver at all. **These are three shapes, `nothing_established`, `directory_known`
   and `not_asked`, and they stay apart**: they are different sentences to a reader, and collapsing them claims ignorance
   about a folder we can point at, or claims a refusal where nobody was ever asked.
-- **saves root missing** — RetroDECK reports its saves folder missing, so a sync would create it on internal storage.
-  This one is about RetroDECK rather than the emulator, which is not asked; the folder is never created, and the sync
-  refuses as a failure rather than with the benign skip.
+- **saves root missing** — the emulator source read its saves folder from its settings and reports it missing, so a sync
+  would create it on internal storage. This one is about the source rather than the emulator; the folder is never
+  created, and the sync refuses as a failure rather than with the benign skip.
+- **place not read** — the answer says its place was not read from the emulator's own settings: the settings file is
+  missing or cannot be read, or the source is not set up, so the emulator's defaults stand in. RetroDECK's and EmuDeck's
+  marker findings alone are not this: their marker names the source's folders, never where an emulator writes.
 
 Detail, including which systems land where on a stock RetroDECK, is in
 [Save sync coverage](docs/architecture/save-sync-coverage.md).

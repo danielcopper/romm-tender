@@ -418,6 +418,16 @@ listed under [Steam Input Mode](configuration.md#steam-input-mode).
 **Fix**: Insert the SD card or drive the saves folder is on. If it is there, repair the folder with RetroDECK's **Repair
 RetroDECK Paths**. Tender does not create the folder itself ([Save Sync](save-sync.md#save-file-location)).
 
+### An emulator's settings file is missing or cannot be read
+
+**Symptom**: A game's save sync says **_Emulator_'s settings file _file_ is missing, so Tender cannot tell where it
+keeps this game's saves.**, or **… cannot be read, …**, or repeats a notice from the main panel about an emulator
+source's settings file.
+
+**Fix**: Start that emulator once, so it writes its settings file. If the file is there and cannot be read, check that
+it is readable, or reset that emulator in RetroDECK. Tender syncs no save at a place the emulator's own settings did not
+name ([Save Sync](save-sync.md#save-file-location)).
+
 ### Auto-sync is disabled
 
 **Fix**: Go to **Save Sync** in the QAM and make sure both "Sync before launch" and "Sync after exit" are toggled on.
