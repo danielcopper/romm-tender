@@ -1496,7 +1496,8 @@ Triggered automatically when a game stops (if `sync_after_exit` is enabled).
    one typed payload (the old `recordSessionEnd` / `postExitSync` endpoints were collapsed into it). If Steam's JS
    context was rebuilt mid-session, `handleGameStop` still fires for the adopted session — see
    [Surviving a JS-context rebuild mid-session](#surviving-a-js-context-rebuild-mid-session) — so the post-exit sync is
-   not skipped.
+   not skipped. While a removed-game cleanup runs the call is refused (`prune_active`) and none of those steps runs: the
+   panel logs the refusal and says in a toast that the session's playtime was not saved.
 3. Backend runs `do_sync_rom_saves`. For most rows the local file's hash will differ from `last_sync_hash` (the user
    just played), so the typical action is `Upload` — matrix row 9 — POSTed as a new version (`overwrite=false`,
    409-backstopped).

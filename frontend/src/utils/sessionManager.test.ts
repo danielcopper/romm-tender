@@ -16,7 +16,10 @@ const backendMock = vi.hoisted(() => ({
   logError: vi.fn(),
   debugLog: vi.fn(),
 }));
-vi.mock("../api/backend", () => backendMock);
+vi.mock("../api/backend", async (importOriginal) => ({
+  ...backendMock,
+  isEndpointFailure: (await importOriginal<typeof import("../api/backend")>()).isEndpointFailure,
+}));
 
 const metadataPatchesMock = vi.hoisted(() => ({ updatePlaytimeDisplay: vi.fn() }));
 vi.mock("./migrationStore", () => ({ setMigrationStatus: vi.fn() }));
@@ -620,7 +623,7 @@ describe("sessionManager post-exit save-sync toast (#1481)", () => {
   // The directional completion toast is rendered frontend-side from the transfer
   // counts via `saveSyncToastBody`; the offline/failure body stays backend-owned
   // (`failure_toast`). These pin both surfaces onto the finalize payload.
-  type SyncOverride = Partial<Awaited<ReturnType<typeof backend.finalizeGameSession>>["sync"]>;
+  type SyncOverride = Partial<backend.SessionFinalizeResult["sync"]>;
 
   const finalizeWithSync = (override: SyncOverride) =>
     vi.mocked(backend.finalizeGameSession).mockResolvedValue({
@@ -700,6 +703,26 @@ describe("sessionManager post-exit save-sync toast (#1481)", () => {
     const bodies = vi.mocked(toaster.toast).mock.calls.map((c) => c[0].body);
     expect(bodies).toContain("Saves uploaded to RomM");
     expect(bodies).toContain("2 save conflicts need resolution");
+  });
+
+  it("says the playtime was not saved when the finalize is refused, and logs the refusal", async () => {
+    vi.mocked(backend.finalizeGameSession).mockResolvedValue({
+      success: false,
+      reason: "prune_active",
+      message: "A removed-game cleanup is in progress",
+    });
+    await runStop();
+    expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Tender",
+        body: "This session's playtime was not saved — a removed-game cleanup was running",
+      }),
+    );
+    expect(backend.logWarn).toHaveBeenCalledWith(
+      `Finalize for romId=${ROM_ID} refused (prune_active): A removed-game cleanup is in progress`,
+    );
+    expect(backend.logError).not.toHaveBeenCalled();
+    expect(updatePlaytimeDisplay).not.toHaveBeenCalled();
   });
 });
 
@@ -1814,7 +1837,7 @@ describe("sessionManager with a backend that does not answer", () => {
       expect(sessionEvents).toContainEqual({ running: true, appId: OTHER_APP_ID, romId: OTHER_ROM_ID });
 
       const migration = { retrodeck: { pending: true } } as unknown as NonNullable<
-        Awaited<ReturnType<typeof backend.finalizeGameSession>>["migration"]
+        backend.SessionFinalizeResult["migration"]
       >;
       answer({ ...IDLE_FINALIZE, total_seconds: 600, sync: { ...IDLE_FINALIZE.sync, uploaded: 2 }, migration });
       await vi.advanceTimersByTimeAsync(0);

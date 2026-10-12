@@ -253,8 +253,9 @@ displayed on the game detail page, in the **Playtime** cell next to the Play but
 
 Each finished session is sent to RomM's built-in play-session store, so your `last_played` time shows correctly in the
 RomM web UI. This is separate from save sync — playtime is recorded for **every** game on every exit, even when save
-sync is off. If RomM is unreachable, the session is queued locally and uploaded automatically the next time you launch a
-game or reconnect (nothing is lost).
+sync is off. The one exception is a game that exits while a cleanup of games removed from RomM is running: that
+session's playtime is not recorded, and a notification says so. If RomM is unreachable, the session is queued locally
+and uploaded automatically the next time you launch a game or reconnect (nothing is lost).
 
 The displayed playtime refreshes live: when you finish a session the PLAYTIME value updates on the same detail page
 without needing to navigate away and back. Opening a game's detail page also reconciles playtime with RomM — if you

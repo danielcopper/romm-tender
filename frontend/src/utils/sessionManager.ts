@@ -14,6 +14,7 @@ import {
   recordSessionStart,
   getAppIdRomIdMap,
   finalizeGameSession,
+  isEndpointFailure,
   logInfo,
   logWarn,
   logError,
@@ -353,11 +354,20 @@ async function handleGameStop(stoppedAppId: number): Promise<void> {
   );
 }
 
+/** The only rule `finalize_game_session` checks is the removed-game cleanup's, so a refusal is always that one. */
+const FINALIZE_REFUSED_TOAST_BODY = "This session's playtime was not saved — a removed-game cleanup was running";
+
 function applyFinalizeResult(
   appId: number,
   romId: number,
   result: Awaited<ReturnType<typeof finalizeGameSession>>,
 ): void {
+  if (isEndpointFailure(result)) {
+    logWarn(`Finalize for romId=${romId} refused (${result.reason}): ${result.message}`);
+    showToast(FINALIZE_REFUSED_TOAST_BODY);
+    return;
+  }
+
   // Playtime display update — appStore mutation must stay frontend.
   if (result.total_seconds != null) {
     updatePlaytimeDisplay(appId, result.total_seconds);
