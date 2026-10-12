@@ -5752,7 +5752,10 @@ class TestABatchDownloadCarriesOnPastAFailedFile:
         logged = [(record.levelno, record.getMessage()) for record in caplog.records]
         # A refusal is logged once, where the download refuses it; the batch adds no second line.
         assert not [line for _level, line in logged if "refused.bin" in line]
-        assert (logging.INFO, "Failed to download firmware romm_error.bin: connection refused") in logged
+        assert (
+            logging.INFO,
+            "Failed to download firmware romm_error.bin: RommConnectionError: connection refused",
+        ) in logged
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("entry", ["download_all_firmware", "download_required_firmware"])

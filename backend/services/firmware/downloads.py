@@ -277,7 +277,9 @@ class FirmwareDownloader:
                 errors.append(name)
                 continue
             except RommApiError as e:
-                self._logger.log(romm_error_log_level(e), f"Failed to download firmware {name}: {e}")
+                self._logger.log(
+                    romm_error_log_level(e), f"Failed to download firmware {name}: {type(e).__name__}: {e}"
+                )
                 errors.append(name)
                 continue
             downloaded += 1
