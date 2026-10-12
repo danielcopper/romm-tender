@@ -246,7 +246,8 @@ gives. What no run of it can say is whether the code inside works — the script
 Beside the tarball the same job attaches `decky-ui-<version>.tgz`, named for the `@decky/ui` version rather than
 Tender's: the `@decky/ui` npm package `frontend/pnpm-lock.yaml` resolves, which `scripts/decky_ui_source.py` fetches
 from the npm registry and writes only once its SHA-512 matches the lock's integrity hash. It is the source of the copy
-the bundles carry, offered from the release itself ([THIRD-PARTY-NOTICES.md](../../THIRD-PARTY-NOTICES.md) says where a
+the bundles carry, offered from the release itself
+([THIRD-PARTY-NOTICES.md](https://github.com/danielcopper/romm-tender/blob/main/THIRD-PARTY-NOTICES.md) says where a
 reader finds it). CI's build job runs the same script on every pull request, without attaching anything, so a release is
 not its first run either.
 
