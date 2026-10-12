@@ -53,7 +53,7 @@ from domain.rom_files import (
     resolve_local_file_name,
     synthetic_rom_name,
 )
-from lib.errors import Refused, RommApiError, classify_error
+from lib.errors import Refused, RommApiError, classify_error, romm_error_log_level
 from lib.path_safety import PathTraversalError, coerce_safe_component, is_inside_folder, safe_join
 from services.rom_adoption._target import Target as _Target
 from services.rom_adoption.renamer import AdoptionIncomplete, AdoptionRenamer, AdoptionRenamerConfig
@@ -686,16 +686,19 @@ class RomAdoptionService:
         user's request — the dialog opens on cheap evidence and never waits for
         this.
 
-        A RomM error fetching the ROM answers ``error``, worded as the
-        entrypoint words that error; any other exception propagates.
+        A RomM error fetching the ROM answers ``error`` with the reason and
+        message the entrypoint would answer it with, and is logged at the level
+        the entrypoint logs it at; any other exception propagates.
         """
         rom_id = int(rom_id)
         try:
             rom_detail, target = await self._loop.run_in_executor(None, self._detail_and_target_io, rom_id)
         except RommApiError as e:
-            self._logger.error(f"Failed to fetch ROM {rom_id} for verification: {e}")
-            _reason, message = classify_error(e)
-            return {"status": "error", "message": message, "differences": []}
+            self._logger.log(
+                romm_error_log_level(e), f"Failed to fetch ROM {rom_id} for verification: {type(e).__name__}: {e}"
+            )
+            reason, message = classify_error(e)
+            return {"status": "error", "reason": reason, "message": message, "differences": []}
         if isinstance(target, FolderRefused):
             return {
                 "status": "error",

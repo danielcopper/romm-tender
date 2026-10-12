@@ -926,7 +926,25 @@ class TestVerify:
 
         result = await h.service.verify_existing_content(_ROM_ID)
 
-        assert result == {"status": "error", "message": classify_error(error)[1], "differences": []}
+        assert result == {
+            "status": "error",
+            "reason": classify_error(error)[0],
+            "message": classify_error(error)[1],
+            "differences": [],
+        }
+
+    @pytest.mark.parametrize(
+        ("error", "level"),
+        [(RommConnectionError("no route to host"), logging.INFO), (RommAuthError("401"), logging.WARNING)],
+    )
+    async def test_a_romm_error_is_logged_once_at_the_classifier_s_level(self, h, caplog, error, level):
+        h.romm_api.fail_on_next(error)
+        caplog.set_level(logging.DEBUG)
+
+        await h.service.verify_existing_content(_ROM_ID)
+
+        lines = [(r.levelno, r.getMessage()) for r in caplog.records if "for verification" in r.getMessage()]
+        assert lines == [(level, f"Failed to fetch ROM {_ROM_ID} for verification: {type(error).__name__}: {error}")]
 
     async def test_any_other_failure_fetching_the_rom_is_not_answered(self, h):
         bug = KeyError("platform_slug")
