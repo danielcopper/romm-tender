@@ -81,8 +81,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### Font Awesome Free icons
 
-The one icon set Tender imports from react-icons is `react-icons/fa`, react-icons' conversion of the Font Awesome Free
-5.15.4 SVG icons into JavaScript components. Those icons are not react-icons' own and carry a licence of their own:
+The one icon set Tender imports from react-icons is `react-icons/fa`, react-icons' conversion of the Font Awesome Free 5
+SVG icons — built from upstream just past the 5.15.4 tag, as react-icons' README names it (`5.15.4-3-gafecf2a`) — into
+JavaScript components. Those icons are not react-icons' own and carry a licence of their own:
 
 - **Icons:** Font Awesome Free, by Fonticons, Inc. — <https://fontawesome.com>
 - **Licence:** Creative Commons Attribution 4.0 International (CC BY 4.0) —
