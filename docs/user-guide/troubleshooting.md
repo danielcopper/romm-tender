@@ -411,12 +411,25 @@ listed under [Steam Input Mode](configuration.md#steam-input-mode).
 
 ## Saves Not Syncing
 
-### RetroDECK's saves folder does not exist
+### An emulator source's saves folder does not exist
 
-**Symptom**: A game's save sync says **Save sync is unavailable: RetroDECK's saves folder _path_ does not exist.**
+**Symptom**: A game's save sync says the main panel's notice for that folder — for RetroDECK, **RetroDECK: its saves
+folder _path_ does not exist, so saves of its emulators cannot be synced. Repair it with RetroDECK's 'Repair RetroDECK
+Paths'.** — and a game's exit says **Save sync is unavailable: the saves folder _path_ does not exist.**
 
-**Fix**: Insert the SD card or drive the saves folder is on. If it is there, repair the folder with RetroDECK's **Repair
-RetroDECK Paths**. Tender does not create the folder itself ([Save Sync](save-sync.md#save-file-location)).
+**Fix**: Insert the SD card or drive the saves folder is on. If it is there, repair the folder with the emulator
+source's own tool — for RetroDECK, **Repair RetroDECK Paths**. Tender does not create the folder itself
+([Save Sync](save-sync.md#save-file-location)).
+
+### An emulator's settings file is missing or cannot be read
+
+**Symptom**: A game's save sync says **_Emulator_'s settings file _file_ is missing, so Tender cannot tell where it
+keeps this game's saves.**, or **… cannot be read, …**, or repeats a notice from the main panel about an emulator
+source's settings file.
+
+**Fix**: Start that emulator once, so it writes its settings file. If the file is there and cannot be read, check that
+it is readable, or reset that emulator in RetroDECK. Tender syncs no save at a place the emulator's own settings did not
+name ([Save Sync](save-sync.md#save-file-location)).
 
 ### Auto-sync is disabled
 

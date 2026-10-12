@@ -12,14 +12,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_answer import save_shape_message
 from domain.save_slot import save_in_slot
 from lib.errors import NamedRefused, NotInstalled, Refused
 from lib.partial_failure import PartialFailure
 from services.saves._helpers import newest_server_saves_by_target
 from services.saves._local_changes import changed_since_last_sync
 from services.saves._messages import SAVE_SYNC_DISABLED, SAVE_SYNC_IN_CONTENT_DIR
-from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
+from services.saves._refusals import SavefilesInContentDir, shape_refusal
 from services.saves._save_state import write_save_state
 from services.saves._settings import resolve_default_slot, save_sync_enabled
 
@@ -167,7 +166,7 @@ class SlotSwitcher:
             raise SavefilesInContentDir(SAVE_SYNC_IN_CONTENT_DIR)
         if save_answer.sync_directory is None:
             self._log_debug(f"switch_slot: rom {rom_id} has no save a sync could carry; refusing")
-            raise SaveShapeUnsupported(save_shape_message(save_answer))
+            raise shape_refusal(save_answer)
 
         saves_dir = info["saves_dir"]
         system = info["system"]

@@ -131,6 +131,16 @@ function wordedFinding(kind: string, { code, data }: SourceHealthFinding): strin
 /** The reason a press is refused with while a finding of RetroDECK's stands in the way of its folders. */
 export const RETRODECK_FINDING_REASON = "retrodeck_finding";
 
+/**
+ * The two reasons a refused save action carries a source's finding under:
+ * `save_shape_unsupported`, which a sync and every save write refuse with, and
+ * `saves_root_missing`, a sync's own failure for a missing saves folder. Either
+ * carries the finding, and the source's kind beside it, wherever the save was
+ * refused for a place not read from the emulator's settings or for a missing
+ * saves folder.
+ */
+const SAVE_FINDING_REASONS: ReadonlySet<unknown> = new Set(["save_shape_unsupported", "saves_root_missing"]);
+
 function isFinding(value: unknown): value is SourceHealthFinding {
   if (typeof value !== "object" || value === null) return false;
   const { code, data } = value as { code?: unknown; data?: unknown };
@@ -138,16 +148,49 @@ function isFinding(value: unknown): value is SourceHealthFinding {
 }
 
 /**
- * An endpoint's answer, with the message of a refusal for one of RetroDECK's
- * findings replaced by the sentence Main's notice shows for that finding, so a
- * refused press and the notice say the same thing. Every other answer comes
- * back as it is.
+ * The sentence for a save refused because the emulator's own settings file was
+ * not read, where Main has no notice for that finding: an emulator's file rides
+ * only on the save answer, and RetroArch's own `retroarch.cfg` is the one such
+ * file that is a health finding — the one carrying no `token` and no `core`.
+ */
+function settingsFileSentence(finding: SourceHealthFinding, emulator: string): string | null {
+  const config = text(finding.data, "config");
+  if (config === null) return null;
+  const ownFile = text(finding.data, "token") !== null || text(finding.data, "core") !== null;
+  if (finding.code === "emulator-config-missing" && ownFile) {
+    return `${emulator}'s settings file ${config} is missing, so Tender cannot tell where it keeps this game's saves.`;
+  }
+  if (finding.code === "emulator-config-unreadable") {
+    return `${emulator}'s settings file ${config} cannot be read, so Tender cannot tell where it keeps this game's saves.`;
+  }
+  return null;
+}
+
+/** The sentence a refusal carrying `finding` is worded with, or `null` where its message stands. */
+function refusalSentence(answer: Record<string, unknown>, finding: SourceHealthFinding): string | null {
+  const { reason, source, emulator } = answer;
+  if (reason === RETRODECK_FINDING_REASON) return findingSentence("retrodeck", finding);
+  if (!SAVE_FINDING_REASONS.has(reason) || typeof source !== "string") return null;
+  const settingsFile = typeof emulator === "string" ? settingsFileSentence(finding, emulator) : null;
+  return settingsFile ?? findingSentence(source, finding);
+}
+
+/**
+ * An endpoint's answer, with the message of a refusal for a source's finding
+ * replaced by the sentence Main's notice shows for that finding, so a refused
+ * press and the notice say the same thing. Two refusals carry one: a folder
+ * press refused for one of RetroDECK's findings, and a save action refused for
+ * a place not read or a missing saves folder, which carries its source's kind
+ * beside the finding. A save refused for an emulator's own settings file, for
+ * which Main shows no notice, says so in a sentence of its own. Every other
+ * answer comes back as it is.
  */
 export function withFindingSentence<T>(answer: T): T {
   if (typeof answer !== "object" || answer === null) return answer;
-  const { reason, finding } = answer as { reason?: unknown; finding?: unknown };
-  if (reason !== RETRODECK_FINDING_REASON || !isFinding(finding)) return answer;
-  return { ...answer, message: findingSentence("retrodeck", finding) };
+  const { finding } = answer as { finding?: unknown };
+  if (!isFinding(finding)) return answer;
+  const sentence = refusalSentence(answer as Record<string, unknown>, finding);
+  return sentence === null ? answer : { ...answer, message: sentence };
 }
 
 /** The two reasons a press is refused with for a platform that has no switched-on system in its source. */

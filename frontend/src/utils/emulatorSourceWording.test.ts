@@ -222,6 +222,105 @@ describe("withFindingSentence", () => {
     expect(withFindingSentence(answer)).toBe(answer);
   });
 
+  describe("a save refused because its place was not read", () => {
+    const saveRefusal = (finding: unknown, source: unknown = "retrodeck", emulator: unknown = "Cemu (Standalone)") => ({
+      success: false,
+      reason: "save_shape_unsupported",
+      message: "Save sync is unavailable: where this emulator keeps saves was not read from its settings.",
+      finding,
+      source,
+      emulator,
+    });
+
+    it.each([
+      [
+        "a source not set up",
+        "emudeck",
+        { code: "not-set-up", data: { path: "/m" } },
+        "EmuDeck is installed but has not been set up yet. Start EmuDeck once and finish its first-run setup.",
+      ],
+      [
+        "RetroArch's own settings file missing",
+        "retrodeck",
+        { code: "emulator-config-missing", data: { config: "/r/retroarch.cfg" } },
+        "RetroDECK: RetroArch's settings file /r/retroarch.cfg is missing, so RetroArch uses its built-in default folders.",
+      ],
+      [
+        "a bare RetroArch's marker",
+        "bare_retroarch_native",
+        { code: "marker-unreadable", data: { path: "/r/retroarch.cfg" } },
+        "RetroArch (native): its settings file /r/retroarch.cfg cannot be read.",
+      ],
+      [
+        "EmuDeck's RetroArch",
+        "emudeck",
+        { code: "companion-config-missing", data: { path: "/e/retroarch.cfg" } },
+        "EmuDeck: RetroArch's settings file /e/retroarch.cfg cannot be read; EmuDeck's RetroArch may be missing or broken.",
+      ],
+    ])("words %s with Main's sentence for the answer's own source", (_label, source, finding, sentence) => {
+      const answer = withFindingSentence(saveRefusal(finding, source));
+
+      expect(answer.message).toBe(sentence);
+      expect(answer.reason).toBe("save_shape_unsupported");
+    });
+
+    it.each([
+      [
+        "a standalone emulator's missing file",
+        "Cemu (Standalone)",
+        { code: "emulator-config-missing", data: { token: "CEMU", config: "/c/settings.xml" } },
+        "Cemu (Standalone)'s settings file /c/settings.xml is missing, so Tender cannot tell where it keeps this game's saves.",
+      ],
+      [
+        "a core's own missing file, named bare",
+        "MAME",
+        { code: "emulator-config-missing", data: { core: "mame", config: "mame.ini" } },
+        "MAME's settings file mame.ini is missing, so Tender cannot tell where it keeps this game's saves.",
+      ],
+      [
+        "an emulator's unreadable file",
+        "melonDS (Standalone)",
+        { code: "emulator-config-unreadable", data: { token: "MELONDS", config: "/m/melonDS.toml", reason: "x" } },
+        "melonDS (Standalone)'s settings file /m/melonDS.toml cannot be read, so Tender cannot tell where it keeps this game's saves.",
+      ],
+    ])("words %s, which Main never shows, after the emulator", (_label, emulator, finding, sentence) => {
+      expect(withFindingSentence(saveRefusal(finding, "retrodeck", emulator)).message).toBe(sentence);
+    });
+
+    it("words an emulator's file with Main's fallback where the answer names no emulator", () => {
+      const finding = { code: "emulator-config-unreadable", data: { token: "XEMU", config: "/x/xemu.toml" } };
+
+      expect(withFindingSentence(saveRefusal(finding, "retrodeck", null)).message).toBe(
+        "Problem with RetroDECK: emulator-config-unreadable",
+      );
+    });
+
+    it.each(["saves_root_missing", "save_shape_unsupported"])(
+      "words a missing saves folder refused with %s with Main's sentence",
+      (reason) => {
+        const finding = { code: "saves-root-missing", data: { path: "/sd/saves" } };
+        const answer = withFindingSentence({ ...saveRefusal(finding, "emudeck", "mGBA"), reason });
+
+        expect(answer.message).toBe(
+          "EmuDeck: its saves folder /sd/saves does not exist, so saves of its emulators cannot be synced.",
+        );
+        expect(answer.reason).toBe(reason);
+      },
+    );
+
+    it("leaves a save refusal that names no source as it came", () => {
+      const answer = saveRefusal({ code: "not-set-up", data: { path: "/m" } }, null);
+
+      expect(withFindingSentence(answer)).toBe(answer);
+    });
+
+    it("leaves a save refusal with no finding as it came", () => {
+      const answer = { success: false, reason: "save_shape_unsupported", message: "one shared card" };
+
+      expect(withFindingSentence(answer)).toBe(answer);
+    });
+  });
+
   it.each([
     ["another refusal", { success: false, reason: "no_rom_folder", message: "m", finding: { code: "x", data: {} } }],
     ["a success", { success: true, message: "ROM removed" }],

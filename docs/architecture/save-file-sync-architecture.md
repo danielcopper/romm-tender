@@ -10,8 +10,8 @@ platform and never was: it belongs to the **emulator** that opens the game, and 
 vendored [emu-atlas](https://github.com/danielcopper/emu-atlas) resolver through `adapters/atlas_saves.py`. Services see
 a `domain.save_answer.SaveAnswer` and never a resolver type.
 
-That answer classifies every ROM into exactly one of **six save states**, and the sync runs in only the first of them —
-see [Save sync coverage](save-sync-coverage.md), which owns the states and the reasoning. Every file in a syncable set
+That answer classifies every ROM into exactly one of **seven save states**, and the sync runs in only the first of them
+— see [Save sync coverage](save-sync-coverage.md), which owns the states and the reasoning. Every file in a syncable set
 syncs **independently against the server save sharing its own canonical target**, so a multi-file set never cross-mixes
 extensions.
 
@@ -825,11 +825,13 @@ A sorted directory RetroArch has not created yet comes back with the `sorted-dir
 `fallback_directory`, the unsorted root RetroArch falls back to (the rule and its source are at `SORTED_DIR_MISSING` in
 `domain/save_answer.py`). A probe there finds nothing, which is the truth; moving files there creates the directory
 first. Any answer a sync would not carry — no emulator resolved, nothing the resolver could establish, a shared card
-even where its directory is known, a save inside the content file, one written beside it, a missing saves root — gives
-no directory to sync in (`SaveAnswer.sync_directory` is empty), and none is supplied by a guess: the sync backstop, the
-status probe and the prune projection skip, and copy-to-slot, rollback, slot switch, the slot-choice migration and
-conflict resolution refuse — with `savefiles_in_content_dir` for an answer beside the content (next section), otherwise
-with `save_shape_unsupported` and the answer's own explanation.
+even where its directory is known, a save inside the content file, one written beside it, a missing saves root, a place
+not read from the emulator's own settings — gives no directory to sync in (`SaveAnswer.sync_directory` is empty), and
+none is supplied by a guess: the sync backstop, the status probe and the prune projection skip, and copy-to-slot,
+rollback, slot switch, the slot-choice migration and conflict resolution refuse — with `savefiles_in_content_dir` for an
+answer beside the content (next section), otherwise with `save_shape_unsupported` and the answer's own explanation. A
+place not read from the settings also carries the resolver's finding, the source's kind and the emulator's label, which
+the panel words the refusal from ([The seven save states](save-sync-coverage.md#the-seven-save-states)).
 
 ### Saves written next to the content (`savefiles_in_content_dir`)
 
@@ -911,8 +913,8 @@ does not otherwise stop — and the files stay the migration's to move until it 
 files regardless of the setting: the RetroDECK home migration and the adoption rename.) A failure — a listing refused,
 the database busy — is logged and leaves the record as it was; the operation that called it goes on. Against the record:
 
-- an answer with no directory, or one anchored in the content's own directory (beside the content file or inside it) →
-  nothing moves and nothing is recorded;
+- an answer with no directory, one anchored in the content's own directory (beside the content file or inside it), or
+  one whose directory was not read from the emulator's own settings → nothing moves and nothing is recorded;
 - nothing recorded → today's answer is recorded; nothing moves;
 - the same directory → nothing;
 - a different one → the game's files move from the recorded directory to the answered one, then the record moves on.
@@ -1471,12 +1473,12 @@ The Play button's path:
    `handleConflicts` in turn (see [The modal](#the-modal)): once all are resolved it notifies siblings and goes on; on
    the first Cancel the button switches to `conflict` and nothing launches. A sync that fails never launches
    unconditionally: the "Save Sync Unavailable" dialog asks first, and Cancel returns the button to Play. The benign
-   skips (`savefiles_in_content_dir`, `save_shape_unsupported`) proceed silently; a missing RetroDECK saves folder
-   (`saves_root_missing`) is a failure, so the dialog asks with its sentence — when it asks, and when the exit's toast
-   says so, is [The six save states](save-sync-coverage.md#the-six-save-states). With "Sync before launch" off the sync
-   answers that before it raises the save answer's refusal, so the dialog never asks about a sync that was switched off.
-   When the sync moved something, the per-direction completion toast above reports it (uploaded / downloaded / both); a
-   failure's classified message appears in the dialog instead.
+   skips (`savefiles_in_content_dir`, `save_shape_unsupported`) proceed silently; a missing saves folder
+   (`saves_root_missing`) is a failure, so the dialog asks with the sentence Main's notice shows for the folder — when
+   it asks, and when the exit's toast says so, is [The seven save states](save-sync-coverage.md#the-seven-save-states).
+   With "Sync before launch" off the sync answers that before it raises the save answer's refusal, so the dialog never
+   asks about a sync that was switched off. When the sync moved something, the per-direction completion toast above
+   reports it (uploaded / downloaded / both); a failure's classified message appears in the dialog instead.
 8. Offline: `check_local_drift`. A local save that changed since the last sync asks Start Anyway / Retry connection /
    Cancel; Retry runs the check again from the start.
 9. Re-confirm: `get_rom_relaunch_options`, bounded at 3 s, heals the shortcut's launch options. A timeout stops the

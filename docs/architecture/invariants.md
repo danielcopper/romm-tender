@@ -306,11 +306,12 @@ Format: **invariant** — tier — enforced by.
   the resolver's own root, BIOS and saves folders are its defaults, so using them would be that guess again. The rules
   each question answers by are on [Config source parsers](config-source-parsers.md#retrodecks-folders-retrodeckjson). A
   save's folder and a firmware file's place take the other route, the save and firmware answers
-  (`adapters/atlas_saves.py`, `adapters/atlas_firmware.py`), and this entry does not cover them: under the three
-  `marker-*` findings a save is still synced where the save answer places it, which is then RetroDECK's default —
-  keeping saves out of it is #2286's. Unseen by the tests: a folder joined onto a root under another name, and a caller
-  that puts the question to RetroDECK's handle itself. Prompt-only: a new caller that downloads into, removes from or
-  bounds a removal by a RetroDECK folder asks `RetroDeckFolders` and raises the refusal it answers with
+  (`adapters/atlas_saves.py`, `adapters/atlas_firmware.py`), and this entry does not cover them: a save's place comes
+  from the emulator's own settings rather than from `retrodeck.json`, so under the three `marker-*` findings a save
+  still syncs where the emulator keeps it, and a place those settings did not name is the save-answer entry's to refuse.
+  Unseen by the tests: a folder joined onto a root under another name, and a caller that puts the question to
+  RetroDECK's handle itself. Prompt-only: a new caller that downloads into, removes from or bounds a removal by a
+  RetroDECK folder asks `RetroDeckFolders` and raises the refusal it answers with
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (AST over the declared file's own calls, matching the two-attribute
   `<...>.<repo>.<method>` shape against the twelve repositories the UoW exposes). Read or write is decided **by the
@@ -1320,14 +1321,14 @@ Format: **invariant** — tier — enforced by.
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — prompt-only — sync
   paths, `get_save_status`, and the three slot mutations hold the lock; mechanize via a `rom_save_sync_states.save`
   call-site audit
-- **Which files a game's save consists of is the EMULATOR's answer, read live, and five of its six states refuse the
-  sync — no probe, no state written** — test + prompt-only — `tests/adapters/test_atlas_saves.py` pins the six states
-  and every way the question cannot be put, `tests/domain/test_save_answer.py` pins the precedence that makes "exactly
-  one" well defined, and `tests/services/saves/test_save_shape_gate.py` pins the absences **each beside a control that
-  asserts the same probe DOES happen for a syncable answer** — without those controls a service that had stopped probing
-  entirely would pass. The answered save directory is not sync state: it lives in its own table
-  (`answered_save_directories`) and may be recorded for a refusing answer, whose files are then followed when that
-  directory moves — a move, not a sync
+- **Which files a game's save consists of is the EMULATOR's answer, read live, and six of its seven states refuse the
+  sync — no probe, no state written; a place not read from the emulator's own settings is one of them** — test +
+  prompt-only — `tests/adapters/test_atlas_saves.py` pins the seven states and every way the question cannot be put,
+  `tests/domain/test_save_answer.py` pins the precedence that makes "exactly one" well defined, and
+  `tests/services/saves/test_save_shape_gate.py` pins the absences **each beside a control that asserts the same probe
+  DOES happen for a syncable answer** — without those controls a service that had stopped probing entirely would pass.
+  The answered save directory is not sync state: it lives in its own table (`answered_save_directories`) and may be
+  recorded for a refusing answer, whose files are then followed when that directory moves — a move, not a sync
   ([Following a Moved Save Directory](save-file-sync-architecture.md#following-a-moved-save-directory)). The rule spans
   seven modules and no diff-scoped review sees it whole: `AtlasSaveLocationAdapter` reads the machine,
   `domain/save_answer.py` decides what the reading means, `RomInfoService.save_answer` turns it into names,
@@ -1382,7 +1383,20 @@ Format: **invariant** — tier — enforced by.
   and only the resolver's machine, which remembers a core's probe by the core file's path, modification time and size,
   outlives it — because the user changes a core's options in the emulator's own quick menu between a launch and the next
   sync; a display cache added without invalidating it on every sync entry is the one change that makes this rule fail
-  silently and expensively. Detail: `docs/architecture/save-sync-coverage.md`, GLOSSARY.md → Save state / Save scope
+  silently and expensively. **A place not read from the emulator's own settings** — a settings file missing or
+  unreadable, a source not set up, a bare RetroArch's marker, which is its `retroarch.cfg` — refuses as its own state,
+  and what decides it is the answer's own findings (`domain/save_answer.py::place_not_read_finding`), never the source's
+  health: ES-DE's settings and EmuDeck's RetroArch beside a standalone emulator are health findings about files no save
+  of that emulator is placed by, and reading them would refuse a save whose place was read. RetroDECK's and EmuDeck's
+  marker findings alone refuse nothing, because their marker names the source's folders and never where an emulator
+  writes; a missing saves root refuses only where the source's roots answer states that root `read`, since a root it
+  only assumed says nothing about a drive. `TestAPlaceNotReadFromTheSettings`,
+  `TestTheRealResolverStatesWhereAPlaceWasNotRead` and `TestAMissingSavesRoot` in `tests/adapters/test_atlas_saves.py`
+  pin both directions, the real resolver's included. Unchecked: such a refusal keeps the directory the resolver named,
+  because the rename on adoption carries a game's saves there, so anything that moves files by `SaveAnswer.directory`
+  has to check the state itself, as `services/saves/save_directory.py::_followable_directory` does — a new mover that
+  does not carries files into a place the emulator's settings never named, and nothing would say so. Detail:
+  `docs/architecture/save-sync-coverage.md`, GLOSSARY.md → Save state / Save scope
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`
   use `slot_query_param` + `save_in_slot`; RomM can't address `slot:null` via the param, so legacy MUST omit it + filter

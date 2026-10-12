@@ -1467,9 +1467,22 @@ describe("launchInterceptor — full funnel watcher", () => {
 
     it("preLaunchSync: saves_root_missing fails with the folder's sentence, so the launch asks first", async () => {
       const ops = await captureOps();
-      const message = "Save sync is unavailable: RetroDECK's saves folder /run/media/sd/saves does not exist.";
+      // The answer as the launch receives it, worded on its way back with the
+      // folder's notice (pinned in api/host.test.ts).
+      const message =
+        "RetroDECK: its saves folder /run/media/sd/saves does not exist, so saves of its emulators cannot be synced. " +
+        "Repair it with RetroDECK's 'Repair RetroDECK Paths'.";
+      const refused = {
+        success: false,
+        message,
+        reason: "saves_root_missing" as const,
+        finding: { code: "saves-root-missing", data: { path: "/run/media/sd/saves" } },
+        source: "retrodeck",
+        emulator: "mGBA",
+        synced: 0,
+      };
 
-      vi.mocked(backend.preLaunchSync).mockResolvedValueOnce({ success: false, message, reason: "saves_root_missing" });
+      vi.mocked(backend.preLaunchSync).mockResolvedValueOnce(refused);
 
       expect(await ops.preLaunchSync()).toEqual({ success: false, message });
     });

@@ -93,47 +93,73 @@ The two per-platform loops — `count_platform_saves` and `delete_platform_saves
 platform, so their cost grows with the platform's installed games. Nothing is cached: the correctness rule is that every
 sync path asks live, and the count exists so the number the button offers equals the number the delete removes.
 
-## The six save states
+## The seven save states
 
-The answer classifies every ROM into **exactly one** of six states. Only the first is a save Tender can carry; the other
-five are refusals, and each says something different about why. A refusal syncs nothing: no path is probed, no sync
+The answer classifies every ROM into **exactly one** of seven states. Only the first is a save Tender can carry; the
+other six are refusals, and each says something different about why. A refusal syncs nothing: no path is probed, no sync
 state is written, and the sync refuses with the benign skip (`reason: "save_shape_unsupported"`) rather than a failure —
 as the `savefiles_in_content_dir` skip does — except for a missing saves root, which is a failure of its own (below). A
 refusing answer that names a directory outside the content's own is still recorded and followed when that directory
 moves, because the files are on the disk either way
-([Following a moved save directory](save-file-sync-architecture.md#following-a-moved-save-directory)).
+([Following a moved save directory](save-file-sync-architecture.md#following-a-moved-save-directory)) — except a place
+not read from the emulator's settings, which the follow carries nothing into.
 
-| State                  | What it means                                                                 | Example on a stock RetroDECK        |
-| ---------------------- | ----------------------------------------------------------------------------- | ----------------------------------- |
-| **per-game files**     | The answer names concrete files with no hole. Sync as usual, any number.      | Game Boy Advance, Saturn            |
-| **shared**             | One card or file that many games write, so per-game sync would overwrite.     | PS2, and a Sega CD disc image       |
-| **inside the content** | The save is written into the game file itself; there is nothing separate.     | an Amiga `.adf`                     |
-| **hole**               | The shape is known, but part of the path or name is the game's own identity.  | Dreamcast, GameCube, 3DS, Wii U     |
-| **not established**    | Nobody established what this emulator writes, or the names in a known folder. | MAME, PSP, ScummVM, unaudited cores |
-| **saves root missing** | RetroDECK reports its saves folder missing; a sync would create it.           | saves on an SD card that is out     |
+| State                  | What it means                                                                          | Example on a stock RetroDECK        |
+| ---------------------- | -------------------------------------------------------------------------------------- | ----------------------------------- |
+| **per-game files**     | The answer names concrete files with no hole. Sync as usual, any number.               | Game Boy Advance, Saturn            |
+| **shared**             | One card or file that many games write, so per-game sync would overwrite.              | PS2, and a Sega CD disc image       |
+| **inside the content** | The save is written into the game file itself; there is nothing separate.              | an Amiga `.adf`                     |
+| **hole**               | The shape is known, but part of the path or name is the game's own identity.           | Dreamcast, GameCube, 3DS, Wii U     |
+| **not established**    | Nobody established what this emulator writes, or the names in a known folder.          | MAME, PSP, ScummVM, unaudited cores |
+| **saves root missing** | The source read its saves folder from its settings, and it is missing.                 | saves on an SD card that is out     |
+| **place not read**     | The emulator's own settings did not name the place, so its defaults stand in for them. | a standalone emulator never started |
 
-**The sixth is about RetroDECK, not the emulator.** While RetroDECK reports `saves-root-missing`, the resolver still
-places a save under a folder that does not exist, and a sync would create it — on internal storage while the SD card it
-belongs on is out, where the SD card hides it once it is back. So the answer refuses without asking the emulator
-anything, and its sentence names the folder: **Save sync is unavailable: RetroDECK's saves folder _path_ does not
-exist.** Unlike the other four, it is no benign skip: the sync refuses with `saves_root_missing`. A launch asks before
-starting on the local saves while "Sync before launch" is on and RomM can be reached, and a game's exit says in a toast
-that its saves were not synced while "Sync after exit" is on. Only RetroDECK's answer is checked for it, because no
-other source reaches a save answer through a catalogue that is not refused. Folders below an existing saves root are
-still created as today.
+**The sixth is about the emulator source, not the emulator.** While the answering source reports `saves-root-missing`
+for a saves root it read from its settings (its roots answer states that root `read`), the resolver still places a save
+under a folder that does not exist, and a sync would create it — on internal storage while the SD card it belongs on is
+out, where the SD card hides it once it is back. So the answer refuses. The refusal carries the finding and the source's
+kind as a place not read does (below), so the launch dialog and every press in the panel read the sentence Main's notice
+shows for the folder. Only the toast after a game exits shows the backend's own sentence, which names the folder and no
+source, since the table of source names lives only in the panel (`sourceName`): **Save sync is unavailable: the saves
+folder _path_ does not exist.** A saves root the source only assumed — its settings name none, or cannot be read, as
+with a damaged `retrodeck.json` — says nothing about a drive and refuses nothing. Every source that has a saves folder
+is checked, and the emulator is still asked, since asking creates nothing. Unlike the other refusals, it is no benign
+skip: the sync refuses with `saves_root_missing`. A launch asks before starting on the local saves while "Sync before
+launch" is on and RomM can be reached, and a game's exit says in a toast that its saves were not synced while "Sync
+after exit" is on. Folders below an existing saves root are still created as today.
+
+**The seventh is about the reading behind the answer.** The resolver names a save's place from the emulator's own
+settings — RetroArch's `retroarch.cfg`, a standalone emulator's own configuration, a libretro core's own file such as
+`mame.ini`, `scummvm.ini` or `WHDLoad.prefs` — and where that file is missing or cannot be read, it names the emulator's
+defaults instead and says so with a finding on the answer. Tender syncs and writes no save there, and the directory
+follow moves none into it. The findings that refuse are the resolver's `PLACE_NOT_READ_CODES`, read off the answer
+itself: `emulator-config-missing`, `emulator-config-unreadable` (also where the emulator then runs on its defaults, as
+melonDS does over a file it cannot parse), `config-unreadable`, `companion-config-missing`, `not-set-up`, and a bare
+RetroArch's `marker-missing`, `marker-unreadable` and `marker-invalid`, its marker being its `retroarch.cfg`.
+RetroDECK's and EmuDeck's marker findings alone refuse nothing: their marker names the source's own folders, never where
+an emulator writes, so under a damaged `retrodeck.json` the saves still sync where the emulators keep them. A source's
+health is not read for this — ES-DE's settings, and EmuDeck's RetroArch beside a standalone emulator, are findings about
+files no save of that emulator is placed by. The refusal is the benign skip, and it carries the finding, the source's
+kind and the emulator's label: the panel words it with the sentence Main's notice shows for that finding, or, for an
+emulator's own settings file, which Main never shows, **_Emulator_'s settings file _file_ is missing, so Tender cannot
+tell where it keeps this game's saves.** (**cannot be read** where it exists). The answer keeps the directory the
+resolver named, so the rename on adoption still carries the game's saves there.
+
+**Where several apply, the first in this order is named:** a shape Tender never syncs (shared, inside the content), then
+a missing saves root, then a place not read, then what cannot be established yet (a hole, not established).
 
 **The hole is not always in a file name.** Flycast's Dreamcast cards need the game's `save_id` in the filename;
 Dolphin's GameCube memory cards need the game's `region` in the DIRECTORY. Either way Tender cannot complete the path,
 which is what the state is about.
 
-**The last state has three shapes and they are kept apart**, because they are three different sentences to a reader.
-`nothing_established` — nobody has established what this emulator writes. `directory_known` — the directory is known and
-the file names in it are not, and telling a user "nothing is known" about a folder we can point at would be wrong.
-`not_asked` — no question reached the resolver: no emulator resolved for this ROM, no emulator source answering, a
-catalogue the resolver refused (EmuDeck's among them where the runtime has no zstd codec to open it), no catalogue entry
-under the label, or no content name to ask with. The status read reports a save Tender could otherwise sync, sitting
-beside the content, the same way, since no sync runs there. The emulator is not implicated, and saying it is would be
-wrong too.
+**The not-established state has three shapes and they are kept apart**, because they are three different sentences to a
+reader. `nothing_established` — nobody has established what this emulator writes. `directory_known` — the directory is
+known and the file names in it are not, and telling a user "nothing is known" about a folder we can point at would be
+wrong. `not_asked` — no question reached the resolver: no emulator resolved for this ROM, no emulator source answering,
+a catalogue the resolver refused (EmuDeck's among them where the runtime has no zstd codec to open it; one refused for a
+source not set up is a place not read instead), no catalogue entry under the label, or no content name to ask with. The
+status read reports a save Tender could otherwise sync, sitting beside the content, the same way, since no sync runs
+there. The emulator is not implicated, and saying it is would be wrong too.
 
 **Scope is the emulator, never the platform.** PS2 is not unsupported — standalone PCSX2 is, and a libretro core for the
 same platform can answer differently. Every state the payload carries names the emulator it is about.

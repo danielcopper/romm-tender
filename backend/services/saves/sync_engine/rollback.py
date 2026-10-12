@@ -24,13 +24,12 @@ from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import parse_iso_to_epoch
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_answer import save_shape_message
 from domain.save_path import sanitize_save_filename
 from domain.save_slot import filter_saves_to_slot
 from lib.errors import DeviceNotRegisteredError, NamedRefused, NotInstalled, Refused
 from services.saves._helpers import local_save_target
 from services.saves._messages import DEVICE_NOT_REGISTERED
-from services.saves._refusals import SaveShapeUnsupported
+from services.saves._refusals import shape_refusal
 from services.saves._save_state import write_save_state
 from services.saves._settings import resolve_default_slot
 
@@ -146,7 +145,7 @@ class RollbackOrchestrator:
         # An answer a sync would not carry has nowhere to write either side of
         # the resolution — the refusal the sync entry points give for it.
         if saves_dir is None:
-            raise SaveShapeUnsupported(save_shape_message(info["save_answer"]))
+            raise shape_refusal(info["save_answer"])
 
         save_state, device_id = await loop.run_in_executor(None, self._read_inputs, rom_id)
 

@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable, Sequence
 
 RETRODECK = "retrodeck"
+EMUDECK = "emudeck"
 
 # Where the order and the switched-off kinds are stored in ``settings.json``.
 ORDER_SETTING = "emulator_source_order"
