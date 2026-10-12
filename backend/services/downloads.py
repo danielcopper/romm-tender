@@ -259,7 +259,7 @@ class DownloadService:
                 await remove_rom(sibling_id)
             except NotInstalled:
                 continue  # raced clean — nothing to supersede
-            except Refused as refused:
+            except (Refused, FolderRefused) as refused:
                 self._logger.error(
                     f"Superseding install of rom {sibling_id} (group of rom {rom_id}) failed: {refused.message}"
                 )

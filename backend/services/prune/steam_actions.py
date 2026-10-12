@@ -14,6 +14,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
+from domain.refusal import DomainRefused
 from lib.errors import Refused, RommApiError, classify_error
 from services.prune._models import cancellation_state, shielded
 from services.prune.results import GroupOutcome
@@ -101,7 +102,7 @@ class SteamActionRunner:
         except asyncio.CancelledError as exc:
             self._record_switch_cancellation(exc, rows, ledger, target_id, app_id, handle)
             raise
-        except (Refused, RommApiError) as exc:
+        except (Refused, DomainRefused, RommApiError) as exc:
             return None, None, self._switch_failed(exc, rows, ledger, handle)
         launch_options, result = self._switch_outcome(switch, ledger, target_id, app_id)
         if result is not None:
@@ -143,7 +144,7 @@ class SteamActionRunner:
     ) -> None:
         """Keep a version switch that finished, refused, or failed on a RomM error as the cancelled run's outcome."""
         state = cancellation_state(exc)
-        if isinstance(state.child_fault, (Refused, RommApiError)):
+        if isinstance(state.child_fault, (Refused, DomainRefused, RommApiError)):
             state.group_result = self._switch_failed(state.child_fault, rows, ledger, handle)
             state.child_fault = None
         elif state.child_completed and isinstance(state.child_result, dict):
@@ -261,7 +262,7 @@ class SteamActionRunner:
 
     def _switch_failed(
         self,
-        exc: Refused | RommApiError,
+        exc: Refused | DomainRefused | RommApiError,
         rows: list[Rom],
         ledger: MutationLedger,
         handle: RecoveryHandle | None,
@@ -269,7 +270,9 @@ class SteamActionRunner:
         """A switch that refused or failed on a RomM error changed no binding, so the provisional commit
         is taken back.
         """
-        reason, message = (exc.reason, exc.message) if isinstance(exc, Refused) else classify_error(exc)
+        reason, message = (
+            (exc.reason, exc.message) if isinstance(exc, (Refused, DomainRefused)) else classify_error(exc)
+        )
         ledger.committed_action = None
         ledger.action_ambiguous = False
         return self._results.group_result(
