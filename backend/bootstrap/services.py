@@ -222,6 +222,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             uow_factory=cfg.callbacks.uow_factory,
             romm_api=cfg.adapters.romm_api,
             source_platform_systems=cfg.adapters.source_platform_systems,
+            logger=cfg.runtime.logger,
             log_debug=cfg.callbacks.log_debug,
         ),
     )
