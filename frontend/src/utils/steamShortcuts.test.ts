@@ -143,6 +143,7 @@ describe("setLaunchOptionsConfirmed", () => {
 
     it("is logged once, at info, when the report missed the wait and the re-read shows the value", async () => {
       vi.useFakeTimers();
+      const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
       const logInfoSpy = vi.spyOn(backend, "logInfo").mockImplementation(() => {});
       stubReports((registration) => ({ strLaunchOptions: registration === 1 ? "old-value" : "new-value" }));
 
@@ -152,14 +153,17 @@ describe("setLaunchOptionsConfirmed", () => {
       await expect(promise).resolves.toBe(true);
       expect(logInfoSpy).toHaveBeenCalledTimes(1);
       expect(logInfoSpy).toHaveBeenCalledWith(RESCUE_LINE);
+      expect(logWarnSpy).not.toHaveBeenCalled();
     });
 
     it("is not logged when the first report confirms", async () => {
+      const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
       const logInfoSpy = vi.spyOn(backend, "logInfo").mockImplementation(() => {});
       stubReports(() => ({ strLaunchOptions: "new-value" }));
 
       await expect(setLaunchOptionsConfirmed(5, "new-value", 2000)).resolves.toBe(true);
       expect(logInfoSpy).not.toHaveBeenCalled();
+      expect(logWarnSpy).not.toHaveBeenCalled();
     });
 
     it("is not logged when the re-read shows a different value too", async () => {
@@ -172,6 +176,69 @@ describe("setLaunchOptionsConfirmed", () => {
 
       await expect(promise).resolves.toBe(false);
       expect(logInfoSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("the line logged when the confirm fails", () => {
+    const WRITTEN = "flatpak run net.retrodeck.retrodeck '/games/psx/Some Game (USA).chd'";
+    const HELD_BEFORE = 'flatpak run net.retrodeck.retrodeck "/games/psx/Some Game (USA).chd"';
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("names the appId and that the re-read delivered no details", async () => {
+      vi.useFakeTimers();
+      const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+      const { fn } = makeRegisterForAppDetails(() => undefined);
+      vi.stubGlobal("SteamClient", {
+        Apps: { SetAppLaunchOptions: vi.fn(), RegisterForAppDetails: fn },
+      });
+
+      const promise = setLaunchOptionsConfirmed(5, WRITTEN, 2000);
+      await vi.advanceTimersByTimeAsync(4000);
+
+      await expect(promise).resolves.toBe(false);
+      expect(logWarnSpy).toHaveBeenCalledTimes(1);
+      expect(logWarnSpy).toHaveBeenCalledWith(
+        "setLaunchOptionsConfirmed: appId 5 not confirmed: the re-read delivered no details within 2000ms",
+      );
+    });
+
+    it("carries the value the re-read showed and the value written, both in full", async () => {
+      vi.useFakeTimers();
+      const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+      const { fn } = makeRegisterForAppDetails(() => ({ strLaunchOptions: HELD_BEFORE }));
+      vi.stubGlobal("SteamClient", {
+        Apps: { SetAppLaunchOptions: vi.fn(), RegisterForAppDetails: fn },
+      });
+
+      const promise = setLaunchOptionsConfirmed(5, WRITTEN, 2000);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      await expect(promise).resolves.toBe(false);
+      expect(logWarnSpy).toHaveBeenCalledTimes(1);
+      expect(logWarnSpy).toHaveBeenCalledWith(
+        `setLaunchOptionsConfirmed: appId 5 not confirmed: the re-read shows ${JSON.stringify(HELD_BEFORE)}, ` +
+          `the write was ${JSON.stringify(WRITTEN)}`,
+      );
+    });
+
+    it("shows an empty value the re-read gave as an empty string", async () => {
+      vi.useFakeTimers();
+      const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+      const { fn } = makeRegisterForAppDetails(() => ({ strLaunchOptions: "" }));
+      vi.stubGlobal("SteamClient", {
+        Apps: { SetAppLaunchOptions: vi.fn(), RegisterForAppDetails: fn },
+      });
+
+      const promise = setLaunchOptionsConfirmed(5, WRITTEN, 2000);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      await expect(promise).resolves.toBe(false);
+      expect(logWarnSpy).toHaveBeenCalledWith(
+        `setLaunchOptionsConfirmed: appId 5 not confirmed: the re-read shows "", the write was ${JSON.stringify(WRITTEN)}`,
+      );
     });
   });
 });

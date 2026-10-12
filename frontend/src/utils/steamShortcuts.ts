@@ -1,5 +1,5 @@
 import type { SyncAddItem } from "../types";
-import { getAppIdRomIdMap, syncHeartbeat, logError, logInfo } from "../api/backend";
+import { getAppIdRomIdMap, syncHeartbeat, logError, logInfo, logWarn } from "../api/backend";
 import { delay } from "./pacedOps";
 
 /**
@@ -61,16 +61,28 @@ export function getAppDetails(appId: number, timeoutMs = 2000): Promise<SteamApp
  * ``true`` when either read shows ``value``, ``false`` when the re-read shows a
  * different value or does not answer. Setting ``""`` (the
  * uninstalled-placeholder value) is valid and confirms against an empty
- * read-back.
+ * read-back. Before resolving ``false`` it logs a warning saying which of the
+ * two happened, carrying a different value in full beside the value written.
  */
 export async function setLaunchOptionsConfirmed(appId: number, value: string, timeoutMs = 2000): Promise<boolean> {
   if (await writeAndAwaitReport(appId, value, timeoutMs)) return true;
   const details = await getAppDetails(appId, timeoutMs);
-  const confirmed = details !== null && launchOptionsOf(details) === value;
-  if (confirmed) {
-    logInfo(`setLaunchOptionsConfirmed: appId ${appId} confirmed by the re-read after the report missed the wait`);
+  if (details === null) {
+    logWarn(
+      `setLaunchOptionsConfirmed: appId ${appId} not confirmed: the re-read delivered no details within ${timeoutMs}ms`,
+    );
+    return false;
   }
-  return confirmed;
+  const seen = launchOptionsOf(details);
+  if (seen !== value) {
+    logWarn(
+      `setLaunchOptionsConfirmed: appId ${appId} not confirmed: the re-read shows ${JSON.stringify(seen)}, ` +
+        `the write was ${JSON.stringify(value)}`,
+    );
+    return false;
+  }
+  logInfo(`setLaunchOptionsConfirmed: appId ${appId} confirmed by the re-read after the report missed the wait`);
+  return true;
 }
 
 function launchOptionsOf(details: SteamAppDetails): string {
