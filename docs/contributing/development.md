@@ -95,11 +95,12 @@ python -m pytest tests/ -q -n auto --cov=backend --cov-report=term --cov-branch
 pytest-cov combines the workers' data into one report, the same one a single-process run writes.
 
 Tests mirror the source layout (`tests/services/`, `tests/adapters/`, `tests/domain/`, `tests/models/`, `tests/lib/`),
-with each test file mapping 1:1 to a source module. Shared fixtures live in `tests/conftest.py`: among them the fresh
-`HOME` every test runs under, and the per-test `emit` and `logger` a service is built with. `_isolated_environment`'s
-docstring there says what the isolation covers and what it does not, and states the named exception, a test class that
-reads your real RetroDECK install and only reads. `.claude/rules/testing-backend.md` has the rules for writing a test
-against them.
+with each test file mapping 1:1 to a source module. A mirror directory carries no `__init__.py`, and no backend
+top-level name may be a standard-library module or importable without `backend/` — `tests/test_backend_package_names.py`
+fails on either and says why. Shared fixtures live in `tests/conftest.py`: among them the fresh `HOME` every test runs
+under, and the per-test `emit` and `logger` a service is built with. `_isolated_environment`'s docstring there says what
+the isolation covers and what it does not, and states the named exception, a test class that reads your real RetroDECK
+install and only reads. `.claude/rules/testing-backend.md` has the rules for writing a test against them.
 
 Frontend component tests run with `mise run test:frontend` (`pnpm -C frontend test`); see
 `.claude/rules/testing-frontend.md` for the backend-event harness, and for what that suite cannot see — `api/host` is
