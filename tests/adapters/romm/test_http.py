@@ -1272,15 +1272,11 @@ class TestTheSimpleRomReadsKeepTheEntityProof:
         with (
             patch("urllib.request.urlopen", side_effect=answer_with_the_404) as mock_open,
             patch("time.sleep"),
+            pytest.raises(RommApiError) as raised,
         ):
-            try:
-                read(api)
-            except RommApiError as exc:
-                raised = exc
-            else:
-                pytest.fail("the read answered instead of raising")
+            read(api)
         assert {call.args[0].full_url for call in mock_open.call_args_list} == {"http://romm.local/api/roms/42/simple"}
-        return raised
+        return raised.value
 
     @pytest.mark.parametrize("read", _READS)
     def test_rom_m_s_entity_answer_is_not_found(self, romm_http, read):
