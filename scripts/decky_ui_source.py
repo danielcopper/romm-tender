@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import http.client
 import os
 import re
 import sys
@@ -89,7 +90,9 @@ def fetch(url: str) -> bytes:
     try:
         with urllib.request.urlopen(url, timeout=FETCH_TIMEOUT_SECONDS) as response:
             return response.read()
-    except OSError as error:  # urllib's URLError and HTTPError among them
+    # OSError covers urllib's URLError and HTTPError; HTTPException is a body
+    # that breaks off part-way (IncompleteRead).
+    except (OSError, http.client.HTTPException) as error:
         raise Refused(f"{url}: {error}") from error
 
 

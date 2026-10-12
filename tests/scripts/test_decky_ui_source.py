@@ -1,16 +1,19 @@
 """Tests for ``scripts/decky_ui_source.py``.
 
 The script is loaded via ``importlib`` because ``scripts/`` is not on
-``sys.path``. No case touches the network: each replaces the module's ``fetch``
-with one answering bytes the case chose, and reads a lock written under
-``tmp_path`` — except the last, which reads the repository's own lock and
-fetches nothing.
+``sys.path``. No case touches the network. The first and the last case call
+``locked_package`` directly, the last on the repository's own lock. The cases
+that run ``main`` read a lock written under ``tmp_path`` and replace the
+module's ``fetch`` with one answering bytes the case chose — except the one
+about a download that breaks off, which keeps ``fetch`` and replaces the
+``urlopen`` beneath it.
 """
 
 from __future__ import annotations
 
 import base64
 import hashlib
+import http.client
 import importlib.util
 import sys
 from pathlib import Path
@@ -102,6 +105,29 @@ def test_a_package_with_other_bytes_is_refused_and_leaves_no_file(
     assert code == 1
     assert "the lock says" in capsys.readouterr().err
     assert not out.exists() or not any(out.iterdir())
+
+
+def test_a_download_that_breaks_off_is_refused_and_leaves_no_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class _BrokenOff:
+        def __enter__(self) -> _BrokenOff:
+            return self
+
+        def __exit__(self, *_exc: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            raise http.client.IncompleteRead(_PACKAGE_BYTES[:5], len(_PACKAGE_BYTES) - 5)
+
+    monkeypatch.setattr(source.urllib.request, "urlopen", lambda *_args, **_kwargs: _BrokenOff())
+    lock_path = tmp_path / "pnpm-lock.yaml"
+    lock_path.write_text(_lock("4.12.1"), encoding="utf-8")
+    out = tmp_path / "build"
+
+    assert source.main(["--lock", str(lock_path), "--out", str(out)]) == 1
+    assert "ERROR: no @decky/ui source asset" in capsys.readouterr().err
+    assert not out.exists()
 
 
 @pytest.mark.parametrize(
