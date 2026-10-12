@@ -2,7 +2,8 @@ name: Release
 
 # Two jobs: release-please decides the version, the tag and the changelog, and
 # `assets` attaches what a tag is worth downloading — `romm-tender-<version>.tar.gz`
-# and its `.sha256`, the pair `install.sh` fetches and verifies.
+# and its `.sha256`, the pair `install.sh` fetches and verifies, and
+# `decky-ui-<version>.tgz`, the source of the `@decky/ui` the bundles carry.
 #
 # The tarball is packed from the tag by the same `scripts/package.sh` a
 # developer runs locally, and held to the same `scripts/check_release_tarball.py`
@@ -103,8 +104,13 @@ jobs:
           TAG: ${{ needs.release-please.outputs.tag_name }}
         run: python3 scripts/check_release_tarball.py build/romm-tender-*.tar.gz --tag "$TAG"
 
-      - name: Attach it to the release
+      - name: Fetch the @decky/ui source package and verify it against the lock
+        run: python3 scripts/decky_ui_source.py --out build
+
+      - name: Attach them to the release
         env:
           TAG: ${{ needs.release-please.outputs.tag_name }}
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$TAG" build/romm-tender-*.tar.gz build/romm-tender-*.tar.gz.sha256 --clobber
+        run: >-
+          gh release upload "$TAG" build/romm-tender-*.tar.gz build/romm-tender-*.tar.gz.sha256 build/decky-ui-*.tgz
+          --clobber

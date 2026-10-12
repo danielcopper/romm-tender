@@ -125,6 +125,11 @@ jobs:
           bash scripts/package.sh --source . --out build
           python3 scripts/check_release_tarball.py build/romm-tender-*.tar.gz
 
+      # What the release job attaches beside the tarball (release.yml says why),
+      # fetched and verified here too, so a release is not its first run.
+      - name: Fetch the @decky/ui source package and verify it against the lock
+        run: python3 scripts/decky_ui_source.py --out build
+
       - name: Type check
         run: pnpm -C frontend typecheck
 
