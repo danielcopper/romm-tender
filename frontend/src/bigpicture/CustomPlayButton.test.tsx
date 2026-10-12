@@ -1713,9 +1713,22 @@ describe("CustomPlayButton — pre-launch failure shapes without an errors array
   );
 
   it("asks before launching while the saves folder is missing, naming the folder", async () => {
-    const message = "Save sync is unavailable: the saves folder /run/media/sd/saves does not exist.";
+    // The answer as the launch receives it, worded on its way back with the
+    // folder's notice (pinned in api/host.test.ts).
+    const message =
+      "RetroDECK: its saves folder /run/media/sd/saves does not exist, so saves of its emulators cannot be synced. " +
+      "Repair it with RetroDECK's 'Repair RetroDECK Paths'.";
+    const refused = {
+      success: false,
+      reason: "saves_root_missing" as const,
+      message,
+      finding: { code: "saves-root-missing", data: { path: "/run/media/sd/saves" } },
+      source: "retrodeck",
+      emulator: "mGBA",
+      synced: 0,
+    };
     mockCachedDetail();
-    vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: false, reason: "saves_root_missing", message });
+    vi.mocked(backend.preLaunchSync).mockResolvedValue(refused);
     vi.mocked(showFallbackLaunchModal).mockResolvedValue(false);
 
     const { findByText } = render(<CustomPlayButton appId={100} />);

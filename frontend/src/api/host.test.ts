@@ -165,6 +165,42 @@ describe("an answer on its way back", () => {
     expect(answer.message).toBe("RetroDECK has no system for Commodore VIC-20, so Tender cannot download its games.");
   });
 
+  it("words a launch's sync refused for a missing saves folder the way the folder's notice does", async () => {
+    vi.spyOn(HostSocket.prototype, "call").mockResolvedValue({
+      success: false,
+      reason: "saves_root_missing",
+      message: "Save sync is unavailable: the saves folder /run/media/sd/saves does not exist.",
+      finding: { code: "saves-root-missing", data: { path: "/run/media/sd/saves" } },
+      source: "retrodeck",
+      emulator: "mGBA",
+      synced: 0,
+    });
+
+    const answer = await endpoint<[number], { message: string }>("pre_launch_sync")(42);
+
+    expect(answer.message).toBe(
+      "RetroDECK: its saves folder /run/media/sd/saves does not exist, so saves of its emulators cannot be synced. " +
+        "Repair it with RetroDECK's 'Repair RetroDECK Paths'.",
+    );
+  });
+
+  it("words a save refused for an emulator's missing settings file after the emulator", async () => {
+    vi.spyOn(HostSocket.prototype, "call").mockResolvedValue({
+      success: false,
+      reason: "save_shape_unsupported",
+      message: "Save sync is unavailable: where this emulator keeps saves was not read from its settings. (Cemu)",
+      finding: { code: "emulator-config-missing", data: { token: "CEMU", config: "/c/settings.xml" } },
+      source: "retrodeck",
+      emulator: "Cemu",
+    });
+
+    const answer = await endpoint<[number, string], { message: string }>("switch_slot")(42, "other");
+
+    expect(answer.message).toBe(
+      "Cemu's settings file /c/settings.xml is missing, so Tender cannot tell where it keeps this game's saves.",
+    );
+  });
+
   it("hands every other answer back as it came", async () => {
     const refusal = { success: false, reason: "no_rom_folder", message: "RetroDECK names no ROM folder for gba." };
     vi.spyOn(HostSocket.prototype, "call").mockResolvedValue(refusal);
