@@ -55,12 +55,15 @@ What this gate deliberately does NOT do, and the first one is the gate's own
 subject: **it never verifies MEMBERSHIP in a folder entry's directory.** The
 two admitted folders are checked to exist and their contents are not read at
 all, so a real module moved into ``frontend/src/types/`` or
-``frontend/src/test-utils/`` is exempted by its PLACE — no marker asked for, no
-failure — which is the accident named above, still live for those two
-directories. That is a declared blind spot rather than an oversight: "is this
-really only a type declaration" is not a cheap check, and a half-check
-(no-functions, say) would exempt on a property nobody stated and read as
-enforcement. Review is what closes it. Beyond that, it does not read the
+``frontend/src/test-utils/`` is exempted by its PLACE here — no marker asked
+for, no failure. For ``frontend/src/types/`` the frontend suite answers instead:
+``frontend/src/typesHoldNoValues.test.ts`` fails on a value any module there
+exports, and exporting none is that folder's whole property. For
+``frontend/src/test-utils/`` nothing does, so the accident named above is still
+live there. That is a declared blind spot rather than an oversight: "is this
+reached only from the test run" is not a cheap check, and a half-check would
+exempt on a property nobody stated and read as enforcement. Review is what
+closes it. Beyond that, it does not read the
 marker's reason, so a marker whose sentence is false passes green — only review
 catches that too, and writing a true one is the whole point of putting it where
 the code is. It does not check that an excluded file is in fact hard to test (no
@@ -96,8 +99,8 @@ MARKER_WINDOW = 5
 # exempted by its place, and only review notices.
 FOLDER_ENTRIES = {
     "frontend/src/types/**": (
-        "type declarations and the literal constants their types are derived from — "
-        "no functions and no branches, so there is nothing to assert"
+        "type declarations only — no runtime value, so nothing there runs and there "
+        "is nothing to assert"
     ),
     "frontend/src/test-utils/**": (
         "shared test harnesses, reached only from the test run — by the tests and by "
