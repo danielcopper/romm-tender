@@ -32,9 +32,8 @@ from lib.errors import Refused, RommForbiddenError, RommNotFoundError, RommUnpro
 if TYPE_CHECKING:
     import logging
 
-    from models.play_sessions import PlaySessionIngestEntry, PlaySessionIngestResult
-
     from domain.playtime import PendingSessionRow
+    from models.play_sessions import PlaySessionIngestEntry, PlaySessionIngestResult
     from services.protocols import (
         Clock,
         ConflictRules,

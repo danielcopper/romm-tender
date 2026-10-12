@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from _vendor import vdf
-from models.prune import MutationOutcome
 
 from adapters.descriptor_paths import (
     hold_writer_exclusion,
@@ -21,6 +20,7 @@ from adapters.descriptor_paths import (
     require_directory,
 )
 from domain.artwork_paths import grid_image_filenames
+from models.prune import MutationOutcome
 
 if TYPE_CHECKING:
     import logging

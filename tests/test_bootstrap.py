@@ -14,16 +14,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from _vendor import atlas
-from bootstrap import (
-    AdapterBundle,
-    BootstrapResult,
-    CallbackBundle,
-    RuntimeBundle,
-    StateBundle,
-    WiringConfig,
-    bootstrap,
-    wire_services,
-)
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
 from fakes.fake_cover_art_file_store import FakeCoverArtFileStore
 from fakes.fake_download_file_store import FakeDownloadFileStore
@@ -51,7 +41,6 @@ from fakes.fake_steam_interface import FakeSteamInterface
 from fakes.fake_transient_units import FakeTransientUnits
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
-from models.shortcut_launcher import ShortcutLauncher
 
 from adapters import atlas_zstd
 from adapters.gavel_native import GavelNativeAdapter
@@ -61,12 +50,23 @@ from adapters.romm.romm_api import RommApiAdapter
 from adapters.steam_config import SteamConfigAdapter
 from adapters.update_attempt import UpdateAttemptFileAdapter
 from adapters.update_staging import UpdateStagingAdapter
+from bootstrap import (
+    AdapterBundle,
+    BootstrapResult,
+    CallbackBundle,
+    RuntimeBundle,
+    StateBundle,
+    WiringConfig,
+    bootstrap,
+    wire_services,
+)
 from domain.app_directories import AppDirectories
 from domain.identity import MIN_ROMM_VERSION, PACKAGE_NAME, VERSION
 from domain.sync_run_kind import SyncRunKind
 from domain.update_release import UpdateSource
 from lib.errors import Refused
 from lib.prune_conflicts import PruneConflicts
+from models.shortcut_launcher import ShortcutLauncher
 from services.achievements import AchievementsService
 from services.cores import CoreService
 from services.data_inventory import DataInventoryService

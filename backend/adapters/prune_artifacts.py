@@ -5,10 +5,9 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
-from models.prune import MutationOutcome
-
 from adapters.descriptor_paths import claim_source, remove_claimed
 from domain.artwork_paths import cache_filename, cover_meta_filename
+from models.prune import MutationOutcome
 
 if TYPE_CHECKING:
     from models.prune import RecoveryArtifact, SourceClaim

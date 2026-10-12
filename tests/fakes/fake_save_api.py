@@ -27,7 +27,6 @@ if TYPE_CHECKING:
         SyncNegotiateResponse,
         SyncOperation,
     )
-
     from services.protocols import SaveFileStore
 
 

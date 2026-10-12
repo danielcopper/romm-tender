@@ -31,6 +31,7 @@ from lib.romm_paging import LIST_PAGE_SIZE
 _SYNC_DISABLED_DETAIL = "Sync is disabled for this device"
 
 if TYPE_CHECKING:
+    from adapters.romm.http import RommHttpAdapter
     from models.cover import CoverRevalidation
     from models.play_sessions import PlaySessionIngestEntry, PlaySessionIngestResponse
     from models.sync import (
@@ -38,8 +39,6 @@ if TYPE_CHECKING:
         SyncCompleteResponse,
         SyncNegotiateResponse,
     )
-
-    from adapters.romm.http import RommHttpAdapter
 
 _logger = logging.getLogger(__name__)
 

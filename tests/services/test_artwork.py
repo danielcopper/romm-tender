@@ -12,12 +12,12 @@ from _factories import _make_conflict_rules
 from fakes.fake_cover_art_file_store import FakeCoverArtFileStore
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
-from models.cover import CoverRevalidation
 
 from domain.artwork_paths import cover_meta_filename
 from domain.cover_refresh import scan_cover_refresh_candidates
 from domain.rom import Rom
 from lib.errors import Refused, RommConnectionError, RommNotFoundError, RommServerError
+from models.cover import CoverRevalidation
 from services.artwork import ArtworkService, ArtworkServiceConfig
 
 

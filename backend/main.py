@@ -17,7 +17,6 @@ sys.path.insert(0, backend_dir)
 _CODE_DIR_FALLBACK = os.path.dirname(backend_dir)
 
 from bootstrap import Application, build_application
-
 from domain.app_directories import AppDirectories, resolve_directories
 from domain.identity import VERSION
 from domain.refusal import DomainRefused

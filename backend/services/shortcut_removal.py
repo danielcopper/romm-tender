@@ -28,7 +28,6 @@ if TYPE_CHECKING:
     import logging
 
     from models.state import ShortcutRegistryEntry
-
     from services.protocols import (
         ArtworkRemover,
         ConflictRules,

@@ -11,10 +11,10 @@ from typing import Any, cast
 import pytest
 from _factories import _make_conflict_rules
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
-from models.prune import InstalledContentRemoval, SaveQuarantine
 
 from domain.rom import Rom
 from domain.version_metadata import VersionMetadata
+from models.prune import InstalledContentRemoval, SaveQuarantine
 from services.prune._models import RecoveryHandle
 from services.prune.finalize import GroupFinalizer, GroupFinalizerConfig
 from services.prune.planning import GroupPlan

@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
-from models.prune import SaveQuarantine
 
 from domain.retrodeck_folders import finding_refusal, unanswered_refusal
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
+from models.prune import SaveQuarantine
 from tests.services.saves._helpers import (
     _create_save,
     _install_rom,

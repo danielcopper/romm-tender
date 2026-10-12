@@ -13,17 +13,15 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from models.prune import SaveQuarantine
-
 from domain.retrodeck_folders import FolderRefused
 from domain.save_backup import BACKUP_DIR_NAME, backup_name, is_backup_for
+from models.prune import SaveQuarantine
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from models.prune import MutationOutcome, SourceClaim
-
     from domain.rom_install import RomInstall
+    from models.prune import MutationOutcome, SourceClaim
     from services.protocols import Clock, RetroDeckFolders, SaveFileStore, UnitOfWorkFactory
     from services.saves.rom_info import RomInfoService
     from services.saves.sync_engine import SyncEngine

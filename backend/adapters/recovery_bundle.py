@@ -25,6 +25,7 @@ from domain.prune import parse_recovery_bundle_id, render_bundle_readme, sanitiz
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from domain.prune import BundleReadmeContext
     from models.prune import (
         RecoveryArtifact,
         RecoveryBundleEntry,
@@ -34,8 +35,6 @@ if TYPE_CHECKING:
         SourceEntry,
         SourceIdentity,
     )
-
-    from domain.prune import BundleReadmeContext
 
 _SAFE_BUNDLE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*_\d{4}-\d{2}-\d{2}_[A-Za-z0-9]{4,32}$", re.ASCII)
 _ROOT_README_NAME = "README.txt"

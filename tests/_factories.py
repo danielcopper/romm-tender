@@ -20,9 +20,9 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from bootstrap import Application, ServicesBundle
 from fakes.running_loop import running_loop
 
+from bootstrap import Application, ServicesBundle
 from lib.conflict_rules import ConflictRuleSet
 from lib.errors import Refused
 from lib.prune_conflicts import PruneConflicts

@@ -39,10 +39,9 @@ from lib.path_safety import coerce_safe_component
 if TYPE_CHECKING:
     import logging
 
-    from models.state import InstalledRomEntry
-
     from domain.platform_system import PlatformSystem
     from lib.partial_failure import PartialFailure
+    from models.state import InstalledRomEntry
     from services.protocols import (
         Clock,
         ConflictRules,

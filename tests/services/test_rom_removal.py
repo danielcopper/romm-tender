@@ -23,14 +23,13 @@ from fakes.system_time import FakeClock
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from models.prune import InstalledContentRemoval
-
 from adapters.recovery_bundle import RecoveryBundleAdapter
 from adapters.rom_files import RomFileAdapter
 from domain.prune import BundleReadmeContext
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from lib.errors import NotInstalled, Refused
+from models.prune import InstalledContentRemoval
 from services.rom_removal import RomRemovalService, RomRemovalServiceConfig, UninstallIncomplete
 
 # Synthetic roms-base path used by the fake fs throughout this module.

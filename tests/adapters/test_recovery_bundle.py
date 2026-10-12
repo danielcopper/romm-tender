@@ -18,9 +18,8 @@ from domain.identity import DISPLAY_NAME
 from lib.errors import OperationAbortedError
 
 if TYPE_CHECKING:
-    from models.prune import RecoveryArtifact
-
     from domain.prune import BundleReadmeContext
+    from models.prune import RecoveryArtifact
 
 
 def _adapter(tmp_path) -> RecoveryBundleAdapter:

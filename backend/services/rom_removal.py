@@ -16,20 +16,18 @@ from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
-from models.prune import InstalledContentRemoval
-
 from domain.retrodeck_folders import FolderRefused, folder_of
 from lib.errors import NotInstalled, Refused
 from lib.partial_failure import PartialFailure
 from lib.path_safety import is_inside_folder
+from models.prune import InstalledContentRemoval
 
 if TYPE_CHECKING:
     import logging
     from collections.abc import AsyncIterator, Callable, Iterable
 
-    from models.prune import MutationOutcome, SourceClaim
-
     from domain.rom_install import RomInstall
+    from models.prune import MutationOutcome, SourceClaim
     from services.protocols import (
         Clock,
         ConflictRules,

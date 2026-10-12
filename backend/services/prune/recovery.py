@@ -11,10 +11,9 @@ from domain.retrodeck_folders import EveryFolderRefused, FolderRefused, folder_o
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from models.prune import RecoveryArtifact, SteamRecoverySnapshot
-
     from domain.prune import BundleReadmeContext
     from domain.rom import Rom
+    from models.prune import RecoveryArtifact, SteamRecoverySnapshot
     from services.protocols import (
         Clock,
         PruneArtifactStore,

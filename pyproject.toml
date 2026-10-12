@@ -108,5 +108,5 @@ allowed-confusables = ["›"]
 # ``main`` and ``check`` are listed like the packages beside them: ruff resolves
 # a first-party module against ``src`` (the repo root), and the two entry points
 # live under ``backend/``, where that lookup does not reach them.
-known-first-party = ["lib", "domain", "services", "adapters", "host", "main", "check"]
+known-first-party = ["lib", "domain", "services", "adapters", "host", "models", "bootstrap", "main", "check"]
 known-third-party = ["_vendor"]

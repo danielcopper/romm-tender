@@ -33,8 +33,6 @@ import pathlib
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from models.cover import CoverRevalidation
-
 from domain.cover_refresh import _strip_cover_ts
 from fakes._romm_save_semantics import (
     check_add_save_conflict,
@@ -44,6 +42,7 @@ from fakes._romm_save_semantics import (
 )
 from lib.errors import RommSyncDisabledError, RommUnprocessableEntityError
 from lib.romm_paging import LIST_PAGE_SIZE
+from models.cover import CoverRevalidation
 
 if TYPE_CHECKING:
     from models.play_sessions import (

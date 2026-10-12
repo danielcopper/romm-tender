@@ -16,6 +16,8 @@ from lib.romm_paging import LIST_PAGE_SIZE
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from domain.update_release import LatestRelease
+    from lib.steam_input_apply import SteamInputApply
     from models.cover import CoverRevalidation
     from models.play_sessions import PlaySessionIngestEntry, PlaySessionIngestResponse
     from models.sync import (
@@ -23,9 +25,6 @@ if TYPE_CHECKING:
         SyncCompleteResponse,
         SyncNegotiateResponse,
     )
-
-    from domain.update_release import LatestRelease
-    from lib.steam_input_apply import SteamInputApply
 
 
 class SteamConfigStore(Protocol):

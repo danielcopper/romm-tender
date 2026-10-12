@@ -60,10 +60,9 @@ from services.version_switch import VersionSwitchService, VersionSwitchServiceCo
 if TYPE_CHECKING:
     from typing import Any
 
-    from models.shortcut_launcher import ShortcutLauncher
-
     from domain.app_directories import AppDirectories
     from domain.update_release import UpdateSource
+    from models.shortcut_launcher import ShortcutLauncher
     from services.protocols import InstalledRomRemoverFn, SaveDirectoriesRecorderFn, SiblingSupersedeFn
 
     from .adapters import AdapterBundle, CallbackBundle, RuntimeBundle, StateBundle
