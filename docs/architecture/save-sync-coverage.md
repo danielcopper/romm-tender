@@ -117,13 +117,16 @@ not read from the emulator's settings, which nothing is ever carried into.
 **The sixth is about the emulator source, not the emulator.** While the answering source reports `saves-root-missing`
 for a saves root it read from its settings (its roots answer states that root `read`), the resolver still places a save
 under a folder that does not exist, and a sync would create it — on internal storage while the SD card it belongs on is
-out, where the SD card hides it once it is back. So the answer refuses, and its sentence names the folder: **Save sync
-is unavailable: RetroDECK's saves folder _path_ does not exist.** A saves root the source only assumed — its settings
-name none, or cannot be read, as with a damaged `retrodeck.json` — says nothing about a drive and refuses nothing. Every
-source is checked, and the emulator is still asked, since asking creates nothing. Unlike the other refusals, it is no
-benign skip: the sync refuses with `saves_root_missing`. A launch asks before starting on the local saves while "Sync
-before launch" is on and RomM can be reached, and a game's exit says in a toast that its saves were not synced while
-"Sync after exit" is on. Folders below an existing saves root are still created as today.
+out, where the SD card hides it once it is back. So the answer refuses, and its sentence names the folder and no source,
+since the backend holds no source's name: **Save sync is unavailable: the saves folder _path_ does not exist.** The
+refusal carries the finding and the source's kind as a place not read does (below), so a press in the panel reads the
+sentence Main's notice shows for the folder; the toast after a game exits shows the backend's own. A saves root the
+source only assumed — its settings name none, or cannot be read, as with a damaged `retrodeck.json` — says nothing about
+a drive and refuses nothing. Every source is checked, and the emulator is still asked, since asking creates nothing.
+Unlike the other refusals, it is no benign skip: the sync refuses with `saves_root_missing`. A launch asks before
+starting on the local saves while "Sync before launch" is on and RomM can be reached, and a game's exit says in a toast
+that its saves were not synced while "Sync after exit" is on. Folders below an existing saves root are still created as
+today.
 
 **The seventh is about the reading behind the answer.** The resolver names a save's place from the emulator's own
 settings — RetroArch's `retroarch.cfg`, a standalone emulator's own configuration, a libretro core's own file such as
