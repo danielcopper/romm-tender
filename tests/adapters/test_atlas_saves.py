@@ -1395,13 +1395,14 @@ class TestTheVocabularyIsTheResolversOwn:
 # entry is ``(state, synced names)``.
 #
 # The rows that differ by extension are the point of the exercise, not noise:
-# PUAE puts an Amiga .adf's save inside the disk image, states a directory it
-# cannot name the contents of for a .lha, and establishes nothing for an .hdf;
+# PUAE puts an Amiga .adf's save inside the disk image, places a .lha's under a
+# WHDLoad.prefs this machine does not have (a place not read from its settings),
+# and establishes nothing for an .hdf;
 # Genesis Plus GX keeps a Sega CD .chd on a shared BRAM card and a .bin in a
 # per-game .srm.
 _PINNED: dict[tuple[str, str], tuple[str, tuple[str, ...]]] = {
     ("amiga", ".adf"): (SAVE_STATE_INSIDE_CONTENT, ()),
-    ("amiga", ".lha"): (SAVE_STATE_UNESTABLISHED, ()),
+    ("amiga", ".lha"): (SAVE_STATE_PLACE_NOT_READ, ()),
     ("amiga", ".hdf"): (SAVE_STATE_UNESTABLISHED, ()),
     ("amigacd32", ".chd"): (SAVE_STATE_PER_GAME_FILES, ("Game Title.nvr",)),
     ("amigacd32", ".bin"): (SAVE_STATE_UNESTABLISHED, ()),
@@ -1420,11 +1421,9 @@ _PINNED: dict[tuple[str, str], tuple[str, tuple[str, ...]]] = {
     ("ps2", ".chd"): (SAVE_STATE_SHARED, ()),
 }
 
-# The two shapes of "not established" the rows above reach, kept apart here too:
-# a .lha states a directory whose names PUAE does not list, an .hdf states
-# nothing at all.
+# The shape of "not established" each row above that reaches it is in: an .hdf
+# states nothing at all.
 _PINNED_SHAPES: dict[tuple[str, str], str] = {
-    ("amiga", ".lha"): UNESTABLISHED_DIRECTORY_KNOWN,
     ("amiga", ".hdf"): UNESTABLISHED_NOTHING,
     ("amigacd32", ".bin"): UNESTABLISHED_NOTHING,
 }
@@ -1484,14 +1483,14 @@ class TestTheRealMachineAnswers:
     def test_one_system_answers_differently_for_three_content_shapes(self, machine, traces):
         """The whole reason a pin names its extension: Amiga is three answers.
 
-        Two of them are different STATES and the third differs only in the shape
-        inside ``unestablished`` — which is exactly why the shape is carried
-        separately. A table keyed by system could state one of the three.
+        Three different states — inside the content, a place not read from the
+        settings, nothing established. A table keyed by system could state one
+        of the three.
         """
         answers = {ext: self._answer(machine, "amiga", ext, traces) for ext in (".adf", ".lha", ".hdf")}
 
         assert answers[".adf"].state == SAVE_STATE_INSIDE_CONTENT
-        assert answers[".lha"].state == SAVE_STATE_UNESTABLISHED
+        assert answers[".lha"].state == SAVE_STATE_PLACE_NOT_READ
         assert answers[".hdf"].state == SAVE_STATE_UNESTABLISHED
         assert len({(a.state, a.unestablished) for a in answers.values()}) == 3
 
