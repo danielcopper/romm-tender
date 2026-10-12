@@ -132,6 +132,32 @@ describe("findingSentence", () => {
     );
   });
 
+  it.each([
+    [
+      "bios-root-missing",
+      { path: "/sd/retrodeck/bios" },
+      "RetroDECK: its BIOS folder /sd/retrodeck/bios does not exist. If it is on an SD card or another drive, insert it.",
+    ],
+    [
+      "roms-root-missing",
+      { path: "/sd/retrodeck/roms" },
+      "RetroDECK: its ROM folder /sd/retrodeck/roms does not exist. If it is on an SD card or another drive, insert it.",
+    ],
+    [
+      "roms-root-not-absolute",
+      { value: "roms" },
+      'RetroDECK: ES-DE\'s ROM folder setting "roms" is not a full path, so Tender cannot tell where its games are.',
+    ],
+    [
+      "emulator-config-missing",
+      { config: "/rd/config/retroarch/retroarch.cfg" },
+      "RetroDECK: RetroArch's settings file /rd/config/retroarch/retroarch.cfg is missing, " +
+        "so RetroArch uses its built-in default folders.",
+    ],
+  ])("words %s from the fact it carries (#2339 D2)", (code, data, sentence) => {
+    expect(findingSentence("retrodeck", { code, data })).toBe(sentence);
+  });
+
   it("names a kind it does not know by the kind", () => {
     expect(findingSentence("standalone_x", { code: "root-missing", data: { path: "/x" } })).toBe(
       "standalone_x: its folder /x does not exist. If it is on an SD card or another drive, insert it.",
@@ -151,6 +177,10 @@ describe("findingSentence", () => {
     ["no systems-file problem", { code: "catalogue-invalid", data: { path: "/es.xml" } }],
     ["no hub", { code: "content-tree-unwired", data: { path: "/p", problem: "missing" } }],
     ["an unknown link problem", { code: "content-tree-unwired", data: { path: "/p", hub: "/h", problem: "toString" } }],
+    ["no BIOS folder", { code: "bios-root-missing", data: {} }],
+    ["no ROM folder", { code: "roms-root-missing", data: {} }],
+    ["no setting, only a path", { code: "roms-root-not-absolute", data: { path: "/p" } }],
+    ["no settings file, only a path", { code: "emulator-config-missing", data: { path: "/p" } }],
   ])("falls back to the code where a fact the sentence needs is missing: %s", (_label, finding) => {
     expect(findingSentence("retrodeck", finding)).toBe(`Problem with RetroDECK: ${finding.code}`);
   });
@@ -211,6 +241,10 @@ describe("findingIsBanner", () => {
     "companion-config-missing",
     "config-unreadable",
     "catalogue-invalid",
+    "bios-root-missing",
+    "roms-root-missing",
+    "roms-root-not-absolute",
+    "emulator-config-missing",
     "brand-new-code",
   ])("shows %s as a banner", (code) => {
     expect(findingIsBanner({ code, data: {} })).toBe(true);
@@ -498,6 +532,28 @@ describe("mainSourceBanners", () => {
         "Repair it with RetroDECK's 'Repair RetroDECK Paths'.",
       "EmuDeck: RetroArch's settings file /ra.cfg cannot be read; EmuDeck's RetroArch may be missing or broken.",
       "EmuDeck is switched on in Settings › Emulator sources, but Tender cannot start games through it yet.",
+    ]);
+  });
+
+  it("words each of the four findings atlas 0.23.0 added on Main, none as a problem with the source (#2339 D2)", () => {
+    const listing = {
+      answering: "retrodeck",
+      sources: [
+        source({
+          findings: [
+            { code: "bios-root-missing", data: { path: "/sd/bios" } },
+            { code: "roms-root-missing", data: { path: "/sd/roms" } },
+            { code: "roms-root-not-absolute", data: { value: "roms" } },
+            { code: "emulator-config-missing", data: { config: "/rd/retroarch.cfg" } },
+          ],
+        }),
+      ],
+    };
+    expect(texts(listing)).toEqual([
+      "RetroDECK: its BIOS folder /sd/bios does not exist. If it is on an SD card or another drive, insert it.",
+      "RetroDECK: its ROM folder /sd/roms does not exist. If it is on an SD card or another drive, insert it.",
+      'RetroDECK: ES-DE\'s ROM folder setting "roms" is not a full path, so Tender cannot tell where its games are.',
+      "RetroDECK: RetroArch's settings file /rd/retroarch.cfg is missing, so RetroArch uses its built-in default folders.",
     ]);
   });
 

@@ -70,33 +70,47 @@ const UNWIRED_PROBLEMS: ReadonlyMap<string, string> = new Map([
   ["diverted", "points elsewhere"],
 ]);
 
+// The key a finding names its folder, file or setting under, where it is not `path`.
+const SUBJECT_KEYS: ReadonlyMap<string, string> = new Map([
+  ["roms-root-not-absolute", "value"],
+  ["emulator-config-missing", "config"],
+]);
+
 /** The worded sentence, or `null` where the code, or a fact it needs, is not one this module knows. */
 function wordedFinding(kind: string, { code, data }: SourceHealthFinding): string | null {
   const name = sourceName(kind);
-  const path = text(data, "path");
-  if (path === null) return null;
+  const subject = text(data, SUBJECT_KEYS.get(code) ?? "path");
+  if (subject === null) return null;
   const repair = kind === "retrodeck" ? RETRODECK_REPAIR : "";
   switch (code) {
     case "not-set-up":
       return `${name} is installed but has not been set up yet. Start ${name} once and finish its first-run setup.`;
     case "marker-missing":
-      return `${name}: its settings file ${path} is missing.`;
+      return `${name}: its settings file ${subject} is missing.`;
     case "marker-unreadable":
     case "config-unreadable":
-      return `${name}: its settings file ${path} cannot be read.`;
+      return `${name}: its settings file ${subject} cannot be read.`;
     case "marker-invalid":
-      return `${name}: its settings file ${path} is damaged, so Tender cannot tell where its folders are.${repair}`;
+      return `${name}: its settings file ${subject} is damaged, so Tender cannot tell where its folders are.${repair}`;
     case "root-missing":
-      return `${name}: its folder ${path} does not exist. If it is on an SD card or another drive, insert it.`;
+      return `${name}: its folder ${subject} does not exist. If it is on an SD card or another drive, insert it.`;
     case "saves-root-missing":
-      return `${name}: its saves folder ${path} does not exist, so saves of its emulators cannot be synced.${repair}`;
+      return `${name}: its saves folder ${subject} does not exist, so saves of its emulators cannot be synced.${repair}`;
+    case "bios-root-missing":
+      return `${name}: its BIOS folder ${subject} does not exist. If it is on an SD card or another drive, insert it.`;
+    case "roms-root-missing":
+      return `${name}: its ROM folder ${subject} does not exist. If it is on an SD card or another drive, insert it.`;
+    case "roms-root-not-absolute":
+      return `${name}: ES-DE's ROM folder setting "${subject}" is not a full path, so Tender cannot tell where its games are.`;
+    case "emulator-config-missing":
+      return `${name}: RetroArch's settings file ${subject} is missing, so RetroArch uses its built-in default folders.`;
     case "companion-config-missing":
-      return `${name}: RetroArch's settings file ${path} cannot be read; ${name}'s RetroArch may be missing or broken.`;
+      return `${name}: RetroArch's settings file ${subject} cannot be read; ${name}'s RetroArch may be missing or broken.`;
     case "catalogue-invalid": {
       const problem = CATALOGUE_PROBLEMS.get(text(data, "problem") ?? "");
       if (problem === undefined) return null;
       return (
-        `${name}: ES-DE's systems file ${path} ${problem}. ` +
+        `${name}: ES-DE's systems file ${subject} ${problem}. ` +
         `ES-DE shows no systems until it is fixed, and Tender cannot tell which emulators ${name} offers.`
       );
     }
@@ -105,7 +119,7 @@ function wordedFinding(kind: string, { code, data }: SourceHealthFinding): strin
       const problem = UNWIRED_PROBLEMS.get(text(data, "problem") ?? "");
       if (hub === null || problem === undefined) return null;
       return (
-        `${name}: texture packs or mods in ${hub} do not reach the emulator, because ${path} ${problem}. ` +
+        `${name}: texture packs or mods in ${hub} do not reach the emulator, because ${subject} ${problem}. ` +
         `Resetting that emulator in ${name} fixes it.`
       );
     }
