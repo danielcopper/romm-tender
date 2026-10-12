@@ -177,6 +177,7 @@ import { useMigrationStatus } from "../utils/migrationStore";
 import { useStrandedAnswer } from "../utils/strandedPanelStore";
 import { detach } from "../utils/detach";
 import type { WireReason } from "../types/reasons";
+import { announceSaveSync } from "../utils/saveSyncEvents";
 
 // S3776 is raised on the declaration line, so its NOSONAR must stay there. prettier-ignore stops
 // Prettier from relocating the trailing comment into the body (which would break the suppression).
@@ -694,9 +695,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
                   showToast(result.message);
                   // Directly update the shown status — no local saves remain
                   noteSaveSyncDisplay(appId, romId, { status: "none", label: "No saves", last_sync_check_at: null });
-                  globalThis.dispatchEvent(
-                    new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }),
-                  );
+                  announceSaveSync(romId);
                 } else {
                   showToast(result.message || "Failed to delete saves");
                 }

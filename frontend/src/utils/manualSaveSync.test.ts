@@ -32,9 +32,7 @@ describe("executeManualSaveSync", () => {
     });
     const dispatchSpy = vi.spyOn(globalThis, "dispatchEvent");
 
-    const result = await executeManualSaveSync(100, 42);
-
-    expect(result).toBe(true);
+    await executeManualSaveSync(100, 42);
     expect(toast.showToast).toHaveBeenCalledWith("Saves synced with RomM (1 up, 1 down)");
     expect(dispatchSpy).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -59,9 +57,7 @@ describe("executeManualSaveSync", () => {
       conflicts: [],
     });
 
-    const result = await executeManualSaveSync(100, 42);
-
-    expect(result).toBe(true);
+    await executeManualSaveSync(100, 42);
     expect(toast.showToast).toHaveBeenCalledWith("Saves already up to date");
   });
 
@@ -75,9 +71,7 @@ describe("executeManualSaveSync", () => {
       conflicts: [{ filename: "save1.srm" } as never],
     });
 
-    const result = await executeManualSaveSync(100, 42);
-
-    expect(result).toBe(true);
+    await executeManualSaveSync(100, 42);
     expect(toast.showToast).not.toHaveBeenCalledWith("Saves already up to date");
     expect(toast.showToast).toHaveBeenCalledWith("1 conflict(s) need resolution");
   });
@@ -89,18 +83,14 @@ describe("executeManualSaveSync", () => {
       synced: 0,
     });
 
-    const result = await executeManualSaveSync(100, 42);
-
-    expect(result).toBe(false);
+    await executeManualSaveSync(100, 42);
     expect(toast.showToast).toHaveBeenCalledWith("Server returned 500");
   });
 
   it("handles exception thrown during sync", async () => {
     vi.mocked(backend.syncRomSaves).mockRejectedValueOnce(new Error("Network boom"));
 
-    const result = await executeManualSaveSync(100, 42);
-
-    expect(result).toBe(false);
+    await executeManualSaveSync(100, 42);
     expect(toast.showToast).toHaveBeenCalledWith("Save sync failed");
   });
 });

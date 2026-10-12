@@ -4,7 +4,6 @@ import * as backend from "../api/backend";
 import {
   CONFLICT_EXPLANATION,
   STALE_CONFLICT_MESSAGE,
-  announceSaveSync,
   conflictTitle,
   formatConflictSize,
   localSaveDetail,
@@ -211,19 +210,6 @@ describe("resolveConflictsSequentially", () => {
 
     await expect(resolveConflictsSequentially(conflicts, showOne)).resolves.toBe("cancel");
     expect(showOne).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe("announceSaveSync", () => {
-  it("dispatches the save_sync change for the ROM", () => {
-    const listener = vi.fn();
-    globalThis.addEventListener("romm_data_changed", listener);
-    try {
-      announceSaveSync(42);
-    } finally {
-      globalThis.removeEventListener("romm_data_changed", listener);
-    }
-    expect((listener.mock.calls[0]![0] as CustomEvent).detail).toEqual({ type: "save_sync", rom_id: 42 });
   });
 });
 

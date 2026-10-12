@@ -14,20 +14,12 @@ import { GameInfoTab } from "./GameInfoTab";
 import { SavesTab } from "./SavesTab";
 import { SlotSetupWizard } from "./SlotSetupWizard";
 import type { PanelState, RomBinding } from "./panelState";
+import { announceSaveSync } from "../utils/saveSyncEvents";
 
 interface TabContentContext {
   readonly appId: number;
   readonly binding: RomBinding;
   readonly state: PanelState;
-}
-
-/** Tell every surface showing this ROM that its save-sync facts moved. */
-function announceSaveSyncChange(romId: number): void {
-  globalThis.dispatchEvent(
-    new CustomEvent("romm_data_changed", {
-      detail: { type: "save_sync", rom_id: romId },
-    }),
-  );
 }
 
 /** Build the pane for the active tab, or null when the active tab builds none. */
@@ -63,7 +55,7 @@ export function buildTabContent({ appId, binding, state }: TabContentContext): R
           // stale `true` puts a saves tab in front of a version whose tracking is
           // not configured (#1754).
           binding.write((prev) => ({ ...prev, slotConfirmed: true }));
-          announceSaveSyncChange(romId);
+          announceSaveSync(romId);
         }}
       />
     );
@@ -96,7 +88,7 @@ export function buildTabContent({ appId, binding, state }: TabContentContext): R
           saveStatus: newStatus,
           conflicts: newStatus.conflicts ?? [],
         }));
-        announceSaveSyncChange(romId);
+        announceSaveSync(romId);
       }}
     />
   );

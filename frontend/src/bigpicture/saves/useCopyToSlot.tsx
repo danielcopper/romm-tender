@@ -17,11 +17,7 @@ import { detach } from "../../utils/detach";
 import { copyToSlotFeedback } from "../../utils/saveSlotWording";
 import { CopyToSlotModal } from "./CopyToSlotModal";
 import type { CopyToSlotHandler } from "./CopyToSlotButton";
-
-/** Refresh both the source and target slot views after a successful copy. */
-function dispatchDataChanged(romId: number): void {
-  globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }));
-}
+import { announceSaveSync } from "../../utils/saveSyncEvents";
 
 async function handleResult(result: CopySaveToSlotStatus, target: string, romId: number): Promise<void> {
   const feedback = copyToSlotFeedback(result, target);
@@ -31,7 +27,7 @@ async function handleResult(result: CopySaveToSlotStatus, target: string, romId:
   }
   showToast(feedback.message);
   if (result.status === "ok") {
-    dispatchDataChanged(romId);
+    announceSaveSync(romId);
   }
 }
 

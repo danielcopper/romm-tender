@@ -4,8 +4,9 @@ import { syncRomSaves } from "../api/backend";
 import { showToast } from "./toast";
 import { saveSyncToastBody } from "./saveSyncToast";
 import { noteSaveSyncDisplay } from "./gameDetailStore";
+import { announceSaveSync } from "./saveSyncEvents";
 
-export async function executeManualSaveSync(appId: number, romId: number): Promise<boolean> {
+export async function executeManualSaveSync(appId: number, romId: number): Promise<void> {
   try {
     const result = await syncRomSaves(romId);
     if (result.success) {
@@ -29,15 +30,13 @@ export async function executeManualSaveSync(appId: number, romId: number): Promi
       if (c > 0) {
         showToast(`${c} conflict(s) need resolution`);
       }
-      globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }));
+      announceSaveSync(romId);
       // Refresh save sync status — last_sync_check_at was just set by the backend
       noteSaveSyncDisplay(appId, romId, { status: "synced", label: "Just now", last_sync_check_at: null });
-      return true;
+      return;
     }
     showToast(result.message || "Save sync failed");
-    return false;
   } catch {
     showToast("Save sync failed");
-    return false;
   }
 }

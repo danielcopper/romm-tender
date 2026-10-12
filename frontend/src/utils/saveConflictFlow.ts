@@ -9,6 +9,7 @@ import { detach } from "./detach";
 import { formatBytes, formatTimestamp } from "./formatters";
 import { showToast } from "./toast";
 import type { SyncConflict } from "../types";
+import { announceSaveSync } from "./saveSyncEvents";
 
 export type SyncConflictAction = "keep_local" | "use_server";
 export type SyncConflictResolution = SyncConflictAction | "cancel";
@@ -105,11 +106,6 @@ export async function resolveConflictsSequentially(
     if ((await showOne(conflict)) === "cancel") return "cancel";
   }
   return "resolved";
-}
-
-/** Tell sibling components a ROM's save state changed, so they re-read it. */
-export function announceSaveSync(romId: number): void {
-  globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }));
 }
 
 // ── The conflict a surface is already showing ──

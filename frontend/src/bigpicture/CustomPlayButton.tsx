@@ -107,6 +107,7 @@ import {
 import { reconfirmLaunchOptions } from "../utils/launchOptionsReconcile";
 import { saveSyncToastBody } from "../utils/saveSyncToast";
 import { boundedOr, withTimeout } from "../utils/withTimeout";
+import { announceSaveSync } from "../utils/saveSyncEvents";
 
 type PlayButtonState =
   | "loading"
@@ -868,7 +869,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
           return "done";
         }
         // Conflicts resolved — notify sibling components to refresh, then launch.
-        globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: rid } }));
+        announceSaveSync(rid);
         await dispatchLaunch(gameId, admission);
         return "done";
       }

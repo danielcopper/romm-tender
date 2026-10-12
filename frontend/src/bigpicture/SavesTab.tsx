@@ -24,6 +24,7 @@ import { ConnectingIndicator } from "./saves/ConnectingIndicator";
 import { renderSaveFileRow } from "./saves/SaveFileRow";
 import { useCopyToSlot } from "./saves/useCopyToSlot";
 import { detach } from "../utils/detach";
+import { announceSaveSync } from "../utils/saveSyncEvents";
 
 interface SavesTabProps {
   /** The group's sticky Steam appId — drives the stranded-version drift check. */
@@ -70,19 +71,11 @@ export const SavesTab: FC<SavesTabProps> = ({
     setVersionHistoryKey((k) => k + 1);
     // Trigger parent refresh of saveStatus so the tracked save row reflects
     // the new tracked_save_id / server fields without leaving the page.
-    globalThis.dispatchEvent(
-      new CustomEvent("romm_data_changed", {
-        detail: { type: "save_sync", rom_id: romId },
-      }),
-    );
+    announceSaveSync(romId);
   };
 
   const handleSlotDeleted = () => {
-    globalThis.dispatchEvent(
-      new CustomEvent("romm_data_changed", {
-        detail: { type: "save_sync", rom_id: romId },
-      }),
-    );
+    announceSaveSync(romId);
   };
 
   // Offline banner reacts live to any reachability signal via the shared store

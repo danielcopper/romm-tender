@@ -57,6 +57,7 @@ import { detach } from "./detach";
 import { tellStrandedPress } from "./strandedPanelStore";
 import { strandedPanelSentence } from "./strandedPanelWording";
 import { TimeoutError, boundedOr, rethrowTimeout, withTimeout } from "./withTimeout";
+import { announceSaveSync } from "./saveSyncEvents";
 
 /**
  * The five decisions the funnel has to put to the user, as questions rather than
@@ -297,7 +298,7 @@ async function handleWatcherVerdict(
       const resolution = await prompts.resolveConflicts(verdict.conflicts);
       if (resolution === "cancel") return "done";
       // Conflicts resolved — notify sibling components to refresh, then relaunch.
-      globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }));
+      announceSaveSync(romId);
       await relaunch(start, romId);
       return "done";
     }
