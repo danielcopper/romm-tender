@@ -636,8 +636,9 @@ A source's installation folder, ROM folder, BIOS folder and saves folder, each w
 or **assumed** where nothing on the machine names it and emu-atlas fell back on the source's usual layout. Tender uses a
 read root and a frontend default, and an assumed one for nothing; a system's ROM folder goes with the ROM root
 (`domain/source_roots.py`, [#2294](https://github.com/danielcopper/romm-tender/issues/2294)). The pages say "its
-settings file does not name its … folder" for an assumed root. _Avoid_: default folder, which a frontend default also
-is.
+settings file does not name its … folder" for an assumed root, unless a notice that the settings file is missing, cannot
+be read or is damaged, or that the source is not set up, already says why. _Avoid_: default folder, which a frontend
+default also is.
 
 ### Not supported vs not established
 

@@ -1,4 +1,4 @@
-"""The rule that decides which of a source's roots Tender may use (#2294)."""
+"""The rule that decides which of a source's roots Tender may use."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ class TestWhichRootIsUsable:
         assert _roots().root("bios").usable
 
     def test_the_frontend_s_own_default_counts_as_read(self):
-        # D5: ES-DE starts games from it.
+        # ES-DE starts games from it.
         assert _roots(roms="frontend-default").root("roms").usable
 
     def test_an_assumed_root_is_not_used(self):
@@ -74,7 +74,7 @@ class TestTendersOwnFindingForAssumedRoots:
         assert assumed_finding(_roots(roms="frontend-default")) is None
 
     def test_none_where_a_finding_of_the_resolver_s_already_explains_them(self):
-        # D7: left out where a marker-* or not-set-up finding speaks for the same roots.
+        # Left out where a marker-* or not-set-up finding speaks for the same roots.
         for code in ("marker-missing", "marker-unreadable", "marker-invalid", "not-set-up"):
             roots = _roots(_finding(code, path=_MARKER), bios="assumed", saves="assumed")
 
@@ -99,7 +99,7 @@ class TestTheReasonARootIsRefusedWith:
         assert unusable_reason(_roots(missing, bios="assumed"), "bios") == missing
 
     def test_under_a_damaged_settings_file_a_read_root_is_still_used(self):
-        # D4: each root by its own provenance alone.
+        # Each root by its own provenance alone.
         damaged = _finding("marker-invalid", path=_MARKER)
 
         assert unusable_reason(_roots(damaged, bios="assumed"), "roms") is None
@@ -115,7 +115,7 @@ class TestTheReasonARootIsRefusedWith:
 
 class TestMissingRootFindingsCountOnlyForAUsableRoot:
     def test_a_missing_root_finding_about_an_assumed_root_does_not_count(self):
-        # D6: the resolver states it for the folder it assumed.
+        # The resolver states it for the folder it assumed.
         findings = (
             _finding("root-missing", path="/a"),
             _finding("bios-root-missing", path="/b"),

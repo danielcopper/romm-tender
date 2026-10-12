@@ -130,20 +130,21 @@ class RetroDeckFolders(Protocol):
     """RetroDECK's folders, each the resolver's answer — or the refusal that stands in for one.
 
     A download asks :meth:`download_folder` or :meth:`bios_download_folder`,
-    which refuse unless RetroDECK is detected and switched on, the root the
-    folder lies in was not only assumed and its home is not missing, and the
-    folder can be created below a root that exists. A removal of a game's installed content is bounded by its
+    which refuse unless RetroDECK is detected and switched on, the resolver
+    did more than assume the root the folder lies in, the home RetroDECK's
+    settings name is not missing, and the folder can be created below a root
+    that exists. A removal of a game's installed content is bounded by its
     system's own folder, which :meth:`rom_folders` answers for several systems
     at once; it refuses where :meth:`rom_root` cannot be named, in the words an
     uninstall says, and refuses one system alone where RetroDECK names no
     folder for it. :meth:`bios_folder` and :meth:`saves_root` answer ``None``
     where RetroDECK is not detected or names none. Every removal question
-    refuses where its root was only assumed, and none minds the switch.
-    Where detecting the sources, or asking about RetroDECK's roots, raised,
-    every question refuses — a download only once RetroDECK
-    is not switched off, which it says first; a raise on a system's own folder
-    refuses only that system's folder. A
-    refusal comes back as a value; the caller that needed the folder raises it.
+    refuses where the resolver only assumed its root, and none minds the
+    switch. Where detecting the sources, or asking about RetroDECK's roots,
+    raised, every question refuses — a download only once RetroDECK is not
+    switched off, which it says first; a raise on a system's own folder
+    refuses only that system's folder. A refusal comes back as a value; the
+    caller that needed the folder raises it.
     :meth:`move_roots` is the move code's, ``None`` where RetroDECK is not
     detected. Every path is symlink-resolved.
     """

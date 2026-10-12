@@ -43,9 +43,9 @@ export function sourceName(kind: string): string {
   return SOURCE_NAMES.get(kind) ?? kind;
 }
 
-/** Whether a finding shows as a notice on Main. `content-tree-unwired` concerns nothing
- *  Tender does, and a settings file whose version alone cannot be read still names
- *  every folder, so each shows only on the source's own card. */
+/** Whether a finding shows as a notice on Main. Two show only on the source's own card:
+ *  `content-tree-unwired`, which concerns nothing Tender does, and a settings file whose
+ *  version alone cannot be read, from which every folder is still read. */
 export function findingIsBanner(finding: SourceHealthFinding): boolean {
   return finding.code !== "content-tree-unwired" && !isVersionOnly(finding);
 }
@@ -75,9 +75,8 @@ const UNWIRED_PROBLEMS: ReadonlyMap<string, string> = new Map([
   ["diverted", "points elsewhere"],
 ]);
 
-// Tender's own finding naming the roots a source's settings file leaves out,
-// which the resolver only assumed: `path` is the settings file, `roots` the
-// roots by name, joined by commas.
+// Tender's own finding for the roots the resolver only assumed; its shape is
+// `backend/domain/source_roots.py`'s.
 const ROOTS_ASSUMED = "roots-assumed";
 
 // What each root is called in a sentence, after "its".
@@ -126,7 +125,7 @@ function wordedFinding(kind: string, { code, data }: SourceHealthFinding): strin
       if (isVersionOnly({ code, data })) {
         return `${name}: its settings file ${subject} holds no version Tender can read; its folders are still read from it.`;
       }
-      return `${name}: its settings file ${subject} is damaged, so Tender cannot tell where its folders are.${repair}`;
+      return `${name}: its settings file ${subject} is damaged, so Tender cannot tell where its folder, BIOS folder and saves folder are.${repair}`;
     case ROOTS_ASSUMED:
       return assumedRootsSentence(name, subject, text(data, "roots"));
     case "root-missing":

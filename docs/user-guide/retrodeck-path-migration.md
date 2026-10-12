@@ -12,7 +12,7 @@ image-based distributions) does not raise a migration for the spelling alone. Th
 RetroDECK's built-in move tool or manually relocate your `retrodeck/` directory. The current home is the one RetroDECK's
 own settings name; while its settings file does not name the home, the BIOS folder or the saves folder — the file is
 missing, unreadable or damaged, leaves one of them out, or RetroDECK has not been set up yet — the folder Tender would
-read is only a default, so it detects no move then and moves nothing.
+read is only RetroDECK's usual place, so it detects no move then and moves nothing.
 
 Tender does not move your RetroDECK files — RetroDECK handles that. What Tender migrates are the files _it_ manages:
 downloaded ROMs, BIOS files, and save files that it tracks for sync purposes.

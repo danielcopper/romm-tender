@@ -62,7 +62,7 @@ describe("findingSentence", () => {
     ["marker-unreadable", "EmuDeck: its settings file /h/settings.sh cannot be read."],
     [
       "marker-invalid",
-      "EmuDeck: its settings file /h/settings.sh is damaged, so Tender cannot tell where its folders are.",
+      "EmuDeck: its settings file /h/settings.sh is damaged, so Tender cannot tell where its folder, BIOS folder and saves folder are.",
     ],
     [
       "root-missing",
@@ -90,7 +90,7 @@ describe("findingSentence", () => {
 
   it("adds RetroDECK's repair to a damaged settings file of RetroDECK's", () => {
     expect(findingSentence("retrodeck", { code: "marker-invalid", data: { path: "/r.json", key: "paths" } })).toBe(
-      `RetroDECK: its settings file /r.json is damaged, so Tender cannot tell where its folders are.${REPAIR}`,
+      `RetroDECK: its settings file /r.json is damaged, so Tender cannot tell where its folder, BIOS folder and saves folder are.${REPAIR}`,
     );
   });
 
@@ -203,7 +203,7 @@ describe("withFindingSentence", () => {
     [
       "marker-invalid",
       {},
-      `RetroDECK: its settings file /m is damaged, so Tender cannot tell where its folders are.${REPAIR}`,
+      `RetroDECK: its settings file /m is damaged, so Tender cannot tell where its folder, BIOS folder and saves folder are.${REPAIR}`,
     ],
     [
       "root-missing",
@@ -627,7 +627,7 @@ describe("mainSourceBanners", () => {
       ],
     };
     expect(texts(listing)).toEqual([
-      "RetroDECK: its settings file /rd.json is damaged, so Tender cannot tell where its folders are. " +
+      "RetroDECK: its settings file /rd.json is damaged, so Tender cannot tell where its folder, BIOS folder and saves folder are. " +
         "Repair it with RetroDECK's 'Repair RetroDECK Paths'.",
       "EmuDeck: RetroArch's settings file /ra.cfg cannot be read; EmuDeck's RetroArch may be missing or broken.",
       "EmuDeck is switched on in Settings › Emulator sources, but Tender cannot start games through it yet.",
@@ -712,7 +712,7 @@ describe("mainSourceBanners", () => {
   });
 });
 
-describe("roots the resolver only assumed (#2294 D7)", () => {
+describe("roots the resolver only assumed", () => {
   const assumed = (roots: string, path = "/h/retrodeck.json") => ({ code: "roots-assumed", data: { path, roots } });
 
   it.each([
@@ -758,7 +758,7 @@ describe("roots the resolver only assumed (#2294 D7)", () => {
     expect(sourceRowLines(source({ root: null, findings: [finding] }))).toEqual([{ tone: "warning", text: sentence }]);
   });
 
-  it("answers a press refused for an assumed root with the notice's sentence (#2294 D1)", () => {
+  it("answers a press refused for an assumed root with the notice's sentence", () => {
     const finding = assumed("bios");
     const answer = withFindingSentence({
       success: false,
@@ -786,7 +786,7 @@ describe("roots the resolver only assumed (#2294 D7)", () => {
   });
 });
 
-describe("a settings file whose version alone cannot be read (#2294 D8)", () => {
+describe("a settings file whose version alone cannot be read", () => {
   const version = { code: "marker-invalid", data: { path: "/h/retrodeck.json", key: "version" } };
   const sentence =
     "RetroDECK: its settings file /h/retrodeck.json holds no version Tender can read; its folders are still read from it.";
@@ -806,7 +806,7 @@ describe("a settings file whose version alone cannot be read (#2294 D8)", () => 
 
     expect(findingIsBanner(paths)).toBe(true);
     expect(findingSentence("retrodeck", paths)).toBe(
-      `RetroDECK: its settings file /h/retrodeck.json is damaged, so Tender cannot tell where its folders are.${REPAIR}`,
+      `RetroDECK: its settings file /h/retrodeck.json is damaged, so Tender cannot tell where its folder, BIOS folder and saves folder are.${REPAIR}`,
     );
   });
 });

@@ -97,10 +97,6 @@ class SourceRoots:
         found = next((root for root in self.roots if root.name == name), None)
         return found if found is not None else SourceRoot(name=name, path=None, provenance=None, settings_file=None)
 
-    def finding(self, code: str) -> SourceFinding | None:
-        """The first finding of *code*, or ``None``."""
-        return next((finding for finding in self.findings if finding.code == code), None)
-
 
 def explaining_finding(roots: SourceRoots) -> SourceFinding | None:
     """The resolver's finding that already says why the source's roots were not read, or ``None``."""

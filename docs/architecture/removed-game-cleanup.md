@@ -249,12 +249,12 @@ bundle seals and the removal consumes a claim against that same folder
 What RetroDECK's state does to a run:
 
 - **A root it needs only assumed, or a question about its roots failed** — the ROM root or the saves root is one the
-  resolver did not read from RetroDECK's or ES-DE's settings (a `retrodeck.json` without `saves_path`, a `marker-*`
-  finding, `not-set-up`), or detecting the sources or asking about its roots raised: the cleanup does not start at all —
-  the start is refused, raising the folder refusal, with the sentence of the finding that explains the root, Tender's
-  own for an assumed root, or **RetroDECK's folders could not be established, so Tender downloads into and removes from
-  none of them.** Nothing is half done: the saves root is asked at the start too, because the run's save inventory needs
-  it and would otherwise refuse midway ([#2244](https://github.com/danielcopper/romm-tender/issues/2244) D3, D5, D13;
+  resolver only assumed or gives no path for (a `retrodeck.json` without `saves_path`, a `marker-*` finding, a RetroDECK
+  not set up), or detecting the sources or asking about its roots raised: the cleanup does not start at all — the start
+  is refused, raising the folder refusal, with the sentence of the finding that explains the root, Tender's own for an
+  assumed root, or **RetroDECK's folders could not be established, so Tender downloads into and removes from none of
+  them.** Nothing is half done: the saves root is asked at the start too, because the run's save inventory needs it and
+  would otherwise refuse midway ([#2244](https://github.com/danielcopper/romm-tender/issues/2244) D3, D5, D13;
   [#2294](https://github.com/danielcopper/romm-tender/issues/2294) D3).
 - **Not installed, or naming no ROM folder** — the run goes ahead: it removes shortcuts, and the records of games
   without a download record. A game with one keeps it, its files on disk or not, and is reported with the uninstall's

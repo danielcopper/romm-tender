@@ -24,13 +24,9 @@ it, and so is a BIOS folder inside RetroDECK's own folder; a root that is not
 there — a drive or an SD card that is out — is never created, because the folder
 would land on internal storage and the drive would hide it once it is back.
 
-**A root the resolver only assumed is used for nothing.** Each root is
-judged by the provenance the resolver's roots answer gives it
-(:mod:`domain.source_roots`): one read from RetroDECK's settings, or ES-DE's own
-default ROM folder, is used; one the resolver fell back on because nothing names
-it is refused, with the finding that explains why, and a system's folder goes
-with the ROM root it lies below. So a damaged ``retrodeck.json`` stops a BIOS
-download while a game still downloads into the ROM folder ES-DE names.
+**A root the resolver only assumed is used for nothing.** Which root may be
+used is :mod:`domain.source_roots`'s rule; each question here asks it about the
+one root it needs, and a system's folder goes with the ROM root it lies below.
 
 **RetroDECK's roots are asked together, up front.** Every question first reads
 the roots answer — home, ROM root, BIOS folder and saves root, and the findings
@@ -48,6 +44,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from _vendor.atlas import HEALTH_ISSUE_ROOT_MISSING
 
 from adapters.emulator_sources import source_roots
 from domain.emulator_sources import RETRODECK
@@ -81,10 +79,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
     from adapters.emulator_sources import EmulatorSourcesAdapter
-
-# A download also stops while RetroDECK's own folder is missing: everything it
-# would land in lies below a folder that is not there.
-_HOME_MISSING = "root-missing"
 
 
 class _Unasked(Exception):
@@ -242,7 +236,11 @@ class RetroDeckFoldersAdapter:
         if retrodeck.roots is None:
             return unanswered_refusal()
         roots = retrodeck.roots
-        missing = next((f for f in counted_findings(roots, roots.findings) if f.code == _HOME_MISSING), None)
+        # A download also stops while the home RetroDECK's settings name is
+        # missing: everything it would land in lies below a folder that is not there.
+        missing = next(
+            (f for f in counted_findings(roots, roots.findings) if f.code == HEALTH_ISSUE_ROOT_MISSING), None
+        )
         if missing is not None:
             return finding_refusal(missing.code, missing.data)
         return _Usable(installation=retrodeck.installation, roots=roots)

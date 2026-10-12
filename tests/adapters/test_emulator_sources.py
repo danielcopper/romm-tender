@@ -460,7 +460,7 @@ def _codes(report: Any) -> list[str]:
 
 @pytest.mark.usefixtures("_no_host_deploy")
 class TestRootsTheResolverOnlyAssumed:
-    """Main's notice and the card state the roots the resolver only assumed (#2294 D6, D7, D8)."""
+    """Main's notice and the card state the roots the resolver only assumed, and no missing folder it guessed."""
 
     def test_a_settings_file_without_paths_names_every_assumed_root_and_shows_no_root(self, tmp_path, traces):
         home = _seed_retrodeck(tmp_path, custom=None)
@@ -476,7 +476,7 @@ class TestRootsTheResolverOnlyAssumed:
 
     def test_a_missing_root_finding_about_an_assumed_root_shows_nowhere(self, tmp_path, traces):
         # The assumed BIOS folder does not exist; the resolver says so, and
-        # Tender shows the assumed-roots notice instead (D6).
+        # Tender shows the assumed-roots notice instead.
         home = _seed_retrodeck(tmp_path, custom=None)
         rd_home = os.path.join(home, "retrodeck")
         _write_marker(home, {"paths": {"rd_home_path": rd_home, "saves_path": os.path.join(rd_home, "saves")}})
@@ -530,7 +530,7 @@ class TestRootsTheResolverOnlyAssumed:
     def test_emudeck_s_settings_file_with_a_path_unset_is_named_and_its_rule_refuses_that_folder(
         self, tmp_path, traces
     ):
-        # Done-when 2: the card and Main's notice say so, and the rule every
+        # The card and Main's notice say so, and the rule every
         # later use of an EmuDeck folder asks refuses it.
         home = str(tmp_path / "home")
         emulation = tmp_path / "sd" / "Emulation"

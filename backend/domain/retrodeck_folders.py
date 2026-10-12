@@ -48,10 +48,11 @@ class FolderRefused(DomainRefused):
 
 
 class EveryFolderRefused(FolderRefused):
-    """A folder refused because the root it lies in may not be used — a removal's bound no more than a download's.
+    """A folder refused for a reason that holds for every folder in its root — a removal's bound as for a download.
 
-    Its holders refuse every press that needs a folder in that root — every
-    system's ROM folder where it is the ROM root — the start of the
+    Where it is the ROM root, every system's ROM folder is refused with it; where
+    RetroDECK's folders could not be established at all, every root is. Its
+    holders refuse every press that needs such a folder, the start of the
     removed-game cleanup included, where a narrower refusal stops only the
     press it was asked for.
     """

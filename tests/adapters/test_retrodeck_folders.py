@@ -352,8 +352,8 @@ def _not_set_up(tree: _Tree) -> RetroDeckFoldersAdapter:
     return tree.adapter()
 
 
-class TestWhileRetroDecksFoldersAreDefaults:
-    """Under one of the four findings Tender uses no root the resolver only assumed (#2294 D4).
+class TestUnderAFindingAboutRetroDecksSettings:
+    """Under one of the four findings Tender uses no root the resolver only assumed.
 
     A ``marker-*`` finding leaves ES-DE's ROM folder read, so the ROM questions
     still answer it; ``not-set-up`` names no ROM folder either.
@@ -369,7 +369,8 @@ class TestWhileRetroDecksFoldersAreDefaults:
         ],
     )
     def test_every_folder_is_refused_for_the_finding_the_move_code_s_too(self, tree, tmp_path, code, make):
-        # The defaults exist, so a refusal is the rule's and not a missing folder's.
+        # The folders RetroDECK's usual layout puts there exist, so a refusal is
+        # the rule's and not a missing folder's.
         for folder in ("roms", "saves", "bios"):
             (tree.home / "retrodeck" / folder).mkdir(parents=True, exist_ok=True)
         tree.rom_directory(tree.home / "retrodeck" / "roms")
@@ -419,7 +420,7 @@ def _assumed(answer: object, roots: str) -> None:
 
 
 class TestEachRootIsJudgedByItsProvenance:
-    """A root the resolver only assumed is used for nothing; one read from elsewhere stays usable (#2294)."""
+    """A root the resolver only assumed is used for nothing; one read from elsewhere stays usable."""
 
     def test_without_a_paths_section_only_es_de_s_rom_folder_is_used(self, tree):
         rd_home = tree.home / "retrodeck"
@@ -461,7 +462,7 @@ class TestEachRootIsJudgedByItsProvenance:
         )
 
     def test_es_de_s_own_default_rom_folder_is_used(self, tree, tmp_path):
-        # D5: an empty ROMDirectory is ES-DE's own default, which it starts games from.
+        # An empty ROMDirectory is ES-DE's own default, which it starts games from.
         rd_home = tmp_path / "retrodeck"
         _set_up_with(tree, rd_home, {"paths": _every_path(rd_home)})
         (tree.home / _ES_SETTINGS).write_text('<string name="ROMDirectory" value="" />\n', encoding="utf-8")
@@ -473,7 +474,7 @@ class TestEachRootIsJudgedByItsProvenance:
         assert adapter.download_folder("gba") == _real(default / "gba")
 
     def test_a_missing_home_the_resolver_only_assumed_does_not_stop_a_game_download(self, tree, tmp_path):
-        # D6: root-missing counts only for a root that was read.
+        # root-missing counts only for a root that was read.
         rd_home = tmp_path / "retrodeck"
         paths = _every_path(rd_home)
         del paths["rd_home_path"]
@@ -536,7 +537,7 @@ def _answer(adapter: RetroDeckFoldersAdapter, question: str) -> object:
 
 
 class TestWhereAQuestionToTheResolverRaises:
-    """A raise establishes nothing — never "not installed" — and a root's raise refuses every folder."""
+    """A raise establishes nothing — never "not installed" — and a raise on the roots refuses every folder."""
 
     @pytest.mark.parametrize("raising", ["roots"])
     def test_a_raise_on_any_root_refuses_every_folder_the_move_code_s_too(self, tree, tmp_path, monkeypatch, raising):

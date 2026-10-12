@@ -282,14 +282,15 @@ it. Nothing falls back to the ROM root ([#2285](https://github.com/danielcopper/
 
 **A root the resolver only assumed is used for nothing.** The roots answer gives each root a provenance: `read` where
 the source's settings name it, `frontend-default` where ES-DE's own default ROM folder applies, and `assumed` where
-nothing on the machine names it and the resolver fell back on RetroDECK's usual layout under the home (`~/retrodeck/…`)
-— a `retrodeck.json` without its `paths` section or with one key unset, or one that is missing, unreadable or damaged.
-Tender uses a root that was read or is ES-DE's own default, and none that was only assumed: nothing is downloaded into
-it, no removal is bounded by it, and the move code moves nothing. Each root is judged by its own provenance alone, also
-under a `marker-*` finding, so with a damaged `retrodeck.json` a game still downloads into, and is removed from, the ROM
-folder ES-DE's settings name, while every BIOS press is refused. A system's ROM folder lies below the ROM root and goes
-with it. The rule is the source-agnostic `domain/source_roots.py`, so every later caller of an EmuDeck folder asks the
-same one ([#2294](https://github.com/danielcopper/romm-tender/issues/2294) D1, D3, D4, D5).
+nothing on the machine names it and the resolver fell back on RetroDECK's usual layout: a folder below the home where
+the settings name the home, and `~/retrodeck` itself where they do not — a `retrodeck.json` without its `paths` section
+or with one key unset, or one that is missing, unreadable or damaged. Tender uses a root that was read or is ES-DE's own
+default, and none that was only assumed: nothing is downloaded into it, no removal is bounded by it, and the move code
+moves nothing. Each root is judged by its own provenance alone, also under a `marker-*` finding, so with a damaged
+`retrodeck.json` a game still downloads into, and is removed from, the ROM folder ES-DE's settings name, while every
+BIOS press is refused. A system's ROM folder lies below the ROM root and goes with it. The rule is the source-agnostic
+`domain/source_roots.py`, so every later caller of an EmuDeck folder asks the same one
+([#2294](https://github.com/danielcopper/romm-tender/issues/2294) D1, D3, D4, D5).
 
 Which root a folder answers by:
 
@@ -311,10 +312,11 @@ notice and the source's card. `not-set-up` refuses everything, since its ROM roo
 `version` key alone leaves every root read and refuses nothing. A download also stops on `root-missing` for a home that
 was read, because everything it would land in lies below a folder that is not there; a BIOS folder that is not there yet
 is created only inside a home that was read. The resolver states `root-missing`, `bios-root-missing` and
-`saves-root-missing` for an assumed root too, so they count — here and on Main and the card — only for a root that was
-read (D6). No folder rule reads `roms-root-missing`, `roms-root-not-absolute` or `emulator-config-missing`; the folders
-they name are still checked on their own, as before — a missing ROM or BIOS folder, a ROM root the roots answer gives no
-path for.
+`saves-root-missing` for an assumed root too, so on Main and the source's card all three show only for a root that was
+read, and the download rule counts `root-missing` only for a home that was read
+([#2294](https://github.com/danielcopper/romm-tender/issues/2294) D6). No folder rule reads `bios-root-missing`,
+`saves-root-missing`, `roms-root-missing`, `roms-root-not-absolute` or `emulator-config-missing`; the folders they name
+are still checked on their own, as before — a missing ROM or BIOS folder, a ROM root the roots answer gives no path for.
 
 **A question that fails establishes no folder.** The roots answer — home, ROM root, BIOS folder and saves root, with the
 findings beside them — is asked once, up front, for every folder question; it carries every finding a folder rule reads,

@@ -161,8 +161,9 @@ class PruneSaveSupport:
         """RetroDECK's saves root every save the cleanup touches must lie in, or ``None`` where it names none.
 
         Raises the refusal where the resolver only assumed the saves root, or
-        where a question about RetroDECK's roots failed; the cleanup's start
-        asks the same question first, so a run that started never meets it.
+        where a question about RetroDECK's roots failed. The cleanup's start
+        refuses for the same answer; this read is a fresh one, so a change
+        after the start is still caught here.
         """
         root = self._retrodeck_folders.saves_root()
         if isinstance(root, FolderRefused):

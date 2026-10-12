@@ -309,9 +309,10 @@ Format: **invariant** — tier — enforced by.
   own beside the resolver's is the drift this replaced: `retrodeck.json` read twice, a system's ROM folder built as
   `<roms root>/<system>` in five places while ES-DE may declare another, and a fallback to `~/retrodeck` that pointed
   downloads, deletes and the move code at internal storage while RetroDECK lay on an SD card. A root the resolver only
-  assumed is that same default, whatever finding stands beside it — a `retrodeck.json` without `paths` or with one key
-  unset carries none — so using it would be that guess again, and the missing-root findings the resolver states for it
-  name a folder nobody configured ([#2294](https://github.com/danielcopper/romm-tender/issues/2294)). The rules each
+  assumed is the same kind of guess — RetroDECK's usual layout, below the home where the settings name one and at
+  `~/retrodeck` where they do not — whatever finding stands beside it (a `retrodeck.json` without `paths` or with one
+  key unset carries none), so using it would be that guess again, and the missing-root findings the resolver states for
+  it name a folder nobody configured ([#2294](https://github.com/danielcopper/romm-tender/issues/2294)). The rules each
   question answers by are on [Config source parsers](config-source-parsers.md#retrodecks-folders-retrodeckjson). A
   save's folder and a firmware file's place take the other route, the save and firmware answers
   (`adapters/atlas_saves.py`, `adapters/atlas_firmware.py`), and this entry does not cover them: a save's place comes

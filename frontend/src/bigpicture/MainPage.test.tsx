@@ -3120,7 +3120,7 @@ describe("MainPage", () => {
       await flushAsync();
       expect(
         await findByText(
-          "RetroDECK: its settings file /rd.json is damaged, so Tender cannot tell where its folders are. " +
+          "RetroDECK: its settings file /rd.json is damaged, so Tender cannot tell where its folder, BIOS folder and saves folder are. " +
             "Repair it with RetroDECK's 'Repair RetroDECK Paths'.",
         ),
       ).toBeInTheDocument();

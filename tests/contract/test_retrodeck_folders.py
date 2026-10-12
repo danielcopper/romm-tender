@@ -128,7 +128,7 @@ _PRESSES: dict[str, Callable[[Any], Awaitable[dict[str, Any]]]] = {
 
 # What a marker finding refuses: the presses that need the BIOS folder or the
 # saves root, which the resolver then only assumed. ES-DE's ROM folder is read
-# from ES-DE's own settings, so the game presses go on (#2294 D4).
+# from ES-DE's own settings, so the game presses go on.
 _REFUSED_UNDER_A_MARKER = (
     "download_platform_firmware_file",
     "download_all_firmware",
@@ -139,7 +139,7 @@ _REFUSED_UNDER_A_MARKER = (
 
 @pytest.mark.parametrize(("code", "make"), _FINDINGS)
 async def test_under_the_finding_nothing_is_downloaded_deleted_or_cleaned_up_there(harness, code, make):
-    # What would be touched lies where the resolver's defaults point, so a
+    # What would be touched lies where the resolver's assumed roots point, so a
     # refusal here is the rule's, not a missing folder's.
     on_disk = _seed_what_a_press_would_touch(harness)
     make(harness)
@@ -572,8 +572,8 @@ def _unset(harness, key: str) -> None:
 async def test_with_the_bios_key_unset_every_use_of_the_bios_folder_is_refused_and_the_rom_folder_stays_usable(
     harness,
 ):
-    # #2294 Done-when 1: the BIOS folder the resolver only assumed is used for
-    # nothing, and ES-DE's ROM folder, read from its own settings, still is.
+    # The BIOS folder the resolver only assumed is used for nothing, and
+    # ES-DE's ROM folder, read from its own settings, still is.
     installed, leftover, bios, bios_leftover = _seed_what_a_press_would_touch(harness)
     seed_es_systems(harness)
     _unset(harness, "bios_path")
@@ -598,9 +598,9 @@ async def test_with_the_bios_key_unset_every_use_of_the_bios_folder_is_refused_a
 
 @pytest.mark.parametrize(("code", "make"), _FINDINGS[:3])
 async def test_under_a_marker_finding_a_game_is_still_removed_from_es_de_s_rom_folder(harness, code, make):
-    # #2294 D4: each root by its own provenance — the marker's roots are
+    # Each root by its own provenance — the marker's roots are
     # assumed, ES-DE's ROM folder was read.
-    installed, leftover, bios, _bios_leftover = _seed_what_a_press_would_touch(harness)
+    installed, leftover, bios, bios_leftover = _seed_what_a_press_would_touch(harness)
     make(harness)
 
     removed = await harness.endpoints.remove_rom(_ROM_ID)
@@ -612,11 +612,12 @@ async def test_under_a_marker_finding_a_game_is_still_removed_from_es_de_s_rom_f
     assert not os.path.exists(leftover)
     _assert_refused_for(refused, code)
     assert os.path.exists(bios)
+    assert os.path.exists(bios_leftover)
 
 
 async def test_where_the_saves_root_is_assumed_the_cleanup_refuses_at_its_start(harness):
-    # #2294 D3: refused as a whole before anything is consumed, never midway
-    # where its save inventory would ask the saves root.
+    # Refused as a whole before anything is consumed, never midway where its
+    # save inventory would ask the saves root.
     seed_es_systems(harness)
     _unset(harness, "saves_path")
 
@@ -629,7 +630,6 @@ async def test_where_the_saves_root_is_assumed_the_cleanup_refuses_at_its_start(
 
 
 async def test_a_settings_file_whose_version_alone_cannot_be_read_refuses_no_press(harness):
-    # #2294 Done-when 3.
     installed, _leftover, _bios, _bios_leftover = _seed_what_a_press_would_touch(harness)
     seed_es_systems(harness)
     marker = _retrodeck_marker_path(harness)
