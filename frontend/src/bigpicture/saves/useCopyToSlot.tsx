@@ -27,6 +27,7 @@ async function handleResult(result: CopySaveToSlotStatus, target: string, romId:
     return;
   }
   showToast(feedback.message);
+  // Only a copy refreshes the slot views: `already_present` copied nothing.
   if (result.status === "ok") {
     announceSaveSync(romId);
   }

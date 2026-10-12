@@ -1,7 +1,8 @@
 /**
- * Pure formatters and selectors for the SavesTab UI. Anything that takes
- * inputs and returns outputs without touching component state or React
- * belongs here; rendering helpers live alongside their components.
+ * Pure formatters and selectors for the save rows and the slot lists: anything
+ * that takes inputs and returns outputs without touching component state or
+ * React. Rendering stays with the components; the slot surfaces' feedback,
+ * failure and confirmation sentences are `saveSlotWording.ts`'s.
  */
 
 import type { DeviceSyncInfo, SaveStatus, SyncConflict, SaveSlotSummary } from "../types";
@@ -16,7 +17,12 @@ export function displaySlot(slot: string | null | undefined): string {
   return slot;
 }
 
-/** Format a relative time string (e.g. "5m ago", "2h ago") from an ISO string */
+/**
+ * A save-sync time as the Saves tab and its toasts show it — a save's, a
+ * version's, or the last sync's: "just now", "5m ago", "2h ago", then a date
+ * ("5 Oct"); "" for no time or a bad one. Elsewhere, `formatTimeAgo`
+ * (`formatters.ts`).
+ */
 export function formatSaveTimeAgo(isoStr: string | null): string {
   if (!isoStr) return "";
   const date = new Date(isoStr);
@@ -174,6 +180,10 @@ export function sortSaveSlots(
     if (rankDiff !== 0) return rankDiff;
     return a.slot.localeCompare(b.slot);
   });
+  // An active slot the list doesn't carry still gets a panel — it is a slot the
+  // user is on. Only for a slot something ANSWERED, though: synthesised off the
+  // panel's placeholder it puts a slot name on screen that nothing ever said
+  // (#1747), and `default` is a real name here, so it reads as a fact.
   if (activeSlot && activeSlotKnown && !sorted.some((s) => s.slot === activeSlot)) {
     sorted.unshift({ slot: activeSlot, source: "local", count: 0, latest_updated_at: null });
   }

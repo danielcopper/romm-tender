@@ -110,6 +110,9 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
       } else {
         showToast(feedback.message);
       }
+      // `put_failed` refreshes too: the local download succeeded and only the
+      // server-side bump did not, so the switch is locally complete — it just
+      // won't reach other devices yet.
       if (result.status === "ok" || result.status === "put_failed") {
         setVersions(null);
         setExpanded(false);

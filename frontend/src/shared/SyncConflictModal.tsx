@@ -24,8 +24,8 @@ interface SyncConflictModalProps {
 
 /**
  * Controlled modal: parent owns isLoading + errorMessage. Three actions:
- *   - Keep Local  -> onResolve("keep_local")  -> backend POSTs local to server (overwrite=true)
- *   - Use Server  -> onResolve("use_server")  -> backend downloads server, overwrites local
+ *   - Keep Local  -> onResolve("keep_local")
+ *   - Use Server  -> onResolve("use_server")   (what each one sends: `resolveOneConflict`)
  *   - Cancel      -> onCancel()               -> pure UI close, no backend call.
  *                                                Conflict re-fires on next sync if state still holds.
  *
@@ -150,8 +150,9 @@ interface SyncConflictModalHostProps {
 }
 
 /**
- * Stateful wrapper: handles the resolveSyncConflict endpoint, error display,
- * and modal close timing. Used by `showSyncConflictModal`.
+ * Stateful wrapper: shows what `resolveOneConflict` answers — the error kept in
+ * the open dialog, or the toast once it closes — and times the close. Used by
+ * `showSyncConflictModal`.
  */
 const SyncConflictModalHost: FC<SyncConflictModalHostProps> = ({ conflict, closeModal, onDone }) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -199,12 +200,9 @@ export function showSyncConflictModal(conflict: SyncConflict): Promise<SyncConfl
 }
 
 /**
- * Walk a list of conflicts sequentially, showing the resolution modal for each.
- * Bails on the first cancel so the caller can decide what to do (e.g. not
- * relaunch). Called by the Play button (pre-launch gate and Resolve) and by the
- * launch watcher through `LaunchPrompts`. Returns "resolved" once every
- * conflict was resolved (or the list was empty), "cancel" on the first
- * dismissal.
+ * Walk a list of conflicts through the resolution modal — the walk's contract is
+ * `resolveConflictsSequentially`'s. Called by the Play button (pre-launch gate
+ * and Resolve) and by the launch watcher through `LaunchPrompts`.
  */
 export function handleConflicts(conflicts: SyncConflict[]): Promise<"cancel" | "resolved"> {
   return resolveConflictsSequentially(conflicts, showSyncConflictModal);
