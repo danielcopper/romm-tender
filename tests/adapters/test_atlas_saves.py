@@ -446,8 +446,8 @@ class TestAMissingSavesRoot:
         assert entry.asked == [_CONTENT]
 
     def test_a_saves_root_the_source_only_assumed_refuses_nothing(self, traces):
-        # The settings name no saves root, or cannot be read: the root is the
-        # source's usual layout, and its absence says nothing about a drive.
+        # Why an assumed root refuses nothing: docs/architecture/save-sync-coverage.md,
+        # "The seven save states".
         answer, _entry = self._answer(traces, roots=_roots(provenance=PROVENANCE_ASSUMED, findings=(self._MISSING,)))
 
         assert answer.state == SAVE_STATE_PER_GAME_FILES
@@ -555,7 +555,7 @@ def _stated(code: str, **data: str) -> Caveat:
 
 
 class TestAPlaceNotReadFromTheSettings:
-    """A save place the resolver did not read from the emulator's own settings is never synced (D2)."""
+    """A save place the resolver did not read from the emulator's own settings is never synced."""
 
     def _answer(self, traces, answer: Any, *, kind: str = "retrodeck", caveats: tuple[str, ...] = ()):
         entry = _Entry("Cemu (Standalone)", answer)
@@ -579,16 +579,15 @@ class TestAPlaceNotReadFromTheSettings:
         assert answer.source == kind
 
     def test_the_directory_the_resolver_named_is_kept(self, traces):
-        # The rename on adoption still carries a game's files there (#2286 D8).
+        # The rename on adoption still carries a game's files there.
         answer = self._answer(traces, _placement(caveats=(CAVEAT_EMULATOR_CONFIG_MISSING,)))
 
         assert answer.directory == _SAVES
 
     @pytest.mark.parametrize("kind", ["retrodeck", "emudeck"])
     @pytest.mark.parametrize("code", _MARKERS)
-    def test_a_frontend_s_marker_finding_alone_refuses_nothing(self, traces, code: str, kind: str):
-        # RetroDECK's and EmuDeck's marker names their folders, not where an
-        # emulator writes (D2, D5).
+    def test_retrodeck_s_and_emudeck_s_marker_finding_alone_refuses_nothing(self, traces, code: str, kind: str):
+        # Why: docs/architecture/save-sync-coverage.md, "The seven save states".
         answer = self._answer(traces, _placement(caveats=(code,)), kind=kind)
 
         assert answer.state == SAVE_STATE_PER_GAME_FILES
@@ -596,7 +595,7 @@ class TestAPlaceNotReadFromTheSettings:
     @pytest.mark.parametrize("kind", ["bare_retroarch_flatpak", "bare_retroarch_native"])
     @pytest.mark.parametrize("code", _MARKERS)
     def test_a_bare_retroarch_s_marker_finding_refuses(self, traces, code: str, kind: str):
-        # Its marker is RetroArch's own retroarch.cfg.
+        # Why: docs/architecture/save-sync-coverage.md, "The seven save states".
         answer = self._answer(traces, _placement(caveats=(code,)), kind=kind)
 
         assert answer.state == SAVE_STATE_PLACE_NOT_READ
@@ -647,8 +646,7 @@ class TestAPlaceNotReadFromTheSettings:
         assert answer.unestablished == UNESTABLISHED_NOT_ASKED
 
     def test_a_finding_in_the_source_s_health_alone_is_not_read(self, traces):
-        # ES-DE's unreadable settings and EmuDeck's RetroArch are health
-        # findings about files no standalone save is placed by.
+        # Why: docs/architecture/save-sync-coverage.md, "The seven save states".
         entry = _Entry("Cemu (Standalone)", _placement())
         adapter = _adapter(
             _Installation(
@@ -747,7 +745,7 @@ class TestTheRealResolverStatesWhereAPlaceWasNotRead:
 
     def test_a_settings_file_that_does_not_parse_refuses_although_the_defaults_answer(self, tmp_path, traces):
         # melonDS runs on its factory settings over a file it cannot parse, and
-        # the resolver answers those defaults (D7).
+        # the resolver answers those defaults.
         home, _saves = _retrodeck_tree(tmp_path, command=self._MELONDS, system="nds", extension="nds")
         self._melonds_settings(home, "[[[ not toml")
 
@@ -1403,9 +1401,8 @@ class TestTheVocabularyIsTheResolversOwn:
 # The rows that differ by extension are the point of the exercise, not noise:
 # PUAE puts an Amiga .adf's save inside the disk image, places a .lha's under a
 # WHDLoad.prefs this machine does not have (a place not read from its settings),
-# and establishes nothing for an .hdf;
-# Genesis Plus GX keeps a Sega CD .chd on a shared BRAM card and a .bin in a
-# per-game .srm.
+# and establishes nothing for an .hdf; Genesis Plus GX keeps a Sega CD .chd on a
+# shared BRAM card and a .bin in a per-game .srm.
 _PINNED: dict[tuple[str, str], tuple[str, tuple[str, ...]]] = {
     ("amiga", ".adf"): (SAVE_STATE_INSIDE_CONTENT, ()),
     ("amiga", ".lha"): (SAVE_STATE_PLACE_NOT_READ, ()),
@@ -1427,7 +1424,7 @@ _PINNED: dict[tuple[str, str], tuple[str, tuple[str, ...]]] = {
     ("ps2", ".chd"): (SAVE_STATE_SHARED, ()),
 }
 
-# The shape of "not established" each row above that reaches it is in: an .hdf
+# The shape inside "not established" for each row above in that state: an .hdf
 # states nothing at all.
 _PINNED_SHAPES: dict[tuple[str, str], str] = {
     ("amiga", ".hdf"): UNESTABLISHED_NOTHING,

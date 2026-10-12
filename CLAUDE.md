@@ -857,22 +857,23 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   sync — no probe, no state written; a place not read from the emulator's own settings is one of them** — test +
   prompt-only — `tests/adapters/test_atlas_saves.py`, `tests/domain/test_save_answer.py` and
   `tests/services/saves/test_save_shape_gate.py`, where each absence test stands beside a control that asserts the probe
-  does happen, and every per-system pin names the extension it asked with (`(system, extension)`). The answered save
-  directory is not sync state: its own table (`answered_save_directories`) may record it for a refusing answer.
-  Prompt-only: every per-ROM entry point refuses through `sync_engine/_shape_refusal.py` and every sync path crosses the
-  `MatrixExecutor.sync_rom_saves` backstop; the five write paths (`slots/switching.py`, `copies.py`, `versions.py`,
-  `slots/setup.py`, `sync_engine/rollback.py`) each refuse on the answer's `sync_directory`, never on `saves_dir` —
-  `test_save_shape_gate.py` pins those five, not the list; the sync, write, delete, count and status paths that
-  `docs/architecture/save-file-sync-architecture.md` lists call `SyncEngine.follow_save_directory` before they look at
-  local files; configuration-role files are held back through `SaveAnswer.synced_files` by the denial
+  does happen, and every per-system pin names the extension it asked with (`(system, extension)`); that a place not read
+  is decided from the answer's own findings (`domain/save_answer.py::place_not_read_finding`), never from the source's
+  health, and that a missing saves root refuses only where the source's roots answer states it `read`, by
+  `TestAPlaceNotReadFromTheSettings`, `TestTheRealResolverStatesWhereAPlaceWasNotRead` and `TestAMissingSavesRoot`
+  there. The answered save directory is not sync state: its own table (`answered_save_directories`) may record it for a
+  refusing answer. Prompt-only: every per-ROM entry point refuses through `sync_engine/_shape_refusal.py` and every sync
+  path crosses the `MatrixExecutor.sync_rom_saves` backstop; the five write paths (`slots/switching.py`, `copies.py`,
+  `versions.py`, `slots/setup.py`, `sync_engine/rollback.py`) each refuse on the answer's `sync_directory`, never on
+  `saves_dir` — `test_save_shape_gate.py` pins those five, not the list; the sync, write, delete, count and status paths
+  that `docs/architecture/save-file-sync-architecture.md` lists call `SyncEngine.follow_save_directory` before they look
+  at local files; configuration-role files are held back through `SaveAnswer.synced_files` by the denial
   `CONFIGURATION_ROLES`, never an allow-list, a directory move carries `owned_files`, and nothing reads `components`
   directly; a rendering reads `unestablished`'s shape and `content_installed` beside the state; the question carries the
   ROM's real content path, and system and path are decided only at `RomInfoService._installed_answer`,
-  `._uninstalled_answer` and `services/rom_adoption/renamer.py`; nothing caches an answer; a place not read is decided
-  from the answer's own findings (`domain/save_answer.py::place_not_read_finding`), never from the source's health, and
-  a missing saves root refuses only where the source's roots answer states it `read`; such a refusal keeps the
-  resolver's directory for the rename on adoption, so anything else that moves files by `SaveAnswer.directory` checks
-  the state first, as `services/saves/save_directory.py::_followable_directory` does
+  `._uninstalled_answer` and `services/rom_adoption/renamer.py`; nothing caches an answer; a refusal for a place not
+  read keeps the resolver's directory for the rename on adoption, so anything else that moves files by
+  `SaveAnswer.directory` checks the state first, as `services/saves/save_directory.py::_followable_directory` does
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`
   use `slot_query_param` + `save_in_slot`; a legacy delete is refused up-front

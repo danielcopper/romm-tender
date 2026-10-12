@@ -107,17 +107,15 @@ PLACE_NOT_READ_CODES = frozenset(
     }
 )
 
-# A source's marker findings. RetroDECK's and EmuDeck's marker names the source's
-# own folders and never where an emulator writes, so its findings alone leave
-# every save place read; a bare RetroArch's marker IS its ``retroarch.cfg``.
+# A source's marker findings, and the kinds whose marker refuses no save: why is
+# ``docs/architecture/save-sync-coverage.md``'s, "The seven save states".
 _MARKER_CODES = frozenset({"marker-missing", "marker-unreadable", "marker-invalid"})
 _MARKER_NAMES_NO_SAVE_PLACE = frozenset({RETRODECK, EMUDECK})
 
 # The resolver's finding for a saves root that is not an existing directory.
 SAVES_ROOT_MISSING = "saves-root-missing"
 
-# The states that are the emulator's save shape and that no reading of the
-# settings changes, so they are named ahead of a finding about the reading.
+# The save shapes Tender never syncs, named ahead of a finding about the reading.
 _PERMANENT_SHAPES = frozenset({"shared", "inside_content"})
 
 # Granularities where one file holds many games' progress.
@@ -364,9 +362,10 @@ def save_shape_message(answer: SaveAnswer) -> str:
     """The sentence a refusal is reported with, named after the emulator it is about.
 
     A missing saves root is no statement about the emulator, so it names the
-    folder instead, and no source: the backend holds no source's name, and the
-    panel words a press from the finding the refusal carries. The sentence
-    stands where nothing rewords it — the toast after a game exits.
+    folder instead, and no source: the table of source names lives only in the
+    panel (``sourceName``), which words every answer it receives from the
+    finding the refusal carries. The sentence stands where nothing rewords it —
+    the toast after a game exits.
     """
     if answer.state == SAVE_STATE_SAVES_ROOT_MISSING:
         return f"Save sync is unavailable: the saves folder {answer.missing_saves_root} does not exist."
@@ -393,11 +392,10 @@ def save_finding_details(answer: SaveAnswer) -> dict[str, object]:
 def place_not_read_finding(findings: Sequence[SourceFinding], source: str | None) -> SourceFinding | None:
     """The first of *findings* saying that a save place was not read from the emulator's settings, or ``None``.
 
-    The answer's own findings, never the source's health: a source's health
-    states findings about files no save of this emulator is placed by (ES-DE's
-    settings, EmuDeck's RetroArch beside a standalone emulator). A marker
-    finding counts only where the marker is the emulator's settings, which is a
-    bare RetroArch's and no other kind's.
+    *findings* are the answer's own, never the source's health. A marker
+    finding is skipped where *source* is RetroDECK or EmuDeck and counts for
+    every other kind. Why both rules hold is
+    ``docs/architecture/save-sync-coverage.md``'s, "The seven save states".
     """
     return next(
         (
@@ -420,7 +418,7 @@ def with_source_findings(
     """*answer*, or the refusal a finding about the reading behind it stands for.
 
     Where several reasons apply, the first in this order is the one named: a
-    shape no reading changes (a shared card, a save inside the game), then a
+    shape Tender never syncs (a shared card, a save inside the game), then a
     missing saves root (*missing_saves_root*, the root the source read from its
     settings and found absent), then a place not read from the emulator's
     settings (:func:`place_not_read_finding` over *findings*), then what the

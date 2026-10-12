@@ -103,12 +103,13 @@ class AtlasSaveLocationAdapter:
         declines and a resolver that raises WERE asked, so both are
         ``nothing_established``.
 
-        Two findings about the reading refuse the answer whatever it says
-        (:func:`domain.save_answer.with_source_findings` names the order): a
-        saves root the source read from its settings and that does not exist,
-        so no folder is created while the SD card that holds the root is out;
-        and a place the answer names that was not read from the emulator's own
-        settings. The emulator is asked either way — asking creates nothing.
+        Two findings about the reading refuse every answer but a shape Tender
+        never syncs (:func:`domain.save_answer.with_source_findings` names the
+        order): a saves root the source read from its settings and that does
+        not exist, so no folder is created while the SD card that holds the
+        root is out; and a place the answer names that was not read from the
+        emulator's own settings. The emulator is asked either way — asking
+        creates nothing.
 
         *content_installed* is the caller's own statement about *content_path*:
         ``False`` where it is the path a ROM WOULD occupy rather than a file on
@@ -253,12 +254,10 @@ class AtlasSaveLocationAdapter:
     def _missing_saves_root(self, installation: Any) -> str | None:
         """The saves root *installation* read from its settings and reports missing, or ``None``.
 
-        The resolver still places a save under a root that does not exist, and
-        a sync writing there would create it (``saves-root-missing``). A root
-        the source only assumed — its settings name none, or cannot be read —
-        says nothing about a drive, so it refuses nothing. Where the roots could
-        not be asked, or the source has no saves root of its own (a bare
-        RetroArch), nothing is claimed missing.
+        A root the source only assumed refuses nothing (why is
+        ``docs/architecture/save-sync-coverage.md``'s, "The seven save states").
+        Where the roots could not be asked, or the source has no saves root of
+        its own (a bare RetroArch), nothing is claimed missing.
         """
         roots = getattr(installation, "roots", None)
         if roots is None:

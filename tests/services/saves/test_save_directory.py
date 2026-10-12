@@ -445,7 +445,7 @@ def _not_read(directory: str) -> SaveAnswer:
 
 
 class TestNeverIntoAPlaceNotRead:
-    """A directory the emulator's settings did not name is a default it may not write to (#2286)."""
+    """A directory the emulator's settings did not name is a default it may not write to."""
 
     def test_a_moved_answer_not_read_from_the_settings_moves_nothing_and_keeps_the_record(self, tmp_path, dirs):
         old, new = dirs

@@ -542,7 +542,7 @@ class TestAMissingSavesRootIsAFailureAndNotASkip:
 
 
 class TestAPlaceNotReadIsRefusedWithItsFinding:
-    """A save place not read from the emulator's settings: every sync, write and move refuses, and nothing lands."""
+    """A save place not read from the emulator's settings: every sync and write refuses, and nothing lands."""
 
     _FINDING = SourceFinding(code="emulator-config-missing", data={"token": "CEMU", "config": "/cfg/Cemu/settings.xml"})
     _DETAILS: ClassVar[dict[str, Any]] = {

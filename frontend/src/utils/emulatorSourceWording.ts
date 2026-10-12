@@ -131,8 +131,14 @@ function wordedFinding(kind: string, { code, data }: SourceHealthFinding): strin
 /** The reason a press is refused with while a finding of RetroDECK's stands in the way of its folders. */
 export const RETRODECK_FINDING_REASON = "retrodeck_finding";
 
-/** The two reasons a save action is refused with that carry a source's finding: a place not read from the
- *  emulator's settings, and a missing saves folder, which a sync refuses as a failure of its own. */
+/**
+ * The two reasons a refused save action carries a source's finding under:
+ * `save_shape_unsupported`, which a sync and every save write refuse with, and
+ * `saves_root_missing`, a sync's own failure for a missing saves folder. Either
+ * carries the finding, and the source's kind beside it, wherever the save was
+ * refused for a place not read from the emulator's settings or for a missing
+ * saves folder.
+ */
 const SAVE_FINDING_REASONS: ReadonlySet<unknown> = new Set(["save_shape_unsupported", "saves_root_missing"]);
 
 function isFinding(value: unknown): value is SourceHealthFinding {
@@ -172,11 +178,12 @@ function refusalSentence(answer: Record<string, unknown>, finding: SourceHealthF
 /**
  * An endpoint's answer, with the message of a refusal for a source's finding
  * replaced by the sentence Main's notice shows for that finding, so a refused
- * press and the notice say the same thing: a refused folder press for one of
- * RetroDECK's findings, and a refused save action whose place was not read or
- * whose saves folder is missing, which names the kind of its source. A save refused for an emulator's own
- * settings file, for which Main shows no notice, says so in a sentence of its
- * own. Every other answer comes back as it is.
+ * press and the notice say the same thing. Two refusals carry one: a folder
+ * press refused for one of RetroDECK's findings, and a save action refused for
+ * a place not read or a missing saves folder, which carries its source's kind
+ * beside the finding. A save refused for an emulator's own settings file, for
+ * which Main shows no notice, says so in a sentence of its own. Every other
+ * answer comes back as it is.
  */
 export function withFindingSentence<T>(answer: T): T {
   if (typeof answer !== "object" || answer === null) return answer;

@@ -294,24 +294,24 @@ Some cores keep their saves in a folder of their own below that — the 3DO core
 `saves/3do/opera/per_game` — and Tender now looks there, because that is where the answer points. That has not yet been
 observed on a device.
 
-Tender never creates an emulator source's saves folder itself. While the folder its settings name does not exist — on an
-SD card that is not inserted, say — no save of that source's emulators is synced, and a game's save sync says what the
-main panel's notice for that folder says. Starting a game asks first whether to launch with the saves on this device,
-while "Sync before launch" is on and RomM can be reached; a game's exit says **Save sync is unavailable: the saves
-folder _path_ does not exist.** in a notification while "Sync after exit" is on, because the saves you just made were
-not synced. A saves folder the settings do not name — RetroDECK's `retrodeck.json` damaged or unreadable, say — stops
-nothing. Created anyway, the folder would land on internal storage, and the SD card would hide what was synced into it
-once it is back. Folders below an existing saves folder, for one emulator or one game, are still created as the emulator
+Tender never creates the saves folder an emulator source's settings name. While that folder does not exist — on an SD
+card that is not inserted, say — no save of that source's emulators is synced: created anyway, the folder would land on
+internal storage, and the SD card would hide what was synced into it once it is back. A game's save sync says what the
+main panel's notice for that folder says, and starting a game asks first whether to launch with the saves on this
+device, while "Sync before launch" is on and RomM can be reached. A game's exit says **Save sync is unavailable: the
+saves folder _path_ does not exist.** in a notification while "Sync after exit" is on, because the saves you just made
+were not synced. A saves folder the settings do not name — RetroDECK's `retrodeck.json` damaged or unreadable, say —
+stops nothing. Folders below an existing saves folder, for one emulator or one game, are still created as the emulator
 would create them.
 
-Tender also syncs, writes and moves no save at a place the emulator's own settings did not name. Where an emulator's
-settings file is missing — it was never started, say — or cannot be read, the emulator falls back on its built-in
-defaults, and Tender cannot tell where it really keeps the game's saves. That game's save sync then says why: with the
-main panel's notice where the problem is one the notice shows (RetroArch's own settings file, or an emulator source that
-is not set up), and otherwise with **_Emulator_'s settings file _file_ is missing, so Tender cannot tell where it keeps
-this game's saves.** (or **cannot be read**). A sync before a game starts or after it exits passes such a game over
-without a message. A damaged or unreadable `retrodeck.json` alone does not stop save sync: it names RetroDECK's own
-folders, while each emulator's save place comes from that emulator's own settings.
+Tender also syncs and writes no save at a place the emulator's own settings did not name. Where an emulator's settings
+file is missing — it was never started, say — or cannot be read, Tender cannot tell where it really keeps the game's
+saves. That game's save sync then says why: with the main panel's notice where the problem is one the notice shows
+(RetroArch's own settings file, or an emulator source that is not set up), and otherwise with **_Emulator_'s settings
+file _file_ is missing, so Tender cannot tell where it keeps this game's saves.** (or **cannot be read**). A sync before
+a game starts or after it exits passes such a game over without a message. A damaged or unreadable `retrodeck.json`
+alone does not stop save sync: it names RetroDECK's own folders, while each emulator's save place comes from that
+emulator's own settings.
 
 ## RetroArch Save Sorting
 

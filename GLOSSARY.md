@@ -930,7 +930,7 @@ recorded as the [answered save directory](#answered-save-directory), which is no
   created, and the sync refuses as a failure rather than with the benign skip.
 - **place not read** — the answer says its place was not read from the emulator's own settings: the settings file is
   missing or cannot be read, or the source is not set up, so the emulator's defaults stand in. RetroDECK's and EmuDeck's
-  marker findings alone are not this: their marker names the source's folders, never where an emulator writes.
+  marker findings alone are not this.
 
 Detail, including which systems land where on a stock RetroDECK, is in
 [Save sync coverage](docs/architecture/save-sync-coverage.md).

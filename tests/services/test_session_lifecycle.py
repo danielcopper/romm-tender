@@ -824,8 +824,8 @@ class TestFinalizeContentDirBenignSkip:
 
 class TestFinalizeSavesRootMissing:
     def test_a_missing_saves_root_toasts_the_folder(self, event_loop, logger):
-        """A missing RetroDECK saves folder is no benign skip: the exit says the saves were not synced, and where."""
-        message = "Save sync is unavailable: RetroDECK's saves folder /run/media/sd/saves does not exist."
+        """A missing saves folder is no benign skip: the exit says the saves were not synced, and where."""
+        message = "Save sync is unavailable: the saves folder /run/media/sd/saves does not exist."
         post = FakePostExitSync(side_effect=Refused("saves_root_missing", message, synced=0))
         service = _make_service(
             playtime_recorder=FakePlaytimeRecorder(),

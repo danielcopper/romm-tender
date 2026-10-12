@@ -102,7 +102,7 @@ as the `savefiles_in_content_dir` skip does — except for a missing saves root,
 refusing answer that names a directory outside the content's own is still recorded and followed when that directory
 moves, because the files are on the disk either way
 ([Following a moved save directory](save-file-sync-architecture.md#following-a-moved-save-directory)) — except a place
-not read from the emulator's settings, which nothing is ever carried into.
+not read from the emulator's settings, which the follow carries nothing into.
 
 | State                  | What it means                                                                          | Example on a stock RetroDECK        |
 | ---------------------- | -------------------------------------------------------------------------------------- | ----------------------------------- |
@@ -117,35 +117,35 @@ not read from the emulator's settings, which nothing is ever carried into.
 **The sixth is about the emulator source, not the emulator.** While the answering source reports `saves-root-missing`
 for a saves root it read from its settings (its roots answer states that root `read`), the resolver still places a save
 under a folder that does not exist, and a sync would create it — on internal storage while the SD card it belongs on is
-out, where the SD card hides it once it is back. So the answer refuses, and its sentence names the folder and no source,
-since the backend holds no source's name: **Save sync is unavailable: the saves folder _path_ does not exist.** The
-refusal carries the finding and the source's kind as a place not read does (below), so a press in the panel reads the
-sentence Main's notice shows for the folder; the toast after a game exits shows the backend's own. A saves root the
-source only assumed — its settings name none, or cannot be read, as with a damaged `retrodeck.json` — says nothing about
-a drive and refuses nothing. Every source is checked, and the emulator is still asked, since asking creates nothing.
-Unlike the other refusals, it is no benign skip: the sync refuses with `saves_root_missing`. A launch asks before
-starting on the local saves while "Sync before launch" is on and RomM can be reached, and a game's exit says in a toast
-that its saves were not synced while "Sync after exit" is on. Folders below an existing saves root are still created as
-today.
+out, where the SD card hides it once it is back. So the answer refuses. The refusal carries the finding and the source's
+kind as a place not read does (below), so the launch dialog and every press in the panel read the sentence Main's notice
+shows for the folder. Only the toast after a game exits shows the backend's own sentence, which names the folder and no
+source, since the table of source names lives only in the panel (`sourceName`): **Save sync is unavailable: the saves
+folder _path_ does not exist.** A saves root the source only assumed — its settings name none, or cannot be read, as
+with a damaged `retrodeck.json` — says nothing about a drive and refuses nothing. Every source that has a saves folder
+is checked, and the emulator is still asked, since asking creates nothing. Unlike the other refusals, it is no benign
+skip: the sync refuses with `saves_root_missing`. A launch asks before starting on the local saves while "Sync before
+launch" is on and RomM can be reached, and a game's exit says in a toast that its saves were not synced while "Sync
+after exit" is on. Folders below an existing saves root are still created as today.
 
 **The seventh is about the reading behind the answer.** The resolver names a save's place from the emulator's own
 settings — RetroArch's `retroarch.cfg`, a standalone emulator's own configuration, a libretro core's own file such as
 `mame.ini`, `scummvm.ini` or `WHDLoad.prefs` — and where that file is missing or cannot be read, it names the emulator's
-defaults instead and says so with a finding on the answer. Tender syncs, writes and moves no save there. The findings
-that refuse are the resolver's `PLACE_NOT_READ_CODES`, read off the answer itself: `emulator-config-missing`,
-`emulator-config-unreadable` (also where the emulator then runs on its defaults, as melonDS does over a file it cannot
-parse), `config-unreadable`, `companion-config-missing`, `not-set-up`, and a bare RetroArch's `marker-missing`,
-`marker-unreadable` and `marker-invalid`, its marker being its `retroarch.cfg`. RetroDECK's and EmuDeck's marker
-findings alone refuse nothing: their marker names the source's own folders, never where an emulator writes, so under a
-damaged `retrodeck.json` the saves still sync where the emulators keep them. A source's health is not read for this —
-ES-DE's settings, and EmuDeck's RetroArch beside a standalone emulator, are findings about files no save of that
-emulator is placed by. The refusal is the benign skip, and it carries the finding, the source's kind and the emulator's
-label: the panel words it with the sentence Main's notice shows for that finding, or, for an emulator's own settings
-file, which Main never shows, **_Emulator_'s settings file _file_ is missing, so Tender cannot tell where it keeps this
-game's saves.** (**cannot be read** where it exists). The answer keeps the directory the resolver named, so the rename
-on adoption still carries the game's saves; the directory follow carries nothing into it.
+defaults instead and says so with a finding on the answer. Tender syncs and writes no save there, and the directory
+follow moves none into it. The findings that refuse are the resolver's `PLACE_NOT_READ_CODES`, read off the answer
+itself: `emulator-config-missing`, `emulator-config-unreadable` (also where the emulator then runs on its defaults, as
+melonDS does over a file it cannot parse), `config-unreadable`, `companion-config-missing`, `not-set-up`, and a bare
+RetroArch's `marker-missing`, `marker-unreadable` and `marker-invalid`, its marker being its `retroarch.cfg`.
+RetroDECK's and EmuDeck's marker findings alone refuse nothing: their marker names the source's own folders, never where
+an emulator writes, so under a damaged `retrodeck.json` the saves still sync where the emulators keep them. A source's
+health is not read for this — ES-DE's settings, and EmuDeck's RetroArch beside a standalone emulator, are findings about
+files no save of that emulator is placed by. The refusal is the benign skip, and it carries the finding, the source's
+kind and the emulator's label: the panel words it with the sentence Main's notice shows for that finding, or, for an
+emulator's own settings file, which Main never shows, **_Emulator_'s settings file _file_ is missing, so Tender cannot
+tell where it keeps this game's saves.** (**cannot be read** where it exists). The answer keeps the directory the
+resolver named, so the rename on adoption still carries the game's saves there.
 
-**Where several apply, the first in this order is named:** a shape no reading changes (shared, inside the content), then
+**Where several apply, the first in this order is named:** a shape Tender never syncs (shared, inside the content), then
 a missing saves root, then a place not read, then what cannot be established yet (a hole, not established).
 
 **The hole is not always in a file name.** Flycast's Dreamcast cards need the game's `save_id` in the filename;
