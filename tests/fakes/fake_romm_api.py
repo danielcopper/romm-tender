@@ -749,8 +749,10 @@ class FakeRommApi:
             self._save_content.pop(sid, None)
         return {"deleted": len(save_ids)}
 
-    def negotiate_sync(self, device_id: str, saves: list[ClientSaveState]) -> SyncNegotiateResponse:
-        self._log("negotiate_sync", (device_id, saves))
+    def negotiate_sync(
+        self, device_id: str, saves: list[ClientSaveState], *, rom_ids: list[int] | None = None
+    ) -> SyncNegotiateResponse:
+        self._log("negotiate_sync", (device_id, saves), {"rom_ids": rom_ids})
         self._check_fail()
         if self.negotiate_sync_disabled:
             raise RommSyncDisabledError("Sync is disabled for this device", url="/api/sync/negotiate", method="POST")

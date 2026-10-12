@@ -351,11 +351,16 @@ class RommSaveApi(Protocol):
         """Delete the given save ids via ``POST /api/saves/delete``."""
         ...
 
-    def negotiate_sync(self, device_id: str, saves: list[ClientSaveState]) -> SyncNegotiateResponse:
+    def negotiate_sync(
+        self, device_id: str, saves: list[ClientSaveState], *, rom_ids: list[int] | None = None
+    ) -> SyncNegotiateResponse:
         """Open a 4.9 sync session: POST the device inventory, get the planned operations.
 
         The server detects (``upload`` / ``download`` / ``conflict`` / ``no_op``)
         but never resolves; opening a session cancels this device's prior ones.
+        With *rom_ids* the server evaluates only those ROMs and the ones the
+        posted saves name (RomM 5.3.0, which
+        refuses a list over its cap with 422); without it, the whole library.
         """
         ...
 

@@ -967,7 +967,7 @@ class TestTheSaveSyncRefusalsOnTheWire:
             ]
         )
 
-        def negotiate(_device_id, _saves):
+        def negotiate(_device_id, _saves, *, rom_ids=None):
             answer = next(negotiations)
             if isinstance(answer, Exception):
                 raise answer

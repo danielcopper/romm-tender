@@ -916,6 +916,17 @@ class TestNegotiateSync:
         client.post_json.assert_called_once_with("/api/sync/negotiate", {"device_id": "dev-1", "saves": saves})
         assert result["session_id"] == 7
 
+    def test_a_given_scope_is_posted_as_rom_ids(self):
+        api, client = _make_api()
+        client.post_json.return_value = _EMPTY_NEGOTIATE
+        saves: list[ClientSaveState] = [
+            {"rom_id": 1, "file_name": "a.srm", "updated_at": "2026-06-01T00:00:00Z", "file_size_bytes": 12},
+        ]
+        api.negotiate_sync("dev-1", saves, rom_ids=[1, 2])
+        client.post_json.assert_called_once_with(
+            "/api/sync/negotiate", {"device_id": "dev-1", "saves": saves, "rom_ids": [1, 2]}
+        )
+
     def test_returns_operations(self):
         api, client = _make_api()
         client.post_json.return_value = {

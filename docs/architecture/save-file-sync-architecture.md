@@ -37,7 +37,7 @@ floor with `reason: "version_error"`.
 | `/api/devices`                                           | POST   | Register a device. Accepts hostname, platform, client info. Returns `device_id` (UUID).                                                                                                                                                                                                                |
 | `/api/devices/{id}`                                      | DELETE | Remove a device registration. Returns 204 No Content. PATCH (rename) is not supported (405).                                                                                                                                                                                                           |
 | `/api/saves/delete`                                      | POST   | Bulk delete saves by ID. Body: `{"saves": [id1, id2, ...]}`. Returns result dict.                                                                                                                                                                                                                      |
-| `/api/sync/negotiate`                                    | POST   | Open a Device Sync session. Body: `{device_id, saves: ClientSaveState[]}`. Returns `{session_id, operations[], total_*}` — the server's `upload`/`download`/`conflict`/`no_op` verdicts (+ a `reason`). Detects but never resolves; opening cancels this device's prior sessions.                      |
+| `/api/sync/negotiate`                                    | POST   | Open a Device Sync session. Body: `{device_id, saves: ClientSaveState[], rom_ids?: int[]}`. Returns `{session_id, operations[], total_*}` — the server's `upload`/`download`/`conflict`/`no_op` verdicts (+ a `reason`). Detects but never resolves; opening cancels this device's prior sessions.     |
 | `/api/sync/sessions/{id}/complete`                       | POST   | Close a negotiated session. Body: `{operations_completed, operations_failed}`. Returns `{session}`.                                                                                                                                                                                                    |
 | `/api/play-sessions`                                     | POST   | Ingest a batch (max 100) of `{rom_id, start_time, end_time, duration_ms}` under a top-level `device_id`. Additive per-device union; dedup on `(user_id, device_id, rom_id, start_time)`. Playtime, decoupled from save-sync ([ADR-0018](../adr/0018-native-play-session-tracking-additive-ingest.md)). |
 | `/api/play-sessions?rom_id={id}`                         | GET    | List a ROM's stored play sessions (needs the `roms.user.read` scope). Summed by `duration_ms` for the reconcile `max()`; degrades to local-only without the scope.                                                                                                                                     |
@@ -164,9 +164,11 @@ Playtime does **not** ride this session: it must be recorded for every ROM on ev
 unconfirmed-slot ROMs), so it ingests through the standalone `/api/play-sessions` endpoint instead
 ([ADR-0018](../adr/0018-native-play-session-tracking-additive-ingest.md), which narrows the "ingest rides `negotiate`"
 aside of ADR-0016/0017). The server's returned `operations` are **discarded** — detection is the client's
-`compute_sync_action`. Opening the session is best-effort: a `negotiate` **transport** failure is non-fatal, the run
-simply proceeds **without** a session (the kernel still syncs). The **one** exception is RomM's per-device
-`sync_enabled` switch — `negotiate` is the only API-mode endpoint that enforces it, answering a 400 with detail
+`compute_sync_action`. The request names the ROMs it is about as `rom_ids` — the one ROM, or the distinct ROMs of the
+whole-device inventory — at most 500; above that the scope is left off and the server evaluates the whole library.
+Opening the session is best-effort: a `negotiate` **transport** failure is non-fatal, the run simply proceeds
+**without** a session (the kernel still syncs). The **one** exception is RomM's per-device `sync_enabled` switch —
+`negotiate` is the only API-mode endpoint that enforces it, answering a 400 with detail
 `"Sync is disabled for this device"` when the user has disabled sync for this device server-side. That specific 400 is
 translated to `RommSyncDisabledError` and **stops** the run with `reason: device_sync_disabled` (a visible policy stop,
 not a silent sessionless degrade); pre-launch treats it like the local save-sync toggle being off and skips silently so

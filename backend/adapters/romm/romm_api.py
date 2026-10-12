@@ -348,7 +348,9 @@ class RommApiAdapter:
 
     # ── Sync sessions (4.9 negotiate) ─────────────────────────────────
 
-    def negotiate_sync(self, device_id: str, saves: list[ClientSaveState]) -> SyncNegotiateResponse:
+    def negotiate_sync(
+        self, device_id: str, saves: list[ClientSaveState], *, rom_ids: list[int] | None = None
+    ) -> SyncNegotiateResponse:
         """Open a sync session: POST this device's inventory, get the planned ops.
 
         The server compares *saves* (per ``(rom_id, slot)``) against its own
@@ -357,12 +359,19 @@ class RommApiAdapter:
         resolves — a ``conflict`` carries no resolution directive. Opening a
         session cancels this device's prior in-flight sessions server-side.
 
+        With *rom_ids* the server evaluates only those ROMs and the ones the
+        posted saves name (RomM 5.3.0, which
+        refuses a list over its cap with 422); without it, the whole library.
+
         A 400 carrying the per-device sync-disabled ``detail`` is translated to
         :class:`RommSyncDisabledError` so the engine can stop the run with a
         visible policy reason (#1489); every other error propagates unchanged.
         """
+        body: dict[str, Any] = {"device_id": device_id, "saves": saves}
+        if rom_ids is not None:
+            body["rom_ids"] = rom_ids
         try:
-            return self._client.post_json("/api/sync/negotiate", {"device_id": device_id, "saves": saves})
+            return self._client.post_json("/api/sync/negotiate", body)
         except RommApiError as e:
             if getattr(e, "detail", None) == _SYNC_DISABLED_DETAIL:
                 raise RommSyncDisabledError(_SYNC_DISABLED_DETAIL, url=e.url, method=e.method) from e

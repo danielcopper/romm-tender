@@ -36,10 +36,11 @@ from lib.errors import (
     SyncBusy,
 )
 from lib.list_result import ErrorCode
+from models.sync import ClientSaveState
 from services.saves._messages import DEVICE_NOT_REGISTERED, DEVICE_SYNC_DISABLED
 from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
 from services.saves.sync_engine import SaveSweepIncomplete
-from services.saves.sync_engine.engine import _first_error_reason, _summarize_sync_result
+from services.saves.sync_engine.engine import NEGOTIATE_ROM_IDS_CAP, _first_error_reason, _summarize_sync_result
 from tests.services.saves._helpers import (
     _create_save,
     _do_sync,
@@ -571,7 +572,7 @@ class TestDeviceSyncDisabled:
         empty = {"operations": [], "total_upload": 0, "total_download": 0, "total_conflict": 0, "total_no_op": 0}
         calls = {"n": 0}
 
-        def negotiate(device_id, saves):
+        def negotiate(device_id, saves, *, rom_ids=None):
             calls["n"] += 1
             if calls["n"] == 1:
                 # Bulk pre-negotiate degrades (no session_id) → per-ROM sessions.
@@ -1894,6 +1895,20 @@ class TestRunRomSyncSession:
         assert complete[0][2]["operations_failed"] == 0
 
     @pytest.mark.asyncio
+    async def test_the_session_is_scoped_to_its_own_rom(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc, device_id="device-1")
+        _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="pokemon.gba")
+        _create_save(tmp_path, system="gba", rom_name="pokemon", content=b"local")
+        _seed_save_state(svc, 42, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
+
+        await svc._sync_engine._run_rom_sync(42)
+
+        negotiations = [c for c in fake.call_log if c[0] == "negotiate_sync"]
+        assert len(negotiations) == 1
+        assert negotiations[0][2]["rom_ids"] == [42]
+
+    @pytest.mark.asyncio
     async def test_malformed_negotiate_response_syncs_without_session(self, tmp_path):
         """A 200 negotiate body missing session_id degrades to a bare matrix run —
         the sync still happens; no session is opened or completed."""
@@ -1903,7 +1918,7 @@ class TestRunRomSyncSession:
         _create_save(tmp_path, system="gba", rom_name="pokemon", content=b"local")
         _seed_save_state(svc, 42, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
 
-        def malformed(device_id, saves):
+        def malformed(device_id, saves, *, rom_ids=None):
             return {}  # 200 body missing session_id
 
         fake.negotiate_sync = malformed  # type: ignore[method-assign]
@@ -2066,7 +2081,7 @@ class TestSyncAllSavesNegotiate:
         _seed_save_state(svc, 1, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
         _create_save(tmp_path, system="gba", rom_name="game1", content=b"s1")
 
-        def always_fail(device_id, saves):
+        def always_fail(device_id, saves, *, rom_ids=None):
             raise RommConnectionError("negotiate down")
 
         fake.negotiate_sync = always_fail  # type: ignore[method-assign]
@@ -2136,7 +2151,7 @@ class TestSyncAllSavesNegotiate:
         _seed_save_state(svc, 1, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
         _create_save(tmp_path, system="gba", rom_name="game1", content=b"s1")
 
-        def malformed(device_id, saves):
+        def malformed(device_id, saves, *, rom_ids=None):
             return {}  # 200 body missing session_id / operations
 
         fake.negotiate_sync = malformed  # type: ignore[method-assign]
@@ -2148,6 +2163,106 @@ class TestSyncAllSavesNegotiate:
         assert not any(c[0] == "complete_sync_session" for c in fake.call_log)
         assert any(c[0] == "list_saves" for c in fake.call_log)
         assert result["synced"] == 1
+
+
+class TestBulkNegotiateScope:
+    """The whole-device negotiate names the ROMs of the inventory it posts, up to RomM's cap."""
+
+    @staticmethod
+    def _seed_confirmed_roms(svc, tmp_path, rom_ids):
+        """Install each ROM with a confirmed named slot and one local save file."""
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "device-1")
+        for rom_id in rom_ids:
+            _install_rom(svc, tmp_path, rom_id=rom_id, system="gba", file_name=f"game{rom_id}.gba")
+            _seed_save_state(svc, rom_id, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
+            _create_save(tmp_path, system="gba", rom_name=f"game{rom_id}", content=b"s")
+
+    @pytest.mark.asyncio
+    async def test_the_scope_is_the_inventory_s_distinct_roms_in_first_seen_order(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        self._seed_confirmed_roms(svc, tmp_path, [7, 3])
+        # A second file for ROM 7: three saves over two ROMs.
+        _create_save(tmp_path, system="gba", rom_name="game7", content=b"rtc", ext=".rtc")
+
+        result = await svc.sync_all_saves()
+        assert isinstance(result, dict)
+
+        negotiations = [c for c in fake.call_log if c[0] == "negotiate_sync"]
+        assert len(negotiations) == 1
+        assert [save["rom_id"] for save in negotiations[0][1][1]] == [7, 7, 3]
+        assert negotiations[0][2]["rom_ids"] == [7, 3]
+
+    @staticmethod
+    def _hand_the_engine_an_inventory_over(svc, rom_ids):
+        """Make the whole-device inventory one save per ROM in *rom_ids*.
+
+        Seeding this many ROMs through the unit of work grows with the square of
+        their count, because the fake copies every repository on each open and
+        close; the scope is derived from the inventory alone, so the builder
+        seam is where these tests hand it in.
+        """
+        inventory: list[ClientSaveState] = [
+            {
+                "rom_id": rom_id,
+                "file_name": f"game{rom_id}.srm",
+                "updated_at": "2026-01-01T00:00:00Z",
+                "file_size_bytes": 1,
+            }
+            for rom_id in rom_ids
+        ]
+
+        def build_inventory(
+            rom_id: int | None = None, *, save_answer: SaveAnswer | None = None
+        ) -> list[ClientSaveState]:
+            return inventory
+
+        svc._sync_engine._build_inventory = build_inventory
+
+    @pytest.mark.asyncio
+    async def test_an_inventory_at_the_cap_is_still_scoped(self, tmp_path):
+        logged: list[str] = []
+        svc, fake = make_service(tmp_path, log_debug=logged.append)
+        rom_ids = list(range(1, NEGOTIATE_ROM_IDS_CAP + 1))
+        self._hand_the_engine_an_inventory_over(svc, rom_ids)
+
+        await svc._sync_engine._bulk_pre_negotiate("device-1")
+
+        negotiations = [c for c in fake.call_log if c[0] == "negotiate_sync"]
+        assert len(negotiations) == 1
+        assert negotiations[0][2]["rom_ids"] == rom_ids
+        assert logged == []
+
+    @pytest.mark.asyncio
+    async def test_the_cap_counts_roms_not_saves(self, tmp_path):
+        logged: list[str] = []
+        svc, fake = make_service(tmp_path, log_debug=logged.append)
+        rom_ids = list(range(1, NEGOTIATE_ROM_IDS_CAP + 1))
+        # One ROM twice: a save more than the cap, over exactly the cap's ROMs.
+        self._hand_the_engine_an_inventory_over(svc, [*rom_ids, rom_ids[0]])
+
+        await svc._sync_engine._bulk_pre_negotiate("device-1")
+
+        negotiations = [c for c in fake.call_log if c[0] == "negotiate_sync"]
+        assert len(negotiations) == 1
+        assert negotiations[0][2]["rom_ids"] == rom_ids
+        assert logged == []
+
+    @pytest.mark.asyncio
+    async def test_an_inventory_over_the_cap_negotiates_unscoped_and_says_so(self, tmp_path):
+        logged: list[str] = []
+        svc, fake = make_service(tmp_path, log_debug=logged.append)
+        self._hand_the_engine_an_inventory_over(svc, range(1, NEGOTIATE_ROM_IDS_CAP + 2))
+
+        await svc._sync_engine._bulk_pre_negotiate("device-1")
+
+        negotiations = [c for c in fake.call_log if c[0] == "negotiate_sync"]
+        assert len(negotiations) == 1
+        assert negotiations[0][2]["rom_ids"] is None
+        assert logged == [
+            f"sync_all_saves: the inventory names {NEGOTIATE_ROM_IDS_CAP + 1} ROMs, over negotiate's cap of "
+            f"{NEGOTIATE_ROM_IDS_CAP}; negotiating without a rom_ids scope"
+        ]
 
 
 class TestSyncPathsHealDeadDevice:
