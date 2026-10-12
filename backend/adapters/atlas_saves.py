@@ -47,9 +47,6 @@ from typing import TYPE_CHECKING, Any
 
 from _vendor.atlas import (
     HEALTH_ISSUE_NOT_SET_UP,
-    HEALTH_ISSUE_SAVES_ROOT_MISSING,
-    PROVENANCE_READ,
-    ROOT_NAME_SAVES,
     SavestateAbsence,
     SavestatePlacement,
     Unresolved,
@@ -57,9 +54,11 @@ from _vendor.atlas import (
 )
 
 from adapters.atlas_catalogue import catalogue_refused
+from adapters.emulator_sources import source_roots
 from domain.emulator_sources import SourceFinding
 from domain.save_answer import (
     SAVE_STATE_SAVES_ROOT_MISSING,
+    SAVES_ROOT_MISSING,
     UNESTABLISHED_NOT_ASKED,
     SaveAnswer,
     SaveGroup,
@@ -68,6 +67,7 @@ from domain.save_answer import (
     with_source_findings,
 )
 from domain.savestate_location import NoSavestates, SavestateLocation
+from domain.source_roots import counted_findings
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -259,17 +259,18 @@ class AtlasSaveLocationAdapter:
         Where the roots could not be asked, or the source has no saves root of
         its own (a bare RetroArch), nothing is claimed missing.
         """
-        roots = getattr(installation, "roots", None)
-        if roots is None:
+        question = getattr(installation, "roots", None)
+        if question is None:
             return None
-        answer = self._ask(roots, "roots")
+        answer = self._ask(question, "roots")
         if answer is None:
             return None
-        saves = next((root for root in answer.roots if root.root == ROOT_NAME_SAVES), None)
-        if saves is None or saves.provenance != PROVENANCE_READ:
-            return None
-        issue = next((issue for issue in answer.caveats if issue.code == HEALTH_ISSUE_SAVES_ROOT_MISSING), None)
-        return None if issue is None else str(issue.data.get("path", ""))
+        roots = source_roots(answer)
+        missing = next(
+            (finding for finding in counted_findings(roots, roots.findings) if finding.code == SAVES_ROOT_MISSING),
+            None,
+        )
+        return None if missing is None else missing.data.get("path", "")
 
     def installation_detected(self) -> bool:
         """Whether an emulator source answers that has been set up, so there is an installation to put questions to.

@@ -18,16 +18,17 @@ from _vendor.atlas import (
     HEALTH_ISSUE_ROOT_MISSING,
 )
 from _vendor.atlas import machine as atlas_machine
-from _vendor.atlas.installations import Health, SystemsAnswer
+from _vendor.atlas.installations import Health, InstallationRoot, RootsAnswer, RootSetting, SystemsAnswer
 from _vendor.atlas.machine import CORE_READ_TIMED_OUT, CoreReading, RealMachine
 from _vendor.atlas.placement import Caveat
 
-from adapters.emulator_sources import EmulatorSourcesAdapter
+from adapters.emulator_sources import EmulatorSourcesAdapter, source_roots
 from domain.emulator_sources import CATALOGUE_READ, CATALOGUE_SEALED, CATALOGUE_UNAVAILABLE, SourceFinding
+from domain.source_roots import unusable_reason
 
 
 class _Installation:
-    """A detected installation answering prepared health, root and systems."""
+    """A detected installation answering prepared health, root and systems, and roots where given."""
 
     def __init__(
         self,
@@ -37,12 +38,16 @@ class _Installation:
         root: str = "/run/media/deck/Emulation/retrodeck",
         systems: SystemsAnswer | Exception | None = None,
         health_raises: Exception | None = None,
+        roots: RootsAnswer | None = None,
     ) -> None:
         self.kind = kind
         self._issues = issues
         self._root = root
         self._systems = systems if systems is not None else SystemsAnswer(systems=("gba",))
         self._health_raises = health_raises
+        if roots is not None:
+            # Only a source the resolver answers roots for has the question.
+            self.roots = lambda: roots
 
     def health(self) -> Health:
         if self._health_raises is not None:
@@ -257,8 +262,16 @@ class TestDescribe:
         assert [(r.kind, r.enabled) for r in reports] == [("retrodeck", True), ("emudeck", False)]
 
     def test_the_root_is_left_out_while_the_settings_file_is_broken(self, traces):
+        # Under a damaged settings file the resolver only assumed the home.
+        assumed_home = InstallationRoot(
+            "installation", "/home/deck/retrodeck", "assumed", RootSetting("/rd.json", "paths.rd_home_path")
+        )
         broken = _Installation(
-            "retrodeck", issues=(Caveat(HEALTH_ISSUE_MARKER_INVALID, "prose", {"path": "/rd.json"}),)
+            "retrodeck",
+            issues=(Caveat(HEALTH_ISSUE_MARKER_INVALID, "prose", {"path": "/rd.json"}),),
+            roots=RootsAnswer(
+                (assumed_home,), caveats=(Caveat(HEALTH_ISSUE_MARKER_INVALID, "prose", {"path": "/rd.json"}),)
+            ),
         )
         (report,) = _holder(_Detect(broken), traces).describe()
 
@@ -434,6 +447,113 @@ class TestTheRealResolver:
             ("retrodeck", True),
         ]
         assert reading.answering_kind == "retrodeck"
+
+
+def _write_marker(home: str, marker: dict[str, Any]) -> None:
+    path = Path(home) / ".var" / "app" / "net.retrodeck.retrodeck" / "config" / "retrodeck" / "retrodeck.json"
+    path.write_text(json.dumps(marker), encoding="utf-8")
+
+
+def _codes(report: Any) -> list[str]:
+    return [finding.code for finding in report.findings]
+
+
+@pytest.mark.usefixtures("_no_host_deploy")
+class TestRootsTheResolverOnlyAssumed:
+    """Main's notice and the card state the roots the resolver only assumed (#2294 D6, D7, D8)."""
+
+    def test_a_settings_file_without_paths_names_every_assumed_root_and_shows_no_root(self, tmp_path, traces):
+        home = _seed_retrodeck(tmp_path, custom=None)
+        _write_marker(home, {"version": "0.10.0b"})
+        marker = os.path.join(home, ".var", "app", "net.retrodeck.retrodeck", "config", "retrodeck", "retrodeck.json")
+
+        (report,) = EmulatorSourcesAdapter(user_home=home, settings={}, log_debug=traces.append).describe()
+
+        assert report.root is None
+        assert SourceFinding(code="roots-assumed", data={"path": marker, "roots": "installation,bios,saves"}) in (
+            report.findings
+        )
+
+    def test_a_missing_root_finding_about_an_assumed_root_shows_nowhere(self, tmp_path, traces):
+        # The assumed BIOS folder does not exist; the resolver says so, and
+        # Tender shows the assumed-roots notice instead (D6).
+        home = _seed_retrodeck(tmp_path, custom=None)
+        rd_home = os.path.join(home, "retrodeck")
+        _write_marker(home, {"paths": {"rd_home_path": rd_home, "saves_path": os.path.join(rd_home, "saves")}})
+
+        (report,) = EmulatorSourcesAdapter(user_home=home, settings={}, log_debug=traces.append).describe()
+
+        assert "bios-root-missing" not in _codes(report)
+        assert "roots-assumed" in _codes(report)
+        assert report.root == rd_home
+
+    def test_a_missing_root_finding_about_a_read_root_still_shows(self, tmp_path, traces):
+        home = _seed_retrodeck(tmp_path, custom=None)
+        rd_home = os.path.join(home, "retrodeck")
+        paths = {"rd_home_path": rd_home, "saves_path": os.path.join(rd_home, "saves")}
+        _write_marker(home, {"paths": {**paths, "bios_path": os.path.join(tmp_path, "card", "bios")}})
+
+        (report,) = EmulatorSourcesAdapter(user_home=home, settings={}, log_debug=traces.append).describe()
+
+        assert "bios-root-missing" in _codes(report)
+        assert "roots-assumed" not in _codes(report)
+
+    def test_a_finding_that_explains_the_roots_stands_alone(self, tmp_path, traces):
+        home = _seed_retrodeck(tmp_path, custom=None)
+        marker = os.path.join(home, ".var", "app", "net.retrodeck.retrodeck", "config", "retrodeck", "retrodeck.json")
+        with open(marker, "w", encoding="utf-8") as handle:
+            handle.write("{not json")
+
+        (report,) = EmulatorSourcesAdapter(user_home=home, settings={}, log_debug=traces.append).describe()
+
+        assert "roots-assumed" not in _codes(report)
+        assert not {"root-missing", "bios-root-missing", "saves-root-missing"} & set(_codes(report))
+
+    def test_a_settings_file_whose_version_alone_cannot_be_read_keeps_the_root(self, tmp_path, traces):
+        home = _seed_retrodeck(tmp_path, custom=None)
+        rd_home = os.path.join(home, "retrodeck")
+        paths = {
+            "rd_home_path": rd_home,
+            "bios_path": os.path.join(rd_home, "bios"),
+            "saves_path": os.path.join(rd_home, "saves"),
+        }
+        os.makedirs(os.path.join(rd_home, "bios"))
+        _write_marker(home, {"version": 10, "paths": paths})
+
+        (report,) = EmulatorSourcesAdapter(user_home=home, settings={}, log_debug=traces.append).describe()
+
+        assert report.root == rd_home
+        assert "roots-assumed" not in _codes(report)
+        version = [finding for finding in report.findings if finding.code == HEALTH_ISSUE_MARKER_INVALID]
+        assert [finding.data.get("key") for finding in version] == ["version"]
+
+    def test_emudeck_s_settings_file_with_a_path_unset_is_named_and_its_rule_refuses_that_folder(
+        self, tmp_path, traces
+    ):
+        # Done-when 2: the card and Main's notice say so, and the rule every
+        # later use of an EmuDeck folder asks refuses it.
+        home = str(tmp_path / "home")
+        emulation = tmp_path / "sd" / "Emulation"
+        for folder in ("roms", "saves"):
+            (emulation / folder).mkdir(parents=True)
+        settings = Path(home) / ".config" / "EmuDeck" / "settings.sh"
+        settings.parent.mkdir(parents=True)
+        settings.write_text(f'romsPath="{emulation / "roms"}"\nsavesPath="{emulation / "saves"}"\n', encoding="utf-8")
+        holder = EmulatorSourcesAdapter(user_home=home, settings={}, log_debug=traces.append)
+
+        (report,) = holder.describe()
+        installation = holder.read().installation("emudeck")
+        assert installation is not None
+        roots = source_roots(installation.roots())
+
+        assert report.kind == "emudeck"
+        assert report.root == str(emulation)
+        assert SourceFinding(code="roots-assumed", data={"path": str(settings), "roots": "bios"}) in report.findings
+        assert "bios-root-missing" not in _codes(report)
+        assert unusable_reason(roots, "bios") == SourceFinding(
+            code="roots-assumed", data={"path": str(settings), "roots": "bios"}
+        )
+        assert unusable_reason(roots, "saves") is None
 
 
 _BACKEND = Path(__file__).resolve().parents[2] / "backend"

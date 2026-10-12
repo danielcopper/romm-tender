@@ -160,8 +160,9 @@ class PruneSaveSupport:
     def _saves_root(self) -> str | None:
         """RetroDECK's saves root every save the cleanup touches must lie in, or ``None`` where it names none.
 
-        Raises the refusal while RetroDECK reports that its roots are defaults,
-        or where a question about them failed.
+        Raises the refusal where the resolver only assumed the saves root, or
+        where a question about RetroDECK's roots failed; the cleanup's start
+        asks the same question first, so a run that started never meets it.
         """
         root = self._retrodeck_folders.saves_root()
         if isinstance(root, FolderRefused):

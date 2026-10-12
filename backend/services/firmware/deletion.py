@@ -120,8 +120,9 @@ class PlatformBiosDeleter:
         name one path, the first unlink takes it, and the second prunes its row
         over an absence.
 
-        Raises RetroDECK's folder refusal while it reports that its folders are
-        defaults, or where a question about them failed: then nothing is removed in them, whatever a record says.
+        Raises RetroDECK's folder refusal where the resolver only assumed its
+        BIOS folder, or where a question about its roots failed: then nothing is
+        removed in it, whatever a record says.
         """
         refused = self._retrodeck_folders.bios_folder()
         if isinstance(refused, FolderRefused):

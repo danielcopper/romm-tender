@@ -175,9 +175,11 @@ class SourceReport:
     """What the settings list shows for one detected source.
 
     ``root`` is the folder the resolver gives as the source's root, for display
-    only, and ``None`` where that root is a default rather than where the source
-    lies. ``catalogue`` is :data:`CATALOGUE_READ`, :data:`CATALOGUE_SEALED` or
-    :data:`CATALOGUE_UNAVAILABLE`.
+    only, and ``None`` where the resolver did not read it from the source's
+    settings. ``findings`` are the resolver's, less a missing-root finding about
+    a root Tender does not use, plus Tender's own ``roots-assumed``
+    (:mod:`domain.source_roots`). ``catalogue`` is :data:`CATALOGUE_READ`,
+    :data:`CATALOGUE_SEALED` or :data:`CATALOGUE_UNAVAILABLE`.
     """
 
     kind: str
