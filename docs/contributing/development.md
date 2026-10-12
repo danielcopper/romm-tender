@@ -541,7 +541,8 @@ name, and the gate exits non-zero. It is slow — the two test suites one after 
 build beside them — so it is a pre-push check, not something to run on every save. The CI jobs it does not run are
 `test-3.14`, which runs the backend suite under Python 3.14 — an interpreter the toolchain does not install (why CI runs
 it: [Dependency management](dependency-management.md)) — and the two that feed Sonar: `pr-metadata`, which needs a pull
-request, and `sonarcloud`, which needs `SONAR_TOKEN` and the CI coverage artifacts.
+request, and `sonarcloud`, which needs `SONAR_TOKEN` and the CI coverage artifacts. The build job's fetch and check of
+the `@decky/ui` source package (`scripts/decky_ui_source.py`) stays out of it too, because it needs the network.
 
 Outside `ci.yml`, a pull request runs more checks, and the gate runs none of them, because each reads the pull request
 itself on GitHub: `decisions` (`.github/workflows/decisions.yml`), which checks that the pull request links an issue
