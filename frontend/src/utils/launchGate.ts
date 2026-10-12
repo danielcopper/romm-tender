@@ -12,7 +12,9 @@
  * The gate also owns the cross-cutting skip-set (`markLaunchSkipped` /
  * `consumeLaunchSkip`): a one-shot handshake by which a caller about to start a
  * game tells the global watcher "I have already handled this start — don't
- * gate it".
+ * gate it". It also holds the `reason` slugs that mean a save sync was skipped
+ * benignly — unrelated to that skip-set — because the gate's callers read the
+ * pre-launch sync's outcome against them.
  */
 
 import type { SyncConflict } from "../types";

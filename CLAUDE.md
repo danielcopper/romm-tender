@@ -670,14 +670,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **Layer import direction (services ↛ adapters, adapters ↛ services, …)** — check — `.importlinter` (`lint-imports`)
 - **Frontend direction: `frontend/src/utils/` and `frontend/src/api/` never import either surface
   (`frontend/src/bigpicture/`, `frontend/src/desktop/`) or `frontend/src/shared/`; `shared/` never imports either
-  surface; the two surfaces never import each other; only the files directly in `frontend/src/` (`index.tsx` and its
-  test) import `frontend/src/qam/` or `frontend/src/boot/`, and neither of those two imports the other; `qam/` never
-  imports either surface or `shared/`; `frontend/src/types/` imports nothing else from `frontend/src/`; and no
-  `frontend/src/` module takes part in an import cycle** — check — `frontend/eslint.config.js`
-  (`import-x/no-restricted-paths`, `import-x/no-cycle`), kept live by `frontend/src/eslintBoundaries.test.ts`; code both
-  surfaces need moves DOWN — UI into `shared/`, the rest into `api/`, `utils/` or `types/` — never sideways; `boot/`
-  sits beside `index.tsx` and may import a surface; a type-only import is no edge for the cycle rule, while a zone
-  reports it like any other import
+  surface; the two surfaces never import each other; only `frontend/src/index.tsx` and its test import
+  `frontend/src/qam/` or `frontend/src/boot/`, and neither of those two imports the other; `qam/` never imports either
+  surface or `shared/`; `frontend/src/types/` imports nothing else from `frontend/src/`; and no `frontend/src/` module
+  takes part in an import cycle** — check — `frontend/eslint.config.js` (`import-x/no-restricted-paths`,
+  `import-x/no-cycle`), kept live by `frontend/src/eslintBoundaries.test.ts`; code both surfaces need moves DOWN — UI
+  into `shared/`, the rest into `api/`, `utils/` or `types/` — never sideways; `boot/` sits beside `index.tsx` and may
+  import a surface; a type-only import is no edge for the cycle rule, while a zone reports it like any other import
 - **No bare `# type: ignore` / blanket suppressions** — check — `scripts/check_no_bare_ignores.sh`
 - **A transport failure and an endpoint's own failure never arrive in the same shape, on either end** — test +
   prompt-only — `hostSocket.test.ts` for the frontend half (`frontend/src/api/hostSocket.ts`); the backend half is
@@ -726,8 +725,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   file entry carries its reason as a `// coverage-exempt:` marker in the file's own first lines, and every marked file
   is listed** — check + test — `scripts/check_coverage_exclusions.py`, and `frontend/src/typesHoldNoValues.test.ts` (no
   module in `frontend/src/types/` exports a value); unchecked: only test utilities go into `frontend/src/test-utils/` (a
-  real module there is exempted by its place, unmarked), a `types/` module running a statement it exports nothing from,
-  and a marker's sentence must be true
+  real module there is exempted by its place, unmarked), a `types/` module that runs code at module scope without
+  exporting a value, and a marker's sentence must be true
 - **Every pinned version in a lock satisfies its `.txt` source constraint (`requirements-dev.*` at the root,
   `docs/requirements.*` beside the docs)** — check — `scripts/check_lock_sync.py`
 - **Every local markdown link in tracked docs resolves (file target + heading/attr-list anchor)** — check —

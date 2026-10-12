@@ -788,24 +788,25 @@ Format: **invariant** — tier — enforced by.
 - **Layer import direction (services ↛ adapters, adapters ↛ services, …)** — check — `.importlinter` (`lint-imports`)
 - **Frontend direction: `frontend/src/utils/` and `frontend/src/api/` never import either surface
   (`frontend/src/bigpicture/`, `frontend/src/desktop/`) or `frontend/src/shared/`; `shared/` never imports either
-  surface; the two surfaces never import each other; only the files directly in `frontend/src/` (`index.tsx` and its
-  test) import `frontend/src/qam/` or `frontend/src/boot/`, and neither of those two imports the other; `qam/` never
-  imports either surface or `shared/`; `frontend/src/types/` imports nothing else from `frontend/src/`; and no
-  `frontend/src/` module takes part in an import cycle** — check — `frontend/eslint.config.js`
-  (`import-x/no-restricted-paths`, `import-x/no-cycle`). The surface pair is a peer rule, not a layer rule: the two
-  share data and logic and almost nothing visual, so anything that turns out to belong to both moves DOWN, never
-  sideways — UI into `shared/`, which both surfaces may import and which imports neither, and the rest into `api/`,
-  `utils/` or `types/`. `qam/`, Tender's Quick Access entry, sits below the surfaces: it mounts the panel through the
-  factory `index.tsx` hands it. `boot/` sits beside `index.tsx` instead, and may import a surface, because its start-up
-  check has to see every Steam lookup the panel relies on, a surface's included — `boot/steamModules.ts` reads
-  `AppDetailsRoute` from `bigpicture/patches/installGamePagePatch.ts`. The `qam/` and `boot/` zones name every directory
-  under `frontend/src/` but their own by glob, so a directory added there is covered without a change to them. These
-  rules go inert rather than loud when misconfigured: until the config names `.ts`/`.tsx` for the plugin to read,
-  `no-cycle` finds no cycle among the frontend's modules (the comment at `import-x/extensions` in
-  `frontend/eslint.config.js` says how). `frontend/src/eslintBoundaries.test.ts` lints known-bad fixtures through the
-  real config and fails if any of the fifteen stops reporting — a green `pnpm lint` alone proves nothing. For the cycle
-  rule a type-only import is not an edge (erased at runtime), which is why the `api/backend.ts` ⇄
-  `utils/cachedGameDetailStore.ts` back-reference is not a cycle; a zone reports an `import type` like any other import
+  surface; the two surfaces never import each other; only `frontend/src/index.tsx` and its test import
+  `frontend/src/qam/` or `frontend/src/boot/`, and neither of those two imports the other; `qam/` never imports either
+  surface or `shared/`; `frontend/src/types/` imports nothing else from `frontend/src/`; and no `frontend/src/` module
+  takes part in an import cycle** — check — `frontend/eslint.config.js` (`import-x/no-restricted-paths`,
+  `import-x/no-cycle`). The surface pair is a peer rule, not a layer rule: the two share data and logic and almost
+  nothing visual, so anything that turns out to belong to both moves DOWN, never sideways — UI into `shared/`, which
+  both surfaces may import and which imports neither, and the rest into `api/`, `utils/` or `types/`. `qam/`, Tender's
+  Quick Access entry, sits below the surfaces: it mounts the panel through the factory `index.tsx` hands it. `boot/`
+  sits beside `index.tsx` instead, and may import a surface, because its start-up check has to see every Steam lookup
+  the panel relies on, a surface's included — `boot/steamModules.ts` reads `AppDetailsRoute` from
+  `bigpicture/patches/installGamePagePatch.ts`. The `qam/` and `boot/` zones name every directory under `frontend/src/`
+  but their own, and every file directly in it but `index.tsx` and its test, by glob, so a directory or a module added
+  there is covered without a change to them. These rules go inert rather than loud when misconfigured: until the config
+  names `.ts`/`.tsx` for the plugin to read, `no-cycle` finds no cycle among the frontend's modules (the comment at
+  `import-x/extensions` in `frontend/eslint.config.js` says how). `frontend/src/eslintBoundaries.test.ts` lints
+  known-bad fixtures through the real config and fails if any of the rules stops reporting — a green `pnpm lint` alone
+  proves nothing. For the cycle rule a type-only import is not an edge (erased at runtime), which is why the
+  `api/backend.ts` ⇄ `utils/cachedGameDetailStore.ts` back-reference is not a cycle; a zone reports an `import type`
+  like any other import
 - **No bare `# type: ignore` / blanket suppressions** — check — `scripts/check_no_bare_ignores.sh`
 - **A transport failure and an endpoint's own failure never arrive in the same shape, on either end** — test +
   prompt-only — `backend/host/protocol.py` states the vocabulary and `.claude/rules/host.md` holds the backend half; the
@@ -933,27 +934,27 @@ Format: **invariant** — tier — enforced by.
 - **A coverage exclusion names a property of the code, never a place: every frontend-scoped entry stands in BOTH
   `frontend/vitest.config.ts`'s `coverage.exclude` and `sonar-project.properties`' `sonar.coverage.exclusions`, every
   file entry carries its reason as a `// coverage-exempt:` marker in the file's own first lines, and every marked file
-  is listed** — check — `scripts/check_coverage_exclusions.py`. **The two lists spell a shared entry differently and
-  that is not drift**: Sonar runs from the repository root and Vitest from `frontend/`, so `src/types/**` there is
-  `frontend/src/types/**` here, and the gate normalises before comparing. An entry spelled repo-relative on the Vitest
-  side excludes nothing at all — Vitest would resolve it to `frontend/frontend/...` — so it is reported by name rather
-  than normalised into agreement with Sonar's identical-looking copy. (A folder entry is admitted only from the script's
-  `FOLDER_ENTRIES`, where membership in the folder IS the property; the backend/config entries are Sonar-only and the
-  frontend test glob Vitest-only, each declared there with its reason so the asymmetry is stated rather than tolerated).
-  Two accidents it removes, both silent: `src/patches/**` excluded a FOLDER, so a file's coverage obligation changed
-  when it was moved out of the folder and nothing said so; and `steamShortcuts.ts` sat on Sonar's list and not on
-  Vitest's under a comment claiming the two were aligned. **What the check cannot see is MEMBERSHIP in a folder entry's
-  directory** — the two admitted folders are checked to exist and their contents are never read by it. For
-  `frontend/src/types/` a test answers instead: `frontend/src/typesHoldNoValues.test.ts` imports every module there and
-  fails on any value one exports, and exporting none is that folder's whole property; a statement such a module runs
-  without exporting anything passes it. For `frontend/src/test-utils/` nothing does, so a real module filed there is
-  exempted by its PLACE, with no marker asked for and nothing failing: the very accident above, still live for that
-  directory. It is declared rather than mechanized on purpose — "is this reached only from the test run" is not a cheap
-  check, and a half-check would exempt on a property nobody stated while reading as enforcement. **Nor can it see the
-  marker's SENTENCE** — a false reason passes green, which is what the three stated reasons this cut found were: "no
-  logic to assert" over a file with four passing tests, "no isolated logic to assert" over 88.65% line coverage, and
-  "thin plugin-entry shim" over 89.09%. Only the first was replaced by a truer marker; the other two files lost their
-  exclusions outright, which is also how their list drift was settled
+  is listed** — check + test — `scripts/check_coverage_exclusions.py`, and `frontend/src/typesHoldNoValues.test.ts`.
+  **The two lists spell a shared entry differently and that is not drift**: Sonar runs from the repository root and
+  Vitest from `frontend/`, so `src/types/**` there is `frontend/src/types/**` here, and the gate normalises before
+  comparing. An entry spelled repo-relative on the Vitest side excludes nothing at all — Vitest would resolve it to
+  `frontend/frontend/...` — so it is reported by name rather than normalised into agreement with Sonar's
+  identical-looking copy. (A folder entry is admitted only from the script's `FOLDER_ENTRIES`, where membership in the
+  folder IS the property; the backend/config entries are Sonar-only and the frontend test glob Vitest-only, each
+  declared there with its reason so the asymmetry is stated rather than tolerated). Two accidents it removes, both
+  silent: `src/patches/**` excluded a FOLDER, so a file's coverage obligation changed when it was moved out of the
+  folder and nothing said so; and `steamShortcuts.ts` sat on Sonar's list and not on Vitest's under a comment claiming
+  the two were aligned. **What the check cannot see is MEMBERSHIP in a folder entry's directory** — the two admitted
+  folders are checked to exist and their contents are never read by it. For `frontend/src/types/` a test answers
+  instead: `frontend/src/typesHoldNoValues.test.ts` imports every module there, at any depth, and fails on any value one
+  exports; a module that runs code at module scope without exporting a value passes it. For `frontend/src/test-utils/`
+  nothing does, so a real module filed there is exempted by its PLACE, with no marker asked for and nothing failing: the
+  very accident above, still live for that directory. It is declared rather than mechanized on purpose — "is this
+  reached only from the test run" is not a cheap check, and a half-check would exempt on a property nobody stated while
+  reading as enforcement. **Nor can it see the marker's SENTENCE** — a false reason passes green, which is what the
+  three stated reasons this cut found were: "no logic to assert" over a file with four passing tests, "no isolated logic
+  to assert" over 88.65% line coverage, and "thin plugin-entry shim" over 89.09%. Only the first was replaced by a truer
+  marker; the other two files lost their exclusions outright, which is also how their list drift was settled
 - **Every pinned version in a lock satisfies its `.txt` source constraint (`requirements-dev.*` at the root,
   `docs/requirements.*` beside the docs)** — check — `scripts/check_lock_sync.py`
 - **Every local markdown link in tracked docs resolves (file target + heading/attr-list anchor)** — check —

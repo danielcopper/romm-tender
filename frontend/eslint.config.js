@@ -138,16 +138,16 @@ export default tseslint.config(
                 "desktop/ and bigpicture/ are peers, not layers: the two surfaces share data and logic and almost nothing visual, so neither may reach into the other. Anything that turns out to belong to both moves DOWN, never sideways: UI into shared/, the rest into api/, utils/ or types/.",
             },
             {
-              target: "./src/!(qam)/**",
+              target: ["./src/!(qam)/**", "./src/!(index|index.test).{ts,tsx}"],
               from: "./src/qam",
               message:
-                "qam/ is Tender's Quick Access entry, and nothing but index.tsx imports it. What you need from it belongs below it, in api/, utils/ or types/.",
+                "qam/ is Tender's Quick Access entry, and nothing but index.tsx and its test imports it. What you need from it belongs below it, in api/, utils/ or types/.",
             },
             {
-              target: "./src/!(boot)/**",
+              target: ["./src/!(boot)/**", "./src/!(index|index.test).{ts,tsx}"],
               from: "./src/boot",
               message:
-                "boot/ is start-up work — the globals bundle's own entry, and the check and failure page index.tsx runs before the panel mounts — and nothing but index.tsx imports it. What you need from it belongs below it, in api/, utils/ or types/.",
+                "boot/ is start-up work — the globals bundle's own entry, and the check and failure page index.tsx runs before the panel mounts — and nothing but index.tsx and its test imports it. What you need from it belongs below it, in api/, utils/ or types/.",
             },
             {
               target: "./src/qam",

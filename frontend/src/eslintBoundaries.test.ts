@@ -166,6 +166,8 @@ describe("frontend direction rules", () => {
     ["qam/ reaching into boot/", "qam/__eslint_fixtures__/reachesBoot.ts", REACHES_BOOT],
     // `no-restricted-paths` has no type-only exemption: an `import type` is an edge here.
     ["types/ reaching into utils/ for a type", "types/__eslint_fixtures__/reachesUtils.ts", REACHES_UTILS_FOR_A_TYPE],
+    ["types/ reaching into bigpicture/", "types/__eslint_fixtures__/reachesUp.ts", REACHES_BIGPICTURE],
+    ["api/ reaching into boot/", "api/__eslint_fixtures__/reachesBoot.ts", REACHES_BOOT],
   ])("reports %s", async (_case, relative, source) => {
     expect(await rulesReportedFor(relative, source)).toContain("import-x/no-restricted-paths");
   });
@@ -174,10 +176,17 @@ describe("frontend direction rules", () => {
     expect(await rulesReportedFor("boot/__eslint_fixtures__/reachesUp.ts", REACHES_BIGPICTURE)).toEqual([]);
   });
 
-  it("leaves a module beside index.tsx reaching into qam/ and boot/ alone", async () => {
-    const source =
-      'import { TabIcon } from "./qam/TabIcon";\nimport { checkSteamModules } from "./boot/steamModules";\nexport const probe = [TabIcon, checkSteamModules];\n';
-    expect(await rulesReportedFor("entryProbe.ts", source)).toEqual([]);
+  const REACHES_QAM_AND_BOOT_FROM_SRC =
+    'import { TabIcon } from "./qam/TabIcon";\nimport { checkSteamModules } from "./boot/steamModules";\nexport const probe = [TabIcon, checkSteamModules];\n';
+
+  it("leaves index.tsx reaching into qam/ and boot/ alone", async () => {
+    expect(await rulesReportedFor("index.tsx", REACHES_QAM_AND_BOOT_FROM_SRC)).toEqual([]);
+  });
+
+  it("reports another module beside index.tsx reaching into qam/ and boot/", async () => {
+    expect(await rulesReportedFor("entryProbe.ts", REACHES_QAM_AND_BOOT_FROM_SRC)).toContain(
+      "import-x/no-restricted-paths",
+    );
   });
 
   it("leaves qam/ reaching into qam/ alone", async () => {
