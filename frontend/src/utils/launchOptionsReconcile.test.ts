@@ -12,10 +12,8 @@ function items(n: number): { app_id: number; launch_options: string }[] {
 }
 
 describe("batchConfirmLaunchOptions", () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.resetAllMocks();
-    const actual = await vi.importActual<typeof steamShortcuts>("./steamShortcuts");
-    vi.mocked(steamShortcuts.sharedShortcutFileReader).mockImplementation(actual.sharedShortcutFileReader);
     vi.mocked(steamShortcuts.setLaunchOptionsConfirmed).mockResolvedValue(true);
     vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
   });

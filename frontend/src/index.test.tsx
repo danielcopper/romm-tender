@@ -1038,8 +1038,18 @@ describe("index.tsx — migration_relaunch_options listener", () => {
     });
     await flush();
 
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, 'flatpak run net.retrodeck.retrodeck "/new/a.bin"');
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(200, 'flatpak run net.retrodeck.retrodeck "/new/b.bin"');
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
+      100,
+      'flatpak run net.retrodeck.retrodeck "/new/a.bin"',
+      undefined,
+      expect.any(Function),
+    );
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
+      200,
+      'flatpak run net.retrodeck.retrodeck "/new/b.bin"',
+      undefined,
+      expect.any(Function),
+    );
   });
 
   it("ignores an empty items array", async () => {
@@ -1101,8 +1111,18 @@ describe("index.tsx — startup launch-options reconcile (#1043)", () => {
     panelFactory();
     await flush();
 
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, 'flatpak run net.retrodeck.retrodeck "/roms/a.bin"');
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(200, 'flatpak run net.retrodeck.retrodeck "/roms/b.bin"');
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
+      100,
+      'flatpak run net.retrodeck.retrodeck "/roms/a.bin"',
+      undefined,
+      expect.any(Function),
+    );
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
+      200,
+      'flatpak run net.retrodeck.retrodeck "/roms/b.bin"',
+      undefined,
+      expect.any(Function),
+    );
     expect(logError).not.toHaveBeenCalledWith(expect.stringContaining("startup_reconcile"));
   });
 
@@ -1123,7 +1143,12 @@ describe("index.tsx — startup launch-options reconcile (#1043)", () => {
     panelFactory();
     await flush();
 
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, 'flatpak run net.retrodeck.retrodeck "/roms/a.bin"');
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
+      100,
+      'flatpak run net.retrodeck.retrodeck "/roms/a.bin"',
+      undefined,
+      expect.any(Function),
+    );
     expect(logError).toHaveBeenCalledWith("startup_reconcile: failed to confirm launch options for appId 100");
   });
 
@@ -1186,7 +1211,12 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     await flush();
 
     expect(getInstalledRelaunchOptions).toHaveBeenCalled();
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, 'flatpak run net.retrodeck.retrodeck "/roms/a.bin"');
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
+      100,
+      'flatpak run net.retrodeck.retrodeck "/roms/a.bin"',
+      undefined,
+      expect.any(Function),
+    );
     expect(logError).not.toHaveBeenCalledWith(expect.stringContaining("sync_reconcile"));
   });
 
@@ -1208,7 +1238,12 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     });
     await flush();
 
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(200, 'flatpak run net.retrodeck.retrodeck "/roms/b.bin"');
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
+      200,
+      'flatpak run net.retrodeck.retrodeck "/roms/b.bin"',
+      undefined,
+      expect.any(Function),
+    );
   });
 
   it("surfaces a sync_reconcile-prefixed logError when the pull endpoint rejects", async () => {

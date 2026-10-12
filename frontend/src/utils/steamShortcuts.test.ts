@@ -7,9 +7,8 @@ import {
   scanShortcutOwnership,
   removeShortcutConfirmedOutcome,
   setLaunchOptionsConfirmed,
-  sharedShortcutFileReader,
-  type ShortcutFileReading,
 } from "./steamShortcuts";
+import type { ShortcutFileReading } from "./shortcutFile";
 import type { SyncAddItem } from "../types";
 
 const ROM_LAUNCHER = "/home/deck/.local/bin/tender-rom-launcher";
@@ -432,33 +431,6 @@ describe("setLaunchOptionsConfirmed's reading of Steam's shortcut file", () => {
 
     await expect(promise).resolves.toBe(true);
     expect(readFile).not.toHaveBeenCalled();
-  });
-});
-
-describe("sharedShortcutFileReader", () => {
-  beforeEach(resetFileEndpoint);
-  afterEach(resetFileEndpoint);
-
-  it("reads nothing until it is first asked", () => {
-    const ask = vi.mocked(backend.getShortcutLaunchOptions);
-
-    sharedShortcutFileReader([1, 2]);
-
-    expect(ask).not.toHaveBeenCalled();
-  });
-
-  it("answers every caller from one backend call for all its app IDs", async () => {
-    const ask = vi
-      .spyOn(backend, "getShortcutLaunchOptions")
-      .mockResolvedValue({ status: "read", launch_options: [{ app_id: 2, launch_options: "two" }] });
-    const readFile = sharedShortcutFileReader([1, 2]);
-
-    const [first, second] = await Promise.all([readFile(), readFile()]);
-
-    expect(ask).toHaveBeenCalledTimes(1);
-    expect(ask).toHaveBeenCalledWith([1, 2]);
-    expect(first).toBe(second);
-    expect(first).toEqual({ status: "read", launchOptions: new Map([[2, "two"]]) });
   });
 });
 

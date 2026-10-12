@@ -540,8 +540,8 @@ describe("DataManagementPage", () => {
       await press(button(view, "Delete every downloaded ROM file?"));
 
       await waitFor(() => {
-        expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(11, "");
-        expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(22, "");
+        expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(11, "", undefined, expect.any(Function));
+        expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(22, "", undefined, expect.any(Function));
       });
     });
 

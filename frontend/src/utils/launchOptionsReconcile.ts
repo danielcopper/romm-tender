@@ -1,6 +1,7 @@
 import { getRomRelaunchOptions, logError } from "../api/backend";
 import type { RelaunchOptionsResult } from "../api/backend";
-import { setLaunchOptionsConfirmed, sharedShortcutFileReader } from "./steamShortcuts";
+import { sharedShortcutFileReader } from "./shortcutFile";
+import { setLaunchOptionsConfirmed } from "./steamShortcuts";
 import {
   isPruneLeaseAdmissionCurrent,
   isPruneLeaseCancellation,
