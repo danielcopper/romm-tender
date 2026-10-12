@@ -1465,6 +1465,15 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(await ops.preLaunchSync()).toEqual({ success: false, message: "Server offline" });
     });
 
+    it("preLaunchSync: saves_root_missing fails with the folder's sentence, so the launch asks first", async () => {
+      const ops = await captureOps();
+      const message = "Save sync is unavailable: RetroDECK's saves folder /run/media/sd/saves does not exist.";
+
+      vi.mocked(backend.preLaunchSync).mockResolvedValueOnce({ success: false, message, reason: "saves_root_missing" });
+
+      expect(await ops.preLaunchSync()).toEqual({ success: false, message });
+    });
+
     it("ensureTrackingConfigured: already-configured proceeds; a tracking-check throw logs and proceeds", async () => {
       const ops = await captureOps();
 

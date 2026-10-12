@@ -10,7 +10,11 @@ from lib.errors import NamedRefused
 
 
 class SaveShapeUnsupported(NamedRefused):
-    """The emulator's save is not a per-game file set this program can carry."""
+    """The emulator's save is not a per-game file set this program can carry.
+
+    A Saves-tab write raises it for a missing saves root too, with that answer's
+    own message; a sync refuses that one with ``saves_root_missing`` instead.
+    """
 
     reason = "save_shape_unsupported"
 

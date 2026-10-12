@@ -98,8 +98,9 @@ sync path asks live, and the count exists so the number the button offers equals
 The answer classifies every ROM into **exactly one** of six states. Only the first is a save Tender can carry; the other
 five are refusals, and each says something different about why. A refusal syncs nothing: no path is probed, no sync
 state is written, and the sync refuses with the benign skip (`reason: "save_shape_unsupported"`) rather than a failure —
-as the `savefiles_in_content_dir` skip does. A refusing answer that names a directory outside the content's own is still
-recorded and followed when that directory moves, because the files are on the disk either way
+as the `savefiles_in_content_dir` skip does — except for a missing saves root, which is a failure of its own (below). A
+refusing answer that names a directory outside the content's own is still recorded and followed when that directory
+moves, because the files are on the disk either way
 ([Following a moved save directory](save-file-sync-architecture.md#following-a-moved-save-directory)).
 
 | State                  | What it means                                                                 | Example on a stock RetroDECK        |
@@ -115,7 +116,9 @@ recorded and followed when that directory moves, because the files are on the di
 places a save under a folder that does not exist, and a sync would create it — on internal storage while the SD card it
 belongs on is out, where the SD card hides it once it is back. So the answer refuses without asking the emulator
 anything, and its sentence names the folder: **Save sync is unavailable: RetroDECK's saves folder _path_ does not
-exist.** Only RetroDECK's answer is checked for it, because no other source reaches a save answer through a catalogue
+exist.** Unlike the other four, it is no benign skip: the sync refuses with `saves_root_missing`, so a launch with "Sync
+before launch" on asks before starting on the local saves, and a game's exit says in a toast that its saves were not
+synced. Only RetroDECK's answer is checked for it, because no other source reaches a save answer through a catalogue
 that is not refused. Folders below an existing saves root are still created as today.
 
 **The hole is not always in a file name.** Flycast's Dreamcast cards need the game's `save_id` in the filename;

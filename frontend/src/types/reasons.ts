@@ -133,6 +133,7 @@ export type WireReason =
   | "save_failed"
   | "save_shape_unsupported"
   | "savefiles_in_content_dir"
+  | "saves_root_missing"
   | "selection_finalized"
   | "service_stopping"
   | "stale_action"

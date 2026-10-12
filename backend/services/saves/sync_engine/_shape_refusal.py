@@ -4,8 +4,8 @@ Two things refuse a sync outright, and both are read off one live answer: five
 of the six save states (:mod:`domain.save_answer`), and a save the emulator
 writes beside the game's content. The three per-ROM entry points all handle
 them identically: take one live reading of the machine, follow a moved save
-directory with it, and where either holds, raise the benign skip instead of
-syncing.
+directory with it, and where either holds, raise the refusal instead of
+syncing — a benign skip, except for a missing saves root.
 
 It lives beside the engine rather than inside it because nothing is added to the
 engine's own module, and because these are the whole refusal: one reading and the
@@ -21,7 +21,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from domain.save_answer import save_shape_message
+from domain.save_answer import SAVE_STATE_SAVES_ROOT_MISSING, save_shape_message
+from lib.errors import Refused
 from services.saves._messages import SAVE_SYNC_IN_CONTENT_DIR
 from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
 
@@ -54,17 +55,21 @@ def live_save_answer(rom_info: RomInfoService, rom_id: int) -> SaveAnswer | None
 
 
 def refuse_unsyncable(answer: SaveAnswer | None) -> None:
-    """Raise the benign skip *answer* refuses a single-ROM sync with; return to sync.
+    """Raise the refusal *answer* refuses a single-ROM sync with; return to sync.
 
     A save beside the content is checked first: its files may be a perfectly
     syncable per-game set, so the shape would let it through. No answer at all
-    returns — an uninstalled ROM is the runner's own case. Either refusal is a
-    benign skip: nothing went wrong, and the game still launches.
+    returns — an uninstalled ROM is the runner's own case. Those two refusals
+    are benign skips: nothing went wrong, and the game still launches. A missing
+    saves root is not one: the game's saves are not synced until the folder is
+    back, so the launch asks first and the exit says so.
     """
     if answer is None:
         return
     if answer.in_content_directory:
         raise SavefilesInContentDir(SAVE_SYNC_IN_CONTENT_DIR, synced=0)
+    if answer.state == SAVE_STATE_SAVES_ROOT_MISSING:
+        raise Refused("saves_root_missing", save_shape_message(answer), synced=0)
     if not answer.syncable:
         raise SaveShapeUnsupported(save_shape_message(answer), synced=0)
 

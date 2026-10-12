@@ -1471,9 +1471,11 @@ The Play button's path:
    `handleConflicts` in turn (see [The modal](#the-modal)): once all are resolved it notifies siblings and goes on; on
    the first Cancel the button switches to `conflict` and nothing launches. A sync that fails never launches
    unconditionally: the "Save Sync Unavailable" dialog asks first, and Cancel returns the button to Play. The benign
-   skips (`savefiles_in_content_dir`, `save_shape_unsupported`) proceed silently. When the sync moved something, the
-   per-direction completion toast above reports it (uploaded / downloaded / both); a failure's classified message
-   appears in the dialog instead.
+   skips (`savefiles_in_content_dir`, `save_shape_unsupported`) proceed silently; a missing RetroDECK saves folder
+   (`saves_root_missing`) is a failure, so the dialog asks with its sentence. With "Sync before launch" off the sync
+   answers before it refuses anything, so the dialog never asks about a sync that was switched off. When the sync moved
+   something, the per-direction completion toast above reports it (uploaded / downloaded / both); a failure's classified
+   message appears in the dialog instead.
 8. Offline: `check_local_drift`. A local save that changed since the last sync asks Start Anyway / Retry connection /
    Cancel; Retry runs the check again from the start.
 9. Re-confirm: `get_rom_relaunch_options`, bounded at 3 s, heals the shortcut's launch options. A timeout stops the

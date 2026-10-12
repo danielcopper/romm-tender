@@ -821,6 +821,25 @@ class TestFinalizeContentDirBenignSkip:
             conflicts_toast=None,
         )
 
+    def test_a_missing_saves_root_toasts_the_folder(self, event_loop, logger):
+        """A missing RetroDECK saves folder is no benign skip: the exit says the saves were not synced, and where."""
+        message = "Save sync is unavailable: RetroDECK's saves folder /run/media/sd/saves does not exist."
+        post = FakePostExitSync(side_effect=Refused("saves_root_missing", message, synced=0))
+        service = _make_service(
+            playtime_recorder=FakePlaytimeRecorder(),
+            post_exit_sync=post,
+            achievement_sync=FakeAchievementSync(),
+            migration_reader=FakeMigrationReader(),
+            logger=logger,
+        )
+
+        result = event_loop.run_until_complete(service.finalize(99))
+        event_loop.run_until_complete(_drain_background_tasks(service))
+
+        assert result.sync.failure_toast == message
+        assert result.sync.success is False
+        assert result.sync.offline is False
+
 
 class TestFinalizeConflicts:
     def test_single_conflict_renders_singular_string(self, event_loop, logger):
