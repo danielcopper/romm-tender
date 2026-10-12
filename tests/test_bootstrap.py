@@ -82,6 +82,7 @@ from services.playtime import PlaytimeService
 from services.prune import PruneService
 from services.prune_leases import PruneLeaseService
 from services.saves import SaveService
+from services.shortcut_file import ShortcutFileService
 from services.steamgrid import SteamGridService
 from services.update_check import UpdateCheckService
 from services.update_outcome import UpdateOutcomeService
@@ -782,7 +783,7 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(fields(result)) == 34
+        assert len(fields(result)) == 35
         assert all(getattr(result, field.name) is not None for field in fields(result))
         assert isinstance(result.prune_conflicts, PruneConflicts)
         assert isinstance(result.core_service, CoreService)
@@ -797,6 +798,7 @@ class TestWireServices:
         assert isinstance(result.leftover_tmp_cleanup_service, LeftoverTmpCleanupService)
         assert isinstance(result.update_outcome_service, UpdateOutcomeService)
         assert isinstance(result.update_output_service, UpdateOutputService)
+        assert isinstance(result.shortcut_file_service, ShortcutFileService)
         deps["loop"].close()
 
     def test_pending_sync_binding_observes_library_rebinds(self, tmp_path):
