@@ -694,6 +694,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   check** — check — `frontend/scripts/check-package-budgets.mjs` (`pnpm -C frontend check:packages`), over the record
   the build writes to `frontend/bundle-packages.json`, refused when it is older than `dist/`; the panel's own code has
   no budget of its own and only `frontend/.size-limit.json`'s total watches it
+- **Every package `frontend/package-budgets.json` lists, in any bundle, has a `## <package>` section of its own in
+  `THIRD-PARTY-NOTICES.md`** — check — `scripts/check_third_party_notices.py`; unseen by it: whether a section is true,
+  and a section for a package no bundle carries any more
 - **Tender's three React globals are spelled exactly the way Decky Loader spells them** — test —
   `frontend/src/boot/steamGlobals.test.ts` against the pinned `decky-globals-block.txt`; the pinned copy itself is held
   by hand, its provenance header naming the upstream commit
