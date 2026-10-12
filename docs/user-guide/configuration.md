@@ -288,8 +288,9 @@ while the source is switched on, an empty grey ring and a grey name while it is 
   sources are used in; the first card's up arrow and the last card's down arrow do nothing. The card slides into its new
   place and the arrow you pressed keeps the focus — the other arrow takes it once the source reaches the top or the
   bottom — so press again to move the source further;
-- the folder it lives in — shown only where the source's own settings file names it, because otherwise the folder Tender
-  would show is only the source's usual place;
+- the folder it lives in — left out where the source's own settings file does not name it, and for a RetroArch without a
+  frontend while its settings file is missing, because the folder Tender would show is then only the source's usual
+  place;
 - what its health says, one line per problem, each led by a warning sign; with none, a green check and **No problems
   found.** where Tender read the source's emulator list;
 - where it could not, **_Source_'s emulator list is not established.**, with a warning sign, unless a line already says

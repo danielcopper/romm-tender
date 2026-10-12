@@ -278,6 +278,33 @@ class TestDescribe:
         assert report.root is None
         assert report.findings == (SourceFinding(code=HEALTH_ISSUE_MARKER_INVALID, data={"path": "/rd.json"}),)
 
+    @pytest.mark.parametrize("code", ["marker-missing", "marker-unreadable", "marker-invalid", "not-set-up"])
+    def test_a_source_without_a_roots_question_hides_its_root_while_its_settings_file_was_not_read(self, traces, code):
+        retroarch = _Installation(
+            "bare_retroarch_native",
+            root="/home/deck/.config/retroarch",
+            issues=(Caveat(code, "prose", {"path": "/home/deck/.config/retroarch/retroarch.cfg"}),),
+        )
+        (report,) = _holder(_Detect(retroarch), traces).describe()
+
+        assert report.root is None
+
+    def test_a_source_without_a_roots_question_shows_its_root_beside_a_settings_file_it_cannot_read(self, traces):
+        retroarch = _Installation(
+            "bare_retroarch_native",
+            root="/home/deck/.config/retroarch",
+            issues=(
+                Caveat(
+                    "config-unreadable",
+                    "prose",
+                    {"path": "/home/deck/.config/retroarch/retroarch.cfg", "status": "denied"},
+                ),
+            ),
+        )
+        (report,) = _holder(_Detect(retroarch), traces).describe()
+
+        assert report.root == "/home/deck/.config/retroarch"
+
     def test_a_refused_catalogue_reads_unavailable(self, traces):
         refused = _Installation(
             "bare_retroarch_native",

@@ -43,7 +43,7 @@ from domain.emulator_sources import (
     no_answering_source_reason,
     stored_kinds,
 )
-from domain.source_roots import ROOT_INSTALLATION, SourceRoot, SourceRoots, reported_findings
+from domain.source_roots import ROOT_INSTALLATION, SourceRoot, SourceRoots, explains_roots, reported_findings
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Mapping
@@ -218,8 +218,10 @@ class EmulatorSourcesAdapter:
         findings = self._findings(source.kind, installation)
         if getattr(installation, "roots", None) is None:
             # A source with no roots question (a bare RetroArch) states no
-            # provenance, and its root is shown as the resolver gives it.
-            root = self._ask(source.kind, "root", installation.root)
+            # provenance: its root is shown as the resolver gives it, except
+            # while a finding says its settings file was not read.
+            explained = any(explains_roots(finding) for finding in findings)
+            root = None if explained else self._ask(source.kind, "root", installation.root)
         else:
             answer = self._ask(source.kind, "roots", installation.roots)
             roots = None if answer is None else source_roots(answer)

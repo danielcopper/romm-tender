@@ -176,7 +176,8 @@ class SourceReport:
 
     ``root`` is the folder the resolver gives as the source's root, for display
     only, and ``None`` where the resolver did not read it from the source's
-    settings. ``findings`` are the resolver's, less a missing-root finding about
+    settings — for a source with no roots question, while a finding says its
+    settings file was not read. ``findings`` are the resolver's, less a missing-root finding about
     a root Tender does not use, plus Tender's own ``roots-assumed``
     (:mod:`domain.source_roots`). ``catalogue`` is :data:`CATALOGUE_READ`,
     :data:`CATALOGUE_SEALED` or :data:`CATALOGUE_UNAVAILABLE`.

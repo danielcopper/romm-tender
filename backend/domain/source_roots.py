@@ -100,10 +100,11 @@ class SourceRoots:
 
 def explaining_finding(roots: SourceRoots) -> SourceFinding | None:
     """The resolver's finding that already says why the source's roots were not read, or ``None``."""
-    return next((finding for finding in roots.findings if _explains(finding)), None)
+    return next((finding for finding in roots.findings if explains_roots(finding)), None)
 
 
-def _explains(finding: SourceFinding) -> bool:
+def explains_roots(finding: SourceFinding) -> bool:
+    """Whether *finding* says why a source's roots were not read from its settings."""
     if finding.code not in _EXPLAINING_CODES:
         return False
     return not (finding.code == "marker-invalid" and finding.data.get("key") == _VERSION_KEY)
