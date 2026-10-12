@@ -243,6 +243,14 @@ tree rolls back with and the licence texts a distributed copy carries, nothing t
 own build and runs it there too, for the reason [ADR-0039](../adr/0039-the-release-ships-the-packagers-tarball.md)
 gives. What no run of it can say is whether the code inside works — the script's own docstring states the blind spot.
 
+Beside the tarball the same job attaches `decky-ui-<version>.tgz`, named for the `@decky/ui` version rather than
+Tender's: the `@decky/ui` npm package `frontend/pnpm-lock.yaml` resolves, which `scripts/decky_ui_source.py` fetches
+from the npm registry and writes only once its SHA-512 matches the lock's integrity hash. It is the source of the copy
+the bundles carry, offered from the release itself
+([THIRD-PARTY-NOTICES.md](https://github.com/danielcopper/romm-tender/blob/main/THIRD-PARTY-NOTICES.md) says where a
+reader finds it). CI's build job runs the same script on every pull request, without attaching anything, so a release is
+not its first run either.
+
 **An install over an existing one is an update, and an update whose new version does not answer is rolled back.** It
 does not ask whether you are coming from the Decky plugin, which a first install does unless given `--yes` or run after
 the question's end date (`TENDER_ACK_UNTIL`, set in `install.sh`): a machine with a tree at the code root already is not
@@ -522,7 +530,7 @@ See [Backend Architecture](../architecture/backend-architecture.md) for details.
 ## Full CI gate
 
 ```bash
-mise run gate         # run the PR checks from .github/workflows/ci.yml locally (all but three, below)
+mise run gate         # run the PR checks from .github/workflows/ci.yml locally (all but the jobs and steps named below)
 ```
 
 `mise run gate` is the single local battery that mirrors CI. It runs the backend tests (`mise run test`), the
@@ -535,7 +543,9 @@ name, and the gate exits non-zero. It is slow — the two test suites one after 
 build beside them — so it is a pre-push check, not something to run on every save. The CI jobs it does not run are
 `test-3.14`, which runs the backend suite under Python 3.14 — an interpreter the toolchain does not install (why CI runs
 it: [Dependency management](dependency-management.md)) — and the two that feed Sonar: `pr-metadata`, which needs a pull
-request, and `sonarcloud`, which needs `SONAR_TOKEN` and the CI coverage artifacts.
+request, and `sonarcloud`, which needs `SONAR_TOKEN` and the CI coverage artifacts. The build job's fetch and check of
+the `@decky/ui` source package (`scripts/decky_ui_source.py`) stays out of it too, because it needs the network, and so
+does its `pnpm audit` step ([pnpm audit](#code-quality) under Code Quality).
 
 Outside `ci.yml`, a pull request runs more checks, and the gate runs none of them, because each reads the pull request
 itself on GitHub: `decisions` (`.github/workflows/decisions.yml`), which checks that the pull request links an issue

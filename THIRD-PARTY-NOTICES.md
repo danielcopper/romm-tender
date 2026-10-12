@@ -1,14 +1,14 @@
 # Third-party notices
 
-Tender's own code is GPL-3.0 (see [LICENSE](LICENSE)). The panel bundle it ships also contains code from the project
-below, under that project's own licence.
+Tender's own code is GPL-3.0-only (see [LICENSE](LICENSE)). The bundles it ships also contain code from the projects
+below, each under its own licence.
 
 ## What this file covers, and where the rest is
 
-**This file covers the JavaScript bundle, and nothing else.** A bundled npm dependency disappears into `dist/index.js`:
-whoever receives the artefact never sees `node_modules`, so there is nowhere for its licence to sit except a file like
-this one. Python and native code ship differently here, and each already carries its licence where a reader of that code
-will find it — so listing them again would be a second copy to keep in step, not a second protection.
+**This file covers the JavaScript bundles, and nothing else.** A bundled npm dependency disappears into `dist/`: whoever
+receives the artefact never sees `node_modules`, so there is nowhere for its licence to sit except a file like this one.
+Python and native code ship differently here, and each already carries its licence where a reader of that code will find
+it — so listing them again would be a second copy to keep in step, not a second protection.
 
 Tender also ships, and this file does not describe:
 
@@ -34,12 +34,16 @@ and how to re-copy it on a bump, is at [`backend/native/README.md`](backend/nati
 
 ## @decky/ui
 
-- **Version:** 4.12.0 — what `frontend/pnpm-lock.yaml` resolves, which is the version actually bundled.
-  [`frontend/package.json`](frontend/package.json) declares the range `^4.11.6`, so it is the lock and not the manifest
-  that fixes which bytes ship
+- **Version:** the one `frontend/pnpm-lock.yaml` resolves at the release's tag, which is the version actually bundled;
+  the source package below carries it in its name. [`frontend/package.json`](frontend/package.json) declares a range, so
+  it is the lock and not the manifest that fixes which bytes ship
 - **Licence:** LGPL-2.1
-- **Source:** <https://github.com/SteamDeckHomebrew/decky-frontend-lib>
-- **Where the text is:** `LICENSE-@decky-ui.txt`, emitted next to the bundle by the build
+- **Source:** `decky-ui-<version>.tgz`, attached to every release from 1.0.0 on, on the
+  [releases page](https://github.com/danielcopper/romm-tender/releases) beside Tender's own tarball, and checked against
+  the lock's integrity hash before it is attached. It is the npm package the build used: the compiled `dist/` the
+  bundles are built from, and the TypeScript it is compiled from under `src/`. Upstream's build configuration is in its
+  repository: <https://github.com/SteamDeckHomebrew/decky-frontend-lib>
+- **Where the text is:** `LICENSE-@decky-ui.txt`, which the build emits into `dist/` beside the bundles that carry it
 
 The package is how Tender reaches Steam's own interface components. It is not a component library of its own: almost
 every member is a search predicate that finds one of Steam's minified modules and hands it back, which is why Tender
@@ -49,6 +53,41 @@ uses it rather than keeping such predicates itself.
 contains its module-cache half. `dist/index-coexistence.js` contains none of it: that bundle takes the package from the
 copy Decky Loader has already loaded, so it distributes nothing.
 
-As LGPL-2.1 requires, you may replace the bundled copy with your own. Tender is open source and the version is pinned,
-so doing so needs nothing from us: change the pin in `frontend/package.json` (or point it at your own build), run
-`pnpm -C frontend install && pnpm -C frontend build`, and the bundle that comes out carries your copy instead.
+As LGPL-2.1 requires, you may replace the bundled copy with your own. Tender is open source and the version is fixed by
+`frontend/pnpm-lock.yaml`, so doing so needs nothing from us: change the range in `frontend/package.json` (or point it
+at your own build), run `pnpm -C frontend install && pnpm -C frontend build`, and the bundles that come out carry your
+copy instead.
+
+## react-icons
+
+- **Version:** the one `frontend/pnpm-lock.yaml` resolves at the release's tag
+- **Licence:** MIT
+- **Source:** <https://github.com/react-icons/react-icons>
+- **Where the text is:** below. A bundle carries a package's code but not its LICENSE file, so the notice travels in
+  this file
+
+`dist/index.js` and `dist/index-coexistence.js` each carry react-icons' icon runtime and the icons the panel imports
+from it. `dist/globals.js` does not.
+
+```text
+Copyright 2018 kamijin_fanta <kamijin@live.jp>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+### Font Awesome Free icons
+
+The one icon set Tender imports from react-icons is `react-icons/fa`, react-icons' conversion of the Font Awesome Free 5
+SVG icons — built from upstream just past the 5.15.4 tag, as react-icons' README names it (`5.15.4-3-gafecf2a`) — into
+JavaScript components. Those icons are not react-icons' own and carry a licence of their own:
+
+- **Icons:** Font Awesome Free, by Fonticons, Inc. — <https://fontawesome.com>
+- **Licence:** Creative Commons Attribution 4.0 International (CC BY 4.0) —
+  <https://creativecommons.org/licenses/by/4.0/>; Font Awesome's own statement of it:
+  <https://fontawesome.com/license/free>
+- **Source:** <https://github.com/FortAwesome/Font-Awesome>
+- **Changes:** converted from SVG into React components by react-icons; Tender does not change them further

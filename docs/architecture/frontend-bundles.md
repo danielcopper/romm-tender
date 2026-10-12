@@ -10,7 +10,7 @@ either can run.
 | `dist/globals.js`            | Steam's React, ReactDOM and JSX runtime, installed under `SP_*`           |
 | `dist/index.js`              | The panel, with `@decky/ui` bundled inside it — **standalone**            |
 | `dist/index-coexistence.js`  | The panel, taking `@decky/ui` from Decky's `DFL` global — **coexistence** |
-| `dist/LICENSE-@decky-ui.txt` | `@decky/ui`'s LGPL-2.1 text, emitted beside the bundle that carries it    |
+| `dist/LICENSE-@decky-ui.txt` | `@decky/ui`'s LGPL-2.1 text, beside the bundles that carry it             |
 
 They are three separate Rollup builds sharing no chunk, so the panel's own modules are transpiled and bundled twice,
 once for each panel bundle.
@@ -498,6 +498,10 @@ It runs after the build beside `check:bundle`, in `mise run gate` and in CI.
 entry under each bundle that carries it, at its recorded size plus about a tenth, rounded up. Raising a budget is the
 same edit and reads the same in a diff: the package that grew, by how much. A package that leaves a bundle takes its
 budget with it.
+
+A package that joins a bundle also needs a `## <package>` section of its own in `THIRD-PARTY-NOTICES.md`, which
+`scripts/check_third_party_notices.py` fails without. A package that leaves every bundle takes its section along, and no
+check notices when it does not.
 
 ## What the tests here can and cannot see
 
