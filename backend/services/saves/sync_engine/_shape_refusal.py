@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from domain.save_answer import SAVE_STATE_SAVES_ROOT_MISSING, save_shape_message
+from domain.save_answer import SAVE_STATE_SAVES_ROOT_MISSING, save_finding_details, save_shape_message
 from lib.errors import Refused
 from services.saves._messages import SAVE_SYNC_IN_CONTENT_DIR
 from services.saves._refusals import SavefilesInContentDir, shape_refusal
@@ -70,7 +70,7 @@ def refuse_unsyncable(answer: SaveAnswer | None) -> None:
     if answer.in_content_directory:
         raise SavefilesInContentDir(SAVE_SYNC_IN_CONTENT_DIR, synced=0)
     if answer.state == SAVE_STATE_SAVES_ROOT_MISSING:
-        raise Refused("saves_root_missing", save_shape_message(answer), synced=0)
+        raise Refused("saves_root_missing", save_shape_message(answer), **save_finding_details(answer), synced=0)
     if not answer.syncable:
         raise shape_refusal(answer, synced=0)
 

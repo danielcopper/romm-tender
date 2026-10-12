@@ -507,7 +507,9 @@ class TestAMissingSavesRootIsAFailureAndNotASkip:
     _MISSING = "/run/media/deck/sd/retrodeck/saves"
 
     def _answer(self) -> SaveAnswer:
-        return saves_root_missing_answer(path=self._MISSING, emulator="mGBA", content_installed=True)
+        return saves_root_missing_answer(
+            path=self._MISSING, emulator="mGBA", content_installed=True, source="retrodeck"
+        )
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("entry", ["pre_launch_sync", "post_exit_sync", "sync_rom_saves"])
@@ -521,7 +523,12 @@ class TestAMissingSavesRootIsAFailureAndNotASkip:
         assert refused.value.reason == "saves_root_missing"
         assert refused.value.reason not in BENIGN_SYNC_SKIP_REASONS
         assert self._MISSING in refused.value.message
-        assert refused.value.details == {"synced": 0}
+        assert refused.value.details == {
+            "finding": {"code": "saves-root-missing", "data": {"path": self._MISSING}},
+            "source": "retrodeck",
+            "emulator": "mGBA",
+            "synced": 0,
+        }
 
     @pytest.mark.asyncio
     async def test_a_launch_with_pre_launch_sync_off_is_not_refused(self, tmp_path):

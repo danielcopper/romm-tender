@@ -350,7 +350,7 @@ class TestTheRefusalIsReportedNeutrally:
 
         assert answer.syncable is False
         assert save_shape_message(answer) == (
-            "Save sync is unavailable: RetroDECK's saves folder /run/media/sd/saves does not exist."
+            "Save sync is unavailable: the saves folder /run/media/sd/saves does not exist."
         )
 
 
@@ -379,13 +379,19 @@ class TestAPlaceNotRead:
         [
             pytest.param(_answer(), id="per-game"),
             pytest.param(_answer(granularity="shared-card"), id="shared"),
-            pytest.param(
-                saves_root_missing_answer(path="/sd/saves", emulator="mGBA", content_installed=True), id="root"
-            ),
         ],
     )
     def test_no_other_answer_carries_anything_beside_its_message(self, answer):
         assert save_finding_details(answer) == {}
+
+    def test_a_missing_saves_root_carries_its_finding_too(self):
+        answer = saves_root_missing_answer(path="/sd/saves", emulator="mGBA", content_installed=True, source="emudeck")
+
+        assert save_finding_details(answer) == {
+            "finding": {"code": "saves-root-missing", "data": {"path": "/sd/saves"}},
+            "source": "emudeck",
+            "emulator": "mGBA",
+        }
 
     def test_its_message_names_the_emulator(self):
         message = save_shape_message(self._refused())

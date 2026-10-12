@@ -441,6 +441,7 @@ class TestAMissingSavesRoot:
         assert answer.syncable is False
         assert answer.missing_saves_root == _SAVES_ROOT
         assert answer.emulator == "mGBA"
+        assert answer.source == kind
         # The emulator is still asked: asking creates nothing.
         assert entry.asked == [_CONTENT]
 
@@ -1378,6 +1379,11 @@ class TestTheVocabularyIsTheResolversOwn:
         from domain.save_answer import _MARKER_CODES
 
         assert frozenset(_MARKERS) == _MARKER_CODES
+
+    def test_the_missing_saves_root_code(self):
+        from domain.save_answer import SAVES_ROOT_MISSING
+
+        assert SAVES_ROOT_MISSING == HEALTH_ISSUE_SAVES_ROOT_MISSING
 
     def test_the_kinds_whose_marker_names_no_save_place(self):
         from domain.emulator_sources import EMUDECK, RETRODECK

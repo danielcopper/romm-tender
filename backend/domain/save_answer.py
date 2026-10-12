@@ -35,12 +35,10 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Literal
 
-from domain.emulator_sources import EMUDECK, RETRODECK
+from domain.emulator_sources import EMUDECK, RETRODECK, SourceFinding
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    from domain.emulator_sources import SourceFinding
 
 # The seven states. Exactly one holds for any ROM.
 SAVE_STATE_PER_GAME_FILES = "per_game_files"
@@ -114,6 +112,9 @@ PLACE_NOT_READ_CODES = frozenset(
 # every save place read; a bare RetroArch's marker IS its ``retroarch.cfg``.
 _MARKER_CODES = frozenset({"marker-missing", "marker-unreadable", "marker-invalid"})
 _MARKER_NAMES_NO_SAVE_PLACE = frozenset({RETRODECK, EMUDECK})
+
+# The resolver's finding for a saves root that is not an existing directory.
+SAVES_ROOT_MISSING = "saves-root-missing"
 
 # The states that are the emulator's save shape and that no reading of the
 # settings changes, so they are named ahead of a finding about the reading.
@@ -249,12 +250,13 @@ class SaveAnswer:
     ``missing_saves_root`` is the saves root the source names and that does not
     exist, set on :data:`SAVE_STATE_SAVES_ROOT_MISSING` alone.
 
-    ``finding`` is the resolver's finding that the place was not read from the
-    emulator's settings, and ``source`` the kind of the source whose answer it
-    is; both are set on :data:`SAVE_STATE_PLACE_NOT_READ` alone. Such an answer
-    keeps the directory and the files the resolver named, because the rename on
-    adoption still carries the files there; every sync and write refuses it,
-    and the directory follow moves nothing into it.
+    ``finding`` is the resolver's finding the answer is refused for, and
+    ``source`` the kind of the source whose answer it is; both are set on
+    :data:`SAVE_STATE_SAVES_ROOT_MISSING` and :data:`SAVE_STATE_PLACE_NOT_READ`
+    alone. An answer refused for a place not read keeps the directory and the
+    files the resolver named, because the rename on adoption still carries the
+    files there; every sync and write refuses it, and the directory follow
+    moves nothing into it.
 
     ``content_installed`` says whether this ROM's content is on disk. It is
     ``False`` for a ROM the library holds but has not installed — the question
@@ -362,11 +364,12 @@ def save_shape_message(answer: SaveAnswer) -> str:
     """The sentence a refusal is reported with, named after the emulator it is about.
 
     A missing saves root is no statement about the emulator, so it names the
-    folder instead — RetroDECK's, the one source the adapter asks about it
-    (``adapters/atlas_saves.py``).
+    folder instead, and no source: the backend holds no source's name, and the
+    panel words a press from the finding the refusal carries. The sentence
+    stands where nothing rewords it — the toast after a game exits.
     """
     if answer.state == SAVE_STATE_SAVES_ROOT_MISSING:
-        return f"Save sync is unavailable: RetroDECK's saves folder {answer.missing_saves_root} does not exist."
+        return f"Save sync is unavailable: the saves folder {answer.missing_saves_root} does not exist."
     sentence = _STATE_MESSAGES.get(answer.state, _STATE_MESSAGES[SAVE_STATE_UNESTABLISHED])
     return f"{sentence} ({answer.emulator})" if answer.emulator else sentence
 
@@ -375,10 +378,10 @@ def save_finding_details(answer: SaveAnswer) -> dict[str, object]:
     """What a refusal of *answer* carries beside its reason and message, for the panel to word it.
 
     The finding, the kind of the source whose answer it is, and the emulator's
-    label, on an answer refused because its place was not read; nothing on any
-    other.
+    label, on an answer refused for a missing saves root or because its place
+    was not read; nothing on any other.
     """
-    if answer.state != SAVE_STATE_PLACE_NOT_READ or answer.finding is None:
+    if answer.finding is None:
         return {}
     return {
         "finding": {"code": answer.finding.code, "data": dict(answer.finding.data)},
@@ -427,7 +430,7 @@ def with_source_findings(
         return answer
     if missing_saves_root is not None:
         return saves_root_missing_answer(
-            path=missing_saves_root, emulator=answer.emulator, content_installed=answer.content_installed
+            path=missing_saves_root, emulator=answer.emulator, content_installed=answer.content_installed, source=source
         )
     finding = place_not_read_finding(findings, source)
     if finding is None:
@@ -496,12 +499,15 @@ def unestablished_answer(
     )
 
 
-def saves_root_missing_answer(*, path: str, emulator: str | None, content_installed: bool) -> SaveAnswer:
-    """The answer while the emulator source's saves root *path* does not exist.
+def saves_root_missing_answer(
+    *, path: str, emulator: str | None, content_installed: bool, source: str | None = None
+) -> SaveAnswer:
+    """The answer while the saves root *path* of the emulator source of kind *source* does not exist.
 
     A refusal, and one nothing below the root is probed for: the sync would
     create the root to write into, and a created root lands on internal storage
-    while the SD card it belongs on is out.
+    while the SD card it belongs on is out. It carries the resolver's finding,
+    whose one fact is the path.
     """
     return SaveAnswer(
         state=SAVE_STATE_SAVES_ROOT_MISSING,
@@ -515,6 +521,8 @@ def saves_root_missing_answer(*, path: str, emulator: str | None, content_instal
         caveats=(),
         content_installed=content_installed,
         missing_saves_root=path,
+        finding=SourceFinding(code=SAVES_ROOT_MISSING, data={"path": path}),
+        source=source,
     )
 
 
