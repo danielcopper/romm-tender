@@ -206,15 +206,15 @@ and an installed ROM. Retention does not imply that RomM still offers the row as
 lazy `get_version_list` load therefore recomputes availability every time; there is no liveness column, migration,
 cache, or persisted verdict.
 
-The existing detail request for the bound id supplies its own answer and RomM's current direct `sibling_roms` view. The
-bound id and every local id positively present in that view are live. A local group member absent from the direct view
-is only a suspect because RomM sibling membership can be transitive, so each suspect is checked by an exact-id
-`get_rom_once` request. These checks fan out concurrently on the worker executor and use the short timeout with no
-retry, keeping them off the event loop and out of the initial Game Page render.
+The bound id's own read (`get_rom_simple`, `GET /api/roms/{id}/simple`) supplies its own answer and RomM's current
+direct `sibling_roms` view. The bound id and every local id positively present in that view are live. A local group
+member absent from the direct view is only a suspect because RomM sibling membership can be transitive, so each suspect
+is checked by an exact-id `get_rom_once` request. These checks fan out concurrently on the worker executor and use the
+short timeout with no retry, keeping them off the event loop and out of the initial Game Page render.
 
 Only a typed `RommNotFoundError` from an exact id marks that entry `vanished`. A successful response is live; timeout,
 transport, authentication, server errors, and malformed or empty data all fail open and leave it available. If the bound
-detail itself 404s, `bound_vanished` is true, `server_query_failed` stays false, and every other local member is checked
+read itself 404s, `bound_vanished` is true, `server_query_failed` stays false, and every other local member is checked
 individually. That entity-specific 404 is not fed into the global connection store; a genuine explicit
 server-unreachable result still is. Cover and save endpoints are not liveness authorities.
 

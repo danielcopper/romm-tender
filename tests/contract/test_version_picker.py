@@ -255,7 +255,7 @@ async def test_get_version_list_server_fail_partial_shape(harness):
     """A server outage degrades to the local-only list + ``server_query_failed``."""
     _seed_rom(harness, rom_id=1, app_id=_APP_ID)
     _seed_rom(harness, rom_id=2, app_id=None)
-    harness.romm.get_rom_side_effect = ConnectionError("down")
+    harness.romm.get_rom_simple_side_effect = ConnectionError("down")
 
     result = await harness.endpoints.get_version_list(_APP_ID)
     assert result["multi_version"] is True
@@ -270,7 +270,7 @@ async def test_get_version_list_bound_404_mixed_local_liveness_shape(harness):
     _seed_rom(harness, rom_id=1, app_id=_APP_ID)
     _seed_rom(harness, rom_id=2, app_id=None)
     _seed_rom(harness, rom_id=3, app_id=None)
-    harness.romm.get_rom_side_effect = RommNotFoundError("bound gone")
+    harness.romm.get_rom_simple_side_effect = RommNotFoundError("bound gone")
     harness.romm.get_rom_once_side_effect_by_id[2] = RommNotFoundError("sibling gone")
     harness.romm.roms[3] = {"id": 3}
 
@@ -287,7 +287,7 @@ async def test_get_version_list_bound_404_mixed_local_liveness_shape(harness):
 async def test_get_version_list_single_bound_404_preserves_non_multi_verdict(harness):
     """The no-picker shape must not silently discard a definitive bound-id 404."""
     _seed_rom(harness, rom_id=1, app_id=_APP_ID)
-    harness.romm.get_rom_side_effect = RommNotFoundError("bound gone")
+    harness.romm.get_rom_simple_side_effect = RommNotFoundError("bound gone")
 
     result = await harness.endpoints.get_version_list(_APP_ID)
 

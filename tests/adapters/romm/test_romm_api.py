@@ -98,8 +98,20 @@ class TestGetRomOnce:
 
         result = api.get_rom_once(42)
 
-        client.request_once.assert_called_once_with("/api/roms/42", timeout=3)
+        client.request_once.assert_called_once_with("/api/roms/42/simple", timeout=3)
         client.request.assert_not_called()
+        assert result == {"id": 42, "name": "Zelda"}
+
+
+class TestGetRomSimple:
+    def test_calls_the_simple_rom_endpoint_through_the_retry_ladder(self):
+        api, client = _make_api()
+        client.request.return_value = {"id": 42, "name": "Zelda"}
+
+        result = api.get_rom_simple(42)
+
+        client.request.assert_called_once_with("/api/roms/42/simple")
+        client.request_once.assert_not_called()
         assert result == {"id": 42, "name": "Zelda"}
 
 
