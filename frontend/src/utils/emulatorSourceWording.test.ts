@@ -154,7 +154,7 @@ describe("findingSentence", () => {
       "RetroDECK: RetroArch's settings file /rd/config/retroarch/retroarch.cfg is missing, " +
         "so RetroArch uses its built-in default folders.",
     ],
-  ])("words %s from the fact it carries (#2339 D2)", (code, data, sentence) => {
+  ])("words %s from the fact it carries", (code, data, sentence) => {
     expect(findingSentence("retrodeck", { code, data })).toBe(sentence);
   });
 
@@ -535,7 +535,7 @@ describe("mainSourceBanners", () => {
     ]);
   });
 
-  it("words each of the four findings atlas 0.23.0 added on Main, none as a problem with the source (#2339 D2)", () => {
+  it("words the BIOS folder, ROM folder, ROM folder setting and RetroArch settings findings on Main, none as a problem with the source", () => {
     const listing = {
       answering: "retrodeck",
       sources: [

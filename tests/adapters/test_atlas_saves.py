@@ -96,7 +96,8 @@ def _caveat(code: str) -> Caveat:
 
 
 # What fills a ``<save_id>`` hole, stated the way the resolver states it for
-# Flycast's per-game cards: the resolver refuses a hole without it.
+# Flycast's per-game cards: atlas's ``SavefilePlacement`` raises on a hole
+# without it (``_check_save_id_stated``).
 _SAVE_ID_STATED = Caveat(
     code=CAVEAT_FILENAMES_CONTENT_CONDITIONAL,
     message="prose that may change freely",
