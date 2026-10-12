@@ -1,6 +1,6 @@
 import { getRomRelaunchOptions, logError } from "../api/backend";
 import type { RelaunchOptionsResult } from "../api/backend";
-import { setLaunchOptionsConfirmed } from "./steamShortcuts";
+import { setLaunchOptionsConfirmed, sharedShortcutFileReader } from "./steamShortcuts";
 import {
   isPruneLeaseAdmissionCurrent,
   isPruneLeaseCancellation,
@@ -142,7 +142,10 @@ export async function reconfirmLaunchOptions(
 /**
  * Confirm-set the launch command on every shortcut in `items`, batching the
  * per-item confirm-polls so a large set doesn't serialize their timeouts.
- * No-ops on a non-array or empty list. A failed confirm (false return) or a
+ * The confirms of one batch share one reading of Steam's shortcut file, taken
+ * at the batch's first confirm that needs it and never in a batch where every
+ * confirm is settled by Steam's own reports. No-ops on a non-array or empty
+ * list. A failed confirm (false return) or a
  * thrown error is logged via `logError` with the `context` prefix and the
  * offending appId; the remaining items are still processed.
  */
@@ -154,11 +157,12 @@ export async function batchConfirmLaunchOptions(
   if (!Array.isArray(items) || items.length === 0) return;
   for (let i = 0; i < items.length; i += CONCURRENCY) {
     const batch = items.slice(i, i + CONCURRENCY);
+    const readFile = sharedShortcutFileReader(batch.map((item) => item.app_id));
     await Promise.all(
       batch.map(async (item) => {
         if (signal?.aborted) return;
         try {
-          const ok = await setLaunchOptionsConfirmed(item.app_id, item.launch_options);
+          const ok = await setLaunchOptionsConfirmed(item.app_id, item.launch_options, undefined, readFile);
           if (!ok) {
             logError(`${context}: failed to confirm launch options for appId ${item.app_id}`);
           }

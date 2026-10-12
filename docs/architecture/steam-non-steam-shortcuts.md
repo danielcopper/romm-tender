@@ -129,10 +129,21 @@ Because `SetAppLaunchOptions` returns `void` with no success signal, Tender **fi
 take longer than the 2 s the poll waits — right after a Steam start, Steam has written the new value to `shortcuts.vdf`
 within the same second while the report is still outstanding — so when the wait runs out, Tender reads the shortcut's
 details once more (`getAppDetails`, bounded by the same 2 s) and counts the write as confirmed if they show the value —
-a confirm only the re-read gave is logged at INFO, a first-report confirm is not. Only a re-read that shows a different
-value, or does not answer, is a failed confirm; every caller of `setLaunchOptionsConfirmed` gets that answer, so a write
-that did not land is still reported where its caller reports one. Setting `""` — the placeholder an uninstalled ROM
-carries until it is downloaded — is valid and confirms against an empty read-back.
+a confirm only the re-read gave is logged at INFO, a first-report confirm is not. A re-read can also answer with a value
+the shortcut held before while the file already holds the one written (#2348), so when the re-read does not show the
+value either, Tender asks the backend what `shortcuts.vdf` holds for the shortcut (`get_shortcut_launch_options`, which
+reads the file and never writes it), and the written value there confirms the write, logged at INFO with how long the
+reading took. The reading waits at most 5 s — an endpoint call otherwise waits out a backend that is down — and one that
+does not answer in time counts as a file that could not be read. The file's answer is sound because Steam rewrote the
+file about 0.1 s after every write that was measured, while the file is read 2–4 s after the write. What it cannot tell
+apart is a write of a value the file already held before it — a value Steam had not yet written out from memory when the
+new write came — which that prompt rewrite makes negligible. Where many confirms run together, as in the reconcile, each
+batch of them reads the file once, at its first confirm that needs it, rather than once per shortcut
+(`batchConfirmLaunchOptions`). Only a confirm the file does not settle either — it shows another value, holds no such
+shortcut, or could not be read — is a failed confirm, and its warning names what the re-read and the file each showed;
+every caller of `setLaunchOptionsConfirmed` gets that answer, so a write that did not land is still reported where its
+caller reports one. Setting `""` — the placeholder an uninstalled ROM carries until it is downloaded — is valid and
+confirms against an empty read-back.
 
 The real hazard is not the set: heavy removal-churn can corrupt Steam's in-memory shortcut state. A Steam restart clears
 it. The sync engine processes removals before additions to minimise churn.
@@ -365,9 +376,11 @@ Shortcut creation and every field update go through the frontend `SteamClient.Ap
 `AddShortcut` returns the real `appId` directly, so Tender never computes app IDs itself and never edits `shortcuts.vdf`
 while Steam is running (Steam holds the file in memory and rewrites it from memory, silently clobbering external writes
 — see [shortcuts.vdf is memory-authoritative](#shortcutsvdf-is-memory-authoritative)). The backend `SteamConfigAdapter`
-(`adapters/steam_config.py`) still lays down artwork **files** in the grid directory, including the icon PNG; its
-`shortcuts.vdf` read/write helpers remain in the adapter but are no longer on any live path after the icon write moved
-to `SteamClient.Apps.SetShortcutIcon`.
+(`adapters/steam_config.py`) still lays down artwork **files** in the grid directory, including the icon PNG. It reads
+`shortcuts.vdf` for two questions — which shortcuts the one-time relocation still has to repoint (`read_shortcut_exes`)
+and what a shortcut's launch options are when Steam's reports did not confirm a write (`read_shortcut_launch_options`) —
+and its whole-file `shortcuts.vdf` helpers (`read_shortcuts`, `write_shortcuts`) are on no live path since the icon
+write moved to `SteamClient.Apps.SetShortcutIcon`.
 
 ### shortcuts.vdf structure
 

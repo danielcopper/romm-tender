@@ -12,8 +12,10 @@ function items(n: number): { app_id: number; launch_options: string }[] {
 }
 
 describe("batchConfirmLaunchOptions", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetAllMocks();
+    const actual = await vi.importActual<typeof steamShortcuts>("./steamShortcuts");
+    vi.mocked(steamShortcuts.sharedShortcutFileReader).mockImplementation(actual.sharedShortcutFileReader);
     vi.mocked(steamShortcuts.setLaunchOptionsConfirmed).mockResolvedValue(true);
     vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
   });
@@ -33,9 +35,59 @@ describe("batchConfirmLaunchOptions", () => {
   it("confirms every item across batches (12 items -> two batches of 10 + 2)", async () => {
     await batchConfirmLaunchOptions(items(12), "startup_reconcile");
     expect(vi.mocked(steamShortcuts.setLaunchOptionsConfirmed)).toHaveBeenCalledTimes(12);
-    expect(vi.mocked(steamShortcuts.setLaunchOptionsConfirmed)).toHaveBeenNthCalledWith(1, 1, "cmd 1");
-    expect(vi.mocked(steamShortcuts.setLaunchOptionsConfirmed)).toHaveBeenNthCalledWith(12, 12, "cmd 12");
+    expect(vi.mocked(steamShortcuts.setLaunchOptionsConfirmed)).toHaveBeenNthCalledWith(
+      1,
+      1,
+      "cmd 1",
+      undefined,
+      expect.any(Function),
+    );
+    expect(vi.mocked(steamShortcuts.setLaunchOptionsConfirmed)).toHaveBeenNthCalledWith(
+      12,
+      12,
+      "cmd 12",
+      undefined,
+      expect.any(Function),
+    );
     expect(vi.mocked(backend.logError)).not.toHaveBeenCalled();
+  });
+
+  describe("the batch's one reading of Steam's shortcut file", () => {
+    beforeEach(() => {
+      vi.mocked(backend.getShortcutLaunchOptions).mockResolvedValue({ status: "read", launch_options: [] });
+    });
+
+    it("is one backend call per batch, for that batch's app IDs, however many of its confirms fail", async () => {
+      vi.mocked(steamShortcuts.setLaunchOptionsConfirmed).mockImplementation(
+        async (_appId, _value, _timeout, readFile) => {
+          await readFile!();
+          return false;
+        },
+      );
+
+      await batchConfirmLaunchOptions(items(12), "startup_reconcile");
+
+      expect(vi.mocked(backend.getShortcutLaunchOptions)).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(backend.getShortcutLaunchOptions)).toHaveBeenNthCalledWith(1, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+      expect(vi.mocked(backend.getShortcutLaunchOptions)).toHaveBeenNthCalledWith(2, [11, 12]);
+    });
+
+    it("hands every confirm of a batch the same reader, and the next batch another", async () => {
+      await batchConfirmLaunchOptions(items(12), "startup_reconcile");
+
+      const readers = vi.mocked(steamShortcuts.setLaunchOptionsConfirmed).mock.calls.map((call) => call[3]);
+      expect(readers.every((reader) => typeof reader === "function")).toBe(true);
+      expect(new Set(readers.slice(0, 10)).size).toBe(1);
+      expect(new Set(readers.slice(10)).size).toBe(1);
+      expect(readers[10]).not.toBe(readers[0]);
+    });
+
+    it("is not taken in a batch whose every confirm is settled without it", async () => {
+      await batchConfirmLaunchOptions(items(12), "startup_reconcile");
+
+      expect(vi.mocked(steamShortcuts.setLaunchOptionsConfirmed)).toHaveBeenCalledTimes(12);
+      expect(vi.mocked(backend.getShortcutLaunchOptions)).not.toHaveBeenCalled();
+    });
   });
 
   it("logs a non-vacuous error with the appId + context on a false confirm; still processes the rest", async () => {

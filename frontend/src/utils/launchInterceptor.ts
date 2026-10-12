@@ -248,8 +248,8 @@ function relaunchGameId(start: CancelledStart): string {
  *  skipped immediately before this RunGame so it doesn't re-enter the watcher
  *  and re-gate. The re-confirm runs in the already-detached post-cancel portion,
  *  so it only adds a bounded wait to the cancel→relaunch window: the command
- *  fetch, the confirm's report wait and re-read, and the lease release each run
- *  under a timeout of their own. */
+ *  fetch, the confirm's report wait, re-read and reading of Steam's shortcut
+ *  file, and the lease release each run under a timeout of their own. */
 async function relaunch(start: CancelledStart, romId: number): Promise<void> {
   const reconfirm = await reconfirmLaunchOptions(romId, start.appId, "Watcher");
   if (reconfirm.status === "timeout") {
