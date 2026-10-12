@@ -146,9 +146,9 @@ export async function reconfirmLaunchOptions(
  * The confirms of one batch share one reading of Steam's shortcut file, taken
  * at the batch's first confirm that needs it and never in a batch where every
  * confirm is settled by Steam's own reports. No-ops on a non-array or empty
- * list. A failed confirm (false return) or a
- * thrown error is logged via `logError` with the `context` prefix and the
- * offending appId; the remaining items are still processed.
+ * list. A failed confirm (false return) or a thrown error is logged via
+ * `logError` with the `context` prefix and the offending appId; the remaining
+ * items are still processed.
  */
 export async function batchConfirmLaunchOptions(
   items: { app_id: number; launch_options: string }[],

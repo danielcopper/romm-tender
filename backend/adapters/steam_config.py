@@ -119,10 +119,11 @@ class SteamConfigAdapter:
         The same reading as :meth:`read_shortcut_exes`, with the same answers —
         ``None`` when nothing could be read, ``{}`` for a machine with no file —
         and the same handling of key case and signed app ids. A record with no
-        ``LaunchOptions`` field reads as ``""``, the value Steam shows for a
-        shortcut that has none.
+        ``LaunchOptions`` field reads as ``""``, the value the frontend's
+        confirm reads off Steam's details when they carry none
+        (``launchOptionsOf``).
 
-        Unlike that reading's callers, this one's asks about a write made
+        Unlike that reading's caller, this one's caller asks about a write made
         seconds earlier in this session, which rests on Steam rewriting the file
         promptly after a launch-options write — measured, and what the file
         still cannot tell, in docs/architecture/steam-non-steam-shortcuts.md.

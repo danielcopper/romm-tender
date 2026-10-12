@@ -235,8 +235,8 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # shortcuts.vdf, to answer which shortcuts of ours still name a launcher
         # other than the bin root's and what a shortcut's launch options are in
         # the file. Object-shaped, so the method name is the whole entry — but
-        # each one consumer reaches it through run_in_executor as a BOUND
-        # METHOD, the blind spot documented above, so these entries catch
+        # each has one consumer, which reaches it through run_in_executor as a
+        # BOUND METHOD, the blind spot documented above, so these entries catch
         # nothing today and are here for the call site that writes one plainly.
         # The store's other I/O is unlisted and that is a gap rather than a
         # judgement: grid_dir() is called from services/artwork.py (six sites),

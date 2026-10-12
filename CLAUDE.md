@@ -658,8 +658,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `__call__`-only seam's bound attribute); one `# pragma: no uow-check` suppresses the line for both families.
   Unchecked: a seam that list does not name — `SteamConfigStore.grid_dir()`, `set_steam_input_config()` and
   `write_shortcut_icon()` today — or whose implementation later grows a file read; a seam passed as a bound method (how
-  `read_shortcut_exes` is reached), behind a helper or a local alias, or inside a nested `def`/`lambda`; a UoW opened
-  through a factory attribute not ending in `uow_factory`
+  `read_shortcut_exes` and `read_shortcut_launch_options` are reached), behind a helper or a local alias, or inside a
+  nested `def`/`lambda`; a UoW opened through a factory attribute not ending in `uow_factory`
 - **A shell function whose value is taken with `$(...)` never reaches `exit` — it answers, and its caller aborts** —
   check — `scripts/check_shell_answer_functions.py` over `install.sh`, `scripts/package.sh`, `bin/tender-rom-launcher`
   and every `*.sh` under `scripts/` and `bin/`; its blind spots are listed in its docstring

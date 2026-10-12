@@ -123,7 +123,7 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     # the launcher at panel load, whatever page the panel happens to be showing,
     # and a shortcut of ours left naming a launcher other than the bin root's
     # is the condition the relocation exists to end. The launch-options reading
-    # writes nothing and answers a confirm of a write Steam already took.
+    # writes nothing and answers the confirm of a write already made.
     "get_shortcut_relocation",
     "get_shortcut_launch_options",
     # The release check: whether a newer release exists, the card's per-version

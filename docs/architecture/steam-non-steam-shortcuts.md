@@ -126,18 +126,21 @@ consequences follow:
 
 Because `SetAppLaunchOptions` returns `void` with no success signal, Tender **fires the set then polls**
 `RegisterForAppDetails` until the read-back `strLaunchOptions` matches (`setLaunchOptionsConfirmed`). That report can
-take longer than the 2 s the poll waits — right after a Steam start, Steam has written the new value to `shortcuts.vdf`
-within the same second while the report is still outstanding — so when the wait runs out, Tender reads the shortcut's
-details once more (`getAppDetails`, bounded by the same 2 s) and counts the write as confirmed if they show the value —
-a confirm only the re-read gave is logged at INFO, a first-report confirm is not. A re-read can also answer with a value
-the shortcut held before while the file already holds the one written (#2348), so when the re-read does not show the
-value either, Tender asks the backend what `shortcuts.vdf` holds for the shortcut (`get_shortcut_launch_options`, which
-reads the file and never writes it), and the written value there confirms the write, logged at INFO with how long the
-reading took. The reading waits at most 5 s — an endpoint call otherwise waits out a backend that is down — and one that
-does not answer in time counts as a file that could not be read. The file's answer is sound because Steam rewrote the
-file about 0.1 s after every write that was measured, while the file is read 2–4 s after the write. What it cannot tell
-apart is a write of a value the file already held before it — a value Steam had not yet written out from memory when the
-new write came — which that prompt rewrite makes negligible. Where many confirms run together, as in the reconcile, each
+take longer than the 2 s the poll waits — right after a Steam start, Steam has already written the new value to
+`shortcuts.vdf` while the report is still outstanding — so when the wait runs out, Tender reads the shortcut's details
+once more (`getAppDetails`, bounded by the same 2 s) and counts the write as confirmed if they show the value — a
+confirm only the re-read gave is logged at INFO, a first-report confirm is not. A re-read can also answer with a value
+other than the one written while the file already holds the written one: on the reference device it did so for two
+shortcuts, each written back to a value it had held before, and which value the re-read showed was not recorded (#2348).
+So when the re-read does not show the value either, Tender asks the backend what `shortcuts.vdf` holds for the shortcut
+(`get_shortcut_launch_options`, which reads the file and never writes it), and the written value there confirms the
+write, logged at INFO with how long this confirm waited for the reading (in a batch, the wait for the batch's shared
+reading, not its parse). The reading waits at most 5 s — an endpoint call otherwise waits out a backend that is down —
+and one that does not answer in time counts as a file that could not be read. The file's answer is sound because on the
+reference device Steam rewrote the file about 0.1 s after each write measured in #2348 (four writes, two shortcuts),
+while the file is read 2–4 s after the write. What it cannot tell apart is a write that did not land of a value the file
+still holds from before — possible only while Steam holds a different value in memory that it has not yet written out —
+and that prompt rewrite makes such a window negligible. Where many confirms run together, as in the reconcile, each
 batch of them reads the file once, at its first confirm that needs it, rather than once per shortcut
 (`batchConfirmLaunchOptions`). Only a confirm the file does not settle either — it shows another value, holds no such
 shortcut, or could not be read — is a failed confirm, and its warning names what the re-read and the file each showed;
