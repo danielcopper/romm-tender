@@ -138,6 +138,7 @@ class FakeRommApi:
         self.get_firmware_side_effect: Exception | None = None
         self.download_firmware_side_effect: Exception | None = None
         self.get_rom_side_effect: Exception | None = None
+        self.get_rom_simple_side_effect: Exception | None = None
         self.get_rom_once_side_effect: Exception | None = None
         self.get_rom_once_side_effect_by_id: dict[int, Exception] = {}
         self.list_roms_side_effect: Exception | None = None
@@ -275,6 +276,15 @@ class FakeRommApi:
     def get_rom(self, rom_id: int) -> dict[str, Any]:
         self._log("get_rom", (rom_id,))
         self._check_fail(self.get_rom_side_effect)
+        rom = self.roms.get(rom_id)
+        if rom is None:
+            return {"id": rom_id}
+        return dict(rom)
+
+    def get_rom_simple(self, rom_id: int) -> dict[str, Any]:
+        """The simple-schema read: the same answer as ``get_rom``, logged under its own name."""
+        self._log("get_rom_simple", (rom_id,))
+        self._check_fail(self.get_rom_simple_side_effect)
         rom = self.roms.get(rom_id)
         if rom is None:
             return {"id": rom_id}

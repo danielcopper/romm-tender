@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from adapters.romm.http import RommHttpAdapter
+from adapters.romm.romm_api import RommApiAdapter
 from lib.errors import (
     RommApiError,
     RommAuthError,
@@ -1244,6 +1245,60 @@ class TestNotFoundDiscrimination:
         # generic route-404; the #1450 fallback must still see RommNotFoundError.
         exc = _http_error(404, "Not Found", content_type="application/json", body=b'{"detail":"Not Found"}')
         assert isinstance(self._translate(romm_http, exc, asset_route=True), RommNotFoundError)
+
+
+class TestTheSimpleRomReadsKeepTheEntityProof:
+    """The exact-ROM reads over ``/api/roms/{id}/simple`` take the strict 404 proof.
+
+    ``get_rom_once``'s 404 is the removed-game cleanup's deletion authority and
+    the version picker's ``vanished``; ``get_rom_simple``'s is the picker's
+    ``bound_vanished``. Each read is driven through the real transport, so an
+    asset-route opt-out anywhere on its path shows up here.
+    """
+
+    _READS: ClassVar[list[Any]] = [
+        pytest.param(lambda api: api.get_rom_once(42), id="get_rom_once"),
+        pytest.param(lambda api: api.get_rom_simple(42), id="get_rom_simple"),
+    ]
+
+    def _read(self, romm_http, read, error_factory):
+        _configure_server(romm_http.settings)
+        api = RommApiAdapter(romm_http.adapter)
+
+        def answer_with_the_404(*_args: Any, **_kwargs: Any) -> None:
+            # A fresh error per attempt: an ``HTTPError``'s body reads only once.
+            raise error_factory()
+
+        with (
+            patch("urllib.request.urlopen", side_effect=answer_with_the_404) as mock_open,
+            patch("time.sleep"),
+        ):
+            try:
+                read(api)
+            except RommApiError as exc:
+                raised = exc
+            else:
+                pytest.fail("the read answered instead of raising")
+        assert {call.args[0].full_url for call in mock_open.call_args_list} == {"http://romm.local/api/roms/42/simple"}
+        return raised
+
+    @pytest.mark.parametrize("read", _READS)
+    def test_rom_m_s_entity_answer_is_not_found(self, romm_http, read):
+        raised = self._read(romm_http, read, lambda: _entity_404("Rom with id '42' not found"))
+        assert isinstance(raised, RommNotFoundError)
+
+    @pytest.mark.parametrize("read", _READS)
+    @pytest.mark.parametrize(
+        "exc_kwargs",
+        [
+            pytest.param({"content_type": "application/json", "body": b'{"detail":"Not Found"}'}, id="generic"),
+            pytest.param({"content_type": "text/html; charset=utf-8", "body": b"<html>404</html>"}, id="proxy"),
+        ],
+    )
+    def test_a_404_rom_m_s_entity_layer_did_not_answer_is_no_verdict(self, romm_http, read, exc_kwargs):
+        raised = self._read(romm_http, read, lambda: _http_error(404, "Not Found", **exc_kwargs))
+        assert not isinstance(raised, RommNotFoundError)
+        assert classify_error(raised)[0] == ErrorCode.SERVER_UNREACHABLE.value
 
 
 # ============================================================================

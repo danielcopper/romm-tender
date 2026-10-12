@@ -136,9 +136,13 @@ class RommApiAdapter:
     def get_rom(self, rom_id: int) -> dict[str, Any]:
         return self._client.request(f"/api/roms/{rom_id}")
 
+    def get_rom_simple(self, rom_id: int) -> dict[str, Any]:
+        """The ROM over RomM's simple schema, through the retry ladder."""
+        return self._client.request(f"/api/roms/{rom_id}/simple")
+
     def get_rom_once(self, rom_id: int) -> dict[str, Any]:
-        """Single-attempt, short-timeout exact-ROM read for liveness probes."""
-        return self._client.request_once(f"/api/roms/{rom_id}", timeout=self._PROBE_TIMEOUT_SECONDS)
+        """Single-attempt, short-timeout exact-ROM read for liveness probes, over the simple schema."""
+        return self._client.request_once(f"/api/roms/{rom_id}/simple", timeout=self._PROBE_TIMEOUT_SECONDS)
 
     def list_roms(self, platform_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0) -> dict[str, Any]:
         return self._client.request(
