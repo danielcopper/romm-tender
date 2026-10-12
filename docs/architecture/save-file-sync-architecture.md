@@ -825,11 +825,11 @@ A sorted directory RetroArch has not created yet comes back with the `sorted-dir
 `fallback_directory`, the unsorted root RetroArch falls back to (the rule and its source are at `SORTED_DIR_MISSING` in
 `domain/save_answer.py`). A probe there finds nothing, which is the truth; moving files there creates the directory
 first. Any answer a sync would not carry — no emulator resolved, nothing the resolver could establish, a shared card
-even where its directory is known, a save inside the content file, one written beside it — gives no directory to sync in
-(`SaveAnswer.sync_directory` is empty), and none is supplied by a guess: the sync backstop, the status probe and the
-prune projection skip, and copy-to-slot, rollback, slot switch, the slot-choice migration and conflict resolution refuse
-— with `savefiles_in_content_dir` for an answer beside the content (next section), otherwise with
-`save_shape_unsupported` and the answer's own explanation.
+even where its directory is known, a save inside the content file, one written beside it, a missing saves root — gives
+no directory to sync in (`SaveAnswer.sync_directory` is empty), and none is supplied by a guess: the sync backstop, the
+status probe and the prune projection skip, and copy-to-slot, rollback, slot switch, the slot-choice migration and
+conflict resolution refuse — with `savefiles_in_content_dir` for an answer beside the content (next section), otherwise
+with `save_shape_unsupported` and the answer's own explanation.
 
 ### Saves written next to the content (`savefiles_in_content_dir`)
 
@@ -1472,8 +1472,9 @@ The Play button's path:
    the first Cancel the button switches to `conflict` and nothing launches. A sync that fails never launches
    unconditionally: the "Save Sync Unavailable" dialog asks first, and Cancel returns the button to Play. The benign
    skips (`savefiles_in_content_dir`, `save_shape_unsupported`) proceed silently; a missing RetroDECK saves folder
-   (`saves_root_missing`) is a failure, so the dialog asks with its sentence. With "Sync before launch" off the sync
-   answers that before it reads the save answer's refusal, so the dialog never asks about a sync that was switched off.
+   (`saves_root_missing`) is a failure, so the dialog asks with its sentence — when it asks, and when the exit's toast
+   says so, is [The six save states](save-sync-coverage.md#the-six-save-states). With "Sync before launch" off the sync
+   answers that before it raises the save answer's refusal, so the dialog never asks about a sync that was switched off.
    When the sync moved something, the per-direction completion toast above reports it (uploaded / downloaded / both); a
    failure's classified message appears in the dialog instead.
 8. Offline: `check_local_drift`. A local save that changed since the last sync asks Start Anyway / Retry connection /
@@ -1499,7 +1500,8 @@ Triggered automatically when a game stops (if `sync_after_exit` is enabled).
    context was rebuilt mid-session, `handleGameStop` still fires for the adopted session — see
    [Surviving a JS-context rebuild mid-session](#surviving-a-js-context-rebuild-mid-session) — so the post-exit sync is
    not skipped. While a removed-game cleanup runs the call is refused (`prune_active`) and none of those steps runs: the
-   panel logs the refusal and says in a toast that the session's playtime was not saved.
+   panel logs the refusal and says in a toast that the session's playtime and saves were not synced. Any other refusal
+   is logged and shown in its own message.
 3. Backend runs `do_sync_rom_saves`. For most rows the local file's hash will differ from `last_sync_hash` (the user
    just played), so the typical action is `Upload` — matrix row 9 — POSTed as a new version (`overwrite=false`,
    409-backstopped).

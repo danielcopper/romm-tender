@@ -116,10 +116,11 @@ moves, because the files are on the disk either way
 places a save under a folder that does not exist, and a sync would create it — on internal storage while the SD card it
 belongs on is out, where the SD card hides it once it is back. So the answer refuses without asking the emulator
 anything, and its sentence names the folder: **Save sync is unavailable: RetroDECK's saves folder _path_ does not
-exist.** Unlike the other four, it is no benign skip: the sync refuses with `saves_root_missing`, so a launch with "Sync
-before launch" on asks before starting on the local saves, and a game's exit says in a toast that its saves were not
-synced. Only RetroDECK's answer is checked for it, because no other source reaches a save answer through a catalogue
-that is not refused. Folders below an existing saves root are still created as today.
+exist.** Unlike the other four, it is no benign skip: the sync refuses with `saves_root_missing`. A launch asks before
+starting on the local saves while "Sync before launch" is on and RomM can be reached, and a game's exit says in a toast
+that its saves were not synced while "Sync after exit" is on. Only RetroDECK's answer is checked for it, because no
+other source reaches a save answer through a catalogue that is not refused. Folders below an existing saves root are
+still created as today.
 
 **The hole is not always in a file name.** Flycast's Dreamcast cards need the game's `save_id` in the filename;
 Dolphin's GameCube memory cards need the game's `region` in the DIRECTORY. Either way Tender cannot complete the path,

@@ -911,9 +911,9 @@ their uninstalled game already has save files.
 ### Save state: per-game files / shared / inside the content / hole / not established / saves root missing
 
 The six values a save answer classifies a ROM into, **exactly one of which holds**. Only the first is a save Tender can
-carry; the other five **refuse** — the sync probes no path, writes no sync state, and refuses with the benign skip
-rather than a failure. A refusing answer can still have its directory recorded as the
-[answered save directory](#answered-save-directory), which is not sync state.
+carry; the other five **refuse** — the sync probes no path and writes no sync state. Four refuse with the benign skip;
+saves root missing refuses as a failure, `saves_root_missing`. A refusing answer can still have its directory recorded
+as the [answered save directory](#answered-save-directory), which is not sync state.
 
 - **per-game files** — the answer names concrete files with no hole. Sync as usual, any number of files.
 - **shared** — the emulator's granularity is a shared card or a shared file, so one file holds many games' progress and
@@ -926,7 +926,8 @@ rather than a failure. A refusing answer can still have its directory recorded a
   and `not_asked`, and they stay apart**: they are different sentences to a reader, and collapsing them claims ignorance
   about a folder we can point at, or claims a refusal where nobody was ever asked.
 - **saves root missing** — RetroDECK reports its saves folder missing, so a sync would create it on internal storage.
-  This one is about RetroDECK rather than the emulator, which is not asked; the folder is never created.
+  This one is about RetroDECK rather than the emulator, which is not asked; the folder is never created, and the sync
+  refuses as a failure rather than with the benign skip.
 
 Detail, including which systems land where on a stock RetroDECK, is in
 [Save sync coverage](docs/architecture/save-sync-coverage.md).

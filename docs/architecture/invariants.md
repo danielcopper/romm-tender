@@ -1321,9 +1321,9 @@ Format: **invariant** — tier — enforced by.
   seven modules and no diff-scoped review sees it whole: `AtlasSaveLocationAdapter` reads the machine,
   `domain/save_answer.py` decides what the reading means, `RomInfoService.save_answer` turns it into names,
   `SyncEngine`'s three per-ROM entry points refuse on it through `sync_engine/_shape_refusal.py`, which holds the
-  reading and the skips it raises, `MatrixExecutor.sync_rom_saves` is the backstop every sync path crosses, and
+  reading and the refusals it raises, `MatrixExecutor.sync_rom_saves` is the backstop every sync path crosses, and
   `services/saves/status/service.py` puts it on the wire. **Four halves have no mechanical check at all.** (1) The
-  refusal is enforced at four call sites — the three per-ROM entry points, which report the skip via
+  refusal is enforced at four call sites — the three per-ROM entry points, which report the refusal via
   `sync_engine/_shape_refusal.py`'s `live_save_answer` / `refuse_unsyncable`, and `MatrixExecutor.sync_rom_saves`
   (reached through `SyncEngine.do_sync_rom_saves`), the backstop that covers the whole-library sweep, whose single
   result has no room to name the ROM it passed over. A fifth entry point added without either goes green, and its
