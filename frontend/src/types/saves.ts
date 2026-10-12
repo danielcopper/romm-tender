@@ -78,7 +78,6 @@ export interface SaveStatus {
   playtime: PlaytimeEntry;
   device_id: string;
   last_sync_check_at: string | null;
-  active_slot?: string | null;
   conflicts?: SyncConflict[];
   save_sync_display?: SaveSyncDisplay;
   /** True when the backend's ``list_saves`` call raised before the matrix
