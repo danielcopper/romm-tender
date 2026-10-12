@@ -17,7 +17,7 @@ _TESTS_ROOT = Path(__file__).resolve().parent
 _BACKEND_ROOT = _TESTS_ROOT.parent / "backend"
 
 # Run under ``-P`` rather than ``-I``: ``-I`` also drops the user site, which the
-# backend's interpreter keeps (the installed unit starts ``python3`` with no flag).
+# backend's interpreter keeps (``install.sh`` writes an ``ExecStart`` with no flag).
 # ``-P`` only keeps the working directory off the path; ``backend/`` and
 # ``tests/`` are taken off here, in case ``PYTHONPATH`` names either.
 _FIND_WITHOUT_BACKEND = """
