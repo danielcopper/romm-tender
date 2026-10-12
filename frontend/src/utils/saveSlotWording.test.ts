@@ -301,3 +301,17 @@ describe("a refusal with no status", () => {
     expect(rollbackFeedback(refusal, null)).toBeNull();
   });
 });
+
+describe("the reviewer's edges", () => {
+  it("a save_shape_unsupported switch with no message answers the fallback", () => {
+    expect(switchSlotFailureMessage("save_shape_unsupported")).toBe("Failed to switch slot");
+    expect(switchSlotFailureMessage("save_shape_unsupported", "")).toBe("Failed to switch slot");
+  });
+
+  it("a copy refused as unsupported says why", () => {
+    expect(copyToSlotFeedback({ status: "unsupported", reason: "savefiles_in_content_dir" }, "backup")).toEqual({
+      kind: "toast",
+      message: "Save sync is off for this game: its saves are written beside the game file.",
+    });
+  });
+});

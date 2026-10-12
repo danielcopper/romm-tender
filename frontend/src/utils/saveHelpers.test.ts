@@ -457,7 +457,12 @@ describe("sortSaveSlots and filterSaveSlotsForDisplay", () => {
   ];
 
   it("sorts active first, alphabetical, legacy last", () => {
-    const sorted = sortSaveSlots(slots, "alpha", true);
+    const sorted = sortSaveSlots(slots, "beta", true);
+    expect(sorted.map((s) => s.slot)).toEqual(["beta", "alpha", ""]);
+  });
+
+  it("synthesizes no slot for an active slot nothing answered (#1747)", () => {
+    const sorted = sortSaveSlots(slots, "gamma", false);
     expect(sorted.map((s) => s.slot)).toEqual(["alpha", "beta", ""]);
   });
 
@@ -470,6 +475,12 @@ describe("sortSaveSlots and filterSaveSlotsForDisplay", () => {
     const sorted = sortSaveSlots(slots, null, true);
     const filtered = filterSaveSlotsForDisplay(sorted, null);
     expect(filtered.map((s) => s.slot)).toEqual(["alpha", "beta"]);
+  });
+
+  it("is not legacy mode while the active slot is not known yet", () => {
+    const sorted = sortSaveSlots(slots, undefined, false);
+    const filtered = filterSaveSlotsForDisplay(sorted, undefined);
+    expect(filtered.map((s) => s.slot)).toEqual(["alpha", "beta", ""]);
   });
 
   it("preserves legacy slot when activeSlot is a named slot", () => {

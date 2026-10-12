@@ -16,23 +16,7 @@ import {
 } from "./saveConflictFlow";
 import { getRommConnectionState, setRommConnectionState } from "./connectionState";
 import type { SaveStatus, SyncConflict } from "../types";
-
-function makeConflict(overrides: Partial<SyncConflict> = {}): SyncConflict {
-  return {
-    type: "sync_conflict",
-    rom_id: 42,
-    filename: "savefile.srm",
-    server_save_id: 9,
-    server_updated_at: "2026-05-01T10:00:00Z",
-    server_size: 2048,
-    local_path: "/saves/savefile.srm",
-    local_hash: "abc",
-    local_mtime: "2026-05-01T09:00:00Z",
-    local_size: 1024,
-    created_at: "2026-05-01T11:00:00Z",
-    ...overrides,
-  };
-}
+import { makeConflict } from "../test-utils/saveFixtures";
 
 function saveStatus(overrides: Partial<SaveStatus> = {}): SaveStatus {
   return {
@@ -319,8 +303,14 @@ describe("resolveKnownConflicts", () => {
     try {
       vi.mocked(backend.getSaveStatus).mockReturnValue(new Promise<never>(() => {}));
       const pending = resolveKnownConflicts(42, vi.fn(), "test");
+      let settled = false;
+      void pending.then(() => {
+        settled = true;
+      });
 
-      await vi.advanceTimersByTimeAsync(15000);
+      await vi.advanceTimersByTimeAsync(14999);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
 
       await expect(pending).resolves.toBe("failed");
       expect(toastBodies()).toEqual(["Couldn't reach server to resolve conflict"]);

@@ -6,6 +6,7 @@ import * as backend from "../../api/backend";
 import { toaster } from "../../api/host";
 import { showModal } from "@decky/ui";
 import type { SaveStatus, SaveSlotSummary, SlotSaveFile } from "../../types";
+import { getRommConnectionState, setRommConnectionState } from "../../utils/connectionState";
 
 // showModal in the @decky/ui mock receives the <ConfirmModal> element. We
 // capture it so tests can read `.props.onOK`, `.props.strDescription`, etc.
@@ -484,8 +485,9 @@ describe("SlotPanel", () => {
       }
     });
 
-    it("shows the 'server_unreachable' error", async () => {
+    it("shows the 'server_unreachable' error and drives the connection store offline", async () => {
       vi.useFakeTimers();
+      setRommConnectionState("connected");
       try {
         vi.mocked(backend.getSlotSaves).mockResolvedValue({
           success: true,
@@ -508,6 +510,7 @@ describe("SlotPanel", () => {
           await vi.advanceTimersByTimeAsync(0);
         });
         expect(container.textContent).toContain("Can't switch — RomM server is not reachable");
+        expect(getRommConnectionState()).toBe("offline");
       } finally {
         vi.useRealTimers();
       }
