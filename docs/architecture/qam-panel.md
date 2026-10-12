@@ -180,7 +180,9 @@ Two things about the glyph are unmeasured, and neither is guessed at:
 
 ### The boundary
 
-The panel renders inside `PanelErrorBoundary`, which has exactly one action. Without a boundary a throw inside the panel
+The panel renders inside `PanelErrorBoundary` (`frontend/src/shared/`), the boundary it shares with Tender's section on
+a game page. The boundary only catches; what it draws in the panel's place is the card the Quick Access entry hands it
+(`frontend/src/qam/PanelFailureCard.tsx`), which has exactly one action. Without a boundary a throw inside the panel
 unmounts the tree it was rendered in — Steam's Quick Access view, not ours — so the fault would cost the reader every
 tab in the strip rather than one. `@decky/ui`'s own `ErrorBoundary` is not a component it defines: the module is one
 `findModuleExport` sweep for a class of Steam's, so both bundles would resolve the same one. This boundary is Tender's
