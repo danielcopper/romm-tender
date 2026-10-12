@@ -5649,6 +5649,32 @@ class TestASingleDownloadThatFails:
         assert self._TMP not in store.files
 
     @pytest.mark.asyncio
+    async def test_a_romm_error_in_the_transfer_is_left_to_whoever_answers_it_to_log(self, fake_romm_api, caplog):
+        fw = self._service(fake_romm_api, FakeFirmwareFileStore({self._TMP: b"partial"}))
+        fake_romm_api.download_firmware_side_effect = RommConnectionError("connection refused")
+        caplog.set_level(logging.DEBUG)
+
+        download = fw.download_firmware(4)
+        with pytest.raises(RommConnectionError):
+            await download
+
+        assert not [r for r in caplog.records if "Failed to download firmware" in r.getMessage()]
+
+    @pytest.mark.asyncio
+    async def test_a_folder_this_device_cannot_create_is_logged_once(self, fake_romm_api, caplog):
+        fw = self._service(fake_romm_api, _UnpreparableStore({self._TMP: b"partial"}))
+        caplog.set_level(logging.DEBUG)
+
+        download = fw.download_firmware(4)
+        with pytest.raises(Refused):
+            await download
+
+        lines = [(r.levelno, r.getMessage()) for r in caplog.records if "Failed to download firmware" in r.getMessage()]
+        assert lines == [
+            (logging.ERROR, "Failed to download firmware dc_boot.bin: simulated: cannot create /fake/bios")
+        ]
+
+    @pytest.mark.asyncio
     async def test_any_other_failure_in_the_transfer_propagates_and_leaves_no_tmp(self, fake_romm_api):
         store = FakeFirmwareFileStore({self._TMP: b"partial"})
         fw = self._service(fake_romm_api, store)
@@ -5715,7 +5741,7 @@ class TestABatchDownloadCarriesOnPastAFailedFile:
 
         with (
             patch.object(fw._downloads, "_download_one", side_effect=fake_download_one),
-            caplog.at_level(logging.ERROR),
+            caplog.at_level(logging.INFO),
         ):
             result = await getattr(fw, entry)("dc")
 
@@ -5723,9 +5749,10 @@ class TestABatchDownloadCarriesOnPastAFailedFile:
         assert result["success"] is True
         assert result["downloaded"] == 1
         assert result["message"].endswith("(2 failed: refused.bin, romm_error.bin)")
-        logged = [record.getMessage() for record in caplog.records]
-        assert "Failed to download firmware refused.bin: refused.bin could not be downloaded" in logged
-        assert "Failed to download firmware romm_error.bin: connection refused" in logged
+        logged = [(record.levelno, record.getMessage()) for record in caplog.records]
+        # A refusal is logged once, where the download refuses it; the batch adds no second line.
+        assert not [line for _level, line in logged if "refused.bin" in line]
+        assert (logging.INFO, "Failed to download firmware romm_error.bin: connection refused") in logged
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("entry", ["download_all_firmware", "download_required_firmware"])
