@@ -32,7 +32,7 @@ rather than silently classifying everything as a refusal.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from domain.emulator_sources import EMUDECK, RETRODECK, SourceFinding
@@ -433,7 +433,23 @@ def with_source_findings(
     finding = place_not_read_finding(findings, source)
     if finding is None:
         return answer
-    return replace(answer, state=SAVE_STATE_PLACE_NOT_READ, unestablished=None, finding=finding, source=source)
+    return SaveAnswer(
+        state=SAVE_STATE_PLACE_NOT_READ,
+        unestablished=None,
+        emulator=answer.emulator,
+        directory=answer.directory,
+        backing_directory=answer.backing_directory,
+        granularity=answer.granularity,
+        needs=answer.needs,
+        components=answer.components,
+        caveats=answer.caveats,
+        content_installed=answer.content_installed,
+        root_kind=answer.root_kind,
+        fallback_directory=answer.fallback_directory,
+        missing_saves_root=answer.missing_saves_root,
+        finding=finding,
+        source=source,
+    )
 
 
 def pick_download_name(known_names: Sequence[str], computed: str) -> str:
