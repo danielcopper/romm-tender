@@ -6198,8 +6198,6 @@ class TestSiblingSupersedeRemoval:
 
     @pytest.mark.asyncio
     async def test_supersede_logs_a_folder_refusal_as_it_logs_a_refusal(self, downloads, caplog):
-        from unittest.mock import AsyncMock
-
         _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
         _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
         refusal = FolderRefused("no_rom_root", "RetroDECK names no ROM folder.")
