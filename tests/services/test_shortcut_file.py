@@ -72,6 +72,13 @@ class TestGetShortcutLaunchOptions:
         assert refused.value.details == {}
 
     @pytest.mark.asyncio
+    async def test_a_machine_with_no_shortcut_file_answers_an_empty_reading(self):
+        """No file is a reading of no shortcuts, not a file that could not be read."""
+        service, _ = _make({})
+
+        assert await service.get_shortcut_launch_options([1]) == {"success": True, "launch_options": []}
+
+    @pytest.mark.asyncio
     async def test_the_file_is_read_off_the_event_loop(self):
         """A parse of the whole file on the loop would stall every other call while it ran."""
         service, steam_config = _make({1: "one"})
