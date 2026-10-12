@@ -25,6 +25,7 @@ import { renderSaveFileRow } from "./saves/SaveFileRow";
 import { useCopyToSlot } from "./saves/useCopyToSlot";
 import { detach } from "../utils/detach";
 import { announceSaveSync } from "../utils/saveSyncEvents";
+import { switchSlotFailureMessage } from "../utils/saveSlotWording";
 
 interface SavesTabProps {
   /** The group's sticky Steam appId — drives the stranded-version drift check. */
@@ -208,13 +209,13 @@ export const SavesTab: FC<SavesTabProps> = ({
                   onSlotSwitched(name, result.save_status);
                 } else {
                   detach(debugLog(`SavesTab: new slot switch failed: ${result.reason}`));
-                  let msg = "Failed to create slot";
-                  if (result.reason === "pending_uploads") {
-                    msg = "Sync your saves first — local changes haven't been uploaded";
-                  } else if (result.reason === "server_unreachable") {
+                  if (result.reason === "server_unreachable") {
                     reportServerReachable(false);
-                    msg = "Can't switch — RomM server is not reachable";
                   }
+                  const msg =
+                    result.reason === "pending_uploads" || result.reason === "server_unreachable"
+                      ? switchSlotFailureMessage(result.reason)
+                      : "Failed to create slot";
                   setNewSlotError(msg);
                   if (newSlotErrorTimerRef.current) clearTimeout(newSlotErrorTimerRef.current);
                   newSlotErrorTimerRef.current = setTimeout(() => setNewSlotError(null), 5000);

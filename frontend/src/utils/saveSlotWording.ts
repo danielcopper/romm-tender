@@ -2,8 +2,7 @@
  * The save-slot surfaces' feedback, failure and confirmation sentences: what a
  * copy to a slot and a restore of a version answer, why a slot switch failed,
  * what deleting a slot will do, and the refusals' own sentences. One home for
- * the surfaces that use them; `SavesTab`'s create-slot failure keeps its own
- * shorter text, as `main` has it. When and where to show them stays with each
+ * the surfaces that use them. When and where to show them stays with each
  * caller.
  */
 
