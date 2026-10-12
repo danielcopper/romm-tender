@@ -358,9 +358,9 @@ class RomRemovalService:
 
         Raises :class:`NotInstalled` for a ROM with no install record,
         ``in_progress`` while another removal holds the ROM, and
-        :class:`FilePresent` while the recorded folder or file exists. It removes no file, so it has no
-        failure of its own to refuse: anything the record drop raises, a
-        database error included, propagates.
+        :class:`FilePresent` while the recorded folder or file exists. It
+        removes no file, so it has no failure of its own to refuse: anything the
+        record drop raises, a database error included, propagates.
         """
         async with self._rules.hold("forget_download", update=True, migration=True, prune=True):
             result = await self._forget_download(int(rom_id))
