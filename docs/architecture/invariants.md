@@ -837,13 +837,16 @@ Format: **invariant** — tier — enforced by.
   given a budget: [frontend-bundles.md](frontend-bundles.md#third-party-package-budgets)
 - **Every package `frontend/package-budgets.json` lists, in any bundle, has a `## <package>` section of its own in
   `THIRD-PARTY-NOTICES.md`** — check — `scripts/check_third_party_notices.py`. A package a bundle carries is distributed
-  with Tender, and its licence asks for a notice that travels with it; the bundles are minified, so the notice lives in
-  that file, and nothing about adding a package to a bundle touches it. The budgets file is the list that does move with
-  a bundle — the package check above fails until a carried package has a budget — so holding the notices against it
-  means a package cannot join a bundle unnamed. A package named only in running text or under a heading of another level
-  counts as missing. **What it cannot see is whether a section is true**: the licence, the source and the bundles it
-  names are read only in review. A section for a package no bundle carries any more passes, because a stale notice
-  claims too much rather than too little
+  with Tender, and its licence asks for a notice that travels with it; a bundle carries a package's code but not its
+  LICENSE file, so the notice lives in that file, and nothing about adding a package to a bundle touches it. The budgets
+  file is the list that does move with a bundle — the package check above fails until a carried package has a budget —
+  so holding the notices against it means a package cannot join a bundle unnamed. A package named only in running text
+  or under a heading of another level counts as missing. **What it cannot see is whether a section is true**: the
+  licence, the source and the bundles it names are read only in review. A section for a package no bundle carries any
+  more passes, because a stale notice claims too much rather than too little. A `## <package>` line inside a code fence
+  counts as a section, since the check reads lines and not Markdown. And content under another licence inside a package
+  — the Font Awesome icons inside react-icons, CC BY 4.0 inside an MIT package — is seen by no check at all; its
+  subsection is held only in review
 - **Tender's three React globals are spelled exactly the way Decky Loader spells them** — test —
   `frontend/src/boot/steamGlobals.test.ts`, which reads `steamGlobals.ts` and the pinned `decky-globals-block.txt` as
   TEXT and compares the four search predicates, which global each answer is assigned to, and the JSX stand-in's keys and

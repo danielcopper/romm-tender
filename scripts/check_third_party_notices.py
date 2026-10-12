@@ -12,7 +12,10 @@ its own and counts as missing.
 **What it does not see:** whether a section is TRUE — the licence, the source
 or the bundles it names are read by nobody but a reviewer; and a section for a
 package no bundle carries any more, which passes here because a stale notice
-claims too much rather than too little.
+claims too much rather than too little; a ``## <package>`` line inside a code
+fence, which counts as a section because this reads lines, not Markdown; and
+content under another licence inside a package — the Font Awesome icons inside
+react-icons — which no check sees at all.
 
 Exit 0 when every budgeted package has its section, 1 otherwise, one line per
 package and every package at once.

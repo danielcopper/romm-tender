@@ -243,11 +243,12 @@ tree rolls back with and the licence texts a distributed copy carries, nothing t
 own build and runs it there too, for the reason [ADR-0039](../adr/0039-the-release-ships-the-packagers-tarball.md)
 gives. What no run of it can say is whether the code inside works — the script's own docstring states the blind spot.
 
-Beside the tarball the same job attaches `decky-ui-<V>.tgz`: the `@decky/ui` npm package `frontend/pnpm-lock.yaml`
-resolves, which `scripts/decky_ui_source.py` fetches from the npm registry and writes only once its SHA-512 matches the
-lock's integrity hash. It is the source of the copy the bundles carry, offered from the release itself
-([THIRD-PARTY-NOTICES.md](../../THIRD-PARTY-NOTICES.md) says where a reader finds it). CI's build job runs the same
-script on every pull request, without attaching anything, so a release is not its first run either.
+Beside the tarball the same job attaches `decky-ui-<version>.tgz`, named for the `@decky/ui` version rather than
+Tender's: the `@decky/ui` npm package `frontend/pnpm-lock.yaml` resolves, which `scripts/decky_ui_source.py` fetches
+from the npm registry and writes only once its SHA-512 matches the lock's integrity hash. It is the source of the copy
+the bundles carry, offered from the release itself ([THIRD-PARTY-NOTICES.md](../../THIRD-PARTY-NOTICES.md) says where a
+reader finds it). CI's build job runs the same script on every pull request, without attaching anything, so a release is
+not its first run either.
 
 **An install over an existing one is an update, and an update whose new version does not answer is rolled back.** It
 does not ask whether you are coming from the Decky plugin, which a first install does unless given `--yes` or run after
@@ -528,7 +529,7 @@ See [Backend Architecture](../architecture/backend-architecture.md) for details.
 ## Full CI gate
 
 ```bash
-mise run gate         # run the PR checks from .github/workflows/ci.yml locally (all but three, below)
+mise run gate         # run the PR checks from .github/workflows/ci.yml locally (all but three jobs and one step, below)
 ```
 
 `mise run gate` is the single local battery that mirrors CI. It runs the backend tests (`mise run test`), the
