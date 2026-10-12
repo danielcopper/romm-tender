@@ -44,9 +44,14 @@ export function sourceName(kind: string): string {
 }
 
 /** Whether a finding shows as a notice on Main. `content-tree-unwired` concerns nothing
- *  Tender does, so it shows only on the source's own card. */
+ *  Tender does, and a settings file whose version alone cannot be read still names
+ *  every folder, so each shows only on the source's own card. */
 export function findingIsBanner(finding: SourceHealthFinding): boolean {
-  return finding.code !== "content-tree-unwired";
+  return finding.code !== "content-tree-unwired" && !isVersionOnly(finding);
+}
+
+function isVersionOnly({ code, data }: SourceHealthFinding): boolean {
+  return code === "marker-invalid" && text(data, "key") === "version";
 }
 
 /** The sentence for one health finding of the source of kind `kind`. */
@@ -70,6 +75,33 @@ const UNWIRED_PROBLEMS: ReadonlyMap<string, string> = new Map([
   ["diverted", "points elsewhere"],
 ]);
 
+// Tender's own finding naming the roots a source's settings file leaves out,
+// which the resolver only assumed: `path` is the settings file, `roots` the
+// roots by name, joined by commas.
+const ROOTS_ASSUMED = "roots-assumed";
+
+// What each root is called in a sentence, after "its".
+const ROOT_WORDS: ReadonlyMap<string, string> = new Map([
+  ["installation", "folder"],
+  ["roms", "ROM folder"],
+  ["bios", "BIOS folder"],
+  ["saves", "saves folder"],
+]);
+
+/** "a", "a and b", "a, b and c". */
+function joinedNaturally(words: readonly string[]): string {
+  return words.length <= 1 ? words.join("") : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+}
+
+/** The sentence for the roots a source's settings file leaves out, or `null` for a root this module cannot name. */
+function assumedRootsSentence(name: string, file: string, roots: string | null): string | null {
+  const words = (roots ?? "").split(",").map((root) => ROOT_WORDS.get(root));
+  if (words.length === 0 || words.some((word) => word === undefined)) return null;
+  const folders = joinedNaturally(words as string[]);
+  const use = words.length === 1 ? "does not use it" : "uses none of them";
+  return `${name}: its settings file ${file} does not name its ${folders}, so Tender ${use}.`;
+}
+
 // The key a finding names its folder, file or setting under, where it is not `path`.
 const SUBJECT_KEYS: ReadonlyMap<string, string> = new Map([
   ["roms-root-not-absolute", "value"],
@@ -91,7 +123,12 @@ function wordedFinding(kind: string, { code, data }: SourceHealthFinding): strin
     case "config-unreadable":
       return `${name}: its settings file ${subject} cannot be read.`;
     case "marker-invalid":
+      if (isVersionOnly({ code, data })) {
+        return `${name}: its settings file ${subject} holds no version Tender can read; its folders are still read from it.`;
+      }
       return `${name}: its settings file ${subject} is damaged, so Tender cannot tell where its folders are.${repair}`;
+    case ROOTS_ASSUMED:
+      return assumedRootsSentence(name, subject, text(data, "roots"));
     case "root-missing":
       return `${name}: its folder ${subject} does not exist. If it is on an SD card or another drive, insert it.`;
     case "saves-root-missing":
@@ -169,7 +206,9 @@ function settingsFileSentence(finding: SourceHealthFinding, emulator: string): s
 /** The sentence a refusal carrying `finding` is worded with, or `null` where its message stands. */
 function refusalSentence(answer: Record<string, unknown>, finding: SourceHealthFinding): string | null {
   const { reason, source, emulator } = answer;
-  if (reason === RETRODECK_FINDING_REASON) return findingSentence("retrodeck", finding);
+  if (reason === RETRODECK_FINDING_REASON) {
+    return findingSentence(typeof source === "string" ? source : "retrodeck", finding);
+  }
   if (!SAVE_FINDING_REASONS.has(reason) || typeof source !== "string") return null;
   const settingsFile = typeof emulator === "string" ? settingsFileSentence(finding, emulator) : null;
   return settingsFile ?? findingSentence(source, finding);

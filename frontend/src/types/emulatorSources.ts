@@ -7,7 +7,9 @@ import type { RommErrorReason } from "./reasons";
 
 /** One health finding of a source, as the resolver states it: a stable `code`
  *  and the facts it established (`path`, `status`, `key`, `problem`, `hub`, …).
- *  The resolver's message text is never carried; the wording is Tender's. */
+ *  The resolver's message text is never carried; the wording is Tender's. One
+ *  code is Tender's own, `roots-assumed`, for the roots the resolver states it
+ *  only assumed. */
 export interface SourceHealthFinding {
   code: string;
   data: Record<string, unknown>;
@@ -25,8 +27,8 @@ export interface EmulatorSource {
   enabled: boolean;
   /** Whether Tender can start games through this source today. */
   starts_games: boolean;
-  /** The source's root, shown under its name and never used; `null` where it
-   *  is a default because the source's settings file is missing or broken. */
+  /** The source's root, shown under its name and never used; `null` where the
+   *  resolver did not read it from the source's settings. */
   root: string | null;
   findings: SourceHealthFinding[];
   catalogue: SourceCatalogueState;
