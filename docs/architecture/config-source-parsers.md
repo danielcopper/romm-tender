@@ -294,6 +294,8 @@ Under the four `marker-*` / `not-set-up` findings the resolver's root, BIOS and 
 finding, and the panel words it with the sentence the finding's notice shows (`withFindingSentence` in
 `frontend/src/utils/emulatorSourceWording.ts`, applied to every endpoint answer in `frontend/src/api/host.ts`). A
 download also stops on `root-missing`, because everything it would land in lies below a folder that is not there.
+`bios-root-missing`, `roms-root-missing`, `roms-root-not-absolute` and `emulator-config-missing` refuse no folder
+question; they are worded on Main and on the source's card, and nothing more.
 
 **A question that fails is treated like one of those four findings.** RetroDECK's health and its four roots — home, ROM
 root, BIOS folder and saves root — are asked together, up front, for every folder question. Where detecting the emulator

@@ -327,13 +327,14 @@ no emulator list.
 **Problems.** Every problem a switched-on source reports also shows as a card on the main panel, named after the source
 — a RetroDECK that is installed but has not been set up yet (**RetroDECK is installed but has not been set up yet. Start
 RetroDECK once and finish its first-run setup.**), a settings file that is missing, unreadable or damaged, a folder that
-does not exist (an SD card that is not inserted), a saves folder that does not exist, ES-DE's systems file that does not
-load (ES-DE then shows no systems, and Tender cannot tell which emulators the source offers), or EmuDeck's RetroArch
-settings that cannot be read. Two kinds stay on the source's card here only: texture packs or mods that do not reach an
-emulator, which concern nothing Tender does, and every problem of a source you switched off. Where Tender cannot get an
-emulator list, the platform page, the emulator menu and a game's BIOS tab say why — no source found, every source
-switched off, a broken systems file, a RetroDECK that has not been set up yet, a list that cannot be read yet — rather
-than showing an empty list.
+does not exist (an SD card that is not inserted), a saves, BIOS or ROM folder that does not exist, ES-DE's ROM folder
+setting that is not a full path, ES-DE's systems file that does not load (ES-DE then shows no systems, and Tender cannot
+tell which emulators the source offers), EmuDeck's RetroArch settings that cannot be read, or RetroDECK's RetroArch
+settings file that is missing (RetroArch then uses its built-in default folders). Two kinds stay on the source's card
+here only: texture packs or mods that do not reach an emulator, which concern nothing Tender does, and every problem of
+a source you switched off. Where Tender cannot get an emulator list, the platform page, the emulator menu and a game's
+BIOS tab say why — no source found, every source switched off, a broken systems file, a RetroDECK that has not been set
+up yet, a list that cannot be read yet — rather than showing an empty list.
 
 ## Tender's place in the Quick Access Menu
 
