@@ -73,10 +73,10 @@ const FILE_READ_BOUND_MS = 5000;
  * as one that could not be done. Resolves ``true`` when any of the three shows
  * ``value``, ``false`` otherwise. Setting ``""`` (the uninstalled-placeholder
  * value) is valid and confirms against an empty read-back. A confirm only the
- * re-read or the file gave is logged at info, the file's with how long its
- * reading took; before resolving ``false`` it logs a warning saying what the
- * re-read and the file each showed, a different value in full beside the value
- * written.
+ * re-read or the file gave is logged at info, the file's with how long it
+ * waited for the reading; before resolving ``false`` it logs a warning saying
+ * what the re-read and the file each showed, and wherever either shows a value,
+ * the value written beside it, both in full.
  */
 export async function setLaunchOptionsConfirmed(
   appId: number,
@@ -99,14 +99,15 @@ export async function setLaunchOptionsConfirmed(
     status: "unreadable",
     why: e instanceof TimeoutError ? `no answer within ${FILE_READ_BOUND_MS}ms` : String(e),
   }));
-  if (reading.status === "read" && reading.launchOptions.get(appId) === value) {
+  const held = reading.status === "read" ? reading.launchOptions.get(appId) : undefined;
+  if (held === value) {
     logInfo(
       `setLaunchOptionsConfirmed: appId ${appId} confirmed by Steam's shortcut file after ${reread}; ` +
-        `the file answered in ${Date.now() - started}ms`,
+        `waited ${Date.now() - started}ms for the file`,
     );
     return true;
   }
-  const written = details === null ? "" : `, the write was ${JSON.stringify(value)}`;
+  const written = details === null && held === undefined ? "" : `, the write was ${JSON.stringify(value)}`;
   logWarn(
     `setLaunchOptionsConfirmed: appId ${appId} not confirmed: ${reread}${written}; ${describeFile(reading, appId)}`,
   );

@@ -29,15 +29,18 @@ async def test_answers_what_the_file_holds_for_the_app_ids_asked_about(harness):
 
     result = await harness.endpoints.get_shortcut_launch_options([3345678901, 8, 99])
 
-    assert result["status"] == "read"
+    assert result["success"] is True
     assert sorted(result["launch_options"], key=lambda entry: entry["app_id"]) == [
         {"app_id": 8, "launch_options": ""},
         {"app_id": 3345678901, "launch_options": "written"},
     ]
 
 
-async def test_no_steam_directory_at_all_is_unreadable(harness):
+async def test_no_steam_directory_at_all_is_refused_as_unreadable(harness):
     result = await harness.endpoints.get_shortcut_launch_options([1])
 
-    assert result["status"] == "unreadable"
-    assert result["message"]
+    assert result == {
+        "success": False,
+        "reason": "shortcut_file_unreadable",
+        "message": "Steam's shortcut file could not be read.",
+    }

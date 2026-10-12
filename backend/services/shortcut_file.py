@@ -12,6 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from lib.errors import Refused
+
 if TYPE_CHECKING:
     import asyncio
 
@@ -36,12 +38,12 @@ class ShortcutFileService:
     async def get_shortcut_launch_options(self, app_ids: list[int | str]) -> dict[str, Any]:
         """Report the launch options the file holds for *app_ids*.
 
-        Returns a discriminated status union (``.claude/rules/endpoints.md``):
-        ``{"status": "read", "launch_options": [{"app_id", "launch_options"}]}``
-        with an entry for each requested app ID the file holds and none for one
-        it does not, or ``{"status": "unreadable", "message"}`` when the file
-        could not be read. An entry of *app_ids* that is not a number is
-        dropped, as it can name no shortcut.
+        Answers ``{"success": True, "launch_options": [{"app_id",
+        "launch_options"}]}`` with an entry for each requested app ID the file
+        holds and none for one it does not, and raises
+        ``Refused("shortcut_file_unreadable")`` when the file could not be read.
+        An entry of *app_ids* that is not a number is dropped, as it can name no
+        shortcut.
         """
         wanted: set[int] = set()
         for raw in app_ids:
@@ -51,9 +53,9 @@ class ShortcutFileService:
                 continue
         held = await self._loop.run_in_executor(None, self._steam_config.read_shortcut_launch_options)
         if held is None:
-            return {"status": "unreadable", "message": "Steam's shortcut file could not be read."}
+            raise Refused("shortcut_file_unreadable", "Steam's shortcut file could not be read.")
         return {
-            "status": "read",
+            "success": True,
             "launch_options": [
                 {"app_id": app_id, "launch_options": value} for app_id, value in held.items() if app_id in wanted
             ],

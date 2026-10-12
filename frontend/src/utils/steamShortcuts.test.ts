@@ -296,7 +296,7 @@ describe("setLaunchOptionsConfirmed's reading of Steam's shortcut file", () => {
     expect(logInfoSpy).toHaveBeenCalledTimes(1);
     expect(logInfoSpy).toHaveBeenCalledWith(
       `setLaunchOptionsConfirmed: appId 5 confirmed by Steam's shortcut file after the re-read shows ${JSON.stringify(HELD_BEFORE)}; ` +
-        "the file answered in 87ms",
+        "waited 87ms for the file",
     );
     expect(logWarnSpy).not.toHaveBeenCalled();
   });
@@ -309,7 +309,7 @@ describe("setLaunchOptionsConfirmed's reading of Steam's shortcut file", () => {
     await expect(confirmWith(() => Promise.resolve(fileHolding([[5, WRITTEN]])))).resolves.toBe(true);
     expect(logInfoSpy).toHaveBeenCalledWith(
       "setLaunchOptionsConfirmed: appId 5 confirmed by Steam's shortcut file after the re-read delivered no details " +
-        "within 2000ms; the file answered in 0ms",
+        "within 2000ms; waited 0ms for the file",
     );
     expect(logWarnSpy).not.toHaveBeenCalled();
   });
@@ -326,6 +326,18 @@ describe("setLaunchOptionsConfirmed's reading of Steam's shortcut file", () => {
         `the write was ${JSON.stringify(WRITTEN)}; the file shows "a third value"`,
     );
     expect(logInfoSpy).not.toHaveBeenCalled();
+  });
+
+  it("names the value written beside the file's value when the re-read delivered no details", async () => {
+    const logWarnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
+    stubSteamShowing(undefined);
+
+    await expect(confirmWith(() => Promise.resolve(fileHolding([[5, HELD_BEFORE]])))).resolves.toBe(false);
+    expect(logWarnSpy).toHaveBeenCalledTimes(1);
+    expect(logWarnSpy).toHaveBeenCalledWith(
+      "setLaunchOptionsConfirmed: appId 5 not confirmed: the re-read delivered no details within 2000ms, " +
+        `the write was ${JSON.stringify(WRITTEN)}; the file shows ${JSON.stringify(HELD_BEFORE)}`,
+    );
   });
 
   it("stays a failure when the file holds the value for another shortcut only", async () => {
@@ -381,7 +393,7 @@ describe("setLaunchOptionsConfirmed's reading of Steam's shortcut file", () => {
     vi.spyOn(backend, "logInfo").mockImplementation(() => {});
     const ask = vi
       .spyOn(backend, "getShortcutLaunchOptions")
-      .mockResolvedValue({ status: "read", launch_options: [{ app_id: 5, launch_options: WRITTEN }] });
+      .mockResolvedValue({ success: true, launch_options: [{ app_id: 5, launch_options: WRITTEN }] });
     stubSteamShowing(HELD_BEFORE);
     vi.useFakeTimers();
 
@@ -394,7 +406,10 @@ describe("setLaunchOptionsConfirmed's reading of Steam's shortcut file", () => {
   });
 
   it.each([
-    { case: "the backend answers unreadable", answer: () => Promise.resolve({ status: "unreadable", message: "no" }) },
+    {
+      case: "the backend refuses the reading",
+      answer: () => Promise.resolve({ success: false, reason: "shortcut_file_unreadable", message: "no" }),
+    },
     { case: "the call rejects", answer: () => Promise.reject(new Error("socket closed")) },
     { case: "the call answers nothing", answer: () => Promise.resolve(undefined) },
   ])("stays a failure when $case", async ({ answer }) => {

@@ -1096,12 +1096,11 @@ class Endpoints:
     async def get_shortcut_launch_options(self, app_ids):
         """Report the launch options Steam's ``shortcuts.vdf`` holds for *app_ids*.
 
-        Returns a discriminated status union: ``{"status": "read",
-        "launch_options": [{"app_id", "launch_options"}]}`` for those of the
-        app IDs the file holds, or ``{"status": "unreadable", "message"}``.
-        Read only, and the file is parsed afresh on every call — the frontend
-        asks it once for a whole batch of confirms rather than once per
-        shortcut.
+        Answers ``{"success": True, "launch_options": [{"app_id",
+        "launch_options"}]}`` for those of the app IDs the file holds, or the
+        failure shape with ``reason`` ``shortcut_file_unreadable``. Read only,
+        and the file is parsed afresh on every call, so a caller with many app
+        IDs asks once for all of them.
         """
         return await self._services.shortcut_file_service.get_shortcut_launch_options(app_ids)
 

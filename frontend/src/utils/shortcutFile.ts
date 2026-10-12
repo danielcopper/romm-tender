@@ -12,12 +12,12 @@ export type ShortcutFileReader = () => Promise<ShortcutFileReading>;
 
 /**
  * Ask the backend what Steam's shortcut file holds for `appIds`, once. A
- * backend that answered nothing is a file that could not be read; one that
- * threw rejects, which the confirm counts the same way.
+ * refusal, or a backend that answered nothing, is a file that could not be
+ * read; one that threw rejects, which the confirm counts the same way.
  */
 export async function readShortcutFile(appIds: number[]): Promise<ShortcutFileReading> {
   const answer = (await getShortcutLaunchOptions(appIds)) as ShortcutLaunchOptions | undefined;
-  if (answer?.status === "read") {
+  if (answer?.success) {
     return {
       status: "read",
       launchOptions: new Map(answer.launch_options.map((entry) => [entry.app_id, entry.launch_options])),

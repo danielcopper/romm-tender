@@ -52,7 +52,7 @@ describe("batchConfirmLaunchOptions", () => {
 
   describe("the batch's one reading of Steam's shortcut file", () => {
     beforeEach(() => {
-      vi.mocked(backend.getShortcutLaunchOptions).mockResolvedValue({ status: "read", launch_options: [] });
+      vi.mocked(backend.getShortcutLaunchOptions).mockResolvedValue({ success: true, launch_options: [] });
     });
 
     it("is one backend call per batch, for that batch's app IDs, however many of its confirms fail", async () => {

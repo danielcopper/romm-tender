@@ -7,6 +7,7 @@ import threading
 
 import pytest
 
+from lib.errors import Refused
 from services.shortcut_file import ShortcutFileService, ShortcutFileServiceConfig
 
 
@@ -41,7 +42,7 @@ class TestGetShortcutLaunchOptions:
         answer = await service.get_shortcut_launch_options([1, 3])
 
         assert answer == {
-            "status": "read",
+            "success": True,
             "launch_options": [{"app_id": 1, "launch_options": "one"}, {"app_id": 3, "launch_options": ""}],
         }
 
@@ -49,7 +50,7 @@ class TestGetShortcutLaunchOptions:
     async def test_an_app_id_the_file_does_not_hold_is_absent_from_the_answer(self):
         service, _ = _make({1: "one"})
 
-        assert await service.get_shortcut_launch_options([2]) == {"status": "read", "launch_options": []}
+        assert await service.get_shortcut_launch_options([2]) == {"success": True, "launch_options": []}
 
     @pytest.mark.asyncio
     async def test_an_app_id_sent_as_a_string_is_matched_and_a_non_number_dropped(self):
@@ -57,17 +58,18 @@ class TestGetShortcutLaunchOptions:
 
         answer = await service.get_shortcut_launch_options(["1", "not a number", None])  # type: ignore[list-item]
 
-        assert answer == {"status": "read", "launch_options": [{"app_id": 1, "launch_options": "one"}]}
+        assert answer == {"success": True, "launch_options": [{"app_id": 1, "launch_options": "one"}]}
 
     @pytest.mark.asyncio
-    async def test_a_file_that_could_not_be_read_answers_unreadable(self):
+    async def test_a_file_that_could_not_be_read_is_refused(self):
         service, _ = _make(None)
 
-        answer = await service.get_shortcut_launch_options([1])
+        with pytest.raises(Refused) as refused:
+            await service.get_shortcut_launch_options([1])
 
-        assert answer["status"] == "unreadable"
-        assert answer["message"]
-        assert "launch_options" not in answer
+        assert refused.value.reason == "shortcut_file_unreadable"
+        assert refused.value.message
+        assert refused.value.details == {}
 
     @pytest.mark.asyncio
     async def test_the_file_is_read_off_the_event_loop(self):

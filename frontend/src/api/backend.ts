@@ -1187,12 +1187,14 @@ export type ShortcutRelocation =
 export const getShortcutRelocation = endpoint<[], ShortcutRelocation>("get_shortcut_relocation");
 
 /**
- * What Steam's `shortcuts.vdf` holds for the asked app IDs: `read` lists those
- * the file holds, and an app ID it does not hold is absent from the list.
+ * What Steam's `shortcuts.vdf` holds for the asked app IDs: the list names
+ * those the file holds, and an app ID it does not hold is absent from it.
  */
 export type ShortcutLaunchOptions =
-  | { status: "read"; launch_options: { app_id: number; launch_options: string }[] }
-  | { status: "unreadable"; message: string };
+  { success: true; launch_options: { app_id: number; launch_options: string }[] } | ShortcutFileRefusal;
+
+/** Why there is no reading of Steam's shortcut file: it could not be read. */
+export type ShortcutFileRefusal = EndpointFailure & { reason: WireReasonSubset<"shortcut_file_unreadable"> };
 
 export const getShortcutLaunchOptions = endpoint<[number[]], ShortcutLaunchOptions>("get_shortcut_launch_options");
 
