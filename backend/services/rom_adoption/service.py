@@ -27,6 +27,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from domain.emulator_sources import RETRODECK
+from domain.refusal import DomainRefused
 from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused, folder_of
 from domain.rom_adoption import (
     DigestRequest,
@@ -408,8 +409,9 @@ class RomAdoptionService:
         would mean a failed carry leaves the saves orphaned under a name whose ROM
         is already gone — the exact outcome the rename exists to prevent.
 
-        A removal that fails **after** the carry is the one abort that is not
-        clean: the file the user keeps can no longer find its saves, which now sit
+        A removal that fails or is refused **after** the carry — RetroDECK's
+        folder refusal included, asked again for the removal — is the one abort
+        that is not clean: the file the user keeps can no longer find its saves, which now sit
         under the canonical name. It answers :class:`AdoptionIncomplete` naming
         them, and whatever an Overwrite set aside in ``.romm-backup`` to make room
         for them, rather than moving them back — a retry of the same download
@@ -440,7 +442,7 @@ class RomAdoptionService:
             return stopped
         try:
             self._remove_under_roms(source_path, target.system, is_dir=existing["kind"] == DIR)
-        except Refused as refused:
+        except (Refused, DomainRefused) as refused:
             if not carried:
                 raise
             renamed = [os.path.basename(pair.target) for pair in carried]
