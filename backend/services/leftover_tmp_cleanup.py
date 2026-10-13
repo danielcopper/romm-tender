@@ -6,8 +6,7 @@ the BIOS directory; a download RomM serves as a ZIP is written to a
 ``.zip.tmp``, which is extracted and then removed. A backend that stopped
 mid-transfer leaves that partial behind; this service removes every one it finds
 under RetroDECK's ROM and BIOS folders when the backend starts — the folders the
-resolver names, and none at all while RetroDECK reports that its roots are
-defaults (``RetroDeckFolders``).
+resolver names, and none the resolver only assumed (``RetroDeckFolders``).
 """
 
 from __future__ import annotations

@@ -2,11 +2,11 @@
 
 Driven through the real endpoints and the real ``RetroDeckFoldersAdapter`` over a
 RetroDECK laid down under the harness home — marker, ES-DE's ROM folder setting,
-deploy. The four findings that make RetroDECK's folders defaults are each
-produced the way the resolver meets them, and under every one a press that would
-download, delete or clean up there is refused and leaves the folders as they were
-— as it is where detecting the sources, or asking the resolver about RetroDECK's
-health or one of its roots, raised.
+deploy. The four findings that leave RetroDECK's roots assumed are each produced
+the way the resolver meets them, and under every one a press that would
+download, delete or clean up in a root the resolver only assumed is refused and
+leaves the folders as they were — as every press is where detecting the
+sources, or asking the resolver about RetroDECK's roots, raised.
 """
 
 from __future__ import annotations
@@ -126,16 +126,29 @@ _PRESSES: dict[str, Callable[[Any], Awaitable[dict[str, Any]]]] = {
 }
 
 
+# What a marker finding refuses: the presses that need the BIOS folder or the
+# saves root, which the resolver then only assumed. ES-DE's ROM folder is read
+# from ES-DE's own settings, so the game presses go on.
+_REFUSED_UNDER_A_MARKER = (
+    "download_platform_firmware_file",
+    "download_all_firmware",
+    "delete_platform_bios",
+    "start_prune",
+)
+
+
 @pytest.mark.parametrize(("code", "make"), _FINDINGS)
 async def test_under_the_finding_nothing_is_downloaded_deleted_or_cleaned_up_there(harness, code, make):
-    # What would be touched lies where the resolver's defaults point, so a
+    # What would be touched lies where the resolver's assumed roots point, so a
     # refusal here is the rule's, not a missing folder's.
     on_disk = _seed_what_a_press_would_touch(harness)
     make(harness)
     before = sorted(os.walk(harness.retrodeck_home))
+    refused = _PRESSES if code == "not-set-up" else {name: _PRESSES[name] for name in _REFUSED_UNDER_A_MARKER}
 
-    presses = {name: await press(harness) for name, press in _PRESSES.items()}
-    harness.app.services.leftover_tmp_cleanup_service.cleanup_leftover_tmp_files()
+    presses = {name: await press(harness) for name, press in refused.items()}
+    if code == "not-set-up":
+        harness.app.services.leftover_tmp_cleanup_service.cleanup_leftover_tmp_files()
 
     for name, result in presses.items():
         assert result["success"] is False, name
@@ -149,9 +162,9 @@ def _raises(*_args: object) -> None:
 
 
 _UNANSWERED = "RetroDECK's folders could not be established, so Tender downloads into and removes from none of them."
-# RetroDECK's health and its four roots, asked together up front: one that
-# raises leaves none of its folders established.
-_ROOT_QUESTIONS = ["health", "root", "roms_dir", "bios_dir", "saves_root"]
+# RetroDECK's four roots, asked together up front in one question: a raise
+# leaves none of its folders established.
+_ROOT_QUESTIONS = ["roots"]
 
 
 def _detection_raises(harness) -> None:
@@ -380,10 +393,22 @@ async def test_while_retrodeck_s_folder_is_missing_a_download_is_refused_for_tha
 
 
 def _point_retrodeck_at(harness, home: str) -> None:
-    """Rewrite RetroDECK's settings as its own move tool leaves them: the home, and ES-DE's ROM folder under it."""
+    """Rewrite RetroDECK's settings as a move of its home leaves them, and ES-DE's ROM folder under it.
+
+    RetroDECK 0.10.10b's move tool keeps every ``paths`` key: it sets the moved
+    folder's variable and writes back each key the file already holds
+    (``conf_write``, libexec/other_functions.sh:192; the move in
+    libexec/dialogs.sh:96 and libexec/api_data_processing.sh:924). So the home,
+    the BIOS folder and the saves folder are all named, under the new home.
+    """
     os.makedirs(os.path.join(home, "roms"), exist_ok=True)
+    paths = {
+        "rd_home_path": home,
+        "bios_path": os.path.join(home, "bios"),
+        "saves_path": os.path.join(home, "saves"),
+    }
     with open(_retrodeck_marker_path(harness), "w") as f:
-        json.dump({"paths": {"rd_home_path": home}}, f)
+        json.dump({"paths": paths}, f)
     settings = os.path.join(
         str(harness.tmp_path), "home", ".var", "app", "net.retrodeck.retrodeck", "config", "ES-DE", "settings"
     )
@@ -532,3 +557,91 @@ async def test_without_retrodeck_the_migrate_press_is_refused_and_says_why(harne
     assert result["reason"] == "retrodeck_not_installed"
     assert result["message"] == "Moving needs RetroDECK, which is not installed."
     _assert_nothing_moved(harness, old_home, left)
+
+
+def _unset(harness, key: str) -> None:
+    """Take *key* out of ``retrodeck.json``'s ``paths``, as a settings file that does not name that folder."""
+    marker = _retrodeck_marker_path(harness)
+    with open(marker) as f:
+        data = json.load(f)
+    del data["paths"][key]
+    with open(marker, "w") as f:
+        json.dump(data, f)
+
+
+async def test_with_the_bios_key_unset_every_use_of_the_bios_folder_is_refused_and_the_rom_folder_stays_usable(
+    harness,
+):
+    # The BIOS folder the resolver only assumed is used for nothing, and
+    # ES-DE's ROM folder, read from its own settings, still is.
+    installed, leftover, bios, bios_leftover = _seed_what_a_press_would_touch(harness)
+    seed_es_systems(harness)
+    _unset(harness, "bios_path")
+
+    bios_presses = {
+        name: await _PRESSES[name](harness)
+        for name in ("download_platform_firmware_file", "download_all_firmware", "delete_platform_bios")
+    }
+    removed = await harness.endpoints.remove_rom(_ROM_ID)
+    harness.app.services.leftover_tmp_cleanup_service.cleanup_leftover_tmp_files()
+
+    for name, result in bios_presses.items():
+        assert result["success"] is False, name
+        _assert_refused_for(result, "roots-assumed")
+        assert result["finding"]["data"] == {"path": _retrodeck_marker_path(harness), "roots": "bios"}, name
+    assert os.path.exists(bios)
+    assert os.path.exists(bios_leftover)
+    assert removed["success"] is True
+    assert not os.path.exists(installed)
+    assert not os.path.exists(leftover)
+
+
+@pytest.mark.parametrize(("code", "make"), _FINDINGS[:3])
+async def test_under_a_marker_finding_a_game_is_still_removed_from_es_de_s_rom_folder(harness, code, make):
+    # Each root by its own provenance — the marker's roots are
+    # assumed, ES-DE's ROM folder was read.
+    installed, leftover, bios, bios_leftover = _seed_what_a_press_would_touch(harness)
+    make(harness)
+
+    removed = await harness.endpoints.remove_rom(_ROM_ID)
+    refused = await harness.endpoints.delete_platform_bios("dc")
+    harness.app.services.leftover_tmp_cleanup_service.cleanup_leftover_tmp_files()
+
+    assert removed["success"] is True
+    assert not os.path.exists(installed)
+    assert not os.path.exists(leftover)
+    _assert_refused_for(refused, code)
+    assert os.path.exists(bios)
+    assert os.path.exists(bios_leftover)
+
+
+async def test_where_the_saves_root_is_assumed_the_cleanup_refuses_at_its_start(harness):
+    # Refused as a whole before anything is consumed, never midway where its
+    # save inventory would ask the saves root.
+    seed_es_systems(harness)
+    _unset(harness, "saves_path")
+
+    result = await harness.endpoints.start_prune({"confirmed": True})
+
+    assert result["success"] is False
+    _assert_refused_for(result, "roots-assumed")
+    assert result["finding"]["data"] == {"path": _retrodeck_marker_path(harness), "roots": "saves"}
+    assert result["source"] == "retrodeck"
+
+
+async def test_a_settings_file_whose_version_alone_cannot_be_read_refuses_no_press(harness):
+    installed, _leftover, _bios, _bios_leftover = _seed_what_a_press_would_touch(harness)
+    seed_es_systems(harness)
+    marker = _retrodeck_marker_path(harness)
+    with open(marker) as f:
+        data = json.load(f)
+    data["version"] = 10
+    with open(marker, "w") as f:
+        json.dump(data, f)
+
+    presses = {name: await press(harness) for name, press in _PRESSES.items()}
+
+    for name, result in presses.items():
+        assert result.get("reason") not in {"retrodeck_finding", "retrodeck_unanswered"}, (name, result)
+    assert presses["remove_rom"]["success"] is True
+    assert not os.path.exists(installed)

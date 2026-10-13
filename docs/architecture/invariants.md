@@ -287,24 +287,33 @@ Format: **invariant** — tier — enforced by.
 - **Every RetroDECK folder Tender downloads into, removes from, bounds a removal by or reads for the move code is the
   resolver's answer, asked through `adapters/retrodeck_folders.py`; no module reads RetroDECK's settings or builds such
   a folder from a root — except the move code, which joins `bios` and `saves` onto each old home a pending move left —
-  and while RetroDECK reports `marker-missing`, `marker-unreadable`, `marker-invalid` or `not-set-up`, or where
-  detecting the sources or a question about RetroDECK's health or one of its four roots raised, none of those folders is
-  used — except that a download while RetroDECK is switched off says so, and a raise on a system's own ROM folder
-  refuses only the presses that need that folder; a removal of a game's files is bounded by its system's own ROM folder,
-  never by the ROM root** — test + prompt-only — `tests/adapters/test_retrodeck_folders.py` (the real resolver over tmp
-  homes: every folder its answer, each finding refusing every question, `TestWhereAQuestionToTheResolverRaises` and
-  `TestWhereDetectingTheSourcesRaises` refusing every question for a raise on the detection, the health or a root and
-  only its own for a system's folder, and `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and
-  `tests/contract/test_retrodeck_folders.py` (under each finding, and where the detection, RetroDECK's health or one of
-  its roots could not be asked, no press downloads, deletes, cleans up or migrates there); the system-folder bound by
-  `tests/services/test_downloads.py::TestASystemFolderLinkedToAnotherDrive` and the linked-folder and one-system cases
-  of `tests/contract/test_prune.py`, with Uninstall all's one-system case in `tests/contract/test_retrodeck_folders.py`
+  and a root the resolver only assumed (`assumed` in its roots answer, `domain/source_roots.py`) or gives no path for is
+  used for nothing, each root judged by its own provenance, also under a `marker-*` finding, and a system's folder going
+  with its ROM root; where detecting the sources or the roots question raised, none of those folders is used — except
+  that a download while RetroDECK is switched off says so, and a raise on a system's own ROM folder refuses only the
+  presses that need that folder; a removal of a game's files is bounded by its system's own ROM folder, never by the ROM
+  root** — test + prompt-only — `tests/domain/test_source_roots.py` (the rule) and
+  `tests/adapters/test_retrodeck_folders.py` (the real resolver over tmp homes: every folder its answer,
+  `TestEachRootIsJudgedByItsProvenance` over a settings file without `paths`, one key unset, a `version` alone
+  unreadable, ES-DE's own default ROM folder and an assumed home that is missing, each `marker-*` finding refusing the
+  BIOS, saves and move questions and `not-set-up` every question, `TestWhereAQuestionToTheResolverRaises` and
+  `TestWhereDetectingTheSourcesRaises` refusing every question for a raise on the detection or the roots and only its
+  own for a system's folder, and `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and
+  `tests/contract/test_retrodeck_folders.py` (under each finding, with a key unset, and where the detection or the roots
+  could not be asked, no press downloads, deletes, cleans up or migrates in a folder that was not read, the cleanup is
+  refused at its start for an assumed saves root, and a `version` alone unreadable refuses no press); the system-folder
+  bound by `tests/services/test_downloads.py::TestASystemFolderLinkedToAnotherDrive` and the linked-folder and
+  one-system cases of `tests/contract/test_prune.py`, with Uninstall all's one-system case in
+  `tests/contract/test_retrodeck_folders.py`
   (`test_where_one_system_s_folder_question_raises_uninstall_all_goes_on_for_every_other_system`). A folder of Tender's
   own beside the resolver's is the drift this replaced: `retrodeck.json` read twice, a system's ROM folder built as
   `<roms root>/<system>` in five places while ES-DE may declare another, and a fallback to `~/retrodeck` that pointed
-  downloads, deletes and the move code at internal storage while RetroDECK lay on an SD card. Under the four findings
-  the resolver's own root, BIOS and saves folders are its defaults, so using them would be that guess again. The rules
-  each question answers by are on [Config source parsers](config-source-parsers.md#retrodecks-folders-retrodeckjson). A
+  downloads, deletes and the move code at internal storage while RetroDECK lay on an SD card. A root the resolver only
+  assumed is the same kind of guess — RetroDECK's usual layout, below the home where the settings name one and at
+  `~/retrodeck` where they do not — whatever finding stands beside it (a `retrodeck.json` without `paths` or with one
+  key unset carries none), so using it would be that guess again, and the missing-root findings the resolver states for
+  it name a folder nobody configured ([#2294](https://github.com/danielcopper/romm-tender/issues/2294)). The rules each
+  question answers by are on [Config source parsers](config-source-parsers.md#retrodecks-folders-retrodeckjson). A
   save's folder and a firmware file's place take the other route, the save and firmware answers
   (`adapters/atlas_saves.py`, `adapters/atlas_firmware.py`), and this entry does not cover them: a save's place comes
   from the emulator's own settings rather than from `retrodeck.json`, so under the three `marker-*` findings a save

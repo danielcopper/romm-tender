@@ -629,6 +629,17 @@ starts games through — RetroDECK, wherever it stands in the order — or, with
 is detected or every detected one is switched off, and the pages say which of the two
 (`domain/emulator_sources.py::answering_source`).
 
+### Root (of an emulator source): read / frontend default / assumed
+
+A source's installation folder, ROM folder, BIOS folder and saves folder, each with where emu-atlas got its path:
+**read** from the source's own settings, the **frontend default** ES-DE falls back on for an empty ROM folder setting,
+or **assumed** where nothing on the machine names it and emu-atlas fell back on the source's usual layout. Tender uses a
+read root and a frontend default, and an assumed one for nothing; a system's ROM folder goes with the ROM root
+(`domain/source_roots.py`, [#2294](https://github.com/danielcopper/romm-tender/issues/2294)). The pages say "its
+settings file does not name its … folder" for an assumed root, unless a notice that the settings file is missing, cannot
+be read or is damaged, or that the source is not set up, already says why. _Avoid_: default folder, which a frontend
+default also is.
+
 ### Not supported vs not established
 
 Two different absences of an answer. **Not supported**: emu-atlas has no knowledge for this at all (an emulator it has

@@ -68,8 +68,9 @@ class EmulatorSourcesService:
 
         ``{"sources": [...], "answering"}``, each source ``{"kind", "enabled",
         "starts_games", "root", "findings", "catalogue"}``: ``root`` is the
-        folder shown under the name, ``None`` where it is a default; ``findings``
-        the health findings as ``{"code", "data"}``; ``catalogue`` ``read``,
+        folder shown under the name, ``None`` where the resolver did not read it
+        from the source's settings; ``findings`` the health findings as
+        ``{"code", "data"}``, Tender's own ``roots-assumed`` among them; ``catalogue`` ``read``,
         ``sealed`` or ``unavailable``. ``answering`` is the kind of the source a
         game's questions go to, ``None`` where none answers. An empty list where
         nothing is detected.

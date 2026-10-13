@@ -259,17 +259,23 @@ and **Check Against Server** answer the same way. A download already running whe
 the folder it started in. Where the ROM folder ES-DE uses lies on a drive or SD card that is not there, Tender creates
 nothing and says **RetroDECK's ROM folder _path_ does not exist. If it is on an SD card or another drive, insert it.**
 
-**While RetroDECK's settings are in doubt, Tender downloads into and removes from none of its folders.** While the main
-panel shows a notice for RetroDECK's settings file — missing, unreadable or damaged — or for a RetroDECK that has not
-been set up yet, those folders are only defaults, not where RetroDECK is. Tender then downloads no game and no BIOS
-file, uninstalls nothing, replaces no copy, does not start the
-[cleanup of versions removed from RomM](#cleaning-up-versions-removed-from-romm), and removes no leftover partial
-download there; each of those buttons answers with the sentence the notice shows. A download is refused the same way,
-with that notice's sentence, while RetroDECK's own folder does not exist (an SD card that is not inserted). Games
-already on your device still start, because RetroDECK starts them itself.
+**Tender uses no folder of RetroDECK's that is only a guess.** Where RetroDECK's settings file does not say where a
+folder is — the file is missing, cannot be read or is damaged, or it leaves that folder out — the folder Tender would
+use is only where RetroDECK usually puts it, not necessarily where RetroDECK keeps it, so Tender downloads nothing into
+it and removes nothing from it. The main panel then shows a notice about the settings file, or says which folders it
+does not name (**RetroDECK: its settings file _file_ does not name its BIOS folder and saves folder, so Tender uses none
+of them.**). Each folder is judged on its own. Games go to the ROM folder ES-DE uses — the one ES-DE's own settings
+name, or ES-DE's own default where they name none — so they are still downloaded, uninstalled and replaced there, even
+with a damaged RetroDECK settings file. A BIOS folder the file does not name means no BIOS file is downloaded or
+deleted, and a saves folder it does not name means the
+[cleanup of versions removed from RomM](#cleaning-up-versions-removed-from-romm) does not start. A button refused this
+way answers with the sentence the notice shows. While RetroDECK has not been set up yet, it names no folder at all, and
+none of these buttons does anything. A download is also refused, with that notice's sentence, while RetroDECK's own
+folder, as its settings name it, does not exist (an SD card that is not inserted). Games already on your device still
+start, because RetroDECK starts them itself.
 
-**The same holds where Tender could not ask about RetroDECK's folders** — finding RetroDECK at all, or asking it where
-its own folder, its ROM folder, its BIOS folder or its saves folder is, failed with an error. Every one of those
+**Tender uses none of RetroDECK's folders where it could not ask about them** — finding RetroDECK at all, or asking it
+where its own folder, its ROM folder, its BIOS folder and its saves folder are, failed with an error. Every one of those
 buttons, and **Delete** on a BIOS file, then says **RetroDECK's folders could not be established, so Tender downloads
 into and removes from none of them.**, and no leftover partial download is removed. A download while RetroDECK is
 switched off says that instead, as it always does. Where only the question for one system's ROM folder failed, the

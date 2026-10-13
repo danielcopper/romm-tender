@@ -25,14 +25,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from _vendor.atlas import (
-    CAVEAT_EMULATOR_CATALOGUE_SEALED,
-    HEALTH_ISSUE_MARKER_INVALID,
-    HEALTH_ISSUE_MARKER_MISSING,
-    HEALTH_ISSUE_MARKER_UNREADABLE,
-    HEALTH_ISSUE_NOT_SET_UP,
-    detect,
-)
+from _vendor.atlas import CAVEAT_EMULATOR_CATALOGUE_SEALED, detect
 from _vendor.atlas.machine import RealMachine
 
 from adapters.atlas_catalogue import catalogue_refused
@@ -50,25 +43,31 @@ from domain.emulator_sources import (
     no_answering_source_reason,
     stored_kinds,
 )
+from domain.source_roots import ROOT_INSTALLATION, SourceRoot, SourceRoots, explains_roots, reported_findings
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Mapping
 
     from domain.emulator_sources import SourcesReading
 
-# While a source's settings file is missing, unreadable or damaged, or not
-# written yet because the source has not been set up, the root the resolver
-# gives is its default (``~/retrodeck`` for RetroDECK), not where the source
-# lies: it is not shown, and none of RetroDECK's folders is used
-# (``adapters/retrodeck_folders.py``).
-ROOTS_ARE_DEFAULTS = frozenset(
-    {
-        HEALTH_ISSUE_MARKER_MISSING,
-        HEALTH_ISSUE_MARKER_UNREADABLE,
-        HEALTH_ISSUE_MARKER_INVALID,
-        HEALTH_ISSUE_NOT_SET_UP,
-    }
-)
+
+def source_roots(answer: Any) -> SourceRoots:
+    """The resolver's roots answer as Tender's value: each root's path, provenance and settings file; its findings."""
+    return SourceRoots(
+        roots=tuple(
+            SourceRoot(
+                name=root.root,
+                path=root.path,
+                provenance=root.provenance,
+                settings_file=root.setting.file if root.setting is not None else None,
+            )
+            for root in answer.roots
+        ),
+        findings=tuple(
+            SourceFinding(code=caveat.code, data={str(key): str(value) for key, value in caveat.data.items()})
+            for caveat in answer.caveats
+        ),
+    )
 
 
 class DetectedSourcesReading:
@@ -217,12 +216,24 @@ class EmulatorSourcesAdapter:
 
     def _report(self, source: ArrangedSource, installation: Any) -> SourceReport:
         findings = self._findings(source.kind, installation)
-        codes = {finding.code for finding in findings}
+        if getattr(installation, "roots", None) is None:
+            # A source with no roots question (a bare RetroArch) states no
+            # provenance: its root is shown as the resolver gives it, except
+            # while a finding says its settings file was not read.
+            explained = any(explains_roots(finding) for finding in findings)
+            root = None if explained else self._ask(source.kind, "root", installation.root)
+        else:
+            answer = self._ask(source.kind, "roots", installation.roots)
+            roots = None if answer is None else source_roots(answer)
+            installation_root = None if roots is None else roots.root(ROOT_INSTALLATION)
+            root = installation_root.path if installation_root is not None and installation_root.usable else None
+            if roots is not None:
+                findings = reported_findings(roots, findings)
         return SourceReport(
             kind=source.kind,
             enabled=source.enabled,
             starts_games=source.starts_games,
-            root=None if codes & ROOTS_ARE_DEFAULTS else self._ask(source.kind, "root", installation.root),
+            root=root,
             findings=findings,
             catalogue=self._catalogue_state(source.kind, installation),
         )
