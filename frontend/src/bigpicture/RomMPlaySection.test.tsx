@@ -567,18 +567,43 @@ describe("RomMPlaySection", () => {
       );
     });
 
-    it("triggers applyArtwork (4 SGDB calls) on first visit when not already applied", async () => {
+    it("fills the empty artwork slots (3 slot fetches, then the icon) on first visit when not already applied", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 50,
       });
+      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "none" });
       vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({
         base64: null,
         no_api_key: false,
       });
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
-      expect(vi.mocked(backend.getSgdbArtworkBase64)).toHaveBeenCalledTimes(4);
+      expect(vi.mocked(backend.getSgdbSlotArtwork).mock.calls).toEqual([
+        [50, testAppId, "hero"],
+        [50, testAppId, "logo"],
+        [50, testAppId, "grid"],
+      ]);
+      expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls).toEqual([[50, 4]]);
+    });
+
+    it("replaces nothing on a first visit whose slots are already filled", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: true, rom_id: 50 });
+      // The backend answers "skip" for a slot Steam's grid directory already fills.
+      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
+      vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: "AAAA", no_api_key: false });
+      vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: false });
+      const setArtwork = vi.fn().mockResolvedValue(undefined);
+      vi.stubGlobal("SteamClient", {
+        Apps: { SetCustomArtworkForApp: setArtwork, SetShortcutIcon: vi.fn(), OpenAppSettingsDialog: vi.fn() },
+      });
+      render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      await flushAsync();
+      expect(vi.mocked(backend.getSgdbSlotArtwork)).toHaveBeenCalledTimes(3);
+      expect(setArtwork).not.toHaveBeenCalled();
+      // Only the icon, which keeps its own rules, goes through the replacing fetch.
+      expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls).toEqual([[50, 4]]);
     });
 
     it("skips metadata background fetch when 'metadata' is not in stale_fields", async () => {
@@ -617,22 +642,25 @@ describe("RomMPlaySection", () => {
       }
     });
 
-    it("logs 'Auto-artwork error' via debugLog when SteamClient.SetCustomArtworkForApp rejects on auto-apply", async () => {
-      // SGDB returns a real base64 so applyArtwork progresses past the
-      // per-call .catch swallowers into SetCustomArtworkForApp — which then
-      // rejects, surfacing the outer `.catch((e) => debugLog(...))` at the
-      // applyArtwork(...).then(...).catch(...) site in loadCached.
+    it("logs 'Auto-artwork error' via debugLog when the icon's save rejects on the first-visit fill", async () => {
+      // A rejected SetCustomArtworkForApp is reported as refused rather than
+      // thrown, so what still reaches the outer `.catch((e) => debugLog(...))`
+      // at the fillEmptyArtwork(...).then(...).catch(...) site is the icon's
+      // save rejecting.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 50,
       });
+      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
       vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({
         base64: "AAAA",
         no_api_key: false,
       });
+      vi.mocked(backend.saveShortcutIcon).mockRejectedValue(new Error("boom"));
       vi.stubGlobal("SteamClient", {
         Apps: {
-          SetCustomArtworkForApp: vi.fn().mockRejectedValue(new Error("boom")),
+          SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined),
+          SetShortcutIcon: vi.fn(),
           OpenAppSettingsDialog: vi.fn(),
         },
       });
@@ -763,18 +791,28 @@ describe("RomMPlaySection", () => {
         }),
       );
 
-    it("re-reads the cached detail and re-applies artwork on a matching switch", async () => {
+    it("re-reads the cached detail and replaces every slot on a matching switch, filled ones included", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: true, rom_id: 50 });
+      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "none" });
       vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false });
 
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       await flushAsync();
 
-      // Baseline: mount already applied artwork once. Clear so the post-switch
-      // counts measure only the re-apply.
+      // Baseline: the first visit filled the empty slots. Clear so the
+      // post-switch calls measure only the switch's apply, and let every slot
+      // be filled by now — the fill-only fetch would answer "skip" for each.
       vi.mocked(cachedStore.getCachedGameDetail).mockClear();
       vi.mocked(backend.getSgdbArtworkBase64).mockClear();
+      vi.mocked(backend.getSgdbSlotArtwork).mockClear();
+      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
+      vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: "NEW=", no_api_key: false });
+      vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: false });
+      const setArtwork = vi.fn().mockResolvedValue(undefined);
+      vi.stubGlobal("SteamClient", {
+        Apps: { SetCustomArtworkForApp: setArtwork, SetShortcutIcon: vi.fn(), OpenAppSettingsDialog: vi.fn() },
+      });
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: true, rom_id: 51 });
 
       await act(async () => {
@@ -782,11 +820,24 @@ describe("RomMPlaySection", () => {
         await Promise.resolve();
       });
       await flushAsync();
+      await flushAsync();
 
-      // Cache re-read for the newly-bound rom_id, and the artwork gate reset drives
-      // a fresh 4-asset SGDB re-apply (#1298 item 3).
+      // Cache re-read for the newly-bound rom_id, and the switch replaces hero,
+      // logo and wide grid through the replacing fetch, as Refresh Artwork does,
+      // with the icon as before.
       expect(vi.mocked(cachedStore.getCachedGameDetail)).toHaveBeenCalledWith(testAppId);
-      expect(vi.mocked(backend.getSgdbArtworkBase64)).toHaveBeenCalledTimes(4);
+      expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls).toEqual([
+        [51, 1],
+        [51, 2],
+        [51, 3],
+        [51, 4],
+      ]);
+      expect(backend.getSgdbSlotArtwork).not.toHaveBeenCalled();
+      expect(setArtwork.mock.calls).toEqual([
+        [testAppId, "NEW=", "png", 1],
+        [testAppId, "NEW=", "png", 2],
+        [testAppId, "NEW=", "png", 3],
+      ]);
     });
 
     it("ignores a version_switched event for a different appId", async () => {

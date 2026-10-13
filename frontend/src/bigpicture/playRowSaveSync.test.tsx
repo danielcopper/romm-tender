@@ -36,6 +36,7 @@ vi.mock("../utils/connectionHeartbeat", () => ({ registerConnectionHeartbeat: vi
 vi.mock("../utils/artwork", () => ({
   applyArtwork: vi.fn(() => Promise.resolve()),
   cancelArtworkApply: vi.fn(() => Promise.resolve()),
+  fillEmptyArtwork: vi.fn(() => Promise.resolve()),
 }));
 vi.mock("../utils/metadataPatches", () => ({ updatePlaytimeDisplay: vi.fn() }));
 // The store's BIOS / core / achievement background refreshes are not on the path
