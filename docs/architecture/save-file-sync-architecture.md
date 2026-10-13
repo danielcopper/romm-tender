@@ -364,14 +364,14 @@ preconditions (a registered device — otherwise the #1478 upload guard would on
 and an installed ROM), then downloads every target to a scratch `.tmp` sibling (never the real save files) and
 classifies it. A **wholesale** failure _before_ the apply phase confirms **nothing**: the device/install precheck
 refuses with `device_not_registered` or `not_installed`, a RomM error from `list_saves` or a phase-1 download answers
-`classify_error`'s reason and message, and a save file on this device that cannot be read, or a saves folder that cannot
-be created, refuses with `migration_failed`. A failure writing the scratch download is not among them: the RomM adapter
-reports it as a connection error, so it answers `server_unreachable`. The scratch temps are cleared and the wizard stays
-open on the message, so the user can simply retry Track. Once the apply phase begins, a **per-target** upload failure is
-**counted, not fatal** (`Could not migrate N save(s)`): the slot is still confirmed and the failed source is left in
-place, so no save that lives only in the legacy bucket is ever lost. (A migration whose server had no legacy saves is a
-no-op that confirms the slot silently; a requested migration can never return `success: true` with nothing migrated
-while legacy saves existed.)
+`classify_error`'s reason and message, and a save file on this device that cannot be read or written — the scratch
+download included, which the RomM adapter raises as `DeviceWriteError` rather than a RomM error — or a saves folder that
+cannot be created, refuses with `migration_failed`. The scratch temps are cleared and the wizard stays open on the
+message, so the user can simply retry Track. Once the apply phase begins, a **per-target** upload failure is **counted,
+not fatal** (`Could not migrate N save(s)`): the slot is still confirmed and the failed source is left in place, so no
+save that lives only in the legacy bucket is ever lost. (A migration whose server had no legacy saves is a no-op that
+confirms the slot silently; a requested migration can never return `success: true` with nothing migrated while legacy
+saves existed.)
 
 The wizard names the target slot on **every** surface — the pre-click explainer under the legacy entry ("the archived
 save itself is left untouched"), the confirm modal ("Copy the archived save into 'default'? If a local save differs,
@@ -1310,9 +1310,10 @@ neither in place):
    server-side dedup. This is what stops a repeat-copy of already-present content from re-pointing the tracked save.
 7. `SaveCopyService._copy_save_to_slot_io` then: `confirm_slot(target)` (creates the slot if new, switches active +
    confirms) → `do_download_save` (the chosen content onto the canonical local file, quarantining the current local file
-   first, #965) → `do_upload_save(server_save=None, overwrite=False)` — a POST into the now-active target slot. A
-   **409** is `target_slot_busy` (the target has newer changes from another device — sync it first, then retry); any
-   other upload error is `copy_failed`.
+   first, #965; a local file this device cannot write is `copy_failed`) →
+   `do_upload_save(server_save=None, overwrite=False)` — a POST into the now-active target slot. A **409** is
+   `target_slot_busy` (the target has newer changes from another device — sync it first, then retry); any other upload
+   error is `copy_failed`.
 
 The status union mirrors `RollbackStatus`:
 `ok | not_configured | invalid_slot_name | rom_not_installed | version_deleted | unsupported{reason?} |

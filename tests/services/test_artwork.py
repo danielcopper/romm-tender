@@ -16,7 +16,7 @@ from fakes.running_loop import running_loop
 from domain.artwork_paths import cover_meta_filename
 from domain.cover_refresh import scan_cover_refresh_candidates
 from domain.rom import Rom
-from lib.errors import Refused, RommConnectionError, RommNotFoundError, RommServerError
+from lib.errors import DeviceWriteError, Refused, RommConnectionError, RommNotFoundError, RommServerError
 from models.cover import CoverRevalidation
 from services.artwork import ArtworkService, ArtworkServiceConfig
 
@@ -1843,7 +1843,7 @@ class TestRefreshCover:
         steam_config.grid_dir.return_value = grid
         _seed_rom(uow, 42, app_id=999, cover_path="old/path.png")
         romm_api.get_rom.return_value = {"id": 42, "path_cover_large": "/c.png"}
-        romm_api.download_cover.side_effect = OSError("disk full")
+        romm_api.download_cover.side_effect = DeviceWriteError("[Errno 28] No space left on device")
         refreshing = artwork_service.refresh_cover(42)
 
         with pytest.raises(Refused) as refused:
@@ -1853,7 +1853,7 @@ class TestRefreshCover:
             "download_failed",
             "The cover could not be saved on this device",
         )
-        assert "disk full" not in refused.value.message
+        assert "No space left" not in refused.value.message
         with uow:
             assert uow.roms.get(42).cover_path == "old/path.png"
 

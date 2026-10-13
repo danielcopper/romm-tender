@@ -1,6 +1,7 @@
 """Standalone HTTP client for the RomM API."""
 
 import base64
+import contextlib
 import gzip
 import json
 import logging
@@ -20,12 +21,16 @@ from adapters.romm.retry import RetryLadder, RetryListener
 from domain.custom_headers import stored_custom_headers
 from lib.certifi_bundle import ca_bundle as _ca_bundle
 from lib.errors import (
+    DeviceWriteError,
     RommApiError,
     RommAuthError,
+    RommClientError,
     RommConflictError,
     RommConnectionError,
     RommForbiddenError,
     RommNotFoundError,
+    RommRateLimitedError,
+    RommReportedServerError,
     RommServerError,
     RommSSLError,
     RommTimeoutError,
@@ -36,6 +41,14 @@ from lib.url_host import same_origin
 from models.cover import CoverRevalidation
 
 _CONTENT_TYPE_JSON = "application/json"
+
+
+def _on_device(operation, *args):
+    """Run a file operation on a download's destination, its ``OSError`` raised as a :class:`DeviceWriteError`."""
+    try:
+        return operation(*args)
+    except OSError as exc:
+        raise DeviceWriteError(str(exc)) from exc
 
 
 class RommHttpAdapter:
@@ -210,27 +223,30 @@ class RommHttpAdapter:
     # Maps HTTP status codes to (error_class, custom_message_template_or_None).
     # None means use the default ``msg``.
     _HTTP_STATUS_MAP: ClassVar[dict[int, tuple[type[RommApiError], str | None]]] = {
-        400: (RommApiError, "Bad request ({method} {url})"),
         401: (RommAuthError, None),
         403: (RommForbiddenError, None),
         404: (RommNotFoundError, None),
         409: (RommConflictError, None),
-        429: (RommServerError, "Rate limited — too many requests ({method} {url})"),
+        429: (RommRateLimitedError, "Rate limited — too many requests ({method} {url})"),
     }
 
-    def _translate_http_status(self, code: int, msg: str, url: str, method: str) -> RommApiError:
-        """Map an HTTP status code to a typed error."""
+    def _translate_http_status(
+        self, code: int, msg: str, url: str, method: str, *, phrase: str | None = None
+    ) -> RommApiError:
+        """Map an HTTP status code to a typed error carrying the answer's reason *phrase*."""
         entry = self._HTTP_STATUS_MAP.get(code)
         if entry:
             cls, tpl = entry
             text = tpl.format(method=method, url=url) if tpl else msg
-            kwargs: dict[str, Any] = {"url": url, "method": method}
-            if cls is RommServerError:
-                kwargs["status_code"] = code
-            return cls(text, **kwargs)
-        if code >= 500:
-            return RommServerError(msg, status_code=code, url=url, method=method)
-        return RommApiError(msg, url=url, method=method)
+            error = cls(text, url=url, method=method)
+        elif code >= 500:
+            error = RommServerError(msg, status_code=code, url=url, method=method)
+        elif 400 <= code < 500:
+            error = RommClientError(msg, status_code=code, url=url, method=method)
+        else:
+            error = RommApiError(msg, url=url, method=method)
+        error.phrase = phrase
+        return error
 
     @staticmethod
     def _read_error_detail(exc: urllib.error.HTTPError) -> Any:
@@ -272,19 +288,25 @@ class RommHttpAdapter:
         return _CONTENT_TYPE_JSON in content_type.lower()
 
     @classmethod
+    def _carries_romm_detail(cls, exc: urllib.error.HTTPError, detail: Any) -> bool:
+        """Whether an error response is RomM's own: a JSON body whose ``detail`` is a non-blank string.
+
+        A missing, unparseable, or non-object body reaches here as
+        ``detail=None`` and is treated exactly like a non-JSON one.
+        """
+        return cls._has_json_content_type(exc) and isinstance(detail, str) and bool(detail.strip())
+
+    @classmethod
     def _is_entity_not_found(cls, exc: urllib.error.HTTPError, detail: Any) -> bool:
         """Whether a 404 is RomM's entity layer answering "this entity does not exist".
 
-        True only for a JSON response whose body parsed to an object carrying a
-        ``detail`` string that names something — i.e. neither blank nor
-        :attr:`_GENERIC_NOT_FOUND_DETAIL` in any casing. A missing, unparseable,
-        or non-object body reaches here as ``detail=None`` and is treated
-        exactly like a non-JSON one.
+        True only for RomM's own answer (:meth:`_carries_romm_detail`) whose
+        ``detail`` names something — i.e. is not
+        :attr:`_GENERIC_NOT_FOUND_DETAIL` in any casing.
         """
-        if not cls._has_json_content_type(exc) or not isinstance(detail, str):
+        if not cls._carries_romm_detail(exc, detail):
             return False
-        named = detail.strip().casefold()
-        return named not in ("", cls._GENERIC_NOT_FOUND_DETAIL.casefold())
+        return detail.strip().casefold() != cls._GENERIC_NOT_FOUND_DETAIL.casefold()
 
     def _translate_not_found(self, exc: urllib.error.HTTPError, url: str, method: str, *, detail: Any) -> RommApiError:
         """Map a 404 to :class:`RommNotFoundError` only when RomM answered about an entity.
@@ -301,8 +323,25 @@ class RommHttpAdapter:
         """
         msg = f"HTTP {exc.code}: {exc.reason} ({method} {url})"
         if self._is_entity_not_found(exc, detail):
-            return self._translate_http_status(exc.code, msg, url, method)
+            return self._translate_http_status(exc.code, msg, url, method, phrase=exc.reason)
         return RommApiError(msg, url=url, method=method)
+
+    def _translate_server_error(
+        self, exc: urllib.error.HTTPError, url: str, method: str, *, detail: Any
+    ) -> RommApiError:
+        """Map a 5xx to :class:`RommReportedServerError` when RomM answered it itself.
+
+        RomM's own answer (:meth:`_carries_romm_detail`) says the server is
+        there; a proxy's HTML or empty 5xx — a 502 for a stopped container —
+        proves nothing about RomM and stays a plain :class:`RommServerError`,
+        which ``classify_error`` calls unreachable.
+        """
+        msg = f"HTTP {exc.code}: {exc.reason} ({method} {url})"
+        if self._carries_romm_detail(exc, detail):
+            error = RommReportedServerError(msg, exc.code, detail=detail, url=url, method=method)
+            error.phrase = exc.reason
+            return error
+        return self._translate_http_status(exc.code, msg, url, method, phrase=exc.reason)
 
     def _translate_unprocessable(
         self, exc: urllib.error.HTTPError, url: str, method: str
@@ -316,7 +355,9 @@ class RommHttpAdapter:
         """
         detail = self._read_error_detail(exc)
         msg = f"HTTP 422: {exc.reason} ({method} {url})"
-        return RommUnprocessableEntityError(msg, detail=detail, url=url, method=method)
+        error = RommUnprocessableEntityError(msg, detail=detail, url=url, method=method)
+        error.phrase = exc.reason
+        return error
 
     def _translate_with_detail(self, exc: urllib.error.HTTPError, url: str, method: str) -> RommApiError:
         """Translate an ``HTTPError`` like :meth:`translate_http_error`, with ``detail`` attached.
@@ -330,11 +371,12 @@ class RommHttpAdapter:
             return self._translate_unprocessable(exc, url, method)
         detail = self._read_error_detail(exc)
         msg = f"HTTP {exc.code}: {exc.reason} ({method} {url})"
-        error = (
-            self._translate_not_found(exc, url, method, detail=detail)
-            if exc.code == 404
-            else self._translate_http_status(exc.code, msg, url, method)
-        )
+        if exc.code == 404:
+            error = self._translate_not_found(exc, url, method, detail=detail)
+        elif exc.code >= 500:
+            error = self._translate_server_error(exc, url, method, detail=detail)
+        else:
+            error = self._translate_http_status(exc.code, msg, url, method, phrase=exc.reason)
         error.detail = detail
         return error
 
@@ -374,8 +416,10 @@ class RommHttpAdapter:
                 return self._translate_unprocessable(exc, url, method)
             if exc.code == 404 and not asset_route:
                 return self._translate_not_found(exc, url, method, detail=self._read_error_detail(exc))
+            if exc.code >= 500:
+                return self._translate_server_error(exc, url, method, detail=self._read_error_detail(exc))
             msg = f"HTTP {exc.code}: {exc.reason} ({method} {url})"
-            return self._translate_http_status(exc.code, msg, url, method)
+            return self._translate_http_status(exc.code, msg, url, method, phrase=exc.reason)
         if isinstance(exc, urllib.error.URLError):
             return (
                 self._translate_unwrapped(exc.reason, url, method)
@@ -521,6 +565,9 @@ class RommHttpAdapter:
     ) -> tuple[int, int]:
         """Read *resp* into *dest_path* and return ``(total, downloaded)``.
 
+        A destination this device cannot open or write raises
+        :class:`DeviceWriteError`; a failure reading *resp* stays the transfer's.
+
         ``mode`` is ``"ab"`` for a resumed transfer (append onto the existing
         ``.tmp``) or ``"wb"`` for a fresh one. ``downloaded`` seeds the running
         byte count with the bytes already on disk so progress + validation count
@@ -531,7 +578,8 @@ class RommHttpAdapter:
         if total is None:
             raw_total = resp.headers.get("Content-Length")
             total = int(raw_total) if raw_total else 0
-        with open(dest_path, mode) as f:
+        f = _on_device(open, dest_path, mode)
+        try:
             while True:
                 try:
                     chunk = resp.read(block_size)
@@ -543,10 +591,19 @@ class RommHttpAdapter:
                     ) from exc
                 if not chunk:
                     break
-                f.write(chunk)
+                _on_device(f.write, chunk)
                 downloaded += len(chunk)
                 if progress_callback and total:
                     progress_callback(downloaded, total)
+        except BaseException:
+            # The failure already raised is the one to report; the close below
+            # would only repeat a write fault on whatever the buffer still holds.
+            with contextlib.suppress(OSError):
+                f.close()
+            raise
+        # Not a ``with`` block: a file smaller than the write buffer reaches the
+        # disk only here, so a full disk fails the close rather than a write.
+        _on_device(f.close)
         return total, downloaded
 
     @staticmethod
@@ -631,7 +688,7 @@ class RommHttpAdapter:
                         total=total,
                     )
                 self._validate_download(total, downloaded)
-            except RommApiError:
+            except (RommApiError, DeviceWriteError):
                 raise
             except Exception as exc:
                 # Asset-level 404: a byte fetch answers about a FILE, never about an
@@ -698,7 +755,7 @@ class RommHttpAdapter:
                 # plain status mapping — which is what arms the ``url_cover`` fallback
                 # on a static-mount cover miss. Do not unify it with the API routes.
                 raise self.translate_http_error(exc, url, "GET", asset_route=True) from exc
-            except RommApiError:
+            except (RommApiError, DeviceWriteError):
                 raise
             except Exception as exc:
                 raise self.translate_http_error(exc, url, "GET") from exc
@@ -760,7 +817,7 @@ class RommHttpAdapter:
                         url=encoded_url,
                     )
                 self._validate_download(total, downloaded)
-            except RommApiError:
+            except (RommApiError, DeviceWriteError):
                 raise
             except Exception as exc:
                 # Asset-level 404: a byte fetch answers about a FILE, never about an

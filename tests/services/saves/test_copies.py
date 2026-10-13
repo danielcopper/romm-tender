@@ -13,7 +13,7 @@ import pytest
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.save_answer import save_shape_message, unestablished_answer
-from lib.errors import RommNotFoundError
+from lib.errors import DeviceWriteError, RommNotFoundError
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
@@ -468,6 +468,25 @@ class TestCopySaveToSlotRefusals:
         assert result.get("message")
         # The source save is untouched.
         assert 10 in fake.saves
+
+    @pytest.mark.asyncio
+    async def test_a_save_this_device_cannot_write_is_copy_failed(self, tmp_path):
+        """The chosen save cannot be written here — an answer of the copy's own, never a transport error."""
+        svc, fake = make_service(tmp_path)
+        _create_save(tmp_path)
+        local_hash = _file_md5(str(tmp_path / "saves" / "gba" / "pokemon.srm"))
+        _setup_configured(svc, tmp_path, active_slot="autosave", tracked_id=100, last_sync_hash=local_hash)
+        fake.saves[100] = _tracked_save(100, slot="autosave")
+        fake.saves[10] = _server_save(save_id=10, rom_id=42, slot=None, updated_at="2026-02-01T10:00:00Z")
+        fake.fail_download_on(10, DeviceWriteError("[Errno 28] No space left on device"))
+
+        result = await svc.copy_save_to_slot(42, 10, TARGET)
+
+        assert result == {
+            "status": "copy_failed",
+            "message": "it could not be written on this device ([Errno 28] No space left on device)",
+        }
+        assert not any(call[0] == "upload_save" for call in fake.call_log)
 
     @pytest.mark.asyncio
     async def test_conflict_blocked_on_dirty_current_slot(self, tmp_path):

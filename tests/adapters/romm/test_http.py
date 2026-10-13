@@ -1143,6 +1143,7 @@ class TestTranslateHttpError:
         assert isinstance(result, RommApiError)
         assert not isinstance(result, RommServerError)
         assert "418" in str(result)
+        assert result.status_code == 418
 
     def test_url_error_plain_becomes_connection_error(self, romm_http):
         exc = urllib.error.URLError("Connection refused")
@@ -1652,6 +1653,7 @@ class TestTranslateHttpStatus:
         err = client._translate_http_status(418, "I'm a teapot", "/api/test", "GET")
         assert isinstance(err, RommApiError)
         assert not isinstance(err, RommServerError)
+        assert err.status_code == 418
 
 
 class TestTranslateUnwrapped:

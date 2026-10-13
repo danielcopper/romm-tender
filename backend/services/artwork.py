@@ -813,8 +813,9 @@ class ArtworkService:
         Refuses with ``not_synced``, ``no_grid_dir``, ``not_found`` (RomM
         answered no ROM) and ``no_cover``, and with ``download_failed`` where
         this device raises an ``OSError`` around the download — the cover's
-        folder, the move into place, the validator sidecar; the ROM row is
-        left as it was. A RomM error propagates.
+        folder, the file the download writes, the move into place, the
+        validator sidecar; the ROM row is left as it was. A RomM error
+        propagates.
         """
         async with self._rules.hold("refresh_cover_artwork", update=True, migration=True, prune=True):
             app_id = await self._loop.run_in_executor(None, self._read_bound_app_id, rom_id)

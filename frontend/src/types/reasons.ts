@@ -10,6 +10,8 @@ export type RommErrorReason =
   | "config_error"
   | "device_sync_disabled"
   | "not_found"
+  | "rate_limited"
+  | "server_error"
   | "server_unreachable"
   | "unknown"
   | "unsupported";

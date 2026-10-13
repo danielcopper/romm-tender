@@ -48,6 +48,10 @@ class RommApiError(Exception):
     # a caller can branch on two responses that share a status code but differ in
     # ``detail`` without every error path paying to read the body.
     detail: Any = None
+    # The reason phrase of the HTTP answer this error translates (``Request
+    # Entity Too Large``), set by the adapter's translation; ``None`` for an
+    # error no HTTP answer carried.
+    phrase: str | None = None
 
     def __init__(self, message, url=None, method=None):
         self.url = url
@@ -95,12 +99,48 @@ class RommUnprocessableEntityError(RommApiError):
         super().__init__(message, url=url, method=method)
 
 
+class RommClientError(RommApiError):
+    """A 4xx Tender has no class of its own for: RomM, or a proxy in front of it, refused the request.
+
+    Carries the status, so a give-up never records RomM as unreachable — the
+    server answered, whatever it answered.
+    """
+
+    def __init__(self, message, status_code, url=None, method=None):
+        self.status_code = status_code
+        super().__init__(message, url=url, method=method)
+
+
 class RommServerError(RommApiError):
     """5xx server errors (500, 502, 503, etc.)."""
 
     def __init__(self, message, status_code=500, url=None, method=None):
         self.status_code = status_code
         super().__init__(message, url=url, method=method)
+
+
+class RommReportedServerError(RommServerError):
+    """A 5xx RomM answered itself: a JSON body carrying a non-blank ``detail``.
+
+    The same proof that makes a 404 an entity verdict. Still retried, but never
+    read as RomM being unreachable — a proxy's 5xx for a stopped container has
+    no such body and stays a plain :class:`RommServerError`.
+    """
+
+    def __init__(self, message, status_code, *, detail: str, url=None, method=None):
+        self.detail = detail
+        super().__init__(message, status_code=status_code, url=url, method=method)
+
+
+class RommRateLimitedError(RommServerError):
+    """429 Too Many Requests — not retried, since another attempt only adds to the load.
+
+    A :class:`RommServerError` because the pairing-code exchange
+    (``RommApi.exchange_pairing_code``) catches its 429 as one.
+    """
+
+    def __init__(self, message, url=None, method=None):
+        super().__init__(message, status_code=429, url=url, method=method)
 
 
 class RommConnectionError(RommApiError):
@@ -165,6 +205,16 @@ class PairingCodeRateLimitedError(RommApiError):
     """Pairing-code exchange rejected: too many exchange attempts from this client (429)."""
 
 
+class DeviceWriteError(OSError):
+    """A download's destination on this device could not be opened or written.
+
+    Raised by the RomM adapter in place of the ``OSError`` behind it, whose
+    text it carries — a full disk among them. Not a :class:`RommApiError`: it is
+    never retried and says nothing about RomM being reachable, and each caller
+    answers it in its own "on this device" wording.
+    """
+
+
 class DeviceNotRegisteredError(Exception):
     """A save upload was attempted with no registered device id.
 
@@ -188,8 +238,9 @@ def classify_error(exc):
 
     ``reason`` is a canonical :class:`lib.list_result.ErrorCode` slug
     (returned as its string value). Several exception types fold onto one
-    slug \u2014 connection/timeout/SSL/5xx/generic-API plus raw socket errors
-    all map to ``server_unreachable``; 401/403 map to ``auth_failed`` \u2014 but
+    slug \u2014 connection/timeout/SSL, a 5xx RomM did not report itself,
+    a status-less API error and raw socket errors all map to
+    ``server_unreachable``; 401/403 map to ``auth_failed`` \u2014 but
     each branch keeps a distinct human ``message``. In particular the 403
     branch stays distinguishable from the 401 branch: a Cloudflare
     bot-fight 403 at the tunnel edge is not a wrong-credentials failure, so
@@ -214,6 +265,10 @@ def classify_error(exc):
             ErrorCode.SERVER_UNREACHABLE.value,
             "Server unreachable \u2014 check your URL and ensure RomM is running",
         )
+    if isinstance(exc, RommRateLimitedError):
+        return "rate_limited", "RomM is rate-limiting requests \u2014 try again in a moment"
+    if isinstance(exc, RommReportedServerError):
+        return "server_error", f"RomM reported an error (HTTP {exc.status_code}) \u2014 {exc.detail.strip()}"
     if isinstance(exc, RommServerError):
         code = exc.status_code or 500
         return ErrorCode.SERVER_UNREACHABLE.value, f"Server error ({code}) \u2014 check your RomM server logs"
@@ -228,6 +283,9 @@ def classify_error(exc):
             "device_sync_disabled",
             "Save sync is disabled for this device on the RomM server — enable it in RomM's device settings",
         )
+    if isinstance(exc, RommApiError) and exc.status_code is not None and 400 <= exc.status_code < 500:
+        answer = f"HTTP {exc.status_code} {exc.phrase}" if exc.phrase else f"HTTP {exc.status_code}"
+        return ErrorCode.UNKNOWN.value, f"RomM or a proxy in front of it refused the request ({answer})"
     if isinstance(exc, RommApiError):
         return ErrorCode.SERVER_UNREACHABLE.value, str(exc)
     if isinstance(exc, (ConnectionError, TimeoutError, socket.gaierror)):

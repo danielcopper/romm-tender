@@ -28,11 +28,20 @@ unreachable, and reaching the CDN is no evidence that RomM came back. Its ladder
 `self._retry.enter(..., romm_origin=False)` for the same reason.
 
 The bit is set only where a ladder gives up, and an error carrying a **4xx status code** never sets it — the server
-answered, whatever it answered. That peel is deliberate and load-bearing: `classify_error` is a user-messaging
-classifier that folds every unbranched `RommApiError` onto `server_unreachable` so a display string always exists, which
-would otherwise sweep in the routine 409 that every `overwrite=false` save upload is designed to provoke. A 404 that
-arrives as a plain `RommApiError` carries no status code and does still set it — nothing proved RomM answered it, the
-same fail-open reading described below.
+answered, whatever it answered. So every HTTP error RomM or a proxy answered carries its status — a 4xx with no class of
+its own is `RommClientError` — and a new translation that drops the status would mark RomM unreachable on a refusal. The
+peel is deliberate and load-bearing: `classify_error` is a user-messaging classifier whose last branch folds every
+status-less `RommApiError` onto `server_unreachable` so a display string always exists, and the routine 409 that every
+`overwrite=false` save upload is designed to provoke must never reach that branch's verdict. A 404 that arrives as a
+plain `RommApiError` carries no status code and does still set it — nothing proved RomM answered it, the same fail-open
+reading described below.
+
+A 5xx is RomM's own only on the same proof as an entity 404's (below, short of the generic-detail blocklist): a JSON
+body carrying a non-blank `detail` string. That one is `RommReportedServerError` — retried, but answered `server_error`
+and never setting the bit; every other 5xx stays `RommServerError` and counts as unreachable. A 429 is
+`RommRateLimitedError`, never retried. A download's destination this device cannot open or write is not RomM's at all:
+`_stream_to_file` raises `DeviceWriteError`, an `OSError`, and the download methods let it pass untranslated — wrapping
+it as a transport error would retry a full disk three times and mark RomM unreachable.
 
 `RommNotFoundError` does not mean "the server said 404". It means **RomM's entity layer said this entity does not
 exist**, and downstream that reading is authority: the removed-game cleanup deletes on it, the version picker marks a

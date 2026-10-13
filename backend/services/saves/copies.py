@@ -166,7 +166,8 @@ class SaveCopyService:
            purely from ``active_slot`` (``_resolve_upload_slot``), so this must
            precede the POST for the copy to land in the target.
         3. Download the chosen save's content onto the canonical local file
-           (quarantines the current local file first, #965).
+           (quarantines the current local file first, #965). Where this device
+           cannot write it, the copy is ``copy_failed``.
         4. POST that content into the now-active target slot
            (``server_save=None`` → a new save, ``overwrite=false`` → the 409
            backstop guards a busy target). A 409 is ``target_slot_busy`` (the
@@ -195,9 +196,18 @@ class SaveCopyService:
         # Bring the chosen save's content down onto the canonical local file. The
         # existing local file (the current slot's save) is quarantined into
         # ``.romm-backup`` first, so nothing that lives only on disk is lost.
-        self._sync_engine.do_download_save(
-            target_save, saves_dir, canonical, save_state, device_id, system, default_slot
-        )
+        try:
+            self._sync_engine.do_download_save(
+                target_save, saves_dir, canonical, save_state, device_id, system, default_slot
+            )
+        except OSError as e:
+            self._logger.error(
+                "_copy_save_to_slot_io: save %s could not be written for rom=%s: %s",
+                save_id,
+                rom_id,
+                e,
+            )
+            return {"status": "copy_failed", "message": f"it could not be written on this device ({e})"}
 
         try:
             self._sync_engine.do_upload_save(

@@ -1296,7 +1296,7 @@ class TestConfirmSlotChoice:
 
         assert (refused.value.reason, refused.value.message) == (
             "migration_failed",
-            "The saves could not be migrated: a save file on this device could not be read,"
+            "The saves could not be migrated: a save file on this device could not be read or written,"
             " or its folder could not be created.",
         )
         assert refused.value.details == {}

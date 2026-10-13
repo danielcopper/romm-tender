@@ -244,10 +244,12 @@ class TestClassifyError:
         assert "RomM's device settings" in msg
 
     def test_conflict_error_is_api_error(self):
-        """RommConflictError is a subclass of RommApiError, not specifically handled."""
-        code, msg = classify_error(RommConflictError("conflict"))
-        assert code == "server_unreachable"
-        assert msg == "conflict"
+        """A 409 reaching the classifier is a refusal the server answered, never an unreachable one."""
+        error = RommConflictError("HTTP 409: Conflict (POST http://romm.local/api/saves?device_id=d1)")
+        error.phrase = "Conflict"
+        code, msg = classify_error(error)
+        assert code == "unknown"
+        assert msg == "RomM or a proxy in front of it refused the request (HTTP 409 Conflict)"
 
     def test_raw_connection_error_is_server_unreachable(self):
         """A socket failure that never passed through the adapter's translation.

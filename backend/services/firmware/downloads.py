@@ -160,10 +160,10 @@ class FirmwareDownloader:
 
         A RomM error propagates unlogged: whoever answers it logs it. Every
         refusal raised here is logged here. Where this device cannot create the
-        folder, the ``.tmp`` is removed and the download refuses with
-        ``bios_download_failed``. The adapter answers everything in the transfer
-        as a RomM error, including a ``.tmp`` it could not open or write, so an
-        ``OSError`` here is this device's.
+        folder or write the ``.tmp`` — the adapter raises the latter as
+        ``DeviceWriteError`` — the ``.tmp`` is removed and the download refuses
+        with ``bios_download_failed``. Every other failure of the transfer
+        reaches here as a RomM error, so an ``OSError`` here is this device's.
         """
         firmware_id = int(firmware_id)
         fw = await self._loop.run_in_executor(None, self._romm_api.get_firmware, firmware_id)
@@ -186,7 +186,7 @@ class FirmwareDownloader:
             if isinstance(e, OSError):
                 raise Refused(
                     "bios_download_failed",
-                    f"{file_name} could not be downloaded: its folder could not be created on this device",
+                    f"{file_name} could not be downloaded: it could not be written on this device",
                 ) from e
             raise
 
