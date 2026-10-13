@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
@@ -19,6 +20,7 @@ import pytest
 from adapters.atlas_saves import AtlasSaveLocationAdapter
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.answered_save_directory import AnsweredSaveDirectory
+from domain.emulator_sources import SourceFinding
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import SaveAnswer, SaveComponent, unestablished_answer
 from lib.errors import Refused
@@ -434,6 +436,57 @@ class TestNeverIntoTheContentDirectory:
         await svc.record_save_directories_once()
 
         assert _recorded(svc) is None
+
+
+def _not_read(directory: str) -> SaveAnswer:
+    """A per-game answer at *directory* whose place was not read from the emulator's settings."""
+    finding = SourceFinding(code="emulator-config-missing", data={"config": "/cfg/retroarch.cfg"})
+    return replace(_answer(directory), state="place_not_read", finding=finding, source="retrodeck")
+
+
+class TestNeverIntoAPlaceNotRead:
+    """A directory the emulator's settings did not name is a default it may not write to."""
+
+    def test_a_moved_answer_not_read_from_the_settings_moves_nothing_and_keeps_the_record(self, tmp_path, dirs):
+        old, new = dirs
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        save = _create_save(tmp_path, content=b"progress")
+
+        _follow(svc, _not_read(str(new)))
+
+        assert save.read_bytes() == b"progress"
+        assert not new.exists()
+        assert _recorded(svc) == str(old)
+
+    def test_a_first_sight_records_nothing(self, tmp_path, dirs):
+        _old, new = dirs
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+
+        _follow(svc, _not_read(str(new)))
+
+        assert _recorded(svc) is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("entry", ["pre_launch_sync", "post_exit_sync", "sync_rom_saves"])
+    async def test_an_entry_point_carries_nothing_before_it_refuses(self, tmp_path, dirs, entry: str):
+        old, new = dirs
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        save = _create_save(tmp_path, content=b"progress")
+        _seed_answer(svc, _not_read(str(new)))
+        sync = getattr(svc, entry)(_ROM)
+
+        with pytest.raises(SaveShapeUnsupported):
+            await sync
+
+        assert save.read_bytes() == b"progress"
+        assert not new.exists()
+        assert _recorded(svc) == str(old)
 
 
 class TestTheSecondaryWritePathsFollowFirst:

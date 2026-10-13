@@ -25,6 +25,7 @@ the same vocabulary, drawn for a controller on one side and for a keyboard and m
 
 - Nothing here may import from `../bigpicture/`, and nothing there may import from here.
 - Nothing in `../shared/` may import from here.
+- Nothing here may import from `../qam/` or `../boot/`, which only `../index.tsx` and its test import.
 
 Anything that turns out to belong to both surfaces moves **down** — UI into `shared/`, the rest into `api/`, `utils/` or
 `types/` — never sideways. Enforced by `import-x/no-restricted-paths` in `eslint.config.js`, whose zones are held to

@@ -10,8 +10,9 @@ last session. If they are different **folders**, Tender flags a migration — tw
 move, so a system that reaches your home through a link (`/home` is a link to `/var/home` on Bazzite and other
 image-based distributions) does not raise a migration for the spelling alone. This typically happens after you use
 RetroDECK's built-in move tool or manually relocate your `retrodeck/` directory. The current home is the one RetroDECK's
-own settings name; while its settings file is missing, unreadable or damaged, or RetroDECK has not been set up yet, the
-home Tender would read is only a default, so it detects no move then and moves nothing.
+own settings name; while its settings file does not name the home, the BIOS folder or the saves folder — the file is
+missing, unreadable or damaged, leaves one of them out, or RetroDECK has not been set up yet — the folder Tender would
+read is only RetroDECK's usual place, so it detects no move then and moves nothing.
 
 Tender does not move your RetroDECK files — RetroDECK handles that. What Tender migrates are the files _it_ manages:
 downloaded ROMs, BIOS files, and save files that it tracks for sync purposes.
@@ -53,11 +54,12 @@ To perform the migration:
 
 Tender updates its internal tracking to point to the new paths and moves any files that need relocating.
 
-**Migrate Files** moves nothing while RetroDECK cannot tell where its folders are: while its settings file is missing,
-unreadable or damaged, or it has not been set up yet, the button answers with the main panel's notice for that, and
-where Tender could not ask RetroDECK about its folders it says **RetroDECK's folders could not be established, so Tender
-downloads into and removes from none of them.** Without RetroDECK it says **Moving needs RetroDECK, which is not
-installed.** The migration stays pending in every case, so you can press again once RetroDECK is back in order.
+**Migrate Files** moves nothing while RetroDECK's settings do not tell where its folders are: while its settings file is
+missing, unreadable or damaged, leaves its home, BIOS folder or saves folder out, or RetroDECK has not been set up yet,
+the button answers with the main panel's notice for that, and where Tender could not ask RetroDECK about its folders it
+says **RetroDECK's folders could not be established, so Tender downloads into and removes from none of them.** Without
+RetroDECK it says **Moving needs RetroDECK, which is not installed.** The migration stays pending in every case, so you
+can press again once RetroDECK is back in order.
 
 ## Conflict Handling
 

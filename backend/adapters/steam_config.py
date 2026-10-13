@@ -62,7 +62,7 @@ class SteamConfigAdapter:
         os.makedirs(grid, exist_ok=True)
         return grid
 
-    # -- VDF read/write (only read_shortcut_exes and read_shortcut_icons are on a live path) --
+    # -- VDF read/write (only read_shortcut_exes, read_shortcut_launch_options and read_shortcut_icons are live) --
 
     def read_shortcuts(self) -> dict[str, Any]:
         path = self.shortcuts_vdf_path()
@@ -106,6 +106,23 @@ class SteamConfigAdapter:
         """
         return self._read_shortcut_field("exe", missing=None)
 
+    def read_shortcut_launch_options(self) -> dict[int, str] | None:
+        """Every non-Steam shortcut's app ID and current ``LaunchOptions``, read off ``shortcuts.vdf``.
+
+        The same reading as :meth:`read_shortcut_exes`, with the same answers —
+        ``None`` when nothing could be read, ``{}`` for a machine with no file —
+        and the same handling of key case and signed app ids. A record with no
+        ``LaunchOptions`` field reads as ``""``, the value the frontend's
+        confirm reads off Steam's details when they carry none
+        (``launchOptionsOf``).
+
+        Unlike that reading's caller, this one's caller asks about a write made
+        seconds earlier in this session, which rests on Steam rewriting the file
+        promptly after a launch-options write — measured, and what the file
+        still cannot tell, in docs/architecture/steam-non-steam-shortcuts.md.
+        """
+        return self._read_shortcut_field("launchoptions", missing="")
+
     def read_shortcut_icons(self) -> dict[int, str] | None:
         """Every non-Steam shortcut's app ID and the ``icon`` it points at, ``""`` for none.
 
@@ -121,6 +138,18 @@ class SteamConfigAdapter:
 
         A record without the field is left out when *missing* is ``None``.
         """
+        records = self._read_shortcut_records()
+        if records is None:
+            return None
+        values: dict[int, str] = {}
+        for fields in records:
+            app_id, value = fields.get("appid"), fields.get(name, missing)
+            if isinstance(app_id, int) and isinstance(value, str):
+                values[to_unsigned_app_id(app_id)] = value
+        return values
+
+    def _read_shortcut_records(self) -> list[dict[str, Any]] | None:
+        """Every shortcut record in ``shortcuts.vdf``, its keys lower-cased; ``None`` when nothing could be read."""
         path = self.shortcuts_vdf_path()
         if not path:
             self._logger.warning("Could not locate Steam's userdata directory; no shortcut was read")
@@ -128,7 +157,7 @@ class SteamConfigAdapter:
         if not os.path.exists(path):
             # A machine that has never had a non-Steam shortcut has no file, and
             # that is a finished reading of nothing rather than a failed one.
-            return {}
+            return []
         try:
             with open(path, "rb") as handle:
                 raw = vdf.binary_loads(handle.read())
@@ -139,15 +168,11 @@ class SteamConfigAdapter:
         if not isinstance(entries, dict):
             self._logger.warning(f"{path} holds no shortcut list")
             return None
-        values: dict[int, str] = {}
-        for entry in entries.values():
-            if not isinstance(entry, dict):
-                continue
-            fields = {key.lower(): value for key, value in entry.items()}
-            app_id, value = fields.get("appid"), fields.get(name, missing)
-            if isinstance(app_id, int) and isinstance(value, str):
-                values[to_unsigned_app_id(app_id)] = value
-        return values
+        return [
+            {key.lower(): value for key, value in entry.items()}
+            for entry in entries.values()
+            if isinstance(entry, dict)
+        ]
 
     def write_shortcuts(self, data: dict[str, Any]) -> None:
         path = self.shortcuts_vdf_path()

@@ -6,7 +6,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from domain.retrodeck_folders import EveryFolderRefused
+from domain.retrodeck_folders import EveryFolderRefused, FolderRefused
 from lib.errors import NamedRefused, Refused
 from lib.url_host import romm_namespace
 from services.prune._models import (
@@ -299,14 +299,18 @@ class PruneService:
     async def _start_prune(self, request: object, began: list[asyncio.Task[None]]) -> dict[str, Any]:
         if not isinstance(request, dict) or request.get("confirmed") is not True:
             raise Refused("confirmation_required", "Explicit confirmation is required before cleanup.")
-        # While RetroDECK's folders are defaults, or could not be established,
-        # the cleanup does not start at all, whatever it would remove, so
-        # nothing of it is half done. Any other missing ROM root refuses only
-        # the removal of each game's files, and a system whose own folder could
-        # not be asked only the removal of that system's games.
+        # While RetroDECK's ROM root or saves root may not be used, or its
+        # folders could not be established, the cleanup does not start at all,
+        # whatever it would remove, so nothing of it is half done. Any other
+        # missing ROM root refuses only the removal of each game's files, and a
+        # system whose own folder could not be asked only the removal of that
+        # system's games.
         root = await self._loop.run_in_executor(None, self._retrodeck_folders.rom_root)
         if isinstance(root, EveryFolderRefused):
             raise root
+        saves_root = await self._loop.run_in_executor(None, self._retrodeck_folders.saves_root)
+        if isinstance(saves_root, FolderRefused):
+            raise saves_root
         selected = self._finalized_selection(request)
         options = parse_options(request, selected)
         preview_id = request.get("preview_id")

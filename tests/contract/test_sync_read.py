@@ -454,6 +454,28 @@ async def test_set_collection_naming_mode_persists(harness):
     assert harness.settings["collection_naming_mode"] == "merge"
 
 
+async def test_set_qam_entry_position_persists(harness):
+    """set_qam_entry_position stores the value and get_settings reports it back."""
+    assert harness.endpoints.get_settings()["qam_entry_position"] == "above_decky"
+
+    result = harness.endpoints.set_qam_entry_position("below_decky")
+    assert result == {"success": True}
+    assert harness.settings["qam_entry_position"] == "below_decky"
+    assert harness.endpoints.get_settings()["qam_entry_position"] == "below_decky"
+
+    result = harness.endpoints.set_qam_entry_position("above_decky")
+    assert result == {"success": True}
+    assert harness.endpoints.get_settings()["qam_entry_position"] == "above_decky"
+
+
+async def test_set_qam_entry_position_rejects_invalid(harness):
+    """An unknown position is answered with the failure shape and changes nothing."""
+    result = harness.endpoints.set_qam_entry_position("first")
+    assert result["success"] is False
+    assert result["reason"] == "invalid_position"
+    assert harness.endpoints.get_settings()["qam_entry_position"] == "above_decky"
+
+
 async def test_set_collection_naming_mode_rejects_invalid(harness):
     """An unrecognised mode returns the canonical failure shape and stores nothing."""
     result = harness.endpoints.set_collection_naming_mode("fancy")

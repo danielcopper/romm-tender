@@ -214,6 +214,8 @@ locally with `mise run docs`.
 - **RomM API quirks**: Filter param is `platform_ids` (plural). Cover URLs have unencoded spaces (must URL-encode).
   Paginated: `{"items": [...], "total": N}`. List calls page via `lib/romm_paging.py` and append
   `&with_char_index=false&with_filter_values=false` to skip aggregations the server otherwise computes on every request.
+  Every `/api/roms` walk that pages with `offset` also sends `order_by=id`; a walk without it is not stable under a
+  concurrent scan (why: `_WALK_ORDER` in `adapters/romm/romm_api.py`).
 - **RomM minimum version**: Requires RomM >= 5.3.0, hard-rejected in `test_connection()` (`MIN_ROMM_VERSION` in
   `domain/identity.py`) — Tender is inert until the server is updated.
 - **User-Agent on outgoing HTTP**: SteamGridDB **and** RomM behind Cloudflare Tunnel reject the default `Python-urllib`
@@ -508,24 +510,31 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **Every RetroDECK folder Tender downloads into, removes from, bounds a removal by or reads for the move code is the
   resolver's answer, asked through `adapters/retrodeck_folders.py`; no module reads RetroDECK's settings or builds such
   a folder from a root — except the move code, which joins `bios` and `saves` onto each old home a pending move left —
-  and while RetroDECK reports `marker-missing`, `marker-unreadable`, `marker-invalid` or `not-set-up`, or where
-  detecting the sources or a question about RetroDECK's health or one of its four roots raised, none of those folders is
-  used — except that a download while RetroDECK is switched off says so, and a raise on a system's own ROM folder
-  refuses only the presses that need that folder; a removal of a game's files is bounded by its system's own ROM folder,
-  never by the ROM root** — test + prompt-only — `tests/adapters/test_retrodeck_folders.py` (the real resolver over tmp
-  homes: every folder its answer, each finding refusing every question, `TestWhereAQuestionToTheResolverRaises` and
-  `TestWhereDetectingTheSourcesRaises` refusing every question for a raise on the detection, the health or a root and
-  only its own for a system's folder, and `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and
-  `tests/contract/test_retrodeck_folders.py` (under each finding, and where the detection, RetroDECK's health or one of
-  its roots could not be asked, no press downloads, deletes, cleans up or migrates there); the system-folder bound by
-  `tests/services/test_downloads.py::TestASystemFolderLinkedToAnotherDrive` and the linked-folder and one-system cases
-  of `tests/contract/test_prune.py`, with Uninstall all's one-system case in `tests/contract/test_retrodeck_folders.py`
+  and a root the resolver only assumed (`assumed` in its roots answer, `domain/source_roots.py`) or gives no path for is
+  used for nothing, each root judged by its own provenance, also under a `marker-*` finding, and a system's folder going
+  with its ROM root; where detecting the sources or the roots question raised, none of those folders is used — except
+  that a download while RetroDECK is switched off says so, and a raise on a system's own ROM folder refuses only the
+  presses that need that folder; a removal of a game's files is bounded by its system's own ROM folder, never by the ROM
+  root** — test + prompt-only — `tests/domain/test_source_roots.py` (the rule) and
+  `tests/adapters/test_retrodeck_folders.py` (the real resolver over tmp homes: every folder its answer,
+  `TestEachRootIsJudgedByItsProvenance` over a settings file without `paths`, one key unset, a `version` alone
+  unreadable, ES-DE's own default ROM folder and an assumed home that is missing, each `marker-*` finding refusing the
+  BIOS, saves and move questions and `not-set-up` every question, `TestWhereAQuestionToTheResolverRaises` and
+  `TestWhereDetectingTheSourcesRaises` refusing every question for a raise on the detection or the roots and only its
+  own for a system's folder, and `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and
+  `tests/contract/test_retrodeck_folders.py` (under each finding, with a key unset, and where the detection or the roots
+  could not be asked, no press downloads, deletes, cleans up or migrates in a folder that was not read, the cleanup is
+  refused at its start for an assumed saves root, and a `version` alone unreadable refuses no press); the system-folder
+  bound by `tests/services/test_downloads.py::TestASystemFolderLinkedToAnotherDrive` and the linked-folder and
+  one-system cases of `tests/contract/test_prune.py`, with Uninstall all's one-system case in
+  `tests/contract/test_retrodeck_folders.py`
   (`test_where_one_system_s_folder_question_raises_uninstall_all_goes_on_for_every_other_system`). A save's folder and a
   firmware file's place take the other route, the save and firmware answers (`adapters/atlas_saves.py`,
-  `adapters/atlas_firmware.py`), and this entry does not cover them: under the three `marker-*` findings a save is still
-  synced where the save answer places it, which is then RetroDECK's default — keeping saves out of it is #2286's. Unseen
-  by them: a folder joined onto a root under another name, and a caller that puts the question to RetroDECK's handle
-  itself. Prompt-only: a new caller that downloads into, removes from or bounds a removal by a RetroDECK folder asks
+  `adapters/atlas_firmware.py`), and this entry does not cover them: a save's place comes from the emulator's own
+  settings rather than from `retrodeck.json`, so under the three `marker-*` findings a save still syncs where the
+  emulator keeps it, and a place those settings did not name is the save-answer entry's to refuse. Unseen by them: a
+  folder joined onto a root under another name, and a caller that puts the question to RetroDECK's handle itself.
+  Prompt-only: a new caller that downloads into, removes from or bounds a removal by a RetroDECK folder asks
   `RetroDeckFolders` and raises the refusal it answers with
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (the file's own calls only: a write behind a helper, a write passed as a
@@ -625,8 +634,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   Access window is bound from inside that window's React tree** — test + prompt-only —
   `frontend/src/qam/quickAccessEntry.test.ts`; finding and patching the renderers is device-only. Prompt-only: marker
   and key are `tender`, never `decky`; nothing writes `window.__TABS_HOOK_INSTANCE` or calls its `add()`, and neither it
-  nor a `decky`-marked entry is read as a sign Decky is present; no tab array held, no unpatch added; the entry moves to
-  the tab array's end on every render pass; nothing binds to the Quick Access window at module scope
+  nor a `decky`-marked entry is read as a sign Decky is present — a `decky`-marked entry is read only to place Tender's
+  entry; no tab array held, no unpatch added; on every render pass the handler places the entry by the stored
+  `qam_entry_position` (before the first `decky`-marked entry under `"above_decky"`, the default; last under
+  `"below_decky"` or with no such entry); nothing binds to the Quick Access window at module scope
 - **Tender's section reaches Steam's game page through the ROUTE component's `renderFunc`, and never through the page
   component's own `type`** — test + prompt-only — `frontend/src/bigpicture/patches/gamePageSeam.test.ts`; the install
   (`installGamePagePatch.ts`) is device-only. Prompt-only: the install patches every memo export whose `type` is a
@@ -653,8 +664,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `__call__`-only seam's bound attribute); one `# pragma: no uow-check` suppresses the line for both families.
   Unchecked: a seam that list does not name — `SteamConfigStore.grid_dir()`, `set_steam_input_config()` and
   `write_shortcut_icon()` today — or whose implementation later grows a file read; a seam passed as a bound method (how
-  `read_shortcut_exes` is reached), behind a helper or a local alias, or inside a nested `def`/`lambda`; a UoW opened
-  through a factory attribute not ending in `uow_factory`
+  `read_shortcut_exes` and `read_shortcut_launch_options` are reached), behind a helper or a local alias, or inside a
+  nested `def`/`lambda`; a UoW opened through a factory attribute not ending in `uow_factory`
 - **A shell function whose value is taken with `$(...)` never reaches `exit` — it answers, and its caller aborts** —
   check — `scripts/check_shell_answer_functions.py` over `install.sh`, `scripts/package.sh`, `bin/tender-rom-launcher`
   and every `*.sh` under `scripts/` and `bin/`; its blind spots are listed in its docstring
@@ -668,10 +679,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **Layer import direction (services ↛ adapters, adapters ↛ services, …)** — check — `.importlinter` (`lint-imports`)
 - **Frontend direction: `frontend/src/utils/` and `frontend/src/api/` never import either surface
   (`frontend/src/bigpicture/`, `frontend/src/desktop/`) or `frontend/src/shared/`; `shared/` never imports either
-  surface; the two surfaces never import each other; and no `frontend/src/` module takes part in an import cycle** —
-  check — `frontend/eslint.config.js` (`import-x/no-restricted-paths`, `import-x/no-cycle`), kept live by
-  `frontend/src/eslintBoundaries.test.ts`; code both surfaces need moves DOWN — UI into `shared/`, the rest into `api/`,
-  `utils/` or `types/` — never sideways; type-only imports are not edges
+  surface; the two surfaces never import each other; only `frontend/src/index.tsx` and its test import
+  `frontend/src/qam/` or `frontend/src/boot/`, and neither of those two imports the other; `qam/` never imports either
+  surface; `frontend/src/types/` imports nothing else from `frontend/src/`; and no `frontend/src/` module takes part in
+  an import cycle** — check — `frontend/eslint.config.js` (`import-x/no-restricted-paths`, `import-x/no-cycle`), kept
+  live by `frontend/src/eslintBoundaries.test.ts`; code both surfaces need moves DOWN — UI into `shared/`, the rest into
+  `api/`, `utils/` or `types/` — never sideways; `boot/` sits beside `index.tsx` and may import a surface; a type-only
+  import is no edge for the cycle rule, while a zone reports it like any other import
 - **No bare `# type: ignore` / blanket suppressions** — check — `scripts/check_no_bare_ignores.sh`
 - **A transport failure and an endpoint's own failure never arrive in the same shape, on either end** — test +
   prompt-only — `hostSocket.test.ts` for the frontend half (`frontend/src/api/hostSocket.ts`); the backend half is
@@ -686,6 +700,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   check** — check — `frontend/scripts/check-package-budgets.mjs` (`pnpm -C frontend check:packages`), over the record
   the build writes to `frontend/bundle-packages.json`, refused when it is older than `dist/`; the panel's own code has
   no budget of its own and only `frontend/.size-limit.json`'s total watches it
+- **Every package `frontend/package-budgets.json` lists, in any bundle, has a `## <package>` section of its own in
+  `THIRD-PARTY-NOTICES.md`** — check — `scripts/check_third_party_notices.py`; unseen by it: whether a section is true,
+  a section for a package no bundle carries any more, a `## <package>` line inside a code fence (it counts), and content
+  under another licence inside a package (Font Awesome inside react-icons), which no check sees
 - **Tender's three React globals are spelled exactly the way Decky Loader spells them** — test —
   `frontend/src/boot/steamGlobals.test.ts` against the pinned `decky-globals-block.txt`; the pinned copy itself is held
   by hand, its provenance header naming the upstream commit
@@ -718,9 +736,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **A coverage exclusion names a property of the code, never a place: every frontend-scoped entry stands in BOTH
   `frontend/vitest.config.ts`'s `coverage.exclude` and `sonar-project.properties`' `sonar.coverage.exclusions`, every
   file entry carries its reason as a `// coverage-exempt:` marker in the file's own first lines, and every marked file
-  is listed** — check — `scripts/check_coverage_exclusions.py`; unchecked: only type declarations and test utilities go
-  into `frontend/src/types/` and `frontend/src/test-utils/` (a real module there is exempted by its place, unmarked),
-  and a marker's sentence must be true
+  is listed** — check + test — `scripts/check_coverage_exclusions.py`, and `frontend/src/typesHoldNoValues.test.ts` (no
+  module in `frontend/src/types/` exports a value); unchecked: only test utilities go into `frontend/src/test-utils/` (a
+  real module there is exempted by its place, unmarked), a `types/` module that runs code at module scope without
+  exporting a value, and a marker's sentence must be true
 - **Every pinned version in a lock satisfies its `.txt` source constraint (`requirements-dev.*` at the root,
   `docs/requirements.*` beside the docs)** — check — `scripts/check_lock_sync.py`
 - **Every local markdown link in tracked docs resolves (file target + heading/attr-list anchor)** — check —
@@ -844,22 +863,27 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — prompt-only — sync
   paths, `get_save_status`, and the three slot mutations hold the lock; mechanize via a `rom_save_sync_states.save`
   call-site audit
-- **Which files a game's save consists of is the EMULATOR's answer, read live, and five of its six states refuse the
-  sync — no probe, no state written** — test + prompt-only — `tests/adapters/test_atlas_saves.py`,
-  `tests/domain/test_save_answer.py` and `tests/services/saves/test_save_shape_gate.py`, where each absence test stands
-  beside a control that asserts the probe does happen, and every per-system pin names the extension it asked with
-  (`(system, extension)`). The answered save directory is not sync state: its own table (`answered_save_directories`)
-  may record it for a refusing answer. Prompt-only: every per-ROM entry point refuses through
-  `sync_engine/_shape_refusal.py` and every sync path crosses the `MatrixExecutor.sync_rom_saves` backstop; the five
-  write paths (`slots/switching.py`, `copies.py`, `versions.py`, `slots/setup.py`, `sync_engine/rollback.py`) each
-  refuse on the answer's `sync_directory`, never on `saves_dir` — `test_save_shape_gate.py` pins those five, not the
-  list; the sync, write, delete, count and status paths that `docs/architecture/save-file-sync-architecture.md` lists
-  call `SyncEngine.follow_save_directory` before they look at local files; configuration-role files are held back
-  through `SaveAnswer.synced_files` by the denial `CONFIGURATION_ROLES`, never an allow-list, a directory move carries
-  `owned_files`, and nothing reads `components` directly; a rendering reads `unestablished`'s shape and
-  `content_installed` beside the state; the question carries the ROM's real content path, and system and path are
-  decided only at `RomInfoService._installed_answer`, `._uninstalled_answer` and `services/rom_adoption/renamer.py`;
-  nothing caches an answer
+- **Which files a game's save consists of is the EMULATOR's answer, read live, and six of its seven states refuse the
+  sync — no probe, no state written; a place not read from the emulator's own settings is one of them** — test +
+  prompt-only — `tests/adapters/test_atlas_saves.py`, `tests/domain/test_save_answer.py` and
+  `tests/services/saves/test_save_shape_gate.py`, where each absence test stands beside a control that asserts the probe
+  does happen, and every per-system pin names the extension it asked with (`(system, extension)`); that a place not read
+  is decided from the answer's own findings (`domain/save_answer.py::place_not_read_finding`), never from the source's
+  health, and that a missing saves root refuses only where the source's roots answer states it `read`, by
+  `TestAPlaceNotReadFromTheSettings`, `TestTheRealResolverStatesWhereAPlaceWasNotRead` and `TestAMissingSavesRoot`
+  there. The answered save directory is not sync state: its own table (`answered_save_directories`) may record it for a
+  refusing answer. Prompt-only: every per-ROM entry point refuses through `sync_engine/_shape_refusal.py` and every sync
+  path crosses the `MatrixExecutor.sync_rom_saves` backstop; the five write paths (`slots/switching.py`, `copies.py`,
+  `versions.py`, `slots/setup.py`, `sync_engine/rollback.py`) each refuse on the answer's `sync_directory`, never on
+  `saves_dir` — `test_save_shape_gate.py` pins those five, not the list; the sync, write, delete, count and status paths
+  that `docs/architecture/save-file-sync-architecture.md` lists call `SyncEngine.follow_save_directory` before they look
+  at local files; configuration-role files are held back through `SaveAnswer.synced_files` by the denial
+  `CONFIGURATION_ROLES`, never an allow-list, a directory move carries `owned_files`, and nothing reads `components`
+  directly; a rendering reads `unestablished`'s shape and `content_installed` beside the state; the question carries the
+  ROM's real content path, and system and path are decided only at `RomInfoService._installed_answer`,
+  `._uninstalled_answer` and `services/rom_adoption/renamer.py`; nothing caches an answer; a refusal for a place not
+  read keeps the resolver's directory for the rename on adoption, so anything else that moves files by
+  `SaveAnswer.directory` checks the state first, as `services/saves/save_directory.py::_followable_directory` does
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`
   use `slot_query_param` + `save_in_slot`; a legacy delete is refused up-front

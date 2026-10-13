@@ -287,30 +287,40 @@ Format: **invariant** — tier — enforced by.
 - **Every RetroDECK folder Tender downloads into, removes from, bounds a removal by or reads for the move code is the
   resolver's answer, asked through `adapters/retrodeck_folders.py`; no module reads RetroDECK's settings or builds such
   a folder from a root — except the move code, which joins `bios` and `saves` onto each old home a pending move left —
-  and while RetroDECK reports `marker-missing`, `marker-unreadable`, `marker-invalid` or `not-set-up`, or where
-  detecting the sources or a question about RetroDECK's health or one of its four roots raised, none of those folders is
-  used — except that a download while RetroDECK is switched off says so, and a raise on a system's own ROM folder
-  refuses only the presses that need that folder; a removal of a game's files is bounded by its system's own ROM folder,
-  never by the ROM root** — test + prompt-only — `tests/adapters/test_retrodeck_folders.py` (the real resolver over tmp
-  homes: every folder its answer, each finding refusing every question, `TestWhereAQuestionToTheResolverRaises` and
-  `TestWhereDetectingTheSourcesRaises` refusing every question for a raise on the detection, the health or a root and
-  only its own for a system's folder, and `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and
-  `tests/contract/test_retrodeck_folders.py` (under each finding, and where the detection, RetroDECK's health or one of
-  its roots could not be asked, no press downloads, deletes, cleans up or migrates there); the system-folder bound by
-  `tests/services/test_downloads.py::TestASystemFolderLinkedToAnotherDrive` and the linked-folder and one-system cases
-  of `tests/contract/test_prune.py`, with Uninstall all's one-system case in `tests/contract/test_retrodeck_folders.py`
+  and a root the resolver only assumed (`assumed` in its roots answer, `domain/source_roots.py`) or gives no path for is
+  used for nothing, each root judged by its own provenance, also under a `marker-*` finding, and a system's folder going
+  with its ROM root; where detecting the sources or the roots question raised, none of those folders is used — except
+  that a download while RetroDECK is switched off says so, and a raise on a system's own ROM folder refuses only the
+  presses that need that folder; a removal of a game's files is bounded by its system's own ROM folder, never by the ROM
+  root** — test + prompt-only — `tests/domain/test_source_roots.py` (the rule) and
+  `tests/adapters/test_retrodeck_folders.py` (the real resolver over tmp homes: every folder its answer,
+  `TestEachRootIsJudgedByItsProvenance` over a settings file without `paths`, one key unset, a `version` alone
+  unreadable, ES-DE's own default ROM folder and an assumed home that is missing, each `marker-*` finding refusing the
+  BIOS, saves and move questions and `not-set-up` every question, `TestWhereAQuestionToTheResolverRaises` and
+  `TestWhereDetectingTheSourcesRaises` refusing every question for a raise on the detection or the roots and only its
+  own for a system's folder, and `TestNoModuleReadsRetroDecksSettings` over the code's string constants) and
+  `tests/contract/test_retrodeck_folders.py` (under each finding, with a key unset, and where the detection or the roots
+  could not be asked, no press downloads, deletes, cleans up or migrates in a folder that was not read, the cleanup is
+  refused at its start for an assumed saves root, and a `version` alone unreadable refuses no press); the system-folder
+  bound by `tests/services/test_downloads.py::TestASystemFolderLinkedToAnotherDrive` and the linked-folder and
+  one-system cases of `tests/contract/test_prune.py`, with Uninstall all's one-system case in
+  `tests/contract/test_retrodeck_folders.py`
   (`test_where_one_system_s_folder_question_raises_uninstall_all_goes_on_for_every_other_system`). A folder of Tender's
   own beside the resolver's is the drift this replaced: `retrodeck.json` read twice, a system's ROM folder built as
   `<roms root>/<system>` in five places while ES-DE may declare another, and a fallback to `~/retrodeck` that pointed
-  downloads, deletes and the move code at internal storage while RetroDECK lay on an SD card. Under the four findings
-  the resolver's own root, BIOS and saves folders are its defaults, so using them would be that guess again. The rules
-  each question answers by are on [Config source parsers](config-source-parsers.md#retrodecks-folders-retrodeckjson). A
+  downloads, deletes and the move code at internal storage while RetroDECK lay on an SD card. A root the resolver only
+  assumed is the same kind of guess — RetroDECK's usual layout, below the home where the settings name one and at
+  `~/retrodeck` where they do not — whatever finding stands beside it (a `retrodeck.json` without `paths` or with one
+  key unset carries none), so using it would be that guess again, and the missing-root findings the resolver states for
+  it name a folder nobody configured ([#2294](https://github.com/danielcopper/romm-tender/issues/2294)). The rules each
+  question answers by are on [Config source parsers](config-source-parsers.md#retrodecks-folders-retrodeckjson). A
   save's folder and a firmware file's place take the other route, the save and firmware answers
-  (`adapters/atlas_saves.py`, `adapters/atlas_firmware.py`), and this entry does not cover them: under the three
-  `marker-*` findings a save is still synced where the save answer places it, which is then RetroDECK's default —
-  keeping saves out of it is #2286's. Unseen by the tests: a folder joined onto a root under another name, and a caller
-  that puts the question to RetroDECK's handle itself. Prompt-only: a new caller that downloads into, removes from or
-  bounds a removal by a RetroDECK folder asks `RetroDeckFolders` and raises the refusal it answers with
+  (`adapters/atlas_saves.py`, `adapters/atlas_firmware.py`), and this entry does not cover them: a save's place comes
+  from the emulator's own settings rather than from `retrodeck.json`, so under the three `marker-*` findings a save
+  still syncs where the emulator keeps it, and a place those settings did not name is the save-answer entry's to refuse.
+  Unseen by the tests: a folder joined onto a root under another name, and a caller that puts the question to
+  RetroDECK's handle itself. Prompt-only: a new caller that downloads into, removes from or bounds a removal by a
+  RetroDECK folder asks `RetroDeckFolders` and raises the refusal it answers with
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (AST over the declared file's own calls, matching the two-attribute
   `<...>.<repo>.<method>` shape against the twelve repositories the UoW exposes). Read or write is decided **by the
@@ -596,8 +606,9 @@ Format: **invariant** — tier — enforced by.
 - **Tender's Quick Access entry composes with Decky's rather than going through it, and everything it binds to the Quick
   Access window is bound from inside that window's React tree** — test + prompt-only —
   `frontend/src/qam/quickAccessEntry.test.ts` pins what a render pass does to a tab array (added once, added again to
-  the replacement array a remount builds, moved to the end whenever a pass finds it higher up, and recognised by its
-  marker alone in an array this module has never seen), each case mutation-checked. **Everything above that line is
+  the replacement array a remount builds, put back — before the first `decky`-marked entry under `"above_decky"`, at the
+  end under `"below_decky"` or where no entry carries that mark — whenever a pass finds it elsewhere, and recognised by
+  its marker alone in an array this module has never seen), each case mutation-checked. **Everything above that line is
   device-only**: whether the two renderers are found, patched and hand back a tree the resolver can walk was measured in
   #1897 and nothing here re-measures it — a suite that faked it would assert against a tree it wrote itself. The rule
   spans the frontend entry and the backend injector, and nothing joins them. **Three halves fail green.** (1) The entry
@@ -607,30 +618,35 @@ Format: **invariant** — tier — enforced by.
   `deinit()` on whatever it finds in that global. **Both are read off Decky's source rather than measured** — the
   `add()` route was deliberately never taken, so its runaway was never observed, and observing the `deinit()` would mean
   breaking Decky's boot on purpose. Neither is a presence check and neither may become one; which bundle is loaded was
-  already decided from the machine (`backend/host/inject/machine.py`). (2) **No tab array is held anywhere**, which is
-  available only because there is no unpatch: the injector refuses to load the panel into a context already carrying
-  `window.__tender_panel__` (`backend/host/inject/bootstrap.py`), and what clears that marker is a JS-context rebuild,
-  which takes the module, its patches and every array with it. Re-adding an unpatch is therefore also re-adding a reason
-  to retain arrays, and the spike's shape — a `Set` of every array ever pushed into — leaks one dead array per Quick
-  Access remount, with the strip's entries and their React elements, for the life of the JS context. (3) The placement
-  is re-asserted on EVERY pass rather than set at creation, because `afterPatch` runs the previous handler first:
-  whoever patches last lands lowest, measured both ways, and install order is a property of which program starts first.
-  A handler that pushed once and trusted the order goes green here and comes out above Decky on exactly the machines
-  where TENDER started first — it pushes first and Decky pushes under it. Where Decky started first the single push
-  already lands lowest, which is the case re-assertion does not have to fix and the one a developer is most likely to
-  test. The third rule's own half — **nothing binds to the Quick Access window at module scope** — is unmechanized and
-  unpinned: that window is replaced by every remount, so a listener, observer or stylesheet held across one is bound to
-  a document nothing renders. What holds today was measured rather than assumed — an unfiltered grep over `frontend/src`
-  (tests aside) for `addEventListener(`, `ResizeObserver`, `MutationObserver`, `ownerDocument`, `defaultView` and
-  `createElement(`, with the enclosing function of every hit read. **Neither observer term is prefixed with `new`**, and
-  that is what makes it find anything: this repo's realm rule takes the constructor off the node's own view, so every
-  observer here is spelled `new view.ResizeObserver` or `new panelView.MutationObserver`, and a pattern anchored on
-  `new ResizeObserver` matches nothing in `frontend/src` at all. The sweep's own boundary is worth stating, because a
-  reader re-deriving it meets the other kind first: a `globalThis` listener binds SharedJSContext's window, which the
-  menu's remount does not touch, so those are out of scope however many of them there are. Every binding into the MENU's
-  window sits inside an effect or an event handler of a component the menu mounts: `utils/qamExpansion.ts`'s stylesheet
-  and `MutationObserver`, `utils/entryFocus.ts`'s focus listeners, `bigpicture/layout/WidePage.tsx`'s `ResizeObserver`,
-  and `bigpicture/layout/ScrollRegion.tsx`, which reads the view per event and retains nothing. The glyph binds nothing
+  already decided from the machine (`backend/host/inject/machine.py`). A `decky`-marked entry is read only to place
+  Tender's entry, never as a sign Decky is present: finding none puts the entry last and decides nothing else. (2) **No
+  tab array is held anywhere**, which is available only because there is no unpatch: the injector refuses to load the
+  panel into a context already carrying `window.__tender_panel__` (`backend/host/inject/bootstrap.py`), and what clears
+  that marker is a JS-context rebuild, which takes the module, its patches and every array with it. Re-adding an unpatch
+  is therefore also re-adding a reason to retain arrays, and the spike's shape — a `Set` of every array ever pushed into
+  — leaks one dead array per Quick Access remount, with the strip's entries and their React elements, for the life of
+  the JS context. (3) The placement is re-asserted on EVERY pass rather than set at creation, because `afterPatch` runs
+  the previous handler first: whoever patches last lands lowest, measured both ways, and install order is a property of
+  which program starts first. A handler that placed the entry once and trusted the order goes green here and is wrong in
+  exactly one case: where TENDER started first under `"below_decky"`. Its pass over a fresh array runs before Decky has
+  pushed, finds no `decky`-marked entry, puts the entry last, and Decky pushes under it. Where Decky started first,
+  Decky's entries are already in the array when Tender's pass runs, so a single placement lands right under either
+  setting. That is the case re-assertion does not have to fix, and the one a developer is most likely to test. In the
+  Tender-first order even the re-asserting handler leaves the entry above Decky for the first pass over a fresh array,
+  until the next pass moves it; that is worked out from the code, not measured. The third rule's own half — **nothing
+  binds to the Quick Access window at module scope** — is unmechanized and unpinned: that window is replaced by every
+  remount, so a listener, observer or stylesheet held across one is bound to a document nothing renders. What holds
+  today was measured rather than assumed — an unfiltered grep over `frontend/src` (tests aside) for `addEventListener(`,
+  `ResizeObserver`, `MutationObserver`, `ownerDocument`, `defaultView` and `createElement(`, with the enclosing function
+  of every hit read. **Neither observer term is prefixed with `new`**, and that is what makes it find anything: this
+  repo's realm rule takes the constructor off the node's own view, so every observer here is spelled
+  `new view.ResizeObserver` or `new panelView.MutationObserver`, and a pattern anchored on `new ResizeObserver` matches
+  nothing in `frontend/src` at all. The sweep's own boundary is worth stating, because a reader re-deriving it meets the
+  other kind first: a `globalThis` listener binds SharedJSContext's window, which the menu's remount does not touch, so
+  those are out of scope however many of them there are. Every binding into the MENU's window sits inside an effect or
+  an event handler of a component the menu mounts: `utils/qamExpansion.ts`'s stylesheet and `MutationObserver`,
+  `utils/entryFocus.ts`'s focus listeners, `bigpicture/layout/WidePage.tsx`'s `ResizeObserver`, and
+  `bigpicture/layout/ScrollRegion.tsx`, which reads the view per event and retains nothing. The glyph binds nothing
   there: its update dot reads stores that are module state of the window the panel's code runs in, and subscribes to
   them from the tree through `useSyncExternalStore`. (`utils/styleInjector.ts` writes into `findSP()`'s document, which
   is the game page's and not the menu's.) One added at module scope would work perfectly until the first
@@ -701,13 +717,14 @@ Format: **invariant** — tier — enforced by.
   uncached so a component installed mid-session is seen), `SandboxLauncherFn` (re-probes the flatpak roots for
   `es_find_rules.xml` and re-stats it before it may use the parse cache), `SystemSupportedExtensionsFn` /
   `SystemKnownFn` (two more questions to the same catalogue, asked afresh from the panel and once per reading within a
-  run), `SteamConfigStore.read_shortcut_exes` (parses Steam's whole `shortcuts.vdf` — 315 KB and 828 entries on the
-  reference machine — for the one-time shortcut relocation. **Listing it changes nothing at its only call site**: the
-  service reaches it through `run_in_executor` as a bound method, which is this checker's documented blind spot, so the
-  entry is a statement of the rule rather than an enforcement of it. It is also not the store's only real I/O —
-  `grid_dir()` is called from `services/artwork.py` (six sites), `services/shortcut_removal.py` and
-  `services/library/reporter.py`, `set_steam_input_config()` from `services/settings.py`, `services/shortcut_removal.py`
-  and `services/library/reporter.py`, and `write_shortcut_icon()` from `services/steamgrid.py` — those are unlisted, and
+  run), `SteamConfigStore.read_shortcut_exes` and `.read_shortcut_launch_options` (each parses Steam's whole
+  `shortcuts.vdf`, for the one-time shortcut relocation and for a launch-options confirm that Steam's reports did not
+  settle. **Listing them changes nothing at their call sites**: each service reaches its reading through
+  `run_in_executor` as a bound method, which is this checker's documented blind spot, so the entries are a statement of
+  the rule rather than an enforcement of it. They are also not the store's only real I/O — `grid_dir()` is called from
+  `services/artwork.py` (six sites), `services/shortcut_removal.py` and `services/library/reporter.py`,
+  `set_steam_input_config()` from `services/settings.py`, `services/shortcut_removal.py` and
+  `services/library/reporter.py`, and `write_shortcut_icon()` from `services/steamgrid.py` — those are unlisted, and
   their being unlisted is a gap, not a judgement), `FirmwarePlatformResolver` (reads what one system's emulators want
   WITH content verification: it opens each candidate in a declared folder and reads it the way the emulator does —
   59-173 ms per system on the reference machine at emu-atlas 0.22) and its whole-machine sibling `FirmwareResolver`, the
@@ -782,16 +799,25 @@ Format: **invariant** — tier — enforced by.
 - **Layer import direction (services ↛ adapters, adapters ↛ services, …)** — check — `.importlinter` (`lint-imports`)
 - **Frontend direction: `frontend/src/utils/` and `frontend/src/api/` never import either surface
   (`frontend/src/bigpicture/`, `frontend/src/desktop/`) or `frontend/src/shared/`; `shared/` never imports either
-  surface; the two surfaces never import each other; and no `frontend/src/` module takes part in an import cycle** —
-  check — `frontend/eslint.config.js` (`import-x/no-restricted-paths`, `import-x/no-cycle`). The surface pair is a peer
-  rule, not a layer rule: the two share data and logic and almost nothing visual, so anything that turns out to belong
-  to both moves DOWN, never sideways — UI into `shared/`, which both surfaces may import and which imports neither, and
-  the rest into `api/`, `utils/` or `types/`. These rules go inert rather than loud when misconfigured: until the config
-  names `.ts`/`.tsx` for the plugin to read, `no-cycle` finds no cycle among the frontend's modules (the comment at
-  `import-x/extensions` in `frontend/eslint.config.js` says how). `frontend/src/eslintBoundaries.test.ts` lints
-  known-bad fixtures through the real config and fails if any of the eleven stops reporting — a green `pnpm lint` alone
-  proves nothing. Type-only imports are not edges (erased at runtime), which is why the `api/backend.ts` ⇄
-  `utils/cachedGameDetailStore.ts` back-reference is not a cycle
+  surface; the two surfaces never import each other; only `frontend/src/index.tsx` and its test import
+  `frontend/src/qam/` or `frontend/src/boot/`, and neither of those two imports the other; `qam/` never imports either
+  surface; `frontend/src/types/` imports nothing else from `frontend/src/`; and no `frontend/src/` module takes part in
+  an import cycle** — check — `frontend/eslint.config.js` (`import-x/no-restricted-paths`, `import-x/no-cycle`). The
+  surface pair is a peer rule, not a layer rule: the two share data and logic and almost nothing visual, so anything
+  that turns out to belong to both moves DOWN, never sideways — UI into `shared/`, which both surfaces may import and
+  which imports neither, and the rest into `api/`, `utils/` or `types/`. `qam/`, Tender's Quick Access entry, sits below
+  the surfaces: it mounts the panel through the factory `index.tsx` hands it, and may import `shared/` like either
+  surface — the panel's error boundary is there. `boot/` sits beside `index.tsx` instead, and may import a surface,
+  because its start-up check has to see every Steam lookup the panel relies on, a surface's included —
+  `boot/steamModules.ts` reads `AppDetailsRoute` from `bigpicture/patches/installGamePagePatch.ts`. The `qam/` and
+  `boot/` zones name every directory under `frontend/src/` but their own, and every file directly in it but `index.tsx`
+  and its test, by glob, so a directory or a module added there is covered without a change to them. These rules go
+  inert rather than loud when misconfigured: until the config names `.ts`/`.tsx` for the plugin to read, `no-cycle`
+  finds no cycle among the frontend's modules (the comment at `import-x/extensions` in `frontend/eslint.config.js` says
+  how). `frontend/src/eslintBoundaries.test.ts` lints known-bad fixtures through the real config and fails if any of the
+  rules stops reporting — a green `pnpm lint` alone proves nothing. For the cycle rule a type-only import is not an edge
+  (erased at runtime), which is why the `api/backend.ts` ⇄ `utils/cachedGameDetailStore.ts` back-reference is not a
+  cycle; a zone reports an `import type` like any other import
 - **No bare `# type: ignore` / blanket suppressions** — check — `scripts/check_no_bare_ignores.sh`
 - **A transport failure and an endpoint's own failure never arrive in the same shape, on either end** — test +
   prompt-only — `backend/host/protocol.py` states the vocabulary and `.claude/rules/host.md` holds the backend half; the
@@ -819,6 +845,18 @@ Format: **invariant** — tier — enforced by.
   file stays the list of what the bundles carry. **The panel's own code is not budgeted**, and only
   `frontend/.size-limit.json`'s total watches it. How the record is made, what counts as own code and how a package is
   given a budget: [frontend-bundles.md](frontend-bundles.md#third-party-package-budgets)
+- **Every package `frontend/package-budgets.json` lists, in any bundle, has a `## <package>` section of its own in
+  `THIRD-PARTY-NOTICES.md`** — check — `scripts/check_third_party_notices.py`. A package a bundle carries is distributed
+  with Tender, and its licence asks for a notice that travels with it; a bundle carries a package's code but not its
+  LICENSE file, so the notice lives in that file, and nothing about adding a package to a bundle touches it. The budgets
+  file is the list that does move with a bundle — the package check above fails until a carried package has a budget —
+  so holding the notices against it means a package cannot join a bundle unnamed. A package named only in running text
+  or under a heading of another level counts as missing. **What it cannot see is whether a section is true**: the
+  licence, the source and the bundles it names are read only in review. A section for a package no bundle carries any
+  more passes, because a stale notice claims too much rather than too little. A `## <package>` line inside a code fence
+  counts as a section, since the check reads lines and not Markdown. And content under another licence inside a package
+  — the Font Awesome icons inside react-icons, CC BY 4.0 inside an MIT package — is seen by no check at all; its
+  subsection is held only in review
 - **Tender's three React globals are spelled exactly the way Decky Loader spells them** — test —
   `frontend/src/boot/steamGlobals.test.ts`, which reads `steamGlobals.ts` and the pinned `decky-globals-block.txt` as
   TEXT and compares the four search predicates, which global each answer is assigned to, and the JSX stand-in's keys and
@@ -919,25 +957,27 @@ Format: **invariant** — tier — enforced by.
 - **A coverage exclusion names a property of the code, never a place: every frontend-scoped entry stands in BOTH
   `frontend/vitest.config.ts`'s `coverage.exclude` and `sonar-project.properties`' `sonar.coverage.exclusions`, every
   file entry carries its reason as a `// coverage-exempt:` marker in the file's own first lines, and every marked file
-  is listed** — check — `scripts/check_coverage_exclusions.py`. **The two lists spell a shared entry differently and
-  that is not drift**: Sonar runs from the repository root and Vitest from `frontend/`, so `src/types/**` there is
-  `frontend/src/types/**` here, and the gate normalises before comparing. An entry spelled repo-relative on the Vitest
-  side excludes nothing at all — Vitest would resolve it to `frontend/frontend/...` — so it is reported by name rather
-  than normalised into agreement with Sonar's identical-looking copy. (A folder entry is admitted only from the script's
-  `FOLDER_ENTRIES`, where membership in the folder IS the property; the backend/config entries are Sonar-only and the
-  frontend test glob Vitest-only, each declared there with its reason so the asymmetry is stated rather than tolerated).
-  Two accidents it removes, both silent: `src/patches/**` excluded a FOLDER, so a file's coverage obligation changed
-  when it was moved out of the folder and nothing said so; and `steamShortcuts.ts` sat on Sonar's list and not on
-  Vitest's under a comment claiming the two were aligned. **What the check cannot see is MEMBERSHIP in a folder entry's
-  directory** — the two admitted folders are checked to exist and their contents are never read, so a real module filed
-  into `frontend/src/types/` or `frontend/src/test-utils/` is exempted by its PLACE, with no marker asked for and
-  nothing failing: the very accident above, still live for those two directories. It is declared rather than mechanized
-  on purpose — "is this really only a type declaration" is not a cheap check, and a half-check would exempt on a
-  property nobody stated while reading as enforcement. **Nor can it see the marker's SENTENCE** — a false reason passes
-  green, which is what the three stated reasons this cut found were: "no logic to assert" over a file with four passing
-  tests, "no isolated logic to assert" over 88.65% line coverage, and "thin plugin-entry shim" over 89.09%. Only the
-  first was replaced by a truer marker; the other two files lost their exclusions outright, which is also how their list
-  drift was settled
+  is listed** — check + test — `scripts/check_coverage_exclusions.py`, and `frontend/src/typesHoldNoValues.test.ts`.
+  **The two lists spell a shared entry differently and that is not drift**: Sonar runs from the repository root and
+  Vitest from `frontend/`, so `src/types/**` there is `frontend/src/types/**` here, and the gate normalises before
+  comparing. An entry spelled repo-relative on the Vitest side excludes nothing at all — Vitest would resolve it to
+  `frontend/frontend/...` — so it is reported by name rather than normalised into agreement with Sonar's
+  identical-looking copy. (A folder entry is admitted only from the script's `FOLDER_ENTRIES`, where membership in the
+  folder IS the property; the backend/config entries are Sonar-only and the frontend test glob Vitest-only, each
+  declared there with its reason so the asymmetry is stated rather than tolerated). Two accidents it removes, both
+  silent: `src/patches/**` excluded a FOLDER, so a file's coverage obligation changed when it was moved out of the
+  folder and nothing said so; and `steamShortcuts.ts` sat on Sonar's list and not on Vitest's under a comment claiming
+  the two were aligned. **What the check cannot see is MEMBERSHIP in a folder entry's directory** — the two admitted
+  folders are checked to exist and their contents are never read by it. For `frontend/src/types/` a test answers
+  instead: `frontend/src/typesHoldNoValues.test.ts` imports every module there, at any depth, and fails on any value one
+  exports; a module that runs code at module scope without exporting a value passes it. For `frontend/src/test-utils/`
+  nothing does, so a real module filed there is exempted by its PLACE, with no marker asked for and nothing failing: the
+  very accident above, still live for that directory. It is declared rather than mechanized on purpose — "is this
+  reached only from the test run" is not a cheap check, and a half-check would exempt on a property nobody stated while
+  reading as enforcement. **Nor can it see the marker's SENTENCE** — a false reason passes green, which is what the
+  three stated reasons this cut found were: "no logic to assert" over a file with four passing tests, "no isolated logic
+  to assert" over 88.65% line coverage, and "thin plugin-entry shim" over 89.09%. Only the first was replaced by a truer
+  marker; the other two files lost their exclusions outright, which is also how their list drift was settled
 - **Every pinned version in a lock satisfies its `.txt` source constraint (`requirements-dev.*` at the root,
   `docs/requirements.*` beside the docs)** — check — `scripts/check_lock_sync.py`
 - **Every local markdown link in tracked docs resolves (file target + heading/attr-list anchor)** — check —
@@ -1303,21 +1343,21 @@ Format: **invariant** — tier — enforced by.
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — prompt-only — sync
   paths, `get_save_status`, and the three slot mutations hold the lock; mechanize via a `rom_save_sync_states.save`
   call-site audit
-- **Which files a game's save consists of is the EMULATOR's answer, read live, and five of its six states refuse the
-  sync — no probe, no state written** — test + prompt-only — `tests/adapters/test_atlas_saves.py` pins the six states
-  and every way the question cannot be put, `tests/domain/test_save_answer.py` pins the precedence that makes "exactly
-  one" well defined, and `tests/services/saves/test_save_shape_gate.py` pins the absences **each beside a control that
-  asserts the same probe DOES happen for a syncable answer** — without those controls a service that had stopped probing
-  entirely would pass. The answered save directory is not sync state: it lives in its own table
-  (`answered_save_directories`) and may be recorded for a refusing answer, whose files are then followed when that
-  directory moves — a move, not a sync
+- **Which files a game's save consists of is the EMULATOR's answer, read live, and six of its seven states refuse the
+  sync — no probe, no state written; a place not read from the emulator's own settings is one of them** — test +
+  prompt-only — `tests/adapters/test_atlas_saves.py` pins the seven states and every way the question cannot be put,
+  `tests/domain/test_save_answer.py` pins the precedence that makes "exactly one" well defined, and
+  `tests/services/saves/test_save_shape_gate.py` pins the absences **each beside a control that asserts the same probe
+  DOES happen for a syncable answer** — without those controls a service that had stopped probing entirely would pass.
+  The answered save directory is not sync state: it lives in its own table (`answered_save_directories`) and may be
+  recorded for a refusing answer, whose files are then followed when that directory moves — a move, not a sync
   ([Following a Moved Save Directory](save-file-sync-architecture.md#following-a-moved-save-directory)). The rule spans
   seven modules and no diff-scoped review sees it whole: `AtlasSaveLocationAdapter` reads the machine,
   `domain/save_answer.py` decides what the reading means, `RomInfoService.save_answer` turns it into names,
   `SyncEngine`'s three per-ROM entry points refuse on it through `sync_engine/_shape_refusal.py`, which holds the
-  reading and the skips it raises, `MatrixExecutor.sync_rom_saves` is the backstop every sync path crosses, and
+  reading and the refusals it raises, `MatrixExecutor.sync_rom_saves` is the backstop every sync path crosses, and
   `services/saves/status/service.py` puts it on the wire. **Four halves have no mechanical check at all.** (1) The
-  refusal is enforced at four call sites — the three per-ROM entry points, which report the skip via
+  refusal is enforced at four call sites — the three per-ROM entry points, which report the refusal via
   `sync_engine/_shape_refusal.py`'s `live_save_answer` / `refuse_unsyncable`, and `MatrixExecutor.sync_rom_saves`
   (reached through `SyncEngine.do_sync_rom_saves`), the backstop that covers the whole-library sweep, whose single
   result has no room to name the ROM it passed over. A fifth entry point added without either goes green, and its
@@ -1365,7 +1405,20 @@ Format: **invariant** — tier — enforced by.
   and only the resolver's machine, which remembers a core's probe by the core file's path, modification time and size,
   outlives it — because the user changes a core's options in the emulator's own quick menu between a launch and the next
   sync; a display cache added without invalidating it on every sync entry is the one change that makes this rule fail
-  silently and expensively. Detail: `docs/architecture/save-sync-coverage.md`, GLOSSARY.md → Save state / Save scope
+  silently and expensively. **A place not read from the emulator's own settings** — a settings file missing or
+  unreadable, a source not set up, a bare RetroArch's marker, which is its `retroarch.cfg` — refuses as its own state,
+  and what decides it is the answer's own findings (`domain/save_answer.py::place_not_read_finding`), never the source's
+  health: ES-DE's settings and EmuDeck's RetroArch beside a standalone emulator are health findings about files no save
+  of that emulator is placed by, and reading them would refuse a save whose place was read. RetroDECK's and EmuDeck's
+  marker findings alone refuse nothing, because their marker names the source's folders and never where an emulator
+  writes; a missing saves root refuses only where the source's roots answer states that root `read`, since a root it
+  only assumed says nothing about a drive. `TestAPlaceNotReadFromTheSettings`,
+  `TestTheRealResolverStatesWhereAPlaceWasNotRead` and `TestAMissingSavesRoot` in `tests/adapters/test_atlas_saves.py`
+  pin both directions, the real resolver's included. Unchecked: such a refusal keeps the directory the resolver named,
+  because the rename on adoption carries a game's saves there, so anything that moves files by `SaveAnswer.directory`
+  has to check the state itself, as `services/saves/save_directory.py::_followable_directory` does — a new mover that
+  does not carries files into a place the emulator's settings never named, and nothing would say so. Detail:
+  `docs/architecture/save-sync-coverage.md`, GLOSSARY.md → Save state / Save scope
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`
   use `slot_query_param` + `save_in_slot`; RomM can't address `slot:null` via the param, so legacy MUST omit it + filter

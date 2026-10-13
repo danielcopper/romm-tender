@@ -87,7 +87,6 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from models.state import ShortcutRegistryEntry
-
     from services.protocols import (
         ConflictRules,
         CoverArtFileStore,

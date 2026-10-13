@@ -35,6 +35,8 @@ import type { AdvancedSection } from "./settings/AdvancedSection";
 import type { UpdatesSection } from "./settings/UpdatesSection";
 import type { LibrarySection } from "./settings/LibrarySection";
 import type { EmulatorSourcesSection } from "./settings/EmulatorSourcesSection";
+import type { InterfaceSection } from "./settings/InterfaceSection";
+import { getQamEntryPositionState, setQamEntryPositionState } from "../utils/qamEntryPositionStore";
 import { showPreferredRegionModal } from "./settings/PreferredRegionModal";
 
 type ConnectionProps = ComponentProps<typeof ConnectionSection>;
@@ -46,6 +48,7 @@ type AdvancedProps = ComponentProps<typeof AdvancedSection>;
 type UpdatesProps = ComponentProps<typeof UpdatesSection>;
 type LibraryProps = ComponentProps<typeof LibrarySection>;
 type EmulatorSourcesProps = ComponentProps<typeof EmulatorSourcesSection>;
+type InterfaceProps = ComponentProps<typeof InterfaceSection>;
 
 // Captured props arrays — reset in beforeEach. Each child mock pushes the
 // props it was called with so tests can inspect handler wiring + state
@@ -59,6 +62,7 @@ const capturedAdvanced: AdvancedProps[] = [];
 const capturedUpdates: UpdatesProps[] = [];
 const capturedLibrary: LibraryProps[] = [];
 const capturedSources: EmulatorSourcesProps[] = [];
+const capturedInterface: InterfaceProps[] = [];
 
 vi.mock("./settings/ConnectionSection", () => ({
   ConnectionSection: (p: ConnectionProps) => {
@@ -100,6 +104,12 @@ vi.mock("./settings/EmulatorSourcesSection", () => ({
   EmulatorSourcesSection: (p: EmulatorSourcesProps) => {
     capturedSources.push(p);
     return createElement("div", { "data-testid": "emulator-sources-section" });
+  },
+}));
+vi.mock("./settings/InterfaceSection", () => ({
+  InterfaceSection: (p: InterfaceProps) => {
+    capturedInterface.push(p);
+    return createElement("div", { "data-testid": "interface-section" });
   },
 }));
 vi.mock("./settings/UpdatesSection", () => ({
@@ -256,6 +266,8 @@ describe("SettingsPage", () => {
     resetUpdateNoticeStoreForTests();
     capturedLibrary.length = 0;
     capturedSources.length = 0;
+    capturedInterface.length = 0;
+    setQamEntryPositionState("above_decky");
     for (const k of Object.keys(pendingEdits) as Array<keyof typeof pendingEdits>) {
       delete pendingEdits[k];
     }
@@ -1292,17 +1304,20 @@ describe("SettingsPage", () => {
         onCancel?: () => void;
       }>();
       expect(props?.strTitle).toBe("Enable Save Sync?");
-      expect(props?.strDescription).toContain("RetroArch game saves");
-      // #1189: the copy must not claim only .srm files sync, and points at the support matrix instead.
-      expect(props?.strDescription).not.toContain("(.srm)");
-      expect(props?.strDescription).toContain("support matrix");
-      // No save-sorting setting is required any more: the copy says save sync
-      // follows RetroArch's sorting and no longer asks for a particular one.
-      expect(props?.strDescription).toContain("follows RetroArch's own save sorting");
-      expect(props?.strDescription).toContain("the next time Tender touches that game's saves");
-      expect(props?.strDescription).not.toContain("the next time that game syncs");
-      expect(props?.strDescription).not.toContain("Sort Saves into Folders");
-      expect(props?.strDescription).not.toContain("will not find your save files");
+      const paragraphs = [
+        "Tender keeps a game's saves in step with your RomM server: before a game starts it fetches a newer save " +
+          "from the server, after you quit it uploads yours, and if both sides changed you choose which one wins. " +
+          "Which files make up a game's save is asked of the emulator that launches it, game by game; a game whose " +
+          "save it cannot tell apart from others, such as a shared memory card or a save inside the game file, is " +
+          "left alone.",
+        "Before a save on this device is overwritten, Tender keeps a copy of the old file.",
+        "Use this with your own RomM account, not a shared one such as admin or guest: saves on the server belong " +
+          "to the user who uploaded them.",
+      ];
+      for (const paragraph of paragraphs) {
+        expect(props?.strDescription).toContain(paragraph);
+      }
+      expect(props?.strDescription).toBe(paragraphs.join("\n\n"));
       expect(props?.strOKButtonText).toBe("I am sure");
       expect(props?.strCancelButtonText).toBe("Cancel");
     });
@@ -1565,6 +1580,74 @@ describe("SettingsPage", () => {
     });
   });
 
+  describe("Interface handlers", () => {
+    beforeEach(() => {
+      openOn = "interface";
+    });
+
+    const lastInterface = () => capturedInterface[capturedInterface.length - 1];
+
+    it("hydrates the position from getSettings", async () => {
+      vi.mocked(backend.getSettings).mockResolvedValue({ ...defaultSettings(), qam_entry_position: "below_decky" });
+      renderPage();
+      await flushAsync();
+      expect(lastInterface()?.qamEntryPosition).toBe("below_decky");
+    });
+
+    it("reads settings without the key as above Decky", async () => {
+      renderPage();
+      await flushAsync();
+      expect(lastInterface()?.qamEntryPosition).toBe("above_decky");
+    });
+
+    it("persists a change and writes it to the store the Quick Access entry is placed by", async () => {
+      vi.mocked(backend.setQamEntryPosition).mockResolvedValue({ success: true });
+      renderPage();
+      await flushAsync();
+      await act(async () => {
+        lastInterface()?.onQamEntryPositionChange("below_decky");
+        await Promise.resolve();
+      });
+      expect(vi.mocked(backend.setQamEntryPosition)).toHaveBeenCalledWith("below_decky");
+      expect(lastInterface()?.qamEntryPosition).toBe("below_decky");
+      expect(getQamEntryPositionState()).toBe("below_decky");
+    });
+
+    it("reverts the toggle and leaves the store alone when the save rejects", async () => {
+      vi.mocked(backend.setQamEntryPosition).mockRejectedValue(new Error("boom"));
+      renderPage();
+      await flushAsync();
+      await act(async () => {
+        lastInterface()?.onQamEntryPositionChange("below_decky");
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      // CATCH-REJECTION assert: rolled back to the pre-toggle "above_decky".
+      expect(lastInterface()?.qamEntryPosition).toBe("above_decky");
+      expect(getQamEntryPositionState()).toBe("above_decky");
+    });
+
+    it("reverts the toggle and leaves the store alone when the backend refuses the value", async () => {
+      vi.mocked(backend.setQamEntryPosition).mockResolvedValue({
+        success: false,
+        reason: "invalid_position",
+        message: "Invalid Quick Access entry position: below_decky",
+      });
+      renderPage();
+      await flushAsync();
+      await act(async () => {
+        lastInterface()?.onQamEntryPositionChange("below_decky");
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(vi.mocked(backend.setQamEntryPosition)).toHaveBeenCalledWith("below_decky");
+      expect(lastInterface()?.qamEntryPosition).toBe("above_decky");
+      expect(getQamEntryPositionState()).toBe("above_decky");
+    });
+  });
+
   describe("Library handlers", () => {
     beforeEach(() => {
       openOn = "steam-library";
@@ -1756,7 +1839,7 @@ describe("SettingsPage", () => {
   });
 
   describe("the section list", () => {
-    it("shows exactly the seven sections, in order", async () => {
+    it("shows exactly the eight sections, in order", async () => {
       const { getAllByTestId } = renderPage();
       await flushAsync();
       const labels = getAllByTestId("field").map((el) => el.textContent);
@@ -1767,6 +1850,7 @@ describe("SettingsPage", () => {
         "Steam Library",
         "Emulator sources",
         "Updates",
+        "Interface",
         "Advanced",
       ]);
     });
@@ -1841,6 +1925,7 @@ describe("SettingsPage", () => {
       ["controller", "controller-section"],
       ["steam-library", "library-section"],
       ["emulator-sources", "emulator-sources-section"],
+      ["interface", "interface-section"],
       ["advanced", "advanced-section"],
     ] as const)("reaches every section's content: %s", async (section, testId) => {
       const { getByTestId, queryByTestId } = renderPage();

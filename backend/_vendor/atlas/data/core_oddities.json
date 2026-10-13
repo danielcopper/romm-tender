@@ -1024,6 +1024,10 @@
                 "files_without_save_id": [
                   "<rom_stem>.A1.bin"
                 ],
+                "save_id": {
+                  "fill": "the disc's product number, read from its header with trailing blanks trimmed and each of ' /\\:*?|<>' replaced by '_'",
+                  "spelling": "path-segment"
+                },
                 "files_established_for": "console",
                 "files_citation": "flycast@1dac369 oslib.cpp:38-67 (names; per-content applies per port, :40-41), maple_cfg.cpp:246-253 (Naomi connects VMUs on B1 and C1 only, so port A1 never exists for arcade content)",
                 "granularity": "per-game-file",
@@ -1069,6 +1073,10 @@
                   "<rom_stem>.C1.bin",
                   "<rom_stem>.D1.bin"
                 ],
+                "save_id": {
+                  "fill": "the disc's product number, read from its header with trailing blanks trimmed and each of ' /\\:*?|<>' replaced by '_'",
+                  "spelling": "path-segment"
+                },
                 "files_established_for": "console",
                 "files_citation": "flycast@1dac369 oslib.cpp:38-67 (names), maple_cfg.cpp:246-253 (Naomi connects VMUs on B1 and C1 only)",
                 "role": "memory-card"
@@ -3448,6 +3456,10 @@
                 "files_without_save_id": [
                   "duckstation_shared_card_2.mcd"
                 ],
+                "save_id": {
+                  "fill": "the disc's game code, read off the running disc as its boot executable's name with the dot dropped and '_' spelled '-' (SCES_123.45 is SCES-12345)",
+                  "spelling": "path-segment"
+                },
                 "granularity": "per-game-file",
                 "role": "memory-card"
               }
@@ -3514,6 +3526,10 @@
                 "files_without_save_id": [
                   "duckstation_shared_card_2.mcd"
                 ],
+                "save_id": {
+                  "fill": "the disc's game code, read off the running disc as its boot executable's name with the dot dropped and '_' spelled '-' (SCES_123.45 is SCES-12345)",
+                  "spelling": "path-segment"
+                },
                 "granularity": "per-game-file",
                 "role": "memory-card"
               }
@@ -3548,6 +3564,10 @@
                 "files_without_save_id": [
                   "duckstation_shared_card_1.mcd"
                 ],
+                "save_id": {
+                  "fill": "the disc's game code, read off the running disc as its boot executable's name with the dot dropped and '_' spelled '-' (SCES_123.45 is SCES-12345)",
+                  "spelling": "path-segment"
+                },
                 "granularity": "per-game-file",
                 "role": "memory-card"
               }
@@ -3563,6 +3583,10 @@
                 "files_without_save_id": [
                   "duckstation_shared_card_1.mcd"
                 ],
+                "save_id": {
+                  "fill": "the disc's game code, read off the running disc as its boot executable's name with the dot dropped and '_' spelled '-' (SCES_123.45 is SCES-12345)",
+                  "spelling": "path-segment"
+                },
                 "granularity": "per-game-file",
                 "role": "memory-card"
               },
@@ -3587,6 +3611,10 @@
                   "duckstation_shared_card_1.mcd",
                   "duckstation_shared_card_2.mcd"
                 ],
+                "save_id": {
+                  "fill": "the disc's game code, read off the running disc as its boot executable's name with the dot dropped and '_' spelled '-' (SCES_123.45 is SCES-12345)",
+                  "spelling": "path-segment"
+                },
                 "granularity": "per-game-files",
                 "role": "memory-card"
               }
@@ -3602,6 +3630,10 @@
                 "files_without_save_id": [
                   "duckstation_shared_card_1.mcd"
                 ],
+                "save_id": {
+                  "fill": "the disc's game code, read off the running disc as its boot executable's name with the dot dropped and '_' spelled '-' (SCES_123.45 is SCES-12345)",
+                  "spelling": "path-segment"
+                },
                 "granularity": "per-game-file",
                 "role": "memory-card"
               },
@@ -3662,6 +3694,10 @@
                 "files_without_save_id": [
                   "duckstation_shared_card_2.mcd"
                 ],
+                "save_id": {
+                  "fill": "the disc's game code, read off the running disc as its boot executable's name with the dot dropped and '_' spelled '-' (SCES_123.45 is SCES-12345)",
+                  "spelling": "path-segment"
+                },
                 "granularity": "per-game-file",
                 "role": "memory-card"
               }
@@ -3706,6 +3742,10 @@
                 "files_without_save_id": [
                   "duckstation_shared_card_2.mcd"
                 ],
+                "save_id": {
+                  "fill": "the disc's game code, read off the running disc as its boot executable's name with the dot dropped and '_' spelled '-' (SCES_123.45 is SCES-12345)",
+                  "spelling": "path-segment"
+                },
                 "granularity": "per-game-file",
                 "role": "memory-card"
               }

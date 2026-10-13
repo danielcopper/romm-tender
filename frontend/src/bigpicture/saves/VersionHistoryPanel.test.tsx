@@ -445,6 +445,21 @@ describe("VersionHistoryPanel", () => {
       );
     });
 
+    it("a refusal with no status shows nothing and keeps the list open", async () => {
+      vi.mocked(backend.savesRollbackToVersion).mockResolvedValue({
+        success: false,
+        reason: "blocked_by_update",
+        message: "An update is being installed",
+      } as never);
+      const { getByText, onRestored } = await expand();
+      fireEvent.click(getByText("Restore"));
+      await flushAsync();
+      await flushAsync();
+      expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
+      expect(onRestored).not.toHaveBeenCalled();
+      expect(getByText("Restore")).not.toBeDisabled();
+    });
+
     it("says a restore that threw could not be confirmed, with the error's message as the subtext", async () => {
       vi.mocked(backend.savesRollbackToVersion).mockRejectedValue(new Error("boom"));
       const { getByText } = await expand();

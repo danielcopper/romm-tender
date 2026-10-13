@@ -20,6 +20,7 @@ import type {
   SourceHealthFinding,
 } from "../types/emulatorSources";
 import type { RommErrorReason } from "../types/reasons";
+import { joined } from "./formatters";
 
 const SOURCE_NAMES: ReadonlyMap<string, string> = new Map([
   ["retrodeck", "RetroDECK"],
@@ -43,10 +44,15 @@ export function sourceName(kind: string): string {
   return SOURCE_NAMES.get(kind) ?? kind;
 }
 
-/** Whether a finding shows as a notice on Main. `content-tree-unwired` concerns nothing
- *  Tender does, so it shows only on the source's own card. */
+/** Whether a finding shows as a notice on Main. Two show only on the source's own card:
+ *  `content-tree-unwired`, which concerns nothing Tender does, and a settings file whose
+ *  version alone cannot be read, from which every folder is still read. */
 export function findingIsBanner(finding: SourceHealthFinding): boolean {
-  return finding.code !== "content-tree-unwired";
+  return finding.code !== "content-tree-unwired" && !isVersionOnly(finding);
+}
+
+function isVersionOnly({ code, data }: SourceHealthFinding): boolean {
+  return code === "marker-invalid" && text(data, "key") === "version";
 }
 
 /** The sentence for one health finding of the source of kind `kind`. */
@@ -70,33 +76,73 @@ const UNWIRED_PROBLEMS: ReadonlyMap<string, string> = new Map([
   ["diverted", "points elsewhere"],
 ]);
 
+// Tender's own finding for the roots the resolver only assumed; its shape is
+// `backend/domain/source_roots.py`'s.
+const ROOTS_ASSUMED = "roots-assumed";
+
+// What each root is called in a sentence, after "its".
+const ROOT_WORDS: ReadonlyMap<string, string> = new Map([
+  ["installation", "folder"],
+  ["roms", "ROM folder"],
+  ["bios", "BIOS folder"],
+  ["saves", "saves folder"],
+]);
+
+/** The sentence for the roots a source's settings file leaves out, or `null` for a root this module cannot name. */
+function assumedRootsSentence(name: string, file: string, roots: string | null): string | null {
+  const words = (roots ?? "").split(",").map((root) => ROOT_WORDS.get(root));
+  if (words.length === 0 || words.includes(undefined)) return null;
+  const folders = joined(words as string[]);
+  const use = words.length === 1 ? "does not use it" : "uses none of them";
+  return `${name}: its settings file ${file} does not name its ${folders}, so Tender ${use}.`;
+}
+
+// The key a finding names its folder, file or setting under, where it is not `path`.
+const SUBJECT_KEYS: ReadonlyMap<string, string> = new Map([
+  ["roms-root-not-absolute", "value"],
+  ["emulator-config-missing", "config"],
+]);
+
 /** The worded sentence, or `null` where the code, or a fact it needs, is not one this module knows. */
 function wordedFinding(kind: string, { code, data }: SourceHealthFinding): string | null {
   const name = sourceName(kind);
-  const path = text(data, "path");
-  if (path === null) return null;
+  const subject = text(data, SUBJECT_KEYS.get(code) ?? "path");
+  if (subject === null) return null;
   const repair = kind === "retrodeck" ? RETRODECK_REPAIR : "";
   switch (code) {
     case "not-set-up":
       return `${name} is installed but has not been set up yet. Start ${name} once and finish its first-run setup.`;
     case "marker-missing":
-      return `${name}: its settings file ${path} is missing.`;
+      return `${name}: its settings file ${subject} is missing.`;
     case "marker-unreadable":
     case "config-unreadable":
-      return `${name}: its settings file ${path} cannot be read.`;
+      return `${name}: its settings file ${subject} cannot be read.`;
     case "marker-invalid":
-      return `${name}: its settings file ${path} is damaged, so Tender cannot tell where its folders are.${repair}`;
+      if (isVersionOnly({ code, data })) {
+        return `${name}: its settings file ${subject} holds no version Tender can read; its folders are still read from it.`;
+      }
+      return `${name}: its settings file ${subject} is damaged, so Tender cannot tell where its folder, BIOS folder and saves folder are.${repair}`;
+    case ROOTS_ASSUMED:
+      return assumedRootsSentence(name, subject, text(data, "roots"));
     case "root-missing":
-      return `${name}: its folder ${path} does not exist. If it is on an SD card or another drive, insert it.`;
+      return `${name}: its folder ${subject} does not exist. If it is on an SD card or another drive, insert it.`;
     case "saves-root-missing":
-      return `${name}: its saves folder ${path} does not exist, so saves of its emulators cannot be synced.${repair}`;
+      return `${name}: its saves folder ${subject} does not exist, so saves of its emulators cannot be synced.${repair}`;
+    case "bios-root-missing":
+      return `${name}: its BIOS folder ${subject} does not exist. If it is on an SD card or another drive, insert it.`;
+    case "roms-root-missing":
+      return `${name}: its ROM folder ${subject} does not exist. If it is on an SD card or another drive, insert it.`;
+    case "roms-root-not-absolute":
+      return `${name}: ES-DE's ROM folder setting "${subject}" is not a full path, so Tender cannot tell where its games are.`;
+    case "emulator-config-missing":
+      return `${name}: RetroArch's settings file ${subject} is missing, so RetroArch uses its built-in default folders.`;
     case "companion-config-missing":
-      return `${name}: RetroArch's settings file ${path} cannot be read; ${name}'s RetroArch may be missing or broken.`;
+      return `${name}: RetroArch's settings file ${subject} cannot be read; ${name}'s RetroArch may be missing or broken.`;
     case "catalogue-invalid": {
       const problem = CATALOGUE_PROBLEMS.get(text(data, "problem") ?? "");
       if (problem === undefined) return null;
       return (
-        `${name}: ES-DE's systems file ${path} ${problem}. ` +
+        `${name}: ES-DE's systems file ${subject} ${problem}. ` +
         `ES-DE shows no systems until it is fixed, and Tender cannot tell which emulators ${name} offers.`
       );
     }
@@ -105,7 +151,7 @@ function wordedFinding(kind: string, { code, data }: SourceHealthFinding): strin
       const problem = UNWIRED_PROBLEMS.get(text(data, "problem") ?? "");
       if (hub === null || problem === undefined) return null;
       return (
-        `${name}: texture packs or mods in ${hub} do not reach the emulator, because ${path} ${problem}. ` +
+        `${name}: texture packs or mods in ${hub} do not reach the emulator, because ${subject} ${problem}. ` +
         `Resetting that emulator in ${name} fixes it.`
       );
     }
@@ -117,6 +163,16 @@ function wordedFinding(kind: string, { code, data }: SourceHealthFinding): strin
 /** The reason a press is refused with while a finding of RetroDECK's stands in the way of its folders. */
 export const RETRODECK_FINDING_REASON = "retrodeck_finding";
 
+/**
+ * The two reasons a refused save action carries a source's finding under:
+ * `save_shape_unsupported`, which a sync and every save write refuse with, and
+ * `saves_root_missing`, a sync's own failure for a missing saves folder. Either
+ * carries the finding, and the source's kind beside it, wherever the save was
+ * refused for a place not read from the emulator's settings or for a missing
+ * saves folder.
+ */
+const SAVE_FINDING_REASONS: ReadonlySet<unknown> = new Set(["save_shape_unsupported", "saves_root_missing"]);
+
 function isFinding(value: unknown): value is SourceHealthFinding {
   if (typeof value !== "object" || value === null) return false;
   const { code, data } = value as { code?: unknown; data?: unknown };
@@ -124,16 +180,51 @@ function isFinding(value: unknown): value is SourceHealthFinding {
 }
 
 /**
- * An endpoint's answer, with the message of a refusal for one of RetroDECK's
- * findings replaced by the sentence Main's notice shows for that finding, so a
- * refused press and the notice say the same thing. Every other answer comes
- * back as it is.
+ * The sentence for a save refused because the emulator's own settings file was
+ * not read, where Main has no notice for that finding: an emulator's file rides
+ * only on the save answer, and RetroArch's own `retroarch.cfg` is the one such
+ * file that is a health finding — the one carrying no `token` and no `core`.
+ */
+function settingsFileSentence(finding: SourceHealthFinding, emulator: string): string | null {
+  const config = text(finding.data, "config");
+  if (config === null) return null;
+  const ownFile = text(finding.data, "token") !== null || text(finding.data, "core") !== null;
+  if (finding.code === "emulator-config-missing" && ownFile) {
+    return `${emulator}'s settings file ${config} is missing, so Tender cannot tell where it keeps this game's saves.`;
+  }
+  if (finding.code === "emulator-config-unreadable") {
+    return `${emulator}'s settings file ${config} cannot be read, so Tender cannot tell where it keeps this game's saves.`;
+  }
+  return null;
+}
+
+/** The sentence a refusal carrying `finding` is worded with, or `null` where its message stands. */
+function refusalSentence(answer: Record<string, unknown>, finding: SourceHealthFinding): string | null {
+  const { reason, source, emulator } = answer;
+  if (reason === RETRODECK_FINDING_REASON) {
+    return findingSentence(typeof source === "string" ? source : "retrodeck", finding);
+  }
+  if (!SAVE_FINDING_REASONS.has(reason) || typeof source !== "string") return null;
+  const settingsFile = typeof emulator === "string" ? settingsFileSentence(finding, emulator) : null;
+  return settingsFile ?? findingSentence(source, finding);
+}
+
+/**
+ * An endpoint's answer, with the message of a refusal for a source's finding
+ * replaced by the sentence Main's notice shows for that finding, so a refused
+ * press and the notice say the same thing. Two refusals carry one: a folder
+ * press refused for one of RetroDECK's findings, and a save action refused for
+ * a place not read or a missing saves folder, which carries its source's kind
+ * beside the finding. A save refused for an emulator's own settings file, for
+ * which Main shows no notice, says so in a sentence of its own. Every other
+ * answer comes back as it is.
  */
 export function withFindingSentence<T>(answer: T): T {
   if (typeof answer !== "object" || answer === null) return answer;
-  const { reason, finding } = answer as { reason?: unknown; finding?: unknown };
-  if (reason !== RETRODECK_FINDING_REASON || !isFinding(finding)) return answer;
-  return { ...answer, message: findingSentence("retrodeck", finding) };
+  const { finding } = answer as { finding?: unknown };
+  if (!isFinding(finding)) return answer;
+  const sentence = refusalSentence(answer as Record<string, unknown>, finding);
+  return sentence === null ? answer : { ...answer, message: sentence };
 }
 
 /** The two reasons a press is refused with for a platform that has no switched-on system in its source. */

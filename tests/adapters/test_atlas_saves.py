@@ -33,7 +33,10 @@ from typing import Any, cast
 import pytest
 from _vendor.atlas import (
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
+    CAVEAT_EMULATOR_CONFIG_MISSING,
+    CAVEAT_EMULATOR_CONFIG_UNREADABLE,
     CAVEAT_FILE_NAMES_UNESTABLISHED,
+    CAVEAT_FILENAMES_CONTENT_CONDITIONAL,
     CAVEAT_SAVE_INSIDE_CONTENT,
     CAVEAT_SAVE_INSIDE_IMAGE,
     CAVEAT_SORTED_DIR_MISSING,
@@ -42,8 +45,16 @@ from _vendor.atlas import (
     GRANULARITY_SHARED_CARD,
     GRANULARITY_SHARED_FILE,
     HEALTH_ISSUE_CATALOGUE_INVALID,
+    HEALTH_ISSUE_COMPANION_CONFIG_MISSING,
+    HEALTH_ISSUE_CONFIG_UNREADABLE,
+    HEALTH_ISSUE_MARKER_INVALID,
+    HEALTH_ISSUE_MARKER_MISSING,
+    HEALTH_ISSUE_MARKER_UNREADABLE,
     HEALTH_ISSUE_NOT_SET_UP,
     HEALTH_ISSUE_SAVES_ROOT_MISSING,
+    PLACE_NOT_READ_CODES,
+    PROVENANCE_ASSUMED,
+    PROVENANCE_READ,
     ROLE_BATTERY,
     ROLE_HIGH_SCORE,
     ROLE_NOTES,
@@ -51,13 +62,15 @@ from _vendor.atlas import (
     ROLE_UNKNOWN,
     ROLES,
     ROOT_CONTENT_DIRECTORY,
+    ROOT_NAME_SAVES,
+    SAVE_ID_SPELLING_PATH_SEGMENT,
     STATE_ROOT_CONTENT_DIRECTORY,
     SavestateAbsence,
     SavestatePlacement,
     Unresolved,
     detect,
 )
-from _vendor.atlas.installations import Health
+from _vendor.atlas.installations import EmuDeck, Health, InstallationRoot, RetroDeck, RootsAnswer
 from _vendor.atlas.placement import (
     FILE_SET_DECLARED,
     FILE_SET_OBSERVED,
@@ -76,6 +89,7 @@ from domain.save_answer import (
     SAVE_STATE_HOLE,
     SAVE_STATE_INSIDE_CONTENT,
     SAVE_STATE_PER_GAME_FILES,
+    SAVE_STATE_PLACE_NOT_READ,
     SAVE_STATE_SAVES_ROOT_MISSING,
     SAVE_STATE_SHARED,
     SAVE_STATE_UNESTABLISHED,
@@ -93,6 +107,16 @@ def _caveat(code: str) -> Caveat:
     return Caveat(code=code, message="prose that may change freely", data={})
 
 
+# What fills a ``<save_id>`` hole, stated the way the resolver states it for
+# Flycast's per-game cards: atlas's ``SavefilePlacement`` raises on a hole
+# without it (``_check_save_id_stated``).
+_SAVE_ID_STATED = Caveat(
+    code=CAVEAT_FILENAMES_CONTENT_CONDITIONAL,
+    message="prose that may change freely",
+    data={"save_id": "the disc's product number", "save_id_spelling": SAVE_ID_SPELLING_PATH_SEGMENT},
+)
+
+
 def _granularity(value: str) -> Granularity:
     return Granularity(value=value, mode=None, readings=(), alternatives=(), provenance="test")
 
@@ -105,6 +129,7 @@ def _placement(
     needs: tuple[str, ...] = (),
     granularity: str | None = GRANULARITY_PER_GAME_FILE,
     caveats: tuple[str, ...] = (),
+    stated: tuple[Caveat, ...] = (),
     physical_dir: str | None = None,
     root_kind: str = "savefile_directory",
     fallback_dir: str | None = None,
@@ -122,7 +147,7 @@ def _placement(
             groups=groups,
         ),
         sources=(),
-        caveats=tuple(_caveat(code) for code in caveats),
+        caveats=(*(_caveat(code) for code in caveats), *stated),
         granularity=None if granularity is None else _granularity(granularity),
         physical_dir=physical_dir,
         fallback_dir=fallback_dir,
@@ -184,12 +209,14 @@ class _Installation:
         caveats: tuple[str, ...] = (),
         kind: str = "retrodeck",
         health: tuple[str | Caveat, ...] | Exception = (),
+        roots: RootsAnswer | Exception | None = None,
     ) -> None:
         self.kind = kind
         self._entries = entries
         self._raises = raises
         self._caveats = caveats
         self._health = health
+        self._roots = roots if roots is not None else _roots()
         self.asked: list[tuple[str, str | None]] = []
 
     def health(self) -> Health:
@@ -197,11 +224,29 @@ class _Installation:
             raise self._health
         return Health(tuple(code if isinstance(code, Caveat) else _caveat(code) for code in self._health))
 
+    def roots(self) -> RootsAnswer:
+        if isinstance(self._roots, Exception):
+            raise self._roots
+        return self._roots
+
     def emulators_for(self, system: str, *, content_path: str | None = None) -> Any:
         self.asked.append((system, content_path))
         if self._raises is not None:
             raise self._raises
         return _Catalogue(self._entries, self._caveats)
+
+
+_SAVES_ROOT = "/run/media/sd/saves"
+
+
+def _roots(*, provenance: str = PROVENANCE_READ, findings: tuple[Caveat, ...] = ()) -> RootsAnswer:
+    """A roots answer whose saves root is ``_SAVES_ROOT``, from where *provenance* says, beside *findings*."""
+    return RootsAnswer(
+        roots=(
+            InstallationRoot(root=ROOT_NAME_SAVES, path=_SAVES_ROOT, provenance=cast("Any", provenance), setting=None),
+        ),
+        caveats=findings,
+    )
 
 
 @pytest.fixture
@@ -277,7 +322,12 @@ class TestTheFiveStates:
 
     def test_a_hole_in_the_name_refuses(self, traces):
         answer = _ask(
-            _placement(files=("<save_id>.A1.bin",), needs=("save_id",), granularity=GRANULARITY_PER_GAME_FILES),
+            _placement(
+                files=("<save_id>.A1.bin",),
+                needs=("save_id",),
+                stated=(_SAVE_ID_STATED,),
+                granularity=GRANULARITY_PER_GAME_FILES,
+            ),
             traces,
         )
 
@@ -292,6 +342,7 @@ class TestTheFiveStates:
             _placement(
                 files=("<save_id>.A1.bin",),
                 needs=("save_id",),
+                stated=(_SAVE_ID_STATED,),
                 granularity=GRANULARITY_PER_GAME_FILES,
                 groups=(
                     FileGroup(
@@ -311,75 +362,411 @@ class TestTheFiveStates:
         assert answer.state == SAVE_STATE_HOLE
 
 
+def _retrodeck_tree(
+    tmp_path, *, marker: str | None = None, saves: bool = True, command: str, system: str, extension: str
+) -> tuple[Any, Any]:
+    """A RetroDECK the real resolver detects, with one system whose one command is *command*.
+
+    *marker* replaces ``retrodeck.json``'s text (a damaged one, say); left out,
+    the marker names the home and a saves root under it, which exists unless
+    *saves* is ``False``. Returns the home and the saves root.
+    """
+    home = tmp_path / "home"
+    saves_root = home / "retrodeck" / "saves"
+    marker_path = home / ".var" / "app" / "net.retrodeck.retrodeck" / "config" / "retrodeck" / "retrodeck.json"
+    marker_path.parent.mkdir(parents=True)
+    marker_path.write_text(
+        marker
+        if marker is not None
+        else json.dumps({"paths": {"rd_home_path": str(home / "retrodeck"), "saves_path": str(saves_root)}}),
+        encoding="utf-8",
+    )
+    (home / "retrodeck").mkdir()
+    if saves:
+        saves_root.mkdir()
+    systems = (
+        home
+        / ".local/share/flatpak/app/net.retrodeck.retrodeck/current/active/files"
+        / "retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml"
+    )
+    systems.parent.mkdir(parents=True)
+    systems.write_text(
+        f'<?xml version="1.0"?>\n<systemList><system><name>{system}</name><extension>.{extension}</extension>'
+        f"{command}</system></systemList>\n",
+        encoding="utf-8",
+    )
+    return home, saves_root
+
+
+_MGBA = '<command label="mGBA">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>'
+
+
+def _real_answer(home: Any, traces: list[str], *, system: str, extension: str, label: str):
+    """The real resolver's save answer for one game of *system* under *home*'s RetroDECK."""
+    sources = EmulatorSourcesAdapter(user_home=str(home), settings={}, log_debug=traces.append)
+    return AtlasSaveLocationAdapter(sources=sources, log_debug=traces.append).resolve_save_answer(
+        system=system,
+        content_path=str(home / "retrodeck" / "roms" / system / f"g.{extension}"),
+        emulator_label=label,
+        content_installed=True,
+    )
+
+
+@pytest.fixture
+def _no_host_deploy(tmp_path, monkeypatch):
+    """Never resolve ``/app`` out of the dev box's own RetroDECK deploy."""
+    monkeypatch.setattr(
+        "_vendor.atlas.installations._FLATPAK_DEPLOY_SYSTEM", str(tmp_path / "no_system_flatpak" / "app")
+    )
+
+
 class TestAMissingSavesRoot:
-    """While the answering RetroDECK reports its saves root missing, no save of its emulators is synced."""
+    """While the answering source's saves root, read from its settings, does not exist, no save is synced."""
 
-    _MISSING = Caveat(code=HEALTH_ISSUE_SAVES_ROOT_MISSING, message="prose", data={"path": "/run/media/sd/saves"})
+    _MISSING = Caveat(code=HEALTH_ISSUE_SAVES_ROOT_MISSING, message="prose", data={"path": _SAVES_ROOT})
 
-    def test_the_answer_refuses_names_the_folder_and_asks_the_emulator_nothing(self, traces):
+    def _answer(self, traces, placement: Any = None, **installation: Any):
+        entry = _Entry("mGBA", _placement() if placement is None else placement)
+        adapter = _adapter(_Installation((entry,), **installation), traces)
+        answer = adapter.resolve_save_answer(
+            system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
+        )
+        return answer, entry
+
+    @pytest.mark.parametrize("kind", ["retrodeck", "emudeck"])
+    def test_every_source_s_missing_saves_root_refuses_and_names_the_folder(self, traces, kind: str):
+        answer, entry = self._answer(traces, kind=kind, roots=_roots(findings=(self._MISSING,)))
+
+        assert answer.state == SAVE_STATE_SAVES_ROOT_MISSING
+        assert answer.syncable is False
+        assert answer.missing_saves_root == _SAVES_ROOT
+        assert answer.emulator == "mGBA"
+        assert answer.source == kind
+        # The emulator is still asked: asking creates nothing.
+        assert entry.asked == [_CONTENT]
+
+    def test_a_saves_root_the_source_only_assumed_refuses_nothing(self, traces):
+        # Why an assumed root refuses nothing: docs/architecture/save-sync-coverage.md,
+        # "The seven save states".
+        answer, _entry = self._answer(traces, roots=_roots(provenance=PROVENANCE_ASSUMED, findings=(self._MISSING,)))
+
+        assert answer.state == SAVE_STATE_PER_GAME_FILES
+
+    def test_a_finding_in_the_health_alone_is_not_read(self, traces):
+        answer, _entry = self._answer(traces, health=(self._MISSING,))
+
+        assert answer.state == SAVE_STATE_PER_GAME_FILES
+
+    def test_roots_that_cannot_be_asked_claim_nothing_missing(self, traces):
+        answer, _entry = self._answer(traces, roots=RuntimeError("roots raised"))
+
+        assert answer.state == SAVE_STATE_PER_GAME_FILES
+
+    def test_a_shared_card_is_named_before_a_missing_saves_root(self, traces):
+        answer, _entry = self._answer(
+            traces,
+            _placement(files=("Mcd001.ps2",), granularity=GRANULARITY_SHARED_CARD),
+            roots=_roots(findings=(self._MISSING,)),
+        )
+
+        assert answer.state == SAVE_STATE_SHARED
+
+    def test_a_missing_saves_root_is_named_before_a_place_not_read(self, traces):
+        answer, _entry = self._answer(
+            traces,
+            _placement(caveats=(CAVEAT_EMULATOR_CONFIG_UNREADABLE,)),
+            roots=_roots(findings=(self._MISSING,)),
+        )
+
+        assert answer.state == SAVE_STATE_SAVES_ROOT_MISSING
+
+    def test_it_is_named_where_no_entry_could_be_asked(self, traces):
+        # A sealed catalogue answers nothing about the emulator; the missing
+        # root is still a fact about the source.
         entry = _Entry("mGBA", _placement())
-        adapter = _adapter(_Installation((entry,), health=(self._MISSING,)), traces)
+        adapter = _adapter(
+            _Installation(
+                (entry,),
+                kind="emudeck",
+                caveats=(CAVEAT_EMULATOR_CATALOGUE_SEALED,),
+                roots=_roots(findings=(self._MISSING,)),
+            ),
+            traces,
+        )
 
         answer = adapter.resolve_save_answer(
             system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
         )
 
         assert answer.state == SAVE_STATE_SAVES_ROOT_MISSING
-        assert answer.syncable is False
-        assert answer.missing_saves_root == "/run/media/sd/saves"
-        assert answer.emulator == "mGBA"
         assert entry.asked == []
 
-    def test_another_source_s_missing_saves_root_is_not_read_as_retrodeck_s(self, traces):
-        # The refusal's sentence names RetroDECK; no other source reaches a save
-        # answer through a catalogue that is not refused.
-        entry = _Entry("mGBA", _placement())
-        adapter = _adapter(_Installation((entry,), kind="emudeck", health=(self._MISSING,)), traces)
+    @pytest.mark.usefixtures("_no_host_deploy")
+    def test_the_real_resolver_s_finding_refuses_and_creates_no_folder(self, tmp_path, traces):
+        home, saves = _retrodeck_tree(tmp_path, saves=False, command=_MGBA, system="gba", extension="gba")
 
-        answer = adapter.resolve_save_answer(
-            system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
+        answer = _real_answer(home, traces, system="gba", extension="gba", label="mGBA")
+
+        assert answer.state == SAVE_STATE_SAVES_ROOT_MISSING
+        assert answer.missing_saves_root == str(saves)
+        assert not saves.exists()
+
+    @pytest.mark.usefixtures("_no_host_deploy")
+    def test_a_damaged_retrodeck_json_does_not_refuse_for_its_assumed_saves_root(self, tmp_path, traces):
+        home, saves = _retrodeck_tree(
+            tmp_path, marker="{not json", saves=False, command=_MGBA, system="gba", extension="gba"
         )
 
-        assert answer.state == SAVE_STATE_PER_GAME_FILES
-        assert entry.asked == [_CONTENT]
+        answer = _real_answer(home, traces, system="gba", extension="gba", label="mGBA")
 
-    def test_the_real_resolver_s_finding_refuses_and_creates_no_folder(self, tmp_path, monkeypatch, traces):
-        monkeypatch.setattr(
-            "_vendor.atlas.installations._FLATPAK_DEPLOY_SYSTEM", str(tmp_path / "no_system_flatpak" / "app")
-        )
+        assert answer.state != SAVE_STATE_SAVES_ROOT_MISSING
+        assert not saves.exists()
+
+    @pytest.mark.usefixtures("_no_host_deploy")
+    def test_the_real_resolver_s_emudeck_finding_refuses_and_creates_no_folder(self, tmp_path, traces):
         home = tmp_path / "home"
-        saves = tmp_path / "card" / "saves"
-        marker = home / ".var" / "app" / "net.retrodeck.retrodeck" / "config" / "retrodeck" / "retrodeck.json"
-        marker.parent.mkdir(parents=True)
-        marker.write_text(
-            json.dumps({"paths": {"rd_home_path": str(home / "retrodeck"), "saves_path": str(saves)}}),
-            encoding="utf-8",
-        )
-        (home / "retrodeck").mkdir()
-        systems = (
-            home
-            / ".local/share/flatpak/app/net.retrodeck.retrodeck/current/active/files"
-            / "retrodeck/components/es-de/share/es-de/resources/systems/linux/es_systems.xml"
-        )
-        systems.parent.mkdir(parents=True)
-        systems.write_text(
-            '<?xml version="1.0"?>\n<systemList><system><name>gba</name><extension>.gba</extension>'
-            '<command label="mGBA">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>'
-            "</system></systemList>\n",
+        emulation = tmp_path / "card" / "Emulation"
+        settings = home / ".config" / "EmuDeck" / "settings.sh"
+        settings.parent.mkdir(parents=True)
+        settings.write_text(
+            f'romsPath="{emulation}/roms"\nbiosPath="{emulation}/bios"\nsavesPath="{emulation}/saves"\n',
             encoding="utf-8",
         )
         sources = EmulatorSourcesAdapter(user_home=str(home), settings={}, log_debug=traces.append)
 
         answer = AtlasSaveLocationAdapter(sources=sources, log_debug=traces.append).resolve_save_answer(
             system="gba",
-            content_path=str(home / "retrodeck" / "roms" / "gba" / "g.gba"),
+            content_path=str(emulation / "roms" / "gba" / "g.gba"),
             emulator_label="mGBA",
             content_installed=True,
         )
 
         assert answer.state == SAVE_STATE_SAVES_ROOT_MISSING
-        assert answer.missing_saves_root == str(saves)
-        assert not saves.exists()
+        assert answer.missing_saves_root == str(emulation / "saves")
+        assert not (emulation / "saves").exists()
+
+
+_MARKERS = (HEALTH_ISSUE_MARKER_MISSING, HEALTH_ISSUE_MARKER_UNREADABLE, HEALTH_ISSUE_MARKER_INVALID)
+_SETTINGS_FILE_CODES = tuple(code for code in PLACE_NOT_READ_CODES if code not in _MARKERS)
+
+
+def _stated(code: str, **data: str) -> Caveat:
+    return Caveat(code=code, message="prose that may change freely", data=data)
+
+
+class TestAPlaceNotReadFromTheSettings:
+    """A save place the resolver did not read from the emulator's own settings is never synced."""
+
+    def _answer(self, traces, answer: Any, *, kind: str = "retrodeck", caveats: tuple[str, ...] = ()):
+        entry = _Entry("Cemu (Standalone)", answer)
+        adapter = _adapter(_Installation((entry,), kind=kind, caveats=caveats), traces)
+        return adapter.resolve_save_answer(
+            system="wiiu", content_path=_CONTENT, emulator_label="Cemu (Standalone)", content_installed=True
+        )
+
+    @pytest.mark.parametrize("kind", ["retrodeck", "emudeck", "bare_retroarch_flatpak"])
+    @pytest.mark.parametrize("code", _SETTINGS_FILE_CODES)
+    def test_every_settings_file_finding_refuses_for_every_source(self, traces, code: str, kind: str):
+        answer = self._answer(traces, _placement(stated=(_stated(code, config="/cfg/settings.xml"),)), kind=kind)
+
+        assert answer.state == SAVE_STATE_PLACE_NOT_READ
+        assert answer.syncable is False
+        assert answer.sync_directory is None
+        assert answer.owned_files == ()
+        assert answer.finding is not None
+        assert answer.finding.code == code
+        assert answer.finding.data == {"config": "/cfg/settings.xml"}
+        assert answer.source == kind
+
+    def test_the_directory_the_resolver_named_is_kept(self, traces):
+        # The rename on adoption still carries a game's files there.
+        answer = self._answer(traces, _placement(caveats=(CAVEAT_EMULATOR_CONFIG_MISSING,)))
+
+        assert answer.directory == _SAVES
+
+    @pytest.mark.parametrize("kind", ["retrodeck", "emudeck"])
+    @pytest.mark.parametrize("code", _MARKERS)
+    def test_retrodeck_s_and_emudeck_s_marker_finding_alone_refuses_nothing(self, traces, code: str, kind: str):
+        # Why: docs/architecture/save-sync-coverage.md, "The seven save states".
+        answer = self._answer(traces, _placement(caveats=(code,)), kind=kind)
+
+        assert answer.state == SAVE_STATE_PER_GAME_FILES
+
+    @pytest.mark.parametrize("kind", ["bare_retroarch_flatpak", "bare_retroarch_native"])
+    @pytest.mark.parametrize("code", _MARKERS)
+    def test_a_bare_retroarch_s_marker_finding_refuses(self, traces, code: str, kind: str):
+        # Why: docs/architecture/save-sync-coverage.md, "The seven save states".
+        answer = self._answer(traces, _placement(caveats=(code,)), kind=kind)
+
+        assert answer.state == SAVE_STATE_PLACE_NOT_READ
+        assert answer.source == kind
+
+    def test_a_marker_finding_beside_a_settings_file_finding_names_the_settings_file(self, traces):
+        answer = self._answer(traces, _placement(caveats=(HEALTH_ISSUE_MARKER_INVALID, CAVEAT_EMULATOR_CONFIG_MISSING)))
+
+        assert answer.finding is not None
+        assert answer.finding.code == CAVEAT_EMULATOR_CONFIG_MISSING
+
+    def test_a_refusal_for_a_missing_settings_file_refuses_with_its_finding(self, traces):
+        declined = Unresolved(
+            code=CAVEAT_EMULATOR_CONFIG_MISSING, message="prose", data={"token": "XEMU", "config": "/x/xemu.toml"}
+        )
+
+        answer = self._answer(traces, declined)
+
+        assert answer.state == SAVE_STATE_PLACE_NOT_READ
+        assert answer.finding is not None
+        assert answer.finding.data == {"token": "XEMU", "config": "/x/xemu.toml"}
+        assert answer.directory is None
+
+    def test_a_refusal_for_another_reason_still_establishes_nothing(self, traces):
+        answer = self._answer(traces, Unresolved(code="standalone-unsupported", message="prose", data={}))
+
+        assert answer.state == SAVE_STATE_UNESTABLISHED
+        assert answer.finding is None
+
+    def test_a_catalogue_refused_for_a_source_not_set_up_names_that_finding(self, traces):
+        answer = self._answer(traces, _placement(), caveats=(HEALTH_ISSUE_NOT_SET_UP,))
+
+        assert answer.state == SAVE_STATE_PLACE_NOT_READ
+        assert answer.finding is not None
+        assert answer.finding.code == HEALTH_ISSUE_NOT_SET_UP
+
+    def test_no_other_finding_on_a_refused_catalogue_is_lent_to_the_entry(self, traces):
+        # Whether a finding concerns the entry's place depends on the entry,
+        # which a refused catalogue never named.
+        answer = self._answer(
+            traces,
+            _placement(),
+            kind="emudeck",
+            caveats=(CAVEAT_EMULATOR_CATALOGUE_SEALED, HEALTH_ISSUE_COMPANION_CONFIG_MISSING),
+        )
+
+        assert answer.state == SAVE_STATE_UNESTABLISHED
+        assert answer.unestablished == UNESTABLISHED_NOT_ASKED
+
+    def test_a_finding_in_the_source_s_health_alone_is_not_read(self, traces):
+        # Why: docs/architecture/save-sync-coverage.md, "The seven save states".
+        entry = _Entry("Cemu (Standalone)", _placement())
+        adapter = _adapter(
+            _Installation(
+                (entry,), kind="emudeck", health=(HEALTH_ISSUE_CONFIG_UNREADABLE, HEALTH_ISSUE_COMPANION_CONFIG_MISSING)
+            ),
+            traces,
+        )
+
+        answer = adapter.resolve_save_answer(
+            system="wiiu", content_path=_CONTENT, emulator_label="Cemu (Standalone)", content_installed=True
+        )
+
+        assert answer.state == SAVE_STATE_PER_GAME_FILES
+
+    @pytest.mark.parametrize(
+        ("placement", "state"),
+        [
+            pytest.param(
+                _placement(granularity=GRANULARITY_SHARED_CARD, caveats=(CAVEAT_EMULATOR_CONFIG_MISSING,)),
+                SAVE_STATE_SHARED,
+                id="shared-card",
+            ),
+            pytest.param(
+                _placement(files=(), caveats=(CAVEAT_SAVE_INSIDE_CONTENT, CAVEAT_EMULATOR_CONFIG_MISSING)),
+                SAVE_STATE_INSIDE_CONTENT,
+                id="inside-content",
+            ),
+        ],
+    )
+    def test_a_shape_never_synced_is_named_before_the_finding(self, traces, placement: Any, state: str):
+        assert self._answer(traces, placement).state == state
+
+    @pytest.mark.parametrize(
+        "placement",
+        [
+            pytest.param(
+                _placement(
+                    files=("<save_id>.bin",),
+                    needs=("save_id",),
+                    stated=(_SAVE_ID_STATED, _stated(CAVEAT_EMULATOR_CONFIG_MISSING, config="/c")),
+                ),
+                id="hole",
+            ),
+            pytest.param(
+                _placement(files=(), caveats=(CAVEAT_FILE_NAMES_UNESTABLISHED, CAVEAT_EMULATOR_CONFIG_MISSING)),
+                id="names-unestablished",
+            ),
+        ],
+    )
+    def test_the_finding_is_named_before_what_cannot_be_established(self, traces, placement: Any):
+        assert self._answer(traces, placement).state == SAVE_STATE_PLACE_NOT_READ
+
+
+@pytest.mark.usefixtures("_no_host_deploy")
+class TestTheRealResolverStatesWhereAPlaceWasNotRead:
+    """The resolver's own findings, over a RetroDECK built in a temporary home."""
+
+    _CEMU = '<command label="Cemu (Standalone)">%EMULATOR_CEMU% %ROM%</command>'
+    _XEMU = '<command label="xemu (Standalone)">%EMULATOR_XEMU% %ROM%</command>'
+    _MELONDS = '<command label="melonDS (Standalone)">%EMULATOR_MELONDS% %ROM%</command>'
+
+    @staticmethod
+    def _melonds_settings(home: Any, text: str) -> None:
+        toml = home / ".var" / "app" / "net.retrodeck.retrodeck" / "config" / "melonDS" / "melonDS.toml"
+        toml.parent.mkdir(parents=True)
+        toml.write_text(text, encoding="utf-8")
+
+    def test_retroarch_s_missing_settings_file_refuses_a_core_s_save(self, tmp_path, traces):
+        home, _saves = _retrodeck_tree(tmp_path, command=_MGBA, system="gba", extension="gba")
+
+        answer = _real_answer(home, traces, system="gba", extension="gba", label="mGBA")
+
+        assert answer.state == SAVE_STATE_PLACE_NOT_READ
+        assert answer.finding is not None
+        assert answer.finding.code == CAVEAT_EMULATOR_CONFIG_MISSING
+        assert answer.finding.data["config"].endswith(os.path.join("retroarch", "retroarch.cfg"))
+        assert answer.source == "retrodeck"
+
+    def test_a_standalone_emulator_s_missing_settings_file_refuses(self, tmp_path, traces):
+        home, _saves = _retrodeck_tree(tmp_path, command=self._CEMU, system="wiiu", extension="wud")
+
+        answer = _real_answer(home, traces, system="wiiu", extension="wud", label="Cemu (Standalone)")
+
+        assert answer.state == SAVE_STATE_PLACE_NOT_READ
+        assert answer.finding is not None
+        assert answer.finding.data["token"] == "CEMU"
+
+    def test_a_missing_settings_file_the_resolver_refuses_on_refuses_too(self, tmp_path, traces):
+        home, _saves = _retrodeck_tree(tmp_path, command=self._XEMU, system="xbox", extension="iso")
+
+        answer = _real_answer(home, traces, system="xbox", extension="iso", label="xemu (Standalone)")
+
+        assert answer.state == SAVE_STATE_PLACE_NOT_READ
+        assert answer.finding is not None
+        assert answer.finding.data["token"] == "XEMU"
+
+    def test_a_settings_file_that_does_not_parse_refuses_although_the_defaults_answer(self, tmp_path, traces):
+        # melonDS runs on its factory settings over a file it cannot parse, and
+        # the resolver answers those defaults.
+        home, _saves = _retrodeck_tree(tmp_path, command=self._MELONDS, system="nds", extension="nds")
+        self._melonds_settings(home, "[[[ not toml")
+
+        answer = _real_answer(home, traces, system="nds", extension="nds", label="melonDS (Standalone)")
+
+        assert answer.state == SAVE_STATE_PLACE_NOT_READ
+        assert answer.finding is not None
+        assert answer.finding.code == CAVEAT_EMULATOR_CONFIG_UNREADABLE
+
+    def test_a_damaged_retrodeck_json_still_syncs_a_save_read_from_the_emulator_s_settings(self, tmp_path, traces):
+        home, saves = _retrodeck_tree(
+            tmp_path, marker="{not json", command=self._MELONDS, system="nds", extension="nds"
+        )
+        self._melonds_settings(home, f'[Instance0]\nSaveFilePath = "{saves / "nds"}"\n')
+
+        answer = _real_answer(home, traces, system="nds", extension="nds", label="melonDS (Standalone)")
+
+        assert HEALTH_ISSUE_MARKER_INVALID in answer.caveats
+        assert answer.state == SAVE_STATE_PER_GAME_FILES
+        assert answer.sync_directory == str(saves / "nds")
+        assert answer.synced_names == ("g.sav",)
 
 
 class TestTheTwoShapesAnAnswerReaches:
@@ -981,6 +1368,26 @@ class TestTheVocabularyIsTheResolversOwn:
 
         assert OURS == ROOT_CONTENT_DIRECTORY == STATE_ROOT_CONTENT_DIRECTORY
 
+    def test_the_codes_for_a_place_not_read(self):
+        from domain.save_answer import PLACE_NOT_READ_CODES as OURS
+
+        assert frozenset(PLACE_NOT_READ_CODES) == OURS
+
+    def test_the_marker_codes(self):
+        from domain.save_answer import _MARKER_CODES
+
+        assert frozenset(_MARKERS) == _MARKER_CODES
+
+    def test_the_missing_saves_root_code(self):
+        from domain.save_answer import SAVES_ROOT_MISSING
+
+        assert SAVES_ROOT_MISSING == HEALTH_ISSUE_SAVES_ROOT_MISSING
+
+    def test_the_kinds_whose_marker_names_no_save_place(self):
+        from domain.emulator_sources import EMUDECK, RETRODECK
+
+        assert (RetroDeck.kind, EmuDeck.kind) == (RETRODECK, EMUDECK)
+
 
 # --- The real resolver, over whatever this machine has ------------------------
 
@@ -992,13 +1399,13 @@ class TestTheVocabularyIsTheResolversOwn:
 # entry is ``(state, synced names)``.
 #
 # The rows that differ by extension are the point of the exercise, not noise:
-# PUAE puts an Amiga .adf's save inside the disk image, states a directory it
-# cannot name the contents of for a .lha, and establishes nothing for an .hdf;
-# Genesis Plus GX keeps a Sega CD .chd on a shared BRAM card and a .bin in a
-# per-game .srm.
+# PUAE puts an Amiga .adf's save inside the disk image, places a .lha's under a
+# WHDLoad.prefs this machine does not have (a place not read from its settings),
+# and establishes nothing for an .hdf; Genesis Plus GX keeps a Sega CD .chd on a
+# shared BRAM card and a .bin in a per-game .srm.
 _PINNED: dict[tuple[str, str], tuple[str, tuple[str, ...]]] = {
     ("amiga", ".adf"): (SAVE_STATE_INSIDE_CONTENT, ()),
-    ("amiga", ".lha"): (SAVE_STATE_UNESTABLISHED, ()),
+    ("amiga", ".lha"): (SAVE_STATE_PLACE_NOT_READ, ()),
     ("amiga", ".hdf"): (SAVE_STATE_UNESTABLISHED, ()),
     ("amigacd32", ".chd"): (SAVE_STATE_PER_GAME_FILES, ("Game Title.nvr",)),
     ("amigacd32", ".bin"): (SAVE_STATE_UNESTABLISHED, ()),
@@ -1017,11 +1424,9 @@ _PINNED: dict[tuple[str, str], tuple[str, tuple[str, ...]]] = {
     ("ps2", ".chd"): (SAVE_STATE_SHARED, ()),
 }
 
-# The two shapes of "not established" the rows above reach, kept apart here too:
-# a .lha states a directory whose names PUAE does not list, an .hdf states
-# nothing at all.
+# The shape inside "not established" for each row above in that state: an .hdf
+# states nothing at all.
 _PINNED_SHAPES: dict[tuple[str, str], str] = {
-    ("amiga", ".lha"): UNESTABLISHED_DIRECTORY_KNOWN,
     ("amiga", ".hdf"): UNESTABLISHED_NOTHING,
     ("amigacd32", ".bin"): UNESTABLISHED_NOTHING,
 }
@@ -1081,14 +1486,14 @@ class TestTheRealMachineAnswers:
     def test_one_system_answers_differently_for_three_content_shapes(self, machine, traces):
         """The whole reason a pin names its extension: Amiga is three answers.
 
-        Two of them are different STATES and the third differs only in the shape
-        inside ``unestablished`` — which is exactly why the shape is carried
-        separately. A table keyed by system could state one of the three.
+        Three different states — inside the content, a place not read from the
+        settings, nothing established. A table keyed by system could state one
+        of the three.
         """
         answers = {ext: self._answer(machine, "amiga", ext, traces) for ext in (".adf", ".lha", ".hdf")}
 
         assert answers[".adf"].state == SAVE_STATE_INSIDE_CONTENT
-        assert answers[".lha"].state == SAVE_STATE_UNESTABLISHED
+        assert answers[".lha"].state == SAVE_STATE_PLACE_NOT_READ
         assert answers[".hdf"].state == SAVE_STATE_UNESTABLISHED
         assert len({(a.state, a.unestablished) for a in answers.values()}) == 3
 

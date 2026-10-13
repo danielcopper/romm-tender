@@ -203,7 +203,7 @@ def _count_entries(
     Mutates *counts* and *entry_names*, the accumulators
     :func:`platform_breakdown` owns. An entry whose ``platform_name`` is its own
     slug contributes no name: an entry rebuilt from a skipped collection unit
-    carries exactly that (``fetcher.py`` ``_reconstruct_collection_members``,
+    carries exactly that (``collection_fetcher.py`` ``_reconstruct_collection_members``,
     which skips unbound rows, so such an entry is bound and lands in
     ``changed``), and accepting it would let work-queue order decide the row's
     name — whichever unit arrives first wins the ``setdefault``.

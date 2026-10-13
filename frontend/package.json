@@ -15,7 +15,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "packageManager": "pnpm@10.29.3",
-  "license": "GPL-3.0",
+  "license": "GPL-3.0-only",
   "dependencies": {
     "@decky/ui": "^4.11.6"
   },

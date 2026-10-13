@@ -44,6 +44,9 @@ export interface InstalledRom {
   launchable: boolean;
 }
 
+/** Where Tender's Quick Access entry sits beside Decky Loader's (`qam/quickAccessEntry.tsx`). */
+export type QamEntryPosition = "above_decky" | "below_decky";
+
 export interface Settings {
   romm_url: string;
   has_token: boolean;
@@ -60,6 +63,9 @@ export interface Settings {
   // Optional: older payloads may omit it, treated as "merge". Mirrors the
   // CollectionNamingMode type in sync.ts.
   collection_naming_mode?: "merge" | "by_label";
+  // Optional: the backend always sends it, but older payloads / test fixtures
+  // may omit it, treated as "above_decky".
+  qam_entry_position?: QamEntryPosition;
   // Preferred sibling-group region (ADR-0021 §3). "auto" = the fixed build-time
   // default order (World > USA > Europe > Japan); any other value heads the
   // ranking with that region on the next sync. Optional: the backend always

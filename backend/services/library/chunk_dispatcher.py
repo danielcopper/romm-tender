@@ -380,10 +380,10 @@ class ChunkDispatcher:
         UoW so "platform fully synced" ⟺ "stamp exists" is atomic on a crash. The
         stamp lets the next sync's incremental-skip gate skip this platform even
         when the whole run is later cancelled (its library-wide ``last_sync`` never
-        advances). Only platform units carry a skip gate — collections have none,
-        so they are never stamped. A cancel or heartbeat timeout mid-unit returns
-        before the final chunk, so an incomplete platform is never stamped
-        (ADR-0023 / #1025).
+        advances). A collection unit is stamped by
+        :meth:`_build_final_collection_stamp`. A cancel or heartbeat timeout
+        mid-unit returns before the final chunk, so an incomplete platform is
+        never stamped (ADR-0023 / #1025).
         """
         if unit.type == "platform" and unit.slug and chunk_index == chunk_count - 1:
             return PlatformSyncState.stamp(
@@ -401,31 +401,35 @@ class ChunkDispatcher:
         chunk_count: int,
         member_rom_ids: list[int] | None,
     ) -> CollectionSyncState | None:
-        """Build the completion stamp for a standard/smart collection's FINAL chunk, else ``None``.
+        """Build the completion stamp for a collection's FINAL chunk, else ``None``.
 
         The collection sibling of :meth:`_build_final_platform_stamp` (#742). On
-        the final chunk of a standard/smart collection unit whose listing carried an
-        ``updated_at``, the stamp rides that chunk's commit UoW so "collection
-        fully synced" ⟺ "stamp exists" is atomic on a crash. ``member_rom_ids`` is
-        the collection's FULL membership (every member id, not just the applied
+        the final chunk of a collection unit whose member ids are known, the
+        stamp rides that chunk's commit UoW so "collection fully synced" ⟺
+        "stamp exists" is atomic on a crash. ``member_rom_ids`` is the
+        collection's FULL membership (every member id, not just the applied
         new_roms), which a future skip replays to rebuild the Steam-collection
-        map. Virtual collections carry no stamp (no stable
-        ``updated_at``), and a cancel or heartbeat timeout mid-unit returns before
-        the final chunk — an incomplete collection is never stamped (ADR-0023).
+        map. A standard or smart collection is stamped only when its listing
+        carried an ``updated_at``; a virtual collection's stamp carries an empty
+        ``updated_at``, because its skip compares member sets instead. A cancel
+        or heartbeat timeout mid-unit returns before the final chunk — an
+        incomplete collection is never stamped (ADR-0023).
         """
-        if (
-            unit.type == "collection"
-            and unit.collection_kind in ("standard", "smart")
-            and unit.collection_updated_at
-            and member_rom_ids is not None
-            and chunk_index == chunk_count - 1
-        ):
-            return CollectionSyncState.stamp(
-                collection_id=str(unit.id),
-                collection_kind=unit.collection_kind,
-                updated_at=unit.collection_updated_at,
-                completed_at=self._clock.now().isoformat(),
-                rom_count=unit.rom_count,
-                member_rom_ids=tuple(member_rom_ids),
-            )
-        return None
+        if unit.type != "collection" or unit.collection_kind is None:
+            return None
+        if member_rom_ids is None or chunk_index != chunk_count - 1:
+            return None
+        if unit.collection_kind == "virtual":
+            updated_at = ""
+        elif unit.collection_updated_at:
+            updated_at = unit.collection_updated_at
+        else:
+            return None
+        return CollectionSyncState.stamp(
+            collection_id=str(unit.id),
+            collection_kind=unit.collection_kind,
+            updated_at=updated_at,
+            completed_at=self._clock.now().isoformat(),
+            rom_count=unit.rom_count,
+            member_rom_ids=tuple(member_rom_ids),
+        )

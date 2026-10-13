@@ -10,8 +10,8 @@ platform and never was: it belongs to the **emulator** that opens the game, and 
 vendored [emu-atlas](https://github.com/danielcopper/emu-atlas) resolver through `adapters/atlas_saves.py`. Services see
 a `domain.save_answer.SaveAnswer` and never a resolver type.
 
-That answer classifies every ROM into exactly one of **six save states**, and the sync runs in only the first of them —
-see [Save sync coverage](save-sync-coverage.md), which owns the states and the reasoning. Every file in a syncable set
+That answer classifies every ROM into exactly one of **seven save states**, and the sync runs in only the first of them
+— see [Save sync coverage](save-sync-coverage.md), which owns the states and the reasoning. Every file in a syncable set
 syncs **independently against the server save sharing its own canonical target**, so a multi-file set never cross-mixes
 extensions.
 
@@ -37,7 +37,7 @@ floor with `reason: "version_error"`.
 | `/api/devices`                                           | POST   | Register a device. Accepts hostname, platform, client info. Returns `device_id` (UUID).                                                                                                                                                                                                                |
 | `/api/devices/{id}`                                      | DELETE | Remove a device registration. Returns 204 No Content. PATCH (rename) is not supported (405).                                                                                                                                                                                                           |
 | `/api/saves/delete`                                      | POST   | Bulk delete saves by ID. Body: `{"saves": [id1, id2, ...]}`. Returns result dict.                                                                                                                                                                                                                      |
-| `/api/sync/negotiate`                                    | POST   | Open a Device Sync session. Body: `{device_id, saves: ClientSaveState[]}`. Returns `{session_id, operations[], total_*}` — the server's `upload`/`download`/`conflict`/`no_op` verdicts (+ a `reason`). Detects but never resolves; opening cancels this device's prior sessions.                      |
+| `/api/sync/negotiate`                                    | POST   | Open a Device Sync session. Body: `{device_id, saves: ClientSaveState[], rom_ids?: int[]}`. Returns `{session_id, operations[], total_*}` — the server's `upload`/`download`/`conflict`/`no_op` verdicts (+ a `reason`). Detects but never resolves; opening cancels this device's prior sessions.     |
 | `/api/sync/sessions/{id}/complete`                       | POST   | Close a negotiated session. Body: `{operations_completed, operations_failed}`. Returns `{session}`.                                                                                                                                                                                                    |
 | `/api/play-sessions`                                     | POST   | Ingest a batch (max 100) of `{rom_id, start_time, end_time, duration_ms}` under a top-level `device_id`. Additive per-device union; dedup on `(user_id, device_id, rom_id, start_time)`. Playtime, decoupled from save-sync ([ADR-0018](../adr/0018-native-play-session-tracking-additive-ingest.md)). |
 | `/api/play-sessions?rom_id={id}`                         | GET    | List a ROM's stored play sessions (needs the `roms.user.read` scope). Summed by `duration_ms` for the reconcile `max()`; degrades to local-only without the scope.                                                                                                                                     |
@@ -164,9 +164,11 @@ Playtime does **not** ride this session: it must be recorded for every ROM on ev
 unconfirmed-slot ROMs), so it ingests through the standalone `/api/play-sessions` endpoint instead
 ([ADR-0018](../adr/0018-native-play-session-tracking-additive-ingest.md), which narrows the "ingest rides `negotiate`"
 aside of ADR-0016/0017). The server's returned `operations` are **discarded** — detection is the client's
-`compute_sync_action`. Opening the session is best-effort: a `negotiate` **transport** failure is non-fatal, the run
-simply proceeds **without** a session (the kernel still syncs). The **one** exception is RomM's per-device
-`sync_enabled` switch — `negotiate` is the only API-mode endpoint that enforces it, answering a 400 with detail
+`compute_sync_action`. The request names the ROMs it is about as `rom_ids` — the one ROM, or the distinct ROMs of the
+whole-device inventory — at most 500; above that the scope is left off and the server evaluates the whole library.
+Opening the session is best-effort: a `negotiate` **transport** failure is non-fatal, the run simply proceeds
+**without** a session (the kernel still syncs). The **one** exception is RomM's per-device `sync_enabled` switch —
+`negotiate` is the only API-mode endpoint that enforces it, answering a 400 with detail
 `"Sync is disabled for this device"` when the user has disabled sync for this device server-side. That specific 400 is
 translated to `RommSyncDisabledError` and **stops** the run with `reason: device_sync_disabled` (a visible policy stop,
 not a silent sessionless degrade); pre-launch treats it like the local save-sync toggle being off and skips silently so
@@ -825,11 +827,13 @@ A sorted directory RetroArch has not created yet comes back with the `sorted-dir
 `fallback_directory`, the unsorted root RetroArch falls back to (the rule and its source are at `SORTED_DIR_MISSING` in
 `domain/save_answer.py`). A probe there finds nothing, which is the truth; moving files there creates the directory
 first. Any answer a sync would not carry — no emulator resolved, nothing the resolver could establish, a shared card
-even where its directory is known, a save inside the content file, one written beside it — gives no directory to sync in
-(`SaveAnswer.sync_directory` is empty), and none is supplied by a guess: the sync backstop, the status probe and the
-prune projection skip, and copy-to-slot, rollback, slot switch, the slot-choice migration and conflict resolution refuse
-— with `savefiles_in_content_dir` for an answer beside the content (next section), otherwise with
-`save_shape_unsupported` and the answer's own explanation.
+even where its directory is known, a save inside the content file, one written beside it, a missing saves root, a place
+not read from the emulator's own settings — gives no directory to sync in (`SaveAnswer.sync_directory` is empty), and
+none is supplied by a guess: the sync backstop, the status probe and the prune projection skip, and copy-to-slot,
+rollback, slot switch, the slot-choice migration and conflict resolution refuse — with `savefiles_in_content_dir` for an
+answer beside the content (next section), otherwise with `save_shape_unsupported` and the answer's own explanation. A
+place not read from the settings also carries the resolver's finding, the source's kind and the emulator's label, which
+the panel words the refusal from ([The seven save states](save-sync-coverage.md#the-seven-save-states)).
 
 ### Saves written next to the content (`savefiles_in_content_dir`)
 
@@ -911,8 +915,8 @@ does not otherwise stop — and the files stay the migration's to move until it 
 files regardless of the setting: the RetroDECK home migration and the adoption rename.) A failure — a listing refused,
 the database busy — is logged and leaves the record as it was; the operation that called it goes on. Against the record:
 
-- an answer with no directory, or one anchored in the content's own directory (beside the content file or inside it) →
-  nothing moves and nothing is recorded;
+- an answer with no directory, one anchored in the content's own directory (beside the content file or inside it), or
+  one whose directory was not read from the emulator's own settings → nothing moves and nothing is recorded;
 - nothing recorded → today's answer is recorded; nothing moves;
 - the same directory → nothing;
 - a different one → the game's files move from the recorded directory to the answered one, then the record moves on.
@@ -1039,12 +1043,21 @@ On a successful resolution the modal closes and surfaces a branch-specific confi
 the local save was uploaded to the server, **Use Server** confirms the server save is now in use and the prior local
 save was backed up to `.romm-backup`. Failure and stale branches stay inline in the modal instead (no toast).
 
-`showSyncConflictModal(conflict)` shows it for one conflict and returns a Promise resolving to
-`"keep_local" | "use_server" | "cancel"`; `handleConflicts(conflicts)` shows it for each conflict in turn and stops at
-the first cancel. Four callers reach it:
+The dialog draws and asks; what it says and what a resolution does live in `frontend/src/utils/saveConflictFlow.ts`, for
+any surface that shows a conflict:
 
-- `CustomPlayButton`, through `handleConflicts` — on the launch gate's `conflict` verdict, and when the user resolves
-  the conflict the button is already showing.
+- the dialog's wording — its title, explanation, the two saves' lines and the stale-conflict sentence;
+- `resolveOneConflict`, one resolution: it sends the chosen side through `resolve_sync_conflict` and answers either the
+  toast to show once the dialog closes or the message to keep in it;
+- `resolveConflictsSequentially`, the walk: one conflict at a time, stopping at the first cancel;
+- `resolveKnownConflicts`, the conflict a surface is already showing: it reads it through `get_save_status`, never a
+  re-sync, hands it to the surface's own walk and tells the other surfaces once it is resolved.
+
+`showSyncConflictModal(conflict)` shows the dialog for one conflict and returns a Promise resolving to
+`"keep_local" | "use_server" | "cancel"`; `handleConflicts(conflicts)` runs the walk with it. Four callers reach it:
+
+- `CustomPlayButton`, through `handleConflicts` — on the launch gate's `conflict` verdict, and through
+  `resolveKnownConflicts` when the user resolves the conflict the button is already showing.
 - The launch watcher (`frontend/src/utils/launchInterceptor.ts`), through `handleConflicts` — on a `conflict` verdict
   for a start it caught. It does not import the modal: `index.tsx` hands it `handleConflicts` as
   `LaunchPrompts.resolveConflicts`.
@@ -1393,9 +1406,9 @@ user action, so when it moves nothing and hits no conflicts it acknowledges with
 rather than staying silent; the automatic surfaces (pre-launch, post-exit) keep the silent zero-case. The wording lives
 in exactly one place: the frontend helper `saveSyncToastBody` (`frontend/src/utils/saveSyncToast.ts`), which every
 surface renders through — pre-launch (`CustomPlayButton`), post-exit (`sessionManager`, from the counts on the
-`finalize_game_session` payload), and the manual per-game sync (`RomMPlaySection`). The backend delivers the counts as
-data, never the directional copy (#1481); the offline/failure body it still owns rides a separate `failure_toast` field
-on `SessionFinalizeSyncResult`.
+`finalize_game_session` payload), and the manual per-game sync (`RomMPlaySection`, through
+`frontend/src/utils/manualSaveSync.ts`). The backend delivers the counts as data, never the directional copy (#1481);
+the offline/failure body it still owns rides a separate `failure_toast` field on `SessionFinalizeSyncResult`.
 
 ### Pre-launch sync
 
@@ -1471,9 +1484,12 @@ The Play button's path:
    `handleConflicts` in turn (see [The modal](#the-modal)): once all are resolved it notifies siblings and goes on; on
    the first Cancel the button switches to `conflict` and nothing launches. A sync that fails never launches
    unconditionally: the "Save Sync Unavailable" dialog asks first, and Cancel returns the button to Play. The benign
-   skips (`savefiles_in_content_dir`, `save_shape_unsupported`) proceed silently. When the sync moved something, the
-   per-direction completion toast above reports it (uploaded / downloaded / both); a failure's classified message
-   appears in the dialog instead.
+   skips (`savefiles_in_content_dir`, `save_shape_unsupported`) proceed silently; a missing saves folder
+   (`saves_root_missing`) is a failure, so the dialog asks with the sentence Main's notice shows for the folder — when
+   it asks, and when the exit's toast says so, is [The seven save states](save-sync-coverage.md#the-seven-save-states).
+   With "Sync before launch" off the sync answers that before it raises the save answer's refusal, so the dialog never
+   asks about a sync that was switched off. When the sync moved something, the per-direction completion toast above
+   reports it (uploaded / downloaded / both); a failure's classified message appears in the dialog instead.
 8. Offline: `check_local_drift`. A local save that changed since the last sync asks Start Anyway / Retry connection /
    Cancel; Retry runs the check again from the start.
 9. Re-confirm: `get_rom_relaunch_options`, bounded at 3 s, heals the shortcut's launch options. A timeout stops the
@@ -1496,7 +1512,9 @@ Triggered automatically when a game stops (if `sync_after_exit` is enabled).
    one typed payload (the old `recordSessionEnd` / `postExitSync` endpoints were collapsed into it). If Steam's JS
    context was rebuilt mid-session, `handleGameStop` still fires for the adopted session — see
    [Surviving a JS-context rebuild mid-session](#surviving-a-js-context-rebuild-mid-session) — so the post-exit sync is
-   not skipped.
+   not skipped. While a removed-game cleanup runs the call is refused (`prune_active`) and none of those steps runs: the
+   panel logs the refusal and says in a toast that the session's playtime and saves were not synced. Any other refusal
+   is logged and shown in its own message.
 3. Backend runs `do_sync_rom_saves`. For most rows the local file's hash will differ from `last_sync_hash` (the user
    just played), so the typical action is `Upload` — matrix row 9 — POSTed as a new version (`overwrite=false`,
    409-backstopped).

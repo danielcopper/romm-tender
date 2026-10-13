@@ -21,6 +21,7 @@
 
 import { afterPatch, createReactTreePatcher, findInReactTree, findModuleByExport, getReactRoot } from "@decky/ui";
 import type { PanelDefinition } from "../api/host";
+import { getQamEntryPositionState } from "../utils/qamEntryPositionStore";
 import { DISPLAY_NAME } from "../utils/toast";
 import { buildEntry, syncEntry } from "./quickAccessEntry";
 
@@ -117,7 +118,7 @@ export function installQuickAccessEntry(factory: () => PanelDefinition): QuickAc
     (_args: unknown[], ret: any) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Steam's internal React tree; runtime shape is dynamic, no upstream types ship
       const holder = findInReactTree(ret, (node: any) => node?.props?.tabs);
-      if (Array.isArray(holder?.props?.tabs)) syncEntry(holder.props.tabs, entry);
+      if (Array.isArray(holder?.props?.tabs)) syncEntry(holder.props.tabs, entry, getQamEntryPositionState());
       return ret;
     },
     DISPLAY_NAME,

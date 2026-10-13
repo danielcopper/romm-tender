@@ -10,7 +10,8 @@ chunk's 60-second window, and the wait that measures against it, belong to
 chunk's emit rather than at run admission. Progress emission lives here —
 sub-services that need to surface progress receive the orchestrator's
 ``emit_progress`` callback through their config. Anything that fetches ROMs
-belongs in :class:`LibraryFetcher`; anything that finalises shortcuts after the apply
+belongs in :class:`LibraryFetcher`, or in :class:`CollectionFetcher` for a
+collection unit; anything that finalises shortcuts after the apply
 completes belongs in :class:`SyncReporter`; Steam's renderer memory belongs
 in :class:`SessionBudgetMonitor`; a single ROM's launch facts — where its
 file is and what runs it — belong in :class:`ShortcutLaunchResolver`; driving
@@ -68,6 +69,7 @@ if TYPE_CHECKING:
     from lib.late_binding import LateBinding
     from services.library._state import LibrarySyncStateBox
     from services.library.chunk_dispatcher import ChunkDispatcher
+    from services.library.collection_fetcher import CollectionFetcher
     from services.library.cover_preparer import CoverPreparer
     from services.library.fetcher import LibraryFetcher
     from services.library.local_library_reader import LocalLibraryReader
@@ -114,8 +116,9 @@ class SyncOrchestratorConfig:
     (which opens exactly one transaction from this module: the platform
     stamp's DELETE at a unit's apply start), the launcher path every built
     shortcut's ``exe`` names, the shared
-    :class:`LibrarySyncStateBox`, and the :class:`LibraryFetcher` peer the
-    orchestrator delegates per-unit fetches to. The ``reporter``
+    :class:`LibrarySyncStateBox`, the :class:`LibraryFetcher` peer the
+    orchestrator takes the work queue and each platform unit's fetch from, and
+    the :class:`CollectionFetcher` peer it takes each collection unit's from. The ``reporter``
     field is a :class:`LateBinding` because :class:`LibraryService`
     constructs the orchestrator before the reporter exists; the façade
     plugs the reader in via ``set()`` once the reporter is built. The
@@ -155,6 +158,7 @@ class SyncOrchestratorConfig:
     uow_factory: UnitOfWorkFactory
     sync_state_box: LibrarySyncStateBox
     fetcher: LibraryFetcher
+    collection_fetcher: CollectionFetcher
     reporter: LateBinding[SyncReporter]
     shortcut_launch_resolver: ShortcutLaunchResolver
     local_library_reader: LocalLibraryReader
@@ -198,6 +202,7 @@ class SyncOrchestrator:
         self._uow_factory = config.uow_factory
         self._sync_state = config.sync_state_box
         self._fetcher = config.fetcher
+        self._collection_fetcher = config.collection_fetcher
         self._reporter = config.reporter
         self._shortcut_launch_resolver = config.shortcut_launch_resolver
         self._local_library_reader = config.local_library_reader
@@ -510,7 +515,7 @@ class SyncOrchestrator:
                 platform_rom_ids.add(rom["id"])
                 synced_rom_ids.add(rom["id"])
         else:
-            unit_roms, all_collection_rom_ids, skipped = await self._fetcher.fetch_collection_unit(
+            unit_roms, all_collection_rom_ids, skipped = await self._collection_fetcher.fetch_collection_unit(
                 unit, synced_rom_ids, progress_step=progress_step, progress_total_steps=progress_total_steps
             )
             if all_collection_rom_ids:
@@ -1204,7 +1209,7 @@ class SyncOrchestrator:
         ``synced_rom_ids``. ``progress_step`` / ``progress_total_steps`` thread
         the unit's coarse position into the fetcher's per-page ``fetching`` frames.
         """
-        unit_roms, all_collection_rom_ids, skipped = await self._fetcher.fetch_collection_unit(
+        unit_roms, all_collection_rom_ids, skipped = await self._collection_fetcher.fetch_collection_unit(
             unit, synced_rom_ids, progress_step=progress_step, progress_total_steps=progress_total_steps
         )
         if all_collection_rom_ids:

@@ -101,6 +101,9 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     # Collection naming mode (#1539) — a settings.json-only write, never touches
     # RetroDECK state; takes effect on the next sync's reporter-key build.
     "set_collection_naming_mode",
+    # Quick Access entry position — a settings.json-only write, never touches
+    # RetroDECK state; the panel reads it on the next render pass of the menu.
+    "set_qam_entry_position",
     # Preferred sibling-group region — a settings.json-only write (ADR-0021 §3),
     # never touches RetroDECK state; takes effect on the next sync. Its companion
     # read (distinct regions in the local library) is a pure local DB read.
@@ -113,16 +116,16 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     # user's explicit QAM ack must both work regardless of a pending migration.
     "get_settings_reset_notice",
     "dismiss_settings_reset_notice",
-    # The one-time move of the shortcuts onto the launcher's home: the plan, the
-    # completion stamp, and the user's answer to the card that ends the
-    # transition. None of the three touches RetroDECK state — the reading is of
-    # Steam's own shortcut file and the two writes are a kv_config row and a
-    # settings key. They have to answer while a migration is pending for the
-    # same reason as the notice above: the frontend points the shortcuts at the
-    # launcher at panel load, whatever page the panel happens to be showing,
+    # Readings of Steam's own shortcut file, which touch no RetroDECK state.
+    # The one-time move of the shortcuts onto the launcher's home (its only
+    # write is a kv_config row) has to answer while a migration is pending for
+    # the same reason as the notice above: the frontend points the shortcuts at
+    # the launcher at panel load, whatever page the panel happens to be showing,
     # and a shortcut of ours left naming a launcher other than the bin root's
-    # is the condition the relocation exists to end.
+    # is the condition the relocation exists to end. The launch-options reading
+    # writes nothing and answers the confirm of a write already made.
     "get_shortcut_relocation",
+    "get_shortcut_launch_options",
     # The release check: whether a newer release exists, the card's per-version
     # Dismiss, the daily-check switch, the reader's own Check now, the
     # acknowledgement of the "is available" toast and the record that the

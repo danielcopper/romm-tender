@@ -17,7 +17,12 @@ from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import parse_iso_to_epoch
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, SAVE_SYNC_CONTENT_DIR_REASON, save_shape_message
+from domain.save_answer import (
+    SAVE_SHAPE_UNSUPPORTED_REASON,
+    SAVE_SYNC_CONTENT_DIR_REASON,
+    save_finding_details,
+    save_shape_message,
+)
 from domain.save_slot import save_in_slot, slot_query_param
 from domain.save_status import compute_multi_file_slot
 from lib.errors import RommNotFoundError
@@ -379,6 +384,7 @@ class VersionsService:
                     "status": "unsupported",
                     "reason": SAVE_SHAPE_UNSUPPORTED_REASON,
                     "message": save_shape_message(info["save_answer"]),
+                    **save_finding_details(info["save_answer"]),
                 }
 
             save_state, device_id = await self._loop.run_in_executor(None, self._read_inputs, rom_id)

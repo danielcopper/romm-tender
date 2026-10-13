@@ -46,13 +46,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
-from bootstrap import (
-    Application,
-    RuntimeBundle,
-    WiringConfig,
-    bootstrap,
-    wire_services,
-)
 from fakes.fake_game_process_control import FakeGameProcessControlAdapter
 from fakes.fake_journal import FakeJournal
 from fakes.fake_latest_release import FakeLatestRelease
@@ -67,6 +60,13 @@ from fakes.fake_steamgrid_db_api import FakeSteamGridDbApi
 from fakes.fake_transient_units import FakeTransientUnits
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
+from bootstrap import (
+    Application,
+    RuntimeBundle,
+    WiringConfig,
+    bootstrap,
+    wire_services,
+)
 from domain.app_directories import AppDirectories
 from domain.identity import MIN_ROMM_VERSION
 from domain.sync_run_kind import SyncRunKind

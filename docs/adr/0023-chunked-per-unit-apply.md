@@ -1,8 +1,14 @@
+---
+status: accepted
+decided: 2026-07-11
+updated: 2026-10-13
+---
+
 # The per-unit apply is chunked into durable per-chunk commits
 
-## Status
+## Scope
 
-Accepted. Tracked under [#1025](https://github.com/danielcopper/decky-romm-sync/issues/1025). Extends
+Tracked under [#1025](https://github.com/danielcopper/decky-romm-sync/issues/1025). Extends
 [ADR-0006](0006-narrow-unit-of-work-scope.md) (the narrow write Unit of Work each chunk commits under) and the
 group-aware apply of [ADR-0021](0021-sibling-group-one-shortcut-binding-active-version.md) (chunks cut only at
 sibling-group boundaries, so a game's dumps never straddle two commits). It carries the #1041 run/unit ack identity and
@@ -227,3 +233,21 @@ mid-unit failure forfeits only the in-flight chunk.**
   cut at)
 - [Backend Architecture](../architecture/backend-architecture.md) and
   [Steam Non-Steam Shortcuts](../architecture/steam-non-steam-shortcuts.md) (the apply pipeline this chunks)
+
+## Amendment — the scan re-stamp limitation ended with RomM 5.1.0
+
+The known limitation under Consequences described rommapp/romm#3836: a RomM filesystem scan re-stamped every member
+ROM's `updated_at`, so the scoped `updated_after` probe fired after every scan. RomM 5.1.0 fixed it (rommapp/romm#3843):
+a scan no longer re-stamps the ROMs it skips. Tender requires RomM 5.3.0 or later, so a scan that changes nothing no
+longer fires the collection probe or the platform skip's probe.
+
+## Amendment — virtual collections are stamped since #2356
+
+The sentence under Consequences that virtual collections are never stamped and always full-fetch stopped being true with
+[#2356](https://github.com/danielcopper/romm-tender/issues/2356). A virtual collection's `updated_at` still says
+nothing, but since RomM 5.3.0's migration 0101 `virtual_collections` is a view over a trigger-maintained membership
+table, so the `rom_ids` its listing carries are live. That set replaces `updated_at` as the membership-stable signal for
+a virtual collection: the gate compares the listing's ids with the stamp's `member_rom_ids` as sets, in place of the
+`updated_at` and both `rom_count` comparisons, and then asks the same scoped `updated_after` probe, which RomM accepts
+with `virtual_collection_id`. The stamp is written on the final chunk like the other two kinds, with an empty
+`updated_at`. Standard and smart collections keep the gate described above.

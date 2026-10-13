@@ -42,6 +42,7 @@ import {
   runLaunchGate,
   markLaunchSkipped,
   consumeLaunchSkip,
+  BENIGN_SYNC_SKIP_REASONS,
   LOCAL_CALL_LIMIT_MS,
   SERVER_CALL_LIMIT_MS,
 } from "./launchGate";
@@ -51,11 +52,12 @@ import { startingSourceOffSentence } from "./emulatorSourceWording";
 import type { GateVerdict, LaunchGateOps, PreLaunchSyncOutcome } from "./launchGate";
 import { reconfirmLaunchOptions } from "./launchOptionsReconcile";
 import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "./saveSetup";
-import { BENIGN_SYNC_SKIP_REASONS, type SyncConflict } from "../types";
+import type { SyncConflict } from "../types";
 import { detach } from "./detach";
 import { tellStrandedPress } from "./strandedPanelStore";
 import { strandedPanelSentence } from "./strandedPanelWording";
 import { TimeoutError, boundedOr, rethrowTimeout, withTimeout } from "./withTimeout";
+import { announceSaveSync } from "./saveSyncEvents";
 
 /**
  * The five decisions the funnel has to put to the user, as questions rather than
@@ -247,8 +249,8 @@ function relaunchGameId(start: CancelledStart): string {
  *  skipped immediately before this RunGame so it doesn't re-enter the watcher
  *  and re-gate. The re-confirm runs in the already-detached post-cancel portion,
  *  so it only adds a bounded wait to the cancel→relaunch window: the command
- *  fetch, the confirm's report wait and re-read, and the lease release each run
- *  under a timeout of their own. */
+ *  fetch, the confirm's report wait, re-read and reading of Steam's shortcut
+ *  file, and the lease release each run under a timeout of their own. */
 async function relaunch(start: CancelledStart, romId: number): Promise<void> {
   const reconfirm = await reconfirmLaunchOptions(romId, start.appId, "Watcher");
   if (reconfirm.status === "timeout") {
@@ -296,7 +298,7 @@ async function handleWatcherVerdict(
       const resolution = await prompts.resolveConflicts(verdict.conflicts);
       if (resolution === "cancel") return "done";
       // Conflicts resolved — notify sibling components to refresh, then relaunch.
-      globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }));
+      announceSaveSync(romId);
       await relaunch(start, romId);
       return "done";
     }

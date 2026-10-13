@@ -32,7 +32,6 @@ from _factories import (
     _make_retry,
     _make_services_bundle,
 )
-from bootstrap import ServicesBundle
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_adoption_move import FakeAdoptionMoveStore
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
@@ -71,6 +70,7 @@ from adapters.steam_config import SteamConfigAdapter
 from adapters.steamgriddb import SteamGridDbAdapter
 from adapters.update_attempt import UpdateAttemptFileAdapter
 from adapters.update_staging import UpdateStagingAdapter
+from bootstrap import ServicesBundle
 from domain.bios_file import BiosFile
 from domain.refusal import DomainRefused, NamedDomainRefused
 from domain.rom import Rom
@@ -968,7 +968,7 @@ class TestTheSaveSyncRefusalsOnTheWire:
             ]
         )
 
-        def negotiate(_device_id, _saves):
+        def negotiate(_device_id, _saves, *, rom_ids=None):
             answer = next(negotiations)
             if isinstance(answer, Exception):
                 raise answer

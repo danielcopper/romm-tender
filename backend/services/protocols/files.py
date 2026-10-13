@@ -18,6 +18,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from contextlib import AbstractContextManager
 
+    from domain.prune import BundleReadmeContext
+    from domain.update_install import UpdateAttemptRecord
+    from domain.update_outcome import UpdateFailure
     from models.adoption import ArchiveMemberInfo, ExistingContent, MoveOutcome, TopLevelEntry, TopLevelName
     from models.prune import (
         MutationOutcome,
@@ -27,10 +30,6 @@ if TYPE_CHECKING:
         SourceClaim,
         SteamRecoverySnapshot,
     )
-
-    from domain.prune import BundleReadmeContext
-    from domain.update_install import UpdateAttemptRecord
-    from domain.update_outcome import UpdateFailure
 
 
 class UpdateStagingStore(Protocol):

@@ -33,8 +33,6 @@ import pathlib
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from models.cover import CoverRevalidation
-
 from domain.cover_refresh import _strip_cover_ts
 from fakes._romm_save_semantics import (
     check_add_save_conflict,
@@ -44,8 +42,11 @@ from fakes._romm_save_semantics import (
 )
 from lib.errors import RommSyncDisabledError, RommUnprocessableEntityError
 from lib.romm_paging import LIST_PAGE_SIZE
+from models.cover import CoverRevalidation
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from models.play_sessions import (
         PlaySessionIngestEntry,
         PlaySessionIngestResponse,
@@ -139,6 +140,7 @@ class FakeRommApi:
         self.get_firmware_side_effect: Exception | None = None
         self.download_firmware_side_effect: Exception | None = None
         self.get_rom_side_effect: Exception | None = None
+        self.get_rom_simple_side_effect: Exception | None = None
         self.get_rom_once_side_effect: Exception | None = None
         self.get_rom_once_side_effect_by_id: dict[int, Exception] = {}
         self.list_roms_side_effect: Exception | None = None
@@ -281,6 +283,15 @@ class FakeRommApi:
             return {"id": rom_id}
         return dict(rom)
 
+    def get_rom_simple(self, rom_id: int) -> dict[str, Any]:
+        """The simple-schema read: the same answer as ``get_rom``, logged under its own name."""
+        self._log("get_rom_simple", (rom_id,))
+        self._check_fail(self.get_rom_simple_side_effect)
+        rom = self.roms.get(rom_id)
+        if rom is None:
+            return {"id": rom_id}
+        return dict(rom)
+
     def get_rom_once(self, rom_id: int) -> dict[str, Any]:
         """Single-attempt exact-ROM fake with per-id failure injection."""
         self._log("get_rom_once", (rom_id,))
@@ -323,21 +334,35 @@ class FakeRommApi:
         ]
         return self._paginate(items, limit, offset)
 
+    @staticmethod
+    def _on_platforms(items: list[dict[str, Any]], platform_ids: Sequence[int] | None) -> list[dict[str, Any]]:
+        """Narrow *items* to those on one of *platform_ids*, as RomM's ``platform_ids`` filter does.
+
+        ``None`` or an empty sequence narrows nothing, as an absent filter does.
+        """
+        if not platform_ids:
+            return items
+        return [r for r in items if r.get("platform_id") in platform_ids]
+
     def list_roms_by_collection(
-        self, collection_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0
+        self,
+        collection_id: int,
+        limit: int = LIST_PAGE_SIZE,
+        offset: int = 0,
+        platform_ids: Sequence[int] | None = None,
     ) -> dict[str, Any]:
         self._log(
             "list_roms_by_collection",
             (collection_id,),
-            {"limit": limit, "offset": offset},
+            {"limit": limit, "offset": offset, "platform_ids": platform_ids},
         )
         self._check_fail(self.list_roms_by_collection_side_effect)
         items = [r for r in self.roms.values() if collection_id in (r.get("collection_ids") or [])]
-        return self._paginate(items, limit, offset)
+        return self._paginate(self._on_platforms(items, platform_ids), limit, offset)
 
     def list_collection_roms_updated_after(
         self,
-        collection_id: int,
+        collection_id: int | str,
         kind: str,
         updated_after: str,
         limit: int = 1,
@@ -349,7 +374,9 @@ class FakeRommApi:
             {"limit": limit, "offset": offset},
         )
         self._check_fail(self.list_collection_roms_updated_after_side_effect)
-        membership_key = "smart_collection_ids" if kind == "smart" else "collection_ids"
+        membership_key = {"smart": "smart_collection_ids", "virtual": "virtual_collection_ids"}.get(
+            kind, "collection_ids"
+        )
         items = [
             r
             for r in self.roms.values()
@@ -358,33 +385,58 @@ class FakeRommApi:
         return self._paginate(items, limit, offset)
 
     def list_roms_by_virtual_collection(
-        self, virtual_id: str, limit: int = LIST_PAGE_SIZE, offset: int = 0
+        self,
+        virtual_id: str,
+        limit: int = LIST_PAGE_SIZE,
+        offset: int = 0,
+        platform_ids: Sequence[int] | None = None,
     ) -> dict[str, Any]:
         self._log(
             "list_roms_by_virtual_collection",
             (virtual_id,),
-            {"limit": limit, "offset": offset},
+            {"limit": limit, "offset": offset, "platform_ids": platform_ids},
         )
         self._check_fail(self.list_roms_by_virtual_collection_side_effect)
         items = [r for r in self.roms.values() if virtual_id in (r.get("virtual_collection_ids") or [])]
-        return self._paginate(items, limit, offset)
+        return self._paginate(self._on_platforms(items, platform_ids), limit, offset)
 
     def list_roms_by_smart_collection(
-        self, smart_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0
+        self,
+        smart_id: int,
+        limit: int = LIST_PAGE_SIZE,
+        offset: int = 0,
+        platform_ids: Sequence[int] | None = None,
     ) -> dict[str, Any]:
         self._log(
             "list_roms_by_smart_collection",
             (smart_id,),
-            {"limit": limit, "offset": offset},
+            {"limit": limit, "offset": offset, "platform_ids": platform_ids},
         )
         self._check_fail(self.list_roms_by_smart_collection_side_effect)
         items = [r for r in self.roms.values() if smart_id in (r.get("smart_collection_ids") or [])]
-        return self._paginate(items, limit, offset)
+        return self._paginate(self._on_platforms(items, platform_ids), limit, offset)
+
+    def _listed(self, entries: list[dict[str, Any]], membership_key: str) -> list[dict[str, Any]]:
+        """Copy *entries* as RomM lists them: each carries ``rom_ids``.
+
+        An entry seeded without ``rom_ids`` lists the ROMs that name its id
+        under *membership_key*, the set RomM keeps for a collection; a seeded
+        ``rom_ids`` is answered as given.
+        """
+        listed = []
+        for entry in entries:
+            copy = dict(entry)
+            if "rom_ids" not in copy:
+                copy["rom_ids"] = [
+                    rid for rid, rom in self.roms.items() if copy.get("id") in (rom.get(membership_key) or [])
+                ]
+            listed.append(copy)
+        return listed
 
     def list_collections(self) -> list[dict[str, Any]]:
         self._log("list_collections")
         self._check_fail(self.list_collections_side_effect)
-        return [dict(c) for c in self.collections]
+        return self._listed(self.collections, "collection_ids")
 
     def list_virtual_collections(self, collection_type: str) -> list[dict[str, Any]]:
         self._log("list_virtual_collections", (collection_type,))
@@ -392,12 +444,12 @@ class FakeRommApi:
         per_type = self.list_virtual_collections_side_effect_by_type.get(collection_type)
         if per_type is not None:
             raise per_type
-        return [dict(c) for c in self.virtual_collections.get(collection_type, [])]
+        return self._listed(self.virtual_collections.get(collection_type, []), "virtual_collection_ids")
 
     def list_smart_collections(self) -> list[dict[str, Any]]:
         self._log("list_smart_collections")
         self._check_fail(self.list_smart_collections_side_effect)
-        return [dict(c) for c in self.smart_collections]
+        return self._listed(self.smart_collections, "smart_collection_ids")
 
     def download_rom_content(
         self,
@@ -723,8 +775,8 @@ class FakeRommApi:
         self._record_device_sync(save_id, device_id)
         return {"status": "ok"}
 
-    def get_save_summary(self, rom_id: int, device_id: str | None = None) -> dict[str, Any]:
-        self._log("get_save_summary", (rom_id,), {"device_id": device_id})
+    def get_save_summary(self, rom_id: int) -> dict[str, Any]:
+        self._log("get_save_summary", (rom_id,))
         self._check_fail(self.get_save_summary_side_effect)
         slots: dict[str | None, list[dict[str, Any]]] = {}
         for s in self.saves.values():
@@ -750,8 +802,10 @@ class FakeRommApi:
             self._save_content.pop(sid, None)
         return {"deleted": len(save_ids)}
 
-    def negotiate_sync(self, device_id: str, saves: list[ClientSaveState]) -> SyncNegotiateResponse:
-        self._log("negotiate_sync", (device_id, saves))
+    def negotiate_sync(
+        self, device_id: str, saves: list[ClientSaveState], *, rom_ids: list[int] | None = None
+    ) -> SyncNegotiateResponse:
+        self._log("negotiate_sync", (device_id, saves), {"rom_ids": rom_ids})
         self._check_fail()
         if self.negotiate_sync_disabled:
             raise RommSyncDisabledError("Sync is disabled for this device", url="/api/sync/negotiate", method="POST")

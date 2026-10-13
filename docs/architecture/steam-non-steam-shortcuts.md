@@ -126,13 +126,27 @@ consequences follow:
 
 Because `SetAppLaunchOptions` returns `void` with no success signal, Tender **fires the set then polls**
 `RegisterForAppDetails` until the read-back `strLaunchOptions` matches (`setLaunchOptionsConfirmed`). That report can
-take longer than the 2 s the poll waits — right after a Steam start, Steam has written the new value to `shortcuts.vdf`
-within the same second while the report is still outstanding — so when the wait runs out, Tender reads the shortcut's
-details once more (`getAppDetails`, bounded by the same 2 s) and counts the write as confirmed if they show the value —
-a confirm only the re-read gave is logged at INFO, a first-report confirm is not. Only a re-read that shows a different
-value, or does not answer, is a failed confirm; every caller of `setLaunchOptionsConfirmed` gets that answer, so a write
-that did not land is still reported where its caller reports one. Setting `""` — the placeholder an uninstalled ROM
-carries until it is downloaded — is valid and confirms against an empty read-back.
+take longer than the 2 s the poll waits — right after a Steam start, Steam has already written the new value to
+`shortcuts.vdf` while the report is still outstanding — so when the wait runs out, Tender reads the shortcut's details
+once more (`getAppDetails`, bounded by the same 2 s) and counts the write as confirmed if they show the value — a
+confirm only the re-read gave is logged at INFO, a first-report confirm is not. A re-read can also answer with a value
+other than the one written while the file already holds the written one: on the reference device it did so for two
+shortcuts, each written back to a value it had held before, and which value the re-read showed was not recorded (#2348).
+So when the re-read does not show the value either, Tender asks the backend what `shortcuts.vdf` holds for the shortcut
+(`get_shortcut_launch_options`, which reads the file and never writes it), and the written value there confirms the
+write, logged at INFO with how long this confirm waited for the reading (in a batch, the wait for the batch's shared
+reading, not its parse). The reading waits at most 5 s — an endpoint call otherwise waits out a backend that is down —
+and one that does not answer in time counts as a file that could not be read. The file's answer is sound because on the
+reference device Steam rewrote the file about 0.1 s after each write measured in #2348 (four writes, two shortcuts),
+while the file is read 2–4 s after the write. What it cannot tell apart is a write that did not land of a value the file
+still holds from before — possible only while Steam holds a different value in memory that it has not yet written out —
+and that prompt rewrite makes such a window negligible. Where many confirms run together, as in the reconcile, each
+batch of them reads the file once, at its first confirm that needs it, rather than once per shortcut
+(`batchConfirmLaunchOptions`). Only a confirm the file does not settle either — it shows another value, holds no such
+shortcut, or could not be read — is a failed confirm, and its warning names what the re-read and the file each showed;
+every caller of `setLaunchOptionsConfirmed` gets that answer, so a write that did not land is still reported where its
+caller reports one. Setting `""` — the placeholder an uninstalled ROM carries until it is downloaded — is valid and
+confirms against an empty read-back.
 
 The real hazard is not the set: heavy removal-churn can corrupt Steam's in-memory shortcut state. A Steam restart clears
 it. The sync engine processes removals before additions to minimise churn.
@@ -192,15 +206,15 @@ and an installed ROM. Retention does not imply that RomM still offers the row as
 lazy `get_version_list` load therefore recomputes availability every time; there is no liveness column, migration,
 cache, or persisted verdict.
 
-The existing detail request for the bound id supplies its own answer and RomM's current direct `sibling_roms` view. The
-bound id and every local id positively present in that view are live. A local group member absent from the direct view
-is only a suspect because RomM sibling membership can be transitive, so each suspect is checked by an exact-id
-`get_rom_once` request. These checks fan out concurrently on the worker executor and use the short timeout with no
-retry, keeping them off the event loop and out of the initial Game Page render.
+The bound id's own read (`get_rom_simple`, `GET /api/roms/{id}/simple`) supplies its own answer and RomM's current
+direct `sibling_roms` view. The bound id and every local id positively present in that view are live. A local group
+member absent from the direct view is only a suspect because RomM sibling membership can be transitive, so each suspect
+is checked by an exact-id `get_rom_once` request. These checks fan out concurrently on the worker executor and use the
+short timeout with no retry, keeping them off the event loop and out of the initial Game Page render.
 
 Only a typed `RommNotFoundError` from an exact id marks that entry `vanished`. A successful response is live; timeout,
 transport, authentication, server errors, and malformed or empty data all fail open and leave it available. If the bound
-detail itself 404s, `bound_vanished` is true, `server_query_failed` stays false, and every other local member is checked
+read itself 404s, `bound_vanished` is true, `server_query_failed` stays false, and every other local member is checked
 individually. That entity-specific 404 is not fed into the global connection store; a genuine explicit
 server-unreachable result still is. Cover and save endpoints are not liveness authorities.
 
@@ -365,9 +379,12 @@ Shortcut creation and every field update go through the frontend `SteamClient.Ap
 `AddShortcut` returns the real `appId` directly, so Tender never computes app IDs itself and never edits `shortcuts.vdf`
 while Steam is running (Steam holds the file in memory and rewrites it from memory, silently clobbering external writes
 — see [shortcuts.vdf is memory-authoritative](#shortcutsvdf-is-memory-authoritative)). The backend `SteamConfigAdapter`
-(`adapters/steam_config.py`) still lays down artwork **files** in the grid directory, including the icon PNG; its
-`read_shortcuts` / `write_shortcuts` helpers are on no live path. `read_shortcut_exes` (the launcher relocation) and
-`read_shortcut_icons` (the shortcut icon job) still read the file, which Tender never writes while Steam runs.
+(`adapters/steam_config.py`) still lays down artwork **files** in the grid directory, including the icon PNG. It reads
+`shortcuts.vdf` for three questions — which shortcuts the one-time relocation still has to repoint
+(`read_shortcut_exes`), what a shortcut's launch options are when Steam's reports did not confirm a write
+(`read_shortcut_launch_options`), and which shortcuts the shortcut icon job still has to give an icon
+(`read_shortcut_icons`) — and its whole-file `shortcuts.vdf` helpers (`read_shortcuts`, `write_shortcuts`) are on no
+live path since the icon write moved to `SteamClient.Apps.SetShortcutIcon`.
 
 ### shortcuts.vdf structure
 

@@ -117,8 +117,9 @@ function socket(): HostSocket {
  *
  * Every answer passes through `withFindingSentence` and
  * `withPlatformSystemSentence`, so a press refused for one of RetroDECK's
- * findings, or for a platform with no system, reads the way the page says it,
- * whichever endpoint refused it.
+ * findings, a save action refused for a source's finding (a launch's own sync
+ * among them), or a press refused for a platform with no system, reads the
+ * way the page or Main's notice says it, whichever endpoint refused it.
  */
 export const endpoint =
   <Args extends unknown[] = [], Return = void>(route: string) =>

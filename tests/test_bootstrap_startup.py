@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 import pytest
+
 from bootstrap.startup import StartupSteps
 
 LOGGER = logging.getLogger("test_startup_steps")

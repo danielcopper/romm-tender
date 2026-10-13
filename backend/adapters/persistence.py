@@ -73,6 +73,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # describes. Applies on the next normal sync via the reporter key +
     # complete-set reconcile.
     "collection_naming_mode": "merge",
+    # Where Tender's Quick Access entry sits beside Decky Loader's: ``"above_decky"``
+    # (default) or ``"below_decky"``, as docs/architecture/qam-panel.md § The
+    # entry describes. Read by the panel; no backend path consults it.
+    "qam_entry_position": "above_decky",
     "preferred_region": "auto",
     # User intent for the sync button: apply without being asked first. Stored
     # for a reader to choose between a preview and a run; no backend sync path

@@ -13,6 +13,7 @@ import type {
   CollectionKind,
   CollectionOwnerScope,
   CollectionNamingMode,
+  QamEntryPosition,
   RegistryPlatform,
   FirmwareStatus,
   PlatformFirmwareStatus,
@@ -446,6 +447,11 @@ export const setCollectionNamingMode = endpoint<
   [CollectionNamingMode],
   { success: boolean; reason?: WireReason; message?: string }
 >("set_collection_naming_mode");
+// Read via getSettings().qam_entry_position; docs/architecture/qam-panel.md § The entry.
+export const setQamEntryPosition = endpoint<
+  [QamEntryPosition],
+  { success: boolean; reason?: WireReason; message?: string }
+>("set_qam_entry_position");
 export const getRegistryPlatforms = endpoint<[], { platforms: RegistryPlatform[] }>("get_registry_platforms");
 export const removePlatformShortcuts = endpoint<
   [string],
@@ -1181,6 +1187,18 @@ export type ShortcutRelocation =
 export const getShortcutRelocation = endpoint<[], ShortcutRelocation>("get_shortcut_relocation");
 
 /**
+ * What Steam's `shortcuts.vdf` holds for the asked app IDs: the list names
+ * those the file holds, and an app ID it does not hold is absent from it.
+ */
+export type ShortcutLaunchOptions =
+  { success: true; launch_options: { app_id: number; launch_options: string }[] } | ShortcutFileRefusal;
+
+/** Why there is no reading of Steam's shortcut file: it could not be read. */
+export type ShortcutFileRefusal = EndpointFailure & { reason: WireReasonSubset<"shortcut_file_unreadable"> };
+
+export const getShortcutLaunchOptions = endpoint<[number[]], ShortcutLaunchOptions>("get_shortcut_launch_options");
+
+/**
  * What only the process hosting this backend knows about its own run.
  *
  * `failed_startup_steps` names the start-up repairs that did not finish — each
@@ -1501,7 +1519,7 @@ export interface SessionFinalizeResult {
   migration: SessionFinalizeMigration | null;
 }
 
-export const finalizeGameSession = endpoint<[number], SessionFinalizeResult>("finalize_game_session");
+export const finalizeGameSession = endpoint<[number], SessionFinalizeResult | EndpointFailure>("finalize_game_session");
 
 // Delete operations
 export const deleteLocalSaves = endpoint<[number], { success: boolean; deleted_count: number; message: string }>(

@@ -27,7 +27,6 @@ if TYPE_CHECKING:
         SyncNegotiateResponse,
         SyncOperation,
     )
-
     from services.protocols import SaveFileStore
 
 
@@ -314,6 +313,9 @@ class FakeSaveApi:
     def get_rom(self, rom_id: int) -> dict[str, Any]:
         raise NotImplementedError
 
+    def get_rom_simple(self, rom_id: int) -> dict[str, Any]:
+        raise NotImplementedError
+
     def get_rom_once(self, rom_id: int) -> dict[str, Any]:
         raise NotImplementedError
 
@@ -389,8 +391,10 @@ class FakeSaveApi:
         self._negotiate_operations = list(operations)
         self._negotiate_session_id = session_id
 
-    def negotiate_sync(self, device_id: str, saves: list[ClientSaveState]) -> SyncNegotiateResponse:
-        self.call_log.append(("negotiate_sync", (device_id, saves), {}))
+    def negotiate_sync(
+        self, device_id: str, saves: list[ClientSaveState], *, rom_ids: list[int] | None = None
+    ) -> SyncNegotiateResponse:
+        self.call_log.append(("negotiate_sync", (device_id, saves), {"rom_ids": rom_ids}))
         self._check_fail()
         if self.negotiate_sync_disabled:
             raise RommSyncDisabledError("Sync is disabled for this device", url="/api/sync/negotiate", method="POST")
@@ -503,8 +507,8 @@ class FakeSaveApi:
         self._record_device_sync(save_id, device_id)
         return {"status": "ok"}
 
-    def get_save_summary(self, rom_id: int, device_id: str | None = None) -> dict[str, Any]:
-        self.call_log.append(("get_save_summary", (rom_id,), {"device_id": device_id}))
+    def get_save_summary(self, rom_id: int) -> dict[str, Any]:
+        self.call_log.append(("get_save_summary", (rom_id,), {}))
         self._check_fail()
         slots: dict[str | None, list[dict[str, Any]]] = {}
         for s in self.saves.values():

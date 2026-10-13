@@ -19,8 +19,7 @@ import {
   playSectionClasses,
   basicAppDetailsSectionStylerClasses,
 } from "../../utils/deckyUiInternals";
-import { RomMPlaySection } from "../RomMPlaySection";
-import { RomMGameInfoPanel } from "../RomMGameInfoPanel";
+import { rommOverviewBlock, ROMM_BLOCK_KEY } from "./rommOverviewBlock";
 import { debugLog } from "../../api/backend";
 import { detach } from "../../utils/detach";
 import { isRomMAppId, rommAppIdCount } from "../../utils/rommAppIds";
@@ -207,24 +206,15 @@ export function registerGameDetailPatch() {
         // Deduplication: don't inject if already present
         const alreadyHasPlayBtn = children.some(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Steam internal React tree; runtime shape is dynamic, no upstream types ship
-          (c: any) => c?.key === "romm-play-section",
+          (c: any) => c?.key === ROMM_BLOCK_KEY,
         );
         if (!alreadyHasPlayBtn) {
           const nativeOverviewIdx = findNativeOverviewIndex(children);
 
-          const rommPlaySection = <RomMPlaySection key="romm-play-section" appId={appId} />;
-
-          const rommInfoPanel = <RomMGameInfoPanel key="romm-info-panel" appId={appId} />;
-
-          // Wrap in a container with the native AppDetailsOverviewPanel
-          // CSS class so it participates in InnerContainer's flex layout
-          // and scroll system the same way the native panel does.
-          const rommWrapper = (
-            <div key="romm-play-section" className={appDetailsClasses?.AppDetailsOverviewPanel || ""} data-romm="true">
-              {rommPlaySection}
-              {rommInfoPanel}
-            </div>
-          );
+          // Carries the native AppDetailsOverviewPanel CSS class so it
+          // participates in InnerContainer's flex layout and scroll system the
+          // same way the native panel does.
+          const rommWrapper = rommOverviewBlock(appId, appDetailsClasses?.AppDetailsOverviewPanel || "");
 
           if (nativeOverviewIdx >= 0) {
             detach(

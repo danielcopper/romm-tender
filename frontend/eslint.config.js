@@ -46,7 +46,7 @@ export default tseslint.config(
   // Direction rules for `src/`. The backend gets this from
   // `.importlinter`, which is Python-only; without an equivalent here nothing
   // in the frontend toolchain has an opinion about which module may reach
-  // which. The eleven rules below make the WRONG seam fail — they cannot certify
+  // which. The fifteen rules below make the WRONG seam fail — they cannot certify
   // that a seam is right. A helper imported by exactly one parent, taking a
   // dozen parameters and doing nothing on its own, is neither a cycle nor a
   // direction violation and still passes.
@@ -55,8 +55,7 @@ export default tseslint.config(
     plugins: { "import-x": importX },
     settings: {
       // Resolution decides what these rules see. The TS resolver handles path
-      // aliases, index files, and `import type` — which is erased at runtime and
-      // must not count as an edge. A resolver that misses imports would make the
+      // aliases and index files. A resolver that misses imports would make the
       // rules quietly permissive.
       "import-x/resolver-next": [createTypeScriptImportResolver(), createNodeResolver()],
       // The files the plugin opens to read THEIR imports are those whose
@@ -137,6 +136,30 @@ export default tseslint.config(
               from: "./src/bigpicture",
               message:
                 "desktop/ and bigpicture/ are peers, not layers: the two surfaces share data and logic and almost nothing visual, so neither may reach into the other. Anything that turns out to belong to both moves DOWN, never sideways: UI into shared/, the rest into api/, utils/ or types/.",
+            },
+            {
+              target: ["./src/!(qam)/**", "./src/!(index|index.test).{ts,tsx}"],
+              from: "./src/qam",
+              message:
+                "qam/ is Tender's Quick Access entry, and nothing but index.tsx and its test imports it. What you need from it belongs below it, in api/, utils/ or types/.",
+            },
+            {
+              target: ["./src/!(boot)/**", "./src/!(index|index.test).{ts,tsx}"],
+              from: "./src/boot",
+              message:
+                "boot/ is start-up work — the globals bundle's own entry, and the check and failure page index.tsx runs before the panel mounts — and nothing but index.tsx and its test imports it. What you need from it belongs below it, in api/, utils/ or types/.",
+            },
+            {
+              target: "./src/qam",
+              from: ["./src/bigpicture", "./src/desktop"],
+              message:
+                "qam/ sits below the surfaces: it mounts the panel through the factory index.tsx hands it, and never reaches into a surface itself. UI it shares with a surface belongs in shared/.",
+            },
+            {
+              target: "./src/types",
+              from: "./src",
+              except: ["./types"],
+              message: "types/ holds type declarations only and imports nothing from the rest of src/.",
             },
           ],
         },

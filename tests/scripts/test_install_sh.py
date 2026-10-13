@@ -3341,9 +3341,8 @@ class TestWhatAnUpdateReadsIsSpelledOnceOnEachSide:
     """Each name an update backs up, reads or compares, held to the backend's own."""
 
     def test_the_database_and_the_settings_match_the_backend(self):
-        from bootstrap.adapters import DB_FILENAME
-
         from adapters.persistence import SETTINGS_FILENAME
+        from bootstrap.adapters import DB_FILENAME
 
         script = _INSTALL.read_text(encoding="utf-8")
 

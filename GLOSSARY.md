@@ -629,6 +629,17 @@ starts games through — RetroDECK, wherever it stands in the order — or, with
 is detected or every detected one is switched off, and the pages say which of the two
 (`domain/emulator_sources.py::answering_source`).
 
+### Root (of an emulator source): read / frontend default / assumed
+
+A source's installation folder, ROM folder, BIOS folder and saves folder, each with where emu-atlas got its path:
+**read** from the source's own settings, the **frontend default** ES-DE falls back on for an empty ROM folder setting,
+or **assumed** where nothing on the machine names it and emu-atlas fell back on the source's usual layout. Tender uses a
+read root and a frontend default, and an assumed one for nothing; a system's ROM folder goes with the ROM root
+(`domain/source_roots.py`, [#2294](https://github.com/danielcopper/romm-tender/issues/2294)). The pages say "its
+settings file does not name its … folder" for an assumed root, unless a notice that the settings file is missing, cannot
+be read or is damaged, or that the source is not set up, already says why. _Avoid_: default folder, which a frontend
+default also is.
+
 ### Not supported vs not established
 
 Two different absences of an answer. **Not supported**: emu-atlas has no knowledge for this at all (an emulator it has
@@ -908,12 +919,12 @@ path it WOULD occupy, because `roms.fs_name` carries the extension the answer tu
 a prediction. `content_installed` says which it is, and a surface that renders the names without reading it tells a user
 their uninstalled game already has save files.
 
-### Save state: per-game files / shared / inside the content / hole / not established / saves root missing
+### Save state: per-game files / shared / inside the content / hole / not established / saves root missing / place not read
 
-The six values a save answer classifies a ROM into, **exactly one of which holds**. Only the first is a save Tender can
-carry; the other five **refuse** — the sync probes no path, writes no sync state, and refuses with the benign skip
-rather than a failure. A refusing answer can still have its directory recorded as the
-[answered save directory](#answered-save-directory), which is not sync state.
+The seven values a save answer classifies a ROM into, **exactly one of which holds**. Only the first is a save Tender
+can carry; the other six **refuse** — the sync probes no path and writes no sync state. Five refuse with the benign
+skip; saves root missing refuses as a failure, `saves_root_missing`. A refusing answer can still have its directory
+recorded as the [answered save directory](#answered-save-directory), which is not sync state.
 
 - **per-game files** — the answer names concrete files with no hole. Sync as usual, any number of files.
 - **shared** — the emulator's granularity is a shared card or a shared file, so one file holds many games' progress and
@@ -925,8 +936,12 @@ rather than a failure. A refusing answer can still have its directory recorded a
   not, or no question reached the resolver at all. **These are three shapes, `nothing_established`, `directory_known`
   and `not_asked`, and they stay apart**: they are different sentences to a reader, and collapsing them claims ignorance
   about a folder we can point at, or claims a refusal where nobody was ever asked.
-- **saves root missing** — RetroDECK reports its saves folder missing, so a sync would create it on internal storage.
-  This one is about RetroDECK rather than the emulator, which is not asked; the folder is never created.
+- **saves root missing** — the emulator source read its saves folder from its settings and reports it missing, so a sync
+  would create it on internal storage. This one is about the source rather than the emulator; the folder is never
+  created, and the sync refuses as a failure rather than with the benign skip.
+- **place not read** — the answer says its place was not read from the emulator's own settings: the settings file is
+  missing or cannot be read, or the source is not set up, so the emulator's defaults stand in. RetroDECK's and EmuDeck's
+  marker findings alone are not this.
 
 Detail, including which systems land where on a stock RetroDECK, is in
 [Save sync coverage](docs/architecture/save-sync-coverage.md).
@@ -1101,8 +1116,8 @@ values match RomM's own kind labels (Standard / Smart / Virtual); RomM's code ca
 **Standard** is a manually-created collection (one of RomM's two owned kinds — its ROM membership is hand-picked; the
 auto-managed favorites collection is a Standard one); **Smart** is a saved-search whose membership resolves at query
 time, and the other owned kind; **Virtual** is an ownerless grouping RomM derives from game metadata, of which Tender
-syncs two `virtual_type`s — `franchise` and `collection` (an IGDB collection). Only Standard and Smart are stampable for
-the incremental skip. Internal-name history: the first kind was called `user` until #1539 renamed it `standard` (display
+syncs two `virtual_type`s — `franchise` and `collection` (an IGDB collection). All three are stampable for the
+incremental skip. Internal-name history: the first kind was called `user` until #1539 renamed it `standard` (display
 "My" → "Standard"). What the QAM calls the kinds is decided in `docs/architecture/qam-panel.md` § Library, not here, and
 the literals stay as they are whatever it calls them.
 

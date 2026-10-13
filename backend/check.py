@@ -39,7 +39,6 @@ sys.path.insert(0, backend_dir)
 _THIS_TREE = os.path.dirname(backend_dir)
 
 from bootstrap import build_application, copy_live_data
-
 from domain.app_directories import (
     ENV_BIN_DIR,
     ENV_CACHE_DIR,

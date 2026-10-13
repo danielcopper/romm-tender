@@ -18,8 +18,6 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from models.shortcut_launcher import ShortcutLauncher
-
 from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.asyncio_sleeper import AsyncioSleeper
 from adapters.atlas_catalogue import AtlasCatalogueAdapter
@@ -74,6 +72,7 @@ from domain.identity import PACKAGE_NAME, VERSION
 from domain.state_migrations import migrate_settings
 from domain.update_install import UPDATE_DIR_NAME
 from domain.user_data_location import launcher_in_bin_dir, launcher_path
+from models.shortcut_launcher import ShortcutLauncher
 
 if TYPE_CHECKING:
     import asyncio

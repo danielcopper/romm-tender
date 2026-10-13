@@ -12,6 +12,7 @@ import type { SaveStatus, SaveSlotSummary, SaveFileStatus, LastKnownSlots } from
 // captured-prop assertions stay in sync as SlotPanel evolves.
 import type { SlotPanel } from "./saves/SlotPanel";
 import { installDomEventListenerSpy, uninstallDomEventListenerSpy } from "../test-utils/dom-event-listener-spy";
+import { switchSlotFailureMessage } from "../utils/saveSlotWording";
 
 // showModal from the global @decky/ui mock receives the <NewSlotModal> element.
 // Tests pull `props.onSubmit` off the captured element to drive the new-slot flow.
@@ -632,6 +633,7 @@ describe("SavesTab", () => {
           await vi.advanceTimersByTimeAsync(0);
         });
         expect(container.textContent).toContain("Sync your saves first — local changes haven't been uploaded");
+        expect(container.textContent).toContain(switchSlotFailureMessage("pending_uploads"));
       } finally {
         vi.useRealTimers();
       }
@@ -676,6 +678,28 @@ describe("SavesTab", () => {
           await vi.advanceTimersByTimeAsync(0);
         });
         expect(container.textContent).toContain("Can't switch — RomM server is not reachable");
+        expect(container.textContent).toContain(switchSlotFailureMessage("server_unreachable"));
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("surfaces 'Failed to create slot' for other switch-slot failure reasons (e.g. not_installed)", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(backend.switchSlot).mockResolvedValue({
+          success: false,
+          reason: "not_installed",
+          message: "Not installed",
+        });
+        const { container, getByText } = render(<SavesTab {...defaultProps()} />);
+        fireEvent.click(getByText("+ New Slot"));
+        await act(async () => {
+          await newSlotModalSubmit()?.("named");
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        expect(container.textContent).toContain("Failed to create slot");
+        expect(container.textContent).not.toContain("download the game first");
       } finally {
         vi.useRealTimers();
       }

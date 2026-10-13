@@ -2,14 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   computeSyncSummary,
   displaySlot,
-  formatRelativeTime,
+  formatSaveTimeAgo,
   pickLastSyncer,
   attributionLabel,
   formatAttributionSegment,
   statusLabel,
-  unsupportedRestoreMessage,
-} from "./helpers";
-import type { DeviceSyncInfo, SaveStatus, SyncConflict } from "../../types";
+  sortSaveSlots,
+  filterSaveSlotsForDisplay,
+} from "./saveHelpers";
+import type { DeviceSyncInfo, SaveStatus, SyncConflict, SaveSlotSummary } from "../types";
 
 describe("displaySlot", () => {
   it("returns 'Manual archive' for null", () => {
@@ -29,7 +30,7 @@ describe("displaySlot", () => {
   });
 });
 
-describe("formatRelativeTime", () => {
+describe("formatSaveTimeAgo", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2025-06-15T12:00:00Z"));
@@ -37,32 +38,32 @@ describe("formatRelativeTime", () => {
   afterEach(() => vi.useRealTimers());
 
   it("returns empty string for null", () => {
-    expect(formatRelativeTime(null)).toBe("");
+    expect(formatSaveTimeAgo(null)).toBe("");
   });
 
   it("returns empty string for empty input", () => {
-    expect(formatRelativeTime("")).toBe("");
+    expect(formatSaveTimeAgo("")).toBe("");
   });
 
   it("returns empty string for an unparseable timestamp", () => {
-    expect(formatRelativeTime("not-a-date")).toBe("");
+    expect(formatSaveTimeAgo("not-a-date")).toBe("");
   });
 
   it("returns 'just now' for under one minute", () => {
-    expect(formatRelativeTime("2025-06-15T11:59:30Z")).toBe("just now");
+    expect(formatSaveTimeAgo("2025-06-15T11:59:30Z")).toBe("just now");
   });
 
   it("returns 'Nm ago' for minute granularity", () => {
-    expect(formatRelativeTime("2025-06-15T11:30:00Z")).toBe("30m ago");
+    expect(formatSaveTimeAgo("2025-06-15T11:30:00Z")).toBe("30m ago");
   });
 
   it("returns 'Nh ago' for hour granularity", () => {
-    expect(formatRelativeTime("2025-06-15T08:00:00Z")).toBe("4h ago");
+    expect(formatSaveTimeAgo("2025-06-15T08:00:00Z")).toBe("4h ago");
   });
 
   it("returns 'D Mon' for older dates", () => {
     // 10 days back puts us in early June; only the day + month tokens matter.
-    const out = formatRelativeTime("2025-06-05T12:00:00Z");
+    const out = formatSaveTimeAgo("2025-06-05T12:00:00Z");
     expect(out).toBe("5 Jun");
   });
 });
@@ -448,29 +449,43 @@ describe("computeSyncSummary", () => {
   });
 });
 
-describe("unsupportedRestoreMessage", () => {
-  it("says the saves are written beside the game file for savefiles_in_content_dir", () => {
-    expect(unsupportedRestoreMessage({ status: "unsupported", reason: "savefiles_in_content_dir" })).toBe(
-      "Save sync is off for this game: its saves are written beside the game file.",
-    );
+describe("sortSaveSlots and filterSaveSlotsForDisplay", () => {
+  const slots: SaveSlotSummary[] = [
+    { slot: "beta", source: "server", count: 1, latest_updated_at: null },
+    { slot: "", source: "server", count: 1, latest_updated_at: null },
+    { slot: "alpha", source: "server", count: 1, latest_updated_at: null },
+  ];
+
+  it("sorts active first, alphabetical, legacy last", () => {
+    const sorted = sortSaveSlots(slots, "beta", true);
+    expect(sorted.map((s) => s.slot)).toEqual(["beta", "alpha", ""]);
   });
 
-  it("shows the backend's own explanation for save_shape_unsupported", () => {
-    const message = "Save sync is unavailable: this emulator writes saves inside the game file itself.";
-    expect(unsupportedRestoreMessage({ status: "unsupported", reason: "save_shape_unsupported", message })).toBe(
-      message,
-    );
+  it("synthesizes no slot for an active slot nothing answered (#1747)", () => {
+    const sorted = sortSaveSlots(slots, "gamma", false);
+    expect(sorted.map((s) => s.slot)).toEqual(["alpha", "beta", ""]);
   });
 
-  it("falls back to the multi-file sentence for save_shape_unsupported without a message", () => {
-    expect(unsupportedRestoreMessage({ status: "unsupported", reason: "save_shape_unsupported" })).toBe(
-      "Restoring isn't available for multi-file saves yet.",
-    );
+  it("synthesizes missing active slot if known", () => {
+    const sorted = sortSaveSlots(slots, "gamma", true);
+    expect(sorted.map((s) => s.slot)).toEqual(["gamma", "alpha", "beta", ""]);
   });
 
-  it("names the multi-file refusal when the backend gives no reason", () => {
-    expect(unsupportedRestoreMessage({ status: "unsupported" })).toBe(
-      "Restoring isn't available for multi-file saves yet.",
-    );
+  it("filters out legacy slot when activeSlot is null (legacy mode)", () => {
+    const sorted = sortSaveSlots(slots, null, true);
+    const filtered = filterSaveSlotsForDisplay(sorted, null);
+    expect(filtered.map((s) => s.slot)).toEqual(["alpha", "beta"]);
+  });
+
+  it("is not legacy mode while the active slot is not known yet", () => {
+    const sorted = sortSaveSlots(slots, undefined, false);
+    const filtered = filterSaveSlotsForDisplay(sorted, undefined);
+    expect(filtered.map((s) => s.slot)).toEqual(["alpha", "beta", ""]);
+  });
+
+  it("preserves legacy slot when activeSlot is a named slot", () => {
+    const sorted = sortSaveSlots(slots, "alpha", true);
+    const filtered = filterSaveSlotsForDisplay(sorted, "alpha");
+    expect(filtered.map((s) => s.slot)).toEqual(["alpha", "beta", ""]);
   });
 });

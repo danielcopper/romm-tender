@@ -314,6 +314,7 @@ class TestGetSettings:
                 "collection_create_platform_groups": True,
                 "collection_owner_scope": "own",
                 "collection_naming_mode": "by_label",
+                "qam_entry_position": "below_decky",
                 "preferred_region": "USA",
                 "skip_preview": True,
             }
@@ -328,6 +329,7 @@ class TestGetSettings:
         assert result["collection_create_platform_groups"] is True
         assert result["collection_owner_scope"] == "own"
         assert result["collection_naming_mode"] == "by_label"
+        assert result["qam_entry_position"] == "below_decky"
         assert result["preferred_region"] == "USA"
         assert result["skip_preview"] is True
 
@@ -378,6 +380,7 @@ class TestGetSettings:
         assert result["collection_create_platform_groups"] is False
         assert result["collection_owner_scope"] == "all"
         assert result["collection_naming_mode"] == "merge"
+        assert result["qam_entry_position"] == "above_decky"
         assert result["preferred_region"] == "auto"
         assert result["skip_preview"] is False
         assert result["romm_custom_header_names"] == []
@@ -1076,6 +1079,24 @@ class TestSetCollectionNamingMode:
             service.set_collection_naming_mode(None)  # type: ignore[arg-type]
         assert refused.value.reason == "invalid_mode"
         assert "collection_naming_mode" not in settings
+        settings_persister.save_settings.assert_not_called()
+
+
+class TestSetQamEntryPosition:
+    @pytest.mark.parametrize("position", ["above_decky", "below_decky"])
+    def test_both_positions_persist(self, service, settings, settings_persister, position):
+        result = service.set_qam_entry_position(position)
+        assert result == {"success": True}
+        assert settings["qam_entry_position"] == position
+        settings_persister.save_settings.assert_called_once_with()
+
+    @pytest.mark.parametrize("position", ["above", "first", None, True])
+    def test_any_other_value_is_refused_without_writing(self, service, settings, settings_persister, position):
+        with pytest.raises(Refused) as refused:
+            service.set_qam_entry_position(position)
+        assert refused.value.reason == "invalid_position"
+        assert "Invalid Quick Access entry position" in refused.value.message
+        assert "qam_entry_position" not in settings
         settings_persister.save_settings.assert_not_called()
 
 

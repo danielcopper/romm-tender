@@ -174,6 +174,13 @@ describe("useCopyToSlot", () => {
     expect(dataChanged).not.toHaveBeenCalled();
   });
 
+  it("a refusal with no status shows nothing and refreshes nothing", async () => {
+    await runCopy({ success: false, reason: "blocked_by_update", message: "An update is being installed" } as never);
+    expect(toaster.toast).not.toHaveBeenCalled();
+    expect(showSyncConflictModal).not.toHaveBeenCalled();
+    expect(dataChanged).not.toHaveBeenCalled();
+  });
+
   it("swallows a rejected copy call and surfaces the generic failure toast", async () => {
     vi.mocked(backend.copySaveToSlot).mockRejectedValue(new Error("network down"));
     const hook = renderHook(() => useCopyToSlot(42, SLOTS));

@@ -16,8 +16,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, ClassVar
 
-from models.cover import CoverRevalidation
-
 from adapters.romm.retry import RetryLadder, RetryListener
 from domain.custom_headers import stored_custom_headers
 from lib.certifi_bundle import ca_bundle as _ca_bundle
@@ -35,6 +33,7 @@ from lib.errors import (
     TokenHostMismatchError,
 )
 from lib.url_host import same_origin
+from models.cover import CoverRevalidation
 
 _CONTENT_TYPE_JSON = "application/json"
 

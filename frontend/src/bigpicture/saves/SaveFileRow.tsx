@@ -9,7 +9,7 @@ import { DialogButton } from "@decky/ui";
 import type { SaveFileStatus, SyncConflict } from "../../types";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
-import { formatAttributionSegment, formatRelativeTime, pickLastSyncer, statusLabel } from "./helpers";
+import { formatAttributionSegment, formatSaveTimeAgo, pickLastSyncer, statusLabel } from "../../utils/saveHelpers";
 
 // Label column width — keeps values aligned vertically across rows
 const LABEL_WIDTH = "88px";
@@ -40,7 +40,7 @@ export function infoRow(
  */
 function buildLastSyncedValue(f: SaveFileStatus, isSynced: boolean): string {
   const lastSyncer = pickLastSyncer(f.device_syncs);
-  const pieces: string[] = [f.last_sync_at ? formatRelativeTime(f.last_sync_at) || "Never" : "Never"];
+  const pieces: string[] = [f.last_sync_at ? formatSaveTimeAgo(f.last_sync_at) || "Never" : "Never"];
   const attrSegment = formatAttributionSegment(f.uploaded_by_us, lastSyncer?.device_name, isSynced);
   if (attrSegment !== null) pieces.push(attrSegment);
   if (f.is_current === false) {
@@ -63,7 +63,7 @@ export function renderSaveFileRow(
   // The slot's most recent sync ATTEMPT — surfaced as a separate "Checked" hint
   // only when this file isn't at rest, so a pending/failed file shows both the
   // last success and the recent check without duplicating the synced ✓ line.
-  const checkedHint = !isSynced && lastSyncCheckAt ? formatRelativeTime(lastSyncCheckAt) : null;
+  const checkedHint = !isSynced && lastSyncCheckAt ? formatSaveTimeAgo(lastSyncCheckAt) : null;
 
   // Header value pieces (right-aligned meta: size + status)
   const headerMeta: (ReactElement | null)[] = [];

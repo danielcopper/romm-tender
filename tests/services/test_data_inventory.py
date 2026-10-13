@@ -4,10 +4,10 @@ import pytest
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
 from fakes.uow_open_probe import record_uow_open
-from models.prune import RecoveryBundleInventory
 
 from domain.rom import Rom
 from domain.rom_install import RomInstall
+from models.prune import RecoveryBundleInventory
 from services.data_inventory import DataInventoryService, DataInventoryServiceConfig
 
 

@@ -86,9 +86,11 @@ class PreviewBuilder:
     ) -> tuple[int | None, str | None]:
         """Measured bytes of a row's installed content, or why they could not be read.
 
-        Measured inside the install's system's own ROM folder, and nothing is
-        measured where RetroDECK names none, or its roots are defaults or could
-        not be established; a start refuses the latter two.
+        Measured inside the install's system's own ROM folder; nothing is
+        measured where that folder is refused. A refusal that stands for every
+        folder — a ROM root only assumed, a RetroDECK not set up, folders that
+        could not be established — also refuses a start; RetroDECK naming no
+        ROM folder does not.
         """
         if install is None:
             return None, None

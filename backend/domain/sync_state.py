@@ -12,8 +12,8 @@ class SyncState(Enum):
 class SyncCancelled(Exception):
     """Cooperative cancel signal for the library sync subsystem.
 
-    Raised by ``LibraryFetcher._check_cancelling`` (mid per-unit
-    pagination) and the ``SyncOrchestrator.sync_preview`` per-unit
+    Raised by ``services/library/_fetch_pages.raise_if_cancelling`` (mid
+    per-unit pagination) and the ``SyncOrchestrator.sync_preview`` per-unit
     checkpoint once a user cancel has flipped ``sync_state`` to
     ``CANCELLING``. Caught only by the cooperative handlers (the
     orchestrator's unit-loop and ``sync_preview`` ``except

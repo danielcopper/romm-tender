@@ -14,8 +14,10 @@ from typing import TYPE_CHECKING, Any, Protocol
 from lib.romm_paging import LIST_PAGE_SIZE
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
+    from domain.update_release import LatestRelease
+    from lib.steam_input_apply import SteamInputApply
     from models.cover import CoverRevalidation
     from models.play_sessions import PlaySessionIngestEntry, PlaySessionIngestResponse
     from models.sync import (
@@ -24,9 +26,6 @@ if TYPE_CHECKING:
         SyncNegotiateResponse,
     )
 
-    from domain.update_release import LatestRelease
-    from lib.steam_input_apply import SteamInputApply
-
 
 class SteamConfigStore(Protocol):
     """Protocol for Steam configuration operations."""
@@ -34,6 +33,7 @@ class SteamConfigStore(Protocol):
     def grid_dir(self) -> str | None: ...
     def read_shortcuts(self) -> dict[str, Any]: ...
     def read_shortcut_exes(self) -> dict[int, str] | None: ...
+    def read_shortcut_launch_options(self) -> dict[int, str] | None: ...
     def read_shortcut_icons(self) -> dict[int, str] | None: ...
     def write_shortcuts(self, data: dict[str, Any]) -> None: ...
     def set_steam_input_config(self, app_ids: list[int], mode: str = "default") -> SteamInputApply: ...
@@ -147,12 +147,29 @@ class RommRomReader(Protocol):
     def get_rom(self, rom_id: int) -> dict[str, Any]:
         """Fetch a single ROM by ID.
 
-        Returns the ROM dict from /api/roms/{rom_id}.
+        Returns RomM's detail answer from /api/roms/{rom_id}, which adds the
+        user's saves, states, screenshots, notes and collections to what
+        :meth:`get_rom_simple` answers.
+        """
+        ...
+
+    def get_rom_simple(self, rom_id: int) -> dict[str, Any]:
+        """Fetch a single ROM by ID over the simple schema, with retries.
+
+        Returns the ROM dict from /api/roms/{rom_id}/simple: the file list and
+        the siblings with their ``is_main_sibling``, without the user's saves,
+        states, screenshots, notes and collections. For a reader that needs
+        the ROM's own fields, files and siblings and none of the user's arrays.
+        Its 404 is the same entity answer as :meth:`get_rom`'s.
         """
         ...
 
     def get_rom_once(self, rom_id: int) -> dict[str, Any]:
-        """Fetch a single ROM by ID once with the short probe timeout."""
+        """Fetch a single ROM by ID from /api/roms/{rom_id}/simple once, with the short probe timeout.
+
+        For liveness probes: one attempt, so a verdict comes back fast, and a
+        404 that is RomM's entity answer raises ``RommNotFoundError``.
+        """
         ...
 
     def list_roms(self, platform_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0) -> dict[str, Any]:
@@ -179,7 +196,7 @@ class RommRomReader(Protocol):
 
     def list_collection_roms_updated_after(
         self,
-        collection_id: int,
+        collection_id: int | str,
         kind: str,
         updated_after: str,
         limit: int = 1,
@@ -188,43 +205,63 @@ class RommRomReader(Protocol):
         """List a collection's ROMs updated after a given timestamp.
 
         The collection sibling of :meth:`list_roms_updated_after` (#742):
-        combines the kind-routed collection filter (``smart_collection_id`` when
-        ``kind == "smart"``, else ``collection_id``) with ``updated_after``, so
+        combines the kind-routed collection filter (``collection_id``,
+        ``smart_collection_id`` or ``virtual_collection_id`` for ``kind``
+        ``"standard"``, ``"smart"`` or ``"virtual"``) with ``updated_after``, so
         the incremental-skip gate can detect a member ROM's content change with a
-        single ``limit=1`` probe. Only standard/smart kinds are queried this way.
+        single ``limit=1`` probe. A virtual collection's id is its string id.
         Returns paginated response filtered by both parameters.
         """
         ...
 
     def list_roms_by_collection(
-        self, collection_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0
+        self,
+        collection_id: int,
+        limit: int = LIST_PAGE_SIZE,
+        offset: int = 0,
+        platform_ids: Sequence[int] | None = None,
     ) -> dict[str, Any]:
         """List ROMs belonging to a user-created collection with pagination.
 
         Returns paginated response {"items": [...], "total": N}
-        from /api/roms filtered by collection_id.
+        from /api/roms filtered by collection_id. With *platform_ids*, only
+        the members on one of those platforms; ``None`` or an empty sequence
+        narrows nothing and answers every member.
         """
         ...
 
     def list_roms_by_virtual_collection(
-        self, virtual_id: str, limit: int = LIST_PAGE_SIZE, offset: int = 0
+        self,
+        virtual_id: str,
+        limit: int = LIST_PAGE_SIZE,
+        offset: int = 0,
+        platform_ids: Sequence[int] | None = None,
     ) -> dict[str, Any]:
         """List ROMs belonging to a virtual (autogenerated) collection with pagination.
 
         Returns paginated response {"items": [...], "total": N}
-        from /api/roms filtered by virtual_collection_id.
+        from /api/roms filtered by virtual_collection_id. With *platform_ids*,
+        only the members on one of those platforms; ``None`` or an empty
+        sequence narrows nothing and answers every member.
         """
         ...
 
     def list_roms_by_smart_collection(
-        self, smart_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0
+        self,
+        smart_id: int,
+        limit: int = LIST_PAGE_SIZE,
+        offset: int = 0,
+        platform_ids: Sequence[int] | None = None,
     ) -> dict[str, Any]:
         """List ROMs belonging to a smart (filter-defined) collection with pagination.
 
         Returns paginated response {"items": [...], "total": N}
         from /api/roms filtered by smart_collection_id. The server
-        resolves the membership from the stored filter on every call,
-        so the result reflects the current library state.
+        resolves the membership from the stored filter on every call, for
+        the requesting user, so the result reflects the current library
+        state. With *platform_ids*, only the members on one of those
+        platforms; ``None`` or an empty sequence narrows nothing and answers
+        every member.
         """
         ...
 
@@ -339,8 +376,11 @@ class RommSaveApi(Protocol):
         """Acknowledge a deferred-sync save download (paired with ``optimistic=False``)."""
         ...
 
-    def get_save_summary(self, rom_id: int, device_id: str | None = None) -> dict[str, Any]:
-        """Return ``/api/saves/summary`` grouped by slot; ``device_id`` includes per-device sync status."""
+    def get_save_summary(self, rom_id: int) -> dict[str, Any]:
+        """Return ``/api/saves/summary``, which takes ``rom_id`` alone and answers the ROM's saves grouped by slot.
+
+        Each slot carries its save count and its newest save (RomM 5.3.0 ``SlotSummarySchema``).
+        """
         ...
 
     def download_save(self, save_id: int, dest_path: str) -> None:
@@ -351,11 +391,16 @@ class RommSaveApi(Protocol):
         """Delete the given save ids via ``POST /api/saves/delete``."""
         ...
 
-    def negotiate_sync(self, device_id: str, saves: list[ClientSaveState]) -> SyncNegotiateResponse:
+    def negotiate_sync(
+        self, device_id: str, saves: list[ClientSaveState], *, rom_ids: list[int] | None = None
+    ) -> SyncNegotiateResponse:
         """Open a 4.9 sync session: POST the device inventory, get the planned operations.
 
         The server detects (``upload`` / ``download`` / ``conflict`` / ``no_op``)
         but never resolves; opening a session cancels this device's prior ones.
+        With *rom_ids* the server evaluates only those ROMs and the ones the
+        posted saves name (RomM 5.3.0, which
+        refuses a list over its cap with 422); without it, the whole library.
         """
         ...
 

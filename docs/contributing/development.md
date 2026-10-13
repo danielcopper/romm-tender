@@ -95,11 +95,13 @@ python -m pytest tests/ -q -n auto --cov=backend --cov-report=term --cov-branch
 pytest-cov combines the workers' data into one report, the same one a single-process run writes.
 
 Tests mirror the source layout (`tests/services/`, `tests/adapters/`, `tests/domain/`, `tests/models/`, `tests/lib/`),
-with each test file mapping 1:1 to a source module. Shared fixtures live in `tests/conftest.py`: among them the fresh
-`HOME` every test runs under, and the per-test `emit` and `logger` a service is built with. `_isolated_environment`'s
-docstring there says what the isolation covers and what it does not, and states the named exception, a test class that
-reads your real RetroDECK install and only reads. `.claude/rules/testing-backend.md` has the rules for writing a test
-against them.
+with each test file mapping 1:1 to a source module. No backend top-level name may be a standard-library module,
+importable without `backend/`, or the name of anything the suite registers from `tests/`: a module or package directly
+under it, or the topmost package of an `__init__.py` chain below it. `tests/test_backend_package_names.py` fails on each
+and says why. Shared fixtures live in `tests/conftest.py`: among them the fresh `HOME` every test runs under, and the
+per-test `emit` and `logger` a service is built with. `_isolated_environment`'s docstring there says what the isolation
+covers and what it does not, and states the named exception, a test class that reads your real RetroDECK install and
+only reads. `.claude/rules/testing-backend.md` has the rules for writing a test against them.
 
 Frontend component tests run with `mise run test:frontend` (`pnpm -C frontend test`); see
 `.claude/rules/testing-frontend.md` for the backend-event harness, and for what that suite cannot see — `api/host` is
@@ -240,6 +242,14 @@ tree rolls back with and the licence texts a distributed copy carries, nothing t
 `sha256sum -c` accepts. That check is not first run at the tag: CI's build job packs a tarball from every pull request's
 own build and runs it there too, for the reason [ADR-0039](../adr/0039-the-release-ships-the-packagers-tarball.md)
 gives. What no run of it can say is whether the code inside works — the script's own docstring states the blind spot.
+
+Beside the tarball the same job attaches `decky-ui-<version>.tgz`, named for the `@decky/ui` version rather than
+Tender's: the `@decky/ui` npm package `frontend/pnpm-lock.yaml` resolves, which `scripts/decky_ui_source.py` fetches
+from the npm registry and writes only once its SHA-512 matches the lock's integrity hash. It is the source of the copy
+the bundles carry, offered from the release itself
+([THIRD-PARTY-NOTICES.md](https://github.com/danielcopper/romm-tender/blob/main/THIRD-PARTY-NOTICES.md) says where a
+reader finds it). CI's build job runs the same script on every pull request, without attaching anything, so a release is
+not its first run either.
 
 **An install over an existing one is an update, and an update whose new version does not answer is rolled back.** It
 does not ask whether you are coming from the Decky plugin, which a first install does unless given `--yes` or run after
@@ -500,16 +510,19 @@ of getting under it, and `frontend/src/` has no equivalent of `service-independe
 rules, in `frontend/eslint.config.js` via `eslint-plugin-import-x`: `frontend/src/utils/` and `frontend/src/api/` may
 not import either surface (`frontend/src/bigpicture/` or `frontend/src/desktop/`) or `frontend/src/shared/`, the UI that
 belongs to both surfaces; `frontend/src/shared/` may not import either surface; the two surfaces may not import each
-other; and no module in `frontend/src/` may take part in an import cycle. The cycle rule is the one that matters most,
-because a cycle is the signature of a split whose two halves still call each other — the wrong seam, detectable without
-judgment. What none of them catch is a helper imported by exactly one parent that takes a dozen parameters and does
-nothing on its own: it is neither a cycle nor a direction violation. These rules make the worst seam fail; they do not
-certify that a seam is right.
+other; only `frontend/src/index.tsx` and its test may import `frontend/src/qam/` or `frontend/src/boot/`, and neither of
+those two the other; `frontend/src/qam/` may not import either surface; `frontend/src/types/` may import nothing else
+from `frontend/src/`; and no module in `frontend/src/` may take part in an import cycle. `frontend/src/boot/` sits
+beside `index.tsx` and may import a surface, because its start-up check has to see every Steam lookup the panel relies
+on, a surface's included. The cycle rule is the one that matters most, because a cycle is the signature of a split whose
+two halves still call each other — the wrong seam, detectable without judgment. What none of them catch is a helper
+imported by exactly one parent that takes a dozen parameters and does nothing on its own: it is neither a cycle nor a
+direction violation. These rules make the worst seam fail; they do not certify that a seam is right.
 
 By default the plugin reads the imports of JavaScript files only, so until the config names `.ts`/`.tsx` for it,
 `no-cycle` finds no cycle among the frontend's modules; the comment at `import-x/extensions` in that file says which
 settings do that. Because the failure mode is silence rather than noise, `frontend/src/eslintBoundaries.test.ts` lints
-known-bad fixtures through the real config and fails if any of the eleven rules stops reporting. A green
+known-bad fixtures through the real config and fails if any of these rules stops reporting. A green
 `pnpm -C frontend lint` on its own does not distinguish a working rule from an inert one.
 
 See [Backend Architecture](../architecture/backend-architecture.md) for details.
@@ -517,7 +530,7 @@ See [Backend Architecture](../architecture/backend-architecture.md) for details.
 ## Full CI gate
 
 ```bash
-mise run gate         # run the PR checks from .github/workflows/ci.yml locally (all but three, below)
+mise run gate         # run the PR checks from .github/workflows/ci.yml locally (all but the jobs and steps named below)
 ```
 
 `mise run gate` is the single local battery that mirrors CI. It runs the backend tests (`mise run test`), the
@@ -530,7 +543,9 @@ name, and the gate exits non-zero. It is slow — the two test suites one after 
 build beside them — so it is a pre-push check, not something to run on every save. The CI jobs it does not run are
 `test-3.14`, which runs the backend suite under Python 3.14 — an interpreter the toolchain does not install (why CI runs
 it: [Dependency management](dependency-management.md)) — and the two that feed Sonar: `pr-metadata`, which needs a pull
-request, and `sonarcloud`, which needs `SONAR_TOKEN` and the CI coverage artifacts.
+request, and `sonarcloud`, which needs `SONAR_TOKEN` and the CI coverage artifacts. The build job's fetch and check of
+the `@decky/ui` source package (`scripts/decky_ui_source.py`) stays out of it too, because it needs the network, and so
+does its `pnpm audit` step ([pnpm audit](#code-quality) under Code Quality).
 
 Outside `ci.yml`, a pull request runs more checks, and the gate runs none of them, because each reads the pull request
 itself on GitHub: `decisions` (`.github/workflows/decisions.yml`), which checks that the pull request links an issue
@@ -639,8 +654,10 @@ backend/
                                      #   each package's provenance is in _vendor/README.md
 frontend/src/                        # Frontend TypeScript
   index.tsx                          # The panel's entry module: event listeners, QAM router, the Quick Access entry's install
-  qam/                               # Tender's own Quick Access entry: the patch, the tab glyph, the panel's boundary
-  boot/                              # Start-up: Steam's React globals, the check of what the panel takes from Steam, the failure page
+  qam/                               # Tender's own Quick Access entry: the patch, the tab glyph, the panel's boundary;
+                                     #   imported only by index.tsx and its test, imports no surface
+  boot/                              # Start-up: Steam's React globals, the check of what the panel takes from Steam, the failure page;
+                                     #   imported only by index.tsx and its test, may import a surface
   bigpicture/                        # The gamepad surface: React components (QAM pages, game detail UI)
     layout/                          # Wide-page frame primitives: WidePage, ScrollRegion, Columns, ListDetail, pane
     library/ settings/ sync/         # Component groups for the Library, Settings and Sync pages
@@ -649,7 +666,7 @@ frontend/src/                        # Frontend TypeScript
   desktop/                           # The desktop-client surface — peer of bigpicture/, see its README
   shared/                            # UI that belongs to both surfaces — the launch prompts; imports neither surface
   api/backend.ts                     # endpoint() wrappers (typed)
-  types/                             # TypeScript interfaces and Steam API declarations
+  types/                             # TypeScript interfaces and Steam API declarations — types only; imports nothing else in src/
   utils/                             # Shortcut CRUD, sync, downloads, collections, session manager, store patches
 bin/tender-rom-launcher              # Pure exec wrapper — installed to <bin root> at every start, and run from there
 tests/                               # Backend unit tests, mirroring backend/ layout

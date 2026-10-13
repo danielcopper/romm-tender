@@ -40,9 +40,8 @@ from services.saves.versions import VersionsService, VersionsServiceConfig
 _KV_SAVE_DIRECTORIES_RECORDED = "save_directories_recorded"
 
 if TYPE_CHECKING:
-    from models.sync import ClientSaveState
-
     from domain.save_answer import SaveAnswer
+    from models.sync import ClientSaveState
     from services.protocols import UnitOfWorkFactory
     from services.saves.slots.switching import SlotSwitchIncomplete
 

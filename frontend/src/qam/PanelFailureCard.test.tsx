@@ -12,7 +12,8 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState, type FC } from "react";
-import { PanelErrorBoundary } from "./PanelErrorBoundary";
+import { PanelErrorBoundary } from "../shared/PanelErrorBoundary";
+import { panelFailureCard } from "./PanelFailureCard";
 
 /**
  * A child that throws while its gate says to, and renders the panel otherwise.
@@ -40,7 +41,7 @@ describe("PanelErrorBoundary", () => {
 
   it("renders the panel untouched while nothing throws", () => {
     render(
-      <PanelErrorBoundary>
+      <PanelErrorBoundary fallback={panelFailureCard}>
         <div>the panel</div>
       </PanelErrorBoundary>,
     );
@@ -52,7 +53,7 @@ describe("PanelErrorBoundary", () => {
     const report = silenceReport();
 
     render(
-      <PanelErrorBoundary>
+      <PanelErrorBoundary fallback={panelFailureCard}>
         <Throws gate={{ fail: true }} />
       </PanelErrorBoundary>,
     );
@@ -73,7 +74,7 @@ describe("PanelErrorBoundary", () => {
     silenceReport();
 
     render(
-      <PanelErrorBoundary>
+      <PanelErrorBoundary fallback={panelFailureCard}>
         <ThrowsAnObject />
       </PanelErrorBoundary>,
     );
@@ -89,6 +90,7 @@ describe("PanelErrorBoundary", () => {
 
     render(
       <PanelErrorBoundary
+        fallback={panelFailureCard}
         onReload={() => {
           order.push("reset");
           gate.fail = false;
@@ -131,6 +133,7 @@ describe("PanelErrorBoundary", () => {
 
     render(
       <PanelErrorBoundary
+        fallback={panelFailureCard}
         onReload={() => {
           fail = false;
         }}

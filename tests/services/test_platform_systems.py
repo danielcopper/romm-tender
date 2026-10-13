@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -40,7 +41,11 @@ def sources() -> FakeSourcePlatformSystems:
 def service(uow_factory, romm, sources) -> PlatformSystemService:
     return PlatformSystemService(
         config=PlatformSystemServiceConfig(
-            uow_factory=uow_factory, romm_api=romm, source_platform_systems=sources, log_debug=MagicMock()
+            uow_factory=uow_factory,
+            romm_api=romm,
+            source_platform_systems=sources,
+            logger=logging.getLogger("test_platform_systems"),
+            log_debug=MagicMock(),
         )
     )
 
@@ -138,6 +143,21 @@ class TestWhereNoneAreKept:
         romm.list_platforms_side_effect = RommAuthError("401")
 
         assert service.platform_system("snes").unasked == "auth_failed"
+
+    @pytest.mark.parametrize(
+        ("error", "level"),
+        [(RommConnectionError("connection refused"), logging.INFO), (RommAuthError("401"), logging.WARNING)],
+    )
+    def test_a_failed_read_is_logged_once_at_the_classifier_s_level(self, service, romm, caplog, error, level):
+        romm.list_platforms_side_effect = error
+        caplog.set_level(logging.DEBUG, logger="test_platform_systems")
+
+        service.platform_system("snes")
+
+        lines = [(r.levelno, r.getMessage()) for r in caplog.records if r.name == "test_platform_systems"]
+        assert lines == [
+            (level, f"[platforms] no ids kept for snes, and RomM's listing failed: {type(error).__name__}: {error}")
+        ]
 
     def test_the_next_read_with_rom_m_reachable_keeps_the_ids(self, service, uow_factory, romm):
         romm.list_platforms_side_effect = RommConnectionError("connection refused")

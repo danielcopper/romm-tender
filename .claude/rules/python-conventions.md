@@ -18,6 +18,9 @@ None of the rules below has a mechanical check. They hold only if they are carri
 
 A sibling set that mixes suffixes reflects a shape difference, not an inconsistency.
 
+The suffixes name types only. A parameter or field is named after the role of what it holds (`hostname_provider`,
+`path_probe`), not after the shape of its Protocol, so a Protocol's rename leaves the names that hold it alone.
+
 ## Async/sync method naming `[ours]`
 
 - Async methods carry the bare domain-verb name — no `_async` / `Async` suffix.

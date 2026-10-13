@@ -1,6 +1,8 @@
 import type { SyncAddItem } from "../types";
-import { getAppIdRomIdMap, syncHeartbeat, logError, logInfo } from "../api/backend";
+import { getAppIdRomIdMap, syncHeartbeat, logError, logInfo, logWarn } from "../api/backend";
 import { delay } from "./pacedOps";
+import { readShortcutFile, type ShortcutFileReader, type ShortcutFileReading } from "./shortcutFile";
+import { TimeoutError, withTimeout } from "./withTimeout";
 
 /**
  * Ownership marker: Tender-managed shortcuts launch through the
@@ -51,26 +53,71 @@ export function getAppDetails(appId: number, timeoutMs = 2000): Promise<SteamApp
 }
 
 /**
+ * How long a confirm waits for Steam's shortcut file to be read. An endpoint
+ * call waits out a backend that is down (`api/hostSocket.ts`), so without a
+ * bound of its own the confirm would wait with it.
+ */
+const FILE_READ_BOUND_MS = 5000;
+
+/**
  * Set an existing shortcut's launch options and confirm the write landed.
  *
  * Every Steam ``Set*`` returns ``void`` with no success signal, so we fire
  * ``SetAppLaunchOptions`` then poll ``RegisterForAppDetails`` until the
  * read-back ``strLaunchOptions`` matches ``value``. When no matching report
  * arrives within ``timeoutMs``, the shortcut's details are read once more
- * through {@link getAppDetails}, bounded by ``timeoutMs`` again: resolves
- * ``true`` when either read shows ``value``, ``false`` when the re-read shows a
- * different value or does not answer. Setting ``""`` (the
- * uninstalled-placeholder value) is valid and confirms against an empty
- * read-back.
+ * through {@link getAppDetails}, bounded by ``timeoutMs`` again, and when that
+ * re-read does not show ``value`` either, Steam's shortcut file is read through
+ * ``readFile`` — by default one backend call for this shortcut alone — bounded
+ * by {@link FILE_READ_BOUND_MS}, and a read that does not answer in time counts
+ * as one that could not be done. Resolves ``true`` when any of the three shows
+ * ``value``, ``false`` otherwise. Setting ``""`` (the uninstalled-placeholder
+ * value) is valid and confirms against an empty read-back. A confirm only the
+ * re-read or the file gave is logged at info, the file's with how long it
+ * waited for the reading; before resolving ``false`` it logs a warning saying
+ * what the re-read and the file each showed, and wherever either shows a value,
+ * the value written beside it, both in full.
  */
-export async function setLaunchOptionsConfirmed(appId: number, value: string, timeoutMs = 2000): Promise<boolean> {
+export async function setLaunchOptionsConfirmed(
+  appId: number,
+  value: string,
+  timeoutMs = 2000,
+  readFile: ShortcutFileReader = () => readShortcutFile([appId]),
+): Promise<boolean> {
   if (await writeAndAwaitReport(appId, value, timeoutMs)) return true;
   const details = await getAppDetails(appId, timeoutMs);
-  const confirmed = details !== null && launchOptionsOf(details) === value;
-  if (confirmed) {
+  const reread =
+    details === null
+      ? `the re-read delivered no details within ${timeoutMs}ms`
+      : `the re-read shows ${JSON.stringify(launchOptionsOf(details))}`;
+  if (details !== null && launchOptionsOf(details) === value) {
     logInfo(`setLaunchOptionsConfirmed: appId ${appId} confirmed by the re-read after the report missed the wait`);
+    return true;
   }
-  return confirmed;
+  const started = Date.now();
+  const reading = await withTimeout(readFile(), FILE_READ_BOUND_MS).catch((e: unknown): ShortcutFileReading => ({
+    status: "unreadable",
+    why: e instanceof TimeoutError ? `no answer within ${FILE_READ_BOUND_MS}ms` : String(e),
+  }));
+  const held = reading.status === "read" ? reading.launchOptions.get(appId) : undefined;
+  if (held === value) {
+    logInfo(
+      `setLaunchOptionsConfirmed: appId ${appId} confirmed by Steam's shortcut file after ${reread}; ` +
+        `waited ${Date.now() - started}ms for the file`,
+    );
+    return true;
+  }
+  const written = details === null && held === undefined ? "" : `, the write was ${JSON.stringify(value)}`;
+  logWarn(
+    `setLaunchOptionsConfirmed: appId ${appId} not confirmed: ${reread}${written}; ${describeFile(reading, appId)}`,
+  );
+  return false;
+}
+
+function describeFile(reading: ShortcutFileReading, appId: number): string {
+  if (reading.status === "unreadable") return `the file could not be read (${reading.why})`;
+  const held = reading.launchOptions.get(appId);
+  return held === undefined ? "the file holds no such shortcut" : `the file shows ${JSON.stringify(held)}`;
 }
 
 function launchOptionsOf(details: SteamAppDetails): string {

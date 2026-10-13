@@ -121,7 +121,7 @@ describe("EmulatorSourcesSection", () => {
     expect(getByTestId("source-lines-retrodeck")).not.toHaveTextContent("cannot start games");
   });
 
-  it("leaves the root out where it is a default and words the finding instead", () => {
+  it("leaves the root out where it was not read and words the finding instead", () => {
     const broken = { ...RETRODECK, root: null, findings: [{ code: "marker-missing", data: { path: "/rd.json" } }] };
     const { queryByTestId, getByTestId } = renderSection({ sources: [broken], answering: "retrodeck" });
 

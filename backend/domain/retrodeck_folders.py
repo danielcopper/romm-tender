@@ -11,9 +11,9 @@ because until Tender keeps downloads in a library of its own, RetroDECK is the
 one source Tender downloads into. Removing what Tender
 put there — an uninstall, the removed-game cleanup, the start-up removal of
 leftover ``.tmp`` files — needs it only detected, whatever its switch. Both
-need its settings file in order: while RetroDECK reports one of the findings
-that make its folders defaults, Tender uses none of them — nor where a question
-about them failed, since then nothing established that they are not defaults.
+need the folder they use to be one the resolver did not only assume
+(:mod:`domain.source_roots`), and neither uses one where a question about
+RetroDECK's folders failed, since then nothing established where they are.
 
 Pure compute — no I/O, no state mutation.
 """
@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from domain.emulator_sources import RETRODECK
 from domain.refusal import DomainRefused
 
 # The reasons a folder is refused with.
@@ -47,16 +48,22 @@ class FolderRefused(DomainRefused):
 
 
 class EveryFolderRefused(FolderRefused):
-    """A folder refused because none of RetroDECK's folders may be used — a removal's bound no more than a download's.
+    """A folder refused for a reason that holds for every folder in its root — a removal's bound as for a download.
 
-    Its holders refuse every press that needs one of RetroDECK's folders, the
-    start of the removed-game cleanup included, where a narrower refusal stops
-    only the press it was asked for.
+    Where it is the ROM root, every system's ROM folder is refused with it; where
+    RetroDECK's folders could not be established at all, every root is. Its
+    holders refuse every press that needs such a folder, the start of the
+    removed-game cleanup included, where a narrower refusal stops only the
+    press it was asked for.
     """
 
 
 class FindingRefused(EveryFolderRefused):
-    """A folder refused because of a finding in RetroDECK's health, which the refusal carries as ``finding``."""
+    """A folder refused because of a finding about RetroDECK's roots, which the refusal carries as ``finding``.
+
+    The finding is the resolver's, or Tender's own for a root the resolver
+    only assumed (``domain.source_roots.ROOTS_ASSUMED``).
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,7 +97,7 @@ def no_rom_folder(system: str) -> FolderRefused:
 
 
 def rom_root_missing(path: str) -> FolderRefused:
-    """The refusal of a download whose ROM folder lies below *path*, which does not exist and no finding names."""
+    """The refusal of a download whose ROM folder lies below *path*, which does not exist."""
     return FolderRefused(
         ROM_ROOT_MISSING,
         f"RetroDECK's ROM folder {path} does not exist. If it is on an SD card or another drive, insert it.",
@@ -144,13 +151,15 @@ def folder_of(folders: dict[str, str | FolderRefused] | FolderRefused, system: s
 
 
 def finding_refusal(code: str, data: dict[str, Any]) -> FindingRefused:
-    """The refusal while RetroDECK's finding *code* stands in the way of its folders.
+    """The refusal while the finding *code* about RetroDECK's roots stands in the way of a folder.
 
     The message is the wording a finding falls back to where the panel has none
-    of its own; the panel words the refusal from ``finding`` instead.
+    of its own; the panel words the refusal from ``finding`` and ``source``
+    instead.
     """
     return FindingRefused(
         RETRODECK_FINDING,
         f"Problem with RetroDECK: {code}",
         finding={"code": code, "data": data},
+        source=RETRODECK,
     )

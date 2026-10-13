@@ -14,12 +14,14 @@ from pathlib import Path
 
 import pytest
 
+from domain.emulator_sources import SourceFinding
 from domain.save_answer import (
     BENIGN_SYNC_SKIP_REASONS,
     SAVE_SHAPE_UNSUPPORTED_REASON,
     SAVE_STATE_HOLE,
     SAVE_STATE_INSIDE_CONTENT,
     SAVE_STATE_PER_GAME_FILES,
+    SAVE_STATE_PLACE_NOT_READ,
     SAVE_STATE_SHARED,
     SAVE_STATE_UNESTABLISHED,
     UNESTABLISHED_DIRECTORY_KNOWN,
@@ -28,9 +30,11 @@ from domain.save_answer import (
     SaveGroup,
     build_save_answer,
     pick_download_name,
+    save_finding_details,
     save_shape_message,
     saves_root_missing_answer,
     unestablished_answer,
+    with_source_findings,
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -346,8 +350,66 @@ class TestTheRefusalIsReportedNeutrally:
 
         assert answer.syncable is False
         assert save_shape_message(answer) == (
-            "Save sync is unavailable: RetroDECK's saves folder /run/media/sd/saves does not exist."
+            "Save sync is unavailable: the saves folder /run/media/sd/saves does not exist."
         )
+
+
+class TestAPlaceNotRead:
+    """A finding that the save place was not read from the settings refuses the answer, and the refusal says so."""
+
+    _FINDING = SourceFinding(code="emulator-config-missing", data={"token": "CEMU", "config": "/c/settings.xml"})
+
+    def _refused(self, answer=None, *, source: str = "retrodeck", findings=None):
+        return with_source_findings(
+            _answer() if answer is None else answer,
+            source=source,
+            findings=(self._FINDING,) if findings is None else findings,
+            missing_saves_root=None,
+        )
+
+    def test_the_refusal_carries_the_finding_the_source_and_the_emulator(self):
+        assert save_finding_details(self._refused()) == {
+            "finding": {"code": "emulator-config-missing", "data": {"token": "CEMU", "config": "/c/settings.xml"}},
+            "source": "retrodeck",
+            "emulator": "mGBA",
+        }
+
+    @pytest.mark.parametrize(
+        "answer",
+        [
+            pytest.param(_answer(), id="per-game"),
+            pytest.param(_answer(granularity="shared-card"), id="shared"),
+        ],
+    )
+    def test_no_other_answer_carries_anything_beside_its_message(self, answer):
+        assert save_finding_details(answer) == {}
+
+    def test_a_missing_saves_root_carries_its_finding_too(self):
+        answer = saves_root_missing_answer(path="/sd/saves", emulator="mGBA", content_installed=True, source="emudeck")
+
+        assert save_finding_details(answer) == {
+            "finding": {"code": "saves-root-missing", "data": {"path": "/sd/saves"}},
+            "source": "emudeck",
+            "emulator": "mGBA",
+        }
+
+    def test_its_message_names_the_emulator(self):
+        message = save_shape_message(self._refused())
+
+        assert message.startswith("Save sync is unavailable:")
+        assert message.endswith("(mGBA)")
+
+    def test_a_marker_finding_of_a_kind_nobody_named_refuses(self):
+        # Where Tender does not know what a source's marker names, it does not
+        # take the place as read.
+        marker = SourceFinding(code="marker-missing", data={"path": "/m"})
+
+        assert self._refused(source="some_new_source", findings=(marker,)).state == SAVE_STATE_PLACE_NOT_READ
+
+    def test_a_finding_outside_the_codes_refuses_nothing(self):
+        other = SourceFinding(code="bios-root-missing", data={"path": "/b"})
+
+        assert self._refused(findings=(other,)).state == SAVE_STATE_PER_GAME_FILES
 
 
 class TestTheBenignSkipListsAgreeAcrossTheWire:
@@ -362,7 +424,7 @@ class TestTheBenignSkipListsAgreeAcrossTheWire:
     """
 
     def _frontend_slugs(self) -> set[str]:
-        source = (_REPO_ROOT / "frontend" / "src" / "types" / "saves.ts").read_text(encoding="utf-8")
+        source = (_REPO_ROOT / "frontend" / "src" / "utils" / "launchGate.ts").read_text(encoding="utf-8")
         block = re.search(
             r"BENIGN_SYNC_SKIP_REASONS:\s*readonly\s+string\[\]\s*=\s*\[(.*?)\]",
             source,

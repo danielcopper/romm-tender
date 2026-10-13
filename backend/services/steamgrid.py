@@ -16,8 +16,6 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from models.shortcut_icon import IconAnswer, IconFetch
-
 from domain.sgdb_artwork import (
     asset_type_endpoint,
     asset_type_name,
@@ -35,6 +33,7 @@ from lib.errors import (
     SgdbRateLimitedError,
     SteamGridDirMissingError,
 )
+from models.shortcut_icon import IconAnswer, IconFetch
 
 if TYPE_CHECKING:
     import logging

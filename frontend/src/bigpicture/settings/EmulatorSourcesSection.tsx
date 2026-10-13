@@ -130,8 +130,8 @@ const SourceCard: FC<SourceCardProps> = ({ source, index, last, busy, cardRef, o
           {/* No focus stop of its own: the arrows above it and the switch
               below it are stops of the same card, and the region brings it
               into view on the way between them. The root line is left out
-              where the root is a default (the settings file is missing or
-              broken), which the lines below it say. */}
+              where the root was not read from the source's settings, which
+              the lines below it say. */}
           <div data-testid={`source-lines-${source.kind}`} style={{ color: MUTED, fontSize: "12px", marginTop: "4px" }}>
             {source.root !== null && (
               <div

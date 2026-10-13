@@ -26,21 +26,27 @@ from typing import Any
 
 from ._data import packaged_text
 
-SAVES_SCHEMA = 2
+SAVES_SCHEMA = 3
 
 
 @dataclass(frozen=True, slots=True)
 class StandaloneBuild:
-    """The upstream revision a card's citations were read at, as the build stamps it.
+    """One build a card's readings were taken at, as the deploy names it and the build stamps it.
 
-    ``revision`` is the short commit hash the deployed binary spells in the
+    ``release`` is the name the deploy writes for the build it ships — the
+    release tag RetroDECK's component recipe writes as ``component_version`` —
+    which is what a resolver whose rule turns on the build reads to pick this
+    one. ``revision`` is the short commit hash the deployed binary spells in the
     version string its ``--version`` prints, so a deployed build can be held
     against the revision the card was written from
     (``tests/test_standalone_build_tripwire.py``). Where that string is a
     constant of the build, as Vita3K's is, it names the commit that build was
-    configured at and the check needs nothing run. A build that moved past the
-    pin fails it rather than letting the card describe source the machine no
-    longer runs.
+    configured at and the check needs nothing run. A build that moved past
+    every pin fails it rather than letting the card describe source the
+    machine no longer runs. ``citation`` is how the release was tied to the
+    commit, and ``provenance`` the sentence an answer read under this build
+    carries in its ``sources`` — the card-level one being what an answer
+    carries where no pinned build applied.
 
     A sibling of :class:`atlas.core_firmware.CoreFirmwareBuild` rather than that
     class: the two pin the same kind of fact and read it through different
@@ -48,8 +54,10 @@ class StandaloneBuild:
     entry happens to need.
     """
 
+    release: str
     revision: str
     citation: str
+    provenance: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,14 +108,21 @@ class StandaloneSaveCard:
     provenance: str
     citations: Mapping[str, str] = field(default_factory=dict)
     citation_installations: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
-    build: StandaloneBuild | None = None
-    """The revision the card's readings were taken at, where the card pins one.
+    builds: tuple[StandaloneBuild, ...] = ()
+    """The builds the card's readings were taken at, where the card pins any.
 
-    ``None`` is a card that pins no revision, which is most of them today: the
-    pin is only worth stating where something can read the deployed build's own
+    Empty is a card that pins no build, which is most of them today: the pin
+    is only worth stating where something can read the deployed build's own
     answer back and compare it, and pinning the rest is open work. The
-    tripwire's ``UNPINNED`` set is what keeps that absence deliberate.
+    tripwire's ``UNPINNED`` set is what keeps that absence deliberate. More
+    than one is a card whose emulator is in the field at builds that answer
+    differently — Vita3K picks its user by one rule at 3996 and another at
+    4103 — and whose resolver reads which one runs.
     """
+
+    def build_for(self, release: str | None) -> StandaloneBuild | None:
+        """The pinned build a deploy's *release* names, or ``None`` — no fuzzy matching."""
+        return next((build for build in self.builds if build.release == release), None)
 
     def cite(self, slot: str, *, flatpak: str | None) -> str:
         """The card's citation for one slot, in the build this launch runs.
@@ -151,23 +166,49 @@ def _stated_pin(value: Any, where: str) -> str:
     return stated
 
 
-def _build(where: str, entry: Any) -> StandaloneBuild | None:
-    """The optional build pin — exactly revision and citation, or nothing at all.
+_BUILD_KEYS = frozenset({"release", "revision", "citation", "provenance"})
 
-    A card that states no block pins nothing, which the tripwire's ``UNPINNED``
-    set is what keeps deliberate. A card that states some other shape is
-    refused by name rather than read for what can be found in it: a misspelled
-    key would otherwise read as a card with no pin, and a pin nobody checks is
-    the one failure this block exists to prevent.
+
+def _build(where: str, entry: Any) -> StandaloneBuild:
+    """One pinned build — exactly release, revision, citation and provenance.
+
+    A block of some other shape is refused by name rather than read for what
+    can be found in it: a misspelled key would otherwise read as a build with
+    no pin, and a pin nobody checks is the one failure this block exists to
+    prevent.
     """
-    if entry is None:
-        return None
-    if not isinstance(entry, dict) or set(entry) != {"revision", "citation"}:
-        raise ValueError(f"{where}: build must state exactly revision/citation, got {entry!r}")
+    if not isinstance(entry, dict) or frozenset(entry) != _BUILD_KEYS:
+        raise ValueError(
+            f"{where}: a build must state exactly release/revision/citation/provenance, "
+            f"got {entry!r}"
+        )
     return StandaloneBuild(
+        release=_stated_pin(entry["release"], f"{where}: build.release"),
         revision=_stated_pin(entry["revision"], f"{where}: build.revision"),
         citation=_stated_pin(entry["citation"], f"{where}: build.citation"),
+        provenance=_stated_pin(entry["provenance"], f"{where}: build.provenance"),
     )
+
+
+def _builds(where: str, entry: Any) -> tuple[StandaloneBuild, ...]:
+    """The optional list of pinned builds — absent, or one build per release.
+
+    A card that states no list pins nothing, which the tripwire's ``UNPINNED``
+    set is what keeps deliberate. An empty list is refused rather than read as
+    that absence, because it states a pin and pins nothing. Two builds under
+    one release would leave the resolver two rules for one deploy, and two
+    under one revision would be one build stated twice, so both are refused.
+    """
+    if entry is None:
+        return ()
+    if not isinstance(entry, list) or not entry:
+        raise ValueError(f"{where}: builds must be a non-empty list, got {entry!r}")
+    builds = tuple(_build(where, build) for build in entry)
+    for field_name in ("release", "revision"):
+        stated = [getattr(build, field_name) for build in builds]
+        if len(set(stated)) != len(stated):
+            raise ValueError(f"{where}: builds state one {field_name} twice: {stated!r}")
+    return builds
 
 
 def _card(token: str, entry: Any) -> StandaloneSaveCard:
@@ -189,6 +230,11 @@ def _card(token: str, entry: Any) -> StandaloneSaveCard:
             f"{where}: which app id an arrangement installs this emulator as is stated once in "
             "atlas/data/emulator_settings.json — a copy here could only ever drift from it, and "
             "an emulator without a save card could not state it at all (#288)"
+        )
+    if "build" in entry:
+        raise ValueError(
+            f"{where}: a pinned build is stated in a 'builds' list since schema 3 — a lone "
+            "'build' block would read as a card that pins nothing"
         )
     provenance = entry.get("provenance", {})
     if not isinstance(provenance, dict):
@@ -233,7 +279,7 @@ def _card(token: str, entry: Any) -> StandaloneSaveCard:
             }
             for app_id, stated in installations.items()
         },
-        build=_build(where, entry.get("build")),
+        builds=_builds(where, entry.get("builds")),
     )
 
 

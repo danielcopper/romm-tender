@@ -16,7 +16,7 @@ import { switchSlot, getVersionList, checkLocalDrift, debugLog, logWarn } from "
 import { getRommConnectionState, onRommConnectionChange, reportServerReachable } from "../utils/connectionState";
 import type { SaveStatus, SyncConflict, SaveSlotSummary, LastKnownSlots } from "../types";
 import { scrollFocusedToCenter } from "../utils/scrollHelpers";
-import { MUTED_COLOR } from "./saves/helpers";
+import { MUTED_COLOR, sortSaveSlots, filterSaveSlotsForDisplay } from "../utils/saveHelpers";
 import { renderLastKnownSlots } from "./saves/LastKnownSlotList";
 import { NewSlotModal } from "./saves/NewSlotModal";
 import { SlotPanel } from "./saves/SlotPanel";
@@ -24,6 +24,8 @@ import { ConnectingIndicator } from "./saves/ConnectingIndicator";
 import { renderSaveFileRow } from "./saves/SaveFileRow";
 import { useCopyToSlot } from "./saves/useCopyToSlot";
 import { detach } from "../utils/detach";
+import { announceSaveSync } from "../utils/saveSyncEvents";
+import { switchSlotFailureMessage } from "../utils/saveSlotWording";
 
 interface SavesTabProps {
   /** The group's sticky Steam appId — drives the stranded-version drift check. */
@@ -70,19 +72,11 @@ export const SavesTab: FC<SavesTabProps> = ({
     setVersionHistoryKey((k) => k + 1);
     // Trigger parent refresh of saveStatus so the tracked save row reflects
     // the new tracked_save_id / server fields without leaving the page.
-    globalThis.dispatchEvent(
-      new CustomEvent("romm_data_changed", {
-        detail: { type: "save_sync", rom_id: romId },
-      }),
-    );
+    announceSaveSync(romId);
   };
 
   const handleSlotDeleted = () => {
-    globalThis.dispatchEvent(
-      new CustomEvent("romm_data_changed", {
-        detail: { type: "save_sync", rom_id: romId },
-      }),
-    );
+    announceSaveSync(romId);
   };
 
   // Offline banner reacts live to any reachability signal via the shared store
@@ -194,25 +188,7 @@ export const SavesTab: FC<SavesTabProps> = ({
   }
 
   // --- Sort: active first, named alphabetically, legacy "" bucket last (#1478) ---
-  const slotRank = (s: SaveSlotSummary): number => {
-    if (s.slot === activeSlot) return 0;
-    if (s.slot === "") return 2;
-    return 1;
-  };
-  const sorted = [...availableSlots].sort((a, b) => {
-    const rankDiff = slotRank(a) - slotRank(b);
-    if (rankDiff !== 0) return rankDiff;
-    return a.slot.localeCompare(b.slot);
-  });
-
-  // An active slot the list doesn't carry still gets a panel — it is a slot the
-  // user is on. Only for a slot something ANSWERED, though: synthesised off the
-  // panel's placeholder it puts a slot name on screen that nothing ever said
-  // (#1747), and `default` is a real name here, so it reads as a fact.
-  const slotInList = sorted.some((s) => s.slot === activeSlot);
-  if (!slotInList && activeSlot && activeSlotKnown) {
-    sorted.unshift({ slot: activeSlot, source: "local", count: 0, latest_updated_at: null });
-  }
+  const sorted = sortSaveSlots(availableSlots, activeSlot, activeSlotKnown);
 
   // --- New Slot button handler ---
   const handleNewSlot = () => {
@@ -233,13 +209,13 @@ export const SavesTab: FC<SavesTabProps> = ({
                   onSlotSwitched(name, result.save_status);
                 } else {
                   detach(debugLog(`SavesTab: new slot switch failed: ${result.reason}`));
-                  let msg = "Failed to create slot";
-                  if (result.reason === "pending_uploads") {
-                    msg = "Sync your saves first — local changes haven't been uploaded";
-                  } else if (result.reason === "server_unreachable") {
+                  if (result.reason === "server_unreachable") {
                     reportServerReachable(false);
-                    msg = "Can't switch — RomM server is not reachable";
                   }
+                  const msg =
+                    result.reason === "pending_uploads" || result.reason === "server_unreachable"
+                      ? switchSlotFailureMessage(result.reason)
+                      : "Failed to create slot";
                   setNewSlotError(msg);
                   if (newSlotErrorTimerRef.current) clearTimeout(newSlotErrorTimerRef.current);
                   newSlotErrorTimerRef.current = setTimeout(() => setNewSlotError(null), 5000);
@@ -299,27 +275,25 @@ export const SavesTab: FC<SavesTabProps> = ({
       {lastKnownSection}
 
       {/* Slot panels — skip the "" (legacy) panel when already in legacy mode */}
-      {sorted
-        .filter((s) => activeSlot !== null || s.slot !== "")
-        .map((slot) => {
-          const isActive = activeSlot !== null && slot.slot === activeSlot;
-          return (
-            <SlotPanel
-              key={`panel-${slot.slot}-${versionHistoryKey}`}
-              romId={romId}
-              slot={slot}
-              isActive={isActive}
-              defaultExpanded={isActive}
-              saveStatus={isActive ? saveStatus : null}
-              conflicts={isActive ? conflicts : []}
-              isOffline={isOffline}
-              onSlotSwitched={onSlotSwitched}
-              onVersionRestored={handleVersionRestored}
-              onSlotDeleted={handleSlotDeleted}
-              onCopy={openCopyModal}
-            />
-          );
-        })}
+      {filterSaveSlotsForDisplay(sorted, activeSlot).map((slot) => {
+        const isActive = activeSlot !== null && slot.slot === activeSlot;
+        return (
+          <SlotPanel
+            key={`panel-${slot.slot}-${versionHistoryKey}`}
+            romId={romId}
+            slot={slot}
+            isActive={isActive}
+            defaultExpanded={isActive}
+            saveStatus={isActive ? saveStatus : null}
+            conflicts={isActive ? conflicts : []}
+            isOffline={isOffline}
+            onSlotSwitched={onSlotSwitched}
+            onVersionRestored={handleVersionRestored}
+            onSlotDeleted={handleSlotDeleted}
+            onCopy={openCopyModal}
+          />
+        );
+      })}
 
       {/* New Slot button + error feedback */}
       <div key="new-slot-area" style={{ marginTop: "10px" }}>

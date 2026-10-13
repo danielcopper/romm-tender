@@ -72,12 +72,12 @@ Steam's memory now and how much the last run added to it, and your last ten sync
 covered and how it ended.
 
 **Force Full Sync** stays on the page whether or not you can press it, and the line under it tells you why when you
-cannot: a run is going, the clear has already been made and is waiting for its next run, or nothing has been synced yet
-so there is nothing to forget. If a change table is up when you confirm it, that table goes — the clear has just thrown
-away what the table was worked out against, so applying it afterwards would skip the very platforms the clear asked to
-be re-fetched. Work out a fresh preview, or start the run. And if Tender could not read what has already been synced,
-the button stays pressable and says so rather than going quiet: not being able to check is not the same as there being
-nothing to clear.
+cannot: a run is going, the clear has already been made and is waiting for its next run, or no sync progress is
+recorded, so there is nothing to forget. If a change table is up when you confirm it, that table goes — the clear has
+just thrown away what the table was worked out against, so applying it afterwards would skip the very platforms the
+clear asked to be re-fetched. Work out a fresh preview, or start the run. And if Tender could not read what has already
+been synced, the button stays pressable and says so rather than going quiet: not being able to check is not the same as
+there being nothing to clear.
 
 ![Tender QAM panel showing connection status, a Sync Library button with Skip Preview and Force Full Sync, and a menu of
 Library, Settings and Data Management](../assets/screenshot-qam.jpg)
@@ -121,7 +121,10 @@ an unchanged library reads seconds, not the minutes a full first import would ta
 (the actual skip is decided per platform, and per collection, as the run reaches it), so a wrong guess can make the
 readout run long or short for a moment, but it never changes what the sync actually does. Collections are skipped the
 same way a platform is: if a collection's membership hasn't changed and none of its games did either, Tender skips it
-without re-listing its contents — so a large, collection-heavy library re-syncs quickly.
+without re-listing its contents — so a large, collection-heavy library re-syncs quickly. That holds for **Franchises**
+and **IGDB collections** too. When Tender does not skip a collection, it asks RomM only for the collection's games on
+platforms you don't sync, since your enabled platforms already brought in the rest. Another user's shared smart
+collection is the exception and is read in full, because which games it holds can depend on who is asking.
 
 The estimate also knows the **difference between adding a game and updating one**. Creating a shortcut is roughly three
 times the work of refreshing one that already exists, and it also has to pull down a cover; updating an existing

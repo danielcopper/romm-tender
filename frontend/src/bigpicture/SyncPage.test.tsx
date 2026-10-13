@@ -176,7 +176,15 @@ function defaultSettings(): Settings {
 }
 
 function defaultStats(): SyncStats {
-  return { last_sync: "2026-07-11T17:48:00", platforms: 3, collections: 1, roms: 120, total_shortcuts: 120 };
+  return {
+    last_sync: "2026-07-11T17:48:00",
+    platforms: 3,
+    collections: 1,
+    roms: 120,
+    total_shortcuts: 120,
+    resumable_games: 0,
+    has_completion_stamp: true,
+  };
 }
 
 function defaultBudget(): SessionBudgetStatus {
@@ -1974,7 +1982,8 @@ describe("SyncPage", () => {
       const button = buttonByExactText(container, "Force Full Sync");
       expect(button).not.toBeNull();
       expect(button?.disabled).toBe(true);
-      expect(container.textContent).toContain("Cleared. Pressing again would clear nothing.");
+      expect(container.textContent).toContain("Cleared.");
+      expect(container.textContent).not.toContain("Pressing again");
     });
 
     it("comes back once a run has been and gone, because there is something to forget again", async () => {
@@ -2008,9 +2017,44 @@ describe("SyncPage", () => {
     });
 
     it("is disabled on a pristine install, where there is nothing to clear", async () => {
-      vi.mocked(backend.getSyncStats).mockResolvedValue({ ...defaultStats(), last_sync: null });
+      vi.mocked(backend.getSyncStats).mockResolvedValue({
+        ...defaultStats(),
+        last_sync: null,
+        has_completion_stamp: false,
+      });
       const { container } = await renderPage();
       expect(buttonByExactText(container, "Force Full Sync")?.disabled).toBe(true);
+    });
+
+    it("is disabled once a clear has been made, though the run history survives it", async () => {
+      // What a Force Full Sync leaves behind: the history it keeps on purpose,
+      // and neither of the two things it removes.
+      vi.mocked(backend.getSyncStats).mockResolvedValue({
+        ...defaultStats(),
+        last_attempt: { finished_at: "2026-07-11T18:02:00", status: "cancelled" },
+        has_completion_stamp: false,
+        resumable_games: 0,
+      });
+      const { container } = await renderPage();
+
+      expect(buttonByExactText(container, "Force Full Sync")?.disabled).toBe(true);
+      expect(container.textContent).toContain("No sync progress is recorded, so there is nothing to forget.");
+    });
+
+    it.each([
+      ["a completion stamp survives", { has_completion_stamp: true, resumable_games: 0 }],
+      ["games are recorded", { has_completion_stamp: false, resumable_games: 3 }],
+    ])("is pressable where %s and no run history is recorded", async (_case, progress) => {
+      vi.mocked(backend.getSyncStats).mockResolvedValue({
+        ...defaultStats(),
+        last_sync: null,
+        last_attempt: null,
+        ...progress,
+      });
+      const { container } = await renderPage();
+
+      expect(buttonByExactText(container, "Force Full Sync")?.disabled).toBe(false);
+      expect(container.textContent).toContain("Forgets what was synced and rebuilds everything next run.");
     });
 
     it("is disabled until the stats answer, since not knowing is not evidence of something to clear", async () => {
@@ -2055,11 +2099,11 @@ describe("SyncPage", () => {
       expect(container.textContent).toContain("Reading what has already been synced");
 
       await act(async () => {
-        finishStats({ ...defaultStats(), last_sync: null });
+        finishStats({ ...defaultStats(), last_sync: null, has_completion_stamp: false });
         await Promise.resolve();
         await Promise.resolve();
       });
-      expect(container.textContent).toContain("Nothing has been synced yet, so there is nothing to forget.");
+      expect(container.textContent).toContain("No sync progress is recorded, so there is nothing to forget.");
     });
 
     it("leaves Skip preview live during a run — the setting is read by the next press", async () => {

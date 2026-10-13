@@ -3,8 +3,10 @@
 RomM's collection listings return the signed-in user's own collections plus
 every other user's PUBLIC collection. This module owns the rule that decides
 whether a collection is the user's own — once to drop foreign units from the
-sync work queue under the ``own`` owner scope (:func:`is_own_collection`), and
-once to tag the rows ``get_collections`` answers with (:func:`listing_is_own`).
+sync work queue under the ``own`` owner scope (:func:`is_own_collection`), once
+to mark a work unit's ``is_own``, which sends a foreign smart collection through
+the full walk (:func:`is_own_collection` again), and once to tag the rows
+``get_collections`` answers with (:func:`listing_is_own`).
 No I/O, no state: identity and the collection's owner id come in as arguments.
 
 Two invariants make the scope safe and non-breaking:

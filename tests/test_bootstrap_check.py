@@ -6,7 +6,6 @@ import logging
 import sqlite3
 
 from bootstrap import copy_live_data
-
 from domain.app_directories import AppDirectories
 
 LOGGER = logging.getLogger("test_bootstrap_check")

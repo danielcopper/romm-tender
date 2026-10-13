@@ -9,6 +9,7 @@ import pytest
 from _factories import _make_conflict_rules
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
+from domain.retrodeck_folders import no_rom_root
 from domain.rom import Rom
 from domain.version_metadata import VersionMetadata
 from lib.errors import Refused, RommConnectionError
@@ -181,6 +182,23 @@ class TestRepoint:
         assert ledger.committed_action is None
         assert ledger.action_ambiguous is False
         assert requested == [], "Steam is never asked once the switch itself failed"
+
+    async def test_a_domain_refusal_from_the_switch_fails_the_group_with_its_reason(self):
+        rows = [_rom(1, app_id=APP_ID), _rom(2)]
+        runner, _, requested = _runner(rows, switch_raises=no_rom_root())
+        ledger = MutationLedger(rows)
+
+        _, _, result = await runner.repoint("run-1", _plan(rows=rows, target_id=2), ledger, None, 1, 1)
+
+        assert result is not None
+        assert (result["status"], result["reason"], result["message"]) == (
+            "failed",
+            no_rom_root().reason,
+            no_rom_root().message,
+        )
+        assert ledger.committed_action is None
+        assert ledger.action_ambiguous is False
+        assert requested == []
 
     async def test_a_romm_error_from_the_switch_fails_the_group_with_its_classified_reason(self):
         rows = [_rom(1, app_id=APP_ID), _rom(2)]

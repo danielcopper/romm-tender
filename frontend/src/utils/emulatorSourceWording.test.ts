@@ -62,7 +62,7 @@ describe("findingSentence", () => {
     ["marker-unreadable", "EmuDeck: its settings file /h/settings.sh cannot be read."],
     [
       "marker-invalid",
-      "EmuDeck: its settings file /h/settings.sh is damaged, so Tender cannot tell where its folders are.",
+      "EmuDeck: its settings file /h/settings.sh is damaged, so Tender cannot tell where its folder, BIOS folder and saves folder are.",
     ],
     [
       "root-missing",
@@ -90,7 +90,7 @@ describe("findingSentence", () => {
 
   it("adds RetroDECK's repair to a damaged settings file of RetroDECK's", () => {
     expect(findingSentence("retrodeck", { code: "marker-invalid", data: { path: "/r.json", key: "paths" } })).toBe(
-      `RetroDECK: its settings file /r.json is damaged, so Tender cannot tell where its folders are.${REPAIR}`,
+      `RetroDECK: its settings file /r.json is damaged, so Tender cannot tell where its folder, BIOS folder and saves folder are.${REPAIR}`,
     );
   });
 
@@ -132,6 +132,32 @@ describe("findingSentence", () => {
     );
   });
 
+  it.each([
+    [
+      "bios-root-missing",
+      { path: "/sd/retrodeck/bios" },
+      "RetroDECK: its BIOS folder /sd/retrodeck/bios does not exist. If it is on an SD card or another drive, insert it.",
+    ],
+    [
+      "roms-root-missing",
+      { path: "/sd/retrodeck/roms" },
+      "RetroDECK: its ROM folder /sd/retrodeck/roms does not exist. If it is on an SD card or another drive, insert it.",
+    ],
+    [
+      "roms-root-not-absolute",
+      { value: "roms" },
+      'RetroDECK: ES-DE\'s ROM folder setting "roms" is not a full path, so Tender cannot tell where its games are.',
+    ],
+    [
+      "emulator-config-missing",
+      { config: "/rd/config/retroarch/retroarch.cfg" },
+      "RetroDECK: RetroArch's settings file /rd/config/retroarch/retroarch.cfg is missing, " +
+        "so RetroArch uses its built-in default folders.",
+    ],
+  ])("words %s from the fact it carries", (code, data, sentence) => {
+    expect(findingSentence("retrodeck", { code, data })).toBe(sentence);
+  });
+
   it("names a kind it does not know by the kind", () => {
     expect(findingSentence("standalone_x", { code: "root-missing", data: { path: "/x" } })).toBe(
       "standalone_x: its folder /x does not exist. If it is on an SD card or another drive, insert it.",
@@ -151,6 +177,10 @@ describe("findingSentence", () => {
     ["no systems-file problem", { code: "catalogue-invalid", data: { path: "/es.xml" } }],
     ["no hub", { code: "content-tree-unwired", data: { path: "/p", problem: "missing" } }],
     ["an unknown link problem", { code: "content-tree-unwired", data: { path: "/p", hub: "/h", problem: "toString" } }],
+    ["no BIOS folder", { code: "bios-root-missing", data: {} }],
+    ["no ROM folder", { code: "roms-root-missing", data: {} }],
+    ["no setting, only a path", { code: "roms-root-not-absolute", data: { path: "/p" } }],
+    ["no settings file, only a path", { code: "emulator-config-missing", data: { path: "/p" } }],
   ])("falls back to the code where a fact the sentence needs is missing: %s", (_label, finding) => {
     expect(findingSentence("retrodeck", finding)).toBe(`Problem with RetroDECK: ${finding.code}`);
   });
@@ -173,7 +203,7 @@ describe("withFindingSentence", () => {
     [
       "marker-invalid",
       {},
-      `RetroDECK: its settings file /m is damaged, so Tender cannot tell where its folders are.${REPAIR}`,
+      `RetroDECK: its settings file /m is damaged, so Tender cannot tell where its folder, BIOS folder and saves folder are.${REPAIR}`,
     ],
     [
       "root-missing",
@@ -190,6 +220,105 @@ describe("withFindingSentence", () => {
   it("leaves a refusal whose finding it cannot read as it came", () => {
     const answer = refusal("marker-missing");
     expect(withFindingSentence(answer)).toBe(answer);
+  });
+
+  describe("a save refused because its place was not read", () => {
+    const saveRefusal = (finding: unknown, source: unknown = "retrodeck", emulator: unknown = "Cemu (Standalone)") => ({
+      success: false,
+      reason: "save_shape_unsupported",
+      message: "Save sync is unavailable: where this emulator keeps saves was not read from its settings.",
+      finding,
+      source,
+      emulator,
+    });
+
+    it.each([
+      [
+        "a source not set up",
+        "emudeck",
+        { code: "not-set-up", data: { path: "/m" } },
+        "EmuDeck is installed but has not been set up yet. Start EmuDeck once and finish its first-run setup.",
+      ],
+      [
+        "RetroArch's own settings file missing",
+        "retrodeck",
+        { code: "emulator-config-missing", data: { config: "/r/retroarch.cfg" } },
+        "RetroDECK: RetroArch's settings file /r/retroarch.cfg is missing, so RetroArch uses its built-in default folders.",
+      ],
+      [
+        "a bare RetroArch's marker",
+        "bare_retroarch_native",
+        { code: "marker-unreadable", data: { path: "/r/retroarch.cfg" } },
+        "RetroArch (native): its settings file /r/retroarch.cfg cannot be read.",
+      ],
+      [
+        "EmuDeck's RetroArch",
+        "emudeck",
+        { code: "companion-config-missing", data: { path: "/e/retroarch.cfg" } },
+        "EmuDeck: RetroArch's settings file /e/retroarch.cfg cannot be read; EmuDeck's RetroArch may be missing or broken.",
+      ],
+    ])("words %s with Main's sentence for the answer's own source", (_label, source, finding, sentence) => {
+      const answer = withFindingSentence(saveRefusal(finding, source));
+
+      expect(answer.message).toBe(sentence);
+      expect(answer.reason).toBe("save_shape_unsupported");
+    });
+
+    it.each([
+      [
+        "a standalone emulator's missing file",
+        "Cemu (Standalone)",
+        { code: "emulator-config-missing", data: { token: "CEMU", config: "/c/settings.xml" } },
+        "Cemu (Standalone)'s settings file /c/settings.xml is missing, so Tender cannot tell where it keeps this game's saves.",
+      ],
+      [
+        "a core's own missing file, named bare",
+        "MAME",
+        { code: "emulator-config-missing", data: { core: "mame", config: "mame.ini" } },
+        "MAME's settings file mame.ini is missing, so Tender cannot tell where it keeps this game's saves.",
+      ],
+      [
+        "an emulator's unreadable file",
+        "melonDS (Standalone)",
+        { code: "emulator-config-unreadable", data: { token: "MELONDS", config: "/m/melonDS.toml", reason: "x" } },
+        "melonDS (Standalone)'s settings file /m/melonDS.toml cannot be read, so Tender cannot tell where it keeps this game's saves.",
+      ],
+    ])("words %s, which Main never shows, after the emulator", (_label, emulator, finding, sentence) => {
+      expect(withFindingSentence(saveRefusal(finding, "retrodeck", emulator)).message).toBe(sentence);
+    });
+
+    it("words an emulator's file with Main's fallback where the answer names no emulator", () => {
+      const finding = { code: "emulator-config-unreadable", data: { token: "XEMU", config: "/x/xemu.toml" } };
+
+      expect(withFindingSentence(saveRefusal(finding, "retrodeck", null)).message).toBe(
+        "Problem with RetroDECK: emulator-config-unreadable",
+      );
+    });
+
+    it.each(["saves_root_missing", "save_shape_unsupported"])(
+      "words a missing saves folder refused with %s with Main's sentence",
+      (reason) => {
+        const finding = { code: "saves-root-missing", data: { path: "/sd/saves" } };
+        const answer = withFindingSentence({ ...saveRefusal(finding, "emudeck", "mGBA"), reason });
+
+        expect(answer.message).toBe(
+          "EmuDeck: its saves folder /sd/saves does not exist, so saves of its emulators cannot be synced.",
+        );
+        expect(answer.reason).toBe(reason);
+      },
+    );
+
+    it("leaves a save refusal that names no source as it came", () => {
+      const answer = saveRefusal({ code: "not-set-up", data: { path: "/m" } }, null);
+
+      expect(withFindingSentence(answer)).toBe(answer);
+    });
+
+    it("leaves a save refusal with no finding as it came", () => {
+      const answer = { success: false, reason: "save_shape_unsupported", message: "one shared card" };
+
+      expect(withFindingSentence(answer)).toBe(answer);
+    });
   });
 
   it.each([
@@ -211,6 +340,10 @@ describe("findingIsBanner", () => {
     "companion-config-missing",
     "config-unreadable",
     "catalogue-invalid",
+    "bios-root-missing",
+    "roms-root-missing",
+    "roms-root-not-absolute",
+    "emulator-config-missing",
     "brand-new-code",
   ])("shows %s as a banner", (code) => {
     expect(findingIsBanner({ code, data: {} })).toBe(true);
@@ -494,10 +627,32 @@ describe("mainSourceBanners", () => {
       ],
     };
     expect(texts(listing)).toEqual([
-      "RetroDECK: its settings file /rd.json is damaged, so Tender cannot tell where its folders are. " +
+      "RetroDECK: its settings file /rd.json is damaged, so Tender cannot tell where its folder, BIOS folder and saves folder are. " +
         "Repair it with RetroDECK's 'Repair RetroDECK Paths'.",
       "EmuDeck: RetroArch's settings file /ra.cfg cannot be read; EmuDeck's RetroArch may be missing or broken.",
       "EmuDeck is switched on in Settings › Emulator sources, but Tender cannot start games through it yet.",
+    ]);
+  });
+
+  it("words the BIOS folder, ROM folder, ROM folder setting and RetroArch settings findings on Main, none as a problem with the source", () => {
+    const listing = {
+      answering: "retrodeck",
+      sources: [
+        source({
+          findings: [
+            { code: "bios-root-missing", data: { path: "/sd/bios" } },
+            { code: "roms-root-missing", data: { path: "/sd/roms" } },
+            { code: "roms-root-not-absolute", data: { value: "roms" } },
+            { code: "emulator-config-missing", data: { config: "/rd/retroarch.cfg" } },
+          ],
+        }),
+      ],
+    };
+    expect(texts(listing)).toEqual([
+      "RetroDECK: its BIOS folder /sd/bios does not exist. If it is on an SD card or another drive, insert it.",
+      "RetroDECK: its ROM folder /sd/roms does not exist. If it is on an SD card or another drive, insert it.",
+      'RetroDECK: ES-DE\'s ROM folder setting "roms" is not a full path, so Tender cannot tell where its games are.',
+      "RetroDECK: RetroArch's settings file /rd/retroarch.cfg is missing, so RetroArch uses its built-in default folders.",
     ]);
   });
 
@@ -554,5 +709,104 @@ describe("mainSourceBanners", () => {
   it("says nothing about starting games where every source is switched off", () => {
     const listing = { answering: null, sources: [source({ kind: "emudeck", enabled: false, starts_games: false })] };
     expect(texts(listing)).toEqual([]);
+  });
+});
+
+describe("roots the resolver only assumed", () => {
+  const assumed = (roots: string, path = "/h/retrodeck.json") => ({ code: "roots-assumed", data: { path, roots } });
+
+  it.each([
+    [
+      "bios",
+      "RetroDECK: its settings file /h/retrodeck.json does not name its BIOS folder, so Tender does not use it.",
+    ],
+    [
+      "bios,saves",
+      "RetroDECK: its settings file /h/retrodeck.json does not name its BIOS folder and saves folder, " +
+        "so Tender uses none of them.",
+    ],
+    [
+      "installation,bios,saves",
+      "RetroDECK: its settings file /h/retrodeck.json does not name its folder, BIOS folder and saves folder, " +
+        "so Tender uses none of them.",
+    ],
+  ])("names %s in one sentence", (roots, sentence) => {
+    expect(findingSentence("retrodeck", assumed(roots))).toBe(sentence);
+  });
+
+  it("names EmuDeck's settings file and folders the same way", () => {
+    expect(findingSentence("emudeck", assumed("saves", "/h/settings.sh"))).toBe(
+      "EmuDeck: its settings file /h/settings.sh does not name its saves folder, so Tender does not use it.",
+    );
+  });
+
+  it("names no repair", () => {
+    expect(findingSentence("retrodeck", assumed("bios"))).not.toContain("Repair");
+  });
+
+  it("falls back to the problem line for a root it has no word for, never a half sentence", () => {
+    expect(findingSentence("retrodeck", assumed("bios,textures"))).toBe("Problem with RetroDECK: roots-assumed");
+  });
+
+  it("shows on Main and on the card", () => {
+    const finding = assumed("bios,saves");
+    const sentence = findingSentence("retrodeck", finding);
+
+    expect(texts({ answering: "retrodeck", sources: [source({ root: null, findings: [finding] })] })).toEqual([
+      sentence,
+    ]);
+    expect(sourceRowLines(source({ root: null, findings: [finding] }))).toEqual([{ tone: "warning", text: sentence }]);
+  });
+
+  it("answers a press refused for an assumed root with the notice's sentence", () => {
+    const finding = assumed("bios");
+    const answer = withFindingSentence({
+      success: false,
+      reason: "retrodeck_finding",
+      message: "Problem with RetroDECK: roots-assumed",
+      finding,
+    });
+
+    expect(answer.message).toBe(findingSentence("retrodeck", finding));
+  });
+
+  it("words a refused press by the source the refusal names", () => {
+    const finding = assumed("bios", "/h/settings.sh");
+    const answer = withFindingSentence({
+      success: false,
+      reason: "retrodeck_finding",
+      message: "Problem with RetroDECK: roots-assumed",
+      finding,
+      source: "emudeck",
+    });
+
+    expect(answer.message).toBe(
+      "EmuDeck: its settings file /h/settings.sh does not name its BIOS folder, so Tender does not use it.",
+    );
+  });
+});
+
+describe("a settings file whose version alone cannot be read", () => {
+  const version = { code: "marker-invalid", data: { path: "/h/retrodeck.json", key: "version" } };
+  const sentence =
+    "RetroDECK: its settings file /h/retrodeck.json holds no version Tender can read; its folders are still read from it.";
+
+  it("says its folders are still read from it", () => {
+    expect(findingSentence("retrodeck", version)).toBe(sentence);
+  });
+
+  it("shows on the source's card only, not on Main", () => {
+    expect(findingIsBanner(version)).toBe(false);
+    expect(texts({ answering: "retrodeck", sources: [source({ findings: [version] })] })).toEqual([]);
+    expect(sourceRowLines(source({ findings: [version] }))).toEqual([{ tone: "warning", text: sentence }]);
+  });
+
+  it("keeps the damaged-file sentence, and Main's notice, for any other key", () => {
+    const paths = { code: "marker-invalid", data: { path: "/h/retrodeck.json", key: "paths.bios_path" } };
+
+    expect(findingIsBanner(paths)).toBe(true);
+    expect(findingSentence("retrodeck", paths)).toBe(
+      `RetroDECK: its settings file /h/retrodeck.json is damaged, so Tender cannot tell where its folder, BIOS folder and saves folder are.${REPAIR}`,
+    );
   });
 });

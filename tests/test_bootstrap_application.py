@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock
 
 from _factories import _make_services_bundle
-from bootstrap import Application, ServicesBundle, WiringConfig, build_application
 from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_steam_interface import FakeSteamInterface
 
+from bootstrap import Application, ServicesBundle, WiringConfig, build_application
 from domain.app_directories import AppDirectories
 from domain.identity import MIN_ROMM_VERSION, PACKAGE_NAME, VERSION
 from domain.update_release import UpdateSource

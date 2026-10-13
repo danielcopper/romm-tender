@@ -11,7 +11,7 @@
 
 import { FC } from "react";
 import { useServerRetryProgress } from "../../utils/connectionState";
-import { MUTED_COLOR } from "./helpers";
+import { MUTED_COLOR } from "../../utils/saveHelpers";
 
 interface ConnectingIndicatorProps {
   /** Leading label; the retry "(attempt N/M)" suffix is appended when known. */

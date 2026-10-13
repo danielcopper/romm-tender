@@ -63,6 +63,15 @@ def _no_host_deploy(tmp_path, monkeypatch):
     )
 
 
+def _every_path(rd_home: Path) -> dict[str, str]:
+    """``retrodeck.json``'s ``paths`` as RetroDECK's setup writes them: the home and every folder below it."""
+    return {
+        "rd_home_path": str(rd_home),
+        "bios_path": str(rd_home / "bios"),
+        "saves_path": str(rd_home / "saves"),
+    }
+
+
 class _Tree:
     """A RetroDECK as the resolver finds it under one home, built up by the test."""
 
@@ -89,9 +98,13 @@ class _Tree:
         settings.write_text(f'<string name="ROMDirectory" value="{path}" />\n', encoding="utf-8")
 
     def set_up(self, rd_home: Path, *, folders: tuple[str, ...] = ("roms", "saves", "bios")) -> Path:
-        """A RetroDECK deployed and set up at *rd_home* with its own settings, and its *folders* created."""
+        """A RetroDECK deployed and set up at *rd_home* with its own settings, and its *folders* created.
+
+        The settings name the home and every folder below it, as RetroDECK's
+        first-run setup writes them.
+        """
         self.deploy()
-        self.marker({"rd_home_path": str(rd_home)})
+        self.marker(_every_path(rd_home))
         self.rom_directory(rd_home / "roms")
         for folder in folders:
             (rd_home / folder).mkdir(parents=True, exist_ok=True)
@@ -116,9 +129,9 @@ def _real(path: Path) -> str:
 
 class TestEveryFolderIsTheResolversAnswer:
     def test_with_retrodeck_s_own_settings_every_folder_lies_on_the_drive_of_its_home(self, tree, tmp_path):
-        # rd_home_path on another drive and every sub-path unset: RetroDECK lays
-        # its tree out under the home it was pointed at, and ES-DE's ROM folder
-        # is set to the one under it.
+        # rd_home_path on another drive and every sub-path set under it, as
+        # RetroDECK lays its tree out under the home it was pointed at, and
+        # ES-DE's ROM folder is set to the one under it.
         drive = tmp_path / "run" / "media" / "sdcard"
         rd_home = tree.set_up(drive / "retrodeck")
         adapter = tree.adapter()
@@ -339,8 +352,12 @@ def _not_set_up(tree: _Tree) -> RetroDeckFoldersAdapter:
     return tree.adapter()
 
 
-class TestWhileRetroDecksFoldersAreDefaults:
-    """Under one of the four findings Tender uses none of RetroDECK's folders."""
+class TestUnderAFindingAboutRetroDecksSettings:
+    """Under one of the four findings Tender uses no root the resolver only assumed.
+
+    A ``marker-*`` finding leaves ES-DE's ROM folder read, so the ROM questions
+    still answer it; ``not-set-up`` names no ROM folder either.
+    """
 
     @pytest.mark.parametrize(
         ("code", "make"),
@@ -352,27 +369,147 @@ class TestWhileRetroDecksFoldersAreDefaults:
         ],
     )
     def test_every_folder_is_refused_for_the_finding_the_move_code_s_too(self, tree, tmp_path, code, make):
-        # The defaults exist, so a refusal is the rule's and not a missing folder's.
+        # The folders RetroDECK's usual layout puts there exist, so a refusal is
+        # the rule's and not a missing folder's.
         for folder in ("roms", "saves", "bios"):
             (tree.home / "retrodeck" / folder).mkdir(parents=True, exist_ok=True)
         tree.rom_directory(tree.home / "retrodeck" / "roms")
         tree.deploy()
         adapter = make(tree)
 
+        rom_answers = [adapter.download_folder("gba"), adapter.rom_root(), adapter.rom_folders(["gba"])]
         answers = [
-            adapter.download_folder("gba"),
             adapter.bios_download_folder(),
-            adapter.rom_root(),
             adapter.bios_folder(),
             adapter.saves_root(),
-            adapter.rom_folders(["gba"]),
             adapter.move_roots(),
         ]
 
+        if code == "not-set-up":
+            answers += rom_answers
+        else:
+            roms = _real(tree.home / "retrodeck" / "roms")
+            assert rom_answers == [os.path.join(roms, "gba"), roms, {"gba": os.path.join(roms, "gba")}]
         for answer in answers:
             assert isinstance(answer, FindingRefused)
             assert answer.reason == "retrodeck_finding"
             assert answer.details["finding"]["code"] == code
+
+
+def _set_up_with(tree: _Tree, rd_home: Path, marker: dict[str, object]) -> None:
+    """A RetroDECK deployed with *marker* as its ``retrodeck.json``, ES-DE pointed at ``roms`` below *rd_home*.
+
+    Every folder RetroDECK's setup makes exists, so a refusal is the rule's
+    and not a missing folder's.
+    """
+    tree.deploy()
+    path = tree.home / _MARKER
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(marker), encoding="utf-8")
+    tree.rom_directory(rd_home / "roms")
+    for folder in ("roms", "saves", "bios"):
+        (rd_home / folder).mkdir(parents=True, exist_ok=True)
+
+
+def _assumed(answer: object, roots: str) -> None:
+    assert isinstance(answer, FindingRefused), answer
+    assert answer.reason == "retrodeck_finding"
+    assert answer.details["finding"]["code"] == "roots-assumed"
+    assert answer.details["finding"]["data"]["roots"] == roots
+    assert answer.details["source"] == "retrodeck"
+
+
+class TestEachRootIsJudgedByItsProvenance:
+    """A root the resolver only assumed is used for nothing; one read from elsewhere stays usable."""
+
+    def test_without_a_paths_section_only_es_de_s_rom_folder_is_used(self, tree):
+        rd_home = tree.home / "retrodeck"
+        _set_up_with(tree, rd_home, {"version": "0.10.0b"})
+        adapter = tree.adapter()
+
+        assert adapter.download_folder("gba") == _real(rd_home / "roms" / "gba")
+        assert adapter.rom_root() == _real(rd_home / "roms")
+        assert adapter.rom_folders(["gba"]) == {"gba": _real(rd_home / "roms" / "gba")}
+        for answer in (adapter.bios_download_folder(), adapter.bios_folder(), adapter.saves_root()):
+            _assumed(answer, "installation,bios,saves")
+        _assumed(adapter.move_roots(), "installation,bios,saves")
+
+    def test_one_key_unset_refuses_only_the_folder_it_would_name(self, tree, tmp_path):
+        rd_home = tmp_path / "card" / "retrodeck"
+        paths = _every_path(rd_home)
+        del paths["bios_path"]
+        _set_up_with(tree, rd_home, {"paths": paths})
+        adapter = tree.adapter()
+
+        _assumed(adapter.bios_download_folder(), "bios")
+        _assumed(adapter.bios_folder(), "bios")
+        _assumed(adapter.move_roots(), "bios")
+        assert adapter.saves_root() == _real(rd_home / "saves")
+        assert adapter.download_folder("gba") == _real(rd_home / "roms" / "gba")
+
+    def test_a_settings_file_whose_version_alone_cannot_be_read_refuses_no_folder(self, tree, tmp_path):
+        rd_home = tmp_path / "retrodeck"
+        _set_up_with(tree, rd_home, {"version": 10, "paths": _every_path(rd_home)})
+        adapter = tree.adapter()
+
+        assert adapter.download_folder("gba") == _real(rd_home / "roms" / "gba")
+        assert adapter.bios_download_folder() == _real(rd_home / "bios")
+        assert adapter.rom_root() == _real(rd_home / "roms")
+        assert adapter.bios_folder() == _real(rd_home / "bios")
+        assert adapter.saves_root() == _real(rd_home / "saves")
+        assert adapter.move_roots() == MoveRoots(
+            home=_real(rd_home), bios=_real(rd_home / "bios"), saves=_real(rd_home / "saves")
+        )
+
+    def test_es_de_s_own_default_rom_folder_is_used(self, tree, tmp_path):
+        # An empty ROMDirectory is ES-DE's own default, which it starts games from.
+        rd_home = tmp_path / "retrodeck"
+        _set_up_with(tree, rd_home, {"paths": _every_path(rd_home)})
+        (tree.home / _ES_SETTINGS).write_text('<string name="ROMDirectory" value="" />\n', encoding="utf-8")
+        default = tree.home / ".var" / "app" / "net.retrodeck.retrodeck" / "config" / "ROMs"
+        default.mkdir(parents=True)
+        adapter = tree.adapter()
+
+        assert adapter.rom_root() == _real(default)
+        assert adapter.download_folder("gba") == _real(default / "gba")
+
+    def test_a_missing_home_the_resolver_only_assumed_does_not_stop_a_game_download(self, tree, tmp_path):
+        # root-missing counts only for a root that was read.
+        rd_home = tmp_path / "retrodeck"
+        paths = _every_path(rd_home)
+        del paths["rd_home_path"]
+        _set_up_with(tree, rd_home, {"paths": paths})
+        assert not (tree.home / "retrodeck").exists()
+        adapter = tree.adapter()
+
+        assert adapter.download_folder("gba") == _real(rd_home / "roms" / "gba")
+        assert adapter.bios_download_folder() == _real(rd_home / "bios")
+
+    def test_a_bios_folder_not_there_yet_is_not_created_inside_an_assumed_home(self, tree, tmp_path):
+        rd_home = tree.home / "retrodeck"
+        _set_up_with(
+            tree, rd_home, {"paths": {"bios_path": str(rd_home / "bios"), "saves_path": str(rd_home / "saves")}}
+        )
+        (rd_home / "bios").rmdir()
+
+        refused = tree.adapter().bios_download_folder()
+
+        assert isinstance(refused, FolderRefused)
+        assert refused.reason == "bios_folder_missing"
+
+    def test_the_gate_asks_the_roots_alone(self, tree, tmp_path, monkeypatch):
+        # roots() carries every finding the gate reads, so health() and the
+        # four path questions are not asked.
+        rd_home = tmp_path / "retrodeck"
+        _set_up_with(tree, rd_home, {"paths": _every_path(rd_home)})
+        adapter = tree.adapter()
+        for question in ("health", "root", "roms_dir", "bios_dir", "saves_root"):
+            monkeypatch.setattr(RetroDeck, question, _raises)
+
+        assert adapter.download_folder("gba") == _real(rd_home / "roms" / "gba")
+        assert adapter.move_roots() == MoveRoots(
+            home=_real(rd_home), bios=_real(rd_home / "bios"), saves=_real(rd_home / "saves")
+        )
 
 
 _UNANSWERED = "RetroDECK's folders could not be established, so Tender downloads into and removes from none of them."
@@ -400,12 +537,12 @@ def _answer(adapter: RetroDeckFoldersAdapter, question: str) -> object:
 
 
 class TestWhereAQuestionToTheResolverRaises:
-    """A raise establishes nothing — never "not installed" — and a root's raise refuses every folder."""
+    """A raise establishes nothing — never "not installed" — and a raise on the roots refuses every folder."""
 
-    @pytest.mark.parametrize("raising", ["health", "root", "roms_dir", "bios_dir", "saves_root"])
+    @pytest.mark.parametrize("raising", ["roots"])
     def test_a_raise_on_any_root_refuses_every_folder_the_move_code_s_too(self, tree, tmp_path, monkeypatch, raising):
-        # The roots are asked together up front, so one that raised leaves none
-        # of them established — a removal's bound no more than a download's.
+        # The roots are asked together up front, so a raise leaves none of
+        # them established — a removal's bound no more than a download's.
         tree.set_up(tmp_path / "retrodeck")
         adapter = tree.adapter()
         monkeypatch.setattr(RetroDeck, raising, _raises)
@@ -440,7 +577,7 @@ class TestWhereAQuestionToTheResolverRaises:
             else:
                 assert isinstance(answer, str), question
 
-    @pytest.mark.parametrize("raising", ["health", "root", "roms_dir", "bios_dir", "saves_root"])
+    @pytest.mark.parametrize("raising", ["roots"])
     def test_switched_off_a_download_still_says_so(self, tree, tmp_path, monkeypatch, raising):
         tree.set_up(tmp_path / "retrodeck")
         adapter = tree.adapter(switched_off=True)

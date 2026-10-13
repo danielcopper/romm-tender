@@ -56,6 +56,7 @@ import {
 import { foldCollectionName } from "./utils/collectionName";
 import { setMigrationStatus } from "./utils/migrationStore";
 import { fetchSettingsResetState } from "./utils/settingsResetStore";
+import { fetchQamEntryPositionState } from "./utils/qamEntryPositionStore";
 import { seedUpdateInstallAttempt, setUpdateInstallAttempt } from "./utils/updateInstallStore";
 import { fetchUpdateNotice, takePushedUpdateNotice } from "./utils/updateNoticeStore";
 import { fetchUpdateOutcome, takePushedUpdateFailure } from "./utils/updateOutcomeStore";
@@ -586,6 +587,18 @@ const tender = definePanel(() => {
         await fetchSettingsResetState();
       } catch (e) {
         logError(`Failed to check settings reset notice: ${e}`);
+      }
+    })(),
+  );
+
+  // Fills the store the Quick Access render handler reads
+  // (utils/qamEntryPositionStore.ts).
+  detach(
+    (async () => {
+      try {
+        await fetchQamEntryPositionState();
+      } catch (e) {
+        logError(`Failed to read where the Quick Access entry sits: ${e}`);
       }
     })(),
   );

@@ -1712,6 +1712,37 @@ describe("CustomPlayButton — pre-launch failure shapes without an errors array
     },
   );
 
+  it("asks before launching while the saves folder is missing, naming the folder", async () => {
+    // The answer as the launch receives it, worded on its way back with the
+    // folder's notice (pinned in api/host.test.ts).
+    const message =
+      "RetroDECK: its saves folder /run/media/sd/saves does not exist, so saves of its emulators cannot be synced. " +
+      "Repair it with RetroDECK's 'Repair RetroDECK Paths'.";
+    const refused = {
+      success: false,
+      reason: "saves_root_missing" as const,
+      message,
+      finding: { code: "saves-root-missing", data: { path: "/run/media/sd/saves" } },
+      source: "retrodeck",
+      emulator: "mGBA",
+      synced: 0,
+    };
+    mockCachedDetail();
+    vi.mocked(backend.preLaunchSync).mockResolvedValue(refused);
+    vi.mocked(showFallbackLaunchModal).mockResolvedValue(false);
+
+    const { findByText } = render(<CustomPlayButton appId={100} />);
+    const playBtn = await findByText("Play");
+    await act(async () => {
+      playBtn.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(vi.mocked(showFallbackLaunchModal)).toHaveBeenCalledWith(message));
+    expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
+  });
+
   it("launches with local saves when the user confirms the shared fallback on a no-errors failure", async () => {
     mockCachedDetail();
     vi.mocked(backend.preLaunchSync).mockResolvedValue({

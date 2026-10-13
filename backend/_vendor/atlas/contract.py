@@ -17,7 +17,11 @@ data. The rule for what serializes:
   ``FirmwareRequirement.system_source`` is neither and keeps its name: it is a
   closed vocabulary naming *which rule* assigned the system (an override, the
   core's ``systemname``, a slug, or nothing), so it is data a client branches
-  on and it serializes.
+  on and it serializes. ``InstallationRoot.provenance`` is the one
+  ``provenance`` that serializes, for the same reason: it is not prose but a
+  closed vocabulary (:data:`~atlas.installations.ROOT_PROVENANCES`) saying
+  whether a root's path was read, is the frontend's default, or was assumed —
+  the word a client branches on before it writes into that folder.
 - **A distribution's ``label`` is a third thing**: it serializes, and a port
   must reproduce it, because it is packaged and versioned world knowledge
   rather than a sentence someone wrote (:mod:`atlas.distribution_labels`) — and
@@ -48,12 +52,15 @@ from .installations import (
     Health,
     Installation,
     LaunchabilityAnswer,
+    LaunchCommandAnswer,
     PlatformSystemsAnswer,
     RomPlacement,
+    RootsAnswer,
     SystemPlatformsAnswer,
     SystemsAnswer,
 )
 from .launch import Launcher
+from .launch_command import LaunchCommand
 from .platforms import PlatformIdentities
 from .placement import (
     Caveat,
@@ -133,7 +140,7 @@ def savefile_placement_contract(placement: SavefilePlacement) -> dict[str, Any]:
 
     The granularity block is plural on purpose: ``readings`` is one entry per
     switch that went into selecting the mode (its provenance prose stays out,
-    like all provenance), and each ``alternatives`` entry names another mode
+    like all provenance prose), and each ``alternatives`` entry names another mode
     with the full option combination that selects it — a client renders
     "is the wanted option active, and in which file does it change" from the
     readings, for one switch or several alike.
@@ -729,6 +736,47 @@ def launchable_contract(answer: LaunchabilityAnswer) -> dict[str, Any]:
     }
 
 
+def launch_command_contract(answer: LaunchCommandAnswer) -> dict[str, Any]:
+    """The stable form of a launch command answer — the entry, the command taken apart, and why not when not.
+
+    ``command`` is ``null`` exactly where the answer refuses. ``program`` keeps
+    all four keys whatever its ``variant``, the ones that variant does not use
+    ``null`` — a ``flatpak`` program carries ``app_id`` and ``command``, an
+    ``appimage`` or ``native`` one its ``path``. ``environment`` is a list, in
+    the order the command sets the variables, because the order is the
+    command's. ``working_folder`` is ``null`` where the command names none.
+    """
+    return {
+        "entry": emulator_contract(answer.entry) if answer.entry is not None else None,
+        "command": _launch_command_body(answer.command) if answer.command is not None else None,
+        "caveats": _caveats_contract(answer.caveats),
+    }
+
+
+def _launch_command_body(command: LaunchCommand) -> dict[str, Any]:
+    """One command taken apart, as the launch command answer carries it."""
+    program = command.program
+    folder = command.working_folder
+    return {
+        "program": {
+            "variant": program.variant,
+            "app_id": program.app_id,
+            "command": program.command,
+            "path": program.path,
+        },
+        "arguments": list(command.arguments),
+        "environment": [{"name": variable.name, "value": variable.value} for variable in command.environment],
+        "working_folder": None
+        if folder is None
+        else {
+            "frontend_path": folder.frontend_path,
+            "host_path": folder.host_path,
+            "created_if_missing": folder.created_if_missing,
+        },
+        "injections": [{"file": injection.file, "outcome": injection.outcome} for injection in command.injections],
+    }
+
+
 def systems_contract(answer: SystemsAnswer) -> dict[str, Any]:
     """The stable form of a systems answer — what the catalogue declares, or why nothing."""
     return {
@@ -811,6 +859,33 @@ def rom_placement_contract(placement: RomPlacement) -> dict[str, Any]:
         "physical_dir": placement.physical_dir,
         "extensions": list(placement.extensions),
         "caveats": _caveats_contract(placement.caveats),
+    }
+
+
+def roots_contract(answer: RootsAnswer) -> dict[str, Any]:
+    """The stable form of a roots answer — each root, where it came from, and what decides it.
+
+    The four entries keep their fixed order (installation, roms, bios, saves),
+    and an entry atlas cannot state a path for stays in it: ``path`` and
+    ``provenance`` are ``null`` there and its own ``caveats`` say why.
+    ``setting`` is ``null`` only where no setting decides the root; elsewhere
+    it names the file and key whether or not the key held a value, because
+    ``provenance`` is what says which.
+    """
+    return {
+        "roots": [
+            {
+                "root": entry.root,
+                "path": entry.path,
+                "provenance": entry.provenance,
+                "setting": None
+                if entry.setting is None
+                else {"file": entry.setting.file, "key": entry.setting.key},
+                "caveats": _caveats_contract(entry.caveats),
+            }
+            for entry in answer.roots
+        ],
+        "caveats": _caveats_contract(answer.caveats),
     }
 
 

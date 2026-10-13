@@ -14,84 +14,23 @@ import { copySaveToSlot, debugLog } from "../../api/backend";
 import type { CopySaveToSlotStatus, SaveSlotSummary } from "../../types";
 import { showSyncConflictModal } from "../../shared/SyncConflictModal";
 import { detach } from "../../utils/detach";
-import { displaySlot } from "./helpers";
+import { copyToSlotFeedback } from "../../utils/saveSlotWording";
 import { CopyToSlotModal } from "./CopyToSlotModal";
 import type { CopyToSlotHandler } from "./CopyToSlotButton";
-
-/** Refresh both the source and target slot views after a successful copy. */
-function dispatchDataChanged(romId: number): void {
-  globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }));
-}
+import { announceSaveSync } from "../../utils/saveSyncEvents";
 
 async function handleResult(result: CopySaveToSlotStatus, target: string, romId: number): Promise<void> {
-  switch (result.status) {
-    case "ok":
-      showToast(`Save copied to slot '${displaySlot(target)}'`);
-      dispatchDataChanged(romId);
-      return;
-    case "already_present":
-      // Content-identical to a save already in the target slot — nothing was
-      // copied (no churn), so no refresh either.
-      showToast(`Already in slot '${displaySlot(target)}' as #${result.existing_id}`);
-      return;
-    case "conflict_blocked": {
-      // A real conflict on the ROM's current slot must be resolved first. The
-      // modal owns the resolution feedback — don't stack a toast on top of it
-      // (mirrors VersionHistoryPanel). The empty-list case has no modal to show.
-      const first = result.conflicts[0];
-      if (first) {
-        await showSyncConflictModal(first);
-      } else {
-        showToast("Copy blocked by a sync conflict. Sync this save, then try again.");
-      }
-      return;
-    }
-    case "target_slot_busy":
-      showToast(`Slot '${displaySlot(target)}' has newer changes on another device — sync it first, then copy again.`);
-      return;
-    case "preflight_failed":
-      showToast(`Sync failed before copy: ${result.errors[0] ?? "preflight error"}`);
-      return;
-    case "server_unreachable":
-      showToast("Couldn't reach RomM. Check your connection and try again.");
-      return;
-    case "not_found":
-      // The server answered — it has no such ROM or device id (#1560 family).
-      // A retry can't help, so the copy must not send the user to check their
-      // connection, and must not claim the saves are gone: the 404 can be the
-      // device registration rather than the ROM (#1570).
-      showToast("RomM couldn't find this game's save data — nothing was copied.");
-      return;
-    case "version_deleted":
-      showToast("This save no longer exists on the server.");
-      return;
-    case "rom_not_installed":
-      showToast("ROM is no longer installed locally. Reinstall and try again.");
-      return;
-    case "unsupported":
-      showToast(unsupportedCopyMessage(result));
-      return;
-    case "not_configured":
-      showToast("Set up save slots for this game first, then copy.");
-      return;
-    case "copy_failed":
-      showToast(`Couldn't copy the save: ${result.message}`);
-      return;
-    case "invalid_slot_name":
-      showToast("Enter a valid slot name.");
-      return;
+  const feedback = copyToSlotFeedback(result, target);
+  if (feedback === null) return;
+  if (feedback.kind === "conflict") {
+    await showSyncConflictModal(feedback.conflict);
+    return;
   }
-}
-
-/** The toast for a copy refused as unsupported — the backend's own explanation where it gave one. */
-function unsupportedCopyMessage(result: Extract<CopySaveToSlotStatus, { status: "unsupported" }>): string {
-  if (result.reason === "savefiles_in_content_dir") {
-    return "Save sync is off for this game: its saves are written beside the game file.";
+  showToast(feedback.message);
+  // Only a copy refreshes the slot views: `already_present` copied nothing.
+  if (result.status === "ok") {
+    announceSaveSync(romId);
   }
-  if (result.reason === "save_shape_unsupported" && result.message) {
-    return result.message;
-  }
-  return "Copying isn't available for multi-file saves yet.";
 }
 
 /** Returns an opener `openCopyModal(saveId, sourceSlot)` for the copy-to-slot flow. */

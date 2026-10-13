@@ -10,7 +10,9 @@ Two answer forms, both vector-pinned. Without ``--installation`` the question
 is put to every detected installation and the answer is the labelled list
 (:func:`~atlas.contract.installation_answers_contract`); with
 ``--installation <kind>`` the first handle of that kind answers alone, in the
-question's bare contract shape.
+question's bare contract shape. ``roots`` has the second form only: RetroDECK
+and EmuDeck answer it and nothing else does, so it is never put to every
+installation and its ``--installation`` is required.
 
 The exit code separates answering from asking: 0 is an answer — an
 ``unresolved`` payload and an empty list are answers — and 2 is a question
@@ -34,10 +36,12 @@ from .contract import (
     identification_contract,
     installation_answers_contract,
     installation_contract,
+    launch_command_contract,
     launchable_contract,
     mod_answer_contract,
     platform_systems_contract,
     rom_placement_contract,
+    roots_contract,
     savefile_answer_contract,
     savestate_answer_contract,
     screenshot_answer_contract,
@@ -49,8 +53,9 @@ from .contract import (
 from .platforms import KNOWN_PLATFORM_VOCABULARIES
 from .detect import detect
 from .every_installation import EveryInstallation
-from .installations import Installation
+from .installations import EmuDeck, Installation, RetroDeck
 from .machine import Machine
+from .placement import checked_cwd
 
 # A question is asked of one handle or of the aggregate, and the two surfaces
 # are the same on purpose (EveryInstallation mirrors the Installation protocol
@@ -65,13 +70,13 @@ _QUESTIONS: dict[str, tuple[_Ask, _Serialize]] = {
     "health": (lambda target, _args: target.health(), health_contract),
     "savefile-location": (
         lambda target, args: target.savefile_location(
-            content_path=args.content, core_so=args.core, system=args.system
+            content_path=args.content, core_so=args.core, system=args.system, cwd=args.cwd
         ),
         savefile_answer_contract,
     ),
     "savestate-location": (
         lambda target, args: target.savestate_location(
-            content_path=args.content, core_so=args.core
+            content_path=args.content, core_so=args.core, cwd=args.cwd
         ),
         savestate_answer_contract,
     ),
@@ -113,16 +118,22 @@ _QUESTIONS: dict[str, tuple[_Ask, _Serialize]] = {
         lambda target, args: target.launchable(args.system, args.content),
         launchable_contract,
     ),
+    "launch-command": (
+        lambda target, args: target.launch_command(args.system, args.content, label=args.label),
+        launch_command_contract,
+    ),
     "firmware-for-core": (
-        lambda target, args: target.firmware_for_core(args.core, verify=args.verify),
+        lambda target, args: target.firmware_for_core(args.core, verify=args.verify, cwd=args.cwd),
         firmware_contract,
     ),
     "firmware-for-system": (
-        lambda target, args: target.firmware_for_system(args.system, verify=args.verify),
+        lambda target, args: target.firmware_for_system(
+            args.system, verify=args.verify, cwd=args.cwd
+        ),
         firmware_contract,
     ),
     "firmware-inventory": (
-        lambda target, args: target.firmware_inventory(verify=args.verify),
+        lambda target, args: target.firmware_inventory(verify=args.verify, cwd=args.cwd),
         firmware_contract,
     ),
     "identify-firmware": (
@@ -132,9 +143,38 @@ _QUESTIONS: dict[str, tuple[_Ask, _Serialize]] = {
 }
 
 
+# The roots question (issue #612) is asked of one handle and only of the kinds
+# that answer it: it is not on the Installation protocol, so the aggregate does
+# not mirror it, and --installation is how it is put.
+_ROOTS_KINDS = (RetroDeck.kind, EmuDeck.kind)
+
 # Help texts shared by every subcommand that takes the same input.
 _SYSTEM_ID_HELP = "system id, e.g. gba"
 _VERIFY_HELP = "hash present files against known dumps"
+
+
+def _cwd_argument(value: str) -> str:
+    """``--cwd`` held to the library's own rule, so a relative value is a usage error (exit 2)."""
+    try:
+        checked_cwd(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from None
+    return value
+
+
+def _absolute_argument(value: str) -> str:
+    """A path the question requires absolute — a relative one is a usage error (exit 2), as the library raises."""
+    if not os.path.isabs(value):
+        raise argparse.ArgumentTypeError(f"must be an absolute path, got {value!r}")
+    return value
+
+
+def _add_cwd(question: argparse.ArgumentParser) -> None:
+    question.add_argument(
+        "--cwd",
+        type=_cwd_argument,
+        help="absolute path of the working folder the launch will use",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -172,15 +212,21 @@ def build_parser() -> argparse.ArgumentParser:
         "health", parents=[common, selecting], help="each installation's structured health"
     )
 
-    def content_core(name: str, help_text: str, *, system: bool = False) -> None:
+    def content_core(
+        name: str, help_text: str, *, system: bool = False, cwd: bool = False
+    ) -> None:
         question = commands.add_parser(name, parents=[common, selecting], help=help_text)
         question.add_argument("--content", help="path of the content file being asked about")
         question.add_argument("--core", help="libretro core .so name, e.g. mgba_libretro.so")
         if system:
             question.add_argument("--system", help="system the content is filed under")
+        if cwd:
+            _add_cwd(question)
 
-    content_core("savefile-location", "where this content's save file lands", system=True)
-    content_core("savestate-location", "where this content's savestates land")
+    content_core(
+        "savefile-location", "where this content's save file lands", system=True, cwd=True
+    )
+    content_core("savestate-location", "where this content's savestates land", cwd=True)
     content_core("screenshot-location", "where this content's screenshots land")
     content_core("texture-pack-location", "where this core reads texture packs from")
     content_core("mod-location", "where this core reads mods from")
@@ -195,6 +241,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser(
         "systems", parents=[common, selecting], help="what the frontend catalogue declares"
+    )
+
+    roots = commands.add_parser(
+        "roots",
+        parents=[common],
+        help="where each root folder is, and whether its settings say so",
+    )
+    roots.add_argument(
+        "--installation",
+        required=True,
+        choices=_ROOTS_KINDS,
+        help="the installation that answers; only these kinds answer this question",
     )
 
     for_platform = commands.add_parser(
@@ -239,6 +297,17 @@ def build_parser() -> argparse.ArgumentParser:
     launch.add_argument("system", help="system id, e.g. dreamcast")
     launch.add_argument("content", help="path of the content file")
 
+    command = commands.add_parser(
+        "launch-command",
+        parents=[common, selecting],
+        help="the command the frontend would run for this file, taken apart",
+    )
+    command.add_argument("--system", required=True, help=_SYSTEM_ID_HELP)
+    command.add_argument(
+        "--content", required=True, type=_absolute_argument, help="absolute path of the content file"
+    )
+    command.add_argument("--label", help="the catalogue entry's label; default: the frontend's own choice")
+
     for_core = commands.add_parser(
         "firmware-for-core",
         parents=[common, selecting],
@@ -246,6 +315,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     for_core.add_argument("--core", required=True, help="libretro core .so name")
     for_core.add_argument("--verify", action="store_true", help=_VERIFY_HELP)
+    _add_cwd(for_core)
 
     for_system = commands.add_parser(
         "firmware-for-system",
@@ -254,6 +324,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     for_system.add_argument("--system", required=True, help=_SYSTEM_ID_HELP)
     for_system.add_argument("--verify", action="store_true", help=_VERIFY_HELP)
+    _add_cwd(for_system)
 
     inventory = commands.add_parser(
         "firmware-inventory",
@@ -261,6 +332,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="the whole firmware tree — declared, present, unclaimed",
     )
     inventory.add_argument("--verify", action="store_true", help=_VERIFY_HELP)
+    _add_cwd(inventory)
 
     identify = commands.add_parser(
         "identify-firmware",
@@ -288,6 +360,18 @@ def run(argv: Sequence[str], *, home: str | None = None, machine: Machine | None
 
     if args.command == "detect":
         payload: object = [installation_contract(i) for i in installations]
+    elif args.command == "roots":
+        handle = next(
+            (
+                i
+                for i in installations
+                if isinstance(i, (RetroDeck, EmuDeck)) and i.kind == args.installation
+            ),
+            None,
+        )
+        if handle is None:
+            return _not_detected(args.installation)
+        payload = roots_contract(handle.roots())
     else:
         ask, serialize = _QUESTIONS[args.command]
         if args.installation is None:
@@ -297,16 +381,20 @@ def run(argv: Sequence[str], *, home: str | None = None, machine: Machine | None
         else:
             chosen = next((i for i in installations if i.kind == args.installation), None)
             if chosen is None:
-                print(
-                    f"no detected installation of kind '{args.installation}'"
-                    f" — `emu-atlas detect` lists what this machine has",
-                    file=sys.stderr,
-                )
-                return 2
+                return _not_detected(args.installation)
             payload = serialize(ask(chosen, args))
 
     print(json.dumps(payload, indent=2, ensure_ascii=False))
     return 0
+
+
+def _not_detected(kind: str) -> int:
+    """Say on stderr that no handle of *kind* was detected, and answer the exit code of a question not put."""
+    print(
+        f"no detected installation of kind '{kind}' — `emu-atlas detect` lists what this machine has",
+        file=sys.stderr,
+    )
+    return 2
 
 
 def main() -> int:

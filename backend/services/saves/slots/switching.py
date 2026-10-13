@@ -12,14 +12,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_answer import save_shape_message
 from domain.save_slot import save_in_slot
 from lib.errors import NamedRefused, NotInstalled, Refused
 from lib.partial_failure import PartialFailure
 from services.saves._helpers import newest_server_saves_by_target
 from services.saves._local_changes import changed_since_last_sync
 from services.saves._messages import SAVE_SYNC_DISABLED, SAVE_SYNC_IN_CONTENT_DIR
-from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
+from services.saves._refusals import SavefilesInContentDir, shape_refusal
 from services.saves._save_state import write_save_state
 from services.saves._settings import resolve_default_slot, save_sync_enabled
 
@@ -157,17 +156,17 @@ class SlotSwitcher:
         if not info:
             raise NotInstalled("ROM is not installed")
 
-        # The emulator writes this game's save beside its content, which the
-        # sync leaves alone — switching slots would download/delete files there,
-        # so the switch could not take effect. Refuse before any file write or
-        # server fetch; likewise for any answer a sync would not carry.
+        # 4. The emulator writes this game's save beside its content, which the
+        #    sync leaves alone — switching slots would download/delete files
+        #    there, so the switch could not take effect. Refuse before any file
+        #    write or server fetch; likewise for any answer a sync would not carry.
         save_answer = info["save_answer"]
         if save_answer.in_content_directory:
             self._log_debug(f"switch_slot: rom {rom_id} saves beside its content; refusing")
             raise SavefilesInContentDir(SAVE_SYNC_IN_CONTENT_DIR)
         if save_answer.sync_directory is None:
             self._log_debug(f"switch_slot: rom {rom_id} has no save a sync could carry; refusing")
-            raise SaveShapeUnsupported(save_shape_message(save_answer))
+            raise shape_refusal(save_answer)
 
         saves_dir = info["saves_dir"]
         system = info["system"]
@@ -183,13 +182,13 @@ class SlotSwitcher:
             await self._sync_engine.follow_save_directory(rom_id, save_answer)
             save_state, device_id = await self._loop.run_in_executor(None, self._read_inputs, rom_id)
 
-            # 4. Check for pending local changes (hashing — run in executor)
+            # 5. Check for pending local changes (hashing — run in executor)
             pending = await self._loop.run_in_executor(None, self._pending_local_changes, rom_id, save_state)
             self._log_debug(f"switch_slot: rom={rom_id} new_slot={new_slot!r} pending={pending}")
             if pending:
                 raise PendingUploads("Pending local changes — upload or discard first", files=pending)
 
-            # 5. Fetch server saves for the new slot (also proves server is reachable)
+            # 6. Fetch server saves for the new slot (also proves server is reachable)
             all_server_saves: list[dict[str, Any]] = await self._loop.run_in_executor(
                 None,
                 lambda: self._retry.with_retry(
@@ -210,17 +209,17 @@ class SlotSwitcher:
                 f"slot_saves_ids={[s.get('id') for s in slot_saves]}"
             )
 
-            # 6. Flip active slot in memory.
+            # 7. Flip active slot in memory.
             save_state.switch_active_slot(resolved_slot)
 
-            # 7. Make the saves dir + tracking coherent with the new slot:
+            # 8. Make the saves dir + tracking coherent with the new slot:
             default_slot = resolve_default_slot(self._settings)
             targets = newest_server_saves_by_target(slot_saves, info["rom_name"], known_names=save_answer.synced_names)
             switch_errors = await self._loop.run_in_executor(
                 None, self._apply_slot_switch, rom_id, saves_dir, system, save_state, device_id, targets, default_slot
             )
 
-            # 8. Persist the coherent state regardless of partial download failures.
+            # 9. Persist the coherent state regardless of partial download failures.
             save_state.mark_sync_evaluated(self._clock.now().isoformat())
             await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
 
@@ -230,7 +229,7 @@ class SlotSwitcher:
                     message=f"Switched to slot but {len(switch_errors)} save(s) failed to download — retry",
                 )
 
-        # 9. Return fresh status. MUST stay outside the lock above —
+        # 10. Return fresh status. MUST stay outside the lock above —
         # get_save_status re-acquires rom_lock(rom_id), which would self-deadlock.
         save_status = await self._status_service.get_save_status(rom_id)
         return {"success": True, "save_status": save_status}

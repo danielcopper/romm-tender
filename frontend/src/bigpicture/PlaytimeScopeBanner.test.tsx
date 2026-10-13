@@ -45,8 +45,14 @@ describe("PlaytimeScopeBanner component", () => {
     // attribute on <section>, so assert via getAttribute, not textContent.
     const section = container.querySelector("section");
     expect(section?.getAttribute("title")).toBe(PLAYTIME_SCOPE_TITLE);
-    expect(container.textContent).toContain(PLAYTIME_SCOPE_TITLE);
     expect(container.textContent).toContain(PLAYTIME_SCOPE_MESSAGE);
+    // The title appears once: in the section's attribute, plus every time it
+    // occurs in the rendered text.
+    const titleAttributes = [...container.querySelectorAll("[title]")].filter(
+      (el) => el.getAttribute("title") === PLAYTIME_SCOPE_TITLE,
+    ).length;
+    const titleInText = container.textContent.split(PLAYTIME_SCOPE_TITLE).length - 1;
+    expect(titleAttributes + titleInText).toBe(1);
   });
 
   it("renders a Dismiss button", () => {

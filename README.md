@@ -171,5 +171,5 @@ This plugin stands on the shoulders of some great projects:
 
 ## License
 
-GPL-3.0. This is an independent project and is not affiliated with, endorsed by, or sponsored by the RomM project or
-Valve Corporation.
+GPL-3.0-only. This is an independent project and is not affiliated with, endorsed by, or sponsored by the RomM project
+or Valve Corporation.

@@ -14,16 +14,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from _vendor import atlas
-from bootstrap import (
-    AdapterBundle,
-    BootstrapResult,
-    CallbackBundle,
-    RuntimeBundle,
-    StateBundle,
-    WiringConfig,
-    bootstrap,
-    wire_services,
-)
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
 from fakes.fake_cover_art_file_store import FakeCoverArtFileStore
 from fakes.fake_download_file_store import FakeDownloadFileStore
@@ -51,7 +41,6 @@ from fakes.fake_steam_interface import FakeSteamInterface
 from fakes.fake_transient_units import FakeTransientUnits
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
-from models.shortcut_launcher import ShortcutLauncher
 
 from adapters import atlas_zstd
 from adapters.gavel_native import GavelNativeAdapter
@@ -62,12 +51,23 @@ from adapters.romm.romm_api import RommApiAdapter
 from adapters.steam_config import SteamConfigAdapter
 from adapters.update_attempt import UpdateAttemptFileAdapter
 from adapters.update_staging import UpdateStagingAdapter
+from bootstrap import (
+    AdapterBundle,
+    BootstrapResult,
+    CallbackBundle,
+    RuntimeBundle,
+    StateBundle,
+    WiringConfig,
+    bootstrap,
+    wire_services,
+)
 from domain.app_directories import AppDirectories
 from domain.identity import MIN_ROMM_VERSION, PACKAGE_NAME, VERSION
 from domain.sync_run_kind import SyncRunKind
 from domain.update_release import UpdateSource
 from lib.errors import Refused
 from lib.prune_conflicts import PruneConflicts
+from models.shortcut_launcher import ShortcutLauncher
 from services.achievements import AchievementsService
 from services.cores import CoreService
 from services.data_inventory import DataInventoryService
@@ -83,6 +83,7 @@ from services.playtime import PlaytimeService
 from services.prune import PruneService
 from services.prune_leases import PruneLeaseService
 from services.saves import SaveService
+from services.shortcut_file import ShortcutFileService
 from services.shortcut_icons import ShortcutIconService
 from services.steamgrid import SteamGridService
 from services.update_check import UpdateCheckService
@@ -804,7 +805,7 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(fields(result)) == 35
+        assert len(fields(result)) == 36
         assert all(getattr(result, field.name) is not None for field in fields(result))
         assert isinstance(result.prune_conflicts, PruneConflicts)
         assert isinstance(result.core_service, CoreService)
@@ -819,6 +820,7 @@ class TestWireServices:
         assert isinstance(result.leftover_tmp_cleanup_service, LeftoverTmpCleanupService)
         assert isinstance(result.update_outcome_service, UpdateOutcomeService)
         assert isinstance(result.update_output_service, UpdateOutputService)
+        assert isinstance(result.shortcut_file_service, ShortcutFileService)
         assert isinstance(result.shortcut_icon_service, ShortcutIconService)
         deps["loop"].close()
 

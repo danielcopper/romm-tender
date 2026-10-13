@@ -38,12 +38,14 @@ describe("FallbackLaunchModal — showFallbackLaunchModal", () => {
     expect(props.strCancelButtonText).toBe("Cancel");
   });
 
-  it("interpolates a backend message into the with-message description", () => {
-    // The with-message ternary branch: `${message} — launch with local saves?`.
+  it("follows a message that ends a sentence with the question as a sentence of its own", () => {
     void showFallbackLaunchModal("Device is not registered with RomM.");
-    expect(lastConfirmModalProps().strDescription).toBe(
-      "Device is not registered with RomM. — launch with local saves?",
-    );
+    expect(lastConfirmModalProps().strDescription).toBe("Device is not registered with RomM. Launch with local saves?");
+  });
+
+  it("joins a message without final punctuation to the question with a dash", () => {
+    void showFallbackLaunchModal("Server offline");
+    expect(lastConfirmModalProps().strDescription).toBe("Server offline — launch with local saves?");
   });
 
   it("falls back to the generic description when no message is supplied", () => {

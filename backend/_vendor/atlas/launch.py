@@ -223,7 +223,7 @@ def _token(command: str, opener: str) -> str | None:
     return command[start + len(opener) : end] or None
 
 
-def _es_replace(text: str, old: str, new: str) -> str:
+def es_replace(text: str, old: str, new: str) -> str:
     """``Utils::String::replace``: rescanned until *old* is gone, one pass where *new* holds *old*.
 
     ``es-core/src/utils/StringUtil.cpp:267-297`` @ v3.4.1.
@@ -250,7 +250,7 @@ def generic_path(path: str) -> str:
     return path
 
 
-def _parent(path: str) -> str:
+def parent_path(path: str) -> str:
     """ES-DE's ``getParent``: the generic path up to its last separator (``FileSystemUtil.cpp:584-595``)."""
     generic = generic_path(path)
     offset = generic.rfind("/")
@@ -261,7 +261,7 @@ def _parent(path: str) -> str:
 _ESCAPED_CHARACTERS = "\\ '\"!$^&*(){}[]?;<>"
 
 
-def _escaped(path: str) -> str:
+def escaped_path(path: str) -> str:
     """ES-DE's ``getEscapedPath`` on Unix: what it substitutes for a ``staticpath`` hit.
 
     Each listed character gets a backslash unless one already precedes it —
@@ -297,7 +297,7 @@ def _matching_files(pattern: str, view: LaunchView) -> tuple[str, ...] | None:
     RetroDECK's build carries a ``{``.
     """
     star = pattern.find("*")
-    parent = _parent(pattern)
+    parent = parent_path(pattern)
     if star <= len(parent):
         return ()
     names = view.listing(parent)
@@ -315,11 +315,33 @@ def _matching_files(pattern: str, view: LaunchView) -> tuple[str, ...] | None:
 
 
 @dataclass(frozen=True, slots=True)
-class _Found:
-    """One hit: the launcher, and what ES-DE put into the command for it (``emulator.first``)."""
+class Found:
+    """One hit: the launcher, and what ES-DE put into the command for it (``emulator.first``).
+
+    ``substituted`` is the text as it went into the command: a ``systempath``
+    hit's path as joined, unescaped (``FileData.cpp:2536-2541``); a
+    ``staticpath`` hit's path through ``getEscapedPath``; or a ``|`` entry's
+    replacement command, as written (``:2581-2590``).
+    """
 
     launcher: Launcher
     substituted: str
+
+
+@dataclass(frozen=True, slots=True)
+class CommandParts:
+    """What ES-DE substitutes into one command once its lookup has found everything it names.
+
+    The texts the command is built from rather than the verdict:
+    ``emulator`` for the ``%EMULATOR_X%`` token, ``precommand`` for a
+    ``%PRECOMMAND_X%`` one, and ``core`` the file a ``%CORE_X%`` names, spelled
+    as the ``corepath`` lookup tested it (``FileData.cpp:1500-1533``) and before
+    ES-DE escapes one that holds a space.
+    """
+
+    emulator: Found
+    precommand: Found | None = None
+    core: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -329,7 +351,7 @@ class _Stopped:
     path: str
 
 
-def _search(rules: EmulatorRules, view: LaunchView) -> _Found | _Stopped | None:
+def _search(rules: EmulatorRules, view: LaunchView) -> Found | _Stopped | None:
     """``findEmulator``'s two loops over one emulator's rules — ``None`` where nothing is found."""
     for entry in rules.system_paths:
         for directory in view.search_path:
@@ -339,7 +361,7 @@ def _search(rules: EmulatorRules, view: LaunchView) -> _Found | _Stopped | None:
                 return _Stopped(candidate)
             if probe == PROBE_HIT:
                 launcher = Launcher(generic_path(candidate), None, view.app_id, RULE_SYSTEMPATH, entry)
-                return _Found(launcher, candidate)
+                return Found(launcher, candidate)
     for entry in rules.static_paths:
         outcome = _static_entry(entry, view)
         if outcome is not None:
@@ -347,20 +369,20 @@ def _search(rules: EmulatorRules, view: LaunchView) -> _Found | _Stopped | None:
     return None
 
 
-def _static_entry(entry: str, view: LaunchView) -> _Found | _Stopped | None:
+def _static_entry(entry: str, view: LaunchView) -> Found | _Stopped | None:
     """One ``staticpath`` entry, expanded and checked the way ``FileData.cpp:2547-2593`` does."""
-    path, pipe, replacement = entry.partition("|")
+    path, _, replacement = entry.partition("|")
     path = expand_home_path(path, view.home)
-    path = _es_replace(path, _ESPATH, view.es_path)
+    path = es_replace(path, _ESPATH, view.es_path)
     if _ROMPATH in path:
         rom_directory = view.rom_directory()
         if rom_directory is None:
             return _Stopped(path)
-        path = _es_replace(path, _ROMPATH, rom_directory)
+        path = es_replace(path, _ROMPATH, rom_directory)
     if "*" in path:
         files = _matching_files(path, view)
         if files is None:
-            return _Stopped(_parent(path))
+            return _Stopped(parent_path(path))
         if files:
             path = files[0]
     probe = view.found(path)
@@ -368,9 +390,11 @@ def _static_entry(entry: str, view: LaunchView) -> _Found | _Stopped | None:
         return _Stopped(path)
     if probe == PROBE_MISS:
         return None
-    command = replacement if pipe else None
+    # An empty replacement is no replacement: ES-DE runs the path it found
+    # (``replaceCommand == ""``, :2581-2583).
+    command = replacement or None
     launcher = Launcher(generic_path(path), command, view.app_id, RULE_STATICPATH, entry)
-    return _Found(launcher, replacement if pipe else _escaped(path))
+    return Found(launcher, command if command is not None else escaped_path(path))
 
 
 @dataclass(frozen=True, slots=True)
@@ -511,7 +535,7 @@ def _emulator_rules(token: str, rules: LayeredFindRules) -> EmulatorRules | Laun
     return found
 
 
-def _find(token: str, rules: LayeredFindRules, view: LaunchView) -> _Found | LaunchResolution:
+def _find(token: str, rules: LayeredFindRules, view: LaunchView) -> Found | LaunchResolution:
     """The launcher ES-DE finds for *token*, or the answer that says it finds none."""
     emulator_rules = _emulator_rules(token, rules)
     if isinstance(emulator_rules, LaunchResolution):
@@ -537,10 +561,10 @@ class LaunchLookup:
     def __init__(self, rules: LayeredFindRules, view: LaunchView) -> None:
         self._rules = rules
         self._view = view
-        self._found: dict[str, _Found | LaunchResolution] = {}
+        self._found: dict[str, Found | LaunchResolution] = {}
         self._notes: dict[str, Caveat | None] = {}
 
-    def _find(self, token: str) -> _Found | LaunchResolution:
+    def _find(self, token: str) -> Found | LaunchResolution:
         if token not in self._found:
             self._found[token] = _find(token, self._rules, self._view)
         return self._found[token]
@@ -588,40 +612,56 @@ class LaunchLookup:
         """
         return _with_custom_note(self._resolve(command, loads_core=loads_core), self._rules)
 
+    def command_parts(self, command: str, *, loads_core: bool) -> CommandParts | None:
+        """What ES-DE substitutes into *command* — ``None`` where :meth:`resolve` answers anything but startable.
+
+        The same lookup over the same snapshot and the same cache: a question
+        that takes the command apart asks this after the entry's verdict, and
+        it cannot find something the verdict did not.
+        """
+        return self._evaluate(command, loads_core=loads_core)[1]
+
     def _resolve(self, command: str, *, loads_core: bool) -> LaunchResolution:
+        return self._evaluate(command, loads_core=loads_core)[0]
+
+    def _evaluate(self, command: str, *, loads_core: bool) -> tuple[LaunchResolution, CommandParts | None]:
         token = _token(command, _EMULATOR_OPENER)
         if token is None:
-            return command_unsupported("the command names no %EMULATOR_…% token, and taking it apart is a later step")
+            reason = "the command names no %EMULATOR_…% token, and taking it apart is a later step"
+            return command_unsupported(reason), None
         if _EMUPATH in command:
-            return command_unsupported("the command uses %EMUPATH%, which this evaluation does not follow")
+            return command_unsupported("the command uses %EMUPATH%, which this evaluation does not follow"), None
         precommand = _token(command, _PRECOMMAND_OPENER)
+        before: Found | None = None
         if precommand is not None:
-            before = self._find(precommand)
-            if isinstance(before, LaunchResolution):
-                return before
+            found_before = self._find(precommand)
+            if isinstance(found_before, LaunchResolution):
+                return found_before, None
+            before = found_before
         found = self._find(token)
         if isinstance(found, LaunchResolution):
-            return found
+            return found, None
         reference = _core_reference(command)
         if reference is None and loads_core:
-            return command_unsupported(
-                "the core is named by a path rather than through %CORE_…%, which ES-DE never checks"
-            )
-        core_path: str | None = None
+            reason = "the core is named by a path rather than through %CORE_…%, which ES-DE never checks"
+            return command_unsupported(reason), None
+        core_file: str | None = None
         if reference is not None:
             core = _find_core(reference, found, self._rules, self._view)
             if isinstance(core, LaunchResolution):
-                return core
-            core_path = core if loads_core else None
+                return core, None
+            core_file = core
+        core_path = generic_path(core_file) if loads_core and core_file is not None else None
         note = self._run_game_note(token, found.launcher)
         notes = () if note is None else (note,)
-        return LaunchResolution(AVAILABILITY_STARTABLE, found.launcher, core_path, notes)
+        resolution = LaunchResolution(AVAILABILITY_STARTABLE, found.launcher, core_path, notes)
+        return resolution, CommandParts(found, before, core_file)
 
 
 def _find_core(
-    reference: _CoreReference, found: _Found, rules: LayeredFindRules, view: LaunchView
+    reference: _CoreReference, found: Found, rules: LayeredFindRules, view: LaunchView
 ) -> str | LaunchResolution:
-    """The core file the ``corepath`` rules find, or the answer that says they find none."""
+    """The core file the ``corepath`` rules find, as ES-DE tested it, or the answer that says they find none."""
     if not rules.bundled_read and reference.name not in rules.custom_core_names:
         return _bundled_unread()
     paths = rules.merged.cores.get(reference.name, ())
@@ -632,14 +672,14 @@ def _find_core(
     for path in paths:
         candidate = expand_home_path(f"{path}/{reference.core_so}", view.home)
         if _EMUPATH in candidate:
-            candidate = candidate.replace(_EMUPATH, _parent(found.substituted), 1)
+            candidate = candidate.replace(_EMUPATH, parent_path(found.substituted), 1)
         if _ESPATH in candidate:
             candidate = candidate.replace(_ESPATH, view.es_path, 1)
         probe = view.found(candidate)
         if probe == PROBE_UNKNOWN:
             return _path_unestablished(candidate)
         if probe == PROBE_HIT:
-            return generic_path(candidate)
+            return candidate
     return LaunchResolution(
         AVAILABILITY_NOT_INSTALLED,
         caveats=(

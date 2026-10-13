@@ -42,6 +42,11 @@ const REACHES_BIGPICTURE =
 const REACHES_DESKTOP = 'import readme from "../../desktop/README.md";\nexport const probe = readme;\n';
 const REACHES_SHARED =
   'import { showCoreChangeModal } from "../../shared/CoreChangeModal";\nexport const probe = showCoreChangeModal;\n';
+const REACHES_QAM = 'import { TabIcon } from "../../qam/TabIcon";\nexport const probe = TabIcon;\n';
+const REACHES_BOOT =
+  'import { checkSteamModules } from "../../boot/steamModules";\nexport const probe = checkSteamModules;\n';
+const REACHES_UTILS_FOR_A_TYPE =
+  'import type { GateVerdict } from "../../utils/launchGate";\nexport type Probe = GateVerdict;\n';
 
 function ruleIds(results: ESLint.LintResult[]): string[] {
   return results.flatMap((r) => r.messages.map((m) => m.ruleId ?? "<fatal>"));
@@ -149,6 +154,53 @@ describe("frontend direction rules", () => {
 
   it("leaves desktop/ reaching down into shared/ alone", async () => {
     expect(await rulesReportedFor("desktop/__eslint_fixtures__/reachesDown.ts", REACHES_SHARED)).toEqual([]);
+  });
+
+  it.each([
+    ["qam/ reaching into bigpicture/", "qam/__eslint_fixtures__/reachesUp.ts", REACHES_BIGPICTURE],
+    ["qam/ reaching into desktop/", "qam/__eslint_fixtures__/reachesDesktop.ts", REACHES_DESKTOP],
+
+    ["utils/ reaching into qam/", "utils/__eslint_fixtures__/reachesQam.ts", REACHES_QAM],
+    ["bigpicture/ reaching into boot/", "bigpicture/__eslint_fixtures__/reachesBoot.ts", REACHES_BOOT],
+    ["boot/ reaching into qam/", "boot/__eslint_fixtures__/reachesQam.ts", REACHES_QAM],
+    ["qam/ reaching into boot/", "qam/__eslint_fixtures__/reachesBoot.ts", REACHES_BOOT],
+    // `no-restricted-paths` has no type-only exemption: an `import type` is an edge here.
+    ["types/ reaching into utils/ for a type", "types/__eslint_fixtures__/reachesUtils.ts", REACHES_UTILS_FOR_A_TYPE],
+    ["types/ reaching into bigpicture/", "types/__eslint_fixtures__/reachesUp.ts", REACHES_BIGPICTURE],
+    ["api/ reaching into boot/", "api/__eslint_fixtures__/reachesBoot.ts", REACHES_BOOT],
+  ])("reports %s", async (_case, relative, source) => {
+    expect(await rulesReportedFor(relative, source)).toContain("import-x/no-restricted-paths");
+  });
+
+  it("leaves boot/ reaching up into bigpicture/ alone", async () => {
+    expect(await rulesReportedFor("boot/__eslint_fixtures__/reachesUp.ts", REACHES_BIGPICTURE)).toEqual([]);
+  });
+
+  const REACHES_QAM_AND_BOOT_FROM_SRC =
+    'import { TabIcon } from "./qam/TabIcon";\nimport { checkSteamModules } from "./boot/steamModules";\nexport const probe = [TabIcon, checkSteamModules];\n';
+
+  it("leaves index.tsx reaching into qam/ and boot/ alone", async () => {
+    expect(await rulesReportedFor("index.tsx", REACHES_QAM_AND_BOOT_FROM_SRC)).toEqual([]);
+  });
+
+  it("reports another module beside index.tsx reaching into qam/ and boot/", async () => {
+    expect(await rulesReportedFor("entryProbe.ts", REACHES_QAM_AND_BOOT_FROM_SRC)).toContain(
+      "import-x/no-restricted-paths",
+    );
+  });
+
+  it("leaves qam/ reaching down into shared/ alone", async () => {
+    expect(await rulesReportedFor("qam/__eslint_fixtures__/reachesDown.ts", REACHES_SHARED)).toEqual([]);
+  });
+
+  it("leaves qam/ reaching into qam/ alone", async () => {
+    const source = 'import { TabIcon } from "../TabIcon";\nexport const probe = TabIcon;\n';
+    expect(await rulesReportedFor("qam/__eslint_fixtures__/reachesItself.ts", source)).toEqual([]);
+  });
+
+  it("leaves types/ reaching into types/ alone", async () => {
+    const source = 'import type { Page } from "../navigation";\nexport type Probe = Page;\n';
+    expect(await rulesReportedFor("types/__eslint_fixtures__/reachesItself.ts", source)).toEqual([]);
   });
 
   it("reports a dependency cycle between two .ts modules", async () => {

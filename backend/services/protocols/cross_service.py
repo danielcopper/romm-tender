@@ -16,11 +16,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from contextlib import AbstractAsyncContextManager
 
-    from models.prune import InstalledContentRemoval, SaveQuarantine, SourceClaim
-    from models.shortcut_icon import IconFetch
-    from models.state import ShortcutRegistryEntry
-    from models.sync import ClientSaveState
-
     from domain.disc_selection import Disc
     from domain.emulator_commands import LaunchingEmulator
     from domain.emulator_sources import SourcesReading
@@ -29,6 +24,10 @@ if TYPE_CHECKING:
     from domain.shortcut_data import EmulatorInvocation
     from domain.update_release import LatestRelease
     from lib.partial_failure import PartialFailure
+    from models.prune import InstalledContentRemoval, SaveQuarantine, SourceClaim
+    from models.shortcut_icon import IconFetch
+    from models.state import ShortcutRegistryEntry
+    from models.sync import ClientSaveState
 
 
 class RomInstallRecorder(Protocol):

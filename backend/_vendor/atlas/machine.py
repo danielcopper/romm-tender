@@ -900,6 +900,20 @@ class StampingMachine(Protocol):
     def file_stamp(self, path: str) -> FileStamp | None: ...
 
 
+@runtime_checkable
+class BoundedReadingMachine(Protocol):
+    """A machine that can read a text file without reading more of it than a caller needs.
+
+    ``read_text_within`` reads at most *limit* + 1 bytes and answers ``None``
+    where the file holds more than *limit*, so a caller with a bound never
+    loads a file larger than it — a check of the size first could not promise
+    that, because the file can grow between the two. :class:`RealMachine` and
+    the fixture machine are such machines.
+    """
+
+    def read_text_within(self, path: str, limit: int) -> ReadResult | None: ...
+
+
 class Machine(Protocol):
     """Narrow machine port: read a file, glob, classify a path, follow links, ask a core.
 
@@ -1005,6 +1019,33 @@ class RealMachine:
         except OSError:
             # Permissions, I/O failure: present but unreadable.
             return ReadResult(READ_UNREADABLE)
+
+    def read_text_within(self, path: str, limit: int) -> ReadResult | None:
+        """:meth:`read_text` that reads at most *limit* + 1 bytes — ``None`` where the file holds more than *limit*.
+
+        The bytes are decoded as UTF-8 without newline translation.
+        """
+        try:
+            st = os.stat(path)
+        except (FileNotFoundError, NotADirectoryError):
+            return ReadResult(READ_MISSING)
+        except OSError:
+            return ReadResult(READ_UNREADABLE)
+        if not _stat.S_ISREG(st.st_mode):
+            return ReadResult(READ_UNREADABLE)
+        try:
+            with open(path, "rb") as f:
+                held = f.read(limit + 1)
+        except (FileNotFoundError, NotADirectoryError):
+            return ReadResult(READ_MISSING)
+        except OSError:
+            return ReadResult(READ_UNREADABLE)
+        if len(held) > limit:
+            return None
+        try:
+            return ReadResult(READ_OK, held.decode("utf-8"))
+        except UnicodeDecodeError:
+            return ReadResult(READ_INVALID_TEXT)
 
     def read_appimage_text(self, path: str, inner_path: str) -> AppImageReadResult:
         """One entry out of an AppImage's embedded squashfs, decoded as UTF-8.
@@ -2430,6 +2471,17 @@ class FixtureMachine:
         if resolved in self._dirs:
             return ReadResult(READ_UNREADABLE)
         return ReadResult(READ_MISSING)
+
+    def read_text_within(self, path: str, limit: int) -> ReadResult | None:
+        """:meth:`read_text`, answering ``None`` where the file holds more than *limit* bytes.
+
+        A fixture's file cannot grow underneath the read, so its size — a
+        string's encoded length, a blob's declared one — decides.
+        """
+        size = self.file_size(path)
+        if size is not None and size > limit:
+            return None
+        return self.read_text(path)
 
     def path_kind(self, path: str) -> PathKind:
         if self._is_inaccessible(path):

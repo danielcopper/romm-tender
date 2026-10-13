@@ -27,11 +27,10 @@ if TYPE_CHECKING:
     import asyncio
     import logging
 
-    from models.state import MetadataCacheEntry
-
     from domain.rom import Rom
     from domain.rom_install import RomInstall
     from domain.rom_save_sync_state import RomSaveSyncState
+    from models.state import MetadataCacheEntry
     from services.protocols import (
         AchievementsReader,
         ActiveCoreReader,

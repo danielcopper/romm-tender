@@ -21,8 +21,6 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from models.shortcut_icon import IconAnswer, IconFetch
-
 from domain.shortcut_icon import (
     LOGO_ICON_NAME,
     PLACEHOLDER_ICON_NAME,
@@ -30,6 +28,7 @@ from domain.shortcut_icon import (
     icon_worklist,
 )
 from lib.errors import SteamGridDirMissingError
+from models.shortcut_icon import IconAnswer, IconFetch
 
 if TYPE_CHECKING:
     import logging

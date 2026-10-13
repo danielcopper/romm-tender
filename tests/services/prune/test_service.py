@@ -17,7 +17,6 @@ from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_shortcut_icon_job import FakeShortcutIconJob
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeUuidGen
-from models.prune import InstalledContentRemoval, SaveQuarantine, SealedSourceClaims
 
 from domain.fetch_generation import count_rows_for_skip, prune_candidate_ids
 from domain.platform_sync_state import PlatformSyncState
@@ -28,6 +27,7 @@ from domain.rom_install import RomInstall
 from domain.version_metadata import VersionMetadata
 from lib.errors import OperationAbortedError, Refused, RommConnectionError, RommNotFoundError
 from lib.prune_conflicts import PruneConflicts
+from models.prune import InstalledContentRemoval, SaveQuarantine, SealedSourceClaims
 from services.prune import PruneService, PruneServiceConfig
 from services.prune._models import ActionOutcome, cancellation_state
 from services.prune.results import _COMPLETION_BUDGET_BYTES, GroupOutcome

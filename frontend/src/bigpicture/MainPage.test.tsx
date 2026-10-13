@@ -271,6 +271,8 @@ function defaultStats(): SyncStats {
     collections: 0,
     roms: 0,
     total_shortcuts: 0,
+    resumable_games: 0,
+    has_completion_stamp: false,
   };
 }
 
@@ -3118,7 +3120,7 @@ describe("MainPage", () => {
       await flushAsync();
       expect(
         await findByText(
-          "RetroDECK: its settings file /rd.json is damaged, so Tender cannot tell where its folders are. " +
+          "RetroDECK: its settings file /rd.json is damaged, so Tender cannot tell where its folder, BIOS folder and saves folder are. " +
             "Repair it with RetroDECK's 'Repair RetroDECK Paths'.",
         ),
       ).toBeInTheDocument();
@@ -3358,6 +3360,7 @@ describe("MainPage", () => {
         total_shortcuts: 12,
         last_attempt: { finished_at: "2026-06-01T17:48:00", status: "cancelled" },
         resumable_games: 12,
+        has_completion_stamp: false,
       };
     }
 

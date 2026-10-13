@@ -10,7 +10,7 @@ either can run.
 | `dist/globals.js`            | Steam's React, ReactDOM and JSX runtime, installed under `SP_*`           |
 | `dist/index.js`              | The panel, with `@decky/ui` bundled inside it — **standalone**            |
 | `dist/index-coexistence.js`  | The panel, taking `@decky/ui` from Decky's `DFL` global — **coexistence** |
-| `dist/LICENSE-@decky-ui.txt` | `@decky/ui`'s LGPL-2.1 text, emitted beside the bundle that carries it    |
+| `dist/LICENSE-@decky-ui.txt` | `@decky/ui`'s LGPL-2.1 text, beside the bundles that carry it             |
 
 They are three separate Rollup builds sharing no chunk, so the panel's own modules are transpiled and bundled twice,
 once for each panel bundle.
@@ -325,11 +325,15 @@ Five properties are worth knowing before changing anything there:
   and later call with `stranded_panel`. `api/host.ts` hands the answer on (`strandedAnswer`, `onStrandedAnswerChange`,
   `recheckStranded`, `isStrandedPanelFailure`) — what it means and when the panel asks again is
   [loading-the-panel.md](loading-the-panel.md#what-the-stranded-panel-is-told).
-- **One endpoint answer is reworded on its way back.** A refusal for one of RetroDECK's findings
-  (`reason: "retrodeck_finding"`, the finding beside it) gets the message Main's notice shows for that finding
-  (`withFindingSentence` in `frontend/src/utils/emulatorSourceWording.ts`), so every press that refuses for it reads the
-  same as the notice whichever endpoint refused. Every other answer comes back as it was sent. The suite stubs this
-  module, so `api/host.test.ts` is where the rewording is pinned.
+- **Three kinds of endpoint answer are reworded on their way back.** A refusal for one of RetroDECK's findings
+  (`reason: "retrodeck_finding"`, the finding beside it), and a save refused for an emulator source's finding
+  (`save_shape_unsupported` or `saves_root_missing`, with the finding and the source's kind beside it), get the message
+  Main's notice shows for that finding — or, for an emulator's own settings file, which Main never shows, a sentence
+  naming the emulator (`withFindingSentence` in `frontend/src/utils/emulatorSourceWording.ts`) — so every press that
+  refuses for it, the launch's own sync included, reads the same as the notice whichever endpoint refused. A download
+  refused for a platform with no switched-on system gets the sentence the platform's pages show
+  (`withPlatformSystemSentence`). Every other answer comes back as it was sent. The suite stubs this module, so
+  `api/host.test.ts` is where the rewording is pinned.
 
 **The fourth thing `host.ts` hands out opens no socket and is the one the panel reaches the screen through.**
 `definePanel` answers with the factory unchanged; `index.tsx` hands that factory to `frontend/src/qam/installEntry.tsx`,
@@ -385,6 +389,11 @@ draw the other's. What Decky Loader does here is read from its own source, `fron
 Steam's game page is not ours to compose: `bigpicture/patches/gameDetailPatch.tsx` swaps Steam's own app-details
 overview panel for Tender's play section and game-info panel, on RomM shortcuts only. Where that patch is INSTALLED is
 `bigpicture/patches/installGamePagePatch.ts`, and the seam it uses is the one thing about it worth reading twice.
+
+The block itself is built by `bigpicture/patches/rommOverviewBlock.tsx`, inside the boundary the Quick Access panel uses
+too (`shared/PanelErrorBoundary.tsx`): a throw while it renders leaves the game page standing, with the line "Tender
+could not show this game's section." in the block's place and a `debugLog` entry carrying the failure and its component
+stack.
 
 **The seam is the route component's `renderFunc`, never the page component's own `type`.** Steam's gamepad router
 renders the library route inline —
@@ -489,6 +498,10 @@ It runs after the build beside `check:bundle`, in `mise run gate` and in CI.
 entry under each bundle that carries it, at its recorded size plus about a tenth, rounded up. Raising a budget is the
 same edit and reads the same in a diff: the package that grew, by how much. A package that leaves a bundle takes its
 budget with it.
+
+A package that joins a bundle also needs a `## <package>` section of its own in `THIRD-PARTY-NOTICES.md`, which
+`scripts/check_third_party_notices.py` fails without. A package that leaves every bundle takes its section along, and no
+check notices when it does not.
 
 ## What the tests here can and cannot see
 

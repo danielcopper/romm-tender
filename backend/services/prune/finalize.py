@@ -24,9 +24,8 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Awaitable
 
-    from models.prune import MutationOutcome, SourceClaim
-
     from domain.rom import Rom
+    from models.prune import MutationOutcome, SourceClaim
     from services.protocols import (
         ActiveDownloadRomIdsFn,
         InstalledRomFilesRemoverFn,

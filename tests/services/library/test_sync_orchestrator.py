@@ -18,9 +18,9 @@ Two production seams remain mockable per test:
 
 ``emit_progress`` is intentionally **not** mocked when the test asserts on
 ``emit.call_args_list`` — driving real emissions keeps the
-assertions honest. The fetcher's runtime methods (``build_work_queue``,
+assertions honest. The fetchers' runtime methods (``build_work_queue``,
 ``fetch_platform_unit``, ``fetch_collection_unit``) are reached through
-the real fetcher against the seeded fake — that is the whole point of the
+the real fetchers against the seeded fake — that is the whole point of the
 migration.
 """
 
@@ -601,8 +601,9 @@ class TestPreviewCoverRefreshCount:
             "platform_slug": "gba",
             "path_cover_large": self._NEW,
         }
+        fake_romm_api.platforms.append({"id": 2, "name": "GBA", "slug": "gba", "rom_count": 1})
         _seed_collection(fake_romm_api, collection_id=7, name="Favorites", rom_ids=[20], is_favorite=True)
-        library.settings["enabled_platforms"] = {}
+        library.settings["enabled_platforms"] = {"2": False}
         library.settings["enabled_collections"] = {"standard": {"7": True}}
         _seed_rom_row(
             library, 20, app_id=2020, platform_slug="gba", name="CGame", fs_name="cgame.gba", cover_source=self._OLD
@@ -918,7 +919,7 @@ class TestPreviewOverASkippedUnit:
                     member_rom_ids=(10,),
                 )
             )
-        fetcher = library.sync._fetcher
+        fetcher = library.sync._collection_fetcher
         fetch_collection_unit = fetcher.fetch_collection_unit
         collection_skips: list[bool] = []
 
@@ -1882,13 +1883,22 @@ class TestFetchCollectionUnit:
     async def test_returns_new_roms_and_member_ids(self, library, fake_romm_api):
         _use_fake_romm(library, fake_romm_api)
         fake_romm_api.roms = {
-            1: {"id": 1, "platform_name": "N64", "collection_ids": [7]},
-            2: {"id": 2, "platform_name": "SNES", "collection_ids": [7]},
-            3: {"id": 3, "platform_name": "GBA", "collection_ids": [7]},
+            1: {"id": 1, "platform_id": 1, "platform_name": "N64", "collection_ids": [7]},
+            2: {"id": 2, "platform_id": 2, "platform_name": "SNES", "collection_ids": [7]},
+            3: {"id": 3, "platform_id": 3, "platform_name": "GBA", "collection_ids": [7]},
         }
-        unit = WorkUnit(type="collection", id="7", name="Faves", slug="", rom_count=3, collection_kind="standard")
+        unit = WorkUnit(
+            type="collection",
+            id="7",
+            name="Faves",
+            slug="",
+            rom_count=3,
+            collection_kind="standard",
+            member_rom_ids=(1, 2, 3),
+            unwalked_platform_ids=(1, 2, 3),
+        )
         synced: set[int] = set()
-        new_roms, ids, _skipped = await library.sync._fetcher.fetch_collection_unit(unit, synced)
+        new_roms, ids, _skipped = await library.sync._collection_fetcher.fetch_collection_unit(unit, synced)
         assert [r["id"] for r in new_roms] == [1, 2, 3]
         assert ids == [1, 2, 3]
         assert synced == {1, 2, 3}
@@ -1897,14 +1907,23 @@ class TestFetchCollectionUnit:
     async def test_dedups_against_already_synced(self, library, fake_romm_api):
         _use_fake_romm(library, fake_romm_api)
         fake_romm_api.roms = {
-            1: {"id": 1, "platform_name": "N64", "virtual_collection_ids": ["9"]},
-            2: {"id": 2, "platform_name": "SNES", "virtual_collection_ids": ["9"]},
+            1: {"id": 1, "platform_id": 1, "platform_name": "N64", "virtual_collection_ids": ["9"]},
+            2: {"id": 2, "platform_id": 2, "platform_name": "SNES", "virtual_collection_ids": ["9"]},
         }
-        unit = WorkUnit(type="collection", id="9", name="Metroid", slug="", rom_count=2, collection_kind="virtual")
+        unit = WorkUnit(
+            type="collection",
+            id="9",
+            name="Metroid",
+            slug="",
+            rom_count=2,
+            collection_kind="virtual",
+            member_rom_ids=(1, 2),
+            unwalked_platform_ids=(2,),
+        )
 
         # rom_id=1 was already fetched via a platform unit
         synced: set[int] = {1}
-        new_roms, ids, _skipped = await library.sync._fetcher.fetch_collection_unit(unit, synced)
+        new_roms, ids, _skipped = await library.sync._collection_fetcher.fetch_collection_unit(unit, synced)
         assert [r["id"] for r in new_roms] == [2]
         # All collection rom_ids reported back even if not in new_roms
         assert ids == [1, 2]
@@ -2683,13 +2702,15 @@ class TestDoSyncPerUnit:
         """#1296 CRITICAL: a skipped platform + a collection holding an UNBOUND
         sibling of a group must NEVER rebind the live installed game.
 
-        Worked failure: the platform incremental-SKIPS, so only its BOUND rows
-        enter ``synced_rom_ids`` and the collection fetches the group's unbound
-        sibling un-deduped. The collection is a PARTIAL group view — the bound
-        installed representative (rom 10) is absent from its fetch but alive on the
-        server — so the collapse must grandfather the group untouched, not read the
-        binding as "vanished" and rebind it onto the uninstalled sibling (which
-        would blank the launch options and orphan the installed ROM).
+        The platform incremental-SKIPS, so only its BOUND rows enter
+        ``synced_rom_ids``. The collection makes no request here: its one
+        member, the group's unbound sibling, is not in ``synced_rom_ids``, but
+        the sync leaves no platform off, so no walk happens and the sibling is
+        left out of ``new_roms`` — as the collection skip already leaves
+        unbound members out. The installed representative (rom
+        10) must stay bound to its shortcut, not be read as "vanished" and
+        rebound onto the uninstalled sibling (which would blank the launch
+        options and orphan the installed ROM).
         """
 
         _use_fake_romm(library, fake_romm_api)
@@ -2741,16 +2762,13 @@ class TestDoSyncPerUnit:
 
         await library.sync._orchestrator._do_sync_per_unit()
 
-        # Prove the exact worked scenario ran: the platform incremental-SKIPPED
-        # (never paginated ``list_roms``), so its bound rows — but NOT the unbound
-        # sibling — entered ``synced_rom_ids`` and the collection fetched rom 11
-        # un-deduped, exercising the partial-view collapse branch.
+        # The platform incremental-SKIPPED (never paginated ``list_roms``), and the
+        # collection fetched no page.
         call_names = [c[0] for c in fake_romm_api.call_log]
         assert "list_roms" not in call_names
-        assert "list_roms_by_collection" in call_names
+        assert "list_roms_by_collection" not in call_names
 
-        # The platform skipped its apply; the collection emitted but grandfathered
-        # the group → NO shortcut entry, and above all NO rebind entry.
+        # NO shortcut entry for the sibling, and above all NO rebind entry.
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         all_emitted = [sd for e in unit_events for sd in e["shortcuts"]]
         assert all(BIND_ROM_ID_KEY not in sd for sd in all_emitted)
@@ -4061,7 +4079,7 @@ class TestSyncOneUnitCollectionAndCancel:
     async def test_sync_collection_unit_threads_kind_and_virtual_type(self, library):
         """_sync_collection_unit stamps the unit's kind + virtual_type onto the membership (#1539)."""
         orch = library.sync._orchestrator
-        orch._fetcher.fetch_collection_unit = AsyncMock(return_value=([{"id": 1}], [1, 2], False))  # type: ignore[method-assign]
+        orch._collection_fetcher.fetch_collection_unit = AsyncMock(return_value=([{"id": 1}], [1, 2], False))  # type: ignore[method-assign]
         unit = WorkUnit(
             type="collection",
             id="vc-1",
@@ -4085,7 +4103,7 @@ class TestSyncOneUnitCollectionAndCancel:
     async def test_sync_collection_unit_standard_has_no_virtual_type(self, library):
         """A standard collection membership carries kind='standard' and virtual_type=None (#1539)."""
         orch = library.sync._orchestrator
-        orch._fetcher.fetch_collection_unit = AsyncMock(return_value=([{"id": 1}], [1], False))  # type: ignore[method-assign]
+        orch._collection_fetcher.fetch_collection_unit = AsyncMock(return_value=([{"id": 1}], [1], False))  # type: ignore[method-assign]
         unit = WorkUnit(
             type="collection",
             id="7",
@@ -4690,8 +4708,8 @@ class TestPlatformCompletionStamp:
 
     @pytest.mark.asyncio
     async def test_no_stamp_for_collection_unit(self, library, fake_romm_api):
-        """Collection units have no incremental-skip gate, so they are never stamped —
-        every chunk's commit carries ``platform_stamp=None``."""
+        """A collection unit never carries a platform stamp — every chunk's commit
+        carries ``platform_stamp=None``; its own stamp is the collection stamp."""
         _use_fake_romm(library, fake_romm_api)
 
         _seed_platform(
@@ -4729,7 +4747,7 @@ class TestPlatformCompletionStamp:
             platform_rom_ids=set(),
         )
 
-        # The collection committed (non-vacuous) but never carried a stamp.
+        # The collection committed (non-vacuous) but never carried a platform stamp.
         assert stamps, "collection unit should have committed at least one chunk"
         assert all(s is None for s in stamps)
 
@@ -5253,8 +5271,8 @@ class TestFailedCollectionListing:
         await run_to_its_end("run-1")
         assert bindings() == {1: 5001, 2: 5002}
         stamp_after_run_1 = stamp()
-        # A virtual collection is never stamped; the other two are.
-        assert (stamp_after_run_1 is None) == (kind == "virtual")
+        # Every kind of collection is stamped.
+        assert stamp_after_run_1 is not None
 
         # Run 2: RomM cannot be reached for the listing; nothing changed on RomM or in the settings.
         failure = RommConnectionError("Connection refused")

@@ -44,9 +44,21 @@ class WorkUnit:
     # threaded so the incremental-skip gate can compare it against the stored
     # ``CollectionSyncState`` stamp (#742). RomM bumps this on any membership
     # add/remove (and a smart-criteria edit), so an equal value is the
-    # membership-stable signal. ``None`` when the listing omits it (e.g. a
-    # virtual collection, which is never stamped) — skip-internal, off the wire.
+    # membership-stable signal of a standard or smart collection. ``None`` when
+    # the listing omits it — skip-internal, off the wire.
     collection_updated_at: str | None = None
+    # Collection-only, off the wire: the listing's ``rom_ids``, the members the
+    # fetch accounts for without a request where a platform unit delivered them.
+    member_rom_ids: tuple[int, ...] = ()
+    # Collection-only, off the wire: the platforms the sync leaves off — every
+    # platform id the platform listing answered that has no platform unit in
+    # this run (a skipped platform has one). They are the ``platform_ids`` a
+    # collection's narrowed walk asks for.
+    unwalked_platform_ids: tuple[int, ...] = ()
+    # Collection-only: whether the collection is the signed-in user's own
+    # (:func:`is_own_collection`). A foreign smart collection's listing is its
+    # owner's view, so its ``member_rom_ids`` do not stand for the caller's walk.
+    is_own: bool = True
     # Plan-time estimate riders (#1382 / #1511 / #1517). ``predicted_skip`` is
     # the plan's local-conditions guess at the fetch-time wholesale-skip gate's
     # outcome, ``collapsed_count`` the persisted post-collapse shortcut count
@@ -140,9 +152,10 @@ def collection_units(
                 virtual_type=virtual_type,
                 # RomM bumps the collection's updated_at on any membership change
                 # (#742). Threaded so the skip gate compares it against the stamp;
-                # ``None`` for a listing that omits it (e.g. virtual, never
-                # stamped).
+                # ``None`` for a listing that omits it.
                 collection_updated_at=c.get("updated_at"),
+                member_rom_ids=tuple(int(rid) for rid in c.get("rom_ids", [])),
+                is_own=is_own_collection(c.get("user_id"), own_user_id, kind=kind),
             )
         )
     return units

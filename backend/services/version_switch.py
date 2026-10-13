@@ -20,7 +20,7 @@ switch back onto a still-installed version re-bakes that install's full Steam
 ``launch_options`` (the frontend writes it onto the shortcut); switching to an
 uninstalled version returns the empty placeholder (ADR-0009). The group is
 resolved by ``sibling_group_key`` over the migration-010 index; the server view
-comes from ``get_rom(bound).sibling_roms``. Server I/O and the relaunch resolver
+comes from ``get_rom_simple(bound).sibling_roms``. Server I/O and the relaunch resolver
 run outside the Unit of Work (ADR-0006) — read/close, then fetch/resolve, then a
 short write UoW. The liveness request narrows the race but cannot transact with
 RomM and SQLite as one unit.
@@ -198,7 +198,7 @@ class VersionSwitchService:
         *different* id at the bound group's canonical source (#1360) — is listed but
         ``switchable: False``, so the picker disables it instead of offering a
         switch the backend would reject. Liveness is recomputed per call: the
-        successful bound detail makes that id live, local ids in its direct
+        successful bound read makes that id live, local ids in its direct
         sibling view are live, and absent local ids are exact-id probed once on
         the executor. Only :class:`RommNotFoundError` sets ``vanished``; every
         other probe outcome fails open. When the server view can't be fetched the
@@ -215,7 +215,7 @@ class VersionSwitchService:
             return {"multi_version": False, "server_query_failed": False, "bound_vanished": False}
 
         try:
-            bound_detail = await self._loop.run_in_executor(None, self._romm_api.get_rom, local.bound_rom_id)
+            bound_detail = await self._loop.run_in_executor(None, self._romm_api.get_rom_simple, local.bound_rom_id)
         except RommNotFoundError:
             # The server ANSWERED — it just no longer has the bound id. That is a
             # statement about the ROM, not about reachability, so the local-only
@@ -320,9 +320,9 @@ class VersionSwitchService:
         return {int(d["id"]): d for d in results if d is not None and int(d.get("id", 0)) > 0}
 
     def _safe_get_rom(self, rom_id: int) -> dict[str, Any] | None:
-        """``get_rom`` that swallows transport failures (returns ``None``)."""
+        """``get_rom_simple`` that swallows transport failures (returns ``None``)."""
         try:
-            return self._romm_api.get_rom(rom_id)
+            return self._romm_api.get_rom_simple(rom_id)
         except Exception as e:  # one stub's failure never fails the whole list
             self._logger.warning(f"Version list: sibling detail fetch failed for rom {rom_id}: {e}")
             return None

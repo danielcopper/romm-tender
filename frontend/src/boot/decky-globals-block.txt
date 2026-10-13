@@ -22,12 +22,25 @@ commit  3e4302e2e58f39d6289d95a64edbb931f3831668  (2026-07-25, the last commit
 read at f75dc1df134daf53b1ec02c351b12313c1696a7e  (main, 2026-09-14)
 fetched 2026-09-16
 
+LICENCE
+-------
+The block between the two markers is Decky Loader's code, by the
+SteamDeckHomebrew project, licensed under the GNU General Public License
+version 2 ("GPLv2", as upstream states it). The licence text is
+`decky-globals-block.LICENSE` beside this file, copied verbatim from the
+LICENSE file at the root of the repository above, at the commit pinned there.
+The block is copied here as a test fixture: `steamGlobals.test.ts` reads it as
+text, no bundle imports it, and nothing under `frontend/` is in the release
+tarball.
+
 REFRESHING IT
 -------------
 Re-fetch the file at the commit you are pinning, replace everything between the
-two markers with the current block, and update all four lines above. Do NOT edit
-the copy to make a failing test pass — a failing test here means our shape and
-Decky's have parted, and which of the two moved is the question to answer first.
+two markers with the current block, update the PROVENANCE lines, and re-copy
+the LICENSE file at the same commit into `decky-globals-block.LICENSE`. Do NOT
+edit the copy to make a failing test pass — a failing test here means our shape
+and Decky's have parted, and which of the two moved is the question to answer
+first.
 
 --- BEGIN decky-loader frontend/src/index.ts (globals block) ---
   if (!window.SP_REACT) {

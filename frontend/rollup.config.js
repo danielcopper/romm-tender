@@ -78,9 +78,9 @@ const OUT_DIR = "../dist";
  * the two that do is enough while they share an output directory, and that
  * premise is what a later change serving `globals.js` on its own would break.
  *
- * `THIRD-PARTY-NOTICES.md` at the repository root names the version and says
- * what the reader may do with it; this is the text itself, verbatim and
- * untouched.
+ * `THIRD-PARTY-NOTICES.md` at the repository root names the package, says where
+ * its source is and what the reader may do with it; this is the text itself,
+ * verbatim and untouched.
  */
 const shipDeckyUiLicence = () => ({
   name: "ship-decky-ui-licence",

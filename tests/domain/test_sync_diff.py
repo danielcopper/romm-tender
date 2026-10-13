@@ -1128,7 +1128,7 @@ class TestPlatformBreakdown:
 
     def test_an_entry_naming_its_own_slug_never_wins_the_name(self):
         # A skipped collection unit rebuilds its members with the slug in
-        # platform_name (fetcher.py _reconstruct_collection_members). Honouring
+        # platform_name (collection_fetcher.py _reconstruct_collection_members). Honouring
         # it would make the row's name depend on which unit the work queue
         # reached first, so the real name wins whichever order they arrive in.
         placeholder = _make_sd(1, platform_slug="gg", platform_name="gg")

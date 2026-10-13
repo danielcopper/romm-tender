@@ -106,6 +106,10 @@ if TYPE_CHECKING:
 
 __all__ = ["MatrixOutcome", "SyncEngine", "SyncEngineConfig"]
 
+# RomM 5.3.0's ``POST /api/sync/negotiate`` takes at most this many ``rom_ids``
+# and answers a longer list with 422 (rommapp/romm#4304).
+NEGOTIATE_ROM_IDS_CAP = 500
+
 
 def _first_error_reason(errors: list[str]) -> str:
     """Return the classified reason of the first sync error, stripped of its source.
@@ -696,9 +700,10 @@ class SyncEngine:
     ) -> int | None:
         """Open a transport-only negotiate session for a confirmed ROM; ``None`` on failure.
 
-        POSTs the ROM-scoped inventory to ``negotiate`` and keeps only the
-        ``session_id`` — the planned ``operations`` are intentionally discarded
-        because the local ``compute_sync_action`` matrix is the sole detection
+        POSTs the ROM-scoped inventory to ``negotiate``, with that one ROM as its
+        ``rom_ids`` scope, and keeps only the ``session_id`` — the planned
+        ``operations`` are intentionally discarded because the local
+        ``compute_sync_action`` matrix is the sole detection
         authority (ADR-0017). Any failure degrades to ``None`` — the sync run
         proceeds without a session envelope rather than aborting — EXCEPT the
         server-side sync-disabled 400 (:class:`RommSyncDisabledError`), which is
@@ -717,7 +722,9 @@ class SyncEngine:
             )
             response = await self._loop.run_in_executor(
                 None,
-                lambda: self._retry.with_retry(lambda: self._romm_api.negotiate_sync(device_id or "", inventory)),
+                lambda: self._retry.with_retry(
+                    lambda: self._romm_api.negotiate_sync(device_id or "", inventory, rom_ids=[rom_id])
+                ),
             )
             return response["session_id"]
         except RommSyncDisabledError:
@@ -769,10 +776,11 @@ class SyncEngine:
 
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
                 await self.follow_save_directory(rom_id, save_answer)
-                refuse_unsyncable(save_answer)
-
+                # Before the refusal: a launch is never asked about a sync the
+                # user switched off, as the post-exit sync is never toasted for one.
                 if not sync_before_launch(self._settings):
                     return {"success": True, "message": "Pre-launch sync disabled", "synced": 0}
+                refuse_unsyncable(save_answer)
 
                 # Pre-probe reachability before any sync work — mirror post_exit_sync.
                 try:
@@ -956,14 +964,29 @@ class SyncEngine:
         session envelope (one shared vs. per-ROM) differs. The one exception is
         the server-side sync-disabled 400 (:class:`RommSyncDisabledError`), which
         is re-raised so the whole sweep aborts with a visible policy reason (#1489).
+
+        The POST names the inventory's distinct ROM ids, in first-seen order, as
+        its ``rom_ids`` scope. Over :data:`NEGOTIATE_ROM_IDS_CAP` of them it goes
+        out unscoped and says so in the debug log: splitting it is no way out,
+        because each negotiate cancels this device's prior sessions, the earlier
+        parts included.
         """
         full_inventory = await self._loop.run_in_executor(None, self._build_inventory, None)
         if not full_inventory:
             return None
+        rom_ids: list[int] | None = list(dict.fromkeys(save["rom_id"] for save in full_inventory))
+        if len(rom_ids) > NEGOTIATE_ROM_IDS_CAP:
+            self._log_debug(
+                f"sync_all_saves: the inventory names {len(rom_ids)} ROMs, over negotiate's cap of "
+                f"{NEGOTIATE_ROM_IDS_CAP}; negotiating without a rom_ids scope"
+            )
+            rom_ids = None
         try:
             response = await self._loop.run_in_executor(
                 None,
-                lambda: self._retry.with_retry(lambda: self._romm_api.negotiate_sync(device_id or "", full_inventory)),
+                lambda: self._retry.with_retry(
+                    lambda: self._romm_api.negotiate_sync(device_id or "", full_inventory, rom_ids=rom_ids)
+                ),
             )
             # Read the key INSIDE the guard: a 200 body missing session_id must
             # degrade like a failure (session_id None → per-ROM sessions), not

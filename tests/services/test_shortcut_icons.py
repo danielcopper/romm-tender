@@ -14,11 +14,11 @@ from _factories import _make_conflict_rules, _make_prune_conflicts
 from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeSleeper
-from models.shortcut_icon import IconAnswer, IconFetch
 
 from domain.rom import Rom
 from domain.shortcut_icon import LOGO_ICON_NAME, PLACEHOLDER_ICON_NAME, PLACEHOLDER_ICON_PNG
 from lib.errors import SteamGridDirMissingError
+from models.shortcut_icon import IconAnswer, IconFetch
 from services import shortcut_icons
 from services.shortcut_icons import ShortcutIconService, ShortcutIconServiceConfig
 

@@ -17,7 +17,6 @@ sys.path.insert(0, backend_dir)
 _CODE_DIR_FALLBACK = os.path.dirname(backend_dir)
 
 from bootstrap import Application, build_application
-
 from domain.app_directories import AppDirectories, resolve_directories
 from domain.identity import VERSION
 from domain.refusal import DomainRefused
@@ -394,6 +393,10 @@ class Endpoints:
     @route
     def set_collection_naming_mode(self, mode):
         return self._services.settings_service.set_collection_naming_mode(mode)
+
+    @route
+    def set_qam_entry_position(self, position):
+        return self._services.settings_service.set_qam_entry_position(position)
 
     @route
     async def start_sync(self):
@@ -1081,13 +1084,25 @@ class Endpoints:
         launcher that is not there stops its game from starting.
 
         The reading is the backend's because ``shortcuts.vdf`` holds every
-        shortcut's ``exe`` and one 315 KB parse answers for all of them; the
+        shortcut's ``exe`` and one parse answers for all of them; the
         frontend's own route to the same fact is a ``RegisterForAppDetails``
         per shortcut, which loads and caches a fat details object each time
         (ADR-0032). Answered without reading anything at all once the transition
         is stamped complete.
         """
         return await self._services.shortcut_relocation_service.get_shortcut_relocation()
+
+    @route
+    async def get_shortcut_launch_options(self, app_ids):
+        """Report the launch options Steam's ``shortcuts.vdf`` holds for *app_ids*.
+
+        Answers ``{"success": True, "launch_options": [{"app_id",
+        "launch_options"}]}`` for those of the app IDs the file holds, or the
+        failure shape with ``reason`` ``shortcut_file_unreadable``. Read only,
+        and the file is parsed afresh on every call, so a caller with many app
+        IDs asks once for all of them.
+        """
+        return await self._services.shortcut_file_service.get_shortcut_launch_options(app_ids)
 
     @route
     def get_host_status(self):

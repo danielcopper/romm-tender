@@ -31,6 +31,9 @@ from lib.romm_paging import LIST_PAGE_SIZE
 _SYNC_DISABLED_DETAIL = "Sync is disabled for this device"
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from adapters.romm.http import RommHttpAdapter
     from models.cover import CoverRevalidation
     from models.play_sessions import PlaySessionIngestEntry, PlaySessionIngestResponse
     from models.sync import (
@@ -38,8 +41,6 @@ if TYPE_CHECKING:
         SyncCompleteResponse,
         SyncNegotiateResponse,
     )
-
-    from adapters.romm.http import RommHttpAdapter
 
 _logger = logging.getLogger(__name__)
 
@@ -52,6 +53,22 @@ _MAX_PLAY_SESSION_PAGES = 50
 # ``items`` / ``total`` from the list endpoints, so both are turned off to skip
 # that server-side work. Appended to every list-endpoint query string.
 _LIST_AGGREGATIONS_DISABLED = "&with_char_index=false&with_filter_values=false"
+
+# RomM orders ``/api/roms`` by ``name_sort_key`` unless told otherwise (5.3.0
+# ``handler/database/roms_handler.py``), and offset paging over that order shifts
+# every later page when a concurrent scan inserts a ROM earlier in name order: one
+# row comes back twice and another not at all. In ``id`` order a new ROM appends
+# at the end. Appended to every ``/api/roms`` walk that pages with ``offset``;
+# the ``updated_after`` probes read only ``total`` and go without it.
+_WALK_ORDER = "&order_by=id"
+
+# The ``/api/roms`` filter each collection kind is listed by.
+_COLLECTION_FILTER = {
+    "standard": "collection_id",
+    "smart": "smart_collection_id",
+    "virtual": "virtual_collection_id",
+}
+
 
 # Public pairing-code exchange endpoint (unauthenticated — the code is the credential).
 _PAIRING_CODE_ENDPOINT = "/api/client-tokens/exchange"
@@ -82,6 +99,19 @@ _TOKEN_SCOPES = [
     "devices.write",
     "roms.user.write",
 ]
+
+
+def _platform_filter(platform_ids: Sequence[int] | None) -> str:
+    """The ``platform_ids`` query fragment, one repetition per id; empty for ``None`` or no ids.
+
+    RomM reads ``platform_ids`` as a repeatable list parameter
+    (``RomFilterParams``, 5.3.0 ``handler/database/rom_filters.py``) and
+    ``filter_roms`` applies it beside the collection filter, so the two narrow
+    together (5.3.0 ``handler/database/roms_handler.py``).
+    """
+    if platform_ids is None:
+        return ""
+    return "".join(f"&platform_ids={pid}" for pid in platform_ids)
 
 
 class RommApiAdapter:
@@ -129,13 +159,18 @@ class RommApiAdapter:
     def get_rom(self, rom_id: int) -> dict[str, Any]:
         return self._client.request(f"/api/roms/{rom_id}")
 
+    def get_rom_simple(self, rom_id: int) -> dict[str, Any]:
+        """The ROM over RomM's simple schema, through the retry ladder."""
+        return self._client.request(f"/api/roms/{rom_id}/simple")
+
     def get_rom_once(self, rom_id: int) -> dict[str, Any]:
-        """Single-attempt, short-timeout exact-ROM read for liveness probes."""
-        return self._client.request_once(f"/api/roms/{rom_id}", timeout=self._PROBE_TIMEOUT_SECONDS)
+        """Single-attempt, short-timeout exact-ROM read for liveness probes, over the simple schema."""
+        return self._client.request_once(f"/api/roms/{rom_id}/simple", timeout=self._PROBE_TIMEOUT_SECONDS)
 
     def list_roms(self, platform_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0) -> dict[str, Any]:
         return self._client.request(
-            f"/api/roms?platform_ids={platform_id}&limit={limit}&offset={offset}{_LIST_AGGREGATIONS_DISABLED}"
+            f"/api/roms?platform_ids={platform_id}&limit={limit}&offset={offset}"
+            f"{_WALK_ORDER}{_LIST_AGGREGATIONS_DISABLED}"
         )
 
     def list_roms_updated_after(
@@ -205,44 +240,59 @@ class RommApiAdapter:
         return result
 
     def list_roms_by_collection(
-        self, collection_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0
+        self,
+        collection_id: int,
+        limit: int = LIST_PAGE_SIZE,
+        offset: int = 0,
+        platform_ids: Sequence[int] | None = None,
     ) -> dict[str, Any]:
         return self._client.request(
-            f"/api/roms?collection_id={collection_id}&limit={limit}&offset={offset}{_LIST_AGGREGATIONS_DISABLED}"
+            f"/api/roms?collection_id={collection_id}{_platform_filter(platform_ids)}&limit={limit}&offset={offset}"
+            f"{_WALK_ORDER}{_LIST_AGGREGATIONS_DISABLED}"
         )
 
     def list_collection_roms_updated_after(
         self,
-        collection_id: int,
+        collection_id: int | str,
         kind: str,
         updated_after: str,
         limit: int = 1,
         offset: int = 0,
     ) -> dict[str, Any]:
-        # A smart collection filters on ``smart_collection_id``; a standard collection
-        # on ``collection_id`` (RomM's /api/roms accepts either alongside
-        # ``updated_after`` — 5.0.0 endpoints/roms/__init__.py). Only standard/smart
-        # kinds ever reach here; the skip gate never probes a virtual collection.
-        param = "smart_collection_id" if kind == "smart" else "collection_id"
+        # RomM's /api/roms takes each collection filter alongside
+        # ``updated_after`` (5.3.0 endpoints/roms/__init__.py). A virtual id is a
+        # base64 string and is encoded like the virtual walk's.
+        param = _COLLECTION_FILTER.get(kind, "collection_id")
+        quoted_id = urllib.parse.quote(str(collection_id), safe="")
         quoted_after = urllib.parse.quote(updated_after)
         return self._client.request(
-            f"/api/roms?{param}={collection_id}&limit={limit}&offset={offset}"
+            f"/api/roms?{param}={quoted_id}&limit={limit}&offset={offset}"
             f"&updated_after={quoted_after}{_LIST_AGGREGATIONS_DISABLED}"
         )
 
     def list_roms_by_virtual_collection(
-        self, virtual_id: str, limit: int = LIST_PAGE_SIZE, offset: int = 0
+        self,
+        virtual_id: str,
+        limit: int = LIST_PAGE_SIZE,
+        offset: int = 0,
+        platform_ids: Sequence[int] | None = None,
     ) -> dict[str, Any]:
         encoded_id = urllib.parse.quote(str(virtual_id), safe="")
         return self._client.request(
-            f"/api/roms?virtual_collection_id={encoded_id}&limit={limit}&offset={offset}{_LIST_AGGREGATIONS_DISABLED}"
+            f"/api/roms?virtual_collection_id={encoded_id}{_platform_filter(platform_ids)}"
+            f"&limit={limit}&offset={offset}{_WALK_ORDER}{_LIST_AGGREGATIONS_DISABLED}"
         )
 
     def list_roms_by_smart_collection(
-        self, smart_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0
+        self,
+        smart_id: int,
+        limit: int = LIST_PAGE_SIZE,
+        offset: int = 0,
+        platform_ids: Sequence[int] | None = None,
     ) -> dict[str, Any]:
         return self._client.request(
-            f"/api/roms?smart_collection_id={smart_id}&limit={limit}&offset={offset}{_LIST_AGGREGATIONS_DISABLED}"
+            f"/api/roms?smart_collection_id={smart_id}{_platform_filter(platform_ids)}&limit={limit}&offset={offset}"
+            f"{_WALK_ORDER}{_LIST_AGGREGATIONS_DISABLED}"
         )
 
     # ── Firmware / BIOS ───────────────────────────────────────────────
@@ -329,18 +379,17 @@ class RommApiAdapter:
             {"device_id": device_id},
         )
 
-    def get_save_summary(self, rom_id: int, device_id: str | None = None) -> dict[str, Any]:
-        query = f"/api/saves/summary?rom_id={rom_id}"
-        if device_id is not None:
-            query += f"&device_id={urllib.parse.quote(device_id, safe='')}"
-        return self._client.request(query)
+    def get_save_summary(self, rom_id: int) -> dict[str, Any]:
+        return self._client.request(f"/api/saves/summary?rom_id={rom_id}")
 
     def delete_server_saves(self, save_ids: list[int]) -> dict[str, Any]:
         return self._client.post_json("/api/saves/delete", {"saves": save_ids})
 
     # ── Sync sessions (4.9 negotiate) ─────────────────────────────────
 
-    def negotiate_sync(self, device_id: str, saves: list[ClientSaveState]) -> SyncNegotiateResponse:
+    def negotiate_sync(
+        self, device_id: str, saves: list[ClientSaveState], *, rom_ids: list[int] | None = None
+    ) -> SyncNegotiateResponse:
         """Open a sync session: POST this device's inventory, get the planned ops.
 
         The server compares *saves* (per ``(rom_id, slot)``) against its own
@@ -349,12 +398,19 @@ class RommApiAdapter:
         resolves — a ``conflict`` carries no resolution directive. Opening a
         session cancels this device's prior in-flight sessions server-side.
 
+        With *rom_ids* the server evaluates only those ROMs and the ones the
+        posted saves name (RomM 5.3.0, which
+        refuses a list over its cap with 422); without it, the whole library.
+
         A 400 carrying the per-device sync-disabled ``detail`` is translated to
         :class:`RommSyncDisabledError` so the engine can stop the run with a
         visible policy reason (#1489); every other error propagates unchanged.
         """
+        body: dict[str, Any] = {"device_id": device_id, "saves": saves}
+        if rom_ids is not None:
+            body["rom_ids"] = rom_ids
         try:
-            return self._client.post_json("/api/sync/negotiate", {"device_id": device_id, "saves": saves})
+            return self._client.post_json("/api/sync/negotiate", body)
         except RommApiError as e:
             if getattr(e, "detail", None) == _SYNC_DISABLED_DETAIL:
                 raise RommSyncDisabledError(_SYNC_DISABLED_DETAIL, url=e.url, method=e.method) from e

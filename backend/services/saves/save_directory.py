@@ -22,7 +22,7 @@ import os
 from typing import TYPE_CHECKING
 
 from domain.answered_save_directory import AnsweredSaveDirectory
-from domain.save_answer import ROOT_CONTENT_DIRECTORY, SORTED_DIR_MISSING
+from domain.save_answer import ROOT_CONTENT_DIRECTORY, SAVE_STATE_PLACE_NOT_READ, SORTED_DIR_MISSING
 
 if TYPE_CHECKING:
     import logging
@@ -228,7 +228,13 @@ def _followable_directory(answer: SaveAnswer) -> str | None:
     stays, and switching the option back finds it unchanged. The root is read
     here rather than :attr:`SaveAnswer.in_content_directory`, which is true only
     for a syncable answer beside the content file.
+
+    ``None`` too where the directory was not read from the emulator's settings
+    (:data:`SAVE_STATE_PLACE_NOT_READ`): it is a default the emulator may not
+    write to, so nothing is carried into it.
     """
+    if answer.state == SAVE_STATE_PLACE_NOT_READ:
+        return None
     if answer.root_kind == ROOT_CONTENT_DIRECTORY:
         # Holds until the content-directory gate is lifted.
         return None

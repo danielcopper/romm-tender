@@ -19,6 +19,7 @@ import { recheckStranded, toaster, type PanelDefinition } from "./api/host";
 import { emitHostEvent, hostEventListenerCount } from "./test-utils/host-event-bus";
 import { resetStrandedPanel, setStrandedAnswer } from "./test-utils/stranded-panel";
 import {
+  getSettings,
   getSettingsResetNotice,
   getUpdateNotice,
   getUpdateOutcome,
@@ -43,6 +44,7 @@ import {
 import { registerGameDetailPatch } from "./bigpicture/patches/gameDetailPatch";
 import { registerLaunchInterceptor } from "./utils/launchInterceptor";
 import { getSettingsResetState, setSettingsResetState } from "./utils/settingsResetStore";
+import { getQamEntryPositionState, setQamEntryPositionState } from "./utils/qamEntryPositionStore";
 import { getUpdateNoticeState, resetUpdateNoticeStoreForTests } from "./utils/updateNoticeStore";
 import { getUpdateOutcomeState, resetUpdateOutcomeStoreForTests } from "./utils/updateOutcomeStore";
 import {
@@ -1036,8 +1038,18 @@ describe("index.tsx — migration_relaunch_options listener", () => {
     });
     await flush();
 
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, 'flatpak run net.retrodeck.retrodeck "/new/a.bin"');
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(200, 'flatpak run net.retrodeck.retrodeck "/new/b.bin"');
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
+      100,
+      'flatpak run net.retrodeck.retrodeck "/new/a.bin"',
+      undefined,
+      expect.any(Function),
+    );
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
+      200,
+      'flatpak run net.retrodeck.retrodeck "/new/b.bin"',
+      undefined,
+      expect.any(Function),
+    );
   });
 
   it("ignores an empty items array", async () => {
@@ -1099,8 +1111,18 @@ describe("index.tsx — startup launch-options reconcile (#1043)", () => {
     panelFactory();
     await flush();
 
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, 'flatpak run net.retrodeck.retrodeck "/roms/a.bin"');
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(200, 'flatpak run net.retrodeck.retrodeck "/roms/b.bin"');
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
+      100,
+      'flatpak run net.retrodeck.retrodeck "/roms/a.bin"',
+      undefined,
+      expect.any(Function),
+    );
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
+      200,
+      'flatpak run net.retrodeck.retrodeck "/roms/b.bin"',
+      undefined,
+      expect.any(Function),
+    );
     expect(logError).not.toHaveBeenCalledWith(expect.stringContaining("startup_reconcile"));
   });
 
@@ -1121,7 +1143,12 @@ describe("index.tsx — startup launch-options reconcile (#1043)", () => {
     panelFactory();
     await flush();
 
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, 'flatpak run net.retrodeck.retrodeck "/roms/a.bin"');
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
+      100,
+      'flatpak run net.retrodeck.retrodeck "/roms/a.bin"',
+      undefined,
+      expect.any(Function),
+    );
     expect(logError).toHaveBeenCalledWith("startup_reconcile: failed to confirm launch options for appId 100");
   });
 
@@ -1184,7 +1211,12 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     await flush();
 
     expect(getInstalledRelaunchOptions).toHaveBeenCalled();
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(100, 'flatpak run net.retrodeck.retrodeck "/roms/a.bin"');
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
+      100,
+      'flatpak run net.retrodeck.retrodeck "/roms/a.bin"',
+      undefined,
+      expect.any(Function),
+    );
     expect(logError).not.toHaveBeenCalledWith(expect.stringContaining("sync_reconcile"));
   });
 
@@ -1206,7 +1238,12 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     });
     await flush();
 
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(200, 'flatpak run net.retrodeck.retrodeck "/roms/b.bin"');
+    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(
+      200,
+      'flatpak run net.retrodeck.retrodeck "/roms/b.bin"',
+      undefined,
+      expect.any(Function),
+    );
   });
 
   it("surfaces a sync_reconcile-prefixed logError when the pull endpoint rejects", async () => {
@@ -1416,6 +1453,33 @@ describe("index.tsx — corrupt-settings reset notice", () => {
 
     expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to check settings reset notice"));
     expect(toaster.toast).not.toHaveBeenCalled();
+  });
+});
+
+describe("index.tsx — where the Quick Access entry sits, at panel load", () => {
+  beforeEach(() => {
+    logError.mockClear();
+    vi.mocked(getSettings).mockReset();
+    setQamEntryPositionState("above_decky");
+  });
+
+  it("fills the store the Quick Access entry is placed by from the backend's settings", async () => {
+    vi.mocked(getSettings).mockResolvedValue({ qam_entry_position: "below_decky" } as Awaited<
+      ReturnType<typeof getSettings>
+    >);
+    panelFactory();
+    await flush();
+
+    expect(getQamEntryPositionState()).toBe("below_decky");
+  });
+
+  it("keeps the default and logs when the settings read rejects", async () => {
+    vi.mocked(getSettings).mockRejectedValue(new Error("boom"));
+    panelFactory();
+    await flush();
+
+    expect(getQamEntryPositionState()).toBe("above_decky");
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to read where the Quick Access entry sits"));
   });
 });
 

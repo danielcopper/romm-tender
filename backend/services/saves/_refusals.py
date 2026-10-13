@@ -6,13 +6,31 @@ names the reasons): it subclasses ``lib.errors.Refused`` rather than
 refusals as ``Refused`` and answers a benign one with no toast.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from domain.save_answer import save_finding_details, save_shape_message
 from lib.errors import NamedRefused
+
+if TYPE_CHECKING:
+    from domain.save_answer import SaveAnswer
 
 
 class SaveShapeUnsupported(NamedRefused):
-    """The emulator's save is not a per-game file set this program can carry."""
+    """The emulator's save is not a per-game file set this program can carry.
+
+    Every save write outside the sync (slot switch, rollback, slot-choice
+    migration) raises it for a missing saves root too, with that answer's own
+    message; a sync refuses that one with ``saves_root_missing`` instead.
+    """
 
     reason = "save_shape_unsupported"
+
+
+def shape_refusal(answer: SaveAnswer, **details: Any) -> SaveShapeUnsupported:
+    """The refusal of *answer*, worded for it and carrying what the panel words it from."""
+    return SaveShapeUnsupported(save_shape_message(answer), **save_finding_details(answer), **details)
 
 
 class SavefilesInContentDir(NamedRefused):

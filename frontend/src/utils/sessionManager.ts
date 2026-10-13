@@ -14,6 +14,7 @@ import {
   recordSessionStart,
   getAppIdRomIdMap,
   finalizeGameSession,
+  isEndpointFailure,
   logInfo,
   logWarn,
   logError,
@@ -27,6 +28,7 @@ import { readRunningApps, readRunningOrStartingApps, type RunningAppsReading } f
 import { delay } from "./pacedOps";
 import { LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "./launchGate";
 import { withTimeout } from "./withTimeout";
+import { announceSaveSync } from "./saveSyncEvents";
 
 // Active session tracking — ONE ENTRY PER RUNNING APP (#1624). Two RomM games at
 // once each hold their own entry, so a second start no longer displaces the
@@ -353,11 +355,20 @@ async function handleGameStop(stoppedAppId: number): Promise<void> {
   );
 }
 
+const PRUNE_ACTIVE_FINALIZE_TOAST_BODY =
+  "Playtime and saves for this session were not synced — a removed-game cleanup was running";
+
 function applyFinalizeResult(
   appId: number,
   romId: number,
   result: Awaited<ReturnType<typeof finalizeGameSession>>,
 ): void {
+  if (isEndpointFailure(result)) {
+    logWarn(`Finalize for romId=${romId} refused (${result.reason}): ${result.message}`);
+    showToast(result.reason === "prune_active" ? PRUNE_ACTIVE_FINALIZE_TOAST_BODY : result.message);
+    return;
+  }
+
   // Playtime display update — appStore mutation must stay frontend.
   if (result.total_seconds != null) {
     updatePlaytimeDisplay(appId, result.total_seconds);
@@ -379,7 +390,7 @@ function applyFinalizeResult(
   // to the honest post-sync state. A failed post-exit sync must refresh too
   // (#1334): the panel would otherwise keep showing a stale green "synced" for
   // a file that is now pending upload.
-  globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }));
+  announceSaveSync(romId);
 
   // Additive conflicts toast — backend renders the count string.
   if (result.sync.conflicts_toast) {
