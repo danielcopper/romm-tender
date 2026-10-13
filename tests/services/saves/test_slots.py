@@ -2,8 +2,7 @@
 
 import asyncio
 import hashlib
-import threading
-from typing import cast
+from typing import Any, Literal, cast
 
 import pytest
 from fakes.fake_save_location_reader import FakeSaveLocationReader
@@ -369,6 +368,22 @@ def _tracked_file() -> FileSyncState:
     )
 
 
+class _ObservedLock(asyncio.Lock):
+    """An ``asyncio.Lock`` that records every task that asks for it.
+
+    A task found in ``askers`` while another task holds the lock is suspended
+    inside ``acquire``: it records itself and then awaits, with no yield between.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.askers: list[asyncio.Task[Any] | None] = []
+
+    async def acquire(self) -> Literal[True]:
+        self.askers.append(asyncio.current_task())
+        return await super().acquire()
+
+
 class TestSaveSlotsUnderRomLock:
     """The slot list's read-merge-write runs under ``SyncEngine.rom_lock``; its server fetch does not."""
 
@@ -531,22 +546,18 @@ class TestSaveSlotsUnderRomLock:
             RomSaveSyncState(active_slot="default", slot_confirmed=True, slots=dict(seeded_slots)),
         )
         fake.saves[2] = _server_save(save_id=2, rom_id=123, slot="desktop")
-        fetched = threading.Event()
-        fetch = fake.get_save_summary
+        lock = _ObservedLock()
+        monkeypatch.setattr(svc._sync_engine, "rom_lock", lambda _rom_id: lock)
 
-        def fetch_and_signal(rid: int):
-            summary = fetch(rid)
-            fetched.set()
-            return summary
-
-        monkeypatch.setattr(fake, "get_save_summary", fetch_and_signal)
-
-        lock = svc._sync_engine.rom_lock(123)
         await lock.acquire()
         task = asyncio.create_task(svc.get_save_slots(123))
-        assert await asyncio.to_thread(fetched.wait, 5)
-        await asyncio.sleep(0.05)
-        assert not task.done()  # blocked on the held lock
+        for _ in range(1000):
+            if task in lock.askers or task.done():
+                break
+            await asyncio.sleep(0.005)
+        assert task in lock.askers
+        assert not task.done()
+        assert ("get_save_summary", (123,), {}) in fake.call_log
         assert _require_save_state(svc, 123).slots == seeded_slots
 
         lock.release()

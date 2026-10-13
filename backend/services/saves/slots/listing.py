@@ -64,8 +64,8 @@ class SlotListing:
         exist on the server (unless they are the active_slot).
 
         The read-merge-write of the ROM's save state runs under
-        ``SyncEngine.rom_lock(rom_id)``, waiting behind a sync of the same ROM;
-        the server fetch stays outside the lock.
+        ``SyncEngine.rom_lock(rom_id)``, waiting while any other holder of that
+        lock runs for the same ROM; the server fetch stays outside the lock.
 
         Refuses with ``sync_disabled`` while save sync is off. A server that
         cannot be reached raises ``ServerUnreachable`` carrying the persisted
@@ -123,7 +123,6 @@ class SlotListing:
                 active_slot = rom_state.active_slot
                 persisted_slots = rom_state.slots
 
-            # Merge: update persisted slots with server data, promote local→server
             merged: dict[str, dict[str, Any]] = {}
             for s in server_slots_list:
                 raw = s.get("slot") or s.get("slot_name")
@@ -136,8 +135,7 @@ class SlotListing:
 
             self._merge_persisted_slots(persisted_slots, merged, active_slot)
 
-            # The aggregate may not exist yet (ROM never synced) — start a
-            # fresh default and seed its active slot.
+            # A ROM that never synced has no aggregate yet.
             if rom_state is None:
                 rom_state = RomSaveSyncState()
                 rom_state.switch_active_slot(active_slot)
