@@ -2984,7 +2984,7 @@ describe("RomMPlaySection", () => {
         success: true,
         message: "",
         downloaded: 3,
-        errors: [],
+        failed: [],
       } as never);
       vi.mocked(backend.getBiosStatus).mockResolvedValue({
         bios_status: {
@@ -3025,16 +3025,45 @@ describe("RomMPlaySection", () => {
         success: true,
         message: "",
         downloaded: 0,
-        errors: [],
+        failed: [],
       } as never);
       vi.mocked(backend.getBiosStatus).mockRejectedValue(new Error("net"));
+      vi.mocked(toaster.toast).mockClear();
+      const listener = vi.fn();
+      globalThis.addEventListener("romm_data_changed", listener);
+      try {
+        await act(async () => {
+          await items[3]!.props.onClick?.();
+        });
+        // Toast still fires; fallback has bios_status null → skips setInfo.
+        expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+          expect.objectContaining({ body: "BIOS downloaded (0 files)" }),
+        );
+        // A batch that downloaded nothing changed no firmware, so no page is told.
+        const biosEvents = listener.mock.calls.map((c) => c[0] as CustomEvent).filter((e) => e.detail.type === "bios");
+        expect(biosEvents).toHaveLength(0);
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", listener);
+      }
+    });
+
+    it("a batch with failed files → toasts the backend's sentence naming them", async () => {
+      const items = await setupBiosAction();
+      vi.mocked(backend.downloadAllFirmware).mockResolvedValue({
+        success: true,
+        message: "Downloaded 2 firmware files (1 failed: scph5501.bin)",
+        downloaded: 2,
+        failed: ["scph5501.bin"],
+      });
       vi.mocked(toaster.toast).mockClear();
       await act(async () => {
         await items[3]!.props.onClick?.();
       });
-      // Toast still fires; fallback has bios_status null → skips setInfo.
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({ body: "BIOS downloaded (0 files)" }),
+        expect.objectContaining({ body: "Downloaded 2 firmware files (1 failed: scph5501.bin)" }),
+      );
+      expect(vi.mocked(toaster.toast)).not.toHaveBeenCalledWith(
+        expect.objectContaining({ body: "BIOS downloaded (2 files)" }),
       );
     });
 

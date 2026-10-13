@@ -1527,12 +1527,21 @@ it, for the focused platform:
   **A running download is said by the button that started it.** The pressed button — bulk or per-row — becomes a
   spinner, every other download button on the pane disables, and when it finishes the rows re-read. There is no
   "Downloaded _X_" notice any more: a success says itself. A **failure** still gets words, in the same status line under
-  the section, carrying the backend's own message; for a DOWNLOAD that line is failure-only, and the pressed button
-  itself says `Failed` in red for two seconds before everything returns. The platform-wide Delete BIOS still writes its
-  result there on success too ("Deleted 3 BIOS file(s)"), which is the one outcome on this pane no row can show; a row's
-  own Delete says it by the row changing. The spinner is keyed on the run's slug as well as the button's identity, so
-  walking to another platform mid-download shows disabled buttons and the "Working on _X_" line rather than a spinner
-  that belongs elsewhere.
+  the section, carrying the backend's own message, and the pressed button itself says `Failed` in red for two seconds
+  before everything returns. For a DOWNLOAD that line is otherwise failure-only, with one case beside it: the two
+  batches (`Download required`, `Download all`) answer success even where some of their files could not be fetched,
+  naming those in a `failed` list beside the message, and then the line carries the backend's sentence ("Downloaded 2
+  firmware files (1 failed: scph5501.bin)"). The button says `Failed` as well only when the batch fetched none of its
+  files. The platform-wide Delete BIOS still writes its result there on success too ("Deleted 3 BIOS file(s)"), which is
+  the one outcome on this pane no row can show; a row's own Delete says it by the row changing. A delete that could not
+  remove every file answers `delete_incomplete`: its line says so, and the rows are re-read all the same, because what
+  it did remove is gone. The platform-wide one names no file; the rows still offering Delete after the re-read are the
+  files that stayed. An open game page is told of a BIOS change (`romm_data_changed`, `bios`) only when a run moved a
+  file — a download that fetched one, a delete that removed one — because each page that matches pays a live BIOS read
+  for it. The game page's own Download BIOS keeps that rule too, and its toast is the backend's sentence once a file
+  failed, "BIOS downloaded (_N_ files)" otherwise. The spinner is keyed on the run's slug as well as the button's
+  identity, so walking to another platform mid-download shows disabled buttons and the "Working on _X_" line rather than
+  a spinner that belongs elsewhere.
 
   **The per-row Delete is authorised by the download record and nothing else** — the row carries `deletable_count`,
   which the backend derives from the same records the platform count comes from (`_stamp_deletable`), and the unlink

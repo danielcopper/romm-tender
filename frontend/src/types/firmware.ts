@@ -556,13 +556,15 @@ export interface BiosStatus {
   bios_status_unknown?: boolean;
 }
 
-/** A firmware download's success answer — a batch whose files partly or wholly failed answers it too, naming them
- *  in `message`; its failure is the endpoints' shared one. `file_path` and `md5_match` come only from the per-row
- *  download, and only when it fetched. */
+/** A firmware download's success answer — a batch whose files partly or wholly failed answers it too; its failure is
+ *  the endpoints' shared one. `failed` comes only from the two batches, naming the files they could not fetch, and
+ *  once it is non-empty `message` is the sentence that says so. `file_path` and `md5_match` come only from the
+ *  per-row download, and only when it fetched. */
 export interface FirmwareDownloadResult {
   success: true;
   message: string;
   downloaded: number;
+  failed?: string[];
   file_path?: string;
   md5_match?: boolean | null;
 }

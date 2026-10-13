@@ -2939,19 +2939,35 @@ describe("Library › Platforms", () => {
         deleted_count: 0,
         message: "Could not delete gc-pal-12.bin: permission denied",
       });
-      const { container } = render(<LibraryPage onBack={vi.fn()} />);
-      await flushAsync();
+      const events: CustomEvent[] = [];
+      const listener = ((e: Event) => events.push(e as CustomEvent)) as EventListener;
+      globalThis.addEventListener("romm_data_changed", listener);
+      try {
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        const readsBefore = vi.mocked(backend.getPlatformFirmwareStatus).mock.calls.length;
 
-      await act(async () => {
-        fireEvent.click([...container.querySelectorAll("button")].find((b) => b.textContent === "Delete")!);
-        await Promise.resolve();
-      });
-      await confirmLastModal();
+        await act(async () => {
+          fireEvent.click([...container.querySelectorAll("button")].find((b) => b.textContent === "Delete")!);
+          await Promise.resolve();
+        });
+        await confirmLastModal();
 
-      expect(vi.mocked(backend.deleteBiosFile)).toHaveBeenCalledWith("gba", "gc-pal-12.bin");
-      expect(within(container).getByTestId("status-bios").textContent).toBe(
-        "Could not delete gc-pal-12.bin: permission denied",
-      );
+        expect(vi.mocked(backend.deleteBiosFile)).toHaveBeenCalledWith("gba", "gc-pal-12.bin");
+        expect(within(container).getByTestId("status-bios").textContent).toBe(
+          "Could not delete gc-pal-12.bin: permission denied",
+        );
+        // A `delete_incomplete` is re-read like a success, and one that removed
+        // nothing tells no game page.
+        const since = vi
+          .mocked(backend.getPlatformFirmwareStatus)
+          .mock.calls.map(([slug]) => slug)
+          .slice(readsBefore);
+        expect(since).toEqual(["gba"]);
+        expect(events).toHaveLength(0);
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", listener);
+      }
     });
 
     it("offers a folder row the delete of what we downloaded into it", async () => {
@@ -3283,6 +3299,62 @@ describe("Library › Platforms", () => {
       }
     });
 
+    it("names the files a batch passed over, and keeps the button for a batch that fetched some", async () => {
+      vi.mocked(backend.downloadRequiredFirmware).mockResolvedValue({
+        success: true,
+        message: "Downloaded 1 required firmware files (1 failed: gba_bios.bin)",
+        downloaded: 1,
+        failed: ["gba_bios.bin"],
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Download required (1)")!);
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
+
+      expect(within(container).getByTestId("status-bios").textContent).toBe(
+        "Downloaded 1 required firmware files (1 failed: gba_bios.bin)",
+      );
+      expect(buttonByText(container, "Failed")).toBeUndefined();
+      expect(buttonByText(container, "Download required (1)")).not.toBeDisabled();
+    });
+
+    it("says Failed on the button of a batch that fetched none of its files", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(backend.downloadAllFirmware).mockResolvedValue({
+          success: true,
+          message: "Downloaded 0 firmware files (1 failed: gba_bios.bin)",
+          downloaded: 0,
+          failed: ["gba_bios.bin"],
+        });
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await act(async () => {
+          for (let i = 0; i < 10; i++) await Promise.resolve();
+        });
+
+        await act(async () => {
+          fireEvent.click(buttonByText(container, "Download all")!);
+          for (let i = 0; i < 8; i++) await Promise.resolve();
+        });
+
+        expect(buttonByText(container, "Failed")).toBeTruthy();
+        expect(within(container).getByTestId("status-bios").textContent).toBe(
+          "Downloaded 0 firmware files (1 failed: gba_bios.bin)",
+        );
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(2000);
+        });
+
+        expect(buttonByText(container, "Failed")).toBeUndefined();
+        expect(buttonByText(container, "Download all")).not.toBeDisabled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("surfaces a download that threw", async () => {
       vi.mocked(backend.downloadRequiredFirmware).mockRejectedValue(new Error("io"));
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
@@ -3322,6 +3394,40 @@ describe("Library › Platforms", () => {
       await confirmLastModal();
       expect(vi.mocked(backend.deletePlatformBios)).toHaveBeenCalledWith("gba");
       expect(within(container).getByTestId("status-bios").textContent).toBe("Deleted 2 BIOS files");
+    });
+
+    it("re-reads the platform after a delete that removed only part, and announces what went", async () => {
+      mockFirmware([firmwarePlatform({ deletable_count: 2 })]);
+      vi.mocked(backend.deletePlatformBios).mockResolvedValue({
+        success: false,
+        reason: "delete_incomplete",
+        deleted_count: 1,
+        message: "Deleted 1 file(s), 1 error(s)",
+      });
+      const events: CustomEvent[] = [];
+      const listener = ((e: Event) => events.push(e as CustomEvent)) as EventListener;
+      globalThis.addEventListener("romm_data_changed", listener);
+      try {
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        const readsBefore = vi.mocked(backend.getPlatformFirmwareStatus).mock.calls.length;
+
+        await act(async () => {
+          fireEvent.click(buttonByText(container, "Delete BIOS (2)")!);
+          await Promise.resolve();
+        });
+        await confirmLastModal();
+
+        expect(within(container).getByTestId("status-bios").textContent).toBe("Deleted 1 file(s), 1 error(s)");
+        const since = vi
+          .mocked(backend.getPlatformFirmwareStatus)
+          .mock.calls.map(([slug]) => slug)
+          .slice(readsBefore);
+        expect(since).toEqual(["gba"]);
+        expect(events.map((e) => e.detail)).toEqual([{ type: "bios", platform_slug: "gba" }]);
+      } finally {
+        globalThis.removeEventListener("romm_data_changed", listener);
+      }
     });
 
     it("surfaces a BIOS delete that threw", async () => {

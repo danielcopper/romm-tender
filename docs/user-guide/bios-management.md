@@ -336,7 +336,10 @@ and the row you focus is the one the right-hand pane describes.
     region has its image — and the number on it counts exactly what it would fetch. All three are always there and grey
     out when there is nothing to do. What they follow is your **library**, not the readiness line above them: a system
     Tender could work out nothing about still offers everything your library holds for it, because those are two
-    separate questions — see [When the requirement is unknown](#when-the-requirement-is-unknown)
+    separate questions — see [When the requirement is unknown](#when-the-requirement-is-unknown). The two downloads
+    carry on past a file they cannot fetch: the line under the section then names the files that failed, and the button
+    turns red only when none of them could be fetched. **Download BIOS** in a game's RomM Actions menu carries on the
+    same way and names the failed files in its notification
 
 <!-- Screenshot: Library › Platforms with a platform selected, its core button above the BIOS table -->
 
@@ -384,8 +387,9 @@ downloaded into it; the folder itself stays.
 
 This is a destructive action, so a confirmation dialog asks you to confirm before anything is deleted. Once confirmed,
 Tender removes the BIOS files **it downloaded** for that system from your RetroDECK bios directory and reports the
-result. Games that need those files won't launch until you download them again with **Download All** or **Download
-Required**.
+result. Where a file cannot be removed, the line under the section says so and the list re-reads itself: the rows that
+still offer **Delete** are the files that stayed. Games that need those files won't launch until you download them again
+with **Download All** or **Download Required**.
 
 **It only ever deletes its own downloads.** A file is removed when Tender has a record of downloading it, and for no
 other reason. Everything else in the BIOS folder is left alone, including:

@@ -624,10 +624,13 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     try {
       const result = await downloadAllFirmware(detail.platformSlug, detail.romId);
       if (result.success) {
-        showToast(`BIOS downloaded (${result.downloaded} files)`);
-        globalThis.dispatchEvent(
-          new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug: detail.platformSlug } }),
-        );
+        const failed = result.failed ?? [];
+        showToast(failed.length > 0 ? result.message : `BIOS downloaded (${result.downloaded} files)`);
+        if (result.downloaded > 0) {
+          globalThis.dispatchEvent(
+            new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug: detail.platformSlug } }),
+          );
+        }
         // Refresh BIOS status — getBiosStatus ships pre-computed level/label so we don't re-derive.
         await refreshBiosStatus(appId);
       } else {
