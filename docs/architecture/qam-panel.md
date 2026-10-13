@@ -1526,16 +1526,17 @@ it, for the focused platform:
 
   **A running download is said by the button that started it.** The pressed button — bulk or per-row — becomes a
   spinner, every other download button on the pane disables, and when it finishes the rows re-read. There is no
-  "Downloaded _X_" notice any more: a success says itself. A **failure** still gets words, in the same status line under
-  the section, carrying the backend's own message, and the pressed button itself says `Failed` in red for two seconds
-  before everything returns. For a DOWNLOAD that line is otherwise failure-only, with one case beside it: the two
-  batches (`Download required`, `Download all`) answer success even where some of their files could not be fetched,
-  naming those in a `failed` list beside the message, and then the line carries the backend's sentence ("Downloaded 2
-  firmware files (1 failed: scph5501.bin)"). The button says `Failed` as well only when the batch fetched none of its
-  files. The platform-wide Delete BIOS still writes its result there on success too ("Deleted 3 BIOS file(s)"), which is
-  the one outcome on this pane no row can show; a row's own Delete says it by the row changing. A delete that could not
-  remove every file answers `delete_incomplete`: its line says so, and the rows are re-read all the same, because what
-  it did remove is gone. The platform-wide one names no file; the rows still offering Delete after the re-read are the
+  "Downloaded _X_" notice any more: a success says itself. A **failure** of a download still gets words, in the same
+  status line under the section, carrying the backend's own message, and the pressed button itself says `Failed` in red
+  for two seconds before everything returns. For a DOWNLOAD that line is otherwise failure-only, except that the two
+  batches (`Download required`, `Download all`) carry on past a file whose download is refused or meets a RomM error —
+  any other fault ends the batch — and answer success, naming those files in a `failed` list beside the message; the
+  line then carries the backend's sentence ("Downloaded 2 firmware files (1 failed: scph5501.bin)"). The button says
+  `Failed` as well only when every file the batch tried failed. The platform-wide Delete BIOS still writes its result
+  there on success too ("Deleted 3 BIOS file(s)"), which is the one outcome on this pane no row can show; a row's own
+  Delete says it by the row changing. A delete that could not remove every file answers `delete_incomplete`: its line
+  says so, and the rows are re-read as after a success, because it may have removed files or dropped records before the
+  file it stopped on. The platform-wide one names no file; the rows still offering Delete after the re-read are the
   files that stayed. An open game page is told of a BIOS change (`romm_data_changed`, `bios`) only when a run moved a
   file — a download that fetched one, a delete that removed one — because each page that matches pays a live BIOS read
   for it. The game page's own Download BIOS keeps that rule too, and its toast is the backend's sentence once a file

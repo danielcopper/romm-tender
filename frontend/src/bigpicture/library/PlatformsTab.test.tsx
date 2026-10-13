@@ -2926,7 +2926,7 @@ describe("Library › Platforms", () => {
       expect(row.textContent).not.toContain("codehandler.bin");
     });
 
-    it("deletes one BIOS file by name, and says so only when it fails", async () => {
+    it("deletes one BIOS file by name, says so only when it fails, and re-reads after a delete that could not finish", async () => {
       mockFirmware([
         firmwarePlatform({
           files: [firmwareFile({ file_name: "gc-pal-12.bin", downloaded: true, satisfied: true, deletable_count: 1 })],
@@ -3320,7 +3320,7 @@ describe("Library › Platforms", () => {
       expect(buttonByText(container, "Download required (1)")).not.toBeDisabled();
     });
 
-    it("says Failed on the button of a batch that fetched none of its files", async () => {
+    it("says Failed on the button of a batch in which every file it tried failed", async () => {
       vi.useFakeTimers();
       try {
         vi.mocked(backend.downloadAllFirmware).mockResolvedValue({

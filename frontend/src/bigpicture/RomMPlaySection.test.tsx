@@ -3019,7 +3019,7 @@ describe("RomMPlaySection", () => {
       }
     });
 
-    it("getBiosStatus rejection during refresh → uses safe fallback, no setInfo write", async () => {
+    it("nothing downloaded and getBiosStatus rejecting → safe fallback, no setInfo write, no game page told", async () => {
       const items = await setupBiosAction();
       vi.mocked(backend.downloadAllFirmware).mockResolvedValue({
         success: true,

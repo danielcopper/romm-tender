@@ -338,8 +338,10 @@ and the row you focus is the one the right-hand pane describes.
     Tender could work out nothing about still offers everything your library holds for it, because those are two
     separate questions — see [When the requirement is unknown](#when-the-requirement-is-unknown). The two downloads
     carry on past a file they cannot fetch: the line under the section then names the files that failed, and the button
-    turns red only when none of them could be fetched. **Download BIOS** in a game's RomM Actions menu carries on the
-    same way and names the failed files in its notification
+    says **Failed** only when not a single file could be fetched
+
+**Download BIOS** in a game's RomM Actions menu carries on past a file it cannot fetch the same way, and names the
+failed files in its notification.
 
 <!-- Screenshot: Library › Platforms with a platform selected, its core button above the BIOS table -->
 
