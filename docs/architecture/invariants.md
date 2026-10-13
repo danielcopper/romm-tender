@@ -1340,11 +1340,19 @@ Format: **invariant** — tier — enforced by.
   that loop is the shape this rule is about, because the copies would drift silently. **Nothing mechanical stands behind
   any of this.** A delete path looping a status list on `downloaded` alone would go green — which is exactly the shape
   this one had when it destroyed that file
-- **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — prompt-only — the sync
-  paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rollback, the removed-game cleanup,
-  deleting and counting a platform's saves, and the passes that record each installed ROM's save directory hold the
-  lock, and following a moved save directory runs inside the lock of whichever holder calls it; mechanize via a
-  `rom_save_sync_states.save` call-site audit
+- **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — test + prompt-only —
+  the sync paths, `get_save_status`, the slot list, the three slot mutations, copy to slot, rolling back to a save
+  version, the removed-game cleanup, deleting a ROM's or a platform's local saves and counting a platform's, and the
+  passes that record each installed ROM's save directory hold the lock (the count and the record passes for the
+  directory follow, not for a write of the save state), and following a moved save directory runs inside the lock of
+  whichever holder calls it. Tests pin the status
+  (`tests/services/saves/test_status.py::TestGetSaveStatusRomLockSerialization`), the three slot mutations
+  (`tests/services/saves/test_slots.py::TestSlotMutationLocking`), the slot list
+  (`test_slots.py::TestSaveSlotsUnderRomLock`), a sync
+  (`tests/services/saves/test_service.py::TestPerRomLockSerialization::test_per_rom_lock_serializes_concurrent_sync`)
+  and the removed-game cleanup (`tests/services/saves/test_prune_support.py::TestLockPruneRoms`); prompt-only: every
+  other holder and any new read-mutate-write — mechanize via a call-site audit of `rom_save_sync_states.save` and
+  `write_save_state`
 - **Which files a game's save consists of is the EMULATOR's answer, read live, and six of its seven states refuse the
   sync — no probe, no state written; a place not read from the emulator's own settings is one of them** — test +
   prompt-only — `tests/adapters/test_atlas_saves.py` pins the seven states and every way the question cannot be put,

@@ -1110,34 +1110,36 @@ input.
 
 `SyncEngine._rom_sync_locks: dict[int, asyncio.Lock]` (`services/saves/sync_engine/engine.py`) serializes
 `pre_launch_sync`, `post_exit_sync`, `sync_rom_saves`, `sync_all_saves`, and `resolve_sync_conflict` for the same
-`rom_id`. `StatusService.get_save_status` also takes the lock — not for the read, but for its one write: the executor
-body adopts a baseline hash (`Skip(adopt_baseline=True)`) and persists it through a `rom_save_sync_states`
-read-modify-write, which would otherwise race a concurrent sync and clobber that sync's update. The slot list
-(`SlotListing.get_save_slots`) takes it for the same reason: it merges the server's slots into the stored listing and
-writes the state back, reading, merging and writing in one unit of work. Both ask the server first, outside the lock,
-and hold it only for the local read-modify-write; a slot list whose server cannot be reached reads the stored state for
+`rom_id`. `StatusService.get_save_status` also takes the lock because of its one write: the executor body adopts a
+baseline hash (`Skip(adopt_baseline=True)`) and persists it through a `rom_save_sync_states` read-modify-write, which
+would otherwise race a concurrent sync and clobber that sync's update. It asks the server first, outside the lock, and
+holds the lock across the save-answer reading, the directory follow and the local probe as well as that write. The slot
+list (`SlotListing.get_save_slots`) takes the lock for the same reason: it merges the server's slots into the stored
+listing and writes the state back. It too asks the server first, outside the lock, and holds the lock only for its one
+unit of work — the read, the merge and the write; a slot list whose server cannot be reached reads the stored state for
 its last-known listing without the lock and writes nothing. The three **slot mutations** — `SlotSwitcher.switch_slot`,
 `SetupWizard.confirm_slot_choice`, and `SlotDeleter.delete_slot` — take the lock too: each loads the `RomSaveSyncState`
 aggregate, mutates it (active-slot flip, slot-confirm, slot/file tracking teardown, switch downloads/deletes), and
 persists, so without the lock a slot op racing an in-flight sync on the same ROM loses updates or PUTs the wrong slot's
 content into the tracked server save (#1057). Unlike the status and the slot list, they hold it across their server I/O:
-`switch_slot` lists the server's saves for the new slot, `delete_slot` deletes the slot's server saves, and
-`confirm_slot_choice`'s migration lists, downloads and uploads, all under the lock. The lock is held as well by
+`switch_slot` lists the ROM's server saves and downloads the new slot's, `delete_slot` deletes the slot's server saves,
+and `confirm_slot_choice`'s migration lists, downloads and uploads, all under the lock. The lock is held as well by
 `SaveCopyService.copy_save_to_slot`, `VersionsService.rollback_to_version`, the removed-game cleanup
 (`PruneSaveSupport.lock_prune_roms`, one lock for each ROM its save inventory names, taken in ascending id order),
-deleting and counting a platform's local saves (`SaveService._delete_saves_for_roms`,
+deleting a ROM's or a platform's local saves and counting a platform's (`SaveService._delete_saves_for_roms`,
 `SaveService.count_platform_saves`), and the passes that record each installed ROM's save directory
-(`SyncEngine._record_each_installed_rom`); following a moved save directory (`SyncEngine.follow_save_directory`) runs
-inside the lock of whichever holder calls it. Different rom_ids have independent locks, so cross-game concurrency (e.g.
-Sync All Saves running concurrently with a resolve on one specific rom) is unaffected. The lock is created lazily on
-first access (`SyncEngine.rom_lock(rom_id)`).
+(`SyncEngine._record_each_installed_rom`) — the count and the record passes hold it for the directory follow, not for a
+write of the save state; following a moved save directory (`SyncEngine.follow_save_directory`) runs inside the lock of
+whichever holder calls it. Different rom_ids have independent locks, so cross-game concurrency (e.g. Sync All Saves
+running concurrently with a resolve on one specific rom) is unaffected. The lock is created lazily on first access
+(`SyncEngine.rom_lock(rom_id)`).
 
 The lock is **not reentrant** (plain `asyncio.Lock`), so a critical section must never call a peer that re-acquires the
 same lock. `switch_slot` is the live instance: its tail `get_save_status` re-takes `rom_lock(rom_id)`, so the lock is
 released at the end of the read-mutate-write block and the status read runs **outside** it — nesting them would
 self-deadlock. The peer calls a slot mutation makes while holding the lock (`read_save_answer`, the directory follow,
-`_migrate_slot_saves`, `_delete_server_slot_saves`, the matrix download/upload workers) are all lock-free by design, so
-holding the lock across their server/file I/O is safe and is the intended serialization point.
+`_migrate_slot_saves_io`, `_delete_server_slot_saves`, the matrix download/upload workers) are all lock-free by design,
+so holding the lock across their server/file I/O is safe and is the intended serialization point.
 
 The realistic race the lock prevents: user clicks Keep Local → executor runs the POST (`overwrite=true`) + state
 mutation → in parallel, `post_exit_sync` for a game that just stopped runs and mutates the same per-file state →
@@ -1620,8 +1622,9 @@ via `invalidate_device_id_cache()` for the rare case where `kv_config["device_id
 sub-service that needs the id — `SyncEngine`, `StatusService`, `VersionsService`, the slot sub-services (`SlotListing` /
 `SlotSwitcher` / `SetupWizard` / `SlotDeleter`), and `RollbackOrchestrator` — receives the shared `DeviceRegistry`
 through its `*ServiceConfig` (the [same-bounded-context peer-ref carve-out](backend-architecture.md)) and reads the id
-through it, instead of each opening its own `kv_config` read. The registry is built once in the `SaveService` facade and
-threaded into every sub-service config.
+through it, instead of each opening its own `kv_config` read. The four slot sub-services are the exception to the
+config: they take the registry, as they take every other dependency, as a bare keyword argument. The registry is built
+once in the `SaveService` facade and threaded into every sub-service config.
 
 **A dead id heals itself, and its queued playtime moves with it.** A cached id is trusted only as far as the best-effort
 `update_device` touch every `ensure_device_registered` makes: a definitive **404** means the server no longer has this
