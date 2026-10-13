@@ -1137,6 +1137,18 @@ class TestTranslateHttpError:
         assert result.status_code == 429
         assert "Rate limited" in str(result)
 
+    def test_a_5xx_body_not_announced_as_json_is_never_read(self, romm_http):
+        """A proxy's error page can never be RomM's proof, so it is not even read."""
+        hdrs = http.client.HTTPMessage()
+        hdrs["Content-Type"] = "text/html"
+        body = MagicMock()
+        exc = urllib.error.HTTPError("url", 502, "Bad Gateway", hdrs, body)
+
+        result = romm_http.adapter.translate_http_error(exc, "http://romm.local/api/x")
+
+        assert type(result) is RommServerError
+        body.read.assert_not_called()
+
     def test_other_4xx_becomes_a_client_error_carrying_its_status(self, romm_http):
         exc = urllib.error.HTTPError("url", 418, "I'm a Teapot", http.client.HTTPMessage(), None)
         result = romm_http.adapter.translate_http_error(exc, "http://romm.local/api/x")
@@ -2234,6 +2246,28 @@ class TestDownloadExternal:
         assert req.get_header("User-agent") == _USER_AGENT
         with open(dest, "rb") as f:
             assert f.read() == data
+
+    def test_a_cdn_5xx_with_a_json_detail_is_never_romm_reporting_an_error(self, tmp_path):
+        """The cover CDN is not RomM, whatever its error body says."""
+        adapter = self._adapter_with_token()
+
+        def the_cdn_fails(*_args, **_kwargs):
+            raise _http_error(
+                500,
+                "Internal Server Error",
+                content_type="application/json",
+                body=json.dumps({"detail": "cache backend down"}).encode(),
+                url="https://cdn.example.com/x.png",
+            )
+
+        with (
+            patch("urllib.request.urlopen", side_effect=the_cdn_fails),
+            patch("time.sleep"),
+            pytest.raises(RommServerError) as raised,
+        ):
+            adapter.download_external("https://cdn.example.com/x.png", str(tmp_path / "cover.png"))
+
+        assert type(raised.value) is RommServerError
 
     def test_uses_absolute_url_verbatim_not_romm_prefixed(self, tmp_path):
         """The url is absolute — it must NOT be prefixed with romm_url."""

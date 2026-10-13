@@ -16,6 +16,7 @@ from lib.errors import (
     RommConnectionError,
     RommForbiddenError,
     RommNotFoundError,
+    RommReportedServerError,
     RommServerError,
     RommSSLError,
     RommSyncDisabledError,
@@ -210,6 +211,15 @@ class TestClassifyError:
         code, msg = classify_error(RommServerError("bad gateway", status_code=502))
         assert code == "server_unreachable"
         assert "502" in msg
+
+    def test_romm_s_own_5xx_detail_answers_its_first_line_cut_to_200_characters(self):
+        first_line = "x" * 250
+        error = RommReportedServerError("HTTP 500", 500, detail=f"{first_line}\nTraceback (most recent call last):")
+
+        code, msg = classify_error(error)
+
+        assert code == "server_error"
+        assert msg == f"RomM reported an error (HTTP 500) \u2014 {'x' * 199}\u2026"
 
     def test_not_found_error(self):
         code, msg = classify_error(RommNotFoundError("missing"))
