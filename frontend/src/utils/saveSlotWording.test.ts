@@ -315,3 +315,21 @@ describe("the reviewer's edges", () => {
     });
   });
 });
+
+describe("rollbackFeedback for a restore that RomM or this device refused", () => {
+  it("words a version this device could not write", () => {
+    const message = "it could not be written on this device (No space left on device)";
+    expect(rollbackFeedback({ status: "write_failed", message }, null)).toEqual({
+      kind: "toast",
+      message: `Couldn't restore the save: ${message}`,
+    });
+  });
+
+  it("words what RomM answered the listing with", () => {
+    const message = "RomM is rate-limiting requests — try again in a moment";
+    expect(rollbackFeedback({ status: "romm_refused", message }, null)).toEqual({
+      kind: "toast",
+      message: `Couldn't restore the save: ${message}`,
+    });
+  });
+});

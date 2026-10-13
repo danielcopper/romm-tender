@@ -7,6 +7,8 @@ import {
   legacyMigrateConfirmDescription,
   legacyTrackExplainer,
   resolveSaveSetupOutcome,
+  rommRefusedToastBody,
+  rommRefusedWizardMessage,
   startFreshHint,
   startFreshHintNewSlot,
   wizardMigrationOutcomeToastBody,
@@ -443,5 +445,51 @@ describe("legacy-migration copy (#1498)", () => {
     it("returns null when nothing was attempted", () => {
       expect(wizardMigrationOutcomeToastBody(0, 0, "default")).toBeNull();
     });
+  });
+});
+
+describe("a save listing RomM refused (romm_refused)", () => {
+  const message = "RomM is rate-limiting requests — try again in a moment";
+
+  it("resolves to its own outcome carrying RomM's message, never to auto-confirm", () => {
+    const info = makeInfo({
+      recommended_action: "romm_refused",
+      server_query_failed: true,
+      message,
+      has_local_saves: true,
+    });
+    expect(resolveSaveSetupOutcome(info)).toEqual({ kind: "romm_refused", message });
+  });
+
+  it("aborts the launch with RomM's message and opens the Saves tab", async () => {
+    const deps = makeLaunchGateDeps();
+    const result = await applyLaunchGateSetupOutcome({ kind: "romm_refused", message }, deps);
+    expect(result).toBe("abort");
+    expect(deps.toast).toHaveBeenCalledWith(rommRefusedToastBody(message));
+    expect(deps.dispatchSavesTab).toHaveBeenCalledOnce();
+    expect(deps.confirmSlotChoice).not.toHaveBeenCalled();
+  });
+
+  it("holds the wizard on RomM's message, never auto-confirming", async () => {
+    const deps = makeWizardDeps();
+    await applyWizardInitialSetupResult(makeInfo({ recommended_action: "romm_refused", message }), deps);
+    expect(deps.setError).toHaveBeenCalledWith(rommRefusedWizardMessage(message));
+    expect(deps.confirmSlotChoice).not.toHaveBeenCalled();
+    expect(deps.setInfo).not.toHaveBeenCalled();
+  });
+
+  it("holds the wizard on a retry too, and clears loading", () => {
+    const deps = makeRetryDeps();
+    applyWizardRetrySetupResult(makeInfo({ recommended_action: "romm_refused", message }), deps);
+    expect(deps.setError).toHaveBeenCalledWith(rommRefusedWizardMessage(message));
+    expect(deps.setLoading).toHaveBeenCalledWith(false);
+    expect(deps.setInfo).not.toHaveBeenCalled();
+  });
+
+  it("words RomM's answer, never an outage", () => {
+    expect(rommRefusedWizardMessage(message)).toContain(message);
+    expect(rommRefusedToastBody(message)).toContain(message);
+    expect(rommRefusedWizardMessage(message)).not.toMatch(/unreachable|not reachable|offline/i);
+    expect(rommRefusedToastBody(message)).not.toMatch(/unreachable|not reachable|offline/i);
   });
 });
