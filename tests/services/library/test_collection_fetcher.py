@@ -449,6 +449,28 @@ class TestFetchCollectionUnitSkip:
         assert not [c for c in fake_romm_api.call_log if c[0] == "list_roms_by_collection"]
 
     @pytest.mark.asyncio
+    async def test_skip_keeps_what_the_last_sync_stored_of_whether_romm_has_a_file(self, library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+        uow = library.uow
+        _seed_collection_stamp(
+            uow,
+            "7",
+            "standard",
+            updated_at="2026-01-01T00:00:00",
+            completed_at="2026-06-01T00:00:00",
+            rom_count=1,
+            member_rom_ids=(10,),
+        )
+        _seed_persisted_rom(uow, 10, app_id=1010, group_key="igdb:10:1", platform_slug="gba", has_file_on_disk=False)
+        fake_romm_api.roms = {10: {"id": 10, "collection_ids": [7], "updated_at": "2026-01-01T00:00:00"}}
+        unit = _user_collection_unit(rom_count=1)
+
+        new_roms, _all_ids, skipped = await library.sync._collection_fetcher.fetch_collection_unit(unit, set())
+
+        assert skipped is True
+        assert [(r["id"], r["has_file_on_disk"]) for r in new_roms] == [(10, False)]
+
+    @pytest.mark.asyncio
     async def test_skip_omits_unbound_member_from_reconstruction(self, library, fake_romm_api):
         """An unbound / absent member is not reconstructed (it is a sibling handled at
         finalize, not a shortcut to rebuild), but is still marked synced."""

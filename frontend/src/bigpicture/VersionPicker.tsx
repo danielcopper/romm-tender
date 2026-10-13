@@ -53,6 +53,7 @@ import { applyCommittedVersionSwitch } from "../utils/versionSwitchApplication";
 import { showUnsyncedSavesModal } from "./UnsyncedSavesSwitchModal";
 import { getEventTarget } from "../utils/events";
 import { setBoundVanished } from "../utils/vanishedBinding";
+import { NO_FILE_ON_ROMM_LABEL } from "../utils/noFileOnRommWording";
 import { detach } from "../utils/detach";
 import {
   capturePruneLeaseAdmission,
@@ -91,6 +92,12 @@ const BADGE_COLORS: Record<"accent" | "muted" | "good", { bg: string; fg: string
 
 /** The label a row (or a singleton binding) carries once RomM 404s its exact id. */
 const VANISHED_HINT = "No longer available on RomM";
+
+/**
+ * Whether a row can be switched to. A version RomM holds no file for can only
+ * be played from a local copy, so it is offered only where one is installed.
+ */
+const isSelectable = (v: VersionInfo): boolean => !v.vanished && v.switchable && !(v.no_file && !v.installed);
 
 /** Accessible name of the trash affordance that opens the cleanup confirmation. */
 const REMOVE_LOCAL_DATA_LABEL = "Remove local data";
@@ -406,11 +413,11 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
   };
 
   const handleSwitch = async (target: VersionInfo): Promise<void> => {
-    if (target.active || target.vanished) return;
-    // A non-switchable row is a RomM sibling that lives in a different local group
-    // (#1359) — its row is rendered disabled, and this guard makes a click a no-op
-    // (defense-in-depth), so switch_version's rejection can never reach a toast.
-    if (!target.switchable) return;
+    // An unselectable row is rendered disabled, and this guard makes a click on
+    // one a no-op (defense-in-depth), so switch_version's rejection — of a
+    // sibling in another local group (#1359), or of one with no file — can never
+    // reach a toast.
+    if (target.active || !isSelectable(target)) return;
     setSwitching(true);
     const admission = capturePruneLeaseAdmission(leaseOwner);
     try {
@@ -498,6 +505,7 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
 
   const rowAvailabilityHint = (v: VersionInfo): ReactNode => {
     if (v.vanished) return <AvailabilityHint text={VANISHED_HINT} />;
+    if (v.no_file) return <AvailabilityHint text={NO_FILE_ON_ROMM_LABEL} />;
     if (!v.switchable) return <AvailabilityHint text="conflicting metadata match in RomM" />;
     return null;
   };
@@ -520,7 +528,7 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
           return (
             <MenuItem
               key={v.rom_id}
-              disabled={!removable && (v.vanished || !v.switchable)}
+              disabled={!removable && !isSelectable(v)}
               {...(removable ? { tone: "destructive" as const } : {})}
               onClick={() => (removable ? openCleanup(v.rom_id) : detach(handleSwitch(v)))}
             >
@@ -533,7 +541,7 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
                   color: v.active ? ACTIVE_ACCENT : undefined,
                   // Unavailable/conflicting rows stay visible as retained context,
                   // but are dimmed until RomM offers a usable target.
-                  opacity: v.vanished || !v.switchable ? 0.55 : undefined,
+                  opacity: isSelectable(v) ? undefined : 0.55,
                 }}
               >
                 {rowCover(v)}

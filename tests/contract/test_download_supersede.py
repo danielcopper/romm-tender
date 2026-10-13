@@ -103,3 +103,21 @@ async def test_the_supersede_removes_a_sibling_while_the_remove_rom_endpoints_ru
     assert refusal is None
     with harness.uow_factory() as uow:
         assert uow.rom_installs.get(1) is None
+
+
+async def test_start_download_refuses_a_rom_romm_holds_no_file_for(harness):
+    """RomM's live answer refuses the download, though the stored row says the ROM has a file (#2196)."""
+    seed_group_member(harness, 2, group_key=_GROUP, shortcut_app_id=_APP_ID)
+    _seed_server_rom(harness, 2, fs_name="new.gba")
+    harness.romm.roms[2]["has_file_on_disk"] = False
+
+    result = await harness.endpoints.start_download(2)
+    await _drain_background_tasks()
+
+    assert result == {
+        "success": False,
+        "reason": "no_file_on_romm",
+        "message": "No file on RomM. If the file was moved or renamed, rescan the library in RomM, then sync.",
+    }
+    assert not [c for c in harness.romm.call_log if c[0] == "download_rom_content"]
+    assert harness.endpoints.get_download_queue()["downloads"] == []

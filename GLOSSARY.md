@@ -475,6 +475,16 @@ user decides ([why](docs/architecture/database-design.md#a-download-whose-file-i
 _Avoid_: **stale install** — the record is not stale, its file is missing. **prune** — nothing removes the row on its
 own.
 
+### No file on RomM
+
+A ROM RomM still lists but holds **no file** for: RomM's `has_file_on_disk` is false, either because the file left its
+disk (`missing_from_fs`) or because the game is physical. RomM answers a download of it with a 404. Tender stores the
+flag on `roms.has_file_on_disk`, and the picker and the play button say _No file on RomM_
+([how the sync treats it](docs/architecture/steam-non-steam-shortcuts.md#a-bound-rom-romm-holds-no-file-for)).
+
+_Avoid_: **missing** on its own — a **missing download** is a local file gone from this device; **vanished** — a
+vanished version is one RomM answers 404 for as an entity, while a ROM without a file is one RomM still knows.
+
 ### Adopt
 
 To take something already present into Tender's records without having produced it. The object varies — a local save

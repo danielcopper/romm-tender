@@ -20,6 +20,7 @@ from domain.disk_space import disk_space_verdict
 from domain.download_frames import cancelled_frame, failed_frame
 from domain.emulator_sources import RETRODECK
 from domain.retrodeck_folders import GAME_DOWNLOAD, EveryFolderRefused, FolderRefused, folder_of
+from domain.rom_file import NO_FILE_ON_ROMM_MESSAGE, NoFileOnRomm, has_file_on_romm
 from domain.rom_files import (
     TMP_EXT,
     ZIP_TMP_EXT,
@@ -309,11 +310,12 @@ class DownloadService:
         """Shared core of ``start_download`` and ``resume_download``.
 
         *answer* passes the adopt dialog's answers, and what the game page reported, through to the gate unread.
-        Fetches ROM detail, resolves the platform path, then runs the three pre-flights **in this order**: the occupancy
-        gate, the #1298 sibling supersede, the disk-space check. Only then are the queue entry, task, byte reservation
-        and control token registered. On ``resume=True`` the disk pre-flight discounts the bytes already on the existing
-        ``.tmp`` and ``_do_download`` appends rather than restarts. The ``already_downloading`` guard stays with
-        ``start_download``; ``resume_download`` validates the paused entry before calling here.
+        Fetches ROM detail and refuses one RomM holds no file for (``no_file_on_romm``), resolves the platform path,
+        then runs the three pre-flights **in this order**: the occupancy gate, the #1298 sibling supersede, the
+        disk-space check. Only then are the queue entry, task, byte reservation and control token registered. On
+        ``resume=True`` the disk pre-flight discounts the bytes already on the existing ``.tmp`` and ``_do_download``
+        appends rather than restarts. The ``already_downloading`` guard stays with ``start_download``;
+        ``resume_download`` validates the paused entry before calling here.
 
         Holds the ROM's in-progress claim from the first step and gives it back on every way out but a started
         download, a cancelled start included, so the ROM is never stuck "Already downloading". A partial failure the
@@ -337,6 +339,10 @@ class DownloadService:
     async def _start_claimed_download(self, rom_id, *, resume: bool, replace_existing: bool, **answer):
         """:meth:`_begin_download` once the ROM's in-progress claim is held."""
         rom_detail = await self._loop.run_in_executor(None, self._romm_api.get_rom, rom_id)
+        # The live answer decides, never the stored column: a rescan since the
+        # last sync may have brought the file back or taken it away.
+        if not has_file_on_romm(rom_detail):
+            raise NoFileOnRomm(NO_FILE_ON_ROMM_MESSAGE)
 
         platform_slug = rom_detail.get("platform_slug", "")
         platform = await self._loop.run_in_executor(None, self._download_platform_io, platform_slug)

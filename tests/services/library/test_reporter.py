@@ -904,6 +904,23 @@ class TestCommitUnitResults:
         assert rom is not None
         assert rom.fs_size_bytes is None
 
+    @pytest.mark.parametrize(("pending", "stored"), [({"has_file_on_disk": False}, False), ({}, True)])
+    def test_commit_persists_whether_romm_has_a_file(self, library, pending, stored):
+        """``has_file_on_disk`` rides the pending entry onto the upserted ``Rom``; an entry without it has a file."""
+        uow = library.uow
+        _stage(
+            library.sync._box,
+            42,
+            {"name": "Game", "fs_name": "game.z64", "platform_slug": "gb", "cover_path": "", **pending},
+        )
+
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+
+        with uow:
+            rom = uow.roms.get(42)
+        assert rom is not None
+        assert rom.has_file_on_disk is stored
+
     def test_commit_stamps_cover_path_when_present(self, library):
         """A finalized cover path is recorded on the upserted ROM row."""
         uow = library.uow

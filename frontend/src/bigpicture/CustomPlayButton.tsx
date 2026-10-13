@@ -1,11 +1,13 @@
 /**
  * Custom Play button that replaces the native Steam Play button on RomM game
  * detail pages. Primary states (the full set is `PlayButtonState`):
- * - Download: ROM not installed, click to download. The same state, while
- *   the recorded file of an installed ROM is gone, is a split button the size
- *   of Play — Download again, and an arrow whose "File missing" menu names the
- *   path and offers Download again and Forget this download — over a one-line
- *   "File missing" note, and no Play
+ * - Download: ROM not installed, click to download. A ROM RomM holds no file
+ *   for (the stored `has_file_on_disk` of the last sync) gets the same button
+ *   disabled, labelled "No file on RomM"; the download refuses on RomM's live
+ *   answer either way. The same state, while the recorded file of an installed
+ *   ROM is gone, is a split button the size of Play — Download again, and an
+ *   arrow whose "File missing" menu names the path and offers Download again
+ *   and Forget this download — over a one-line "File missing" note, and no Play
  * - Play: ROM installed, launches the game (with pre-launch save sync)
  * - Checking: the launch check is running, before any sync
  * - Syncing: Save sync in progress before launch
@@ -61,6 +63,7 @@ import {
   downloadForgottenToast,
   forgetRefusedToast,
 } from "../utils/missingDownloadWording";
+import { NO_FILE_ON_ROMM_LABEL } from "../utils/noFileOnRommWording";
 import { resolveKnownConflicts } from "../utils/saveConflictFlow";
 import { showAdoptExistingModal } from "./AdoptExistingModal";
 import { showAdoptCandidateModal } from "./AdoptCandidateModal";
@@ -202,6 +205,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   const [targetOccupied, setTargetOccupied] = useState(false);
   const [candidatePresent, setCandidatePresent] = useState(false);
   const [missingPath, setMissingPath] = useState<string | null>(null);
+  const [noFileOnRomm, setNoFileOnRomm] = useState(false);
   const [forgetPending, setForgetPending] = useState(false);
   // Set synchronously before the forget's first await, for the same reason as
   // `uninstallPendingRef`.
@@ -258,6 +262,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       setRomId(rid);
       romIdRef.current = rid;
       if (cached.rom_name) setRomName(cached.rom_name);
+      setNoFileOnRomm(cached.has_file_on_disk === false);
       setMissingPath(cached.installed && cached.file_missing_at ? cached.file_missing_at : null);
       if (cached.installed && cached.file_missing_at) {
         setDlProgress(null);
@@ -352,6 +357,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
         setRomId(rid);
         romIdRef.current = rid;
         if (cached.rom_name) setRomName(cached.rom_name);
+        setNoFileOnRomm(cached.has_file_on_disk === false);
 
         // Seed the running overlay from the live session/running-app state so a
         // button mounted mid-session (or after a reload-adoption) shows Resume
@@ -1547,6 +1553,8 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       dlLabel = formatProgress(dlProgress.bytesDownloaded, dlProgress.totalBytes);
     } else if (actionPending) {
       dlLabel = "Starting...";
+    } else if (noFileOnRomm) {
+      dlLabel = NO_FILE_ON_ROMM_LABEL;
     } else if (targetOccupied || candidatePresent) {
       // Pressing opens the comparison dialog (#260), so the label names that
       // action rather than a state: nothing is installed here, and a label
@@ -1595,6 +1603,9 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     // vanished version dimmed instead of hiding it. An in-flight download keeps
     // its controls — that is a different action and out of scope.
     const downloadBlockedByVanished = boundVanished && !downloading && !paused && !extracting;
+    // Nothing to download either: RomM holds no file for the ROM. An in-flight
+    // download keeps its controls, for the same reason as above.
+    const downloadBlockedByNoFile = noFileOnRomm && !downloading && !paused && !extracting;
     const downloadBtn = (
       <DialogButton
         // romm-btn-download-idle carries the blue hover/focus highlight, which is
@@ -1612,7 +1623,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
         onClick={() => {
           detach(handleDownload());
         }}
-        disabled={actionPending || isOffline || downloadBlockedByVanished}
+        disabled={actionPending || isOffline || downloadBlockedByVanished || downloadBlockedByNoFile}
       >
         {/* Progress fill bar — kept at its frozen width while paused. */}
         {downloading && (

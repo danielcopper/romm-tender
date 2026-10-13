@@ -22,7 +22,9 @@ group, both a pure, shuffle-stable compute over its fetched members:
   every prerelease across all regions, then region preference decides, then the
   newest revision within a region, then RomM's own alphabetical grouped-view
   fallback (so an ungroomed retail library with no region signal resolves
-  identically to the RomM web UI), then rom_id.
+  identically to the RomM web UI), then rom_id. The default and ranking legs
+  leave out a member RomM holds no file for while a member with a file remains
+  (:func:`resolve_group_representative` states it).
 
 * **What the group's Steam shortcut is named** — :func:`canonical_group_name`.
   The name follows the *pure* order above (prerelease > region > revision >
@@ -47,6 +49,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from collections.abc import Set as AbstractSet
 
     from domain.rom import Rom
 
@@ -269,6 +272,8 @@ def resolve_group_representative(
     installed_rom_ids: set[int],
     bound_rom_ids: set[int],
     preferred_region: str = AUTO_REGION,
+    *,
+    fileless_rom_ids: AbstractSet[int] = frozenset(),
 ) -> int:
     """Return the representative ``rom_id`` for one sibling group's *members*.
 
@@ -287,22 +292,35 @@ def resolve_group_representative(
 
     *preferred_region* re-heads the region ranking (``"auto"`` = no preference).
 
+    *fileless_rom_ids* are the members RomM holds no file for
+    (:func:`domain.rom_file.has_file_on_romm`). The installed leg reads every
+    member, because an installed one plays from the local file, and so does the
+    binding leg: the shortcut the user has stays where it is, and only the
+    sibling collapse moves it, onto the same dump in a new shape
+    (:func:`domain.sync_diff.collapse_sibling_groups`). Legs 3 and 4 leave the
+    fileless members out whenever a member with a file remains, since a
+    representative nobody chose is one the play button would have to download;
+    when no member has a file they run over all members. The empty default is
+    "every member has a file".
+
     Raises ``ValueError`` on an empty *members* — a group always has at least one
     fetched member at the call sites here.
     """
     if not members:
         raise ValueError("cannot resolve a representative for an empty sibling group")
 
+    with_file = [m for m in members if int(m["rom_id"]) not in fileless_rom_ids]
+    candidates = with_file or members
     for leg in (
         [m for m in members if int(m["rom_id"]) in installed_rom_ids],
         [m for m in members if int(m["rom_id"]) in bound_rom_ids],
-        [m for m in members if m.get("is_main_sibling")],
-        members,
+        [m for m in candidates if m.get("is_main_sibling")],
+        candidates,
     ):
         if leg:
             return int(min(leg, key=lambda m: _rank_key(m, preferred_region))["rom_id"])
 
-    # Unreachable — the final leg is the full member list, always non-empty here.
+    # Unreachable — the final leg is never empty: with_file, else every member.
     raise AssertionError("resolution chain fell through a non-empty member list")
 
 

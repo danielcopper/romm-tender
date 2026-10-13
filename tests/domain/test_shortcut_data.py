@@ -525,6 +525,20 @@ class TestBuildShortcutsData:
         result = build_shortcuts_data(roms, _LAUNCHER, {}, {})
         assert result[0]["fs_size_bytes"] is None
 
+    @pytest.mark.parametrize(
+        ("served", "expected"),
+        [
+            ({"has_file_on_disk": False, "missing_from_fs": True}, False),
+            ({"has_file_on_disk": False, "is_physical": True}, False),
+            ({"has_file_on_disk": True}, True),
+            ({}, True),
+        ],
+    )
+    def test_carries_whether_romm_has_a_file(self, served, expected):
+        roms = [{"id": 1, "name": "Game A", **served}]
+        result = build_shortcuts_data(roms, _LAUNCHER, {}, {})
+        assert result[0]["has_file_on_disk"] is expected
+
     def test_exe_path_contains_rom_launcher(self):
         roms = [{"id": 1, "name": "Game"}]
         result = build_shortcuts_data(roms, _LAUNCHER, {}, {})

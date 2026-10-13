@@ -816,3 +816,28 @@ class TestReSaveDoesNotCascade:
             (rom_id,),
         ).fetchone()[0]
         assert session_count == 0
+
+
+class TestHasFileOnDisk:
+    """``has_file_on_disk`` rides the sync UPSERT like ``fs_size_bytes`` (#2196)."""
+
+    def test_a_rom_without_a_file_round_trips(self, uow: SqliteUnitOfWork):
+        rom = _rom(1)
+        rom.has_file_on_disk = False
+        uow.roms.save(rom)
+
+        loaded = uow.roms.get(1)
+        assert loaded is not None
+        assert loaded.has_file_on_disk is False
+        assert uow._conn is not None
+        assert uow._conn.execute("SELECT has_file_on_disk FROM roms WHERE rom_id = 1").fetchone()[0] == 0
+
+    def test_a_resync_writes_the_new_answer_over_the_old(self, uow: SqliteUnitOfWork):
+        missing = _rom(1)
+        missing.has_file_on_disk = False
+        uow.roms.save(missing)
+        uow.roms.save(_rom(1))
+
+        loaded = uow.roms.get(1)
+        assert loaded is not None
+        assert loaded.has_file_on_disk is True

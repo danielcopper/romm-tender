@@ -1,0 +1,54 @@
+-- =============================================================================
+-- 026_add_rom_has_file_on_disk.sql — whether RomM holds a file for the ROM
+-- #2196 (a ROM RomM marks as having no file is offered as a version)
+-- =============================================================================
+--
+-- RomM keeps a ROM row whose file has left its disk, and a physical game has
+-- no file at all. Its ROM payload says which with ``has_file_on_disk``
+-- (``not is_physical and not missing_from_fs``, sent since 5.3.0), and it
+-- answers a content download of such a ROM with a 404. This column carries
+-- that fact locally, so the version picker and the play button can say so
+-- without a request:
+--
+--   * roms.has_file_on_disk — 1 when RomM holds a file for the ROM, 0 when not.
+--
+-- NOT NULL DEFAULT 1, so a row written before this migration reads as having a
+-- file until the next sync writes it: "unknown" is read the way Tender read
+-- every ROM before it looked at the flag, and nothing is refused on it.
+--
+-- The value is a server-derived fact, so it rides the sync UPSERT exactly like
+-- ``fs_size_bytes`` (migration 021) and the version-metadata columns (migration
+-- 008): every applying sync writes the server's value onto each row it fetched.
+-- A platform or collection the incremental skip passes over is not fetched, so
+-- on a library that has not changed since the last sync no row would ever get
+-- its real value. This migration therefore takes the skip away once:
+--
+--   * every platform stamp is revoked (skip_revoked, migration 025), so each
+--     enabled platform full-fetches on the first sync after the upgrade and
+--     its apply writes it a fresh stamp. Migrations 024 to 026 ship together,
+--     so for an install coming from a release that ends at 023, migration 025
+--     has already revoked every stamp in the same upgrade and this statement
+--     changes nothing; it reaches a database that was already at 025.
+--   * every collection stamp is deleted — they carry no revoked flag and are
+--     re-derivable — so each enabled collection fetches once and is stamped
+--     again. This one reaches every install: 025 leaves collection stamps
+--     standing, and a skipped collection rebuilds its members on a platform
+--     the run does not fetch from stored rows that carry the default.
+--
+-- That costs one full fetch per enabled collection on every install, and one
+-- per enabled platform on a database already at 025 (on any other, 025 has
+-- already asked for it). The fetch happens on the first applied sync: the
+-- preview offers Apply for it through the revoked platform stamps
+-- (``restamp_platform_count``) even where nothing else changed. A library that
+-- syncs collections with no platform enabled is offered no Apply for it, and
+-- its rows keep the default until an apply runs for another reason. Both
+-- statements touch only stamps, so running them again does no harm. The
+-- download does not trust the column either way: it reads the ROM from RomM
+-- when it starts and refuses on that live answer.
+--
+-- Transaction-safe DDL/DML only — the runner (adapters/sqlite_migrations.py) wraps
+-- BEGIN/COMMIT and stamps PRAGMA user_version = 26.
+-- -----------------------------------------------------------------------------
+ALTER TABLE roms ADD COLUMN has_file_on_disk INTEGER NOT NULL DEFAULT 1;  -- RomM has_file_on_disk (0/1)
+UPDATE platform_sync_state SET skip_revoked = 1 WHERE skip_revoked = 0;
+DELETE FROM collection_sync_state WHERE collection_id IS NOT NULL;  -- every row: collection_id is NOT NULL (019)

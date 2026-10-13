@@ -1066,20 +1066,19 @@ class SyncOrchestrator:
         # the shortcut, so it never reaches the frontend (no Set* walk, no confirm
         # poll). Its ``roms`` row still commits: chunking routes the skipped
         # groups' rows to chunk 0's leftover (sync_chunking), so DB work is never
-        # dropped and the platform stamp still rides the final chunk. Rebind
-        # entries are force-kept even when classify calls them "unchanged" — they
-        # MUST move their binding onto the surviving representative, and skipping
-        # one would let the vanished sibling's shortcut go stale-removed instead of
-        # rebound. ``new_ids`` prices each chunk create-vs-update for the budget
-        # gate. Covers ride only the delta (covers are creates-only, #1391).
+        # dropped and the platform stamp still rides the final chunk. A rebind
+        # entry is never unchanged — classify counts it as changed, because it
+        # must move its binding onto the representative. ``new_ids`` prices each
+        # chunk create-vs-update for the budget gate. Covers ride only the delta
+        # (covers are creates-only, #1391).
         new, changed, unchanged_ids, _stale, _disabled = classify_roms(emitted, registry, set())
         rebind_ids = {e["rom_id"] for e in emitted if BIND_ROM_ID_KEY in e}
-        skip_ids = set(unchanged_ids) - rebind_ids
+        skip_ids = set(unchanged_ids)
         new_ids = {e["rom_id"] for e in new}
         apply_emitted = [e for e in emitted if e["rom_id"] not in skip_ids]
         self._logger.info(
-            f"Delta apply: {unit.name} — {len(new)} new + {len(changed)} changed + "
-            f"{len(rebind_ids)} rebind of {len(emitted)} collapsed ({len(skip_ids)} unchanged skipped)"
+            f"Delta apply: {unit.name} — {len(new)} new + {len(changed)} changed "
+            f"({len(rebind_ids)} of them rebinds) of {len(emitted)} collapsed ({len(skip_ids)} unchanged skipped)"
         )
         # A skipped entry is already correct on its Steam shortcut — no Set* walk is
         # owed — so it counts as done the moment the delta is computed (#1383). It is

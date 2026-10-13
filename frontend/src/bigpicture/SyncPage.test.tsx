@@ -567,6 +567,16 @@ describe("SyncPage", () => {
       }
     });
 
+    it("offers Apply Sync for a preview whose only change is a rebind (#2196)", async () => {
+      // A rebind keeps the shortcut's name and launch command and moves only its
+      // binding; the backend counts it as one changed game.
+      adoptPreview(preview({ summary: summary({ changed_count: 1 }) }));
+      const { container } = await renderPage();
+
+      expect(buttonByExactText(container, "Apply Sync")?.disabled).toBe(false);
+      expect(container.textContent).not.toContain("Everything is up to date.");
+    });
+
     it("says the split is unavailable when the backend sent none, and adds nothing up itself", async () => {
       adoptPreview(preview({ summary: summary({ new_count: 13, changed_count: 3, remove_count: 6 }) }));
       const { container } = await renderPage();

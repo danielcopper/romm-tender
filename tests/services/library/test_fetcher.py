@@ -711,6 +711,20 @@ class TestIncrementalSkipGroupParity:
         assert {r["id"] for r in result} == {10}
 
     @pytest.mark.asyncio
+    async def test_a_skip_keeps_what_the_last_sync_stored_of_whether_romm_has_a_file(self, library, fake_romm_api):
+        _wire_fake(library, fake_romm_api)
+        uow = library.uow
+        _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=2)
+        _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1", has_file_on_disk=False)
+        _seed_persisted_rom(uow, 20, app_id=1002, group_key="igdb:200:1")
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=2)
+
+        result = await library.sync._fetcher._try_unit_incremental_skip(unit)
+
+        assert result is not None
+        assert {r["id"]: r["has_file_on_disk"] for r in result} == {10: False, 20: True}
+
+    @pytest.mark.asyncio
     async def test_no_skip_when_server_count_differs_from_persisted(self, library, fake_romm_api):
         _wire_fake(library, fake_romm_api)
         uow = library.uow

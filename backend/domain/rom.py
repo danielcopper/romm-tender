@@ -23,12 +23,14 @@ class Rom:
 
     ``sibling_group_key`` and the version dimensions (``regions`` / ``languages``
     / ``revision`` / ``tags`` / ``is_main_sibling``), plus ``fs_size_bytes`` (the
-    server-reported ROM size, #1395), are server-derived facts RomM supplies per
-    ROM — the sibling group this dump belongs to, how it differs from its
-    siblings (region/language/revision variants), and how large it is. They are
-    set at construction from the fetch and refreshed on every sync (they ride the
-    sync UPSERT, unlike the user-pin ``emulator_override`` / ``selected_disc``);
-    no mutation verbs, as no local flow changes them independently of a sync.
+    server-reported ROM size, #1395) and ``has_file_on_disk`` (whether RomM holds
+    a file it can serve), are server-derived facts RomM supplies per ROM — the
+    sibling group this dump belongs to, how it differs from its siblings
+    (region/language/revision variants), how large it is, and whether there is
+    anything to download. They are set at construction from the fetch and
+    refreshed on every sync (they ride the sync UPSERT, unlike the user-pin
+    ``emulator_override`` / ``selected_disc``); no mutation verbs, as no local
+    flow changes them independently of a sync.
     """
 
     rom_id: int
@@ -53,6 +55,7 @@ class Rom:
     tags: tuple[str, ...] = ()
     is_main_sibling: bool = False
     fs_size_bytes: int | None = None
+    has_file_on_disk: bool = True
 
     @classmethod
     def synced(
@@ -67,6 +70,7 @@ class Rom:
         igdb_id: int | None = None,
         version: VersionMetadata = _EMPTY_VERSION_METADATA,
         fs_size_bytes: int | None = None,
+        has_file_on_disk: bool = True,
     ) -> Rom:
         """Build a Rom synced from RomM at ISO timestamp ``synced_at``.
 
@@ -98,6 +102,7 @@ class Rom:
             tags=version.tags,
             is_main_sibling=version.is_main_sibling,
             fs_size_bytes=fs_size_bytes,
+            has_file_on_disk=has_file_on_disk,
         )
 
     def record_fetch_generation(self, fetch_id: str) -> None:

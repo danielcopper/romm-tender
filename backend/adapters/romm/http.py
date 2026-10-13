@@ -590,9 +590,13 @@ class RommHttpAdapter:
         invoked exactly once with ``range_supported: bool`` the moment the
         response headers arrive (before the body streams), so the caller can
         surface resumability live during the download.
+
+        *path* arrives percent-encoded: each caller quotes the segments it builds
+        (a ROM's or firmware's file name, a device id), because only the caller
+        knows which characters are data. Quoting it again here would turn every
+        ``%20`` into ``%2520``.
         """
-        encoded_path = urllib.parse.quote(path, safe="/:?=&@")
-        url = self._settings["romm_url"].rstrip("/") + encoded_path
+        url = self._settings["romm_url"].rstrip("/") + path
         dest_path = Path(dest)
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         # One-shot guard: ``on_meta`` fires once even across a ``with_retry`` retry.

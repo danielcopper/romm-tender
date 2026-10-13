@@ -28,6 +28,7 @@ from domain.collection_name import fold_collection_name
 from domain.fetch_generation import prune_candidate_ids
 from domain.platform_names import decode_platform_names
 from domain.rom import Rom
+from domain.rom_file import has_file_on_romm
 from domain.rom_metadata_mapping import build_rom_metadata
 from domain.sibling_resolution import reachable_rom_ids
 from domain.sync_diff import BIND_ROM_ID_KEY, should_include_in_platform_collection
@@ -599,6 +600,7 @@ class SyncReporter:
                 igdb_id=built.get("igdb_id"),
                 version=VersionMetadata.from_mapping(built),
                 fs_size_bytes=built.get("fs_size_bytes"),
+                has_file_on_disk=has_file_on_romm(built),
             )
         except ValueError as e:
             self._logger.warning(f"Skipping invalid ROM {rom_id} during commit: {e}")

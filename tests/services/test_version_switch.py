@@ -19,6 +19,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
 
 from domain.rom import Rom
+from domain.rom_file import NoFileOnRomm
 from domain.rom_install import RomInstall
 from lib.errors import (
     NamedRefused,
@@ -100,6 +101,7 @@ def _seed_rom(
     tags: tuple[str, ...] = (),
     is_main_sibling: bool = False,
     applied_launch_options: str | None = None,
+    has_file_on_disk: bool = True,
 ) -> None:
     uow.roms.save(
         Rom(
@@ -116,6 +118,7 @@ def _seed_rom(
             tags=tags,
             is_main_sibling=is_main_sibling,
             applied_launch_options=applied_launch_options,
+            has_file_on_disk=has_file_on_disk,
         )
     )
 
@@ -582,6 +585,41 @@ class TestGetVersionList:
         assert by_id[1]["is_default"] is False
         assert by_id[10]["is_default"] is True
 
+    def test_a_member_without_a_file_is_marked_and_never_the_default(self, event_loop, service, uow, romm):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID)
+        _seed_rom(uow, rom_id=2, app_id=None, is_main_sibling=True, has_file_on_disk=False)
+        romm.roms[1] = {"id": 1, "sibling_roms": []}
+
+        by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
+
+        assert (by_id[1]["no_file"], by_id[2]["no_file"]) == (False, True)
+        assert (by_id[1]["is_default"], by_id[2]["is_default"]) == (True, False)
+
+    def test_a_server_only_version_without_a_file_is_marked_and_never_the_default(self, event_loop, service, uow, romm):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID)
+        romm.roms[1] = {"id": 1, "sibling_roms": [{"id": 5, "fs_name_no_ext": "Game (Japan)"}]}
+        romm.roms[5] = {
+            "id": 5,
+            "platform_id": 57,
+            "fs_name_no_ext": "Game (Japan)",
+            "rom_user": {"is_main_sibling": True},
+            "has_file_on_disk": False,
+            "is_physical": True,
+        }
+
+        by_id = {v["rom_id"]: v for v in _run(event_loop, service.get_version_list(_APP_ID))["versions"]}
+
+        assert by_id[5]["no_file"] is True
+        assert (by_id[1]["is_default"], by_id[5]["is_default"]) == (True, False)
+
+    def test_a_single_version_without_a_file_is_not_the_default(self, event_loop, service, uow, romm):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID, has_file_on_disk=False)
+        romm.roms[1] = {"id": 1, "sibling_roms": []}
+
+        bound = _run(event_loop, service.get_version_list(_APP_ID))["bound_version"]
+
+        assert (bound["no_file"], bound["is_default"]) == (True, False)
+
     def test_liveness_is_recomputed_on_every_load(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)
         _seed_rom(uow, rom_id=2, app_id=None)
@@ -961,6 +999,51 @@ class TestSwitchVersion:
         assert relaunch_resolver.calls == [2]
         with uow as u:
             assert u.roms.get(2).shortcut_app_id == _APP_ID  # binding committed
+
+    def test_a_local_target_without_a_file_that_is_not_installed_is_refused(self, event_loop, service, uow, romm):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID)
+        _seed_rom(uow, rom_id=2, app_id=None, has_file_on_disk=False)
+
+        switch = service.switch_version(_APP_ID, 2, False)
+        with pytest.raises(NoFileOnRomm):
+            _run(event_loop, switch)
+
+        with uow as u:
+            assert u.roms.get(1).shortcut_app_id == _APP_ID
+            assert u.roms.get(2).shortcut_app_id is None
+
+    def test_an_installed_local_target_without_a_file_switches(self, event_loop, service, uow, romm):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID)
+        _seed_rom(uow, rom_id=2, app_id=None, has_file_on_disk=False)
+        _seed_install(uow, 2)
+
+        result = _run(event_loop, service.switch_version(_APP_ID, 2, False))
+
+        assert result["success"] is True
+        assert result["rom_id"] == 2
+        with uow as u:
+            assert u.roms.get(2).shortcut_app_id == _APP_ID
+
+    def test_a_server_only_target_without_a_file_is_refused_and_not_persisted(self, event_loop, service, uow, romm):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID, group_key=_GROUP)
+        romm.roms[3] = {
+            "id": 3,
+            "name": "Game (Japan)",
+            "fs_name": "Game (Japan).sfc",
+            "platform_id": 57,
+            "platform_slug": "snes",
+            "igdb_id": 100,
+            "sibling_roms": [{"id": 1}],
+            "has_file_on_disk": False,
+        }
+
+        switch = service.switch_version(_APP_ID, 3, False)
+        with pytest.raises(NoFileOnRomm):
+            _run(event_loop, switch)
+
+        with uow as u:
+            assert u.roms.get(3) is None
+            assert u.roms.get(1).shortcut_app_id == _APP_ID
 
     def test_bound_elsewhere_rejects(self, event_loop, service, uow, romm):
         _seed_rom(uow, rom_id=1, app_id=_APP_ID)

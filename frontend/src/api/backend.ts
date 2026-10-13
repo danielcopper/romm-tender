@@ -220,6 +220,9 @@ export interface CachedGameDetail extends BiosAnswer {
   // (a pre-migration row or a not-yet-re-applied platform); the frontend hides
   // the size in that case.
   fs_size_bytes?: number | null;
+  // Whether RomM held a file for the ROM at the last sync. False for one whose
+  // file left RomM's disk and for a physical game; absent reads as having one.
+  has_file_on_disk?: boolean;
   // Whether something already sits where a download would write (#260). Only
   // ever true for a ROM with no install record — one `stat`, no network — so the
   // page can offer "already here" instead of an undifferentiated Download. False
@@ -746,6 +749,9 @@ export const selectDisc = endpoint<[number, string | null], SelectDiscResult>("s
  * reject it; every other row is switchable (#1368). `vanished` is a separate,
  * ephemeral liveness verdict: RomM answered 404 for that exact local id during
  * this list load. The retained row stays visible but cannot be selected.
+ * `no_file` marks a version RomM holds no file for: it is never the default,
+ * and the row is selectable only when the version is installed here. The
+ * backend always sends it; absent reads as having a file.
  */
 export interface VersionInfo {
   rom_id: number;
@@ -761,6 +767,7 @@ export interface VersionInfo {
   is_default: boolean;
   switchable: boolean;
   vanished: boolean;
+  no_file?: boolean;
 }
 
 /**
@@ -824,7 +831,8 @@ export interface SwitchVersionUnsyncedSaves {
  * `bound_elsewhere` (a grandfathered duplicate),
  * `invalid_target` (a server-only target the aggregate rejects),
  * `download_in_progress` (a group download is running — cancel it first),
- * `version_vanished` (RomM definitively no longer has the target), a refusal by
+ * `version_vanished` (RomM definitively no longer has the target),
+ * `no_file_on_romm` (RomM holds no file for a target not installed here), a refusal by
  * the update, migration or prune rule, or a RomM error the server fetch raised.
  * All surface via the picker's toast fallback (`result.message`). The reason
  * union excludes `unsynced_saves` so the soft-block variant narrows cleanly.
@@ -837,6 +845,7 @@ export interface SwitchVersionFailure {
         | "bound_elsewhere"
         | "invalid_target"
         | "download_in_progress"
+        | "no_file_on_romm"
         | "version_vanished"
         | "blocked_by_update"
         | "blocked_by_migration"

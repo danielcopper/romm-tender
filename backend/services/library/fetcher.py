@@ -674,6 +674,7 @@ class LibraryFetcher:
                 "sgdb_id": rom.sgdb_id,
                 "ra_id": rom.ra_id,
                 "sibling_group_key": rom.sibling_group_key,
+                "has_file_on_disk": rom.has_file_on_disk,
             }
             for rom in all_rows
             if rom.shortcut_app_id is not None

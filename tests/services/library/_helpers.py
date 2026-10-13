@@ -223,11 +223,12 @@ async def _fake_wait_set_event(_unit, event):
     return {}
 
 
-def _seed_persisted_rom(uow, rom_id, *, app_id, group_key, platform_slug="n64", fetch_id=None):
+def _seed_persisted_rom(uow, rom_id, *, app_id, group_key, platform_slug="n64", fetch_id=None, has_file_on_disk=True):
     """Persist one ``roms`` row (bound when app_id is set, else an unbound sibling).
 
     ``fetch_id`` is the fetch generation that last saw the row (#1504); ``None``
-    leaves it unknown, the state a pre-020 row reads.
+    leaves it unknown, the state a pre-020 row reads. ``has_file_on_disk`` is
+    what the last sync stored of RomM's answer (#2196).
     """
     from domain.rom import Rom
 
@@ -242,6 +243,7 @@ def _seed_persisted_rom(uow, rom_id, *, app_id, group_key, platform_slug="n64", 
                 last_synced_at="2025-01-01T00:00:00",
                 sibling_group_key=group_key,
                 last_fetch_id=fetch_id,
+                has_file_on_disk=has_file_on_disk,
             )
         )
 

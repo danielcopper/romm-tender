@@ -34,6 +34,7 @@ from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
 from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused, finding_refusal, switched_off
 from domain.rom import Rom
 from domain.rom_adoption import TargetOccupied
+from domain.rom_file import NoFileOnRomm
 from domain.rom_files import TMP_EXT, ZIP_TMP_EXT
 from domain.rom_install import RomInstall
 from domain.version_metadata import VersionMetadata
@@ -351,6 +352,30 @@ class TestStartDownload:
         with pytest.raises(RommNotFoundError):
             await coro
         assert 9999 not in downloads.service._download_in_progress
+
+    @pytest.mark.asyncio
+    async def test_a_rom_romm_holds_no_file_for_starts_nothing(self, downloads):
+        # The stored column says the ROM has a file; RomM's live answer decides.
+        _seed_rom(downloads.uow, 42)
+        rom_detail = {
+            "id": 42,
+            "name": "Zelda",
+            "fs_name": "zelda.z64",
+            "platform_slug": "n64",
+            "has_file_on_disk": False,
+        }
+        downloads.service._loop = MagicMock()
+        downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
+        downloads.service._loop.create_task = MagicMock()
+
+        with pytest.raises(NoFileOnRomm) as refused:
+            await downloads.service.start_download(42)
+
+        assert refused.value.reason == "no_file_on_romm"
+        assert refused.value.message.startswith("No file on RomM")
+        assert 42 not in downloads.service._download_queue
+        assert 42 not in downloads.service._download_in_progress
+        downloads.service._loop.create_task.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_checks_disk_space(self, downloads, tmp_path):

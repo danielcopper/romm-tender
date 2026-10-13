@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 from domain.collection_name import fold_collection_name
+from domain.rom_file import has_file_on_romm
 from domain.sibling_resolution import AUTO_REGION, canonical_group_name, resolve_group_representative
 
 if TYPE_CHECKING:
@@ -46,8 +47,11 @@ def classify_roms(
 
     Returns the ROMs split into new (not in registry), changed (registry
     entry exists but a *persisted* identity field — name, platform_slug, or
-    fs_name — differs, OR, for an entry outside *skipped_rom_ids*, the target
-    ``launch_options`` differs from the recorded ``applied_launch_options``),
+    fs_name — differs, OR, for an entry outside *skipped_rom_ids*, either the
+    target ``launch_options`` differs from the recorded
+    ``applied_launch_options`` or the entry is a rebind — it carries
+    ``bind_rom_id`` — whose shortcut keeps its name and launch command while its
+    binding moves, which is work the apply does and the preview has to offer),
     unchanged_ids (otherwise), stale (in registry but not in the current
     fetch), and the count of stale ROMs whose stored platform no longer appears
     in fetched_platform_names.
@@ -72,8 +76,12 @@ def classify_roms(
     is no change the apply would make, and counting it would show the same
     phantom "changed" on every preview. Such an entry is "changed" only for an
     identity difference; Steam's copy of an installed game's command is kept
-    current by the launch-options reconcile instead. The apply path classifies
-    only units it fetched and passes none.
+    current by the launch-options reconcile instead. A rebind keyed by one is
+    no change either, for the same reason: the apply moves no binding for a
+    unit it skipped. That also keeps the stem a skipped platform's rows are
+    rebuilt with — the file name without its extension, since the stored row
+    keeps no ``fs_name_no_ext`` — from deciding anything. The apply path
+    classifies only units it fetched and passes none.
 
     ``platform_name`` is deliberately excluded from the changed comparison:
     it is a derived display field, never persisted on the ``roms`` row. The
@@ -99,7 +107,8 @@ def classify_roms(
         if not reg or not reg.get("app_id"):
             new.append(sd)
         elif _identity_differs(reg, sd) or (
-            sd["rom_id"] not in skipped_rom_ids and reg.get("applied_launch_options") != sd.get("launch_options", "")
+            sd["rom_id"] not in skipped_rom_ids
+            and (BIND_ROM_ID_KEY in sd or reg.get("applied_launch_options") != sd.get("launch_options", ""))
         ):
             changed.append({**sd, "existing_app_id": reg["app_id"]})
         else:
@@ -264,6 +273,16 @@ def collapse_sibling_groups(
       server but the group still has fetched members: one synthetic entry (see
       :func:`_rebind_entry`) keeps the vanished sibling's shortcut and moves its
       binding to the surviving representative.
+    * **Rebind off a member without a file** (complete view only) — inside the
+      grandfathered lane, a surviving bound sibling RomM holds no file for and
+      that is not installed is rebound the same way onto a sibling that has a
+      file and the same ``fs_name_no_ext``: the same dump in a new shape, as
+      when a rescan turns ``Game (USA).zip`` into a folder ``Game (USA)``. The
+      sibling must hold no shortcut, its own or one rebound to it earlier in
+      this group. A sibling whose name differs at all is another version the
+      user did not choose — RomM does not send every dimension it parses, so
+      comparing the dimensions would cross versions — and the shortcut then
+      stays grandfathered, its play button saying there is no file.
     * **New** — no binding anywhere in the group: emit the single representative
       chosen by :func:`resolve_group_representative`, but with its display
       ``name`` replaced by :func:`canonical_group_name` — the region-preferred
@@ -309,11 +328,20 @@ def collapse_sibling_groups(
     emitted: list[dict[str, Any]] = []
     for group_key, members in by_group.items():
         fetched_ids = {m["rom_id"] for m in members}
+        fileless = {m["rom_id"] for m in members if not has_file_on_romm(m)}
         bound_here = bound_by_group.get(group_key, [])
         surviving_ids = {rid for rid, _ in bound_here if rid in fetched_ids}
         if surviving_ids:
-            # ≥1 bound sibling still fetched → grandfather every surviving one.
-            emitted.extend(m for m in members if m["rom_id"] in surviving_ids)
+            # ≥1 bound sibling still fetched → grandfather every surviving one,
+            # unless it has no file and a complete view can move its binding.
+            emitted.extend(
+                _grandfather_or_rebind(
+                    members,
+                    sorted(item for item in bound_here if item[0] in surviving_ids),
+                    _GroupChain(installed_rom_ids, bound_rom_ids, fileless, preferred_region),
+                    complete_group_view=complete_group_view,
+                )
+            )
         elif not bound_here:
             # No binding anywhere in the group → mint the single representative,
             # named after the region-preferred (canonical) member. The bind
@@ -321,7 +349,9 @@ def collapse_sibling_groups(
             # sticky Steam name follows the pure region ranking (ADR-0021 §2/§3).
             # Copy so the original member dict (also staged in pending_all_roms
             # for the per-sibling identity upsert) keeps its own real name.
-            rep_id = resolve_group_representative(members, installed_rom_ids, bound_rom_ids, preferred_region)
+            rep_id = resolve_group_representative(
+                members, installed_rom_ids, bound_rom_ids, preferred_region, fileless_rom_ids=fileless
+            )
             emitted.append({**_member_by_id(members, rep_id), "name": canonical_group_name(members, preferred_region)})
         elif complete_group_view:
             # Complete view: every bound sibling truly vanished from the server →
@@ -329,7 +359,10 @@ def collapse_sibling_groups(
             # never remove). The rebind entry keeps the vanished sibling's
             # persisted name (sticky) — canonical naming is mint-only.
             rep = _member_by_id(
-                members, resolve_group_representative(members, installed_rom_ids, bound_rom_ids, preferred_region)
+                members,
+                resolve_group_representative(
+                    members, installed_rom_ids, bound_rom_ids, preferred_region, fileless_rom_ids=fileless
+                ),
             )
             kept_rom_id, kept_reg = min(bound_here, key=lambda item: item[0])
             emitted.append(_rebind_entry(rep, kept_rom_id, kept_reg))
@@ -340,6 +373,67 @@ def collapse_sibling_groups(
     return emitted
 
 
+class _GroupChain(NamedTuple):
+    """What :func:`resolve_group_representative` is asked with for one group."""
+
+    installed_rom_ids: set[int]
+    bound_rom_ids: set[int]
+    fileless_rom_ids: set[int]
+    preferred_region: str
+
+
+def _grandfather_or_rebind(
+    members: list[dict[str, Any]],
+    surviving: list[tuple[int, dict[str, Any]]],
+    chain: _GroupChain,
+    *,
+    complete_group_view: bool,
+) -> list[dict[str, Any]]:
+    """The grandfathered lane's entries: each surviving bound sibling, kept or rebound.
+
+    *surviving* are the group's bound ``(rom_id, registry row)`` pairs still in
+    *members*, in ``rom_id`` order so two siblings that would move onto the same
+    target resolve the same way every run: the first takes it, and the second
+    stays where it is, since a ROM carries one shortcut.
+    """
+    taken = set(chain.bound_rom_ids)
+    entries: list[dict[str, Any]] = []
+    for rom_id, reg in surviving:
+        own = _member_by_id(members, rom_id)
+        target = None
+        if complete_group_view and rom_id in chain.fileless_rom_ids and rom_id not in chain.installed_rom_ids:
+            target = _same_dump_with_file(own, members, chain, taken)
+        if target is None:
+            entries.append(own)
+            continue
+        taken.add(target["rom_id"])
+        entries.append(_rebind_entry(target, rom_id, reg))
+    return entries
+
+
+def _same_dump_with_file(
+    own: dict[str, Any], members: list[dict[str, Any]], chain: _GroupChain, taken: set[int]
+) -> dict[str, Any] | None:
+    """The sibling *own*'s shortcut may move to, or ``None``.
+
+    One with a file, no shortcut, and *own*'s ``fs_name_no_ext``; of several,
+    the one the chain ranks first. An empty stem names no file, so it matches
+    nothing.
+    """
+    stem = own.get("fs_name_no_ext")
+    if not stem:
+        return None
+    same_dump = [
+        m
+        for m in members
+        if m["rom_id"] not in chain.fileless_rom_ids and m["rom_id"] not in taken and m.get("fs_name_no_ext") == stem
+    ]
+    if not same_dump:
+        return None
+    pick = resolve_group_representative(same_dump, chain.installed_rom_ids, set(), chain.preferred_region)
+    return _member_by_id(same_dump, pick)
+
+
 def _member_by_id(members: list[dict[str, Any]], rom_id: int) -> dict[str, Any]:
     """Return the group member whose ``rom_id`` matches (the resolver picks from *members*)."""
     return next(m for m in members if m["rom_id"] == rom_id)
@@ -348,14 +442,19 @@ def _member_by_id(members: list[dict[str, Any]], rom_id: int) -> dict[str, Any]:
 def _rebind_entry(rep: dict[str, Any], kept_rom_id: int, kept_reg: dict[str, Any]) -> dict[str, Any]:
     """Synthesize the emitted entry for a rebinding group (ADR-0021 §2).
 
-    Keyed by the vanished bound sibling (*kept_rom_id*) so the frontend REUSES
-    that sibling's existing Steam shortcut (its appId is already in the
-    rom_id→appId map) and the preview diff reads the group as unchanged. The
-    entry carries the representative's launch bake (its installed path, or the
-    empty placeholder when the representative is uninstalled) plus a
-    ``bind_rom_id`` marker so the per-unit commit moves the DB binding onto the
-    representative — the shortcut's appId, artwork, collections and playtime all
-    survive; only the active version changes. Identity fields stay the vanished
+    The bound sibling it is keyed by has vanished from RomM, or is still listed
+    with no file; the commit treats both alike, because the binding moves by
+    ``bind_rom_id`` and the old row is only ever unbound, never removed.
+
+    Keyed by the bound sibling (*kept_rom_id*) so the frontend REUSES that
+    sibling's existing Steam shortcut (its appId is already in the rom_id→appId
+    map); outside a unit the run skipped, :func:`classify_roms` counts it as
+    changed, because the binding moves even where the name and launch command
+    stay. The entry carries the representative's launch bake (its installed
+    path, or the empty placeholder when the representative is uninstalled) plus
+    a ``bind_rom_id`` marker so the per-unit commit moves the DB binding onto
+    the representative — the shortcut's appId, artwork, collections and playtime
+    all survive; only the active version changes. Identity fields stay the bound
     sibling's (sticky name — never rename automatically, which would change the
     appId).
     """

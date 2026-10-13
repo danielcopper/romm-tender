@@ -524,6 +524,57 @@ describe("VersionPicker — vanished retained rows (#1570)", () => {
   });
 });
 
+describe("VersionPicker — versions RomM holds no file for (#2196)", () => {
+  beforeEach(() => {
+    captured.menu = null;
+    vi.mocked(backend.getVersionList).mockReset();
+    vi.mocked(backend.switchVersion)
+      .mockReset()
+      .mockResolvedValue({ success: false, reason: "not_in_group", message: "refused" });
+    vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: null });
+    vi.mocked(toaster.toast).mockReset();
+    vi.mocked(openRemovedGamesCleanupModal).mockReset().mockResolvedValue(true);
+  });
+
+  function listWithJapanWithoutAFile(installed: boolean): VersionList {
+    const versions = (multiVersionList().versions ?? []).map((v) =>
+      v.rom_id === 2 ? { ...v, no_file: true, installed, is_default: false } : { ...v },
+    );
+    return multiVersionList({ versions });
+  }
+
+  it("lists a version without a file disabled, dimmed and labelled, with no cleanup offer", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValue(listWithJapanWithoutAFile(false));
+
+    const { menu } = await renderAndOpen();
+
+    const row = within(menu.container)
+      .getAllByRole("menuitem")
+      .find((i) => i.textContent.includes("Game (Japan)"))!;
+    expect(row.textContent).toContain("No file on RomM");
+    expect(row.getAttribute("aria-disabled")).toBe("true");
+    expect((row.firstElementChild as HTMLElement | null)?.style.opacity).toBe("0.55");
+    expect(within(row).queryByLabelText("Remove local data")).toBeNull();
+    await clickRow(menu.container, "Game (Japan)");
+    expect(backend.switchVersion).not.toHaveBeenCalled();
+    expect(openRemovedGamesCleanupModal).not.toHaveBeenCalled();
+  });
+
+  it("switches to a version without a file that is installed here", async () => {
+    vi.mocked(backend.getVersionList).mockResolvedValue(listWithJapanWithoutAFile(true));
+
+    const { menu } = await renderAndOpen();
+
+    const row = within(menu.container)
+      .getAllByRole("menuitem")
+      .find((i) => i.textContent.includes("Game (Japan)"))!;
+    expect(row.textContent).toContain("No file on RomM");
+    expect(row.getAttribute("aria-disabled")).toBeNull();
+    await clickRow(menu.container, "Game (Japan)");
+    expect(backend.switchVersion).toHaveBeenCalledWith(APP_ID, 2, false);
+  });
+});
+
 describe("VersionPicker — liveness connection signals (#1570)", () => {
   beforeEach(() => {
     captured.menu = null;

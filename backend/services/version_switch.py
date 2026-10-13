@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from domain.rom import Rom
+from domain.rom_file import NO_FILE_ON_ROMM_MESSAGE, NoFileOnRomm, has_file_on_romm
 from domain.shortcut_data import extract_version_metadata
 from domain.sibling_group import compute_sibling_group_key, target_in_sibling_group
 from domain.sibling_resolution import AUTO_REGION, fs_name_stem, resolve_group_representative
@@ -116,6 +117,7 @@ class _MemberView:
     tags: list[str]
     is_main_sibling: bool
     installed: bool
+    has_file: bool
 
 
 @dataclass(frozen=True)
@@ -142,7 +144,8 @@ class _SwitchContext:
     the refusal names it by its ``fs_name`` stem (regions/revision distinguish
     siblings that share a ROM ``name``). ``group_member_ids`` snapshots the sibling
     group (plus the target) so the switch is refused while any of them has an
-    active download.
+    active download. ``target_playable`` is false for a local target RomM holds no
+    file for (the stored column) that is not installed here either.
     """
 
     bound_rom_id: int
@@ -154,6 +157,7 @@ class _SwitchContext:
     target_group_key: str | None
     target_app_id: int | None
     group_member_ids: frozenset[int]
+    target_playable: bool
 
 
 class VersionSwitchService:
@@ -351,6 +355,7 @@ class VersionSwitchService:
                     tags=list(r.tags),
                     is_main_sibling=r.is_main_sibling,
                     installed=uow.rom_installs.get(r.rom_id) is not None,
+                    has_file=r.has_file_on_disk,
                 )
                 for r in rows
             ]
@@ -405,9 +410,12 @@ class VersionSwitchService:
         non-switchable rather than a dead-end. ``vanished`` is independent of
         membership: retained rows keep their switchable verdict but are excluded
         from default ranking; the picker refuses a switch to them, and
-        ``switch_version`` refuses one that still 404s (``version_vanished``). A
-        single-version group renders no picker while preserving its bound/server
-        verdicts.
+        ``switch_version`` refuses one that still 404s (``version_vanished``).
+        ``no_file`` marks a version RomM holds no file for — the stored column for
+        a local row, the fetched detail for a server-only one. It is never the
+        default either, and ``switch_version`` refuses a switch to it unless it is
+        installed (``no_file_on_romm``). A single-version group renders no picker
+        while preserving its bound/server verdicts.
         """
         entries: list[dict[str, Any]] = [
             {
@@ -421,6 +429,7 @@ class VersionSwitchService:
                 "synced": True,
                 "installed": m.installed,
                 "vanished": m.rom_id in vanished_ids,
+                "no_file": not m.has_file,
                 # Members share the bound key by construction (iter_by_group_key),
                 # so they are always switchable — routed through the shared
                 # predicate to keep a single authority.
@@ -441,7 +450,7 @@ class VersionSwitchService:
             bound_version = entries[0] if entries and entries[0]["rom_id"] == local.bound_rom_id else None
             if bound_version is not None:
                 bound_version["active"] = True
-                bound_version["is_default"] = not bound_version["vanished"]
+                bound_version["is_default"] = not (bound_version["vanished"] or bound_version["no_file"])
             return {
                 "multi_version": False,
                 "server_query_failed": server_query_failed,
@@ -449,7 +458,9 @@ class VersionSwitchService:
                 "bound_version": bound_version,
             }
 
-        default_candidate_ids = {e["rom_id"] for e in entries if e["switchable"] and not e["vanished"]}
+        default_candidate_ids = {
+            e["rom_id"] for e in entries if e["switchable"] and not e["vanished"] and not e["no_file"]
+        }
         default_rom_id = self._resolve_default(local, server_only_stubs, detail_by_id, default_candidate_ids)
         for e in entries:
             e["active"] = e["rom_id"] == local.bound_rom_id
@@ -494,6 +505,7 @@ class VersionSwitchService:
             # Presence in the bound ROM's current direct sibling response is a
             # positive server statement, so a server-only stub is live.
             "vanished": False,
+            "no_file": not has_file_on_romm(detail if detail is not None else stub),
             "switchable": target_in_sibling_group(
                 bound_group_key=local.group_key,
                 target_group_key=stub_local_group_keys.get(rom_id) if target_is_local else None,
@@ -517,11 +529,11 @@ class VersionSwitchService:
         ``is_main_sibling`` else the 1G1R + preferred-region ranking — independent
         of which version is currently bound (marking that would be circular with
         the ``active`` flag). Ranks only over the caller's candidates: switchable,
-        live versions. A cross-group RomM sibling and a retained vanished row must
-        not win the Default badge. A server-only stub with no fetched detail ranks
-        with only its label. Returns ``None`` when no candidate remains or the
-        chain cannot decide, so the badge is simply absent rather than the call
-        failing.
+        live versions with a file on RomM. A cross-group RomM sibling, a retained
+        vanished row and a version RomM holds no file for must not win the Default
+        badge. A server-only stub with no fetched detail ranks with only its
+        label. Returns ``None`` when no candidate remains or the chain cannot
+        decide, so the badge is simply absent rather than the call failing.
         """
         ranking: list[dict[str, Any]] = [
             {
@@ -594,17 +606,20 @@ class VersionSwitchService:
 
         On success returns
         ``{success: True, rom_id, target_installed, launch_options, app_id}``:
-        ``launch_options`` is the target install's full Steam launch command when
-        it is downloaded (the frontend writes it onto the shortcut), or ``""`` for
-        an uninstalled target (the ADR-0009 placeholder). Guards, each a raised
+        ``launch_options`` is the target install's full Steam launch command when it
+        is downloaded (the frontend writes it onto the shortcut), or ``""`` for an
+        uninstalled target (the ADR-0009 placeholder). Guards, each a raised
         refusal: unknown appId → ``not_found``; any group member has an active
         download → ``download_in_progress`` (cancel it first); target outside the
         group → ``not_in_group``; target bound to a *different* shortcut
-        (grandfathered duplicate, ADR-0021 §5) → ``bound_elsewhere``; a server-only
-        target whose detail the aggregate rejects → ``invalid_target``; a
-        definitive 404 for either target shape → :class:`VersionVanished`. Any other
-        failed mandatory server-only target fetch raises its ``RommApiError``. The
-        optional local probe instead fails open on every non-404 outcome.
+        (grandfathered duplicate, ADR-0021 §5) → ``bound_elsewhere``; a target RomM
+        holds no file for that is not installed here → :class:`NoFileOnRomm`, read
+        from the stored column for a local target and from the fetched detail for a
+        server-only one; a server-only target whose detail the aggregate rejects →
+        ``invalid_target``; a definitive 404 for either target shape →
+        :class:`VersionVanished`. Any other failed mandatory server-only target
+        fetch raises its ``RommApiError``. The optional local probe instead fails
+        open on every non-404 outcome.
         """
         app_id = int(app_id)
         target_rom_id = int(target_rom_id)
@@ -639,6 +654,8 @@ class VersionSwitchService:
         except RommNotFoundError as e:
             self._logger.warning(f"Version switch: target rom {target_rom_id} is gone from the server")
             raise VersionVanished(_VERSION_VANISHED_MESSAGE) from e
+        if not has_file_on_romm(target_dict):
+            raise NoFileOnRomm(NO_FILE_ON_ROMM_MESSAGE)
 
         # Canonical compatibility against the bound key: the target's id at the
         # bound canonical source must be absent-or-equal (its raw ``target_dict``
@@ -674,6 +691,8 @@ class VersionSwitchService:
             raise Refused("not_in_group", _NOT_IN_GROUP_MESSAGE)
         if ctx.target_app_id is not None and ctx.target_app_id != app_id:
             raise Refused("bound_elsewhere", f"Version {target_rom_id} is already used by another shortcut.")
+        if not ctx.target_playable:
+            raise NoFileOnRomm(NO_FILE_ON_ROMM_MESSAGE)
         await self._refuse_stranding_saves(ctx, allow_stranded)
         target_vanished = await self._loop.run_in_executor(None, self._probe_switch_target_vanished, target_rom_id)
         if target_vanished:
@@ -808,6 +827,11 @@ class VersionSwitchService:
                 target_group_key=target_local.sibling_group_key if target_local is not None else None,
                 target_app_id=target_local.shortcut_app_id if target_local is not None else None,
                 group_member_ids=frozenset(member_ids),
+                target_playable=(
+                    target_local is None
+                    or target_local.has_file_on_disk
+                    or uow.rom_installs.get(target_rom_id) is not None
+                ),
             )
 
     def _is_sibling(self, target_dict: dict[str, Any], bound_rom_id: int, group_key: str | None) -> bool:
@@ -889,6 +913,7 @@ class VersionSwitchService:
                 # sibling shows its download size immediately, not only after the
                 # next sync backfills it.
                 fs_size_bytes=target_dict.get("fs_size_bytes"),
+                has_file_on_disk=has_file_on_romm(target_dict),
             )
         except (ValueError, KeyError) as e:
             self._logger.warning(f"Version switch: could not build target row: {e}")

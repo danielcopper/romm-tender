@@ -199,12 +199,36 @@ Two guards keep a re-import from wiping a freshly-bound shortcut (`#1036`):
   the run just re-bound onto the new `rom_id` is never emitted for removal. The `get_by_app_id` reverse lookup orders
   `rom_id DESC LIMIT 1` so it resolves the live (newest) binding for any pre-migration edge state.
 
+### A bound ROM RomM holds no file for
+
+RomM keeps a ROM row whose file has left its disk, and lists a physical game that never had one. Its payload's
+`has_file_on_disk` is false for both, and RomM answers a content download of either with a 404; `missing_from_fs` and
+`is_physical` are not read on their own. The sync stores the flag on the row (`roms.has_file_on_disk`, see
+[Database Design](database-design.md)), and the representative chain reads it
+([Backend Architecture — group-aware sync](backend-architecture.md#libraryservice-decomposition-serviceslibrary)).
+
+A shortcut bound to such a member that is not installed is moved by the next complete-view sync (a platform unit, or the
+preview) onto a sibling with a file whose `fs_name_no_ext` equals the bound member's, through the same rebind entry the
+re-import case uses: keyed by the bound row, so the appId, artwork, collections and playtime survive, and carrying
+`bind_rom_id` → the sibling. An equal stem means the file was replaced in place — a rescan that turns `Game (USA).zip`
+into a folder `Game (USA)`. A sibling whose name differs in any part (language, region, version, a hack or a patch)
+never takes over: it is another version the user did not choose, and RomM parses some of those dimensions, such as
+`(v1.1)`, without sending them. The target must hold no shortcut of its own (grandfathered duplicates), and two bound
+members never move onto one target; of several candidates the chain's order picks. Otherwise the shortcut stays on the
+member without a file, and its play button says **No file on RomM**.
+
+`classify_roms` counts an entry carrying `bind_rom_id` as changed — this rebind and the re-import one alike — because
+the apply moves a binding for it even when the shortcut's name and launch command stay the same. Without that, a rebind
+alone left the preview at "Everything is up to date" with no Apply to press. The exception is an entry keyed by a row of
+a unit the run skipped: the apply moves no binding for a skipped unit, so the preview counts none.
+
 ### Retained-row availability in the version picker
 
 ADR-0007 keeps a `roms` row after RomM stops returning that id because the row can anchor local-only saves, playtime,
 and an installed ROM. Retention does not imply that RomM still offers the row as a playable version. The Game Page's
 lazy `get_version_list` load therefore recomputes availability every time; there is no liveness column, migration,
-cache, or persisted verdict.
+cache, or persisted verdict. (The `no_file` marker below is a different thing: a fact the last sync stored, not a
+liveness verdict.)
 
 The bound id's own read (`get_rom_simple`, `GET /api/roms/{id}/simple`) supplies its own answer and RomM's current
 direct `sibling_roms` view. The bound id and every local id positively present in that view are live. A local group
@@ -240,6 +264,13 @@ same `version_vanished` refusal; other RomM errors keep their ordinary classifie
 the short write UoW, whose fresh membership and bound-elsewhere checks still decide SQLite races. This leaves an
 unavoidable cross-system interval after a successful response: the liveness check reduces stale-list risk but is not a
 transaction with RomM.
+
+A version RomM still lists but holds no file for carries `no_file` — for a local row the column the last sync stored,
+for a server-only one the fetched detail — and the row reads **No file on RomM**. It is never the Default, and unlike a
+vanished row it offers no local cleanup, since a rescan in RomM can bring back a file that was moved or renamed. The row
+is selectable only where that version is installed here, and `switch_version` refuses any other switch to it with
+`no_file_on_romm`. A download refuses the same way on RomM's live answer, read when it starts, so a file a rescan
+brought back since the last sync downloads, and one that left since does not.
 
 ## Explicit cleanup of vanished versions
 

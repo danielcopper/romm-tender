@@ -1242,3 +1242,141 @@ class TestPlatformBreakdownConservesTheClassification:
 
         assert after == (before[0], before[1], before[2] + 1)
         assert after[2] == len(stale)
+
+
+def _no_file(entry: dict[str, Any]) -> dict[str, Any]:
+    """*entry* as built for a ROM RomM holds no file for."""
+    return {**entry, "has_file_on_disk": False}
+
+
+class TestCollapseMembersWithoutAFile:
+    """Members RomM holds no file for (#2196): the representative and the rebind off one."""
+
+    def test_a_new_group_mints_the_present_member_where_the_ranking_ties(self):
+        members = [_no_file(_gsd(1, fs_name_no_ext="Game (USA)")), _gsd(2, fs_name_no_ext="Game (USA)")]
+        emitted = collapse_sibling_groups(members, registry={}, installed_rom_ids=set(), complete_group_view=True)
+        assert [e["rom_id"] for e in emitted] == [2]
+
+    def test_a_physical_rom_is_a_member_without_a_file(self):
+        physical = {**_gsd(1, fs_name_no_ext="Game (USA)"), "has_file_on_disk": False, "is_physical": True}
+        members = [physical, _gsd(2, fs_name_no_ext="Game (USA)")]
+        emitted = collapse_sibling_groups(members, registry={}, installed_rom_ids=set(), complete_group_view=True)
+        assert [e["rom_id"] for e in emitted] == [2]
+
+    def test_a_group_with_no_file_anywhere_still_mints_its_shortcut(self):
+        members = [_no_file(_gsd(1, fs_name_no_ext="b")), _no_file(_gsd(2, fs_name_no_ext="a"))]
+        emitted = collapse_sibling_groups(members, registry={}, installed_rom_ids=set(), complete_group_view=True)
+        assert [e["rom_id"] for e in emitted] == [2]
+
+    def test_a_bound_member_without_a_file_is_rebound_onto_the_same_dump_with_a_file(self):
+        # The Saturn case: a rescan turned "Game (USA).zip" into a folder "Game (USA)".
+        members = [
+            _no_file(_gsd(1, fs_name="Game (USA).zip", fs_name_no_ext="Game (USA)")),
+            _gsd(2, fs_name="Game (USA)", fs_name_no_ext="Game (USA)"),
+        ]
+        registry = {"1": _greg(1, app_id=1001, fs_name="Game (USA).zip")}
+        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
+        assert len(emitted) == 1
+        assert emitted[0]["rom_id"] == 1  # keyed by the bound row, so its shortcut and appId are reused
+        assert emitted[0][BIND_ROM_ID_KEY] == 2
+        assert emitted[0]["fs_name"] == "Game (USA).zip"  # the sticky identity stays the bound row's
+
+    @pytest.mark.parametrize(
+        "other_stem",
+        ["Game (USA) (v1.1)", "Game (USA) (De)", "Game (USA) (Hack)", "Game (Europe)", "game (usa)"],
+    )
+    def test_a_sibling_whose_name_differs_takes_no_rebind(self, other_stem):
+        members = [_no_file(_gsd(1, fs_name_no_ext="Game (USA)")), _gsd(2, fs_name_no_ext=other_stem)]
+        registry = {"1": _greg(1, app_id=1001)}
+        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
+        assert [(e["rom_id"], BIND_ROM_ID_KEY in e) for e in emitted] == [(1, False)]
+
+    def test_a_bound_group_with_no_file_anywhere_stays_bound_as_it_is(self):
+        # D4: the shortcut stays on its member; no rebind, and no second shortcut.
+        members = [
+            _no_file(_gsd(1, fs_name="Game (USA).zip", fs_name_no_ext="Game (USA)")),
+            _no_file(_gsd(2, fs_name="Game (USA)", fs_name_no_ext="Game (USA)", is_main_sibling=True)),
+        ]
+        registry = {"1": _greg(1, app_id=1001, fs_name="Game (USA).zip")}
+        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
+        assert [(e["rom_id"], BIND_ROM_ID_KEY in e) for e in emitted] == [(1, False)]
+
+    def test_an_empty_stem_matches_nothing(self):
+        members = [_no_file(_gsd(1, fs_name_no_ext="")), _gsd(2, fs_name_no_ext="")]
+        registry = {"1": _greg(1, app_id=1001)}
+        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
+        assert [(e["rom_id"], BIND_ROM_ID_KEY in e) for e in emitted] == [(1, False)]
+
+    def test_a_same_dump_holding_its_own_shortcut_takes_no_rebind(self):
+        members = [_no_file(_gsd(1, fs_name_no_ext="Game (USA)")), _gsd(2, fs_name_no_ext="Game (USA)")]
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
+        assert sorted((e["rom_id"], BIND_ROM_ID_KEY in e) for e in emitted) == [(1, False), (2, False)]
+
+    def test_of_two_same_dumps_with_a_file_the_chain_picks(self):
+        members = [
+            _no_file(_gsd(1, fs_name_no_ext="Game (USA)")),
+            _gsd(2, fs_name_no_ext="Game (USA)"),
+            _gsd(3, fs_name_no_ext="Game (USA)", is_main_sibling=True),
+        ]
+        registry = {"1": _greg(1, app_id=1001)}
+        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
+        assert [(e["rom_id"], e[BIND_ROM_ID_KEY]) for e in emitted] == [(1, 3)]
+
+    def test_two_bound_members_without_a_file_never_rebind_onto_one_dump(self):
+        members = [
+            _no_file(_gsd(1, fs_name_no_ext="Game (USA)")),
+            _no_file(_gsd(2, fs_name_no_ext="Game (USA)")),
+            _gsd(3, fs_name_no_ext="Game (USA)"),
+        ]
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
+        assert sorted((e["rom_id"], e.get(BIND_ROM_ID_KEY)) for e in emitted) == [(1, 3), (2, None)]
+
+    def test_an_installed_bound_member_without_a_file_stays_bound(self):
+        members = [_no_file(_gsd(1, fs_name_no_ext="Game (USA)")), _gsd(2, fs_name_no_ext="Game (USA)")]
+        registry = {"1": _greg(1, app_id=1001)}
+        emitted = collapse_sibling_groups(members, registry, installed_rom_ids={1}, complete_group_view=True)
+        assert [(e["rom_id"], BIND_ROM_ID_KEY in e) for e in emitted] == [(1, False)]
+
+    def test_a_partial_view_never_rebinds_off_a_member_without_a_file(self):
+        members = [_no_file(_gsd(1, fs_name_no_ext="Game (USA)")), _gsd(2, fs_name_no_ext="Game (USA)")]
+        registry = {"1": _greg(1, app_id=1001)}
+        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=False)
+        assert [(e["rom_id"], BIND_ROM_ID_KEY in e) for e in emitted] == [(1, False)]
+
+
+class TestClassifyCountsARebindAsChanged:
+    """Every entry carrying ``bind_rom_id`` is changed, so the preview offers Apply for it alone."""
+
+    def test_a_rebind_off_a_member_without_a_file_is_changed(self):
+        members = [_no_file(_gsd(1, fs_name_no_ext="Game (USA)")), _gsd(2, fs_name_no_ext="Game (USA)")]
+        registry = {"1": _greg(1, app_id=1001)}
+        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
+        result = classify_roms(emitted, registry, {"N64"})
+        assert [e["rom_id"] for e in result.changed] == [1]
+        assert result.unchanged_ids == []
+
+    def test_a_rebind_keyed_by_a_skipped_unit_s_row_is_no_change(self):
+        # The apply moves no binding for a skipped unit, so its rebuilt stem
+        # (the file name without its extension) can decide nothing.
+        members = [
+            _no_file(_gsd(1, fs_name="Game (USA).zip", fs_name_no_ext="Game (USA)")),
+            _gsd(2, fs_name="Game (USA)", fs_name_no_ext="Game (USA)"),
+        ]
+        registry = {"1": _greg(1, app_id=1001, fs_name="Game (USA).zip")}
+        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
+        assert emitted[0][BIND_ROM_ID_KEY] == 2
+        result = classify_roms(emitted, registry, {"N64"}, skipped_rom_ids=frozenset({1}))
+        assert result.changed == []
+        assert result.unchanged_ids == [1]
+
+    def test_the_rebind_after_a_re_import_is_changed(self):
+        # The bound rom 1 vanished from RomM; the group's rom 2 survives.
+        members = [_gsd(2, fs_name_no_ext="game")]
+        registry = {"1": _greg(1, app_id=1001)}
+        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
+        assert emitted[0][BIND_ROM_ID_KEY] == 2
+        result = classify_roms(emitted, registry, {"N64"})
+        assert [e["rom_id"] for e in result.changed] == [1]
+        assert result.unchanged_ids == []

@@ -71,6 +71,21 @@ that exact ROM id establishes that it is gone. Timeouts, sign-in/permission erro
 responses fail open: Tender does not disable a version merely because it could not get a trustworthy answer. A
 ROM-specific 404 also does not make the rest of Tender report that RomM is offline.
 
+A version RomM still lists but has **no file** for carries the label _"No file on RomM"_. That happens when its file has
+left RomM's disk — a rescan that turned `Game (USA).zip` into a folder `Game (USA)` leaves the old entry behind beside
+the new one — and for a physical game, which never had a file. Unlike the check above, for a version already synced this
+is what the last sync stored, not a fresh answer. Such a version never receives the **Default** badge. It is dimmed and
+cannot be selected unless it is downloaded on this device; a downloaded one stays selectable and plays from your local
+copy. It offers no cleanup, because a rescan in RomM can bring a moved file back. When the shortcut is bound to such a
+version and it is not downloaded, the **Download** button reads _"No file on RomM"_ and stays greyed out. If its file
+was moved or renamed, rescan the library in RomM and sync; otherwise pick another version.
+
+The next sync moves a shortcut off a version without a file by itself only onto **the same file in a new shape**: a
+version whose file name, without its extension, is exactly the same — the folder `Game (USA)` for `Game (USA).zip`. The
+shortcut keeps its place in Steam, its artwork, collections and playtime. A version whose name differs at all — another
+language, region, revision, a hack or a patch — is never chosen for you; switch to it here if you want it. The sync
+preview lists such a move as one changed game, so Apply is offered for it.
+
 Selecting a different version **rebinds** the game to it: the Download button now fetches that version, the panel's
 title and Region/Languages rows update to reflect it, and its cover refreshes to the new version. The Steam shortcut
 keeps its name, its place in your collections, and its playtime — all tied to the shortcut, which never changes. A
@@ -235,6 +250,12 @@ detail page, or use **Cancel** in the QAM download queue. Only the partial trans
 already-installed copy of the game is never removed, so cancelling a re-download (or a download that fails partway)
 leaves your existing install intact. If the cancel happens to land just as the download finishes, the game is kept as
 **Installed** rather than torn down.
+
+A game RomM has **no file** for — its file has left RomM's disk, or it is a physical game — cannot be downloaded. When
+the last sync saw that, the button reads _"No file on RomM"_ and is greyed out. Tender also asks RomM when a download
+starts, so a file that left since the last sync starts nothing either, and a notification says _"No file on RomM"_. If
+its file was moved or renamed, rescan the library in RomM, then sync; a physical game has no file to download. See
+[Versions](#the-switch-version-control) for a game with other versions.
 
 Downloaded ROMs are stored in the folder RetroDECK's frontend, ES-DE, uses for the game's system — with RetroDECK's own
 settings `~/retrodeck/roms/gba/`, or the same folder on the drive you moved RetroDECK to. Tender creates that system's

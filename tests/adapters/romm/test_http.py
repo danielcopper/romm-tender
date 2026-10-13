@@ -93,6 +93,36 @@ class TestRommDownloadUrlEncoding:
         assert encoded == path
 
 
+class TestAFileNameIsEncodedOnce:
+    """The content URL carries a file name quoted once: ``%20``, never ``%2520`` (#2196)."""
+
+    @pytest.mark.parametrize(
+        ("fetch", "expected"),
+        [
+            (
+                lambda api, dest: api.download_rom_content(42, "My Game (USA).zip", dest),
+                "http://romm.local/api/roms/42/content/My%20Game%20%28USA%29.zip",
+            ),
+            (
+                lambda api, dest: api.download_firmware(3, "BIOS (JP).bin", dest),
+                "http://romm.local/api/firmware/3/content/BIOS%20%28JP%29.bin",
+            ),
+            (
+                lambda api, dest: api.download_save_content(7, dest, device_id="deck one"),
+                "http://romm.local/api/saves/7/content?device_id=deck%20one&optimistic=true",
+            ),
+        ],
+    )
+    def test_the_requested_url(self, romm_http, tmp_path, fetch, expected):
+        romm_http.settings["romm_url"] = "http://romm.local"
+        resp = _make_resp(200, {"Content-Length": "5"}, b"BYTES")
+
+        with patch("urllib.request.urlopen", return_value=resp) as mock_open:
+            fetch(RommApiAdapter(romm_http.adapter), str(tmp_path / "out.bin"))
+
+        assert mock_open.call_args[0][0].full_url == expected
+
+
 class TestRommSslContext:
     def test_default_verifies_ssl(self, romm_http):
         """Default setting (False) should produce a context that verifies certs."""

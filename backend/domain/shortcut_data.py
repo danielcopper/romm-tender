@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+from domain.rom_file import has_file_on_romm
 from domain.sibling_group import compute_sibling_group_key
 from domain.user_data_location import LAUNCHER_EXE_SUFFIX
 
@@ -317,6 +318,9 @@ def build_shortcuts_data(
             # commit persists it on the Rom aggregate (it rides the sync UPSERT
             # like the version dimensions). Absent/None → "size unknown".
             "fs_size_bytes": rom.get("fs_size_bytes"),
+            # Persisted like the size; the sibling collapse reads it to keep a
+            # ROM RomM holds no file for from becoming the bound version.
+            "has_file_on_disk": has_file_on_romm(rom),
             "cover_path": "",
             # The sibling-group key + version dimensions (ADR-0021), extracted by
             # the shared helper so the sync build and the version-switch persist

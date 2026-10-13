@@ -139,6 +139,23 @@ lets the user set in its own UI.
 >   would flip `classify_roms` to "changed" and rename the live shortcut, changing its appId; that must never happen.
 >   Under a partial (collection) view the canonical name is chosen among the fetched members only — acceptable and
 >   documented, since the group's real representative rides its own platform unit in the same run.
+>
+> **Amendment (a version RomM holds no file for, [#2196](https://github.com/danielcopper/romm-tender/issues/2196)).**
+> RomM keeps a ROM whose file left its disk and lists a physical game that never had one; its `has_file_on_disk` is
+> false for both, and a download of either is a 404. The chain reads that flag, stored per row:
+>
+> - **The installed and binding legs read every member.** An installed member without a file plays from its local copy,
+>   and a bound one stays bound: the version is one the user chose, and another version may differ in language or
+>   region.
+> - **RomM's default and the 1G1R ranking leave a member without a file out** whenever a member with a file remains;
+>   with none left they run over every member as before. They decide only where no binding exists, so a new group mints
+>   its shortcut on a dump with a file whenever one exists and no member is installed.
+> - **One rebind moves a binding off a member without a file** that is not installed: in a complete view, onto a sibling
+>   with a file, no shortcut of its own, and the same `fs_name_no_ext`. An equal stem is the same dump in a new shape,
+>   as when a rescan turns `Game (USA).zip` into a folder `Game (USA)`; a different language, region, version, hack or
+>   patch differs in the name. The dimensions are not compared, because RomM parses a version such as `(v1.1)` without
+>   sending it. The rebind keeps the shortcut's appId through §2's rebind lane, and the sync's preview counts it as a
+>   change.
 
 ### 4. Saves stay per rom_id; a version switch never migrates saves
 

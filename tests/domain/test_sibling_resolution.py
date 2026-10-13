@@ -505,3 +505,28 @@ class TestReachableRomIds:
 
     def test_no_rows_reach_nothing(self):
         assert reachable_rom_ids([]) == set()
+
+
+class TestMembersWithoutAFile:
+    """A member RomM holds no file for (``fileless_rom_ids``) in the chain's legs."""
+
+    def test_a_present_member_beats_a_missing_one_that_ties_in_the_ranking(self):
+        # The tie falls to rom_id, which would pick the missing row 1.
+        members = [_m(1, fs_name_no_ext="Game (USA)"), _m(2, fs_name_no_ext="Game (USA)")]
+        assert resolve_group_representative(members, set(), set(), fileless_rom_ids={1}) == 2
+
+    def test_the_main_sibling_leg_leaves_a_member_without_a_file_out(self):
+        members = [_m(1, fs_name_no_ext="a", is_main_sibling=True), _m(2, fs_name_no_ext="b")]
+        assert resolve_group_representative(members, set(), set(), fileless_rom_ids={1}) == 2
+
+    def test_an_installed_member_without_a_file_stays_the_representative(self):
+        members = [_m(1, fs_name_no_ext="b"), _m(2, fs_name_no_ext="a", is_main_sibling=True)]
+        assert resolve_group_representative(members, {1}, set(), fileless_rom_ids={1}) == 1
+
+    def test_the_binding_leg_keeps_a_bound_member_without_a_file(self):
+        members = [_m(1, fs_name_no_ext="b"), _m(2, fs_name_no_ext="a", is_main_sibling=True)]
+        assert resolve_group_representative(members, set(), {1}, fileless_rom_ids={1}) == 1
+
+    def test_with_no_member_holding_a_file_the_chain_runs_over_all_of_them(self):
+        members = [_m(1, fs_name_no_ext="b"), _m(2, fs_name_no_ext="a", is_main_sibling=True)]
+        assert resolve_group_representative(members, set(), set(), fileless_rom_ids={1, 2}) == 2

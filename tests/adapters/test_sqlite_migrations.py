@@ -83,7 +83,7 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 021_add_rom_fs_size + 022_rename_collection_kind_user_to_standard
 # + 023_add_rom_install_launchable + 024_add_answered_save_directories
 # + 025_add_platform_skip_revoked).
-_SHIPPED_VERSION = 25
+_SHIPPED_VERSION = 26
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp and
@@ -1495,8 +1495,8 @@ class Test022RenameCollectionKindUserToStandard:
         finally:
             conn.close()
 
-        final_version = apply_migrations(db_path)
-        assert final_version == _SHIPPED_VERSION
+        final_version = apply_migrations(db_path, str(_only_migrations_through(tmp_path, 25)))
+        assert final_version == 25
 
         conn = sqlite3.connect(db_path)
         try:
@@ -1760,3 +1760,90 @@ class Test025AddPlatformSkipRevoked:
 def test_shipped_migrations_dir_resolves_to_real_schema():
     """The default MIGRATIONS_DIR points at the shipped 001_initial.sql."""
     assert (Path(MIGRATIONS_DIR) / "001_initial.sql").is_file()
+
+
+class Test026AddRomHasFileOnDisk:
+    """026 — adds the NOT NULL DEFAULT 1 has_file_on_disk column to roms (#2196)."""
+
+    def test_adds_has_file_on_disk_to_roms_only(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+
+        apply_migrations(db_path)
+
+        assert _user_version(db_path) == _SHIPPED_VERSION
+        assert "has_file_on_disk" in _columns(db_path, "roms")
+        assert "has_file_on_disk" not in _columns(db_path, "rom_installs")
+
+    def test_has_file_on_disk_absent_before_026(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 25)))
+
+        assert _user_version(db_path) == 25
+        assert "has_file_on_disk" not in _columns(db_path, "roms")
+
+    def test_a_row_from_before_026_reads_as_having_a_file(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 25)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO roms (rom_id, platform_slug, name, fs_name, last_synced_at) "
+                "VALUES (1, 'saturn', 'Game', 'Game (USA).zip', '2026-10-01T10:00:00')"
+            )
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        conn = sqlite3.connect(db_path)
+        try:
+            value = conn.execute("SELECT has_file_on_disk FROM roms WHERE rom_id = 1").fetchone()[0]
+        finally:
+            conn.close()
+        assert value == 1
+
+    def test_the_first_sync_after_026_fetches_every_platform_and_collection_once(self, tmp_path: Path):
+        # No incremental skip may pass over a row whose has_file_on_disk is still
+        # only the default: every platform stamp is revoked, every collection
+        # stamp goes.
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 25)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO platform_sync_state (platform_slug, completed_at, rom_count, fetch_id, skip_revoked) "
+                "VALUES ('saturn', '2026-10-01T10:00:00', 3, 'run-1', 0)"
+            )
+            conn.execute(
+                "INSERT INTO collection_sync_state "
+                "(collection_id, collection_kind, updated_at, completed_at, rom_count, member_rom_ids) "
+                "VALUES ('7', 'standard', '2026-10-01T09:00:00', '2026-10-01T10:00:00', 2, '[1, 2]')"
+            )
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        conn = sqlite3.connect(db_path)
+        try:
+            stamp = conn.execute(
+                "SELECT rom_count, fetch_id, skip_revoked FROM platform_sync_state WHERE platform_slug = 'saturn'"
+            ).fetchone()
+            collections = conn.execute("SELECT COUNT(*) FROM collection_sync_state").fetchone()[0]
+        finally:
+            conn.close()
+        assert stamp == (3, "run-1", 1)
+        assert collections == 0
+
+    def test_has_file_on_disk_refuses_a_null(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute(
+                    "INSERT INTO roms (rom_id, platform_slug, name, fs_name, last_synced_at, has_file_on_disk) "
+                    "VALUES (1, 'saturn', 'Game', 'g.zip', '2026-10-01T10:00:00', NULL)"
+                )
+        finally:
+            conn.close()

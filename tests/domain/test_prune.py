@@ -7,12 +7,14 @@ import pytest
 from domain.identity import DISPLAY_NAME
 from domain.prune import (
     _READABLE_KINDS,
+    natural_default,
     parse_recovery_bundle_id,
     recovery_bundle_id,
     render_bundle_readme,
     sanitize_package_name,
     selected_prune_ids,
 )
+from domain.rom import Rom
 
 if TYPE_CHECKING:
     from domain.prune import BundleReadmeContext
@@ -248,3 +250,22 @@ def test_selected_ids_truth_table():
         )
         == set()
     )
+
+
+def test_the_cleanup_s_default_target_does_not_read_whether_romm_has_a_file():
+    # The removed-game cleanup stays as it was (#2196, out of scope): a tie in
+    # the ranking still falls to rom_id, the row RomM holds no file for.
+    def row(rom_id: int, *, has_file: bool) -> Rom:
+        return Rom(
+            rom_id=rom_id,
+            platform_slug="saturn",
+            name="Game",
+            fs_name="Game (USA).zip" if rom_id == 1 else "Game (USA)",
+            shortcut_app_id=None,
+            last_synced_at="2026-10-13T00:00:00",
+            sibling_group_key="g1",
+            has_file_on_disk=has_file,
+        )
+
+    rows = [row(1, has_file=False), row(2, has_file=True)]
+    assert natural_default(rows, {1, 2}, "auto") == 1

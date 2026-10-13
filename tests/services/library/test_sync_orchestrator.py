@@ -2627,6 +2627,81 @@ class TestDoSyncPerUnit:
         assert result["summary"]["new_count"] == 1  # one game, not two dumps
         assert result["new_names"] == ["Zelda (USA)"]
 
+    def _seed_rescanned_saturn_game(self, library, fake_romm_api):
+        """A bound "Game (USA).zip" (app 5000) RomM keeps without its file, beside the folder a rescan made of it."""
+        _use_fake_romm(library, fake_romm_api)
+        _seed_rom_row(
+            library,
+            1,
+            app_id=5000,
+            platform_slug="saturn",
+            name="Game (USA)",
+            fs_name="Game (USA).zip",
+            sibling_group_key="igdb:100:1",
+        )
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="Saturn",
+            slug="saturn",
+            roms=[
+                {
+                    "id": 1,
+                    "name": "Game (USA)",
+                    "igdb_id": 100,
+                    "fs_name": "Game (USA).zip",
+                    "fs_name_no_ext": "Game (USA)",
+                    "has_file_on_disk": False,
+                    "missing_from_fs": True,
+                },
+                {
+                    "id": 2,
+                    "name": "Game (USA)",
+                    "igdb_id": 100,
+                    "fs_name": "Game (USA)",
+                    "fs_name_no_ext": "Game (USA)",
+                    "has_file_on_disk": True,
+                },
+            ],
+        )
+        library.settings["enabled_platforms"] = {"1": True}
+
+    @pytest.mark.asyncio
+    async def test_a_bound_rom_without_a_file_rebinds_onto_its_rescanned_folder(self, library, fake_romm_api, emit):
+        """The shortcut of a ROM RomM holds no file for moves onto the same dump in its
+        new shape: one shortcut, keyed by the old row so the appId is reused (#2196)."""
+        self._seed_rescanned_saturn_game(library, fake_romm_api)
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+
+        async def ack_reuse(_unit, event):
+            event.set()
+            return {str(rid): 5000 for rid in library.sync._box.pending_sync}
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = ack_reuse
+        library.sync._box.sync_state = SyncState.RUNNING
+
+        await library.sync._orchestrator._do_sync_per_unit()
+
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        assert [[e["rom_id"] for e in u["shortcuts"]] for u in unit_events] == [[1]]
+        stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
+        assert stale_events == [{"remove": []}]
+        with library.uow as uow:
+            assert uow.roms.get(2).shortcut_app_id == 5000
+            assert uow.roms.get(1).shortcut_app_id is None
+            assert uow.roms.get(1).has_file_on_disk is False
+            assert uow.roms.get(2).has_file_on_disk is True
+
+    @pytest.mark.asyncio
+    async def test_the_preview_offers_apply_for_a_rebind_alone(self, library, fake_romm_api, emit):
+        """A rebind whose name and launch command stay the same is one changed game."""
+        self._seed_rescanned_saturn_game(library, fake_romm_api)
+
+        result = await library.sync.sync_preview()
+
+        summary = result["summary"]
+        assert (summary["new_count"], summary["changed_count"], summary["remove_count"]) == (0, 1, 0)
+
     @pytest.mark.asyncio
     async def test_vanished_bound_sibling_rebinds_without_stale_removal(self, library, fake_romm_api, emit):
         """A bound sibling that disappears while its group survives rebinds to a

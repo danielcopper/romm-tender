@@ -96,6 +96,7 @@ export type WireReason =
   | "no_active_session"
   | "no_api_key"
   | "no_cover"
+  | "no_file_on_romm"
   | "no_grid_dir"
   | "no_migration_needed"
   | "no_platform_system"

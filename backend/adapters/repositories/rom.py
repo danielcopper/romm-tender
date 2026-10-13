@@ -47,6 +47,9 @@ _SYNC_COLUMNS = (
     # the UPSERT and refreshes every sync — set directly from the fetched dict,
     # no confirmed-else-preserved merge. NULL = unknown.
     "fs_size_bytes",
+    # Whether RomM holds a file for the ROM: server-derived like the size, set
+    # directly from the fetched dict. A STRICT 0/1 INTEGER.
+    "has_file_on_disk",
     # The fetch generation that last saw this row (#1504). Server-independent
     # like the pins, but it rides the UPSERT: the reporter merges it
     # confirmed-else-preserved before save(), so a platform apply advances it
@@ -67,7 +70,8 @@ _UPDATE_ASSIGNMENTS = ", ".join(f"{col} = excluded.{col}" for col in _SYNC_COLUM
 
 def _row_to_rom(row: sqlite3.Row) -> Rom:
     # The JSON-array columns are NOT NULL DEFAULT '[]', so json.loads is always
-    # safe; is_main_sibling is a STRICT 0/1 INTEGER mapped back to bool.
+    # safe; is_main_sibling and has_file_on_disk are STRICT 0/1 INTEGERs mapped
+    # back to bool.
     return Rom(
         rom_id=row["rom_id"],
         platform_slug=row["platform_slug"],
@@ -90,6 +94,7 @@ def _row_to_rom(row: sqlite3.Row) -> Rom:
         tags=tuple(json.loads(row["tags"])),
         is_main_sibling=bool(row["is_main_sibling"]),
         fs_size_bytes=row["fs_size_bytes"],
+        has_file_on_disk=bool(row["has_file_on_disk"]),
         last_fetch_id=row["last_fetch_id"],
     )
 
@@ -162,6 +167,7 @@ class SqliteRomRepository(BaseRepository):
                 json.dumps(list(rom.tags)),
                 int(rom.is_main_sibling),
                 rom.fs_size_bytes,
+                int(rom.has_file_on_disk),
                 rom.last_fetch_id,
             ),
         )

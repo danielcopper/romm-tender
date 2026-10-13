@@ -268,6 +268,35 @@ describe("CustomPlayButton — vanished bound ROM (#1570 F20)", () => {
   });
 });
 
+describe("CustomPlayButton — a ROM RomM holds no file for (#2196)", () => {
+  beforeEach(() => {
+    vi.mocked(getCachedGameDetail).mockReset();
+    vi.mocked(backend.startDownload).mockReset();
+  });
+
+  const downloadButton = (container: HTMLElement): HTMLButtonElement =>
+    container.querySelector<HTMLButtonElement>("button.romm-btn-download")!;
+
+  it("says so up front and offers no download", async () => {
+    mockCachedDetail({ rom_id: 42, installed: false, has_file_on_disk: false });
+    const { findByText, container } = render(<CustomPlayButton appId={100} />);
+    await findByText("No file on RomM");
+
+    expect(downloadButton(container).disabled).toBe(true);
+    downloadButton(container).click();
+    await act(async () => Promise.resolve());
+    expect(backend.startDownload).not.toHaveBeenCalled();
+  });
+
+  it("plays an installed ROM as before", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true, has_file_on_disk: false });
+    const { findByText, queryByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Play");
+
+    expect(queryByText("No file on RomM")).toBeNull();
+  });
+});
+
 describe("CustomPlayButton — download_failed listener", () => {
   beforeEach(() => {
     vi.mocked(getCachedGameDetail).mockReset();

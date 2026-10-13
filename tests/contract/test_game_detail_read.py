@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 from domain.rom import Rom
 from domain.version_metadata import VersionMetadata
 
@@ -38,6 +40,7 @@ def _seed_versioned_rom(harness, **overrides):
                     is_main_sibling=overrides.get("is_main_sibling", True),
                 ),
                 fs_size_bytes=overrides.get("fs_size_bytes", 3_145_728),
+                has_file_on_disk=overrides.get("has_file_on_disk", True),
             )
         )
     return app_id
@@ -94,6 +97,16 @@ async def test_cached_game_detail_null_fs_size_bytes_rides_as_none(harness):
 
     assert result["found"] is True
     assert result["fs_size_bytes"] is None
+
+
+@pytest.mark.parametrize("has_file", [True, False])
+async def test_cached_game_detail_carries_whether_romm_had_a_file(harness, has_file):
+    """The payload carries the stored answer, which the play button reads without a request (#2196)."""
+    app_id = _seed_versioned_rom(harness, has_file_on_disk=has_file)
+
+    result = await harness.endpoints.get_cached_game_detail(app_id)
+
+    assert result["has_file_on_disk"] is has_file
 
 
 async def test_cached_game_detail_unknown_app_id_is_not_found(harness):
