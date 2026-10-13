@@ -20,6 +20,7 @@ import type {
   SourceHealthFinding,
 } from "../types/emulatorSources";
 import type { RommErrorReason } from "../types/reasons";
+import { joined } from "./formatters";
 
 const SOURCE_NAMES: ReadonlyMap<string, string> = new Map([
   ["retrodeck", "RetroDECK"],
@@ -87,16 +88,11 @@ const ROOT_WORDS: ReadonlyMap<string, string> = new Map([
   ["saves", "saves folder"],
 ]);
 
-/** "a", "a and b", "a, b and c". */
-function joinedNaturally(words: readonly string[]): string {
-  return words.length <= 1 ? words.join("") : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
-}
-
 /** The sentence for the roots a source's settings file leaves out, or `null` for a root this module cannot name. */
 function assumedRootsSentence(name: string, file: string, roots: string | null): string | null {
   const words = (roots ?? "").split(",").map((root) => ROOT_WORDS.get(root));
-  if (words.length === 0 || words.some((word) => word === undefined)) return null;
-  const folders = joinedNaturally(words as string[]);
+  if (words.length === 0 || words.includes(undefined)) return null;
+  const folders = joined(words as string[]);
   const use = words.length === 1 ? "does not use it" : "uses none of them";
   return `${name}: its settings file ${file} does not name its ${folders}, so Tender ${use}.`;
 }
