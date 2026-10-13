@@ -14,12 +14,12 @@ it (`config_error` is `NotConfigured`, `not_installed` is `NotInstalled`), other
 because the panel reads a payload only on success — except that every save-sync refusal carries `synced=0`, and the
 sweep's also `conflicts=0` (#2205 D2). A partial failure's extras are what was done. Where a refusal is raised, its
 reason is a literal, a module constant or a `StrEnum` value — what `scripts/check_reason_parity.py` reads; anything else
-fails it. Transport failures collapse onto `SERVER_UNREACHABLE` — a server that could not be reached, never one that
-answered: a 4xx answers its own reason or `UNKNOWN`, a 5xx RomM reports itself `server_error`, and a 429 `rate_limited`
-(`classify_error` in `lib/errors.py`); 401 and 403 collapse onto `AUTH_FAILED` (same slug, distinct `message`). The
-legacy `error_code` key and a second `error` key are **forbidden**. A reason added or dropped lands in the panel's
-`WireReason` union (`frontend/src/types/reasons.ts`) in the same change; `scripts/check_reason_parity.py` fails until it
-does.
+fails it. Transport failures collapse onto `SERVER_UNREACHABLE`, and so do the answers nothing proves RomM gave — a
+proxy's 5xx, an unproven 404; an answer RomM or a proxy gave with a 4xx answers its own reason or `UNKNOWN`, a 5xx RomM
+reports itself `server_error`, and a 429 `rate_limited` (`classify_error` in `lib/errors.py`); 401 and 403 collapse onto
+`AUTH_FAILED` (same slug, distinct `message`). The legacy `error_code` key and a second `error` key are **forbidden**. A
+reason added or dropped lands in the panel's `WireReason` union (`frontend/src/types/reasons.ts`) in the same change;
+`scripts/check_reason_parity.py` fails until it does.
 
 **`main.py` builds the shape** from what a use case raises or returns (below), and no other module builds it from a
 literal; `scripts/check_failure_shape.py --check` fails on one that does. The gate reads where the shape is built, not

@@ -75,7 +75,8 @@ new code in it.
 - `romm-http.md` — an unproven 404 must never become `RommNotFoundError`, which is deletion authority downstream: the
   entity proof is the default and only the three byte-stream fetches opt out. Tests pin both directions; nothing else
   does. Also owns the transport's reachability state: a new request method sends through `_urlopen` (checked) and passes
-  `romm_origin=False` if it does not talk to RomM (not checked).
+  `romm_origin=False` if it does not talk to RomM (not checked), and a new translation of an HTTP answer keeps its
+  status, or a refusal marks RomM unreachable (not checked).
 - `bootstrap-wiring.md` — the `main.py` / `bootstrap/` split, which module of `bootstrap/` new wiring belongs in, what
   the `Application` and `Endpoints` each hold, and why `run()` is synchronous.
 - `host.md` — the process that hosts this backend (`backend/host/**`): the transport-vs-endpoint failure shapes, the
