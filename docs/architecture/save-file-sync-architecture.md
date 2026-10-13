@@ -1112,14 +1112,25 @@ input.
 `pre_launch_sync`, `post_exit_sync`, `sync_rom_saves`, `sync_all_saves`, and `resolve_sync_conflict` for the same
 `rom_id`. `StatusService.get_save_status` also takes the lock — not for the read, but for its one write: the executor
 body adopts a baseline hash (`Skip(adopt_baseline=True)`) and persists it through a `rom_save_sync_states`
-read-modify-write, which would otherwise race a concurrent sync and clobber that sync's update. The three **slot
-mutations** — `SlotSwitcher.switch_slot`, `SetupWizard.confirm_slot_choice`, and `SlotDeleter.delete_slot` — take the
-lock too: each loads the `RomSaveSyncState` aggregate, mutates it (active-slot flip, slot-confirm, slot/file tracking
-teardown, switch downloads/deletes), and persists, so without the lock a slot op racing an in-flight sync on the same
-ROM loses updates or PUTs the wrong slot's content into the tracked server save (#1057). The lock-free server-saves
-network fetch stays outside the lock; only the local RMW is the critical section. Different rom_ids have independent
-locks, so cross-game concurrency (e.g. Sync All Saves running concurrently with a resolve on one specific rom) is
-unaffected. The lock is created lazily on first access (`SyncEngine.rom_lock(rom_id)`).
+read-modify-write, which would otherwise race a concurrent sync and clobber that sync's update. The slot list
+(`SlotListing.get_save_slots`) takes it for the same reason: it merges the server's slots into the stored listing and
+writes the state back, reading, merging and writing in one unit of work. Both ask the server first, outside the lock,
+and hold it only for the local read-modify-write; a slot list whose server cannot be reached reads the stored state for
+its last-known listing without the lock and writes nothing. The three **slot mutations** — `SlotSwitcher.switch_slot`,
+`SetupWizard.confirm_slot_choice`, and `SlotDeleter.delete_slot` — take the lock too: each loads the `RomSaveSyncState`
+aggregate, mutates it (active-slot flip, slot-confirm, slot/file tracking teardown, switch downloads/deletes), and
+persists, so without the lock a slot op racing an in-flight sync on the same ROM loses updates or PUTs the wrong slot's
+content into the tracked server save (#1057). Unlike the status and the slot list, they hold it across their server I/O:
+`switch_slot` lists the server's saves for the new slot, `delete_slot` deletes the slot's server saves, and
+`confirm_slot_choice`'s migration lists, downloads and uploads, all under the lock. The lock is held as well by
+`SaveCopyService.copy_save_to_slot`, `VersionsService.rollback_to_version`, the removed-game cleanup
+(`PruneSaveSupport.lock_prune_roms`, one lock for each ROM its save inventory names, taken in ascending id order),
+deleting and counting a platform's local saves (`SaveService._delete_saves_for_roms`,
+`SaveService.count_platform_saves`), and the passes that record each installed ROM's save directory
+(`SyncEngine._record_each_installed_rom`); following a moved save directory (`SyncEngine.follow_save_directory`) runs
+inside the lock of whichever holder calls it. Different rom_ids have independent locks, so cross-game concurrency (e.g.
+Sync All Saves running concurrently with a resolve on one specific rom) is unaffected. The lock is created lazily on
+first access (`SyncEngine.rom_lock(rom_id)`).
 
 The lock is **not reentrant** (plain `asyncio.Lock`), so a critical section must never call a peer that re-acquires the
 same lock. `switch_slot` is the live instance: its tail `get_save_status` re-takes `rom_lock(rom_id)`, so the lock is
