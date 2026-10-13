@@ -5749,6 +5749,7 @@ class TestABatchDownloadCarriesOnPastAFailedFile:
         assert result["success"] is True
         assert result["downloaded"] == 1
         assert result["message"].endswith("(2 failed: refused.bin, romm_error.bin)")
+        assert result["failed"] == ["refused.bin", "romm_error.bin"]
         logged = [(record.levelno, record.getMessage()) for record in caplog.records]
         # A refusal is logged once, where the download refuses it; the batch adds no second line.
         assert not [line for _level, line in logged if "refused.bin" in line]
@@ -6109,10 +6110,7 @@ class TestAPartialBiosDeleteIsIncomplete:
 
         assert result == FirmwareDeletionIncomplete(
             reason="delete_incomplete",
-            message=(
-                "Could not delete scph39001.bin: scph39001.bin: "
-                "simulated remove failure: /fake/bios/pcsx2/bios/scph39001.bin"
-            ),
+            message="Could not delete scph39001.bin: simulated remove failure: /fake/bios/pcsx2/bios/scph39001.bin",
             deleted_count=0,
         )
         assert len(store.files) == 2

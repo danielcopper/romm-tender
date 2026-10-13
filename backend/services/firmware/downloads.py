@@ -235,7 +235,7 @@ class FirmwareDownloader:
         msg = f"Downloaded {downloaded} firmware files"
         if errors:
             msg += f" ({len(errors)} failed: {', '.join(errors)})"
-        return {"success": True, "message": msg, "downloaded": downloaded}
+        return {"success": True, "message": msg, "downloaded": downloaded, "failed": errors}
 
     async def _download_firmware_batch(
         self, platform_firmware, placements: Mapping[str, FirmwarePlacement]
@@ -364,7 +364,7 @@ class FirmwareDownloader:
         msg = f"Downloaded {downloaded} required firmware files"
         if errors:
             msg += f" ({len(errors)} failed: {', '.join(errors)})"
-        return {"success": True, "message": msg, "downloaded": downloaded}
+        return {"success": True, "message": msg, "downloaded": downloaded, "failed": errors}
 
     def _platform_emulator_identity(self, system: str, platform_slug: str) -> str | None:
         """The identity of the platform's resolved emulator, or ``None``.

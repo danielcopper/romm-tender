@@ -233,7 +233,7 @@ class PlatformBiosDeleter:
         if errors:
             return FirmwareDeletionIncomplete(
                 reason="delete_incomplete",
-                message=f"Could not delete {file_name}: {errors[0]}",
+                message=f"Could not delete {errors[0]}",
                 deleted_count=deleted,
             )
         if deleted == 0:
