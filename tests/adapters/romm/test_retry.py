@@ -423,7 +423,7 @@ class TestKnownUnreachableFastPath:
             adapter.with_retry(fn, base_delay=0)
         return fn.call_count
 
-    @pytest.mark.parametrize("fault", ["open", "write"])
+    @pytest.mark.parametrize("fault", ["open", "write", "close"])
     def test_a_download_this_device_cannot_write_is_tried_once_and_never_counts_as_unreachable(
         self, adapter, tmp_path, fault
     ):
@@ -431,10 +431,14 @@ class TestKnownUnreachableFastPath:
             # A folder where the file should go: open() itself fails.
             (tmp_path / "rom.zip").mkdir()
             dest, body = str(tmp_path / "rom.zip"), b"rom bytes"
-        else:
+        elif fault == "write":
             # The kernel's always-full device: the write fails with ENOSPC, as on a
             # full disk. The body outgrows the write buffer, so write() itself fails.
             dest, body = "/dev/full", b"x" * 200_000
+        else:
+            # A body the size of a save fits the write buffer, so the full disk
+            # shows only when the file is closed.
+            dest, body = "/dev/full", b"rom bytes"
         with (
             patch("urllib.request.urlopen", side_effect=lambda *_a, **_k: _streamed_response(body)) as urlopen,
             patch("time.sleep"),
