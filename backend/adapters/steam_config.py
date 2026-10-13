@@ -186,6 +186,17 @@ class SteamConfigAdapter:
 
     # -- Grid files -------------------------------------------------------------
 
+    def grid_file_names(self) -> frozenset[str] | None:
+        """The names of the regular files in Steam's grid directory, links followed; ``None`` without one.
+
+        A link that leads nowhere, or to a directory, is left out.
+        """
+        grid_dir = self.grid_dir()
+        if not grid_dir:
+            return None
+        with os.scandir(grid_dir) as entries:
+            return frozenset(entry.name for entry in entries if entry.is_file())
+
     def write_shortcut_icon(self, app_id: int, icon_bytes: bytes) -> str:
         """Write an icon PNG into Steam's grid dir and return its path.
 

@@ -246,6 +246,10 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # write_shortcut_icon() from services/steamgrid.py.
         "read_shortcut_exes",
         "read_shortcut_launch_options",
+        # SteamConfigStore.grid_file_names — lists Steam's grid directory and
+        # stats every entry that is a link, to answer which artwork slots a
+        # shortcut already has.
+        "grid_file_names",
         # FirmwarePlatformResolver (services/protocols/paths.py) — reads what
         # one system's emulators want, with content verification: it opens each
         # candidate in a declared folder and reads it the way the emulator does,

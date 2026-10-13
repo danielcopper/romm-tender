@@ -7,6 +7,7 @@ import pytest
 from _vendor import vdf
 
 from adapters.steam_config import SteamConfigAdapter
+from domain.artwork_slot import ArtworkSlot, is_slot_filled
 from lib.errors import SteamGridDirMissingError
 from lib.steam_input_apply import SteamInputApply
 
@@ -578,3 +579,48 @@ class TestSetSteamInputConfig:
         with patch("adapters.steam_config.os.replace", side_effect=PermissionError("read-only")):
             assert adapter.set_steam_input_config([42], mode="force_on") is SteamInputApply.WRITE_FAILED
         assert not (config_dir / "localconfig.vdf.tmp").exists()
+
+
+# ── grid_file_names ─────────────────────────────────────────
+
+
+class TestGridFileNames:
+    """The listing a slot is judged filled by: regular files only, links followed."""
+
+    @staticmethod
+    def _grid(tmp_path):
+        grid = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123" / "config" / "grid"
+        grid.mkdir(parents=True)
+        return grid
+
+    def test_names_every_regular_file(self, tmp_path, adapter):
+        grid = self._grid(tmp_path)
+        (grid / "100.png").write_bytes(b"x")
+        (grid / "100_logo.json").write_text("{}")
+
+        assert adapter.grid_file_names() == frozenset({"100.png", "100_logo.json"})
+
+    def test_a_link_to_a_file_counts_as_the_file(self, tmp_path, adapter):
+        grid = self._grid(tmp_path)
+        target = tmp_path / "elsewhere.png"
+        target.write_bytes(b"x")
+        (grid / "100_hero.png").symlink_to(target)
+
+        assert "100_hero.png" in adapter.grid_file_names()
+        assert is_slot_filled(adapter.grid_file_names(), 100, ArtworkSlot.HERO)
+
+    def test_a_link_that_leads_nowhere_is_left_out(self, tmp_path, adapter):
+        grid = self._grid(tmp_path)
+        (grid / "100_logo.png").symlink_to(tmp_path / "gone.png")
+
+        assert adapter.grid_file_names() == frozenset()
+        assert not is_slot_filled(adapter.grid_file_names(), 100, ArtworkSlot.LOGO)
+
+    def test_a_directory_is_left_out(self, tmp_path, adapter):
+        grid = self._grid(tmp_path)
+        (grid / "100.png").mkdir()
+
+        assert not is_slot_filled(adapter.grid_file_names(), 100, ArtworkSlot.WIDE_GRID)
+
+    def test_no_steam_user_directory_is_no_listing(self, adapter):
+        assert adapter.grid_file_names() is None
