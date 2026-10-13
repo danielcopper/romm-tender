@@ -1137,7 +1137,7 @@ class TestTranslateHttpError:
         assert result.status_code == 429
         assert "Rate limited" in str(result)
 
-    def test_other_4xx_becomes_generic_api_error(self, romm_http):
+    def test_other_4xx_becomes_a_client_error_carrying_its_status(self, romm_http):
         exc = urllib.error.HTTPError("url", 418, "I'm a Teapot", http.client.HTTPMessage(), None)
         result = romm_http.adapter.translate_http_error(exc, "http://romm.local/api/x")
         assert isinstance(result, RommApiError)

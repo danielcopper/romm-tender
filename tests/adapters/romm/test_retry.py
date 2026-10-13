@@ -327,14 +327,14 @@ class TestKnownUnreachableFastPath:
             RommNotFoundError("Rom with id '4375' not found"),
             RommConflictError("409"),
             RommUnprocessableEntityError("422"),
-            RommServerError("rate limited", status_code=429),
+            RommRateLimitedError("rate limited"),
             RommClientError("HTTP 413: Request Entity Too Large", status_code=413),
             RommReportedServerError("HTTP 500: Internal Server Error", 500, detail="database is locked"),
         ],
         ids=["401", "403", "entity-404", "409", "422", "429", "413", "romm-own-5xx"],
     )
     def test_a_server_answer_never_counts_as_unreachable(self, adapter, exc):
-        """Any 4xx means the server answered, whatever it answered.
+        """Any 4xx, and a 5xx RomM reports itself, means the server answered, whatever it answered.
 
         The 404 case is deletion authority downstream (#1570). The 409 is the
         one that bites in normal operation: every automatic save upload POSTs
@@ -487,7 +487,7 @@ class TestKnownUnreachableFastPath:
         )
 
     def test_a_5xx_romm_reports_itself_answers_server_error_and_never_counts_as_unreachable(self, adapter):
-        """RomM's own JSON ``detail`` proves the server is there — the same proof an entity 404 needs."""
+        """RomM's own JSON ``detail`` proves the server is there — the first half of an entity 404's proof."""
         hdrs = http.client.HTTPMessage()
         hdrs["Content-Type"] = "application/json"
 

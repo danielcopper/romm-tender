@@ -243,7 +243,7 @@ class TestClassifyError:
         assert "disabled for this device" in msg
         assert "RomM's device settings" in msg
 
-    def test_conflict_error_is_api_error(self):
+    def test_a_409_reaching_the_classifier_is_a_refusal_never_unreachable(self):
         """A 409 reaching the classifier is a refusal the server answered, never an unreachable one."""
         error = RommConflictError("HTTP 409: Conflict (POST http://romm.local/api/saves?device_id=d1)")
         error.phrase = "Conflict"

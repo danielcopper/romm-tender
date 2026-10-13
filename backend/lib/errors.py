@@ -49,8 +49,8 @@ class RommApiError(Exception):
     # ``detail`` without every error path paying to read the body.
     detail: Any = None
     # The reason phrase of the HTTP answer this error translates (``Request
-    # Entity Too Large``), set by the adapter's translation; ``None`` for an
-    # error no HTTP answer carried.
+    # Entity Too Large``), set by the adapter's translation; ``None`` where none
+    # was kept — an error raised in code, or an unproven 404.
     phrase: str | None = None
 
     def __init__(self, message, url=None, method=None):
@@ -122,7 +122,8 @@ class RommServerError(RommApiError):
 class RommReportedServerError(RommServerError):
     """A 5xx RomM answered itself: a JSON body carrying a non-blank ``detail``.
 
-    The same proof that makes a 404 an entity verdict. Still retried, but never
+    The first half of the proof that makes a 404 an entity verdict, without its
+    blocklist of FastAPI's stock ``Not Found``. Still retried, but never
     read as RomM being unreachable — a proxy's 5xx for a stopped container has
     no such body and stays a plain :class:`RommServerError`.
     """
@@ -133,7 +134,7 @@ class RommReportedServerError(RommServerError):
 
 
 class RommRateLimitedError(RommServerError):
-    """429 Too Many Requests — not retried, since another attempt only adds to the load.
+    """429 Too Many Requests — never retried (``RetryLadder.is_retryable`` says why).
 
     A :class:`RommServerError` because the pairing-code exchange
     (``RommApiAdapter.exchange_pairing_code``) catches its 429 as one.
@@ -206,12 +207,15 @@ class PairingCodeRateLimitedError(RommApiError):
 
 
 class DeviceWriteError(OSError):
-    """A download's destination on this device could not be opened or written.
+    """A download's destination on this device could not be opened, written or closed.
 
-    Raised by the RomM adapter in place of the ``OSError`` behind it, whose
-    text it carries — a full disk among them. Not a :class:`RommApiError`: it is
-    never retried and says nothing about RomM being reachable, and each caller
-    answers it in its own "on this device" wording.
+    Raised by the RomM adapter in place of the ``OSError`` behind it, a full
+    disk among them, with its ``errno`` and ``strerror`` but not its path. Not
+    a :class:`RommApiError`, so it says nothing about RomM being reachable;
+    ``RetryLadder.is_retryable`` refuses it by name — as an ``OSError`` it would
+    otherwise be retried. A caller with an answer of its own words it as a
+    fault on this device with :func:`with_system_text`; elsewhere its text is
+    the message.
     """
 
 
@@ -231,6 +235,26 @@ class DeviceNotRegisteredError(Exception):
     save-sync concern) since ``lib`` cannot import the service-layer message
     constants.
     """
+
+
+def with_system_text(sentence: str, exc: OSError) -> str:
+    """*sentence* with the system's own words for *exc* appended — ``… (No space left on device)``.
+
+    Only ``strerror`` is appended, which names no path; an ``OSError`` raised
+    with a message alone has none, and *sentence* then stands alone.
+    """
+    return f"{sentence} ({exc.strerror})" if exc.strerror else sentence
+
+
+# A RomM ``detail`` goes into a one-line message; a traceback or an essay
+# would bury the status in front of it.
+_DETAIL_LIMIT = 200
+
+
+def _detail_line(detail: str) -> str:
+    """The first line of *detail*, cut to :data:`_DETAIL_LIMIT` characters."""
+    line = detail.strip().splitlines()[0]
+    return line if len(line) <= _DETAIL_LIMIT else line[: _DETAIL_LIMIT - 1] + "\u2026"
 
 
 def classify_error(exc):
@@ -268,7 +292,7 @@ def classify_error(exc):
     if isinstance(exc, RommRateLimitedError):
         return "rate_limited", "RomM is rate-limiting requests \u2014 try again in a moment"
     if isinstance(exc, RommReportedServerError):
-        return "server_error", f"RomM reported an error (HTTP {exc.status_code}) \u2014 {exc.detail.strip()}"
+        return "server_error", f"RomM reported an error (HTTP {exc.status_code}) \u2014 {_detail_line(exc.detail)}"
     if isinstance(exc, RommServerError):
         code = exc.status_code or 500
         return ErrorCode.SERVER_UNREACHABLE.value, f"Server error ({code}) \u2014 check your RomM server logs"

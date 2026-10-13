@@ -70,9 +70,10 @@ class RetryLadder:
         """Check if an exception is a transient error worth retrying."""
         # TokenHostMismatchError is intentionally absent: a wrong-origin token
         # can never become right by retrying, so with_retry re-raises it at once.
-        # A 429 (a RommServerError) and a disk fault on this device (an OSError)
-        # would each match a branch below; neither clears within the ladder's
-        # few seconds, so both are refused first.
+        # Refused before the branches below would take them (a 429 is a
+        # RommServerError, a disk fault an OSError): another attempt seconds
+        # after a 429 only adds to the load the server is turning away, and a
+        # disk fault on this device does not clear within the ladder's seconds.
         if isinstance(exc, RommRateLimitedError | DeviceWriteError):
             return False
         if isinstance(exc, RommServerError | RommConnectionError | RommTimeoutError):
@@ -171,10 +172,11 @@ class RetryLadder:
         An error carrying a **4xx status code** is peeled off first: the server
         answered, whatever it answered — the routine 409 that every
         ``overwrite=false`` save upload is designed to provoke among them.
-        ``classify_error`` answers no such error ``server_unreachable`` either,
-        but it is a user-messaging classifier whose last branch folds every
-        status-less ``RommApiError`` onto that reason so a display string always
-        exists; the peel keeps the rule here from resting on its branch order.
+        ``classify_error`` gives every error carrying a 4xx a reason other than
+        ``server_unreachable`` too — its own, or ``unknown`` — but it is a
+        user-messaging classifier whose last branch folds every status-less
+        ``RommApiError`` onto that reason so a display string always exists;
+        the peel keeps the rule here from resting on its branch order.
         Past the peel, ``classify_error`` stays the single definition of
         unreachable rather than a second, coarser one here.
 

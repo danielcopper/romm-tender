@@ -48,7 +48,7 @@ def _on_device(operation, *args):
     try:
         return operation(*args)
     except OSError as exc:
-        raise DeviceWriteError(str(exc)) from exc
+        raise DeviceWriteError(exc.errno, exc.strerror) from exc
 
 
 class RommHttpAdapter:
@@ -326,16 +326,16 @@ class RommHttpAdapter:
             return self._translate_http_status(exc.code, msg, url, method, phrase=exc.reason)
         return RommApiError(msg, url=url, method=method)
 
-    def _translate_server_error(
-        self, exc: urllib.error.HTTPError, url: str, method: str, *, detail: Any
-    ) -> RommApiError:
+    def _translate_server_error(self, exc: urllib.error.HTTPError, url: str, method: str) -> RommApiError:
         """Map a 5xx to :class:`RommReportedServerError` when RomM answered it itself.
 
         RomM's own answer (:meth:`_carries_romm_detail`) says the server is
         there; a proxy's HTML or empty 5xx — a 502 for a stopped container —
         proves nothing about RomM and stays a plain :class:`RommServerError`,
-        which ``classify_error`` calls unreachable.
+        which ``classify_error`` calls unreachable. Only a body announced as
+        JSON is read: a proxy's error page can never be the proof.
         """
+        detail: Any = self._read_error_detail(exc) if self._has_json_content_type(exc) else None
         msg = f"HTTP {exc.code}: {exc.reason} ({method} {url})"
         if self._carries_romm_detail(exc, detail):
             error = RommReportedServerError(msg, exc.code, detail=detail, url=url, method=method)
@@ -369,12 +369,12 @@ class RommHttpAdapter:
         """
         if exc.code == 422:
             return self._translate_unprocessable(exc, url, method)
+        if exc.code >= 500:
+            return self._translate_server_error(exc, url, method)
         detail = self._read_error_detail(exc)
         msg = f"HTTP {exc.code}: {exc.reason} ({method} {url})"
         if exc.code == 404:
             error = self._translate_not_found(exc, url, method, detail=detail)
-        elif exc.code >= 500:
-            error = self._translate_server_error(exc, url, method, detail=detail)
         else:
             error = self._translate_http_status(exc.code, msg, url, method, phrase=exc.reason)
         error.detail = detail
@@ -392,7 +392,7 @@ class RommHttpAdapter:
         return RommApiError(f"Unexpected error: {exc}", url=url, method=method)
 
     def translate_http_error(
-        self, exc: Exception, url: str, method: str = "GET", *, asset_route: bool = False
+        self, exc: Exception, url: str, method: str = "GET", *, asset_route: bool = False, romm_origin: bool = True
     ) -> RommApiError:
         """Translate urllib/socket exceptions into RommApiError subclasses.
 
@@ -406,6 +406,9 @@ class RommHttpAdapter:
         and the sole consumer answers that 404 by refetching the cover from the
         ROM's external ``url_cover``, a non-destructive and self-correcting
         reaction.
+
+        *romm_origin* is ``False`` for the third-party cover CDN: its 5xx is
+        never RomM reporting an error, whatever its body says.
         """
         if isinstance(exc, urllib.error.HTTPError):
             if exc.code == 422:
@@ -416,8 +419,8 @@ class RommHttpAdapter:
                 return self._translate_unprocessable(exc, url, method)
             if exc.code == 404 and not asset_route:
                 return self._translate_not_found(exc, url, method, detail=self._read_error_detail(exc))
-            if exc.code >= 500:
-                return self._translate_server_error(exc, url, method, detail=self._read_error_detail(exc))
+            if exc.code >= 500 and romm_origin:
+                return self._translate_server_error(exc, url, method)
             msg = f"HTTP {exc.code}: {exc.reason} ({method} {url})"
             return self._translate_http_status(exc.code, msg, url, method, phrase=exc.reason)
         if isinstance(exc, urllib.error.URLError):
@@ -565,8 +568,9 @@ class RommHttpAdapter:
     ) -> tuple[int, int]:
         """Read *resp* into *dest_path* and return ``(total, downloaded)``.
 
-        A destination this device cannot open or write raises
-        :class:`DeviceWriteError`; a failure reading *resp* stays the transfer's.
+        A destination this device cannot open, write or close raises
+        :class:`DeviceWriteError`; a failure reading *resp* is left to the
+        caller's translation, like every other failure of the transfer.
 
         ``mode`` is ``"ab"`` for a resumed transfer (append onto the existing
         ``.tmp``) or ``"wb"`` for a fresh one. ``downloaded`` seeds the running
@@ -596,13 +600,15 @@ class RommHttpAdapter:
                 if progress_callback and total:
                     progress_callback(downloaded, total)
         except BaseException:
-            # The failure already raised is the one to report; the close below
-            # would only repeat a write fault on whatever the buffer still holds.
+            # Closing flushes what the buffer still holds, so after a failed
+            # write it fails the same way; the error already raised is the one
+            # to report.
             with contextlib.suppress(OSError):
                 f.close()
             raise
-        # Not a ``with`` block: a file smaller than the write buffer reaches the
-        # disk only here, so a full disk fails the close rather than a write.
+        # Not a ``with`` block, whose close would raise a plain ``OSError``: a
+        # file smaller than the write buffer first reaches the disk at this
+        # close, so a full disk shows here rather than in a write.
         _on_device(f.close)
         return total, downloaded
 
@@ -824,7 +830,7 @@ class RommHttpAdapter:
                 # entity — and this one is a third-party CDN, which has no entity
                 # layer at all. Never deletion-authority grade; keeps the plain
                 # status mapping. Do not unify it with the API routes.
-                raise self.translate_http_error(exc, encoded_url, "GET", asset_route=True) from exc
+                raise self.translate_http_error(exc, encoded_url, "GET", asset_route=True, romm_origin=False) from exc
 
         return self._retry.enter(_do_download, (), {}, romm_origin=False)
 
