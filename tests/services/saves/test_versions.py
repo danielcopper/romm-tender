@@ -7,7 +7,7 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import save_shape_message, unestablished_answer
-from lib.errors import RommNotFoundError
+from lib.errors import DeviceWriteError, RommNotFoundError
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
@@ -861,6 +861,25 @@ class TestRollbackToVersion:
         # so disk file and state file remain consistent.
         file_state = _require_save_state(svc, 42).files["pokemon.srm"]
         assert file_state.tracked_save_id == 50
+
+    @pytest.mark.asyncio
+    async def test_a_version_this_device_cannot_write_is_write_failed(self, tmp_path):
+        """The chosen version cannot be written here — an answer of the restore's own, never a transport error."""
+        svc, fake = make_service(tmp_path)
+        _create_save(tmp_path)
+        local_hash = _file_md5(str(tmp_path / "saves" / "gba" / "pokemon.srm"))
+        self._setup_state(svc, tmp_path, tracked_id=100, last_sync_hash=local_hash)
+        fake.saves[100] = self._tracked_save(100)
+        fake.saves[50] = _server_save(save_id=50, rom_id=42, slot="default", updated_at="2026-02-01T10:00:00Z")
+        fake.fail_download_on(50, DeviceWriteError(28, "No space left on device"))
+
+        result = await svc.rollback_to_version(42, "default", 50)
+
+        assert result == {
+            "status": "write_failed",
+            "message": "it could not be written on this device (No space left on device)",
+        }
+        assert not any(call[0] == "upload_save" for call in fake.call_log)
 
     @pytest.mark.asyncio
     async def test_rollback_ignores_confirm_download_failure(self, tmp_path):

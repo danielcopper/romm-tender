@@ -1267,6 +1267,8 @@ rollback API.
 - **Pre-flight `Conflict`**: switch never runs. Status: `conflict_blocked`. Local file untouched.
 - **Pre-flight non-conflict error**: switch never runs. Status: `preflight_failed`. Local file untouched.
 - **Step 1 (download) fails**: state is not mutated. Status: `not_found` (or surfaced error). Local file unchanged.
+  Where this device cannot write the download (`DeviceWriteError`, a full disk among them) the status is `write_failed`,
+  its message naming the system's words for the fault, and the panel words it "Couldn't restore the save: …".
 - **Step 1 (download) succeeds, step 2 (PUT) fails**: state mutation from the download is persisted. Status:
   `put_failed`. Local file and local state both point at the target. Cross-device propagation is incomplete — other
   devices still see the original newest save. Calling `rollback_to_version` again is safe and idempotent: step 1 is
@@ -1600,8 +1602,10 @@ failure here is **classified by type**, not collapsed onto a blanket "Server off
 - Any other `RommApiError` is not caught: it propagates, and both of its readers answer it through `lib/errors.py`
   `classify_error`, so it carries its **own** `reason` + `message` — the endpoint translator for `pre_launch_sync`, the
   session lifecycle for `post_exit_sync`. A revoked token (401) surfaces `auth_failed` + "Authentication failed — check
-  your username and password", an SSL misconfig surfaces the SSL message, a 5xx surfaces the server-error message. These
-  answers **omit** the `offline` flag, so the UI never claims a reachable server is unreachable. The Play button's
+  your username and password", an SSL misconfig surfaces the SSL message, and a 5xx surfaces one of two: an error RomM
+  reports itself answers `server_error` with RomM's `detail`, any other 5xx `server_unreachable` with "Server error (N)
+  — check your RomM server logs". These answers **omit** the `offline` flag — a 5xx too, whichever reason it answers —
+  so the session-end toast never claims a server is offline on anything but a connection that failed. The Play button's
   fallback launch modal shows that backend `message` verbatim, so a user whose token expired sees "authentication
   failed" instead of being told the server is offline forever. Any exception that is not a RomM error is not caught
   either: the endpoint answers it as a transport error, the session lifecycle with its generic failure toast.

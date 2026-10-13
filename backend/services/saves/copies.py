@@ -25,7 +25,7 @@ from domain.save_answer import (
 )
 from domain.save_slot import save_in_slot
 from domain.save_status import compute_multi_file_slot
-from lib.errors import RommConflictError, RommNotFoundError
+from lib.errors import RommConflictError, RommNotFoundError, with_system_text
 from services.saves._helpers import local_save_target
 from services.saves._save_state import write_save_state
 from services.saves._settings import resolve_default_slot
@@ -207,7 +207,7 @@ class SaveCopyService:
                 rom_id,
                 e,
             )
-            return {"status": "copy_failed", "message": f"it could not be written on this device ({e})"}
+            return {"status": "copy_failed", "message": with_system_text("it could not be written on this device", e)}
 
         try:
             self._sync_engine.do_upload_save(

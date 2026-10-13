@@ -56,7 +56,7 @@ from domain.artwork_paths import (
 )
 from domain.cover_refresh import cover_ts_only_change, scan_cover_refresh_candidates
 from domain.sync_stage import SyncStage
-from lib.errors import Refused, RommNotFoundError
+from lib.errors import Refused, RommNotFoundError, with_system_text
 
 
 @dataclass(frozen=True)
@@ -844,7 +844,9 @@ class ArtworkService:
                 )
             except OSError as e:
                 self._logger.warning(f"refresh_cover: failed to save the cover for rom {rom_id}: {e}")
-                raise Refused("download_failed", "The cover could not be saved on this device") from e
+                raise Refused(
+                    "download_failed", with_system_text("The cover could not be saved on this device", e)
+                ) from e
 
             self.finalize_cover_path(grid, cache_path, app_id, str(rom_id))
             await self._loop.run_in_executor(None, self._persist_cover_path, rom_id, cache_path, result.applied_source)

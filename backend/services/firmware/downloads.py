@@ -21,7 +21,7 @@ from domain.emulator_commands import resolve_platform_option
 from domain.firmware_groups import fetched_as_required
 from domain.retrodeck_folders import BIOS_DOWNLOAD
 from domain.rom_files import TMP_EXT
-from lib.errors import Refused, RommApiError, romm_error_log_level
+from lib.errors import Refused, RommApiError, romm_error_log_level, with_system_text
 from lib.path_safety import PathTraversalError
 
 if TYPE_CHECKING:
@@ -186,7 +186,7 @@ class FirmwareDownloader:
             if isinstance(e, OSError):
                 raise Refused(
                     "bios_download_failed",
-                    f"{file_name} could not be downloaded: it could not be written on this device",
+                    with_system_text(f"{file_name} could not be downloaded: it could not be written on this device", e),
                 ) from e
             raise
 

@@ -478,13 +478,13 @@ class TestCopySaveToSlotRefusals:
         _setup_configured(svc, tmp_path, active_slot="autosave", tracked_id=100, last_sync_hash=local_hash)
         fake.saves[100] = _tracked_save(100, slot="autosave")
         fake.saves[10] = _server_save(save_id=10, rom_id=42, slot=None, updated_at="2026-02-01T10:00:00Z")
-        fake.fail_download_on(10, DeviceWriteError("[Errno 28] No space left on device"))
+        fake.fail_download_on(10, DeviceWriteError(28, "No space left on device"))
 
         result = await svc.copy_save_to_slot(42, 10, TARGET)
 
         assert result == {
             "status": "copy_failed",
-            "message": "it could not be written on this device ([Errno 28] No space left on device)",
+            "message": "it could not be written on this device (No space left on device)",
         }
         assert not any(call[0] == "upload_save" for call in fake.call_log)
 

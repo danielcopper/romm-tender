@@ -119,6 +119,8 @@ export function rollbackFeedback(result: RollbackStatus, versionUpdatedAt: strin
         message:
           "Restored locally, but the server didn't update. Other devices will see the previous version until you retry.",
       };
+    case "write_failed":
+      return { kind: "toast", message: `Couldn't restore the save: ${result.message}` };
     case "rom_not_installed":
       // Distinct from `version_deleted`: the chosen version may well still exist
       // on the server; the local ROM install is what's gone (uninstalled between

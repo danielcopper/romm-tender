@@ -241,7 +241,9 @@ export type RollbackStatus =
   | { status: "not_found"; message: string }
   | { status: "conflict_blocked"; conflicts: SyncConflict[] }
   | { status: "preflight_failed"; errors: string[] }
-  | { status: "put_failed"; message: string };
+  | { status: "put_failed"; message: string }
+  // This device could not write the chosen version.
+  | { status: "write_failed"; message: string };
 
 export type ListFileVersionsResult =
   | { status: "ok"; versions: SaveVersionEntry[] }

@@ -1738,9 +1738,8 @@ class TestTheCoverRepairRefusalsOnTheWire:
         assert message["result"] == {
             "success": False,
             "reason": "download_failed",
-            "message": "The cover could not be saved on this device",
+            "message": "The cover could not be saved on this device (Permission denied)",
         }
-        assert "Permission denied" not in raw
         assert "/home/someone" not in raw
 
 

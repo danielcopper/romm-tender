@@ -15,7 +15,7 @@ import pytest
 
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.sync_action import Conflict, Skip
-from lib.errors import DeviceNotRegisteredError, RommApiError, RommConflictError
+from lib.errors import DeviceNotRegisteredError, DeviceWriteError, RommApiError, RommConflictError
 from services.saves.sync_engine.matrix import (
     DispatchSink,
     RomDispatchContext,
@@ -2426,11 +2426,11 @@ class TestSyncRomSavesDispatch:
 
 
 class TestGetServerSaveHashNonRetryable:
-    """get_server_save_hash swallows non-retryable errors and returns None
-    (matrix.py line 130). The retryable-raise path (line 129) is already
+    """get_server_save_hash swallows non-retryable RomM errors and returns None,
+    and raises a fault of this device's. The retryable-raise path is already
     covered by TestResolveSyncConflict.test_resolve_keep_local_falls_back_*."""
 
-    def test_get_server_save_hash_returns_none_on_non_retryable_error(self, tmp_path):
+    def test_get_server_save_hash_returns_none_on_non_retryable_error_and_raises_a_device_fault(self, tmp_path):
         svc, fake = make_service(tmp_path)
         _install_rom(svc, tmp_path)
 
@@ -2447,6 +2447,14 @@ class TestGetServerSaveHashNonRetryable:
         # download_save was attempted exactly once.
         download_calls = [c for c in fake.call_log if c[0] == "download_save"]
         assert len(download_calls) == 1
+
+        def _cannot_write(save_id: int, dest_path: str) -> None:
+            raise DeviceWriteError(28, "No space left on device")
+
+        fake.download_save = _cannot_write  # type: ignore[method-assign]
+
+        with pytest.raises(DeviceWriteError):
+            svc._sync_engine._matrix.get_server_save_hash({"id": 100})
 
     def test_get_server_save_hash_returns_none_when_save_id_missing(self, tmp_path):
         """No save_id on the server-save dict → short-circuit to None (line 120)."""
