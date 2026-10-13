@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import threading
 from typing import cast
 
 import pytest
@@ -31,6 +32,7 @@ from tests.services.saves._helpers import (
     _seed_save_state_dict,
     _server_save,
     _set_device_id,
+    _uow,
     make_service,
 )
 
@@ -354,6 +356,203 @@ class TestSaveSlots:
         assert slot_names == ["default"]
         # State persisted: reload from SQLite and confirm the slots map matches.
         assert "default" in _require_save_state(svc, 123).slots
+
+
+def _tracked_file() -> FileSyncState:
+    return FileSyncState(
+        last_sync_hash="abc",
+        last_sync_at="2026-04-18T10:00:00Z",
+        last_sync_server_updated_at="2026-04-18T10:00:00Z",
+        last_sync_server_save_id=7,
+        last_sync_server_size=1024,
+        tracked_save_id=7,
+    )
+
+
+class TestSaveSlotsUnderRomLock:
+    """The slot list's read-merge-write runs under ``SyncEngine.rom_lock``; its server fetch does not."""
+
+    @staticmethod
+    def _commit_during_fetch(svc, fake, monkeypatch, rom_id: int, committed: RomSaveSyncState) -> None:
+        """Have a sync of *rom_id* commit *committed* while the slot list's server fetch is in flight."""
+        fetch = fake.get_save_summary
+
+        def fetch_while_a_sync_commits(rid: int):
+            with _uow(svc) as uow:
+                uow.rom_save_sync_states.save(rom_id, committed)
+            return fetch(rid)
+
+        monkeypatch.setattr(fake, "get_save_summary", fetch_while_a_sync_commits)
+
+    @pytest.mark.asyncio
+    async def test_a_sync_committed_during_the_fetch_keeps_its_state(self, tmp_path, monkeypatch):
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "dev-1")
+        _seed_save_state(
+            svc,
+            123,
+            RomSaveSyncState(
+                active_slot="default",
+                slot_confirmed=True,
+                slots={"default": {"source": "server", "count": 1, "latest_updated_at": None}},
+            ),
+        )
+        fake.saves[1] = _server_save(save_id=1, rom_id=123, slot="default")
+        self._commit_during_fetch(
+            svc,
+            fake,
+            monkeypatch,
+            123,
+            RomSaveSyncState(
+                active_slot="default",
+                slot_confirmed=True,
+                slots={"default": {"source": "server", "count": 1, "latest_updated_at": None}},
+                files={"pokemon.srm": _tracked_file()},
+                last_sync_check_at="2026-04-18T10:00:00Z",
+            ),
+        )
+
+        await svc.get_save_slots(123)
+
+        state = _require_save_state(svc, 123)
+        assert state.files == {"pokemon.srm": _tracked_file()}
+        assert state.last_sync_check_at == "2026-04-18T10:00:00Z"
+
+    @pytest.mark.asyncio
+    async def test_a_sync_committed_during_the_fetch_of_an_untracked_rom_keeps_its_row(self, tmp_path, monkeypatch):
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "dev-1")
+        _seed_rom(svc, 123)
+        fake.saves[1] = _server_save(save_id=1, rom_id=123, slot="default")
+        self._commit_during_fetch(
+            svc,
+            fake,
+            monkeypatch,
+            123,
+            RomSaveSyncState(
+                active_slot="default",
+                slot_confirmed=True,
+                files={"pokemon.srm": _tracked_file()},
+            ),
+        )
+
+        result = await svc.get_save_slots(123)
+
+        state = _require_save_state(svc, 123)
+        assert state.files == {"pokemon.srm": _tracked_file()}
+        assert state.slot_confirmed is True
+        assert state.active_slot == "default"
+        assert result["active_slot"] == "default"
+
+    @pytest.mark.asyncio
+    async def test_the_answers_active_slot_is_the_one_a_sync_switched_to_during_the_fetch(self, tmp_path, monkeypatch):
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "dev-1")
+        _seed_save_state(
+            svc,
+            123,
+            RomSaveSyncState(
+                active_slot="default",
+                slot_confirmed=True,
+                slots={"default": {"source": "server", "count": 1, "latest_updated_at": None}},
+            ),
+        )
+        fake.saves[1] = _server_save(save_id=1, rom_id=123, slot="default")
+        self._commit_during_fetch(
+            svc,
+            fake,
+            monkeypatch,
+            123,
+            RomSaveSyncState(
+                active_slot="desktop",
+                slot_confirmed=True,
+                slots={
+                    "default": {"source": "server", "count": 1, "latest_updated_at": None},
+                    "desktop": {"source": "local", "count": 0, "latest_updated_at": None},
+                },
+            ),
+        )
+
+        result = await svc.get_save_slots(123)
+
+        assert result["active_slot"] == "desktop"
+        assert _require_save_state(svc, 123).active_slot == "desktop"
+
+    @pytest.mark.asyncio
+    async def test_an_unreachable_server_answers_with_the_state_read_after_the_fetch(self, tmp_path, monkeypatch):
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "dev-1")
+        _seed_save_state(
+            svc,
+            123,
+            RomSaveSyncState(
+                active_slot="default",
+                slot_confirmed=True,
+                slots={"default": {"source": "server", "count": 1, "latest_updated_at": None}},
+            ),
+        )
+        committed = RomSaveSyncState(
+            active_slot="default",
+            slot_confirmed=True,
+            slots={
+                "default": {"source": "server", "count": 1, "latest_updated_at": None},
+                "save1": {"source": "local", "count": 0, "latest_updated_at": None},
+            },
+        )
+        self._commit_during_fetch(svc, fake, monkeypatch, 123, committed)
+        fake.fail_on_next(RommConnectionError("connection refused"))
+
+        with pytest.raises(ServerUnreachable) as refused:
+            await svc.get_save_slots(123)
+
+        assert refused.value.details == {
+            "last_known": {
+                "slots": [
+                    {"slot": "default", "source": "server", "count": 1, "latest_updated_at": None},
+                    {"slot": "save1", "source": "local", "count": 0, "latest_updated_at": None},
+                ],
+                "active_slot": "default",
+            }
+        }
+
+    @pytest.mark.asyncio
+    async def test_with_the_lock_held_it_fetches_but_persists_only_after_release(self, tmp_path, monkeypatch):
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "dev-1")
+        seeded_slots = {"default": {"source": "server", "count": 1, "latest_updated_at": None}}
+        _seed_save_state(
+            svc,
+            123,
+            RomSaveSyncState(active_slot="default", slot_confirmed=True, slots=dict(seeded_slots)),
+        )
+        fake.saves[2] = _server_save(save_id=2, rom_id=123, slot="desktop")
+        fetched = threading.Event()
+        fetch = fake.get_save_summary
+
+        def fetch_and_signal(rid: int):
+            summary = fetch(rid)
+            fetched.set()
+            return summary
+
+        monkeypatch.setattr(fake, "get_save_summary", fetch_and_signal)
+
+        lock = svc._sync_engine.rom_lock(123)
+        await lock.acquire()
+        task = asyncio.create_task(svc.get_save_slots(123))
+        assert await asyncio.to_thread(fetched.wait, 5)
+        await asyncio.sleep(0.05)
+        assert not task.done()  # blocked on the held lock
+        assert _require_save_state(svc, 123).slots == seeded_slots
+
+        lock.release()
+        result = await asyncio.wait_for(task, timeout=5)
+        assert [row["slot"] for row in result["slots"]] == ["default", "desktop"]
+        assert set(_require_save_state(svc, 123).slots) == {"default", "desktop"}
 
 
 class TestSaveTrackingConfigured:

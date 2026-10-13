@@ -15,7 +15,7 @@ from domain.save_slot import save_in_slot, slot_query_param
 from lib.errors import Refused, RommApiError, ServerUnreachable, classify_error
 from lib.list_result import ErrorCode
 from services.saves._messages import SAVE_SYNC_DISABLED
-from services.saves._save_state import write_save_state
+from services.saves._save_state import read_save_state
 from services.saves._settings import resolve_default_slot, save_sync_enabled
 
 if TYPE_CHECKING:
@@ -27,6 +27,7 @@ if TYPE_CHECKING:
         RommSaveApi,
         UnitOfWorkFactory,
     )
+    from services.saves.sync_engine import SyncEngine
     from services.saves.sync_engine.devices import DeviceRegistry
 
 
@@ -43,6 +44,7 @@ class SlotListing:
         retry: RetryStrategy,
         loop: asyncio.AbstractEventLoop,
         log_debug: DebugLogger,
+        sync_engine: SyncEngine,
     ) -> None:
         self._settings = settings
         self._uow_factory = uow_factory
@@ -51,10 +53,7 @@ class SlotListing:
         self._retry = retry
         self._loop = loop
         self._log_debug = log_debug
-
-    def _read_state(self, rom_id: int) -> RomSaveSyncState | None:
-        with self._uow_factory() as uow:
-            return uow.rom_save_sync_states.get(rom_id)
+        self._sync_engine = sync_engine
 
     async def get_save_slots(self, rom_id: int) -> dict[str, Any]:
         """List available save slots for a ROM.
@@ -63,6 +62,10 @@ class SlotListing:
         result so local slots survive restarts. Promotes local slots to server
         when they appear on the server. Removes server slots that no longer
         exist on the server (unless they are the active_slot).
+
+        The read-merge-write of the ROM's save state runs under
+        ``SyncEngine.rom_lock(rom_id)``, waiting behind a sync of the same ROM;
+        the server fetch stays outside the lock.
 
         Refuses with ``sync_disabled`` while save sync is off. A server that
         cannot be reached raises ``ServerUnreachable`` carrying the persisted
@@ -73,18 +76,6 @@ class SlotListing:
         rom_id = int(rom_id)
         if not save_sync_enabled(self._settings):
             raise Refused("sync_disabled", SAVE_SYNC_DISABLED)
-
-        rom_state = await self._loop.run_in_executor(None, self._read_state, rom_id)
-        default_slot = resolve_default_slot(self._settings)
-        # ROM not tracked → fall back to the global default slot. ROM
-        # tracked with ``active_slot=None`` → preserve legacy mode (None
-        # means "no slots"; the persisted slots dict will contain ``""``).
-        if rom_state is None:
-            active_slot: str | None = default_slot
-            persisted_slots: dict[str, dict[str, Any]] = {}
-        else:
-            active_slot = rom_state.active_slot
-            persisted_slots = rom_state.slots
 
         # Fetch server slots. On failure we MUST NOT persist a merged map —
         # an empty server_slots_list would drop every persisted server slot
@@ -101,34 +92,58 @@ class SlotListing:
             self._log_debug(f"Failed to fetch save slots for rom {rom_id}: {e}")
             reason, message = classify_error(e)
             if reason == ErrorCode.SERVER_UNREACHABLE.value:
+                rom_state = await self._loop.run_in_executor(None, read_save_state, self._uow_factory, rom_id)
                 raise ServerUnreachable(message, last_known=_last_known_snapshot(rom_state)) from e
             raise
         server_slots_list: list[dict[str, Any]] = summary.get("slots", [])
 
-        # Merge: update persisted slots with server data, promote local→server
-        merged: dict[str, dict[str, Any]] = {}
-        for s in server_slots_list:
-            raw = s.get("slot") or s.get("slot_name")
-            name = raw if raw else ""
-            merged[name] = {
-                "source": "server",
-                "count": s.get("count", 0),
-                "latest_updated_at": (s.get("latest") or {}).get("updated_at"),
-            }
-
-        self._merge_persisted_slots(persisted_slots, merged, active_slot)
-
-        # Persist merged slots in state. The aggregate may not exist yet (ROM
-        # never synced) — start a fresh default and seed its active slot.
-        if rom_state is None:
-            game_entry = RomSaveSyncState()
-            game_entry.switch_active_slot(active_slot)
-        else:
-            game_entry = rom_state
-        game_entry.refresh_slot_listing(merged)
-        await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, game_entry)
+        async with self._sync_engine.rom_lock(rom_id):
+            merged, active_slot = await self._loop.run_in_executor(
+                None, self._persist_listing_io, rom_id, server_slots_list
+            )
 
         return {"success": True, "slots": _slot_rows(merged), "active_slot": active_slot}
+
+    def _persist_listing_io(
+        self, rom_id: int, server_slots_list: list[dict[str, Any]]
+    ) -> tuple[dict[str, dict[str, Any]], str | None]:
+        """Merge *server_slots_list* into the stored listing and persist it, in one unit of work.
+
+        Returns the merged listing and the active slot it was merged around.
+        """
+        with self._uow_factory() as uow:
+            rom_state = uow.rom_save_sync_states.get(rom_id)
+            # ROM not tracked → fall back to the global default slot. ROM
+            # tracked with ``active_slot=None`` → preserve legacy mode (None
+            # means "no slots"; the persisted slots dict will contain ``""``).
+            if rom_state is None:
+                active_slot: str | None = resolve_default_slot(self._settings)
+                persisted_slots: dict[str, dict[str, Any]] = {}
+            else:
+                active_slot = rom_state.active_slot
+                persisted_slots = rom_state.slots
+
+            # Merge: update persisted slots with server data, promote local→server
+            merged: dict[str, dict[str, Any]] = {}
+            for s in server_slots_list:
+                raw = s.get("slot") or s.get("slot_name")
+                name = raw if raw else ""
+                merged[name] = {
+                    "source": "server",
+                    "count": s.get("count", 0),
+                    "latest_updated_at": (s.get("latest") or {}).get("updated_at"),
+                }
+
+            self._merge_persisted_slots(persisted_slots, merged, active_slot)
+
+            # The aggregate may not exist yet (ROM never synced) — start a
+            # fresh default and seed its active slot.
+            if rom_state is None:
+                rom_state = RomSaveSyncState()
+                rom_state.switch_active_slot(active_slot)
+            rom_state.refresh_slot_listing(merged)
+            uow.rom_save_sync_states.save(rom_id, rom_state)
+        return merged, active_slot
 
     @staticmethod
     def _merge_persisted_slots(

@@ -88,6 +88,7 @@ class SlotsService:
             retry=config.retry,
             loop=config.loop,
             log_debug=config.log_debug,
+            sync_engine=config.sync_engine,
         )
         self._switcher = SlotSwitcher(
             settings=config.settings,
