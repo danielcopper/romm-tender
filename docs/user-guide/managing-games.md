@@ -643,6 +643,11 @@ Tap **Refresh Metadata** in the game detail panel to:
 This is useful if artwork was missing on first sync (SteamGridDB may have added new images since) or if metadata has
 changed on your RomM server.
 
+Opening a game's page sets its hero banner, logo and wide grid only where the game has none yet, so an image you set
+yourself stays. Switching the game to another version replaces all three with that version's, an image you set yourself
+included. **Refresh Artwork** is the way to replace them otherwise: it applies every image again, one you set yourself
+included, and asks SteamGridDB again for a logo or wide grid it had none for.
+
 When you tap **Refresh Artwork**, Tender asks your RomM server which SteamGridDB game the ROM maps to and applies the
 hero banner, logo, wide grid, and icon for that game. **RomM is the source of truth**: whenever your server has a
 SteamGridDB id for a game, that id wins — on both sync and refresh. If RomM has no id, Tender tries to derive one from

@@ -1156,6 +1156,16 @@ and IGDB-collection are both `kind="virtual"`, distinguished by `virtual_type` (
 complete-set reconcile on the next normal sync (no Force Full Sync). Collections whose Steam names come out the same
 still union.
 
+### Artwork slot / filled slot / slot outcome
+
+An **artwork slot** is one of the images Steam draws for a shortcut — here the hero, the logo and the wide grid, which
+Tender takes from SteamGridDB (`domain/artwork_slot.py`, `ArtworkSlot`; the cover and the icon have rules of their own).
+A slot is **filled** when Steam's grid directory holds an image file for it, whoever put it there, and a filled slot is
+left alone except by **Refresh Artwork**, the SteamGridDB picker and a version switch. A **slot outcome** is what was
+last found for a ROM's wide grid or logo — `set`, `none` or `refused` (`ArtworkSlotOutcome`). Detail:
+[Game page artwork](docs/architecture/steam-non-steam-shortcuts.md#game-page-artwork). _Avoid_: plain "slot", which
+means a **Save-sync slot**.
+
 ### Shortcut icon job / placeholder icon / logo icon
 
 The **shortcut icon job** is the background run that gives every bound shortcut still waiting for an icon its
