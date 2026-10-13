@@ -5,11 +5,11 @@
  * (`CustomPlayButton.ensureTrackingConfigured`). Anything that lives here can
  * be unit-tested without rendering the component or stubbing React.
  *
- * The "server_unreachable" and "not_found" branches exist because
- * `recommended_action` carries the explicit failure mode from the backend (see
- * `get_save_setup_info`); the call site MUST NOT treat an empty `server_slots`
- * array as authoritative on either path or it risks clobbering real server
- * saves on first sync. They hold identically and differ only in copy.
+ * The "server_unreachable", "not_found" and "romm_refused" branches exist
+ * because `recommended_action` carries the explicit failure mode from the
+ * backend (see `get_save_setup_info`); the call site MUST NOT treat an empty
+ * `server_slots` array as authoritative on any of them or it risks clobbering
+ * real server saves on first sync. They hold identically and differ only in copy.
  */
 
 import type { SaveSetupInfo } from "../types";
@@ -17,6 +17,7 @@ import type { SaveSetupInfo } from "../types";
 export type SaveSetupOutcome =
   | { kind: "server_unreachable" }
   | { kind: "not_found" }
+  | { kind: "romm_refused"; message: string }
   | { kind: "auto_confirm"; slot: string }
   | { kind: "needs_user_choice" };
 
@@ -29,6 +30,9 @@ export function resolveSaveSetupOutcome(info: SaveSetupInfo): SaveSetupOutcome {
   // on an outage, so this must NOT fall through to auto-confirm (#1570).
   if (info.recommended_action === "not_found") {
     return { kind: "not_found" };
+  }
+  if (info.recommended_action === "romm_refused") {
+    return { kind: "romm_refused", message: info.message ?? "" };
   }
   // Either the backend marked the response as "auto_confirm_default", or the
   // server is reachable but reports no saves on either side — both are safe
@@ -67,6 +71,17 @@ export const NOT_FOUND_WIZARD_MESSAGE =
 
 export const NOT_FOUND_TOAST_BODY =
   "Cannot configure save slot — RomM couldn't find the save data for this setup. Open the Saves tab.";
+
+/** Copy for the `romm_refused` branch: RomM answered the listing, with something
+ *  that is neither a missing entity nor an outage (a 429, a refused request, an
+ *  error of its own). */
+export function rommRefusedWizardMessage(message: string): string {
+  return `RomM did not list this game's saves — setup paused. ${message}`;
+}
+
+export function rommRefusedToastBody(message: string): string {
+  return `Cannot configure save slot — RomM did not list this game's saves. ${message}`;
+}
 
 const NEEDS_USER_CHOICE_TOAST_BODY = "Configure save sync in the Saves tab first";
 
@@ -113,6 +128,11 @@ export async function applyLaunchGateSetupOutcome(
   // tracking unconfigured.
   if (outcome.kind === "not_found") {
     deps.toast(NOT_FOUND_TOAST_BODY);
+    deps.dispatchSavesTab();
+    return "abort";
+  }
+  if (outcome.kind === "romm_refused") {
+    deps.toast(rommRefusedToastBody(outcome.message));
     deps.dispatchSavesTab();
     return "abort";
   }
@@ -178,6 +198,10 @@ export async function applyWizardInitialSetupResult(result: SaveSetupInfo, deps:
     deps.setError(NOT_FOUND_WIZARD_MESSAGE);
     return;
   }
+  if (result.recommended_action === "romm_refused") {
+    deps.setError(rommRefusedWizardMessage(result.message ?? ""));
+    return;
+  }
   if (result.recommended_action === "auto_confirm_default") {
     deps.setConfirming(true);
     try {
@@ -228,6 +252,11 @@ export function applyWizardRetrySetupResult(result: SaveSetupInfo, deps: WizardR
   }
   if (result.recommended_action === "not_found") {
     deps.setError(NOT_FOUND_WIZARD_MESSAGE);
+    deps.setLoading(false);
+    return;
+  }
+  if (result.recommended_action === "romm_refused") {
+    deps.setError(rommRefusedWizardMessage(result.message ?? ""));
     deps.setLoading(false);
     return;
   }

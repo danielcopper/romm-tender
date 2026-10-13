@@ -25,7 +25,7 @@ from domain.save_answer import (
 )
 from domain.save_slot import save_in_slot, slot_query_param
 from domain.save_status import compute_multi_file_slot
-from lib.errors import RommNotFoundError, with_system_text
+from lib.errors import RommApiError, RommNotFoundError, classify_error, with_system_text
 from services.saves._helpers import local_save_target
 from services.saves._save_state import write_save_state
 from services.saves._settings import resolve_default_slot
@@ -346,6 +346,10 @@ class VersionsService:
           device id. Distinct from both siblings: ``version_deleted`` is one
           missing save inside a ROM the server still has, and
           ``server_unreachable`` is a connection the user can retry (#1570).
+        - ``{"status": "romm_refused", "message": ...}`` if that same call drew
+          any other RomM answer ``classify_error`` does not call unreachable —
+          a 429, a refused request, an error RomM reports itself — with its
+          message.
         - ``{"status": "conflict_blocked", "conflicts": [...]}`` if the
           pre-flight surfaced a conflict on the currently-tracked save.
           The frontend resolves it via the standard conflict modal.
@@ -434,6 +438,14 @@ class VersionsService:
                 self._log_debug(f"rollback_to_version: server has no such entity: {e}")
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "not_found", "message": str(e)}
+            except RommApiError as e:
+                self._log_debug(f"rollback_to_version: failed to list saves: {e}")
+                # Persist whatever the pre-flight mutated before bailing.
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
+                reason, message = classify_error(e)
+                if reason == "server_unreachable":
+                    return {"status": "server_unreachable", "message": str(e)}
+                return {"status": "romm_refused", "message": message}
             except Exception as e:
                 self._log_debug(f"rollback_to_version: failed to list saves: {e}")
                 # Persist whatever the pre-flight mutated before bailing.

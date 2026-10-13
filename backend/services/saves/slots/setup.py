@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 from domain.iso_time import epoch_to_iso, parse_iso_to_epoch
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_slot import save_in_slot
-from lib.errors import NotInstalled, Refused, RommNotFoundError
+from lib.errors import NotInstalled, Refused, RommApiError, RommNotFoundError, classify_error
 from services.saves._helpers import newest_server_saves_by_target
 from services.saves._messages import (
     MIGRATION_DEVICE_NOT_REGISTERED,
@@ -98,15 +98,18 @@ class SetupWizard:
         game_state: RomSaveSyncState | None,
         default_slot: str,
         recommended_action: str,
+        message: str | None = None,
     ) -> dict[str, Any]:
         """Build the held-wizard payload for a failed server-saves query.
 
         Every failure branch holds the wizard the same way — an unproven
         server view must never auto-confirm the default slot, whatever the
         cause. Only *recommended_action* differs, so the frontend can say
-        why without claiming the server is offline.
+        why without claiming the server is offline, and ``romm_refused``
+        carries the *message* that says it.
         """
         slot_confirmed = bool(game_state.slot_confirmed) if game_state else False
+        extra = {"message": message} if message is not None else {}
         return {
             "has_local_saves": len(local_files) > 0,
             "local_files": local_file_info,
@@ -116,6 +119,7 @@ class SetupWizard:
             "active_slot": game_state.active_slot if (game_state and slot_confirmed) else None,
             "recommended_action": recommended_action,
             "server_query_failed": True,
+            **extra,
         }
 
     async def get_save_setup_info(self, rom_id: int) -> dict[str, Any]:
@@ -127,8 +131,10 @@ class SetupWizard:
         ``recommended_action`` carries the failure cause when the server-saves
         query raises: ``server_unreachable`` for a transport failure,
         ``not_found`` when the server answered that it has no such ROM or
-        device id. Both hold the wizard identically — only the copy and the
-        frontend's reachability verdict differ (#1570).
+        device id, and ``romm_refused`` with ``classify_error``'s ``message``
+        for any other RomM answer it does not call unreachable. All three hold
+        the wizard identically — only the copy and the frontend's reachability
+        verdict differ (#1570).
         """
         rom_id = int(rom_id)
 
@@ -172,6 +178,20 @@ class SetupWizard:
                 game_state=game_state,
                 default_slot=default_slot,
                 recommended_action="not_found",
+            )
+        except RommApiError as e:
+            self._logger.warning(
+                f"get_save_setup_info({rom_id}): failed to list server saves: {e}",
+            )
+            reason, message = classify_error(e)
+            refused = reason != "server_unreachable"
+            return self._setup_query_failed(
+                local_files=local_files,
+                local_file_info=local_file_info,
+                game_state=game_state,
+                default_slot=default_slot,
+                recommended_action="romm_refused" if refused else "server_unreachable",
+                message=message if refused else None,
             )
         except Exception as e:
             self._logger.warning(

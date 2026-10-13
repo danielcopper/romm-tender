@@ -1266,6 +1266,9 @@ rollback API.
 
 - **Pre-flight `Conflict`**: switch never runs. Status: `conflict_blocked`. Local file untouched.
 - **Pre-flight non-conflict error**: switch never runs. Status: `preflight_failed`. Local file untouched.
+- **The listing after the pre-flight fails**: switch never runs. A call that could not reach RomM is
+  `server_unreachable`, a definitive 404 `not_found`, and any other RomM answer `romm_refused` with `classify_error`'s
+  message, which the panel words "Couldn't restore the save: …".
 - **Step 1 (download) fails**: state is not mutated. Status: `not_found` (or surfaced error). Local file unchanged.
   Where this device cannot write the download (`DeviceWriteError`, a full disk among them) the status is `write_failed`,
   its message naming the system's words for the fault, and the panel words it "Couldn't restore the save: …".
@@ -1304,7 +1307,8 @@ neither in place):
 4. A **matrix pre-flight** (`do_sync_rom_saves`) runs unconditionally on the _current_ slot, protecting its dirty local
    before the copy overwrites it: `conflict_blocked` / `preflight_failed` on a bad pre-flight (same shapes as rollback).
 5. `list_saves` with **no slot filter** (the chosen save may live in any slot) locates the save by id; a missing id is
-   `version_deleted`, a failed call is `server_unreachable`.
+   `version_deleted`. A call that could not reach RomM is `server_unreachable`, a definitive 404 `not_found`, and any
+   other RomM answer `copy_failed` with `classify_error`'s message — a 429 is RomM rate-limiting, not RomM gone.
 6. **Dedup pre-check**: if the chosen save's `content_hash` already matches a save in the _target_ slot, the copy is a
    no-op — `already_present{existing_id}` (the existing twin's id) is returned with **no** download / upload /
    make-current, so nothing churns (the frontend toasts "already in slot … as `#<id>`" and does not refresh). It fires

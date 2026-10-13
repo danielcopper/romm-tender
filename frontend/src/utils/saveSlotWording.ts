@@ -120,6 +120,7 @@ export function rollbackFeedback(result: RollbackStatus, versionUpdatedAt: strin
           "Restored locally, but the server didn't update. Other devices will see the previous version until you retry.",
       };
     case "write_failed":
+    case "romm_refused":
       return { kind: "toast", message: `Couldn't restore the save: ${result.message}` };
     case "rom_not_installed":
       // Distinct from `version_deleted`: the chosen version may well still exist

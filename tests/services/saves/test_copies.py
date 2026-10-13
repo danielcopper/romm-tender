@@ -13,7 +13,7 @@ import pytest
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.save_answer import save_shape_message, unestablished_answer
-from lib.errors import DeviceWriteError, RommNotFoundError
+from lib.errors import DeviceWriteError, RommNotFoundError, RommRateLimitedError
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
@@ -408,6 +408,32 @@ class TestCopySaveToSlotRefusals:
         assert result["status"] == "server_unreachable"
         assert "unreachable" in result.get("message", "").lower()
         assert "error" not in result
+
+    @pytest.mark.asyncio
+    async def test_a_429_on_post_preflight_list_is_copy_failed_not_unreachable(self, tmp_path):
+        """RomM rate-limiting the listing answered — the copy names that, never an outage."""
+        svc, fake = make_service(tmp_path)
+        _create_save(tmp_path)
+        local_hash = _file_md5(str(tmp_path / "saves" / "gba" / "pokemon.srm"))
+        _setup_configured(svc, tmp_path, active_slot="autosave", tracked_id=100, last_sync_hash=local_hash)
+        fake.saves[100] = _tracked_save(100, slot="autosave")
+
+        original_list = fake.list_saves
+        call_count = {"n": 0}
+
+        def rate_limit_second_list(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] >= 2:
+                raise RommRateLimitedError("Rate limited")
+            return original_list(*args, **kwargs)
+
+        fake.list_saves = rate_limit_second_list  # type: ignore[method-assign]
+        try:
+            result = await svc.copy_save_to_slot(42, 100, TARGET)
+        finally:
+            fake.list_saves = original_list  # type: ignore[method-assign]
+
+        assert result == {"status": "copy_failed", "message": "RomM is rate-limiting requests — try again in a moment"}
 
     @pytest.mark.asyncio
     async def test_definitive_404_on_post_preflight_list_is_not_found(self, tmp_path):

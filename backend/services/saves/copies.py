@@ -25,7 +25,7 @@ from domain.save_answer import (
 )
 from domain.save_slot import save_in_slot
 from domain.save_status import compute_multi_file_slot
-from lib.errors import RommConflictError, RommNotFoundError, with_system_text
+from lib.errors import RommApiError, RommConflictError, RommNotFoundError, classify_error, with_system_text
 from services.saves._helpers import local_save_target
 from services.saves._save_state import write_save_state
 from services.saves._settings import resolve_default_slot
@@ -273,7 +273,8 @@ class SaveCopyService:
            a transport failure is ``server_unreachable``, a definitive 404 (the
            server answered that it has no such ROM or device id) is ``not_found``
            — distinct so the copy surface never reports an answering server
-           offline (#1570).
+           offline (#1570) — and any other RomM answer ``classify_error`` does
+           not call unreachable is ``copy_failed`` with its message.
         8. The copy proper runs in :meth:`_copy_save_to_slot_io`.
 
         A dedup pre-check between the ``list_saves`` and the copy short-circuits
@@ -370,6 +371,14 @@ class SaveCopyService:
                 # Persist whatever the pre-flight mutated before bailing.
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "not_found", "message": str(e)}
+            except RommApiError as e:
+                self._log_debug(f"copy_save_to_slot: failed to list saves: {e}")
+                # Persist whatever the pre-flight mutated before bailing.
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
+                reason, message = classify_error(e)
+                if reason == "server_unreachable":
+                    return {"status": "server_unreachable", "message": str(e)}
+                return {"status": "copy_failed", "message": message}
             except Exception as e:
                 self._log_debug(f"copy_save_to_slot: failed to list saves: {e}")
                 # Persist whatever the pre-flight mutated before bailing.

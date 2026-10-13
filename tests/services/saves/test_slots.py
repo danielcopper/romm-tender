@@ -15,6 +15,7 @@ from lib.errors import (
     RommAuthError,
     RommConnectionError,
     RommNotFoundError,
+    RommRateLimitedError,
     ServerUnreachable,
 )
 from services.saves._refusals import SavefilesInContentDir, SaveShapeUnsupported
@@ -778,6 +779,22 @@ class TestGetSaveSetupInfo:
 
         result = await svc.get_save_setup_info(42)
         assert result["recommended_action"] == "server_unreachable"
+        assert result["server_query_failed"] is True
+
+    @pytest.mark.asyncio
+    async def test_a_429_recommends_romm_refused_with_its_message_and_still_holds(self, tmp_path):
+        """RomM rate-limiting the listing answered — the wizard holds and says so, never an outage."""
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "dev-1")
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path)
+        fake.fail_on_next(RommRateLimitedError("Rate limited"))
+
+        result = await svc.get_save_setup_info(42)
+        assert result["recommended_action"] == "romm_refused"
+        assert result["message"] == "RomM is rate-limiting requests — try again in a moment"
+        assert result["server_slots"] == []
         assert result["server_query_failed"] is True
 
     @pytest.mark.asyncio
