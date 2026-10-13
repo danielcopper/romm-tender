@@ -1591,6 +1591,7 @@ def _dispatcher_over_steamgrid(api_key: str = "sgdb-key", uow: FakeUnitOfWork | 
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
             conflict_rules=_make_conflict_rules(),
             downscale_icon=lambda data: data,
+            clock=FakeClock(),
         )
     )
     endpoints = Endpoints(_make_application(_make_services_bundle(sgdb_service=service)), HostStatus())

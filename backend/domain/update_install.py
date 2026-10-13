@@ -141,6 +141,7 @@ _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
                 # Artwork and shortcut settings written to disk or to Steam.
                 "apply_sgdb_game_id",
                 "sgdb_artwork",
+                "report_sgdb_slot_artwork",
                 "refresh_cover_artwork",
                 "save_shortcut_icon",
                 "shortcut_icons",
@@ -175,6 +176,7 @@ READ_ONLY_CLAIMS: frozenset[str] = frozenset(
         "get_save_status",
         "get_sgdb_artwork_base64",
         "get_sgdb_resolution",
+        "get_sgdb_slot_artwork",
         "refresh_save_status",
         "test_connection",
     }

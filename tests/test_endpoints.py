@@ -308,6 +308,8 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "get_playtime_scope_notice",
     # SteamGridDB / Steam shortcut artwork (Steam-side, not retrodeck).
     "get_sgdb_artwork_base64",
+    "get_sgdb_slot_artwork",
+    "report_sgdb_slot_artwork",
     "verify_sgdb_api_key",
     "save_sgdb_api_key",
     "save_shortcut_icon",

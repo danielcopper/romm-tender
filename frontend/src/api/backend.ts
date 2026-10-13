@@ -522,6 +522,31 @@ export const getSgdbArtworkBase64 = endpoint<
   { base64: string | null; no_api_key?: boolean; prune_lease_token?: string }
 >("get_sgdb_artwork_base64");
 
+/** An artwork slot the game page fills only while it is empty: the wide grid, the logo or the hero. */
+export type SgdbArtworkSlot = "grid" | "logo" | "hero";
+
+/** What the backend answers for one empty slot: the image to set, or why there is none to set. */
+export type SgdbSlotArtwork =
+  | {
+      status: "image";
+      base64: string;
+      /** SteamGridDB's image id; `null` for the hero, whose outcome is not recorded. */
+      image_id: number | null;
+      sha256: string;
+      sgdb_id: number;
+      prune_lease_token?: string;
+    }
+  | { status: "skip" | "none" | "failed" | "no_api_key" };
+
+/** Serve SteamGridDB's image for one slot of a shortcut, only while Steam's grid directory has no file for it. */
+export const getSgdbSlotArtwork = endpoint<[number, number, SgdbArtworkSlot], SgdbSlotArtwork>("get_sgdb_slot_artwork");
+
+/** Report what `SetCustomArtworkForApp` made of a wide grid or logo the fetch served, passing its answer back. */
+export const reportSgdbSlotArtwork = endpoint<
+  [number, "grid" | "logo", "set" | "refused", number | null, number | null, string | null],
+  { success: boolean }
+>("report_sgdb_slot_artwork");
+
 /** A single SGDB game candidate for the manual picker. */
 export interface SgdbCandidate {
   id: number;

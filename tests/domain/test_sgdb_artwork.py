@@ -5,11 +5,16 @@ from __future__ import annotations
 import pytest
 
 from domain.sgdb_artwork import (
+    SgdbCandidate,
     asset_type_endpoint,
     asset_type_name,
     build_autocomplete_path,
+    cached_artwork_name,
+    cached_image_id,
+    choose_candidate,
     classify_resolution,
     first_grid_url,
+    is_cached_artwork,
     parse_autocomplete_results,
     sgdb_endpoint_path,
     to_signed_app_id,
@@ -62,13 +67,13 @@ class TestSgdbEndpointPath:
         assert sgdb_endpoint_path("hero", 9999) == "/heroes/game/9999"
 
     def test_logo_path(self):
-        assert sgdb_endpoint_path("logo", 42) == "/logos/game/42"
+        assert sgdb_endpoint_path("logo", 42) == "/logos/game/42?types=static"
 
     def test_icon_path(self):
         assert sgdb_endpoint_path("icon", 1) == "/icons/game/1"
 
     def test_grid_path_appends_dimensions_query(self):
-        assert sgdb_endpoint_path("grid", 7) == "/grids/game/7?dimensions=460x215,920x430"
+        assert sgdb_endpoint_path("grid", 7) == "/grids/game/7?dimensions=460x215,920x430&types=static"
 
     def test_unknown_asset_returns_none(self):
         assert sgdb_endpoint_path("banner", 1) is None
@@ -226,3 +231,124 @@ class TestToUnsignedAppId:
 
     def test_leaves_an_id_that_was_never_negative_alone(self):
         assert to_unsigned_app_id(42) == 42
+
+
+def _image(image_id: int, width: int, height: int) -> dict:
+    return {"id": image_id, "url": f"https://cdn.example/{image_id}.png", "width": width, "height": height}
+
+
+class TestOnlyTheWideGridAndTheLogoNarrowTheirQuery:
+    @pytest.mark.parametrize("asset_type", ["hero", "icon"])
+    def test_the_hero_and_the_icon_are_asked_as_before(self, asset_type):
+        assert "?" not in (sgdb_endpoint_path(asset_type, 1) or "")
+
+
+class TestChooseTheWideGrid:
+    def test_920_by_430_wins_over_an_earlier_460_by_215(self):
+        data = [_image(1, 460, 215), _image(2, 920, 430)]
+
+        assert choose_candidate("grid", data) == SgdbCandidate(
+            image_id=2, url="https://cdn.example/2.png", width=920, height=430
+        )
+
+    def test_460_by_215_wins_over_an_earlier_candidate_of_another_size(self):
+        data = [_image(1, 600, 900), _image(2, 460, 215)]
+
+        assert choose_candidate("grid", data).image_id == 2
+
+    def test_without_either_size_the_first_candidate_is_taken(self):
+        data = [_image(1, 1024, 1024), _image(2, 600, 900)]
+
+        assert choose_candidate("grid", data).image_id == 1
+
+    def test_among_two_920_by_430_the_first_is_taken(self):
+        data = [_image(1, 460, 215), _image(2, 920, 430), _image(3, 920, 430)]
+
+        assert choose_candidate("grid", data).image_id == 2
+
+
+class TestChooseTheLogo:
+    def test_the_first_candidate_from_640_to_2048_wide_is_taken(self):
+        data = [_image(1, 300, 100), _image(2, 4000, 1000), _image(3, 800, 300), _image(4, 1000, 400)]
+
+        assert choose_candidate("logo", data).image_id == 3
+
+    @pytest.mark.parametrize("width", [640, 2048])
+    def test_both_ends_of_the_band_count(self, width):
+        data = [_image(1, 639, 100), _image(2, width, 100)]
+
+        assert choose_candidate("logo", data).image_id == 2
+
+    @pytest.mark.parametrize("width", [639, 2049])
+    def test_just_outside_the_band_falls_back_to_the_first(self, width):
+        data = [_image(1, 300, 100), _image(2, width, 100)]
+
+        assert choose_candidate("logo", data).image_id == 1
+
+    def test_a_candidate_with_no_stated_width_is_only_a_fallback(self):
+        data = [{"id": 1, "url": "https://cdn.example/1.png"}, _image(2, 900, 300)]
+
+        assert choose_candidate("logo", data).image_id == 2
+
+
+class TestWhatCountsAsACandidate:
+    def test_no_data_is_no_candidate(self):
+        assert choose_candidate("grid", []) is None
+        assert choose_candidate("grid", None) is None
+
+    @pytest.mark.parametrize("asset_type", ["grid", "logo"])
+    def test_a_wide_grid_or_logo_without_an_id_is_no_candidate(self, asset_type):
+        data = [{"url": "https://cdn.example/a.png", "width": 920, "height": 430}, _image(2, 460, 215)]
+
+        assert choose_candidate(asset_type, data).image_id == 2
+
+    def test_an_id_that_is_a_bool_is_no_id(self):
+        assert choose_candidate("grid", [{"id": True, "url": "https://cdn.example/a.png"}]) is None
+
+    def test_a_hero_without_an_id_is_still_a_candidate(self):
+        data = [{"url": "https://cdn.example/hero.png"}]
+
+        assert choose_candidate("hero", data) == SgdbCandidate(
+            image_id=None, url="https://cdn.example/hero.png", width=None, height=None
+        )
+
+    def test_an_entry_without_a_url_is_skipped(self):
+        data = [{"id": 1, "url": ""}, {"id": 2}, "junk", _image(3, 460, 215)]
+
+        assert choose_candidate("grid", data).image_id == 3
+
+    def test_the_hero_takes_the_first_candidate_whatever_its_size(self):
+        data = [_image(1, 100, 100), _image(2, 1920, 620)]
+
+        assert choose_candidate("hero", data).image_id == 1
+
+
+class TestCachedArtworkNames:
+    @pytest.mark.parametrize("asset_type", ["grid", "logo"])
+    def test_a_wide_grid_or_logo_is_named_by_its_image_id(self, asset_type):
+        name = cached_artwork_name(42, asset_type, 12345)
+
+        assert name == f"42_{asset_type}_12345.png"
+        assert cached_image_id(name, 42, asset_type) == 12345
+
+    @pytest.mark.parametrize("asset_type", ["hero", "icon"])
+    def test_a_hero_or_icon_keeps_its_plain_name(self, asset_type):
+        assert cached_artwork_name(42, asset_type, 12345) == f"42_{asset_type}.png"
+        assert cached_image_id(f"42_{asset_type}.png", 42, asset_type) is None
+
+    def test_a_wide_grid_without_an_image_id_has_no_name(self):
+        with pytest.raises(ValueError, match="image id"):
+            cached_artwork_name(42, "grid", None)
+
+    @pytest.mark.parametrize(
+        "name",
+        ["42_grid.png", "42_grid_12345.png.tmp", "142_grid_12345.png", "42_logo_12345.png", "42_grid_abc.png"],
+    )
+    def test_no_other_name_carries_rom_42s_wide_grid_id(self, name):
+        assert cached_image_id(name, 42, "grid") is None
+
+    def test_both_names_a_wide_grid_has_had_are_its_cache_files(self):
+        assert is_cached_artwork("42_grid.png", 42, "grid")
+        assert is_cached_artwork("42_grid_7.png", 42, "grid")
+        assert not is_cached_artwork("42_logo_7.png", 42, "grid")
+        assert not is_cached_artwork("421_grid.png", 42, "grid")

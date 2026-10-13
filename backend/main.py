@@ -742,6 +742,16 @@ class Endpoints:
         return await self._services.sgdb_service.get_sgdb_artwork_base64(rom_id, asset_type_num)
 
     @route
+    async def get_sgdb_slot_artwork(self, rom_id, app_id, slot):
+        return await self._services.sgdb_service.get_sgdb_slot_artwork(rom_id, app_id, slot)
+
+    @route
+    async def report_sgdb_slot_artwork(self, rom_id, slot, outcome, sgdb_id, image_id, sha256):
+        return await self._services.sgdb_service.report_sgdb_slot_artwork(
+            rom_id, slot, outcome, sgdb_id, image_id, sha256
+        )
+
+    @route
     async def verify_sgdb_api_key(self, api_key=None):
         return await self._services.sgdb_service.verify_sgdb_api_key(api_key)
 

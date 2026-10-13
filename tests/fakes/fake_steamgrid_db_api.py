@@ -10,9 +10,11 @@ Seed in-memory state through the typed helpers:
 - ``seed_igdb_lookup(igdb_id, sgdb_id)`` — register an IGDB-to-SGDB
   match so ``request("/games/igdb/{igdb_id}")`` returns the canonical
   ``{"success": True, "data": {"id": sgdb_id}}`` payload.
-- ``seed_artwork(sgdb_game_id, asset_type, image_url)`` — register an
-  artwork URL so the matching ``request("/{endpoint}/game/{id}...")``
-  call returns ``{"success": True, "data": [{"url": image_url}]}``.
+- ``seed_artwork(sgdb_game_id, asset_type, image_url, image_id=None)`` —
+  register an artwork URL so the matching ``request("/{endpoint}/game/{id}...")``
+  call returns ``{"success": True, "data": [{"id": image_id, "url": image_url}]}``.
+  Without an *image_id* each seeded asset gets one of its own, so no two slots
+  share an id by accident.
 - ``seed_raw_response(path, body)`` — register a raw JSON body for an
   arbitrary path; the fake matches by path prefix to tolerate query
   strings appended by the grid endpoint.
@@ -65,6 +67,8 @@ class FakeSteamGridDbApi:
         self._image_bytes: dict[str, bytes] = {}
         # Optional sink that captures ``download_image`` writes when bound.
         self._artwork_cache: _ArtworkCacheSink | None = None
+        # The last SteamGridDB image id ``seed_artwork`` handed out.
+        self._next_image_id = 1000
         # Default ``download_image`` return when no side_effect armed.
         self.download_image_return: bool = True
         # Body returned by ``verify_api_key`` when no side_effect armed.
@@ -125,13 +129,19 @@ class FakeSteamGridDbApi:
         else:
             self._responses[path] = {"success": True, "data": {"id": sgdb_id}}
 
-    def seed_artwork(self, sgdb_game_id: int, asset_type: str, image_url: str) -> None:
-        """Register an artwork URL for ``request("/{endpoint}/game/{id}...")``."""
+    def seed_artwork(self, sgdb_game_id: int, asset_type: str, image_url: str, image_id: int | None = None) -> None:
+        """Register an artwork URL for ``request("/{endpoint}/game/{id}...")``, as SteamGridDB image *image_id*.
+
+        Without *image_id* the asset gets the next of the fake's own ids.
+        """
         endpoint = _ASSET_TYPE_TO_ENDPOINT.get(asset_type)
         if endpoint is None:
             raise ValueError(f"unknown asset_type: {asset_type!r}")
+        if image_id is None:
+            self._next_image_id += 1
+            image_id = self._next_image_id
         path = f"/{endpoint}/game/{sgdb_game_id}"
-        self._responses[path] = {"success": True, "data": [{"url": image_url}]}
+        self._responses[path] = {"success": True, "data": [{"id": image_id, "url": image_url}]}
 
     def seed_image_bytes(self, url: str, data: bytes) -> None:
         """Stage bytes that ``download_image`` writes to ``dest_path`` for *url*."""

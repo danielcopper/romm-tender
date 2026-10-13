@@ -373,6 +373,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             uow_factory=cfg.callbacks.uow_factory,
             conflict_rules=conflict_rules,
             downscale_icon=cfg.adapters.downscale_icon,
+            clock=cfg.runtime.clock,
         ),
     )
 
