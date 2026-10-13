@@ -56,6 +56,9 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
         detach(debugLog(`VersionHistoryPanel: server has no such entry for ${filename}: ${result.message}`));
         setVersions(null);
         setLoadError("RomM couldn't find this game's save data.");
+      } else if (result.status === "romm_refused") {
+        setVersions(null);
+        setLoadError(`Couldn't load the versions: ${result.message}`);
       } else {
         detach(debugLog(`VersionHistoryPanel: server unreachable for ${filename}: ${result.message}`));
         setVersions(null);

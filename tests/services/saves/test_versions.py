@@ -226,6 +226,17 @@ class TestListFileVersions:
         assert result != {"status": "ok", "versions": []}
 
     @pytest.mark.asyncio
+    async def test_a_429_on_the_listing_returns_romm_refused_not_unreachable(self, tmp_path):
+        """RomM rate-limiting the listing answered — the panel names that, never an outage."""
+        svc, fake = make_service(tmp_path)
+
+        fake.fail_on_next(RommRateLimitedError("Rate limited"))
+
+        result = await svc.list_file_versions(42, "default", "pokemon.srm")
+
+        assert result == {"status": "romm_refused", "message": "RomM is rate-limiting requests — try again in a moment"}
+
+    @pytest.mark.asyncio
     async def test_definitive_404_returns_not_found_not_server_unreachable(self, tmp_path):
         """A 404 is the server ANSWERING — it must not read as unreachable (#1570).
 

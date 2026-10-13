@@ -167,6 +167,20 @@ describe("VersionHistoryPanel", () => {
     expect(container.textContent).not.toMatch(/no saves|has no save|without saves/i);
   });
 
+  it("shows what RomM answered, NOT the connection prompt, when RomM refused the listing", async () => {
+    vi.mocked(backend.savesListFileVersions).mockResolvedValue({
+      status: "romm_refused",
+      message: "RomM is rate-limiting requests — try again in a moment",
+    });
+    const { getByText, container } = render(<VersionHistoryPanel {...defaultProps()} />);
+    fireEvent.click(getByText("Previous Versions"));
+    await flushAsync();
+    expect(container.textContent).toContain(
+      "Couldn't load the versions: RomM is rate-limiting requests — try again in a moment",
+    );
+    expect(container.textContent).not.toMatch(/couldn't reach|unreachable|not reachable|offline/i);
+  });
+
   it("Retry button retriggers loadVersions", async () => {
     vi.mocked(backend.savesListFileVersions)
       .mockResolvedValueOnce({ status: "server_unreachable", message: "boom" })

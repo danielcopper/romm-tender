@@ -151,6 +151,10 @@ class VersionsService:
           registered device id. Distinct from ``server_unreachable``: the
           server answered, so retrying is pointless and the panel says so
           instead of blaming the connection (#1570).
+        - ``{"status": "romm_refused", "message": ...}`` if that call drew any
+          other RomM answer ``classify_error`` does not call unreachable — a
+          429, a refused request, an error RomM reports itself — with its
+          message.
         """
         rom_id = int(rom_id)
         save_state, device_id = await self._loop.run_in_executor(None, self._read_inputs, rom_id)
@@ -172,6 +176,12 @@ class VersionsService:
             # retry cannot change that, so the panel must not offer one (#1570).
             self._log_debug(f"list_file_versions: server has no such entity: {e}")
             return {"status": "not_found", "message": str(e)}
+        except RommApiError as e:
+            self._log_debug(f"list_file_versions: failed to list saves: {e}")
+            reason, message = classify_error(e)
+            if reason == "server_unreachable":
+                return {"status": "server_unreachable", "message": str(e)}
+            return {"status": "romm_refused", "message": message}
         except Exception as e:
             self._log_debug(f"list_file_versions: failed to list saves: {e}")
             return {"status": "server_unreachable", "message": str(e)}

@@ -256,7 +256,9 @@ export type ListFileVersionsResult =
   | { status: "multi_file_unsupported"; versions: SaveVersionEntry[] }
   | { status: "server_unreachable"; message: string }
   // See RollbackStatus — the server answered, it just has no such entry.
-  | { status: "not_found"; message: string };
+  | { status: "not_found"; message: string }
+  // Any other answer RomM gave to the listing, worded by `classify_error`.
+  | { status: "romm_refused"; message: string };
 
 /** Discriminated-status result of `copySaveToSlot` — copies one server save into
  *  a target slot, which becomes the ROM's active slot (the source is preserved).

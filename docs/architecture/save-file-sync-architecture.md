@@ -1176,7 +1176,9 @@ This matches the convention used by the official RomM clients [Argosy](https://g
 The version-history UI (`list_file_versions`) reflects the same principle: it returns every save in the active slot
 except the currently-tracked one, with no filename filter. A user can switch to any save in the slot — even ones
 uploaded by another client with a different name — and the destructive switch lands the content at the canonical local
-path.
+path. A listing that could not reach RomM answers `server_unreachable` and the panel offers a retry; a definitive 404 is
+`not_found`; any other RomM answer is `romm_refused` with `classify_error`'s message, which the panel shows as "Couldn't
+load the versions: …" rather than blaming the connection.
 
 ## Version Switch Flow (rollback)
 
