@@ -3414,17 +3414,35 @@ class TestTheShortcutIconJob:
         assert harness.icon_job.resumes == 1
 
     @pytest.mark.asyncio
-    async def test_a_start_refused_while_a_run_is_under_way_resumes_only_its_own_stop(self, harness):
+    async def test_a_start_refused_while_a_run_is_under_way_resumes_only_its_own_stop(self, harness, monkeypatch):
         _seed(harness.uow, _rom(1, fetch="old"))
         harness.romm.outcomes[1] = [{"id": 1}]
         preview = await _preview(harness)
-        await _start(harness, preview["preview_id"])
+        loop = asyncio.get_running_loop()
+        proving = threading.Event()
+        release_proof = threading.Event()
+        get_rom_once = harness.romm.get_rom_once
 
-        with pytest.raises(Refused):
+        # The first run must still be active when the second start asks whether
+        # one is, so it is held at its exact-ID proof until that start is refused.
+        def held_proof(rom_id: int) -> dict[str, Any]:
+            proving.set()
+            if not release_proof.wait(timeout=5):
+                raise TimeoutError("test did not release the run's exact-ID proof")
+            return get_rom_once(rom_id)
+
+        monkeypatch.setattr(harness.romm, "get_rom_once", held_proof)
+        await _start(harness, preview["preview_id"])
+        assert await loop.run_in_executor(None, proving.wait, 5)
+
+        with pytest.raises(Refused) as refused:
             await _start(harness, preview["preview_id"])
-        assert (harness.icon_job.stops, harness.icon_job.resumes) == (2, 1)
+        while_held = (harness.icon_job.stops, harness.icon_job.resumes)
+        release_proof.set()
         await _finish(harness)
 
+        assert refused.value.reason == "prune_active"
+        assert while_held == (2, 1)
         assert (harness.icon_job.stops, harness.icon_job.resumes) == (2, 2)
 
     @pytest.mark.asyncio
