@@ -1,7 +1,7 @@
 """CollectionSyncState — the per-collection "this collection fully synced" stamp.
 
 The collection sibling of :class:`domain.platform_sync_state.PlatformSyncState`
-(ADR-0023): recorded when a standard/smart collection work unit finishes its **last**
+(ADR-0023): recorded when a collection work unit finishes its **last**
 apply chunk, so the incremental-skip gate can avoid re-paginating an unchanged
 collection on the next sync. Keyed by ``(collection_id, collection_kind)`` — a
 standard collection id and a smart collection id can collide (both are small ints on
@@ -16,20 +16,21 @@ each id to its shortcut through the registry (the same sibling-group fallback th
 reporter uses at finalize).
 
 The skip is gated on three verified RomM signals, ALL of which must agree with
-the stamp for a skip to fire (see ``LibraryFetcher._try_collection_incremental_skip``):
+the stamp for a skip to fire (see ``CollectionFetcher._try_collection_incremental_skip``):
 
-1. ``updated_at`` unchanged — RomM bumps the Collection/SmartCollection row's
-   ``updated_at`` on any membership add/remove (and a smart-criteria edit), so an
-   equal value is the membership-stable signal.
+1. membership unchanged — for a standard or smart collection the row's
+   ``updated_at`` is unchanged (RomM bumps it on any membership add/remove, and a
+   smart-criteria edit); a virtual collection's ``updated_at`` says nothing, so
+   for it the listing's ``rom_ids`` must equal the stored member set instead.
 2. a scoped ``updated_after`` probe (keyed off ``completed_at``, our own last
    sync time) returns zero — catches a member ROM's content change, and a ROM
    entering a smart collection via its own metadata change (the collection row's
    ``updated_at`` does not move for that).
-3. ``rom_count`` unchanged vs. both the live listing and the stored member set.
+3. for a standard or smart collection, ``rom_count`` unchanged vs. both the live
+   listing and the stored member set.
 
-Only **standard** and **smart** collections carry a stamp — virtual collections
-are auto-generated groupings with no stable ``updated_at`` and are never
-stamped (they always full-fetch). A thin record built whole and upserted —
+All three kinds carry a stamp; the skip never reads a virtual collection's
+``updated_at``, so it may be empty. A thin record built whole and upserted —
 never a partial field mutation — so it carries a single ``stamp`` constructor and
 no verb-named mutators. Unlike a platform stamp it has no revoked state and is
 deleted outright; which flows delete it, and why, is in
@@ -66,18 +67,20 @@ class CollectionSyncState:
         """Record that a collection fully synced with the given member set.
 
         ``updated_at`` is the collection's server ``updated_at`` at completion —
-        the membership-stable signal the skip re-checks. ``completed_at`` is our
-        own ISO sync timestamp, the reference the scoped ``updated_after`` probe
-        keys off to detect a member ROM's content change. ``rom_count`` is the
+        the membership-stable signal the skip re-checks — and is required for a
+        standard or smart collection. ``completed_at`` is our own ISO sync
+        timestamp, the reference the scoped ``updated_after`` probe keys off to
+        detect a member ROM's content change. ``rom_count`` is the
         server's collection ROM count as of completion, and ``member_rom_ids`` is
         the full member set the skip replays to rebuild collection membership
-        without re-fetching. Only ``standard`` / ``smart`` kinds are stampable.
+        without re-fetching. ``collection_kind`` is ``standard``, ``smart`` or
+        ``virtual``.
         """
         if not collection_id:
             raise ValueError("collection_id is required")
-        if collection_kind not in ("standard", "smart"):
-            raise ValueError(f"collection_kind must be 'standard' or 'smart', got {collection_kind!r}")
-        if not updated_at:
+        if collection_kind not in ("standard", "smart", "virtual"):
+            raise ValueError(f"collection_kind must be 'standard', 'smart' or 'virtual', got {collection_kind!r}")
+        if collection_kind != "virtual" and not updated_at:
             raise ValueError("updated_at is required")
         if not completed_at:
             raise ValueError("completed_at is required")

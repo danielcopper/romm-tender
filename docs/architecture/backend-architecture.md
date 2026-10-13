@@ -420,12 +420,13 @@ bounded/retried backend release acknowledgement before gated cover/status work. 
 
 #### LibraryService decomposition (`services/library/`)
 
-The library sync subsystem is a façade over nine sub-services that coordinate through a shared `LibrarySyncStateBox`:
+The library sync subsystem is a façade over ten sub-services that coordinate through a shared `LibrarySyncStateBox`:
 
 | Module                        | Role                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `service.py`                  | `LibraryService` façade — public use cases; wires the sub-services and delegates                                                                                                                                                                                                                                                                                                                                     |
-| `fetcher.py`                  | `LibraryFetcher` — read-only RomM roundtrips: list platforms/collections, the incremental/full pagination loop, per-unit work-queue construction. The outward half of the read pair below                                                                                                                                                                                                                            |
+| `fetcher.py`                  | `LibraryFetcher` — read-only RomM roundtrips: list platforms/collections, per-unit work-queue construction (a collection unit carries its listed `rom_ids`), a platform unit's incremental/full pagination loop. The outward half of the read pair below                                                                                                                                                             |
+| `collection_fetcher.py`       | `CollectionFetcher` — one collection unit's ROMs, for all three kinds: the collection incremental skip against its `CollectionSyncState` stamp, the registry rebuild of a skipped collection's members, and otherwise the walk narrowed to the platforms the sync leaves off (a foreign smart collection walked whole); see "Incremental skip" below                                                                 |
 | `local_library_reader.py`     | `LocalLibraryReader` — the inward pair of `fetcher.py`: what THIS DEVICE recorded about the library, read back out of SQLite (the `Rom` rows and their bindings, the completion stamps, the persisted sibling keys, the last finished run), shaped into the projections a run decides against and the reachable set the collections listing counts against. Declared read-only (`scripts/check_read_only_module.py`) |
 | `sync_orchestrator.py`        | `SyncOrchestrator` — preview (read-only), the per-unit apply pipeline (fetch → collapse → delta, then hand the delta to the dispatcher), cancel, the heartbeat clock, progress emission, and which terminal status a stopped run earns. Holds no `ArtworkManager` at all — the run's artwork seam is `cover_preparer.py`'s and `reporter.py`'s                                                                       |
 | `chunk_dispatcher.py`         | `ChunkDispatcher` — one unit's apply as durable chunk round-trips: emit `sync_apply_unit`, wait out the heartbeat clock for the ack, commit the chunk through the reporter, and stash or discard a chunk whose ack never came. It opens no transaction, and the run's `try_begin_run` / `finish_run` stay with the orchestrator                                                                                      |
@@ -442,8 +443,8 @@ finalisation (`finalize_cover_path`). Those are different questions asked at dif
 the confinement names a pair rather than one owner — `scripts/check_seam_owner.py` enforces the pair, so a third holder
 fails CI instead of quietly reopening the spread the cut closed.
 
-The pipeline is split **fetch (read-only) / apply (owns persistence)**: the fetcher never mutates the `roms` registry or
-`rom_metadata`, and the reporter's per-unit commit upserts each acked ROM's `roms` row and stamps its cached
+The pipeline is split **fetch (read-only) / apply (owns persistence)**: neither fetcher ever mutates the `roms` registry
+or `rom_metadata`, and the reporter's per-unit commit upserts each acked ROM's `roms` row and stamps its cached
 `rom_metadata` in the same write Unit of Work (Rom row first, then metadata — FK-safe). So a preview never mutates
 state, and an interrupted apply leaves only the units it already committed — incremental, per-unit delivery.
 
@@ -852,19 +853,19 @@ rather than changing how the union works.
 `build_work_queue` group collections into three internal kinds: `standard`, `smart`, and `virtual`. RomM's own UI calls
 the ownership-carrying first kind **Standard** (Tender's earlier name for it was `user`, a misnomer renamed internally
 by #1539 — display "My" → "Standard"; see the enabled-bucket migration note below). The `virtual` kind is RomM's
-ownerless `VirtualCollection` (base64 id, no `user_id`, no stable `updated_at` — never stamped), and it carries a
-`virtual_type` sub-field on each collection dict/setting so the Collections tab can list it under Franchises or IGDB
-collections. RomM's `VirtualCollection` has five `type` values, but Tender syncs only the **two RomM itself surfaces as
-browsable collections**: IGDB `franchise` and the default IGDB `collection` (series). `genre`, `company`, and `mode` are
-**intentionally excluded** — RomM treats `genre`/`company` as ROM _filter facets_ (not collections) and `mode` as
-neither, so they never appear in RomM's Collections view. The supported set is a single constant
-(`services/library/fetcher._SUPPORTED_VIRTUAL_TYPES`); `get_collections` fetches each supported type and merges them
-under the one `virtual` bucket. Which types a sync fetches, and what a failed one does to the sync and to
-`get_collections`, is under "A listing that fails stops the run" below. Because the type is baked into the base64 id,
-ids are globally unique across types, so one enabled-bucket keyed by id cannot collide. The owner scope,
-stamp-exclusion, and per-unit ROM-fetch dispatch all stay a **single `kind == "virtual"` branch**, not fanned out per
-type. On disk `enabled_collections` holds the three buckets `standard`, `smart` and `virtual`, the shape every
-`settings.json` from version 13 on has. The ownership-carrying bucket was once called `user`: old
+ownerless `VirtualCollection` (base64 id, no `user_id`, no `updated_at` worth comparing — stamped by its member set,
+under "Incremental skip" below), and it carries a `virtual_type` sub-field on each collection dict/setting so the
+Collections tab can list it under Franchises or IGDB collections. RomM's `VirtualCollection` has five `type` values, but
+Tender syncs only the **two RomM itself surfaces as browsable collections**: IGDB `franchise` and the default IGDB
+`collection` (series). `genre`, `company`, and `mode` are **intentionally excluded** — RomM treats `genre`/`company` as
+ROM _filter facets_ (not collections) and `mode` as neither, so they never appear in RomM's Collections view. The
+supported set is a single constant (`services/library/fetcher._SUPPORTED_VIRTUAL_TYPES`); `get_collections` fetches each
+supported type and merges them under the one `virtual` bucket. Which types a sync fetches, and what a failed one does to
+the sync and to `get_collections`, is under "A listing that fails stops the run" below. Because the type is baked into
+the base64 id, ids are globally unique across types, so one enabled-bucket keyed by id cannot collide. The owner scope,
+the skip gate's membership check, and per-unit ROM-fetch dispatch all stay a **single `kind == "virtual"` branch**, not
+fanned out per type. On disk `enabled_collections` holds the three buckets `standard`, `smart` and `virtual`, the shape
+every `settings.json` from version 13 on has. The ownership-carrying bucket was once called `user`: old
 `collection_sync_state` completion stamps keyed `collection_kind = 'user'` are rewritten to `'standard'` by SQLite
 migration **022** so an unchanged standard collection still takes the incremental skip across the upgrade (#1539).
 
@@ -968,18 +969,57 @@ final chunk's fresh stamp replaces the row, which clears the flag. The apply sta
 its chunks re-mark rows with the new run's generation and a kept stamp naming the old one would make discovery read
 every re-marked row as gone from RomM.
 
+**A collection unit fetches only the members no platform unit delivered (#2356).** Its members come from the listing
+`build_work_queue` already read: RomM's collection listings carry each collection's `rom_ids`, and the work unit keeps
+them (`WorkUnit.member_rom_ids`). A member already in the run's `synced_rom_ids` — a platform unit delivered it, a
+skipped platform's rebuilt rows included — is covered without a request. The rest are fetched by one walk of the
+collection narrowed to the platforms the sync leaves off: the listed platforms with no platform unit in this run, a
+skipped platform having one. The walk sends the collection's own filter plus `platform_ids` for each of them
+(`WorkUnit.unwalked_platform_ids`), and RomM applies the two filters together. A run with every platform enabled
+therefore fetches no page for any collection but a foreign smart one. The collection's membership map is the listing's
+ids plus any the walk answered beyond them. A listed member neither covered nor answered is logged with the unit's name
+and the count and left out of the run's new ROMs. Three cases are known: a scan racing the run, a ROM the walk does not
+show, and an unbound sibling on a skipped platform. The last is left out of the platform's rebuilt rows, which hold only
+bound rows, and the walk does not ask for its platform, which has a unit. The collection skip leaves unbound members out
+the same way.
+
+**A smart collection's listing is not its live membership.** Its listed `rom_ids` are a stored column RomM computes for
+the collection's owner and refreshes after the writes that can move it (in RomM 5.3.0 a scan, a ROM edit or deletion, a
+save or state upload or deletion, and a membership change), while `GET /api/roms?smart_collection_id=` evaluates the
+criteria live for the caller. **A foreign smart collection is walked whole**, unnarrowed: with per-user criteria
+(favorite, saves, states, last played, statuses) its owner's set and the caller's differ, and the sync follows the
+caller's view. Only the caller's own smart collections (`domain/collection_owner.is_own_collection`, which also reads an
+unknown identity as own) take the listing's ids, and **an own smart collection walks the platforms the sync leaves off
+whenever there are any**, even when its listing names no leftover. A refresh that fails is logged by RomM, not raised,
+so the stored set can lag the live criteria, and a live member on such a platform that the listing misses would
+otherwise go undelivered. Standard and virtual collections list their members live and walk only for leftovers. Under
+the `own` owner scope no foreign collection is queued.
+
+**A collection skips only when its membership and its members are unchanged.** The collection sibling of the platform
+stamp, `CollectionSyncState`, is written when any collection unit's last apply chunk commits, and the skip replays its
+`member_rom_ids` without a request beyond one `limit=1` probe. Membership is judged per kind. A standard or smart
+collection compares the listing's `updated_at` with the stamp's (RomM bumps it on any membership change and a
+smart-criteria edit), and its `rom_count` with both the stamp's and the stored member set's size. A virtual collection's
+`updated_at` says nothing — `virtual_collections` is a view — but its listed `rom_ids` are live since RomM 5.3.0's
+migration 0101, so it compares the listing's ids with the stamp's member set as sets, and its stamp stores an empty
+`updated_at`. Then, for every kind, the scoped `updated_after` probe keyed off the stamp's `completed_at` must answer
+zero; it filters with the kind's own collection parameter (`collection_id`, `smart_collection_id` or
+`virtual_collection_id`). A failed probe falls open to a fetch.
+
 **A collection stamp is deleted, not revoked, when a local removal, the stale removal or removed-game cleanup's row
-delete reaches one of its members.** A skipped standard or smart collection replays its `CollectionSyncState`'s
-`member_rom_ids` and passes over a member that is no longer bound, so a stamp standing over an unbound member lets the
-collection skip and never re-creates that member's shortcut. The local destructive flows, the reporter's stale removal
-and removed-game cleanup's row delete therefore delete every collection stamp whose member set holds one of the rows
-they remove, unbind or delete, in the same write UoW (`CollectionSyncStateRepository.delete_intersecting`). Removed-game
-discovery, its canary ids and the Library page's `reachable_count` — the readers a platform stamp is kept for — read no
-collection stamp, so there is nothing to keep one for. The stale removal needs no set of the collections the run
-processed, unlike its platform rule: a processed collection adds every member to the rows the run returned — every
-stamped member on a skip, every fetched one on a full fetch — so none of its current members is stale. A collection
-member the stale removal unbinds therefore belongs to a collection the run built no unit for, and that collection
-full-fetches once a run builds one for it again instead of skipping over the member.
+delete reaches one of its members.** A skipped collection replays its `CollectionSyncState`'s `member_rom_ids` and
+passes over a member that is no longer bound, so a stamp standing over an unbound member lets the collection skip and
+never re-creates that member's shortcut. The local destructive flows, the reporter's stale removal and removed-game
+cleanup's row delete therefore delete every collection stamp whose member set holds one of the rows they remove, unbind
+or delete, in the same write UoW (`CollectionSyncStateRepository.delete_intersecting`). Removed-game discovery, its
+canary ids and the Library page's `reachable_count` — the readers a platform stamp is kept for — read no collection
+stamp, so there is nothing to keep one for. The stale removal needs no set of the collections the run processed, unlike
+its platform rule: a processed collection adds every member to the rows the run returned — every stamped member on a
+skip, every member a platform unit delivered or its walk fetched otherwise — so none of its current bound members is
+stale. For an own smart collection that holds because it walks the platforms the sync leaves off whatever its listing
+says: a bound member its lagging listing misses would otherwise go unreturned. A collection member the stale removal
+unbinds therefore belongs to a collection the run built no unit for, and that collection is fetched rather than skipped
+once a run builds one for it again.
 
 **A listing that fails stops the run.** The platform listing and the standard, smart and virtual collection listings are
 read while the work queue is built, before any unit is fetched, and a failure of any of them raises to the same handler
@@ -993,9 +1033,9 @@ preview, emits the same `error` frame and raises the error on: a RomM error is a
 and message, and anything else reaches the panel as a transport error, for which the Sync page shows its own general
 line. Read as an empty listing instead, the run would build no unit for an enabled platform or collection, and once any
 other unit keeps the run from ending as "Nothing to sync", the stale removal would unbind the games only it brings in; a
-collection would also lose its stamp (a standard or smart one has one), and the frontend's stale-collection cleanup
-would delete its Steam collection. A collection absent from a list RomM did answer with is a real removal and still goes
-that way. Only a kind with an enabled id is listed, and of the virtual kind only a type an enabled id encodes
+collection would also lose its stamp (every kind has one), and the frontend's stale-collection cleanup would delete its
+Steam collection. A collection absent from a list RomM did answer with is a real removal and still goes that way. Only a
+kind with an enabled id is listed, and of the virtual kind only a type an enabled id encodes
 (`domain/virtual_collection_id.py` reads it out of RomM's id; an id that does not decode lists every supported type), so
 an endpoint that keeps failing blocks the sync only for a user who has switched on a collection it serves — switched on,
 not synced: a foreign collection the owner scope drops from the queue still needs its kind listed. The platform listing
@@ -1194,28 +1234,26 @@ plan (per-unit weights + planned totals, via `sync_plan`) and the applying frame
   whether or not the mirror is complete, and zero persisted rows honestly means "every planned item is a create". On a
   **collection** it counts the bound members of the completion stamp's stored `member_rom_ids` (the same member set the
   skip replays), in one short read UoW covering every collection unit — no ROM fetch. The two sides are deliberately
-  **asymmetric** on the empty case: a platform reports `0`, an unstamped or virtual collection is **omitted**. A
-  collection's membership exists only in its stamp, and virtual collections are never stampable
-  (`CollectionSyncState.stamp` accepts only `standard`/`smart`), so `0` there would claim knowledge that does not exist.
-  Absent and `0` price identically today; the distinction keeps the field honest for later consumers, so do not collapse
-  it into consistency. A collection's stored member set may be **stale** if membership changed since the stamp —
-  accepted and bounded, since this is estimate-only and a freshness probe would mean network I/O at plan time. A fourth
-  rider, `new_shortcut_count` (#1517), is the create-side complement of `collapsed_count`: the shortcuts the next apply
-  must **mint** rather than update — sibling groups with no binding anywhere, unbound keyless rows, and every server ROM
-  the local mirror holds no row for (`rom_count − persisted rows`, clamped at zero). It is **platform-only** — a
-  collection's rows belong to their platform's unit, so counting creates on a collection too would price the same
-  shortcuts twice — and like `bound_count` it is **not** stamp-gated: an unbound group genuinely has no shortcut and a
-  ROM with no local row genuinely has to be created, whether or not the mirror is complete. The frontend takes it as its
-  create term directly instead of deriving creates by subtracting `bound_count` from the unit's weight (see the
-  composition-priced seed below). **Hard constraint (ADR-0023): the prediction never feeds the actual skip decision** —
-  `_try_unit_incremental_skip` at fetch time remains the sole skip authority, so a mis-prediction can only make the
-  estimate read long or short, never mis-apply. A Force Full Sync needs no special case: `clear_sync_cache` deletes
-  every stamp before the run, so a forced plan predicts no skips and drops every `collapsed_count` — the unit is then
-  weighed at the full pre-collapse `rom_count`, but `bound_count` and `new_shortcut_count` both survive the clear (they
-  read the rows, not the stamp) and keep the forced re-apply priced by composition (#1517). `get_platforms` carried the
-  same count as a per-platform garnish for the old toggle label; the Library page's list shows RomM's own `rom_count`,
-  so the garnish had no reader and the whole-table scan it cost — inside a `BEGIN IMMEDIATE`, on the read that gates the
-  page's first paint — went with it (#1815).
+  **asymmetric** on the empty case: a platform reports `0`, an unstamped collection is **omitted** and so priced as all
+  creates. The collection count is read from the stamp's stored member set only, so without a stamp there is no count to
+  report, and `0` would state one. Absent and `0` price identically today; the distinction keeps the field honest for
+  later consumers, so do not collapse it into consistency. A collection's stored member set may be **stale** if
+  membership changed since the stamp — accepted, since this is estimate-only. A fourth rider, `new_shortcut_count`
+  (#1517), is the create-side complement of `collapsed_count`: the shortcuts the next apply must **mint** rather than
+  update — sibling groups with no binding anywhere, unbound keyless rows, and every server ROM the local mirror holds no
+  row for (`rom_count − persisted rows`, clamped at zero). It is **platform-only** — a collection's rows belong to their
+  platform's unit, so counting creates on a collection too would price the same shortcuts twice — and like `bound_count`
+  it is **not** stamp-gated: an unbound group genuinely has no shortcut and a ROM with no local row genuinely has to be
+  created, whether or not the mirror is complete. The frontend takes it as its create term directly instead of deriving
+  creates by subtracting `bound_count` from the unit's weight (see the composition-priced seed below). **Hard constraint
+  (ADR-0023): the prediction never feeds the actual skip decision** — `_try_unit_incremental_skip` at fetch time remains
+  the sole skip authority, so a mis-prediction can only make the estimate read long or short, never mis-apply. A Force
+  Full Sync needs no special case: `clear_sync_cache` deletes every stamp before the run, so a forced plan predicts no
+  skips and drops every `collapsed_count` — the unit is then weighed at the full pre-collapse `rom_count`, but
+  `bound_count` and `new_shortcut_count` both survive the clear (they read the rows, not the stamp) and keep the forced
+  re-apply priced by composition (#1517). `get_platforms` carried the same count as a per-platform garnish for the old
+  toggle label; the Library page's list shows RomM's own `rom_count`, so the garnish had no reader and the whole-table
+  scan it cost — inside a `BEGIN IMMEDIATE`, on the read that gates the page's first paint — went with it (#1815).
 - **Static walk-cost ceiling (pre-run seed).** Before a run — in the preview, and again as the initial "up to X min" the
   instant a skip-preview run starts — the estimate is a pure cost model over **three independent terms** (#1511),
   because a run is three independent phases and one blended per-item rate cannot describe a mix of them:
@@ -1249,12 +1287,11 @@ plan (per-unit weights + planned totals, via `sync_plan`) and the applying frame
 - **Collections still price by bound members.** Platform and collection units are priced the same way on an ordinary
   re-sync, so a collection-heavy library does not reinstate the over-read through its collections. **A Force Full Sync
   is the exception for collections**: `clear_sync_cache` clears `collection_sync_state` wholesale, and a collection's
-  member set lives _only_ in that stamp, so every collection unit is unstamped for that run and reverts to create
-  pricing. Platforms are unaffected — their `bound_count` and `new_shortcut_count` are deliberately not stamp-gated.
-  This follows directly from the `None`-not-`0` rule above and errs **long**, the safe direction; correcting it would
-  mean asserting membership the plan does not have. A unit whose `bound_count` is absent (older backend, unstamped or
-  virtual collection) prices as all creates, the pre-#1511 behaviour. The live-countdown weights are unaffected and stay
-  `predicted_skip ? 0 : (collapsed_count ?? rom_count)`.
+  count is read from that stamp only, so every collection unit is unstamped for that run and reverts to create pricing.
+  Platforms are unaffected — their `bound_count` and `new_shortcut_count` are deliberately not stamp-gated. This follows
+  directly from the `None`-not-`0` rule above and errs **long**, the safe direction. A unit whose `bound_count` is
+  absent (older backend, unstamped collection) prices as all creates, the pre-#1511 behaviour. The live-countdown
+  weights are unaffected and stay `predicted_skip ? 0 : (collapsed_count ?? rom_count)`.
 - **Measured live countdown (takes over within seconds).** Once the apply is underway, `syncEta.ts` measures the
   **real** rate from the applying frames — one throttled sample per second over a ~30 s sliding window — and projects
   `remaining = (planned_total − processed) / rate`, rendered rounded **up** ("9 min left") so it never promises less

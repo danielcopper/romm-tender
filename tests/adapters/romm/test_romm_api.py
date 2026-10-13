@@ -641,6 +641,52 @@ class TestListCollectionRomsUpdatedAfter:
             "&with_char_index=false&with_filter_values=false"
         )
 
+    def test_virtual_collection_uses_the_encoded_virtual_collection_id(self):
+        api, client = _make_api()
+        client.request.return_value = {"items": [], "total": 0}
+        api.list_collection_roms_updated_after("RnJhbmNoaXNlOjE=", "virtual", "2024-01-15T10:30:00+00:00")
+        client.request.assert_called_once_with(
+            "/api/roms?virtual_collection_id=RnJhbmNoaXNlOjE%3D&limit=1&offset=0"
+            "&updated_after=2024-01-15T10%3A30%3A00%2B00%3A00&with_char_index=false&with_filter_values=false"
+        )
+
+
+class TestCollectionWalksNarrowedByPlatform:
+    """``platform_ids`` repeats once per id after the collection filter; ``None`` walks every member."""
+
+    @pytest.mark.parametrize(
+        ("walk", "collection_id", "filter_param"),
+        [
+            ("list_roms_by_collection", 7, "collection_id=7"),
+            ("list_roms_by_smart_collection", 7, "smart_collection_id=7"),
+            ("list_roms_by_virtual_collection", "fr/1", "virtual_collection_id=fr%2F1"),
+        ],
+    )
+    def test_platform_ids_narrow_the_walk(self, walk, collection_id, filter_param):
+        api, client = _make_api()
+        client.request.return_value = {"items": [], "total": 0}
+        getattr(api, walk)(collection_id, 500, 0, platform_ids=(1, 2))
+        client.request.assert_called_once_with(
+            f"/api/roms?{filter_param}&platform_ids=1&platform_ids=2&limit=500&offset=0"
+            "&order_by=id&with_char_index=false&with_filter_values=false"
+        )
+
+    @pytest.mark.parametrize(
+        ("walk", "collection_id", "filter_param"),
+        [
+            ("list_roms_by_collection", 7, "collection_id=7"),
+            ("list_roms_by_smart_collection", 7, "smart_collection_id=7"),
+            ("list_roms_by_virtual_collection", "fr/1", "virtual_collection_id=fr%2F1"),
+        ],
+    )
+    def test_no_platform_ids_walk_every_member(self, walk, collection_id, filter_param):
+        api, client = _make_api()
+        client.request.return_value = {"items": [], "total": 0}
+        getattr(api, walk)(collection_id, 500, 0)
+        client.request.assert_called_once_with(
+            f"/api/roms?{filter_param}&limit=500&offset=0&order_by=id&with_char_index=false&with_filter_values=false"
+        )
+
 
 class TestDownloadRomContent:
     def test_url_encodes_filename(self):

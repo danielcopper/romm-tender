@@ -19,15 +19,16 @@ from services.library.fetcher import _SUPPORTED_VIRTUAL_TYPES
 def rebind_loop(library_service, loop):
     """Rebind the event loop on every LibraryService sub-service.
 
-    Four of the façade's sub-services (fetcher, orchestrator, reporter,
-    session-budget monitor) hold their own ctor-bound ``_loop``. Tests that
-    swap in a mock loop must propagate it to all four so async calls land on
-    the override. ``ShortcutLaunchResolver``, ``LocalLibraryReader`` and
+    Five of the façade's sub-services (fetcher, collection fetcher,
+    orchestrator, reporter, session-budget monitor) hold their own ctor-bound
+    ``_loop``. Tests that swap in a mock loop must propagate it to all five so
+    async calls land on the override. ``ShortcutLaunchResolver``, ``LocalLibraryReader`` and
     ``ChunkDispatcher`` hold none — the first two are synchronous workers their
     holders offload through *their* loops (the orchestrator's, and the fetcher's
     for the reachable set), and the dispatcher offloads nothing at all.
     """
     library_service._fetcher._loop = loop
+    library_service._collection_fetcher._loop = loop
     library_service._orchestrator._loop = loop
     library_service._reporter._loop = loop
     library_service._session_budget._loop = loop
@@ -176,11 +177,12 @@ def _seed_rom_row(
 def _use_fake_romm(library, fake_romm_api):
     """Swap the harness's ``MagicMock`` ``romm_api`` for the seeded fake.
 
-    The fetcher and the artwork service each hold the ``romm_api`` they were
-    built with, so both are rebound here.
+    The two fetchers and the artwork service each hold the ``romm_api`` they
+    were built with, so all three are rebound here.
     """
     library.romm_api = fake_romm_api
     library.sync._fetcher._romm_api = fake_romm_api
+    library.sync._collection_fetcher._romm_api = fake_romm_api
     library.artwork._romm_api = fake_romm_api
     return fake_romm_api
 
@@ -204,6 +206,11 @@ def _seed_platform(fake_romm_api, *, platform_id, name, slug, roms):
         fake_romm_api.roms[rom_id] = full_rom
 
 
+def _fetching_frames(emit):
+    """Ordered ``sync_progress`` payloads whose stage is ``fetching``."""
+    return [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_progress" and c[0][1].get("stage") == "fetching"]
+
+
 async def _fake_wait_set_event(_unit, event):
     """Default ``_wait_for_unit_complete`` stand-in: set the event and
     return an empty rom_id_to_app_id map.
@@ -214,3 +221,43 @@ async def _fake_wait_set_event(_unit, event):
     """
     event.set()
     return {}
+
+
+def _seed_persisted_rom(uow, rom_id, *, app_id, group_key, platform_slug="n64", fetch_id=None):
+    """Persist one ``roms`` row (bound when app_id is set, else an unbound sibling).
+
+    ``fetch_id`` is the fetch generation that last saw the row (#1504); ``None``
+    leaves it unknown, the state a pre-020 row reads.
+    """
+    from domain.rom import Rom
+
+    with uow:
+        uow.roms.save(
+            Rom(
+                rom_id=rom_id,
+                platform_slug=platform_slug,
+                name=f"G{rom_id}",
+                fs_name=f"g{rom_id}.z64",
+                shortcut_app_id=app_id,
+                last_synced_at="2025-01-01T00:00:00",
+                sibling_group_key=group_key,
+                last_fetch_id=fetch_id,
+            )
+        )
+
+
+def _seed_collection_stamp(uow, cid, kind, *, updated_at, completed_at, rom_count, member_rom_ids):
+    """Persist a per-collection completion stamp (#742) so the skip can honor it."""
+    from domain.collection_sync_state import CollectionSyncState
+
+    with uow:
+        uow.collection_sync_state.save(
+            CollectionSyncState.stamp(
+                collection_id=cid,
+                collection_kind=kind,
+                updated_at=updated_at,
+                completed_at=completed_at,
+                rom_count=rom_count,
+                member_rom_ids=member_rom_ids,
+            )
+        )

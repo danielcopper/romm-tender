@@ -435,7 +435,7 @@ class TestWholeUnitStaging:
 
 
 class TestFinalChunkCollectionStamp:
-    """A standard/smart collection is stamped on its FINAL chunk only (#742).
+    """A collection is stamped on its FINAL chunk only (#742).
 
     Driven through ``apply_unit_in_chunks`` directly rather than the whole
     pipeline: the condition reads only the unit and its position in the chunk
@@ -543,6 +543,46 @@ class TestFinalChunkCollectionStamp:
 
         assert stamps == [None], "only the first chunk committed, and it carries no stamp"
         assert box.abandoned_chunk is not None
+
+    @pytest.mark.asyncio
+    async def test_a_virtual_collection_is_stamped_with_an_empty_updated_at(self, library):
+        stamps = []
+
+        async def capture_commit(_rid_to_aid, _chunk_rows, platform_stamp=None, collection_stamp=None, fetch_id=None):
+            stamps.append(collection_stamp)
+
+        library.sync._reporter.commit_unit_results = capture_commit  # type: ignore[method-assign]
+        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        box = library.sync._box
+        box.sync_state = SyncState.RUNNING
+        box.current_sync_id = "run-virtual-stamp"
+
+        unit = WorkUnit(
+            type="collection",
+            id="fr-1",
+            name="Mario",
+            slug="",
+            rom_count=2,
+            collection_kind="virtual",
+            virtual_type="franchise",
+        )
+        emitted = [{"rom_id": 1, "sibling_group_key": None}]
+        await library.sync._chunk_dispatcher.apply_unit_in_chunks(
+            unit,
+            unit_index=0,
+            total_units=1,
+            emitted=emitted,
+            shortcuts_data=list(emitted),
+            unit_roms=[{"id": 1}],
+            new_ids=set(),
+            confirmed_cover_sources={},
+            collection_member_ids=[1, 2],
+        )
+
+        [stamp] = stamps
+        assert stamp is not None
+        assert (stamp.collection_id, stamp.collection_kind, stamp.updated_at) == ("fr-1", "virtual", "")
+        assert stamp.member_rom_ids == (1, 2)
 
 
 class TestAckIdentityPrecedesTheEmit:

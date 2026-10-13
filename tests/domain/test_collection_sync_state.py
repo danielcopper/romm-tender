@@ -58,8 +58,21 @@ class TestStamp:
                 member_rom_ids=(1,),
             )
 
-    @pytest.mark.parametrize("kind", ["virtual", "", "user", "STANDARD"])
-    def test_non_standard_smart_kind_raises(self, kind):
+    def test_virtual_stamp_accepts_an_empty_updated_at(self):
+        stamp = CollectionSyncState.stamp(
+            collection_id="RnJhbmNoaXNlOjE=",
+            collection_kind="virtual",
+            updated_at="",
+            completed_at="2026-05-28T10:05:00+00:00",
+            rom_count=2,
+            member_rom_ids=(10, 11),
+        )
+        assert stamp.collection_kind == "virtual"
+        assert stamp.updated_at == ""
+        assert stamp.member_rom_ids == (10, 11)
+
+    @pytest.mark.parametrize("kind", ["", "user", "STANDARD"])
+    def test_unknown_kind_raises(self, kind):
         with pytest.raises(ValueError, match="collection_kind must be"):
             CollectionSyncState.stamp(
                 collection_id="7",

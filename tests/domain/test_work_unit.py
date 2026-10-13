@@ -136,6 +136,39 @@ class TestCollectionUnits:
         assert collection_units(listing, set(), "standard") == []
         assert collection_units([], {"1"}, "standard") == []
 
+    def test_the_listing_s_rom_ids_become_the_unit_s_members(self):
+        listing = [{"id": 7, "name": "Faves", "slug": "faves", "rom_count": 3, "rom_ids": [3, "1", 2]}]
+        assert collection_units(listing, {"7"}, "standard")[0].member_rom_ids == (3, 1, 2)
+
+    def test_a_listing_without_rom_ids_has_no_members(self):
+        assert collection_units([{"id": 7, "rom_count": 2}], {"7"}, "standard")[0].member_rom_ids == ()
+
+    def test_a_foreign_collection_is_not_own_and_its_owner_s_is(self):
+        listing = [
+            {"id": 1, "name": "Mine", "rom_count": 0, "user_id": 5},
+            {"id": 2, "name": "Theirs", "rom_count": 0, "user_id": 9},
+        ]
+        units = collection_units(listing, {"1", "2"}, "smart", own_user_id=5)
+        assert [(u.id, u.is_own) for u in units] == [("1", True), ("2", False)]
+
+    def test_unknown_identity_reads_every_collection_as_own(self):
+        listing = [{"id": 2, "name": "Theirs", "rom_count": 0, "user_id": 9}]
+        assert collection_units(listing, {"2"}, "smart", own_user_id=None)[0].is_own is True
+
+    def test_members_platforms_left_off_and_ownership_stay_off_the_wire(self):
+        unit = WorkUnit(
+            type="collection",
+            id="7",
+            name="Faves",
+            slug="",
+            rom_count=2,
+            collection_kind="smart",
+            member_rom_ids=(1, 2),
+            unwalked_platform_ids=(4,),
+            is_own=False,
+        )
+        assert set(unit.to_event_payload()) == {"type", "id", "name", "slug", "rom_count", "collection_kind"}
+
     def test_a_missing_name_falls_back_to_the_id_and_the_slug_to_empty(self):
         units = collection_units([{"id": 4}], {"4"}, "standard")
         assert (units[0].name, units[0].slug, units[0].rom_count) == ("4", "", 0)

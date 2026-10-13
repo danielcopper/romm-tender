@@ -1,8 +1,9 @@
 """Library fetch sub-service.
 
-Owns every read-only roundtrip to the RomM library: listing platforms,
-listing collections, the incremental/full ROM pagination loop, and the
-per-unit work-queue construction. Settings reads/writes about which
+Owns the read-only roundtrips to the RomM library a run starts from: listing
+platforms, listing collections, the per-unit work-queue construction, and a
+platform unit's incremental/full ROM pagination loop. A collection unit's ROMs
+are :class:`~services.library.collection_fetcher.CollectionFetcher`'s. Settings reads/writes about which
 platforms/collections are enabled live here too, since they shape the
 fetch query. Anything that transforms fetched ROMs into Steam-shortcut
 shape belongs on the façade or downstream sub-services; this file
@@ -21,20 +22,20 @@ from domain.fetch_generation import backfill_needed, bound_row_not_returned, cou
 from domain.platform_prefs import materialize_enabled_platforms, resolve_sync_enabled
 from domain.platform_sync_state import stamp_for_skip
 from domain.skip_prediction import collapsed_shortcut_count, new_shortcut_count, predict_unit_skip
-from domain.sync_stage import SyncStage
-from domain.sync_state import SyncCancelled, SyncState
+from domain.sync_state import SyncCancelled
 from domain.virtual_collection_id import virtual_types_to_list
 from domain.work_unit import WorkUnit, collection_units
 from lib.errors import Refused
 from lib.romm_paging import LIST_PAGE_SIZE
+from services.library._fetch_pages import emit_fetch_page_progress, raise_if_cancelling
 from services.library._platform_ids import keep_platform_ids
 
 if TYPE_CHECKING:
     import asyncio
     import logging
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Callable
 
-    from domain.collection_sync_state import CollectionSyncState
+    from services.library._fetch_pages import EmitProgressFn
     from services.library._state import LibrarySyncStateBox
     from services.library.local_library_reader import LocalLibraryReader
     from services.protocols import (
@@ -44,13 +45,6 @@ if TYPE_CHECKING:
         UnitOfWorkFactory,
     )
 
-    # Orchestrator-supplied progress emitter. Matches the kw-only signature
-    # of ``SyncOrchestrator.emit_progress``: stage positional, every other
-    # field keyword. Sub-services consume this through the Config seam.
-    EmitProgressFn = Callable[..., Awaitable[None]]
-
-
-_SYNC_CANCELLED = "Sync cancelled"
 
 # The RomM virtual-collection types Tender syncs as browsable collections.
 # RomM's ``VirtualCollection`` model has five ``type`` values, but only these two
@@ -95,14 +89,6 @@ class _SkipBaseline(NamedTuple):
     bound_row_not_returned: bool
 
 
-# Emit a ``fetching`` progress frame on the first page and every Nth page of a
-# paginated unit fetch. At the 500-ROM page size a large platform paginates in
-# only a handful of pages (a ~3000-ROM platform is 7), so every page is narrated
-# (interval 1) — a "page 3/7" update every few seconds — rather than throttled.
-# The interval knob stays so a future larger page count can throttle again.
-_FETCH_PROGRESS_PAGE_INTERVAL = 1
-
-
 @dataclass(frozen=True)
 class LibraryFetcherConfig:
     """Frozen wiring bundle handed to ``LibraryFetcher.__init__``.
@@ -129,7 +115,7 @@ class LibraryFetcherConfig:
 
 
 class LibraryFetcher:
-    """Library fetch sub-service: platform/collection metadata + ROM pagination."""
+    """Library fetch sub-service: platform/collection metadata, the work queue, a platform unit's ROMs."""
 
     def __init__(self, *, config: LibraryFetcherConfig) -> None:
         self._romm_api = config.romm_api
@@ -318,10 +304,14 @@ class LibraryFetcher:
 
     # ── ROM fetch pipeline ───────────────────────────────────────
 
-    async def _fetch_enabled_platforms(self):
-        """Fetch and filter platforms by enabled_platforms setting, keeping every listed platform's ids."""
-        platforms = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
-        await self._loop.run_in_executor(None, keep_platform_ids, self._uow_factory, self._logger, platforms)
+    async def _fetch_enabled_platforms(self) -> tuple[list[dict[str, Any]], tuple[int, ...]]:
+        """Fetch and filter platforms by enabled_platforms setting, keeping every listed platform's ids.
+
+        Answers ``(enabled, unwalked_ids)``: the platforms this run syncs, and
+        the id of every listed platform it does not.
+        """
+        listed = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
+        await self._loop.run_in_executor(None, keep_platform_ids, self._uow_factory, self._logger, listed)
 
         # Empty map = "all platforms enabled" (the safety floor for a user who
         # syncs without ever opening the Platforms page). ``get_platforms``
@@ -330,14 +320,15 @@ class LibraryFetcher:
         enabled = self._settings.get("enabled_platforms", {})
         self._logger.info(f"Platform filter: {len(enabled)} prefs saved, no_prefs={not enabled}")
         self._logger.info(f"Enabled platforms: {[k for k, v in enabled.items() if v]}")
-        platforms = [p for p in platforms if resolve_sync_enabled(enabled, str(p["id"]))]
+        platforms = [p for p in listed if resolve_sync_enabled(enabled, str(p["id"]))]
         self._logger.info(f"Syncing {len(platforms)} platforms: {[p['name'] for p in platforms]}")
-        return platforms
+        synced_ids = {int(p["id"]) for p in platforms}
+        left_off_ids = tuple(int(p["id"]) for p in listed if int(p["id"]) not in synced_ids)
+        return platforms, left_off_ids
 
     def _check_cancelling(self):
         """Raise SyncCancelled if sync is being cancelled."""
-        if self._sync_state.sync_state == SyncState.CANCELLING:
-            raise SyncCancelled(_SYNC_CANCELLED)
+        raise_if_cancelling(self._sync_state)
 
     # ── Per-unit work queue ──────────────────────────────────────
 
@@ -360,7 +351,7 @@ class LibraryFetcher:
         """
         units: list[WorkUnit] = []
 
-        platforms = await self._fetch_enabled_platforms()
+        platforms, unwalked_platform_ids = await self._fetch_enabled_platforms()
         platform_units = [
             WorkUnit(
                 type="platform",
@@ -403,7 +394,8 @@ class LibraryFetcher:
         collection_queue.extend(await self._build_virtual_collection_units(enabled_virtual_ids))
         # One short read UoW for every collection at once — after the listing
         # fetches, never across them.
-        units.extend(await self._attach_collection_bound_counts(collection_queue))
+        collection_queue = await self._attach_collection_bound_counts(collection_queue)
+        units.extend(replace(unit, unwalked_platform_ids=unwalked_platform_ids) for unit in collection_queue)
 
         return units
 
@@ -510,21 +502,18 @@ class LibraryFetcher:
     def _read_collection_bound_counts(self, units: list[WorkUnit]) -> dict[tuple[str, str | None], int]:
         """Bound-member count per stamped collection, keyed ``(id, kind)`` (#1511).
 
-        A collection has no local membership column — membership lives on the
-        server — so the count comes from the completion stamp's
-        ``member_rom_ids`` (the same stored member set the skip replays),
-        counting those whose ``roms`` row carries a ``shortcut_app_id``. No ROM
+        The count is read from the completion stamp's stored
+        ``member_rom_ids`` only (the set the skip replays), counting those whose
+        ``roms`` row carries a ``shortcut_app_id``. No ROM
         fetch, one short read UoW for every collection unit at once.
 
         Deliberately ASYMMETRIC with the platform rider: a platform with no
         persisted rows reports ``0`` (real knowledge — nothing is mirrored, so
         every item is a create), whereas an unstamped collection is omitted
-        entirely. A collection's member set exists ONLY in its stamp, so without
-        one there is no membership to count; virtual collections are never
-        stampable at all (``CollectionSyncState.stamp`` accepts only
-        ``user``/``smart``). Reporting ``0`` there would claim knowledge we do
-        not have. Absent and ``0`` price identically today — both read as
-        all-creates — but the distinction keeps the field honest for any later
+        entirely and so priced as all-creates. The count is read from the
+        stamp's stored member set only, so without a stamp there is no count to
+        report, and ``0`` would state one. Absent and ``0`` price identically
+        today, but the distinction keeps the field honest for any later
         consumer. Do not "simplify" this into consistency with the platform side.
 
         Consequence worth knowing before re-tuning the estimate: ``clear_sync_cache``
@@ -534,9 +523,8 @@ class LibraryFetcher:
         unaffected (their bound count reads the rows directly, no stamp gate). The
         estimate reads long, never short, which is the safe direction.
 
-        The member set may be STALE (membership can have changed since the
-        stamp). That is accepted and bounded: estimate-only (ADR-0023), and a
-        freshness probe would mean network I/O at plan time.
+        The stored member set may be STALE (membership can have changed since
+        the stamp). That is accepted: the count is estimate-only (ADR-0023).
         """
         counts: dict[tuple[str, str | None], int] = {}
         with self._uow_factory() as uow:
@@ -860,42 +848,6 @@ class LibraryFetcher:
         superseded = persisted_count - fetched_count
         return f", {superseded} superseded row(s) retained but not counted" if superseded > 0 else ""
 
-    async def _emit_fetch_page_progress(
-        self,
-        *,
-        unit_name: str,
-        page: int,
-        total_pages: int,
-        progress_step: int,
-        progress_total_steps: int,
-    ) -> None:
-        """Emit a throttled ``fetching`` progress frame for a paginated fetch.
-
-        Called once per page; emits only on the first page and every
-        ``_FETCH_PROGRESS_PAGE_INTERVAL``-th page so the frame rate stays
-        bounded on a large multi-page fetch. ``progress_step`` /
-        ``progress_total_steps`` are the run's coarse unit index / total so the
-        main bar holds its position while the fine line advances by page; a
-        falsy pair (the preview loop already emits its own per-unit frame,
-        standalone callers) leaves the coarse bar indeterminate, as before.
-        The frame carries the ``fetch`` sub-stage so the frontend fills the
-        unit's fetch sub-slice of the bar (#1407). The displayed total is
-        clamped to at least ``page`` so a server that grew since the listing
-        never shows ``page 63/62``.
-        """
-        if page != 1 and page % _FETCH_PROGRESS_PAGE_INTERVAL != 0:
-            return
-        shown_total = max(total_pages, page)
-        await self._emit_progress(
-            SyncStage.FETCHING,
-            current=page,
-            total=shown_total,
-            message=f"Fetching {unit_name} (page {page}/{shown_total})",
-            step=progress_step,
-            total_steps=progress_total_steps,
-            sub_stage="fetch",
-        )
-
     async def fetch_platform_unit(
         self, unit: WorkUnit, *, progress_step: int = 0, progress_total_steps: int = 0
     ) -> tuple[list[dict[str, Any]], bool]:
@@ -937,7 +889,8 @@ class LibraryFetcher:
         while True:
             self._check_cancelling()
             page_num += 1
-            await self._emit_fetch_page_progress(
+            await emit_fetch_page_progress(
+                self._emit_progress,
                 unit_name=platform_name,
                 page=page_num,
                 total_pages=total_pages,
@@ -982,244 +935,3 @@ class LibraryFetcher:
             offset += limit
 
         return unit_roms, False
-
-    def _read_collection_stamp(self, collection_id: str, collection_kind: str) -> CollectionSyncState | None:
-        """Read one collection's completion stamp in a short read UoW."""
-        with self._uow_factory() as uow:
-            return uow.collection_sync_state.get(collection_id, collection_kind)
-
-    def _reconstruct_collection_members(
-        self, member_rom_ids: list[int], already_synced: set[int]
-    ) -> list[dict[str, Any]]:
-        """Reconstruct the bound rows of a skipped collection's not-yet-covered members.
-
-        A collection unit ordinarily returns as ``new_roms`` only its members NOT
-        already in ``synced_rom_ids`` — its members on platforms this run did not
-        fetch (a disabled platform, or a group edge). On a skip those rows come
-        from the registry instead of a fetch, mirroring the platform skip's
-        reconstruction (``_read_incremental_baseline``), so the preview union
-        stays complete: a member bound in the registry but absent from the fetch
-        would otherwise read as stale. A member already synced (its platform unit
-        covered it) is skipped; an unbound / absent member is skipped too — it is
-        not a shortcut to reconstruct (an unbound sibling maps to its group's
-        bound representative at finalize, ADR-0021). One short read UoW.
-        """
-        with self._uow_factory() as uow:
-            reconstructed: list[dict[str, Any]] = []
-            for rid in member_rom_ids:
-                if rid in already_synced:
-                    continue
-                rom = uow.roms.get(rid)
-                if rom is None or rom.shortcut_app_id is None:
-                    continue
-                reconstructed.append(
-                    {
-                        "id": rom.rom_id,
-                        "name": rom.name,
-                        "fs_name": rom.fs_name,
-                        "platform_slug": rom.platform_slug,
-                        "platform_name": rom.platform_slug,
-                        "igdb_id": rom.igdb_id,
-                        "sgdb_id": rom.sgdb_id,
-                        "ra_id": rom.ra_id,
-                        "sibling_group_key": rom.sibling_group_key,
-                    }
-                )
-            return reconstructed
-
-    async def _try_collection_incremental_skip(self, unit: WorkUnit) -> list[int] | None:
-        """Per-unit incremental-skip pre-check for a standard/smart collection unit.
-
-        Returns the stamped member rom-id list when the collection is unchanged —
-        the caller replays it into ``synced_rom_ids`` + the Steam-collection
-        membership map without paginating. Returns ``None`` to fall through to a
-        full paginated fetch. The collection sibling of
-        :meth:`_try_unit_incremental_skip` (#742), gated on three verified RomM
-        signals, ALL of which must agree with the ``CollectionSyncState`` stamp
-        (ADR-0023):
-
-        1. the collection's server ``updated_at`` still equals the stamp — RomM
-           bumps it on any membership add/remove (and a smart-criteria edit), so
-           an equal value is the membership-stable signal;
-        2. a scoped ``updated_after`` probe (keyed off the stamp's ``completed_at``,
-           our last sync time) reports zero rows — catches a member ROM's content
-           change and a ROM entering a smart collection via its own metadata; and
-        3. the stamp's ``rom_count`` still matches both the live listing count and
-           the stored member set (a stamp written from a partial fetch is not
-           trusted to reconstruct the whole membership).
-
-        Only ``standard`` / ``smart`` collections are stampable — a virtual
-        collection has no stable ``updated_at`` and always full-fetches. The probe
-        exception (server error mid-check) falls open to a full fetch, mirroring
-        the platform gate.
-        """
-        kind = unit.collection_kind
-        if kind not in ("standard", "smart"):
-            # Virtual collections carry no stamp — always full-fetch.
-            return None
-        if not unit.collection_updated_at:
-            self._logger.info(f"Per-unit fetch {unit.name}: no collection updated_at — full fetch")
-            return None
-
-        collection_id = str(unit.id)
-        stamp = await self._loop.run_in_executor(None, self._read_collection_stamp, collection_id, kind)
-        if stamp is None:
-            self._logger.info(f"Per-unit fetch {unit.name}: no completion stamp — full fetch")
-            return None
-        if stamp.updated_at != unit.collection_updated_at:
-            self._logger.info(
-                f"Per-unit fetch {unit.name}: collection updated_at changed "
-                f"({stamp.updated_at!r} -> {unit.collection_updated_at!r}) — full fetch"
-            )
-            return None
-        if stamp.rom_count != unit.rom_count:
-            self._logger.info(
-                f"Per-unit fetch {unit.name}: stamped rom_count {stamp.rom_count} "
-                f"!= server {unit.rom_count} — full fetch"
-            )
-            return None
-        if len(stamp.member_rom_ids) != unit.rom_count:
-            # A stamp whose stored member set no longer matches the server count
-            # can't be trusted to reconstruct the whole membership — full-fetch.
-            self._logger.info(
-                f"Per-unit fetch {unit.name}: stamped members {len(stamp.member_rom_ids)} "
-                f"!= server {unit.rom_count} — full fetch"
-            )
-            return None
-
-        try:
-            # Typed ``object`` so the isinstance guard below is genuine narrowing —
-            # the RomM API return type is a JSON-shape promise the server can break.
-            delta_resp: object = await self._loop.run_in_executor(
-                None,
-                self._romm_api.list_collection_roms_updated_after,
-                int(unit.id),
-                kind,
-                stamp.completed_at,
-                1,
-                0,
-            )
-        except Exception as e:
-            self._logger.warning(
-                f"Per-unit collection incremental check failed for {unit.name}, falling back to full fetch: {e}"
-            )
-            return None
-
-        server_total = delta_resp.get("total", 0) if isinstance(delta_resp, dict) else 0
-        if server_total == 0:
-            self._logger.info(f"Per-unit skip: {unit.name} unchanged ({len(stamp.member_rom_ids)} members)")
-            return list(stamp.member_rom_ids)
-
-        self._logger.info(
-            f"Per-unit fetch {unit.name}: {server_total} member(s) updated, "
-            f"server={unit.rom_count} members={len(stamp.member_rom_ids)} — full fetch"
-        )
-        return None
-
-    async def _fetch_collection_page(
-        self, unit: WorkUnit, limit: int, offset: int
-    ) -> dict[str, Any] | list[dict[str, Any]]:
-        """Fetch one page of a collection unit's ROMs via its kind-specific endpoint.
-
-        A ``virtual`` collection is a RomM virtual collection (string base64 id,
-        the same endpoint for every virtual type), a ``smart`` collection a
-        saved-search (int id), and the default a regular standard collection (int id) —
-        each has its own list endpoint. ``dict | list`` keeps the caller's
-        isinstance guard genuine: the paginated endpoints return ``{"items": [...]}``
-        but a bare-list response shape is tolerated.
-        """
-        if unit.collection_kind == "virtual":
-            return await self._loop.run_in_executor(
-                None, self._romm_api.list_roms_by_virtual_collection, str(unit.id), limit, offset
-            )
-        if unit.collection_kind == "smart":
-            return await self._loop.run_in_executor(
-                None, self._romm_api.list_roms_by_smart_collection, int(unit.id), limit, offset
-            )
-        return await self._loop.run_in_executor(
-            None, self._romm_api.list_roms_by_collection, int(unit.id), limit, offset
-        )
-
-    async def fetch_collection_unit(
-        self, unit: WorkUnit, synced_rom_ids: set[int], *, progress_step: int = 0, progress_total_steps: int = 0
-    ) -> tuple[list[dict[str, Any]], list[int], bool]:
-        """Fetch ROMs for a single collection unit.
-
-        Tries the incremental-skip path first: when the collection is unchanged
-        (:meth:`_try_collection_incremental_skip`, #742), its membership is
-        reconstructed from the stamp instead of paginated — no pages fetched
-        beyond the ``limit=1`` probe.
-
-        Mutates *synced_rom_ids* in place: every ROM seen via this
-        collection (fetched or reconstructed) is added so subsequent units
-        (and the final stale cleanup) treat them as covered.
-
-        Returns ``(new_roms, all_collection_rom_ids, skipped)``:
-          * ``new_roms`` — ROMs not already present in *synced_rom_ids*,
-            decorated with platform_name/platform_slug for shortcut
-            construction. On a skip these are reconstructed from the registry
-            (the collection's members on platforms this run did not fetch), so
-            the caller's union stays complete.
-          * ``all_collection_rom_ids`` — every rom_id in the collection
-            (including those already synced via a platform unit), used
-            to build Steam collection memberships at the final phase.
-          * ``skipped`` — True when the incremental check succeeded. The caller
-            short-circuits the per-unit apply + commit branch (like the platform
-            skip), keeping the reconstructed rows and membership for accounting.
-
-        ``progress_step`` / ``progress_total_steps`` are the run's coarse unit
-        index / total, threaded through to the throttled per-page ``fetching``
-        frames so a large collection fetch narrates its progress like a
-        platform fetch does.
-        """
-        if unit.type != "collection":
-            raise ValueError(f"fetch_collection_unit called with non-collection unit type={unit.type}")
-
-        skip_member_ids = await self._try_collection_incremental_skip(unit)
-        if skip_member_ids is not None:
-            # Reconstruct the not-yet-covered members from the registry BEFORE
-            # marking them synced, so the preview union stays complete, then add
-            # every member to synced_rom_ids so the stale cleanup treats them as
-            # covered (a skipped collection applies nothing new).
-            reconstructed = await self._loop.run_in_executor(
-                None, self._reconstruct_collection_members, skip_member_ids, set(synced_rom_ids)
-            )
-            synced_rom_ids.update(skip_member_ids)
-            return reconstructed, list(skip_member_ids), True
-
-        new_roms: list[dict[str, Any]] = []
-        all_collection_rom_ids: list[int] = []
-
-        offset = 0
-        limit = LIST_PAGE_SIZE
-        total_pages = (unit.rom_count + limit - 1) // limit if unit.rom_count else 0
-        page_num = 0
-        while True:
-            self._check_cancelling()
-            page_num += 1
-            await self._emit_fetch_page_progress(
-                unit_name=unit.name,
-                page=page_num,
-                total_pages=total_pages,
-                progress_step=progress_step,
-                progress_total_steps=progress_total_steps,
-            )
-            page = await self._fetch_collection_page(unit, limit, offset)
-
-            items = page.get("items", []) if isinstance(page, dict) else page
-            for rom in items:
-                rid = rom["id"]
-                all_collection_rom_ids.append(rid)
-                if rid in synced_rom_ids:
-                    continue
-                synced_rom_ids.add(rid)
-                rom["platform_name"] = rom.get("platform_name", rom.get("platform_display_name", "Unknown"))
-                rom["platform_slug"] = rom.get("platform_slug", rom.get("platform_fs_slug", ""))
-                rom.pop("files", None)
-                new_roms.append(rom)
-
-            if len(items) < limit:
-                break
-            offset += limit
-
-        return new_roms, all_collection_rom_ids, False

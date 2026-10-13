@@ -118,10 +118,9 @@ export function previewApplySeconds(s: SyncPreviewSummary): number {
  * subtraction, which is the pre-#1517 behaviour.
  *
  * The ``bound_count`` fallback is not rare for collections: a collection's
- * membership is known only from its completion stamp, and a Force Full Sync
- * clears every stamp, so a forced run prices its collections as creates even
- * though their shortcuts survive. Deliberate — the alternative is asserting
- * membership the plan does not have — and it errs long, the safe direction.
+ * count is read from its completion stamp only, and a Force Full Sync clears
+ * every stamp, so a forced run prices its collections as creates even though
+ * their shortcuts survive. Deliberate, and it errs long, the safe direction.
  *
  * Cover downloads ride the create term; the plan carries no cover-refresh count,
  * and a refresh-only unit's covers are the cheap warm case.

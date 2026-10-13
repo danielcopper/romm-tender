@@ -47,6 +47,12 @@ class TestRoundTrip:
         assert loaded is not None
         assert loaded.member_rom_ids == ()
 
+    def test_a_virtual_stamp_with_an_empty_updated_at_round_trips(self, uow: SqliteUnitOfWork):
+        stamp = _stamp("RnJhbmNoaXNlOjE=", kind="virtual", updated_at="", rom_count=2, member_rom_ids=(4, 5))
+        uow.collection_sync_state.save(stamp)
+
+        assert uow.collection_sync_state.get("RnJhbmNoaXNlOjE=", "virtual") == stamp
+
 
 class TestMiss:
     def test_get_absent_returns_none(self, uow: SqliteUnitOfWork):

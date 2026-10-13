@@ -336,7 +336,7 @@ class TestComputeComponentGroupKeys:
 
     def test_explicit_null_key_is_fresh_not_resident(self):
         # A skipped collection reconstructs its bound rows verbatim, NULL key
-        # included (fetcher._reconstruct_collection_members) — carrying the field
+        # included (collection_fetcher._reconstruct_collection_members) — carrying the field
         # as NULL is not residency, so the member is fresh and gets a computed key.
         a = {"id": 1, "platform_id": 57, "igdb_id": 100, "sibling_group_key": None, "sibling_roms": []}
         assert compute_component_group_keys([a], {}) == {1: "igdb:100:57"}

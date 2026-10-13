@@ -71,7 +71,7 @@ async def test_one_off_toggle_leaves_other_platforms_enabled(harness):
     assert on_disk["enabled_platforms"] == {"1": True, "2": False, "3": True}
 
     # 4. The sync-time filter keeps every OTHER platform.
-    filtered = await harness.app.services.sync_service._fetcher._fetch_enabled_platforms()
+    filtered, _unwalked = await harness.app.services.sync_service._fetcher._fetch_enabled_platforms()
     kept_slugs = {p["slug"] for p in filtered}
     assert kept_slugs == {"snes", "gba"}
     assert "n64" not in kept_slugs

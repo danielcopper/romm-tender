@@ -121,7 +121,10 @@ an unchanged library reads seconds, not the minutes a full first import would ta
 (the actual skip is decided per platform, and per collection, as the run reaches it), so a wrong guess can make the
 readout run long or short for a moment, but it never changes what the sync actually does. Collections are skipped the
 same way a platform is: if a collection's membership hasn't changed and none of its games did either, Tender skips it
-without re-listing its contents — so a large, collection-heavy library re-syncs quickly.
+without re-listing its contents — so a large, collection-heavy library re-syncs quickly. That holds for **Franchises**
+and **IGDB collections** too. When Tender does not skip a collection, it asks RomM only for the collection's games on
+platforms you don't sync, since your enabled platforms already brought in the rest. Another user's shared smart
+collection is the exception and is read in full, because which games it holds can depend on who is asking.
 
 The estimate also knows the **difference between adding a game and updating one**. Creating a shortcut is roughly three
 times the work of refreshing one that already exists, and it also has to pull down a cover; updating an existing

@@ -4,8 +4,9 @@ Owns the public use cases the endpoints call (platform/
 collection metadata, sync preview/apply/cancel, reporting, the
 ``roms``-derived queries) and the shared :class:`LibrarySyncStateBox` that
 threads through every sub-service. Implementation lives in the
-sub-service modules: :class:`LibraryFetcher` for ROM/metadata
-roundtrips, :class:`SyncOrchestrator` for the preview/apply
+sub-service modules: :class:`LibraryFetcher` for the listings, the work
+queue and a platform unit's ROMs, :class:`CollectionFetcher` for a collection
+unit's ROMs, :class:`SyncOrchestrator` for the preview/apply
 lifecycle and safety heartbeat, :class:`SyncReporter` for post-apply
 finalisation and the ``roms``-derived queries,
 :class:`SessionBudgetMonitor` for Steam's renderer-heap budget,
@@ -26,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 from lib.late_binding import LateBinding
 from services.library._state import CollectionMembership, LibrarySyncStateBox
 from services.library.chunk_dispatcher import ChunkDispatcher, ChunkDispatcherConfig
+from services.library.collection_fetcher import CollectionFetcher, CollectionFetcherConfig
 from services.library.cover_preparer import CoverPreparer, CoverPreparerConfig
 from services.library.fetcher import LibraryFetcher, LibraryFetcherConfig
 from services.library.local_library_reader import LocalLibraryReader, LocalLibraryReaderConfig
@@ -109,7 +111,8 @@ class LibraryService:
     """Façade for the library sync pipeline.
 
     Composes :class:`LibraryFetcher` (platform/collection roundtrips +
-    metadata-cache stamping), :class:`SyncOrchestrator` (preview/apply lifecycle
+    metadata-cache stamping), :class:`CollectionFetcher` (a collection unit's
+    ROMs), :class:`SyncOrchestrator` (preview/apply lifecycle
     + safety heartbeat), :class:`SyncReporter` (post-apply finalisation + the
     ``roms``-derived queries), :class:`SessionBudgetMonitor` (Steam's
     renderer-heap budget), :class:`ShortcutLaunchResolver` (each ROM's installed
@@ -157,6 +160,20 @@ class LibraryService:
                 sync_state_box=self._box,
                 emit_progress=self._emit_progress_proxy,
                 local_library_reader=self._local_library_reader,
+            )
+        )
+
+        # Sub-service: CollectionFetcher — a collection unit's skip, members and
+        # walk. Built beside the fetcher, which queues the collection units it
+        # fetches, and held by the orchestrator.
+        self._collection_fetcher = CollectionFetcher(
+            config=CollectionFetcherConfig(
+                romm_api=config.romm_api,
+                loop=config.loop,
+                logger=config.logger,
+                uow_factory=config.uow_factory,
+                sync_state_box=self._box,
+                emit_progress=self._emit_progress_proxy,
             )
         )
 
@@ -246,6 +263,7 @@ class LibraryService:
                 uow_factory=config.uow_factory,
                 sync_state_box=self._box,
                 fetcher=self._fetcher,
+                collection_fetcher=self._collection_fetcher,
                 reporter=reporter_binding,
                 shortcut_launch_resolver=self._shortcut_launch_resolver,
                 local_library_reader=self._local_library_reader,
@@ -277,7 +295,7 @@ class LibraryService:
     async def _emit_progress_proxy(self, stage, **kwargs):
         """Late-bound proxy to the orchestrator's emit_progress.
 
-        Threaded into the fetcher's config at ctor time before
+        Threaded into both fetchers' configs at ctor time before
         ``self._orchestrator`` exists — calls resolve at invocation
         time, by which point both sub-services are wired.
         """

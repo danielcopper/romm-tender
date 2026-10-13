@@ -1116,8 +1116,8 @@ values match RomM's own kind labels (Standard / Smart / Virtual); RomM's code ca
 **Standard** is a manually-created collection (one of RomM's two owned kinds — its ROM membership is hand-picked; the
 auto-managed favorites collection is a Standard one); **Smart** is a saved-search whose membership resolves at query
 time, and the other owned kind; **Virtual** is an ownerless grouping RomM derives from game metadata, of which Tender
-syncs two `virtual_type`s — `franchise` and `collection` (an IGDB collection). Only Standard and Smart are stampable for
-the incremental skip. Internal-name history: the first kind was called `user` until #1539 renamed it `standard` (display
+syncs two `virtual_type`s — `franchise` and `collection` (an IGDB collection). All three are stampable for the
+incremental skip. Internal-name history: the first kind was called `user` until #1539 renamed it `standard` (display
 "My" → "Standard"). What the QAM calls the kinds is decided in `docs/architecture/qam-panel.md` § Library, not here, and
 the literals stay as they are whatever it calls them.
 

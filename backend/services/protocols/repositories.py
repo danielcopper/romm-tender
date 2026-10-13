@@ -452,12 +452,11 @@ class CollectionSyncStateRepository(Protocol):
 
     Identity is the composite ``(collection_id, collection_kind)``. The collection
     sibling of ``PlatformSyncStateRepository`` (ADR-0023): backs the incremental-skip
-    gate's honoring of an unchanged standard/smart collection so it is not re-paginated
-    (#742).
+    gate's honoring of an unchanged collection so it is not re-paginated (#742).
     """
 
     def get(self, collection_id: str, collection_kind: str) -> CollectionSyncState | None:
-        """Return the completion stamp for the collection, or ``None``. (library/fetcher.py skip gate)"""
+        """Return the completion stamp for the collection, or ``None``. (library/collection_fetcher.py skip gate)"""
         ...
 
     def save(self, state: CollectionSyncState) -> None:
@@ -465,7 +464,7 @@ class CollectionSyncStateRepository(Protocol):
         ...
 
     def delete_intersecting(self, rom_ids: Collection[int]) -> None:
-        """Drop every stamp whose ``member_rom_ids`` hold one of *rom_ids*, of either kind.
+        """Drop every stamp whose ``member_rom_ids`` hold one of *rom_ids*, of any kind.
 
         A no-op for an empty *rom_ids* or when no stamp holds one. The ``roms``
         table records no collection membership, so the stored member sets are

@@ -45,6 +45,8 @@ from lib.romm_paging import LIST_PAGE_SIZE
 from models.cover import CoverRevalidation
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from models.play_sessions import (
         PlaySessionIngestEntry,
         PlaySessionIngestResponse,
@@ -332,21 +334,35 @@ class FakeRommApi:
         ]
         return self._paginate(items, limit, offset)
 
+    @staticmethod
+    def _on_platforms(items: list[dict[str, Any]], platform_ids: Sequence[int] | None) -> list[dict[str, Any]]:
+        """Narrow *items* to those on one of *platform_ids*, as RomM's ``platform_ids`` filter does.
+
+        ``None`` or an empty sequence narrows nothing, as an absent filter does.
+        """
+        if not platform_ids:
+            return items
+        return [r for r in items if r.get("platform_id") in platform_ids]
+
     def list_roms_by_collection(
-        self, collection_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0
+        self,
+        collection_id: int,
+        limit: int = LIST_PAGE_SIZE,
+        offset: int = 0,
+        platform_ids: Sequence[int] | None = None,
     ) -> dict[str, Any]:
         self._log(
             "list_roms_by_collection",
             (collection_id,),
-            {"limit": limit, "offset": offset},
+            {"limit": limit, "offset": offset, "platform_ids": platform_ids},
         )
         self._check_fail(self.list_roms_by_collection_side_effect)
         items = [r for r in self.roms.values() if collection_id in (r.get("collection_ids") or [])]
-        return self._paginate(items, limit, offset)
+        return self._paginate(self._on_platforms(items, platform_ids), limit, offset)
 
     def list_collection_roms_updated_after(
         self,
-        collection_id: int,
+        collection_id: int | str,
         kind: str,
         updated_after: str,
         limit: int = 1,
@@ -358,7 +374,9 @@ class FakeRommApi:
             {"limit": limit, "offset": offset},
         )
         self._check_fail(self.list_collection_roms_updated_after_side_effect)
-        membership_key = "smart_collection_ids" if kind == "smart" else "collection_ids"
+        membership_key = {"smart": "smart_collection_ids", "virtual": "virtual_collection_ids"}.get(
+            kind, "collection_ids"
+        )
         items = [
             r
             for r in self.roms.values()
@@ -367,33 +385,58 @@ class FakeRommApi:
         return self._paginate(items, limit, offset)
 
     def list_roms_by_virtual_collection(
-        self, virtual_id: str, limit: int = LIST_PAGE_SIZE, offset: int = 0
+        self,
+        virtual_id: str,
+        limit: int = LIST_PAGE_SIZE,
+        offset: int = 0,
+        platform_ids: Sequence[int] | None = None,
     ) -> dict[str, Any]:
         self._log(
             "list_roms_by_virtual_collection",
             (virtual_id,),
-            {"limit": limit, "offset": offset},
+            {"limit": limit, "offset": offset, "platform_ids": platform_ids},
         )
         self._check_fail(self.list_roms_by_virtual_collection_side_effect)
         items = [r for r in self.roms.values() if virtual_id in (r.get("virtual_collection_ids") or [])]
-        return self._paginate(items, limit, offset)
+        return self._paginate(self._on_platforms(items, platform_ids), limit, offset)
 
     def list_roms_by_smart_collection(
-        self, smart_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0
+        self,
+        smart_id: int,
+        limit: int = LIST_PAGE_SIZE,
+        offset: int = 0,
+        platform_ids: Sequence[int] | None = None,
     ) -> dict[str, Any]:
         self._log(
             "list_roms_by_smart_collection",
             (smart_id,),
-            {"limit": limit, "offset": offset},
+            {"limit": limit, "offset": offset, "platform_ids": platform_ids},
         )
         self._check_fail(self.list_roms_by_smart_collection_side_effect)
         items = [r for r in self.roms.values() if smart_id in (r.get("smart_collection_ids") or [])]
-        return self._paginate(items, limit, offset)
+        return self._paginate(self._on_platforms(items, platform_ids), limit, offset)
+
+    def _listed(self, entries: list[dict[str, Any]], membership_key: str) -> list[dict[str, Any]]:
+        """Copy *entries* as RomM lists them: each carries ``rom_ids``.
+
+        An entry seeded without ``rom_ids`` lists the ROMs that name its id
+        under *membership_key*, the set RomM keeps for a collection; a seeded
+        ``rom_ids`` is answered as given.
+        """
+        listed = []
+        for entry in entries:
+            copy = dict(entry)
+            if "rom_ids" not in copy:
+                copy["rom_ids"] = [
+                    rid for rid, rom in self.roms.items() if copy.get("id") in (rom.get(membership_key) or [])
+                ]
+            listed.append(copy)
+        return listed
 
     def list_collections(self) -> list[dict[str, Any]]:
         self._log("list_collections")
         self._check_fail(self.list_collections_side_effect)
-        return [dict(c) for c in self.collections]
+        return self._listed(self.collections, "collection_ids")
 
     def list_virtual_collections(self, collection_type: str) -> list[dict[str, Any]]:
         self._log("list_virtual_collections", (collection_type,))
@@ -401,12 +444,12 @@ class FakeRommApi:
         per_type = self.list_virtual_collections_side_effect_by_type.get(collection_type)
         if per_type is not None:
             raise per_type
-        return [dict(c) for c in self.virtual_collections.get(collection_type, [])]
+        return self._listed(self.virtual_collections.get(collection_type, []), "virtual_collection_ids")
 
     def list_smart_collections(self) -> list[dict[str, Any]]:
         self._log("list_smart_collections")
         self._check_fail(self.list_smart_collections_side_effect)
-        return [dict(c) for c in self.smart_collections]
+        return self._listed(self.smart_collections, "smart_collection_ids")
 
     def download_rom_content(
         self,
