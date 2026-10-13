@@ -136,7 +136,7 @@ class RommRateLimitedError(RommServerError):
     """429 Too Many Requests — not retried, since another attempt only adds to the load.
 
     A :class:`RommServerError` because the pairing-code exchange
-    (``RommApi.exchange_pairing_code``) catches its 429 as one.
+    (``RommApiAdapter.exchange_pairing_code``) catches its 429 as one.
     """
 
     def __init__(self, message, url=None, method=None):
