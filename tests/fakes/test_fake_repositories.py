@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from domain.answered_save_directory import AnsweredSaveDirectory
+from domain.artwork_slot import ArtworkSlot
+from domain.artwork_slot_outcome import ArtworkSlotOutcome
 from domain.bios_file import BiosFile
 from domain.collection_sync_state import CollectionSyncState
 from domain.firmware_cache import FirmwareCacheEntry
@@ -24,6 +26,7 @@ from domain.rom_metadata import RomMetadata
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from domain.sync_run import SyncRun
 from fakes.fake_answered_save_directory_repository import FakeAnsweredSaveDirectoryRepository
+from fakes.fake_artwork_slot_outcome_repository import FakeArtworkSlotOutcomeRepository
 from fakes.fake_bios_file_repository import FakeBiosFileRepository
 from fakes.fake_collection_sync_state_repository import FakeCollectionSyncStateRepository
 from fakes.fake_firmware_cache_repository import FakeFirmwareCacheRepository
@@ -40,6 +43,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 if TYPE_CHECKING:
     from services.protocols import (
         AnsweredSaveDirectoryRepository,
+        ArtworkSlotOutcomeRepository,
         BiosFileRepository,
         FirmwareCacheRepository,
         KvConfigRepository,
@@ -668,3 +672,49 @@ class TestFakeUnitOfWorkRomIdForeignKey:
             )
             uow.kv_config.set("k", "v")
         assert uow.committed is True
+
+
+class TestFakeArtworkSlotOutcomeRepository:
+    @staticmethod
+    def _none(rom_id: int, slot: ArtworkSlot) -> ArtworkSlotOutcome:
+        return ArtworkSlotOutcome.record_none(rom_id=rom_id, slot=slot, sgdb_id=7, recorded_at=1.0)
+
+    def test_it_satisfies_its_protocol(self):
+        repo: ArtworkSlotOutcomeRepository = FakeArtworkSlotOutcomeRepository()
+        assert repo is not None
+
+    def test_round_trip_per_slot_and_delete_for_rom(self):
+        repo = FakeArtworkSlotOutcomeRepository()
+        repo.save(self._none(1, ArtworkSlot.LOGO))
+        repo.save(self._none(1, ArtworkSlot.WIDE_GRID))
+        repo.save(self._none(2, ArtworkSlot.LOGO))
+
+        repo.delete_for_rom(1)
+
+        assert repo.get(1, ArtworkSlot.LOGO) is None
+        assert repo.get(1, ArtworkSlot.WIDE_GRID) is None
+        assert repo.get(2, ArtworkSlot.LOGO) == self._none(2, ArtworkSlot.LOGO)
+
+    def test_an_orphan_row_aborts_the_commit(self):
+        uow = FakeUnitOfWork()
+        with pytest.raises(sqlite3.IntegrityError, match="artwork_slot_outcomes"), uow:
+            uow.artwork_slot_outcomes.save(self._none(42, ArtworkSlot.LOGO))
+        assert uow.artwork_slot_outcomes.get(42, ArtworkSlot.LOGO) is None
+
+    def test_the_rows_go_with_their_rom(self):
+        uow = FakeUnitOfWork()
+        with uow:
+            uow.roms.save(_rom(42))
+            uow.artwork_slot_outcomes.save(self._none(42, ArtworkSlot.LOGO))
+        with uow:
+            uow.roms.delete(42)
+        assert uow.artwork_slot_outcomes.get(42, ArtworkSlot.LOGO) is None
+
+    def test_a_failed_block_rolls_its_rows_back(self):
+        uow = FakeUnitOfWork()
+        with uow:
+            uow.roms.save(_rom(42))
+        with pytest.raises(RuntimeError), uow:
+            uow.artwork_slot_outcomes.save(self._none(42, ArtworkSlot.LOGO))
+            raise RuntimeError("boom")
+        assert uow.artwork_slot_outcomes.get(42, ArtworkSlot.LOGO) is None

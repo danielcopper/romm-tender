@@ -135,6 +135,7 @@ from services.protocols.paths import (
 from services.protocols.persistence import SettingsPersister
 from services.protocols.repositories import (
     AnsweredSaveDirectoryRepository,
+    ArtworkSlotOutcomeRepository,
     BiosFileRepository,
     CollectionSyncStateRepository,
     FirmwareCacheRepository,
@@ -178,6 +179,7 @@ __all__ = [
     "AnsweredSaveDirectoryRepository",
     "ArtworkManager",
     "ArtworkRemover",
+    "ArtworkSlotOutcomeRepository",
     "BiosChecker",
     "BiosFileRepository",
     "Clock",

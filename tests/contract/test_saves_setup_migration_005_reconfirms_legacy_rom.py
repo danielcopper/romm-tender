@@ -75,6 +75,8 @@ def _rewind_to_v4(db_path: str) -> None:
         conn.execute("ALTER TABLE rom_installs DROP COLUMN launchable")
         # Reverse 024 so its CREATE TABLE re-applies instead of duplicating.
         conn.execute("DROP TABLE answered_save_directories")
+        # Reverse 027 so its CREATE TABLE re-applies instead of duplicating.
+        conn.execute("DROP TABLE artwork_slot_outcomes")
         # Reverse 017 so its ADD COLUMN re-applies instead of duplicating.
         conn.execute("ALTER TABLE rom_save_files DROP COLUMN last_sync_server_hash")
         # Reverse 018 so 005's `UPDATE rom_save_states` finds the table under its

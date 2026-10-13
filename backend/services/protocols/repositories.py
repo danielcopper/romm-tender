@@ -14,7 +14,8 @@ The Protocols match the aggregate roots settled in ADR-0003 — ``Rom``,
 ``FirmwareCacheEntry``, ``SyncRun`` — plus ``PlatformSyncState`` (the per-platform
 completion stamp, ADR-0023), its per-collection sibling ``CollectionSyncState``,
 ``AnsweredSaveDirectory`` (the save directory the resolver last answered per ROM,
-ADR-0041) and the ``kv_config`` key-value surface.
+ADR-0041), ``ArtworkSlotOutcome`` (what was last found for a ROM's wide grid or
+logo) and the ``kv_config`` key-value surface.
 ``SyncSettings``/``Platform``/``Device`` are NOT repositories — ADR-0003 dropped
 those aggregates.
 
@@ -31,6 +32,8 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Iterator
 
     from domain.answered_save_directory import AnsweredSaveDirectory
+    from domain.artwork_slot import ArtworkSlot
+    from domain.artwork_slot_outcome import ArtworkSlotOutcome
     from domain.bios_file import BiosFile
     from domain.collection_sync_state import CollectionSyncState
     from domain.firmware_cache import FirmwareCacheEntry
@@ -283,6 +286,25 @@ class AnsweredSaveDirectoryRepository(Protocol):
 
     def delete(self, rom_id: int) -> None:
         """Drop *rom_id*'s record, so its next answer is a first sight. A no-op when none exists."""
+        ...
+
+
+class ArtworkSlotOutcomeRepository(Protocol):
+    """Persistence seam for the ``ArtworkSlotOutcome`` aggregate (per-ROM wide grid and logo outcomes).
+
+    Keyed by ``(rom_id, slot)``. (steamgrid.py, the one reader and writer)
+    """
+
+    def get(self, rom_id: int, slot: ArtworkSlot) -> ArtworkSlotOutcome | None:
+        """Return what was last found for *rom_id*'s *slot*, or ``None`` when nothing is recorded."""
+        ...
+
+    def save(self, record: ArtworkSlotOutcome) -> None:
+        """Upsert *record* under its ``(rom_id, slot)``."""
+        ...
+
+    def delete_for_rom(self, rom_id: int) -> None:
+        """Drop every slot's record of *rom_id*. A no-op when none exists."""
         ...
 
 
