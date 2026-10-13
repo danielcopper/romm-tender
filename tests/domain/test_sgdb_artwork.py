@@ -233,8 +233,14 @@ class TestToUnsignedAppId:
         assert to_unsigned_app_id(42) == 42
 
 
-def _image(image_id: int, width: int, height: int) -> dict:
+def _image(image_id: int, width: int, height: int) -> dict[str, object]:
     return {"id": image_id, "url": f"https://cdn.example/{image_id}.png", "width": width, "height": height}
+
+
+def _chosen(asset_type: str, data: object) -> SgdbCandidate:
+    candidate = choose_candidate(asset_type, data)
+    assert candidate is not None
+    return candidate
 
 
 class TestOnlyTheWideGridAndTheLogoNarrowTheirQuery:
@@ -254,41 +260,41 @@ class TestChooseTheWideGrid:
     def test_460_by_215_wins_over_an_earlier_candidate_of_another_size(self):
         data = [_image(1, 600, 900), _image(2, 460, 215)]
 
-        assert choose_candidate("grid", data).image_id == 2
+        assert _chosen("grid", data).image_id == 2
 
     def test_without_either_size_the_first_candidate_is_taken(self):
         data = [_image(1, 1024, 1024), _image(2, 600, 900)]
 
-        assert choose_candidate("grid", data).image_id == 1
+        assert _chosen("grid", data).image_id == 1
 
     def test_among_two_920_by_430_the_first_is_taken(self):
         data = [_image(1, 460, 215), _image(2, 920, 430), _image(3, 920, 430)]
 
-        assert choose_candidate("grid", data).image_id == 2
+        assert _chosen("grid", data).image_id == 2
 
 
 class TestChooseTheLogo:
     def test_the_first_candidate_from_640_to_2048_wide_is_taken(self):
         data = [_image(1, 300, 100), _image(2, 4000, 1000), _image(3, 800, 300), _image(4, 1000, 400)]
 
-        assert choose_candidate("logo", data).image_id == 3
+        assert _chosen("logo", data).image_id == 3
 
     @pytest.mark.parametrize("width", [640, 2048])
     def test_both_ends_of_the_band_count(self, width):
         data = [_image(1, 639, 100), _image(2, width, 100)]
 
-        assert choose_candidate("logo", data).image_id == 2
+        assert _chosen("logo", data).image_id == 2
 
     @pytest.mark.parametrize("width", [639, 2049])
     def test_just_outside_the_band_falls_back_to_the_first(self, width):
         data = [_image(1, 300, 100), _image(2, width, 100)]
 
-        assert choose_candidate("logo", data).image_id == 1
+        assert _chosen("logo", data).image_id == 1
 
     def test_a_candidate_with_no_stated_width_is_only_a_fallback(self):
         data = [{"id": 1, "url": "https://cdn.example/1.png"}, _image(2, 900, 300)]
 
-        assert choose_candidate("logo", data).image_id == 2
+        assert _chosen("logo", data).image_id == 2
 
 
 class TestWhatCountsAsACandidate:
@@ -300,7 +306,7 @@ class TestWhatCountsAsACandidate:
     def test_a_wide_grid_or_logo_without_an_id_is_no_candidate(self, asset_type):
         data = [{"url": "https://cdn.example/a.png", "width": 920, "height": 430}, _image(2, 460, 215)]
 
-        assert choose_candidate(asset_type, data).image_id == 2
+        assert _chosen(asset_type, data).image_id == 2
 
     def test_an_id_that_is_a_bool_is_no_id(self):
         assert choose_candidate("grid", [{"id": True, "url": "https://cdn.example/a.png"}]) is None
@@ -315,12 +321,12 @@ class TestWhatCountsAsACandidate:
     def test_an_entry_without_a_url_is_skipped(self):
         data = [{"id": 1, "url": ""}, {"id": 2}, "junk", _image(3, 460, 215)]
 
-        assert choose_candidate("grid", data).image_id == 3
+        assert _chosen("grid", data).image_id == 3
 
     def test_the_hero_takes_the_first_candidate_whatever_its_size(self):
         data = [_image(1, 100, 100), _image(2, 1920, 620)]
 
-        assert choose_candidate("hero", data).image_id == 1
+        assert _chosen("hero", data).image_id == 1
 
 
 class TestCachedArtworkNames:
