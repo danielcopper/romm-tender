@@ -635,20 +635,27 @@ The hero, the logo and the wide grid come from SteamGridDB, and Steam has to be 
 first visit to a game's page in a session sets each of the three **only where the slot is empty** (`fillEmptyArtwork` in
 `utils/artwork.ts`). **Refresh Artwork** and the SteamGridDB game picker are an explicit request and still replace every
 slot (`applyArtwork`), and so does a version switch: once artwork was applied for one ROM of an app id, the newly bound
-ROM's is applied in the replacing mode, an image set by hand included. `applyArtwork` serves each image from the artwork
-cache first (`get_sgdb_artwork_base64`), so a version switch downloads only what the new ROM's cache lacks. Refresh
-Artwork alone downloads anew: once `get_sgdb_resolution` answers `resolved`, the frontend asks
-`refresh_sgdb_artwork(rom_id, sgdb_id)`, which downloads all four images past the cache and replaces a cached file only
-with a download that succeeded, before `applyArtwork` serves them. A SteamGridDB id RomM now provides therefore replaces
-images a manual pick left in the cache. A 401 or 403 there, or on the resolution's name search, refuses `auth_failed`
-("SteamGridDB refused the API key — check it in Settings"), and a 429 `rate_limited`, and the frontend shows that
-message instead of opening the picker. On Refresh Artwork and in the picker, a refusal of an artwork endpoint is shown
-as its own message rather than read as "no image"; the first visit only logs it. Refresh Artwork's one toast also names
-a failed RomM cover refresh beside the SteamGridDB result. The replacing mode records the wide grid and the logo it set,
-or Steam refused, under the ROM now bound, as the fill does below: `get_sgdb_artwork_base64` answers a wide grid or logo
-with its image id, the hash of its bytes and the ROM's SteamGridDB id for the report. The shortcut artwork job fills the
-wide grid and the logo in the background by the same rules ([Shortcut artwork](#shortcut-artwork)), so a first visit
-usually finds them filled; the hero is the game page's alone, and the icon keeps its own rules, under the same section.
+ROM's is applied in the replacing mode, an image set by hand included. The replacing mode records the wide grid and the
+logo it set, or Steam refused, under the ROM now bound, as the fill does below: `get_sgdb_artwork_base64` answers a wide
+grid or logo with its image id, the hash of its bytes and the ROM's SteamGridDB id for the report. The shortcut artwork
+job fills the wide grid and the logo in the background by the same rules ([Shortcut artwork](#shortcut-artwork)), so a
+first visit usually finds them filled; the hero is the game page's alone, and the icon keeps its own rules, under the
+same section.
+
+**Downloading anew.** `applyArtwork` serves each image from the artwork cache first (`get_sgdb_artwork_base64`), so a
+version switch downloads only what the new ROM's cache lacks. Refresh Artwork and the picker download past the cache:
+once `get_sgdb_resolution` answers `resolved`, the frontend asks `refresh_sgdb_artwork(rom_id, sgdb_id)`, and a pick
+asks `apply_sgdb_game_id`. Both download all four images and replace a cached file only with a download that succeeded,
+before `applyArtwork` serves them; a pick then drops the previous pick's file of each image it did not download. A
+SteamGridDB id RomM now provides therefore replaces an image a manual pick left in the cache, where SteamGridDB has such
+an image for that game. A 401 or 403 from SteamGridDB on either, or on the resolution's name search, refuses
+`auth_failed` with `_KEY_REFUSED` (`services/steamgrid.py`), and a 429 refuses `rate_limited`; the frontend shows that
+message instead of opening the picker. Only the key dialog's check (`verify_sgdb_api_key`) answers a 401 or 403 with
+"Invalid API key", as does every use case for a key no header can carry. On Refresh Artwork and in the picker, a refusal
+of an artwork endpoint is shown as its own message rather than read as "no image"; the first visit only logs it, and
+stops asking once a slot answers `key_refused`. Refresh Artwork's one toast also names a failed RomM cover refresh after
+the SteamGridDB result, once where both say the same; when the picker opens instead, the cover failure is a toast of its
+own before it.
 
 **When a slot is filled** (`domain/artwork_slot.py`, `is_slot_filled`). A slot already holding an image is left alone,
 whoever set it — an image set by hand is never replaced. It is filled when Steam's grid directory holds a regular file,
@@ -679,16 +686,17 @@ slot whose file is gone is asked again. Rows are keyed by ROM rather than app id
 new app id. The hero is not recorded.
 
 **Which image** (`domain/sgdb_artwork.py`, `choose_candidate`), in the one download path the game page, Refresh Artwork,
-the picker and the shortcut artwork job share (`SteamGridService._fetch_sgdb_artwork_io`, behind the cache check of
-`_download_sgdb_artwork_io` for all but Refresh Artwork). Images are chosen among SteamGridDB's candidates by their
-stated size and never scaled locally — decoding in pure Python takes seconds for a large logo and reads no JPEG or WebP.
-The wide grid and the logo are asked as static images only (`types=static`), the wide grid in its two sizes only, since
-`/grids` also lists the portrait covers. The wide grid prefers 920×430, Valve's own library header size, then 460×215,
-then the first candidate; the logo prefers the first candidate between 640 and 2048 pixels wide, then the first
-candidate: the band keeps SteamGridDB's top-ranked logo unless it is tiny or many times larger than Steam draws it.
-SteamGridDB lists an asset's candidates in its website's "Highest Score (Beta)" order and reports a score of 0 for every
-image, so the first candidate is the best-rated one (checked for one game against the website by the maintainer). A slot
-never stays empty for want of a preferred size.
+the picker and the shortcut artwork job's wide grids and logos share (`SteamGridService._fetch_sgdb_artwork_io`, behind
+the cache check of `_download_sgdb_artwork_io` for all but Refresh Artwork and the picker). The job's icon takes its own
+path (`do_fetch_shortcut_icon`), which takes SteamGridDB's first icon. Images are chosen among SteamGridDB's candidates
+by their stated size and never scaled locally — decoding in pure Python takes seconds for a large logo and reads no JPEG
+or WebP. The wide grid and the logo are asked as static images only (`types=static`), the wide grid in its two sizes
+only, since `/grids` also lists the portrait covers. The wide grid prefers 920×430, Valve's own library header size,
+then 460×215, then the first candidate; the logo prefers the first candidate between 640 and 2048 pixels wide, then the
+first candidate: the band keeps SteamGridDB's top-ranked logo unless it is tiny or many times larger than Steam draws
+it. SteamGridDB lists an asset's candidates in its website's "Highest Score (Beta)" order and reports a score of 0 for
+every image, so the first candidate is the best-rated one (checked for one game against the website by the maintainer).
+A slot never stays empty for want of a preferred size.
 
 **The artwork cache** keeps a downloaded wide grid or logo as `{rom_id}_grid_{image_id}.png` /
 `{rom_id}_logo_{image_id}.png`: the cache is re-derivable and may vanish at any time, so which image it holds lives and

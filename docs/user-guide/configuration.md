@@ -226,8 +226,7 @@ configured". The artwork Tender already downloaded and the images already set in
 
 <!-- Screenshot: SteamGridDB API Key section with the Edit button -->
 
-Without an API key, games will still have cover art from RomM but the hero banner, logo overlay, wide grid image, and
-icon will be missing.
+Without an API key, Tender downloads no hero banner, logo, wide grid image or icon; games still get cover art from RomM.
 
 Tender finds a game on SteamGridDB by the SteamGridDB id your RomM server holds for it. How RomM gets those ids, and
 what to do for a game it has none for, is under
