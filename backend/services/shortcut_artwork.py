@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.artwork_slot import ArtworkSlot
-from domain.artwork_slot_outcome import icon_waits, slot_waits
+from domain.artwork_slot_outcome import icon_waits, logo_icon_waits, slot_waits
 from domain.shortcut_icon import LOGO_ICON_NAME, PLACEHOLDER_ICON_NAME, PLACEHOLDER_ICON_PNG
 from lib.errors import SteamGridDirMissingError
 from models.shortcut_artwork import SlotAnswer
@@ -113,11 +113,12 @@ class ShortcutArtworkServiceConfig:
 
 @dataclass(frozen=True)
 class _Item:
-    """One shortcut's work in a pass: the slots it waits for, in order."""
+    """One shortcut's work in a pass: the slots it waits for, in order, after the logo icon where it waits for that."""
 
     rom_id: int
     app_id: int
     slots: tuple[ArtworkSlot, ...]
+    logo_icon: bool = False
 
 
 @dataclass(frozen=True)
@@ -328,6 +329,7 @@ class ShortcutArtworkService:
     def _log_pass(self, work: list[_Item]) -> None:
         counts = (
             (sum(1 for item in work if ArtworkSlot.ICON in item.slots), "an icon"),
+            (sum(1 for item in work if item.logo_icon), "the logo icon"),
             (sum(1 for item in work if ArtworkSlot.WIDE_GRID in item.slots), "a wide grid"),
             (sum(1 for item in work if ArtworkSlot.LOGO in item.slots), "a logo"),
         )
@@ -417,8 +419,11 @@ class ShortcutArtworkService:
         second: list[_Item] = []
         for app_id, rom in sorted(roms.items(), key=lambda pair: pair[1].rom_id):
             slots = tuple(slot for slot in (ArtworkSlot.ICON, ArtworkSlot.WIDE_GRID) if waits(app_id, rom, slot))
-            if slots:
-                first.append(_Item(rom.rom_id, app_id, slots))
+            logo_icon = app_id in icons and logo_icon_waits(
+                icons[app_id], outcomes[(rom.rom_id, ArtworkSlot.ICON)], sgdb_id=rom.sgdb_id, now=now
+            )
+            if slots or logo_icon:
+                first.append(_Item(rom.rom_id, app_id, slots, logo_icon))
             if waits(app_id, rom, ArtworkSlot.LOGO):
                 second.append(_Item(rom.rom_id, app_id, (ArtworkSlot.LOGO,)))
         return first, second
@@ -444,6 +449,8 @@ class ShortcutArtworkService:
 
     async def _serve(self, item: _Item, batch: list[_Finished | _SlotReady], plan: _Plan) -> _Item | None:
         """Fetch what *item* waits for, in order; answer what is left of it after a 429, else ``None``."""
+        if item.logo_icon:
+            await self._give_logo_icon(item, batch, plan)
         for index, slot in enumerate(item.slots):
             if self._must_stop():
                 return None
@@ -473,6 +480,12 @@ class ShortcutArtworkService:
             if finished is not None:
                 await self._add(batch, finished)
         return True
+
+    async def _give_logo_icon(self, item: _Item, batch: list[_Finished | _SlotReady], plan: _Plan) -> None:
+        """Queue Tender's logo icon for *item*, whose recorded ``none`` was never shown, without asking SteamGridDB."""
+        finished = await self._write(item, SlotAnswer.NONE, self._source.icon_generation(item.app_id), plan)
+        if finished is not None:
+            await self._add(batch, finished)
 
     async def _serve_slot(self, item: _Item, slot: ArtworkSlot, batch: list[_Finished | _SlotReady]) -> bool:
         """Put *item*'s *slot* into the artwork cache and queue it; ``False`` after a 429, so it is asked again."""
@@ -529,7 +542,7 @@ class ShortcutArtworkService:
         *full_only* nothing is taken unless a whole batch waits. Nothing is
         handed over while Steam's renderer stands at or above the session
         budget's ceiling: the run ends there, and what was finished waits for
-        the next run.
+        the next run, as :meth:`_yields_now` says.
         """
         async with self._one_batch_at_a_time:
             if not batch or (full_only and len(batch) < _BATCH_SIZE):
@@ -582,7 +595,13 @@ class ShortcutArtworkService:
             self._no_write.set()
 
     def _yields_now(self) -> bool:
-        """Whether the run must stop here; what it wrote and has not handed over waits for the next run."""
+        """Whether the run must stop here; what it wrote and has not handed over waits for the next run.
+
+        That run finds it not set and gives it again: an image from the
+        artwork cache, and the logo icon without asking SteamGridDB, since a
+        ``none`` recorded for a shortcut still showing no icon does not keep
+        the logo icon back (:func:`domain.artwork_slot_outcome.logo_icon_waits`).
+        """
         if self._stopped or self._must_yield():
             self._stopped = True
         return self._stopped

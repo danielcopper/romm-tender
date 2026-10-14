@@ -5,8 +5,15 @@ from __future__ import annotations
 import pytest
 
 from domain.artwork_slot import ArtworkSlot
-from domain.artwork_slot_outcome import RULED_OUT_SECONDS, ArtworkSlotOutcome, SlotOutcome, icon_waits, slot_waits
-from domain.shortcut_icon import LOGO_ICON_NAME
+from domain.artwork_slot_outcome import (
+    RULED_OUT_SECONDS,
+    ArtworkSlotOutcome,
+    SlotOutcome,
+    icon_waits,
+    logo_icon_waits,
+    slot_waits,
+)
+from domain.shortcut_icon import LOGO_ICON_NAME, PLACEHOLDER_ICON_NAME
 
 NOW = 1_800_000_000.0
 
@@ -133,3 +140,24 @@ class TestWhetherTheJobAsksForAnIcon:
         )
 
         assert _icon_waits(f"{_GRID}/100_icon.png", record, now=NOW + 1)
+
+
+class TestWhetherTheJobGivesTheLogoIconWithoutAsking:
+    @pytest.mark.parametrize("icon", ["", f"{_GRID}/{PLACEHOLDER_ICON_NAME}"], ids=["empty", "placeholder"])
+    def test_a_shortcut_showing_no_icon_whose_none_still_rules_it_out_gets_it(self, icon):
+        assert logo_icon_waits(icon, _icon_none(), sgdb_id=7, now=NOW + 1)
+
+    def test_a_shortcut_already_showing_the_logo_icon_needs_nothing(self):
+        assert not logo_icon_waits(_LOGO_ICON, _icon_none(), sgdb_id=7, now=NOW + 1)
+
+    def test_without_a_record_it_is_asked_instead(self):
+        assert not logo_icon_waits("", None, sgdb_id=7, now=NOW + 1)
+
+    def test_once_the_none_no_longer_rules_it_out_it_is_asked_instead(self):
+        assert not logo_icon_waits("", _icon_none(), sgdb_id=7, now=NOW + RULED_OUT_SECONDS)
+        assert not logo_icon_waits("", _icon_none(), sgdb_id=8, now=NOW + 1)
+
+    def test_a_refused_icon_is_not_given_the_logo_icon(self):
+        refused = ArtworkSlotOutcome.record_refused(rom_id=1, slot=ArtworkSlot.ICON, sgdb_id=7, recorded_at=NOW)
+
+        assert not logo_icon_waits("", refused, sgdb_id=7, now=NOW + 1)

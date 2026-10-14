@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 from domain._aggregate import cosmic_aggregate
 from domain.artwork_slot import RECORDED_SLOTS, ArtworkSlot, is_slot_filled
-from domain.shortcut_icon import is_icon_filled
+from domain.shortcut_icon import is_icon_filled, shows_no_icon
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable
@@ -152,6 +152,19 @@ def icon_waits(
     if is_icon_filled(icon, grid_dir, file_names):
         return False
     return _not_ruled_out(recorded, sgdb_id=sgdb_id, now=now)
+
+
+def logo_icon_waits(icon: str, recorded: ArtworkSlotOutcome | None, *, sgdb_id: int | None, now: float) -> bool:
+    """Whether the shortcut artwork job gives a shortcut Tender's logo icon at *now*, without asking SteamGridDB.
+
+    It does while *icon* shows no icon — empty or the placeholder — and
+    *recorded*, the ROM's icon outcome, is a ``none`` that still rules the slot
+    out for *sgdb_id*: the week rules out asking again, not showing the logo, so
+    a logo icon that never reached Steam is given at the next run.
+    """
+    if not shows_no_icon(icon) or recorded is None or recorded.outcome is not SlotOutcome.NONE:
+        return False
+    return recorded.rules_out(sgdb_id=sgdb_id, now=now)
 
 
 def _not_ruled_out(recorded: ArtworkSlotOutcome | None, *, sgdb_id: int | None, now: float) -> bool:

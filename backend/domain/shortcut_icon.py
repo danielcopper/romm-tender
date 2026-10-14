@@ -30,6 +30,7 @@ PLACEHOLDER_ICON_PNG = bytes.fromhex(
 """A 1x1 PNG whose one pixel is fully transparent: an empty spot in the list, not a grey box."""
 
 _STAND_IN_NAMES = frozenset({"", PLACEHOLDER_ICON_NAME, LOGO_ICON_NAME})
+_NO_ICON_NAMES = frozenset({"", PLACEHOLDER_ICON_NAME})
 
 
 def is_icon_filled(icon: str, grid_dir: str, file_names: Collection[str] | None) -> bool:
@@ -49,3 +50,8 @@ def is_icon_filled(icon: str, grid_dir: str, file_names: Collection[str] | None)
     if posixpath.normpath(directory) != posixpath.normpath(grid_dir):
         return True
     return file_names is None or name in file_names
+
+
+def shows_no_icon(icon: str) -> bool:
+    """Whether *icon*, a shortcut's icon path in ``shortcuts.vdf``, is empty or the placeholder, in any directory."""
+    return icon.rpartition("/")[2] in _NO_ICON_NAMES

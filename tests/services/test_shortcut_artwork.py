@@ -1416,6 +1416,69 @@ class TestTheIconIsARecordedSlot:
         await job.run()
 
         assert job.source.fetched == []
+        assert job.sink.events == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("icon", ["", _PLACEHOLDER], ids=["empty", "placeholder"])
+    async def test_a_shortcut_still_showing_no_icon_within_the_week_gets_the_logo_icon_without_a_request(self, icon):
+        job = _Job(icons={100: icon}, bound={100: 1}, sgdb_ids={1: 7})
+        _record_icon_none(job, sgdb_id=7, at=job.clock.time() - RULED_OUT_SECONDS + 1)
+
+        await job.run()
+
+        assert job.source.fetched == []
+        assert job.batches() == [[{"app_id": 100, "icon_path": _LOGO}]]
+
+    @pytest.mark.asyncio
+    async def test_a_logo_icon_lost_on_its_way_to_steam_is_given_at_the_next_run_without_a_request(self):
+        job = _Job(icons={100: _PLACEHOLDER}, bound={100: 1}, sgdb_ids={1: 7})
+        job.source.answer(1, SlotAnswer.NONE)
+
+        def record_none_then_a_sync_starts(rom_id: int, slot: ArtworkSlot) -> None:
+            with job.uow:
+                job.uow.artwork_slot_outcomes.save(
+                    ArtworkSlotOutcome.record_none(rom_id=rom_id, slot=slot, sgdb_id=7, recorded_at=job.clock.time())
+                )
+            job.sync_running = True
+
+        job.source.on_slot_none = record_none_then_a_sync_starts
+
+        await job.run()
+        assert job.sink.events == []
+        job.sync_running = False
+        await job.run()
+
+        assert job.source.fetched == [1]
+        assert job.delivered() == {100: _LOGO}
+
+    @pytest.mark.asyncio
+    async def test_a_logo_icon_that_could_not_be_read_is_given_once_it_can_be_without_a_request(self):
+        job = _Job(icons={100: _PLACEHOLDER}, bound={100: 1}, sgdb_ids={1: 7}, logo=None)
+        job.source.answer(1, SlotAnswer.NONE)
+        job.source.on_slot_none = lambda rom_id, slot: _record_icon_none(job, sgdb_id=7, at=job.clock.time())
+
+        await job.run()
+        assert job.sink.events == []
+        job.service._tender_logo = lambda: b"logo"
+        await job.run()
+
+        assert job.source.fetched == [1]
+        assert job.delivered() == {100: _LOGO}
+
+    @pytest.mark.asyncio
+    async def test_a_refused_icon_within_the_week_is_not_given_the_logo_icon(self):
+        job = _Job(icons={100: _PLACEHOLDER}, bound={100: 1}, sgdb_ids={1: 7})
+        with job.uow:
+            job.uow.artwork_slot_outcomes.save(
+                ArtworkSlotOutcome.record_refused(
+                    rom_id=1, slot=ArtworkSlot.ICON, sgdb_id=7, recorded_at=job.clock.time()
+                )
+            )
+
+        await job.run()
+
+        assert job.source.fetched == []
+        assert job.sink.events == []
 
     @pytest.mark.asyncio
     async def test_a_logo_icon_steamgriddb_had_none_for_is_fetched_once_the_week_is_over(self):
