@@ -654,12 +654,11 @@ SteamGridDB may have new images by now.
 
 When you tap **Refresh Artwork**, Tender asks your RomM server which SteamGridDB game the ROM maps to and applies the
 hero banner, logo, wide grid, and icon for that game. **RomM is the source of truth**: whenever your server has a
-SteamGridDB id for a game, that id wins — on both sync and refresh. If RomM has no id, Tender tries to derive one from
-the game's IGDB id. Only when neither resolves a SteamGridDB game does a picker open, where you search SteamGridDB by
-name and choose from the results (with thumbnails). A name pick is applied immediately but is **not permanent** — once
-your RomM server has a SteamGridDB id for that game, that id takes over. Because a manual pick isn't stored as the
-resolved id, you can change it any time: just tap **Refresh Artwork** again and the picker reopens. To pin a specific
-match for good, set the SteamGridDB id on the game in RomM.
+SteamGridDB id for a game, that id wins — on both sync and refresh. Where RomM's id comes from, and how to give RomM
+one, is under [Game not found on SteamGridDB](troubleshooting.md#game-not-found-on-steamgriddb). If RomM has no id, a
+picker opens, where you search SteamGridDB by name and choose from the results (with thumbnails). A name pick is applied
+immediately. Because a manual pick isn't stored as the resolved id, you can change it any time: just tap **Refresh
+Artwork** again and the picker reopens. To pin a specific match for good, set the SteamGridDB id on the game in RomM.
 
 The full set of per-game actions — refresh artwork, refresh metadata, sync save files, download BIOS, and uninstall — is
 available from the RomM Actions menu in the game detail panel.

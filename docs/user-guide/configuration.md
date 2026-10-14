@@ -226,6 +226,10 @@ To set this up:
 Without an API key, games will still have cover art from RomM but the hero banner, logo overlay, wide grid image, and
 icon will be missing.
 
+Tender finds a game on SteamGridDB by the SteamGridDB id your RomM server holds for it. How RomM gets those ids, and
+what to do for a game it has none for, is under
+[Game not found on SteamGridDB](troubleshooting.md#game-not-found-on-steamgriddb).
+
 ## Steam Input Mode
 
 Controls how Steam handles controller input for ROM shortcuts. Found in **Settings › Controller**.

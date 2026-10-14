@@ -738,22 +738,21 @@ the game page.
   search and among recent games, and neither should wait for the other; a logo shows only on the game page, which fills
   an empty one itself on opening. The number of requests is the same in any order.
 - **One icon:** `SteamGridService.do_fetch_shortcut_icon` serves it from the artwork cache first. A ROM with no
-  SteamGridDB id stored is resolved through its stored IGDB id, and the id is saved as **Refresh Artwork** saves it; no
-  name search runs, since picking from one needs a person. The fetch answers the icon downscaled, and the job writes it
-  as `{app_id}_icon.png`. A file the downscale cannot read — a page in place of an image, a truncated PNG — is a failure
-  and leaves the artwork cache, so the next run downloads it again; the game page writes such a file as it came, with a
-  warning.
+  SteamGridDB id stored answers "no icon" without a request; no name search runs, since picking from one needs a person.
+  The fetch answers the icon downscaled, and the job writes it as `{app_id}_icon.png`. A file the downscale cannot read
+  — a page in place of an image, a truncated PNG — is a failure and leaves the artwork cache, so the next run downloads
+  it again; the game page writes such a file as it came, with a warning.
 - **One wide grid or logo:** `SteamGridService.do_fetch_slot_artwork` puts SteamGridDB's image into the artwork cache by
   the rule the game page uses ("Which image", above) and answers that it is ready; no bytes leave the backend here. A
   ROM with no SteamGridDB id stored gets a `none` record without a request; a game SteamGridDB has no candidate for, or
   does not know (a 404), gets one too. The record keeps the slot off the worklist for a week. A failure records nothing,
   so the next run asks again.
-- **No icon:** a game SteamGridDB has no icon for, or one no SteamGridDB game can be found for, gets Tender's logo —
-  `tender-icon.png`, shipped in `defaults/` and copied into the grid directory. The job does not ask again; **Refresh
-  Artwork** does, and so does the game page's passive artwork apply the first time the page is opened in a session, for
-  a game whose SteamGridDB id is known. Where the logo cannot be read, that is logged, and the shortcut keeps its
-  placeholder and stays on the worklist. A timeout, an answer that says it failed, or any other failure is not "no
-  icon": the shortcut stays on the worklist and the next run asks again.
+- **No icon:** a game SteamGridDB has no icon for, one with no SteamGridDB id stored, or one whose id SteamGridDB does
+  not know, gets Tender's logo — `tender-icon.png`, shipped in `defaults/` and copied into the grid directory. The job
+  does not ask again; **Refresh Artwork** does, and so does the game page's passive artwork apply the first time the
+  page is opened in a session, for a game whose SteamGridDB id is known. Where the logo cannot be read, that is logged,
+  and the shortcut keeps its placeholder and stays on the worklist. A timeout, an answer that says it failed, or any
+  other failure is not "no icon": the shortcut stays on the worklist and the next run asks again.
 - **Pace:** four shortcuts at a time. A 429 from SteamGridDB's API or its image CDN (`SgdbRateLimitedError`) pauses
   every worker: 30 s, twice as long at each 429 in a row, at most 15 minutes, then on, with only what the 429 met asked
   again; every run starts the pause over. A 401 or 403 from the API — a key SteamGridDB does not accept — ends the run
