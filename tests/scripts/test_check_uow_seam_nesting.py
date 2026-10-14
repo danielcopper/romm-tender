@@ -422,6 +422,7 @@ class TestIoSeamsViolations:
             "_platform_firmware_resolver",
             "_firmware_resolver",
             "_resolve_path",
+            "_renderer_above_ceiling",
         ],
     )
     def test_call_shaped_seams_are_matched_by_their_holding_attribute(self, attribute: str):
@@ -438,6 +439,20 @@ class TestIoSeamsViolations:
         )
         assert len(findings) == 1
         assert attribute in findings[0]
+        assert "file-I/O seam" in findings[0]
+
+    @pytest.mark.parametrize("method", ["read_shortcut_icons", "grid_file_names", "renderer_above_ceiling"])
+    def test_every_read_the_shortcut_icon_job_makes_inside_uow_is_flagged(self, method: str):
+        findings = check.scan_source(
+            "class S:\n"
+            "    def go(self):\n"
+            "        with self._uow_factory() as uow:\n"
+            f"            answer = self._peer.{method}()\n"
+            "        return answer\n",
+            "svc.py",
+        )
+        assert len(findings) == 1
+        assert method in findings[0]
         assert "file-I/O seam" in findings[0]
 
     def test_io_seam_inside_try_within_uow_is_flagged(self):

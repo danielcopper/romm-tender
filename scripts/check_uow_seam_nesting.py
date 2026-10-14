@@ -78,13 +78,15 @@ seams are closed the cheap way instead: every consumer in ``services/`` binds
 each to one attribute, and that attribute name is what the list carries. A
 leading underscore marks an attribute a service binds rather than a method a
 Protocol names, and the list carries two kinds of them. The call-shaped seams
-are six today: ``_sandbox_launcher``, ``_system_extensions``,
-``_system_known``, ``_platform_firmware_resolver``, ``_firmware_resolver`` and
-``_resolve_path``. One of those six is listed a second time under its
-implementation's own method name, for a peer that holds the object rather than
-the bound method: ``EsFindRulesAdapter.resolve_sandbox_launcher`` beside
-``_sandbox_launcher``. The name is plainly not the attribute minus its
-underscore, which is the point: a twin exists when the implementation has a
+are seven today: ``_sandbox_launcher``, ``_system_extensions``,
+``_system_known``, ``_platform_firmware_resolver``, ``_firmware_resolver``,
+``_resolve_path`` and ``_renderer_above_ceiling``. Two of those seven are
+listed a second time under their implementation's own method name, for a peer
+that holds the object rather than the bound method:
+``EsFindRulesAdapter.resolve_sandbox_launcher`` beside ``_sandbox_launcher``,
+and ``LibraryService.renderer_above_ceiling`` beside
+``_renderer_above_ceiling``. The first name is plainly not the attribute minus
+its underscore, which is the point: a twin exists when the implementation has a
 method name a peer could write, and it has to be read off the implementation
 rather than derived from the attribute. The other five seams have no such twin.
 That is a convention, not a guarantee — a
@@ -246,6 +248,11 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # write_shortcut_icon() from services/steamgrid.py.
         "read_shortcut_exes",
         "read_shortcut_launch_options",
+        # SteamConfigStore.read_shortcut_icons — the same whole-file parse, for
+        # every shortcut's icon, which the shortcut icon job's worklist is
+        # derived from. Its one call site names it plainly, so this entry is
+        # enforced there.
+        "read_shortcut_icons",
         # SteamConfigStore.grid_file_names — lists Steam's grid directory and
         # stats every entry that is a link, to answer which artwork slots a
         # shortcut already has.
@@ -316,6 +323,15 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # documented above, so the entry states the rule rather than enforcing
         # it — and is here for the call site that writes it plainly.
         "bundle_inventory",
+        # RendererAboveCeilingProvider (services/protocols/cross_service.py) —
+        # the shortcut icon job's reading of Steam's renderer memory before each
+        # batch, through the sync's SessionBudgetMonitor: a /proc read, and above
+        # 1.5 GB a garbage collection over Steam's debugger (about five seconds)
+        # and a second read. Call-shaped, so the list carries the attribute the
+        # job binds it to, and beside it LibraryService.renderer_above_ceiling,
+        # the method a peer holding the library service would write.
+        "_renderer_above_ceiling",
+        "renderer_above_ceiling",
     }
 )
 
