@@ -780,10 +780,10 @@ class ShortcutArtworkSource(Protocol):
         """Write *rom_id*'s cached icon, downscaled, for *app_id*, unless the game page saved one since *generation*.
 
         Answers what was written; ``None`` when the page saved an icon since,
-        when the cache holds no icon for the ROM, when the downscale cannot
-        read it (it then leaves the cache), or when the cached file could not
-        be read or the icon could not be written — or the cache or the
-        database could not be read on the way; each is logged, never raised.
+        when the cache holds no icon for the ROM, or on a failure, which is
+        logged and never raised: the downscale cannot read the icon (it then
+        leaves the cache), the cache, the cached file or the database cannot
+        be read, or the icon cannot be written.
         """
         ...
 
