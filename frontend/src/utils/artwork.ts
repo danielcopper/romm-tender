@@ -150,9 +150,9 @@ async function applySgdbArtwork(romId: number, appId: number): Promise<number | 
 
       // SGDB types 1-3 (hero / logo / wide grid) map 1:1 to Steam capsule assetTypes 1-3.
       // The wide grid and the logo are recorded as the fill path records them;
-      // the hero and the icon are not. The awaits are sequential by design, one image at a
-      // time; S9382 is raised on the slot's await line, so its NOSONAR stays
-      // there.
+      // the hero and the icon are not. The awaits are sequential by design, one
+      // image at a time; S9382 is raised on the slot's await line, so its
+      // NOSONAR stays there.
       const customArt: Array<[answer: SgdbArtwork, assetType: number, slot: RecordedSlot | null]> = [
         [results[0], 1, null],
         [results[1], 2, "logo"],
