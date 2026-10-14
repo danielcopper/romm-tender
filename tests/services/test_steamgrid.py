@@ -326,15 +326,14 @@ class TestGetSgdbArtworkBase64:
         steamgrid.service._loop = asyncio.get_running_loop()
 
         # roms is empty — no row carries an sgdb_id for rom 42.
-        # RomM/IGDB would resolve if (incorrectly) consulted — they must not be.
+        # RomM would resolve if (incorrectly) consulted — it must not be.
         fake_romm_api.roms[42] = {"id": 42, "sgdb_id": 9999}
-        fake_steamgrid_db_api.seed_igdb_lookup(igdb_id=1234, sgdb_id=9999)
 
         result = await steamgrid.service.get_sgdb_artwork_base64(42, 1)
 
         assert result["base64"] is None
         assert result["no_api_key"] is False
-        # No RomM read and no IGDB cross-ref happened on the passive path.
+        # No RomM read and no IGDB request happened on the passive path.
         assert not any(name == "get_rom" for name, _a, _k in fake_romm_api.call_log)
         assert not any(p.startswith("/games/igdb/") for p in fake_steamgrid_db_api.requested_paths)
 
@@ -393,15 +392,13 @@ class TestGetSgdbArtworkBase64:
         # ROM with sgdb_id already cached on its row.
         _seed_rom(uow, 42, app_id=100001, sgdb_id=9999, name="Zelda")
 
-        # Grid artwork available for the cached SGDB id; IGDB lookup
-        # would resolve to a different id if (incorrectly) consulted.
-        fake_steamgrid_db_api.seed_igdb_lookup(igdb_id=1234, sgdb_id=7777)
+        # Grid artwork available for the cached SGDB id.
         fake_steamgrid_db_api.seed_artwork(9999, "grid", "https://example.com/grid.png")
         fake_steamgrid_db_api.seed_image_bytes("https://example.com/grid.png", b"grid data")
 
         result = await steamgrid.service.get_sgdb_artwork_base64(42, 3)  # 3 = grid
 
-        # IGDB lookup must NOT be consulted when sgdb_id is cached.
+        # No IGDB request is sent when sgdb_id is cached.
         assert not any(p.startswith("/games/igdb/") for p in fake_steamgrid_db_api.requested_paths)
         # The artwork request must use the cached sgdb_id (9999), not 7777.
         assert any("/grids/game/9999" in p for p in fake_steamgrid_db_api.requested_paths)
@@ -539,8 +536,7 @@ class TestGetSgdbResolution:
     """The picker-driven resolution cascade in ``get_sgdb_resolution``.
 
     Exercises every ``classify_resolution`` branch (RomM is the source of
-    truth) plus the unresolved fall-through to IGDB cross-ref and the
-    name-search picker.
+    truth) plus the unresolved fall-through to the name-search picker.
     """
 
     @pytest.mark.asyncio
@@ -608,28 +604,12 @@ class TestGetSgdbResolution:
         assert uow.roms.save_count == save_count_before
 
     @pytest.mark.asyncio
-    async def test_unresolved_igdb_resolves_and_persists(self, steamgrid, uow, fake_romm_api, fake_steamgrid_db_api):
-        steamgrid.settings["steamgriddb_api_key"] = "some-key"
-        steamgrid.service._loop = asyncio.get_running_loop()
-
-        _seed_rom(uow, 42, app_id=1, name="Zelda")
-        # No sgdb_id anywhere, but RomM has an igdb_id that cross-refs.
-        fake_romm_api.roms[42] = {"id": 42, "igdb_id": 1234, "name": "Zelda"}
-        fake_steamgrid_db_api.seed_igdb_lookup(igdb_id=1234, sgdb_id=5555)
-
-        result = await steamgrid.service.get_sgdb_resolution(42)
-
-        assert result == {"decision": "resolved", "sgdb_id": 5555}
-        with uow:
-            assert uow.roms.get(42).sgdb_id == 5555
-
-    @pytest.mark.asyncio
     async def test_unresolved_needs_pick_with_candidates(self, steamgrid, uow, fake_romm_api, fake_steamgrid_db_api):
         steamgrid.settings["steamgriddb_api_key"] = "some-key"
         steamgrid.service._loop = asyncio.get_running_loop()
 
         _seed_rom(uow, 42, app_id=1)
-        # No sgdb_id, no igdb_id → name search.
+        # No sgdb_id → name search.
         fake_romm_api.roms[42] = {"id": 42, "name": "Zelda"}
 
         fake_steamgrid_db_api.seed_raw_response(
@@ -646,21 +626,26 @@ class TestGetSgdbResolution:
         assert result["candidates"] == [{"id": 100, "name": "Zelda", "release_year": 2009, "thumb_url": "z-thumb.png"}]
 
     @pytest.mark.asyncio
-    async def test_unresolved_igdb_lookup_fails_falls_through_to_pick(
-        self, steamgrid, fake_romm_api, fake_steamgrid_db_api
+    async def test_an_igdb_id_without_a_steamgriddb_id_asks_only_the_name_search(
+        self, steamgrid, uow, fake_romm_api, fake_steamgrid_db_api
     ):
         steamgrid.settings["steamgriddb_api_key"] = "some-key"
         steamgrid.service._loop = asyncio.get_running_loop()
 
-        fake_romm_api.roms[42] = {"id": 42, "igdb_id": 1234, "name": "Obscure Port"}
-        # IGDB cross-ref has no match.
-        fake_steamgrid_db_api.seed_igdb_lookup(igdb_id=1234, sgdb_id=None)
-        # Name search yields nothing.
-        fake_steamgrid_db_api.seed_raw_response("/search/autocomplete/Obscure%20Port", {"success": True, "data": []})
+        _seed_rom(uow, 42, app_id=1, name="Zelda")
+        fake_romm_api.roms[42] = {"id": 42, "igdb_id": 1234, "name": "Zelda"}
+        fake_steamgrid_db_api.seed_raw_response(
+            "/search/autocomplete/Zelda",
+            {"success": True, "data": [{"id": 100, "name": "Zelda", "release_date": 1234567890}]},
+        )
+        fake_steamgrid_db_api.seed_raw_response(
+            "/grids/game/100", {"success": True, "data": [{"thumb": "z-thumb.png"}]}
+        )
 
         result = await steamgrid.service.get_sgdb_resolution(42)
 
-        assert result == {"decision": "needs_pick", "candidates": []}
+        assert result["decision"] == "needs_pick"
+        assert fake_steamgrid_db_api.requested_paths == ["/search/autocomplete/Zelda", "/grids/game/100?limit=1"]
 
     @pytest.mark.asyncio
     async def test_a_refused_name_search_still_opens_the_picker_with_no_candidates(
@@ -908,8 +893,8 @@ class TestApplySgdbGameId:
         """Regression for #755: a manual pick leaves a later refresh on ``needs_pick``.
 
         Because the pick persists no sgdb_id, a subsequent
-        ``get_sgdb_resolution`` for the same rom — RomM still silent, no
-        IGDB match — falls through to the name-search picker instead of
+        ``get_sgdb_resolution`` for the same rom — RomM still silent —
+        falls through to the name-search picker instead of
         resolving the (no-longer-stored) manual id. Pre-fix the pick
         stored the id and this returned ``resolved``, dead-ending the
         re-pick.
@@ -922,7 +907,7 @@ class TestApplySgdbGameId:
 
         await steamgrid.service.apply_sgdb_game_id(42, 8888)
 
-        # RomM still has no sgdb_id and no igdb_id; name search yields nothing.
+        # RomM still has no sgdb_id; name search yields nothing.
         fake_romm_api.roms[42] = {"id": 42, "name": "Obscure Port"}
         fake_steamgrid_db_api.seed_raw_response("/search/autocomplete/Obscure%20Port", {"success": True, "data": []})
 
@@ -1301,58 +1286,6 @@ class TestDebugLoggerProtocolSeam:
         )
 
 
-class TestGetSgdbGameId:
-    """SGDB IGDB-lookup error paths in ``_get_sgdb_game_id``.
-
-    Covers the response-shape branches and the ``except Exception`` net
-    that protects the artwork pipeline from a transient SGDB outage.
-    """
-
-    def test_returns_id_on_success(self, steamgrid, fake_steamgrid_db_api):
-        fake_steamgrid_db_api.seed_raw_response(
-            "/games/igdb/1234",
-            {"success": True, "data": {"id": 9999}},
-        )
-
-        result = steamgrid.service._get_sgdb_game_id(1234)
-
-        assert result == 9999
-        assert fake_steamgrid_db_api.requested_paths == ["/games/igdb/1234"]
-
-    def test_returns_none_when_success_false(self, steamgrid, fake_steamgrid_db_api):
-        """SGDB body with success=False (e.g. unknown IGDB id) → None."""
-        fake_steamgrid_db_api.seed_raw_response(
-            "/games/igdb/1234",
-            {"success": False, "data": {"id": 9999}},
-        )
-
-        assert steamgrid.service._get_sgdb_game_id(1234) is None
-
-    def test_returns_none_when_data_missing(self, steamgrid, fake_steamgrid_db_api):
-        """SGDB body lacking ``data`` (malformed) → None."""
-        fake_steamgrid_db_api.seed_raw_response("/games/igdb/1234", {"success": True})
-
-        assert steamgrid.service._get_sgdb_game_id(1234) is None
-
-    def test_returns_none_when_response_is_none(self, steamgrid, fake_steamgrid_db_api):
-        """Adapter returns ``None`` (e.g. empty body) → None."""
-        fake_steamgrid_db_api.seed_raw_response("/games/igdb/1234", None)
-
-        assert steamgrid.service._get_sgdb_game_id(1234) is None
-
-    def test_sgdb_api_error_swallowed(self, steamgrid, fake_steamgrid_db_api):
-        """``SgdbApiError`` (4xx/5xx) is logged and swallowed → None."""
-        fake_steamgrid_db_api.request_side_effect = SgdbApiError(503, "Service Unavailable")
-
-        assert steamgrid.service._get_sgdb_game_id(1234) is None
-
-    def test_network_error_swallowed(self, steamgrid, fake_steamgrid_db_api):
-        """Connection-level errors are logged and swallowed → None."""
-        fake_steamgrid_db_api.request_side_effect = ConnectionError("connection refused")
-
-        assert steamgrid.service._get_sgdb_game_id(1234) is None
-
-
 class TestDownloadSgdbArtwork:
     """SGDB artwork-download error paths in ``_download_sgdb_artwork``.
 
@@ -1658,7 +1591,7 @@ class TestTheJobsWriteAndAPickOnTheGamePage:
         assert steamgrid.service.icon_generation(8) == 0
 
 
-def _seed_rom_with_ids(uow, rom_id, *, sgdb_id=None, igdb_id=None):
+def _seed_rom_with_ids(uow, rom_id, *, sgdb_id=None):
     with uow:
         uow.roms.save(
             Rom(
@@ -1669,7 +1602,6 @@ def _seed_rom_with_ids(uow, rom_id, *, sgdb_id=None, igdb_id=None):
                 shortcut_app_id=100 + rom_id,
                 last_synced_at="2025-01-01T00:00:00",
                 sgdb_id=sgdb_id,
-                igdb_id=igdb_id,
             )
         )
 
@@ -1735,29 +1667,30 @@ class TestFetchShortcutIcon:
         assert (fetch.answer, fetch.data) == (IconAnswer.ICON, b"icon five")
         assert sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 1, "icon")] == b"icon five"
 
-    def test_resolves_a_missing_id_through_igdb_and_saves_it(self, steamgrid, uow, fake_steamgrid_db_api):
-        _seed_rom_with_ids(uow, 1, igdb_id=77)
-        fake_steamgrid_db_api.seed_igdb_lookup(77, 5)
-        fake_steamgrid_db_api.seed_artwork(5, "icon", "https://cdn/icon5.png")
-        fake_steamgrid_db_api.seed_image_bytes("https://cdn/icon5.png", b"icon five")
-
-        fetch = steamgrid.service.do_fetch_shortcut_icon(1)
-
-        assert fetch.answer is IconAnswer.ICON
-        assert uow.roms.get(1).sgdb_id == 5
-
     def test_a_rom_with_neither_id_has_no_icon(self, steamgrid, uow, fake_steamgrid_db_api):
         _seed_rom_with_ids(uow, 1)
 
         assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.NO_ICON
         assert fake_steamgrid_db_api.requested_paths == []
 
-    def test_an_igdb_id_steamgriddb_has_no_game_for_has_no_icon(self, steamgrid, uow, fake_steamgrid_db_api):
-        _seed_rom_with_ids(uow, 1, igdb_id=77)
-        fake_steamgrid_db_api.seed_igdb_lookup(77, None)
+    def test_an_igdb_id_without_a_steamgriddb_id_has_no_icon_and_asks_nothing(
+        self, steamgrid, uow, fake_steamgrid_db_api
+    ):
+        with uow:
+            uow.roms.save(
+                Rom(
+                    rom_id=1,
+                    platform_slug="n64",
+                    name="Game",
+                    fs_name="Game.z64",
+                    shortcut_app_id=101,
+                    last_synced_at="2025-01-01T00:00:00",
+                    igdb_id=77,
+                )
+            )
 
         assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.NO_ICON
-        assert uow.roms.get(1).sgdb_id is None
+        assert fake_steamgrid_db_api.requested_paths == []
 
     def test_a_game_with_no_icon_has_no_icon(self, steamgrid, uow, fake_steamgrid_db_api):
         _seed_rom_with_ids(uow, 1, sgdb_id=5)
@@ -1782,23 +1715,6 @@ class TestFetchShortcutIcon:
         assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.FAILED
         assert fake_steamgrid_db_api.requested_paths == ["/icons/game/5"]
 
-    def test_an_igdb_answer_that_says_it_failed_establishes_nothing(
-        self, steamgrid, uow, fake_steamgrid_db_api, caplog
-    ):
-        _seed_rom_with_ids(uow, 1, igdb_id=77)
-        fake_steamgrid_db_api.seed_raw_response("/games/igdb/77", {"success": False, "errors": ["oops"]})
-
-        with caplog.at_level(logging.WARNING):
-            assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.FAILED
-        assert uow.roms.get(1).sgdb_id is None
-        assert "SGDB icon fetch failed" not in caplog.text
-        assert steamgrid.service._cross_ref_igdb_io(1) is IconAnswer.FAILED
-
-    def test_no_igdb_answer_at_all_establishes_nothing(self, steamgrid, uow, fake_steamgrid_db_api):
-        _seed_rom_with_ids(uow, 1, igdb_id=77)
-
-        assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.FAILED
-
     @pytest.mark.parametrize("status", [401, 403])
     def test_a_refused_key_answers_key_refused_and_leaves_the_warning_to_the_job(
         self, steamgrid, uow, fake_steamgrid_db_api, status, caplog
@@ -1817,18 +1733,14 @@ class TestFetchShortcutIcon:
 
         assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.NO_ICON
 
-    @pytest.mark.parametrize("where", ["api", "cdn", "igdb"])
+    @pytest.mark.parametrize("where", ["api", "cdn"])
     def test_a_429_anywhere_answers_rate_limited(self, steamgrid, uow, fake_steamgrid_db_api, where):
-        if where == "igdb":
-            _seed_rom_with_ids(uow, 1, igdb_id=77)
+        _seed_rom_with_ids(uow, 1, sgdb_id=5)
+        fake_steamgrid_db_api.seed_artwork(5, "icon", "https://cdn/icon5.png")
+        if where == "api":
             fake_steamgrid_db_api.request_side_effect = SgdbRateLimitedError("Too Many Requests")
         else:
-            _seed_rom_with_ids(uow, 1, sgdb_id=5)
-            fake_steamgrid_db_api.seed_artwork(5, "icon", "https://cdn/icon5.png")
-            if where == "api":
-                fake_steamgrid_db_api.request_side_effect = SgdbRateLimitedError("Too Many Requests")
-            else:
-                fake_steamgrid_db_api.download_image_side_effect = SgdbRateLimitedError("Too Many Requests")
+            fake_steamgrid_db_api.download_image_side_effect = SgdbRateLimitedError("Too Many Requests")
 
         assert steamgrid.service.do_fetch_shortcut_icon(1).answer is IconAnswer.RATE_LIMITED
 

@@ -547,8 +547,8 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         detach(debugLog(`refreshCoverArtwork failed: ${coverResult.reason} — ${coverResult.message}`));
       }
 
-      // Step 2: resolve which SGDB game id to use. The backend either picks
-      // one automatically (RomM/IGDB) or hands back manual candidates.
+      // Step 2: resolve which SGDB game id to use. The backend either takes
+      // the stored or RomM's id or hands back manual candidates.
       const resolution = await getSgdbResolution(romId).catch((e): null => {
         detach(debugLog(`getSgdbResolution rejected: ${e}`));
         return null;

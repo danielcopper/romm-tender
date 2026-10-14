@@ -776,13 +776,12 @@ class ShortcutArtworkSource(Protocol):
     def do_fetch_shortcut_icon(self, rom_id: int) -> IconFetch:
         """Fetch *rom_id*'s SteamGridDB icon, from the cache first, downscale it, and say what came of it.
 
-        A ROM with no SteamGridDB id stored is resolved through its stored
-        IGDB id, and an id found that way is saved as Refresh Artwork saves it.
-        No game, or a game SteamGridDB holds no icon for, answers ``NO_ICON``;
-        a 429 from the API or the image CDN ``RATE_LIMITED``; a 401 or 403 from
-        the API ``KEY_REFUSED``, which the caller logs; anything else that went
-        wrong ``FAILED``, and so does an icon the downscale cannot read, which
-        leaves the cache. Synchronous — callers on the loop offload it.
+        A ROM with no SteamGridDB id stored answers ``NO_ICON`` without a
+        request, and so does a game SteamGridDB does not know or holds no icon
+        for; a 429 from the API or the image CDN ``RATE_LIMITED``; a 401 or 403
+        from the API ``KEY_REFUSED``, which the caller logs; anything else that
+        went wrong ``FAILED``, and so does an icon the downscale cannot read,
+        which leaves the cache. Synchronous — callers on the loop offload it.
         """
         ...
 

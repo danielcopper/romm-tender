@@ -7,9 +7,6 @@ in ``services.protocols.transport`` (``request``, ``download_image``,
 
 Seed in-memory state through the typed helpers:
 
-- ``seed_igdb_lookup(igdb_id, sgdb_id)`` — register an IGDB-to-SGDB
-  match so ``request("/games/igdb/{igdb_id}")`` returns the canonical
-  ``{"success": True, "data": {"id": sgdb_id}}`` payload.
 - ``seed_artwork(sgdb_game_id, asset_type, image_url, image_id=None)`` —
   register an artwork URL so the matching ``request("/{endpoint}/game/{id}...")``
   call returns ``{"success": True, "data": [{"id": image_id, "url": image_url}]}``.
@@ -116,18 +113,6 @@ class FakeSteamGridDbApi:
         dimensions query string appended to ``/grids/game/{id}`` paths.
         """
         self._responses[path] = body
-
-    def seed_igdb_lookup(self, igdb_id: int, sgdb_id: int | None) -> None:
-        """Register an IGDB-to-SGDB resolution.
-
-        Passing ``None`` for *sgdb_id* registers a "not found" response
-        (``{"success": True, "data": None}``).
-        """
-        path = f"/games/igdb/{igdb_id}"
-        if sgdb_id is None:
-            self._responses[path] = {"success": True, "data": None}
-        else:
-            self._responses[path] = {"success": True, "data": {"id": sgdb_id}}
 
     def seed_artwork(self, sgdb_game_id: int, asset_type: str, image_url: str, image_id: int | None = None) -> None:
         """Register an artwork URL for ``request("/{endpoint}/game/{id}...")``, as SteamGridDB image *image_id*.

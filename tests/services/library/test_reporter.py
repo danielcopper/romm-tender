@@ -974,7 +974,7 @@ class TestCommitUnitResults:
             assert uow.roms.get(20) is not None
 
     def test_commit_preserves_out_of_band_sgdb_id_on_resync(self, library):
-        """An sgdb_id resolved out-of-band (e.g. IGDB cross-ref) survives a re-sync
+        """An sgdb_id resolved out-of-band (e.g. by Refresh Artwork) survives a re-sync
         whose pending entry has sgdb_id=None — the live RomM fetch never carries it.
 
         Regression of #746's _merge_optional_id contract: a blind upsert would

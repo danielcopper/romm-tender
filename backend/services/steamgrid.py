@@ -110,7 +110,7 @@ class SteamGridServiceConfig:
     Holds the Protocol-typed adapters (``sgdb_api``, ``romm_api``,
     ``steam_config``, ``sgdb_artwork_cache``), the live settings dict,
     runtime infrastructure, the ``settings.json`` persister, the SQLite
-    Unit-of-Work factory (the ``sgdb_id`` cross-ref is persisted onto the
+    Unit-of-Work factory (a resolved ``sgdb_id`` is persisted onto the
     ``roms`` aggregate via the UoW), the pending-sync read seam, the
     debug-logger seam SteamGridService needs at construction time, the
     ``ConflictRules`` the artwork, icon, resolution and game-id use cases check
@@ -169,17 +169,6 @@ class SteamGridService:
         # replaced rather than changed: a reader holds a frozen snapshot. A note
         # two threads race to lose costs one download more, nothing else.
         self._slot_cache_names: dict[tuple[int, str], frozenset[str]] | None = None
-
-    # -- SGDB lookup -------------------------------------------------------
-
-    def _get_sgdb_game_id(self, igdb_id):
-        try:
-            result = self._sgdb_api.request(f"/games/igdb/{igdb_id}")
-            if result and result.get("success") and result.get("data"):
-                return result["data"]["id"]
-        except Exception as e:
-            self._logger.warning(f"SGDB lookup failed for IGDB {igdb_id}: {e}")
-        return None
 
     # -- artwork download --------------------------------------------------
 
@@ -315,26 +304,24 @@ class SteamGridService:
             sgdb_id = pending.get("sgdb_id")
         return sgdb_id
 
-    async def _fetch_ids_from_romm(self, rom_id):
-        """Fetch ``(sgdb_id, igdb_id, rom_data)`` from RomM without persisting.
+    async def _fetch_sgdb_id_from_romm(self, rom_id):
+        """Fetch ``(sgdb_id, rom_data)`` from RomM without persisting.
 
-        Reads the ROM detail from RomM and surfaces its ``sgdb_id`` /
-        ``igdb_id`` fields. Persistence is the caller's decision — this
-        method never writes the registry. Returns ``(None, None, None)``
-        on a network failure (logged, never raised).
+        Reads the ROM detail from RomM and surfaces its ``sgdb_id`` field.
+        Persistence is the caller's decision — this method never writes the
+        registry. Returns ``(None, None)`` on a network failure (logged, never
+        raised).
         """
         sgdb_id = None
-        igdb_id = None
         rom_data = None
         try:
             rom_data = await self._loop.run_in_executor(None, self._romm_api.get_rom, rom_id)
             if rom_data:
                 sgdb_id = rom_data.get("sgdb_id")
-                igdb_id = rom_data.get("igdb_id")
-            self._log_debug(f"SGDB artwork: fetched sgdb_id={sgdb_id}, igdb_id={igdb_id} from RomM for rom_id={rom_id}")
+            self._log_debug(f"SGDB artwork: fetched sgdb_id={sgdb_id} from RomM for rom_id={rom_id}")
         except Exception as e:
-            self._logger.warning(f"SGDB artwork: failed to fetch IDs from RomM for rom_id={rom_id}: {e}")
-        return sgdb_id, igdb_id, rom_data
+            self._logger.warning(f"SGDB artwork: failed to fetch the SGDB id from RomM for rom_id={rom_id}: {e}")
+        return sgdb_id, rom_data
 
     def _persist_sgdb_id(self, rom_id_str, sgdb_id):
         """Stamp a resolved ``sgdb_id`` on the ROM row in a short write UoW.
@@ -376,17 +363,17 @@ class SteamGridService:
         """Resolve which SGDB game id to use for *rom_id*, picker-driven.
 
         The single explicit user action that may re-read RomM and offer the
-        name search; the shortcut artwork job runs the IGDB cross-ref without
-        one. Deletes the ROM's recorded artwork slot outcomes before it
-        resolves: an explicit request asks SteamGridDB again. RomM's
-        ``sgdb_id`` always wins when present. Returns one of:
+        name search; the shortcut artwork job reads only the stored id.
+        Deletes the ROM's recorded artwork slot outcomes before it resolves:
+        an explicit request asks SteamGridDB again. RomM's ``sgdb_id`` always
+        wins when present. Returns one of:
 
         - ``{"decision": "no_api_key"}`` — no key configured.
         - ``{"decision": "resolved", "sgdb_id": int}`` — a winning id was
-          found (and persisted when it came from RomM or IGDB).
-        - ``{"decision": "needs_pick", "candidates": [...]}`` — nothing
-          resolved automatically; offer a manual name-search picker, with no
-          candidates when the name search is refused.
+          found (and persisted when it came from RomM).
+        - ``{"decision": "needs_pick", "candidates": [...]}`` — neither the
+          ROM row nor RomM holds an id; offer a manual name-search picker,
+          with no candidates when the name search is refused.
         """
         async with self._rules.hold("get_sgdb_resolution", prune=True):
             return await self._get_sgdb_resolution(rom_id)
@@ -400,7 +387,7 @@ class SteamGridService:
         _refuse_a_key_that_cannot_be_sent(self._settings["steamgriddb_api_key"])
 
         state_id = self._resolve_sgdb_id_state_only(rom_id)
-        romm_id, igdb_id, rom_data = await self._fetch_ids_from_romm(rom_id)
+        romm_id, rom_data = await self._fetch_sgdb_id_from_romm(rom_id)
 
         decision = classify_resolution(state_id, romm_id)
         if decision == "use_romm" and romm_id is not None:
@@ -409,13 +396,6 @@ class SteamGridService:
             return {"decision": "resolved", "sgdb_id": int(romm_id)}
         if decision == "use_state" and state_id is not None:
             return {"decision": "resolved", "sgdb_id": int(state_id)}
-
-        # Unresolved: try IGDB cross-ref, then fall back to a name search.
-        if igdb_id:
-            resolved = await self._loop.run_in_executor(None, self._get_sgdb_game_id, igdb_id)
-            if resolved:
-                self._persist_sgdb_id(rom_id_str, resolved)
-                return {"decision": "resolved", "sgdb_id": int(resolved)}
 
         name = (rom_data or {}).get("name") or ""
         try:
@@ -466,12 +446,11 @@ class SteamGridService:
         A manual pick only paints pixels — it downloads the chosen
         game's four asset types into the rom's artwork cache (which the
         cache-first ``get_sgdb_artwork_base64`` then serves onto the
-        Steam shortcut) and persists **nothing**. Only authoritative ids
-        (RomM ``sgdb_id`` or an IGDB cross-ref) are remembered as the
-        resolved id; a manual pick is not. So a later "Refresh Artwork"
-        on an otherwise-unresolvable rom stays ``needs_pick`` and reopens
-        the picker, giving the user a free re-pick. The previously
-        applied art stays visible until replaced.
+        Steam shortcut) and persists **nothing**. Only RomM's ``sgdb_id``
+        is remembered as the resolved id; a manual pick is not. So a later
+        "Refresh Artwork" on an otherwise-unresolvable rom stays
+        ``needs_pick`` and reopens the picker, giving the user a free
+        re-pick. The previously applied art stays visible until replaced.
         """
         async with self._rules.hold("apply_sgdb_game_id", prune=True):
             return await self._apply_sgdb_game_id(rom_id, sgdb_id)
@@ -880,10 +859,7 @@ class SteamGridService:
         """
         sgdb_id = self._resolve_sgdb_id_state_only(rom_id)
         if not sgdb_id:
-            found = self._cross_ref_igdb_io(rom_id)
-            if isinstance(found, IconAnswer):
-                return found
-            sgdb_id = found
+            return IconAnswer.NO_ICON
         path = sgdb_endpoint_path("icon", sgdb_id)
         result = self._sgdb_api.request(path) if path else None
         if result is None or not result.get("success"):
@@ -939,25 +915,3 @@ class SteamGridService:
         except OSError as e:
             self._logger.warning(f"Failed to remove the cached icon for rom_id={rom_id}: {e}")
         return IconFetch(IconAnswer.FAILED)
-
-    def _cross_ref_igdb_io(self, rom_id: int) -> int | IconAnswer:
-        """Resolve *rom_id*'s SteamGridDB id through its stored IGDB id, and save it.
-
-        ``NO_ICON`` when the ROM has no IGDB id or SteamGridDB knows no game
-        for it, ``FAILED`` for an answer that says neither. Lets the API's
-        errors through, so the caller can tell a 429 from a game SteamGridDB
-        does not know.
-        """
-        with self._uow_factory() as uow:
-            rom = uow.roms.get(rom_id)
-        igdb_id = rom.igdb_id if rom is not None else None
-        if not igdb_id:
-            return IconAnswer.NO_ICON
-        result = self._sgdb_api.request(f"/games/igdb/{igdb_id}")
-        if result is None or not result.get("success"):
-            return IconAnswer.FAILED
-        if not result.get("data"):
-            return IconAnswer.NO_ICON
-        sgdb_id = int(result["data"]["id"])
-        self._persist_sgdb_id(str(rom_id), sgdb_id)
-        return sgdb_id

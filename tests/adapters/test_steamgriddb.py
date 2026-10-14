@@ -29,7 +29,7 @@ class TestRequest:
             logger=logging.getLogger("test"),
             user_agent="romm-tender/9.9.9",
         )
-        assert adapter.request("/games/igdb/123") is None
+        assert adapter.request("/games/id/123") is None
 
     def test_sends_auth_header(self, adapter):
         mock_resp = MagicMock()
@@ -37,7 +37,7 @@ class TestRequest:
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
         with patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
-            adapter.request("/games/igdb/123")
+            adapter.request("/games/id/123")
             req = mock_open.call_args[0][0]
             assert req.get_header("Authorization") == "Bearer test-key-123"
 
@@ -67,7 +67,7 @@ class TestRequest:
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
         with patch("urllib.request.urlopen", return_value=mock_resp):
-            result = adapter.request("/games/igdb/123")
+            result = adapter.request("/games/id/123")
             assert result == {"success": True, "data": {"id": 42}}
 
     def test_constructs_correct_url(self, adapter):
@@ -170,7 +170,7 @@ class TestRequestHttpErrorWrapping:
         )
         with patch("urllib.request.urlopen", side_effect=http_error):
             with pytest.raises(SgdbApiError) as exc_info:
-                adapter.request("/games/igdb/123")
+                adapter.request("/games/id/123")
             assert exc_info.value.status_code == 403
 
 
