@@ -341,12 +341,15 @@ async function setSlotImage(
   }
 }
 
-/** Report what Steam made of the image for the backend to record. */
-async function reportSlotOutcome(
+/**
+ * Report what Steam made of an image for the backend to record, passing back the SteamGridDB ids and the hash the
+ * backend answered with it; a report that fails is logged.
+ */
+export async function reportSlotOutcome(
   romId: number,
-  slot: RecordedSlot,
+  slot: RecordedSlot | "icon",
   outcome: "set" | "refused",
-  image: SlotImage,
+  image: { sgdb_id: number | null; image_id: number | null; sha256: string },
 ): Promise<void> {
   await reportSgdbSlotArtwork(romId, slot, outcome, image.sgdb_id, image.image_id, image.sha256).catch((e) => {
     detach(debugLog(`Artwork: reporting the ${slot} for rom ${romId} failed: ${e}`));

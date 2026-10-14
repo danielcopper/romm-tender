@@ -7,10 +7,9 @@
  * one image at a time.
  */
 
-import { debugLog, logError, reportSgdbSlotArtwork } from "../api/backend";
-import type { ShortcutArtworkData, ShortcutIconRecord } from "../types";
-import { detach } from "./detach";
-import { isArtworkApplyInFlight, setJobSlotArtwork } from "./artwork";
+import { logError } from "../api/backend";
+import type { ShortcutArtworkData } from "../types";
+import { isArtworkApplyInFlight, reportSlotOutcome, setJobSlotArtwork } from "./artwork";
 import { isPruneLeaseCancelled, withPruneLease } from "./pruneLease";
 
 /**
@@ -55,16 +54,8 @@ async function setIcons(data: ShortcutArtworkData, stopped: () => boolean): Prom
       outcome = "refused";
       logError(`Shortcut artwork: could not set the icon of appId ${appId}: ${e}`);
     }
-    if (record) reports.push(reportIcon(record, outcome));
+    if (record) reports.push(reportSlotOutcome(record.rom_id, "icon", outcome, record));
   }
   await Promise.all(reports);
   return applied;
-}
-
-/** Report what Steam made of a SteamGridDB icon for the backend to record. */
-async function reportIcon(record: ShortcutIconRecord, outcome: "set" | "refused"): Promise<void> {
-  const { rom_id: romId, sgdb_id: sgdbId, image_id: imageId, sha256 } = record;
-  await reportSgdbSlotArtwork(romId, "icon", outcome, sgdbId, imageId, sha256).catch((e) => {
-    detach(debugLog(`Shortcut artwork: reporting the icon for rom ${romId} failed: ${e}`));
-  });
 }
