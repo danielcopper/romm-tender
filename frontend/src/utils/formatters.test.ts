@@ -237,6 +237,23 @@ describe("resolveLastPlayed", () => {
   it("falls back to steamUnixSeconds when restoredIso is invalid", () => {
     expect(resolveLastPlayed("invalid-date-string", 0)).toBe("Never");
   });
+
+  it("reads a naive ISO string as UTC, not local time", () => {
+    // In New York, 02:00 UTC on the 14th is 22:00 local on the 13th, and 03:00
+    // UTC on the 15th is 23:00 on the 14th: read as UTC the string is 25 hours
+    // old ("Yesterday"), read as local time 21 ("Today").
+    vi.stubEnv("TZ", "America/New_York");
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2025-06-15T03:00:00Z"));
+    try {
+      expect(resolveLastPlayed("2025-06-14T02:00:00", 0)).toBe("Yesterday");
+      expect(resolveLastPlayed("2025-06-14T02:00:00Z", 0)).toBe("Yesterday");
+      expect(resolveLastPlayed("2025-06-14T02:00:00+00:00", 0)).toBe("Yesterday");
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllEnvs();
+    }
+  });
 });
 
 describe("formatReleaseDate", () => {

@@ -78,26 +78,20 @@ vi.mock("../utils/scrollHelpers", () => ({ scrollToTop: vi.fn() }));
 vi.mock("../utils/events", () => ({
   getEventTarget: vi.fn((e: { target?: unknown } | null) => e?.target ?? null),
 }));
-vi.mock("../utils/formatters", () => {
-  const formatLastPlayed = vi.fn((rt: number) => (rt ? "2024-01-15" : ""));
-  const formatPlaytime = vi.fn((m: number) => (m ? "1h 30m" : ""));
-  // Deterministic echo so the SPACE REQUIRED cell's rendered value is
-  // recognizable in assertions; null (unknown size) yields "" per the real impl.
-  const formatBytes = vi.fn((b: number | null) => (b == null ? "" : `${b}bytes`));
-  const resolveLastPlayed = vi.fn((restoredIso: string | null, steamUnixSeconds: number): string => {
-    if (restoredIso) {
-      const ms = Date.parse(restoredIso);
-      if (!Number.isNaN(ms)) return formatLastPlayed(Math.floor(ms / 1000));
-    }
-    return formatLastPlayed(steamUnixSeconds);
-  });
+vi.mock("../utils/formatters", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../utils/formatters")>();
   return {
-    formatLastPlayed,
-    formatPlaytime,
-    formatBytes,
-    resolveLastPlayed,
+    formatLastPlayed: vi.fn((rt: number) => (rt ? "2024-01-15" : "")),
+    formatPlaytime: vi.fn((m: number) => (m ? "1h 30m" : "")),
+    // Deterministic echo so the SPACE REQUIRED cell's rendered value is
+    // recognizable in assertions; null (unknown size) yields "" per the real impl.
+    formatBytes: vi.fn((b: number | null) => (b == null ? "" : `${b}bytes`)),
+    // The real preference rule, so the LAST PLAYED tests below run it rather
+    // than a copy. It formats through the real formatLastPlayed.
+    resolveLastPlayed: actual.resolveLastPlayed,
   };
 });
+const realFormatters = await vi.importActual<typeof import("../utils/formatters")>("../utils/formatters");
 vi.mock("../utils/playSection", () => ({
   applySaveSyncDisplay: vi.fn(() => ({ status: null, label: "" })),
   // Must stay in sync with the beforeEach re-stub (resetAllMocks wipes this impl) —
@@ -2005,15 +1999,11 @@ describe("RomMPlaySection", () => {
   // ------------------------------------------------------------------
 
   describe("LAST PLAYED source (#1294)", () => {
-    // Echo the numeric timestamp so OUR (restored) date and Steam's device-local
-    // date render as distinguishable strings — the default formatLastPlayed mock
-    // collapses every non-zero value to a single "2024-01-15".
-    function applyEchoLastPlayedFormatter(): void {
-      vi.mocked(formatters.formatLastPlayed).mockImplementation((rt: number) => (rt ? `lp:${rt}` : ""));
-    }
+    // The real resolveLastPlayed formats through the real formatLastPlayed, so
+    // each value is told apart by what that formatter shows for it.
+    const shown = (secs: number): string => realFormatters.formatLastPlayed(secs);
 
     function mountReconciled(lastPlayed: string | null, steamRt: number) {
-      applyEchoLastPlayedFormatter();
       stubAppStore({ [testAppId]: { rt_last_time_played: steamRt, minutes_playtime_forever: 60 } });
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
@@ -2035,26 +2025,22 @@ describe("RomMPlaySection", () => {
       const ourSecs = Math.floor(Date.parse(iso) / 1000);
       const { container } = mountReconciled(iso, 1111111111);
       await flushAsync();
-      // Restored ISO routed through the SAME formatter (converted to seconds),
-      // and the Steam device-local value is NOT what's shown.
-      expect(vi.mocked(formatters.formatLastPlayed)).toHaveBeenCalledWith(ourSecs);
       expect(container.textContent).toContain("LAST PLAYED");
-      expect(container.textContent).toContain(`lp:${ourSecs}`);
-      expect(container.textContent).not.toContain("lp:1111111111");
+      expect(container.textContent).toContain(shown(ourSecs));
+      expect(container.textContent).not.toContain(shown(1111111111));
     });
 
     it("falls back to Steam's rt_last_time_played when last_played is null (no regression)", async () => {
       const { container } = mountReconciled(null, 1111111111);
       await flushAsync();
-      expect(container.textContent).toContain("lp:1111111111");
+      expect(container.textContent).toContain(shown(1111111111));
     });
 
     it("falls back safely to Steam's value when last_played is unparseable (no crash)", async () => {
       const { container } = mountReconciled("not-a-real-date", 1111111111);
       await flushAsync();
       // Unparseable restored value → Steam device-local value shown, no throw.
-      expect(container.textContent).toContain("lp:1111111111");
-      expect(container.textContent).not.toContain("lp:NaN");
+      expect(container.textContent).toContain(shown(1111111111));
     });
 
     it("keeps OUR restored last_played across a later romm_playtime_changed signal (onPlaytimeChanged branch)", async () => {
@@ -2063,21 +2049,20 @@ describe("RomMPlaySection", () => {
       const { container } = mountReconciled(iso, 1111111111);
       await flushAsync();
       // Restored value adopted on reconcile.
-      expect(container.textContent).toContain(`lp:${ourSecs}`);
+      expect(container.textContent).toContain(shown(ourSecs));
 
-      // A later playtime signal (session end / bulk write) raises Steam's
+      // A later playtime signal (session end / bulk write) changes Steam's
       // device-local rt to a DIFFERENT value and fires the chokepoint signal.
       // The reactive handler must keep the restored value — Steam's synthesized
       // rt must NOT win.
-      stubAppStore({ [testAppId]: { rt_last_time_played: 2222222222, minutes_playtime_forever: 120 } });
+      stubAppStore({ [testAppId]: { rt_last_time_played: 1222222222, minutes_playtime_forever: 120 } });
       act(() => {
         globalThis.dispatchEvent(new CustomEvent("romm_playtime_changed", { detail: { appId: testAppId } }));
       });
-      expect(container.textContent).toContain(`lp:${ourSecs}`);
-      expect(container.textContent).not.toContain("lp:2222222222");
+      expect(container.textContent).toContain(shown(ourSecs));
+      expect(container.textContent).not.toContain(shown(1222222222));
     });
   });
-
   // ------------------------------------------------------------------
   // F. romm_data_changed DOM event handler
   // ------------------------------------------------------------------

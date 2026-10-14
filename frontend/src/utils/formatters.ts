@@ -22,11 +22,15 @@ export function formatLastPlayed(timestamp: number): string {
 
 /**
  * Resolve the last-played label, preferring the restored ISO timestamp over
- * Steam's recorded unix seconds when present.
+ * Steam's recorded unix seconds when present. A restored value without an offset
+ * is a RomM play-session `end_time`, which RomM sends in UTC, so it is read as UTC
+ * rather than as local time; the end times Tender records carry their offset.
  */
 export function resolveLastPlayed(restoredIso: string | null, steamUnixSeconds: number): string {
   if (restoredIso) {
-    const ms = Date.parse(restoredIso);
+    const normalized =
+      restoredIso.endsWith("Z") || /[+-]\d{2}(?::?\d{2})?$/.test(restoredIso) ? restoredIso : `${restoredIso}Z`;
+    const ms = Date.parse(normalized);
     if (!Number.isNaN(ms)) return formatLastPlayed(Math.floor(ms / 1000));
   }
   return formatLastPlayed(steamUnixSeconds);
