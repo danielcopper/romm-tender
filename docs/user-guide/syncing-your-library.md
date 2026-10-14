@@ -467,10 +467,12 @@ in the desktop client's library list until its icon arrives. Without a SteamGrid
 game the sync adds keeps Steam's default icon instead. When Steam's memory is nearly full the background job stops, and
 goes on after Steam restarts or after the next sync.
 
-The background job leaves an image you set yourself alone. It does not ask again for an icon SteamGridDB had none for;
-**Refresh Artwork** does, and so does opening the game's page for a game Tender already knows on SteamGridDB (opening
-the page also replaces an icon you set yourself). A game that had no icon at all before shows its first one after Steam
-restarts, which switching between Game Mode and Desktop Mode does.
+The background job leaves an image you set yourself alone. When SteamGridDB has no icon for a game, the game shows
+Tender's logo as its icon, and the job asks again after a week, as it does for an icon Steam did not accept, or as soon
+as a sync brings the game a new SteamGridDB match from RomM. **Refresh Artwork** asks at once, and so does opening the
+game's page for a game Tender already knows on SteamGridDB (opening the page also replaces an icon you set yourself). A
+game that had no icon at all before shows its first one after Steam restarts, which switching between Game Mode and
+Desktop Mode does.
 
 The hero banner is set the first time a game's page is opened in a session, and so are a logo and a wide grid the
 background job has not set yet; each only where the game has none: an image you set yourself, in Steam's own artwork
