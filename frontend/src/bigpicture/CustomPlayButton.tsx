@@ -34,7 +34,6 @@ import {
   pauseDownload,
   resumeDownload,
   getDownloadQueue,
-  removeRom,
   forgetDownload,
   debugLog,
   preLaunchSync,
@@ -45,6 +44,7 @@ import {
   probeReachability,
   checkLocalDrift,
 } from "../api/backend";
+import { executeRomUninstall } from "../utils/romUninstall";
 import { confirmCoreChangeIfNeeded as confirmCoreChangeUtil } from "../utils/coreChange";
 import { activateRunningApp, executeStopRunningGame } from "../utils/runningGame";
 import {
@@ -1026,13 +1026,13 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   };
 
   /**
-   * Run a removal of this ROM's install record — an uninstall or a forget — and,
-   * once the backend has answered success, reset the shortcut's now-stale launch
-   * command to the uninstalled "" placeholder under the removal's lease and
-   * announce the ROM as not installed. The reset keeps a raced-past
-   * not_installed launch from exec'ing a stale `flatpak run … '<path>'`
-   * (#1051); it is best-effort, so a launch-options hiccup never turns a
-   * removal that happened into an error.
+   * Run a forget of this ROM's install record (an uninstall goes through
+   * `executeRomUninstall`) and, once the backend has answered success, reset
+   * the shortcut's now-stale launch command to the uninstalled "" placeholder
+   * under the removal's lease and announce the ROM as not installed. The reset
+   * keeps a raced-past not_installed launch from exec'ing a stale
+   * `flatpak run … '<path>'` (#1051); it is best-effort, so a launch-options
+   * hiccup never turns a removal that happened into an error.
    */
   const removeInstallRecord = async <R extends { success: boolean; prune_lease_token?: string }>(
     rid: number,
@@ -1068,20 +1068,20 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     setState("uninstall_pending");
     detach(debugLog(`CustomPlayButton: uninstalling romId=${romId}`));
     try {
-      const result = await removeInstallRecord(romId, () => removeRom(romId), "ROM uninstall");
-      if (result.success) {
-        showToast(`${romName || "ROM"} uninstalled`);
+      const removed = await executeRomUninstall({
+        romId,
+        appId,
+        romName,
+        leaseOwner,
+        tag: "CustomPlayButton",
+      });
+      if (removed) {
         // Dark pulse transition before showing Download button
         setState("uninstalling");
         transitionTimerRef.current = setTimeout(() => enterDownloadState(), 500);
-        return;
       } else {
-        showToast(result.message || "Uninstall failed");
         setState(stateBeforeUninstall);
       }
-    } catch {
-      showToast("Uninstall failed");
-      setState(stateBeforeUninstall);
     } finally {
       uninstallPendingRef.current = false;
       setUninstallProgress(null);

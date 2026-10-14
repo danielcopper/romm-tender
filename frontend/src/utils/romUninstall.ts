@@ -29,7 +29,8 @@ export interface RomUninstallOptions {
   context?: string | undefined;
 }
 
-export async function executeRomUninstall(options: RomUninstallOptions): Promise<void> {
+/** Remove the ROM's files and announce it; true once the removal is done and announced. */
+export async function executeRomUninstall(options: RomUninstallOptions): Promise<boolean> {
   const { romId, appId, romName, leaseOwner, tag = "handleUninstall", context = "ROM uninstall" } = options;
   const currentAdmission = capturePruneLeaseAdmission(leaseOwner);
 
@@ -37,7 +38,7 @@ export async function executeRomUninstall(options: RomUninstallOptions): Promise
     const result = await removeRom(romId);
     if (!result.success) {
       showToast(result.message || "Uninstall failed");
-      return;
+      return false;
     }
 
     // Why the launch command is reset, and why best-effort: `removeInstallRecord`'s
@@ -48,21 +49,24 @@ export async function executeRomUninstall(options: RomUninstallOptions): Promise
       async (signal) => {
         if (isPruneLeaseCancelled(signal)) return;
         await setLaunchOptionsConfirmed(appId, "").catch(() => false);
-        if (isPruneLeaseCancelled(signal)) return;
-        globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: romId } }));
       },
       leaseOwner,
       currentAdmission,
     );
+    // The backend has removed the ROM whether or not the reset above ran to the
+    // end, so the game page and the pickers hear about it either way.
+    globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: romId } }));
 
     showToast(`${romName || "ROM"} uninstalled`);
+    return true;
   } catch (e) {
     // The backend uninstall already committed before the continuation was torn
     // down; reporting it as a failure would be a lie the user can't act on.
     if (isPruneLeaseCancellation(e, currentAdmission)) {
       detach(debugLog(`${tag}: continuation was cancelled: ${e}`));
-      return;
+      return false;
     }
     showToast("Uninstall failed");
+    return false;
   }
 }

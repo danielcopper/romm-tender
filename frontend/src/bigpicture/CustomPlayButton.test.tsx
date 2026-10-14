@@ -1183,6 +1183,84 @@ describe("CustomPlayButton — uninstall resets launch_options (#1051)", () => {
     // command untouched (the shortcut is still installed).
     expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
   });
+
+  /** Record the rom ids every "romm_rom_uninstalled" announces until the returned stop is called. */
+  function listenForUninstalls(): { romIds: number[]; stop: () => void } {
+    const romIds: number[] = [];
+    const listener = (event: WindowEventMap["romm_rom_uninstalled"]) => romIds.push(event.detail.rom_id);
+    globalThis.addEventListener("romm_rom_uninstalled", listener);
+    return { romIds, stop: () => globalThis.removeEventListener("romm_rom_uninstalled", listener) };
+  }
+
+  it("announces the ROM as uninstalled once the backend has removed it", async () => {
+    mockCachedDetail({ rom_id: 42, installed: true });
+    const uninstalls = listenForUninstalls();
+    const { container, findByText } = render(<CustomPlayButton appId={100} />);
+    await findByText("Play");
+
+    await clickUninstall(container);
+
+    expect(uninstalls.romIds).toEqual([42]);
+    expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body: "Test ROM uninstalled" }));
+    uninstalls.stop();
+  });
+
+  it("announces the uninstall even when leaving the page cuts the launch-command reset short", async () => {
+    let finishReset!: (confirmed: boolean) => void;
+    vi.mocked(setLaunchOptionsConfirmed).mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        finishReset = resolve;
+      }),
+    );
+    vi.mocked(backend.removeRom).mockResolvedValue({
+      success: true,
+      message: "",
+      prune_lease_token: "uninstall-lease",
+    });
+    mockCachedDetail({ rom_id: 42, installed: true });
+    const uninstalls = listenForUninstalls();
+    const { container, findByText, unmount } = render(<CustomPlayButton appId={100} />);
+    await findByText("Play");
+
+    await clickUninstall(container);
+    expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, "");
+
+    // Leaving the page aborts the removal's continuation while the reset runs.
+    unmount();
+    await act(async () => {
+      finishReset(true);
+      for (let index = 0; index < 10; index++) await Promise.resolve();
+    });
+
+    expect(uninstalls.romIds).toEqual([42]);
+    uninstalls.stop();
+  });
+
+  it("says nothing failed when the page is left before the removal's lease is taken", async () => {
+    let finishRemoval!: (result: { success: true; message: string; prune_lease_token: string }) => void;
+    vi.mocked(backend.removeRom).mockReturnValue(
+      new Promise((resolve) => {
+        finishRemoval = resolve;
+      }),
+    );
+    mockCachedDetail({ rom_id: 42, installed: true });
+    const { container, findByText, unmount } = render(<CustomPlayButton appId={100} />);
+    await findByText("Play");
+
+    await clickUninstall(container);
+    // The backend removes the ROM after the page has gone, so the reset can no
+    // longer be admitted; the removal itself happened.
+    unmount();
+    await act(async () => {
+      finishRemoval({ success: true, message: "", prune_lease_token: "uninstall-lease" });
+      for (let index = 0; index < 10; index++) await Promise.resolve();
+    });
+
+    expect(vi.mocked(toaster.toast)).not.toHaveBeenCalledWith(expect.objectContaining({ body: "Uninstall failed" }));
+    expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(
+      expect.stringContaining("CustomPlayButton: continuation was cancelled"),
+    );
+  });
 });
 
 describe("CustomPlayButton — uninstall is visible and single-shot (#1664)", () => {
