@@ -210,8 +210,8 @@ carry them. `me.write` is deliberately **not** requested — a pasted token cann
 Under **Settings › Connections**, below the RomM group — SteamGridDB is one of the two services Tender talks to.
 
 Tender uses [SteamGridDB](https://www.steamgriddb.com/) to fetch additional artwork for your games — hero banners,
-logos, and wide grid images. RomM provides cover art, but SteamGridDB fills in the rest so your games look like
-first-class Steam titles.
+logos, wide grid images, and the icons beside each game in Steam's library list. RomM provides cover art, but
+SteamGridDB fills in the rest so your games look like first-class Steam titles.
 
 To set this up:
 
@@ -223,8 +223,8 @@ To set this up:
 
 <!-- Screenshot: SteamGridDB API Key section with the Edit button -->
 
-Without an API key, games will still have cover art from RomM but the hero banner, logo overlay, and wide grid image
-will be missing.
+Without an API key, games will still have cover art from RomM but the hero banner, logo overlay, wide grid image, and
+icon will be missing.
 
 ## Steam Input Mode
 
