@@ -7,7 +7,7 @@
  * `romm_playtime_changed` to update display reactively.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { reconcilePlaytime, debugLog } from "../api/backend";
 import { formatPlaytime, formatLastPlayed, resolveLastPlayed } from "./formatters";
 import { updatePlaytimeDisplay } from "./metadataPatches";
@@ -45,6 +45,21 @@ export function useGamePlaytime(appId: number, romId: number | null, logContext:
     restoredLastPlayed: null,
     playtime: initialPlaytime,
   });
+
+  // The play section is mounted under one constant key, so Steam can hand the same
+  // instance another game; nothing the previous game restored may stay on it.
+  const prevAppIdRef = useRef(appId);
+  useEffect(() => {
+    if (prevAppIdRef.current !== appId) {
+      prevAppIdRef.current = appId;
+      const ov = appStore.GetAppOverviewByAppID(appId);
+      setPlaytimeInfo({
+        lastPlayed: formatLastPlayed(ov?.rt_last_time_played ?? 0),
+        restoredLastPlayed: null,
+        playtime: formatPlaytime(ov?.minutes_playtime_forever ?? 0),
+      });
+    }
+  }, [appId]);
 
   // Reconcile-on-view: folds RomM's play-session history into local total.
   // INTENTIONALLY NOT gated on connectivity (#1345): reconcile returns the

@@ -164,4 +164,47 @@ describe("useGamePlaytime", () => {
       expect(result.current.playtime).toBe("1h 30m");
     });
   });
+
+  it("resets state when appId changes", () => {
+    const { rerender, result } = renderHook(({ appId, romId }) => useGamePlaytime(appId, romId), {
+      initialProps: { appId: 100, romId: null as number | null },
+    });
+
+    vi.mocked(appStore.GetAppOverviewByAppID).mockReturnValue(
+      overview({
+        appid: 200,
+        rt_last_time_played: 1650000000,
+        minutes_playtime_forever: 60,
+      }),
+    );
+
+    rerender({ appId: 200, romId: null });
+
+    expect(result.current.playtime).toBe("1 Hour");
+  });
+
+  it("drops the previous game's restored last-played when the same instance moves to another game", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-21T12:00:00Z"));
+    vi.mocked(backend.reconcilePlaytime).mockResolvedValueOnce({
+      total_seconds: 7200,
+      session_count: 3,
+      last_played: "2026-09-20T12:00:00Z",
+      server_query_failed: false,
+    });
+    const { rerender, result } = renderHook(({ appId, romId }) => useGamePlaytime(appId, romId), {
+      initialProps: { appId: 100, romId: 1 as number | null },
+    });
+    await waitFor(() => expect(result.current.lastPlayed).toBe("Yesterday"));
+
+    // Game 200 has never been played and has no rom yet: nothing restored.
+    rerender({ appId: 200, romId: null });
+    expect(result.current.lastPlayed).toBe("Never");
+
+    // Nor does game 100's restored value come back on game 200's next playtime signal.
+    act(() => {
+      globalThis.dispatchEvent(new CustomEvent("romm_playtime_changed", { detail: { appId: 200 } }));
+    });
+    expect(result.current.lastPlayed).toBe("Never");
+  });
 });
