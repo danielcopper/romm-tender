@@ -15,7 +15,8 @@ When you open a RomM game in the Steam Library, you'll see the Tender panel belo
 - **BIOS status** — whether required BIOS files are present (see [BIOS Management](bios-management.md))
 - **Save sync status** — on the **Saves** tab: when each save file last synced, and any conflict waiting for you (see
   [Save Sync](save-sync.md))
-- **Playtime** — **Last Played** and **Playtime** cells next to the Play button
+- **Playtime** — **Last Played** and **Playtime** cells next to the Play button. Last Played reads Today, Yesterday or
+  so many days ago within a week, and otherwise the date in your Steam client's language
 - **Space required** — for a game that isn't downloaded yet, a "Space Required" cell next to the Play button shows how
   much disk space the download needs. It disappears once the game is installed (mirroring how Steam hides it for
   installed games); it's also omitted when RomM doesn't report the size.

@@ -108,12 +108,32 @@ describe("formatTimeAgo", () => {
   });
 });
 
+const realToLocaleDateString = Date.prototype.toLocaleDateString;
+
+/** Format dates as a Steam client in *locale* would: the code under test asks
+ *  for the context's own language (`undefined`), which a test cannot set. */
+function formatDatesIn(locale: string): void {
+  vi.spyOn(Date.prototype, "toLocaleDateString").mockImplementation(function (
+    this: Date,
+    _locales?: Intl.LocalesArgument,
+    options?: Intl.DateTimeFormatOptions,
+  ) {
+    return realToLocaleDateString.call(this, locale, options);
+  });
+}
+
+const seconds = (date: Date): number => Math.floor(date.getTime() / 1000);
+
 describe("formatLastPlayed", () => {
+  // Local-time fixtures, so every label below holds in any time zone.
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2025-06-15T12:00:00Z"));
+    vi.setSystemTime(new Date(2025, 5, 15, 12));
   });
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
   it("returns 'Never' for 0 or negative", () => {
     expect(formatLastPlayed(0)).toBe("Never");
@@ -121,28 +141,38 @@ describe("formatLastPlayed", () => {
   });
 
   it("returns 'Today' for today's timestamp", () => {
-    const todayMidday = Math.floor(new Date("2025-06-15T10:00:00Z").getTime() / 1000);
-    expect(formatLastPlayed(todayMidday)).toBe("Today");
+    expect(formatLastPlayed(seconds(new Date(2025, 5, 15, 10)))).toBe("Today");
+  });
+
+  it("returns 'Today' for a timestamp later than now (a clock behind the recording one)", () => {
+    expect(formatLastPlayed(seconds(new Date(2025, 5, 15, 13)))).toBe("Today");
+    expect(formatLastPlayed(seconds(new Date(2025, 5, 18, 12)))).toBe("Today");
   });
 
   it("returns 'Yesterday' for one day ago", () => {
-    const yesterday = Math.floor(new Date("2025-06-14T10:00:00Z").getTime() / 1000);
-    expect(formatLastPlayed(yesterday)).toBe("Yesterday");
+    expect(formatLastPlayed(seconds(new Date(2025, 5, 14, 10)))).toBe("Yesterday");
   });
 
   it("returns 'N days ago' for under a week", () => {
-    const threeDaysAgo = Math.floor(new Date("2025-06-12T10:00:00Z").getTime() / 1000);
-    expect(formatLastPlayed(threeDaysAgo)).toBe("3 days ago");
+    expect(formatLastPlayed(seconds(new Date(2025, 5, 12, 10)))).toBe("3 days ago");
   });
 
-  it("returns 'DD. Mon.' for same-year dates older than a week", () => {
-    const twoMonthsAgo = Math.floor(new Date("2025-04-10T10:00:00Z").getTime() / 1000);
-    expect(formatLastPlayed(twoMonthsAgo)).toBe("10. Apr.");
+  it("names this year's older dates by day and short month in the client's language", () => {
+    const tenthOfApril = seconds(new Date(2025, 3, 10, 12));
+    formatDatesIn("en-GB");
+    expect(formatLastPlayed(tenthOfApril)).toBe("10 Apr");
+    formatDatesIn("en-US");
+    expect(formatLastPlayed(tenthOfApril)).toBe("Apr 10");
+    formatDatesIn("de-DE");
+    expect(formatLastPlayed(tenthOfApril)).toBe("10. Apr.");
   });
 
-  it("returns 'DD. Mon. YYYY' for prior-year dates", () => {
-    const lastYear = Math.floor(new Date("2024-08-20T10:00:00Z").getTime() / 1000);
-    expect(formatLastPlayed(lastYear)).toBe("20. Aug. 2024");
+  it("adds the year for another year's dates", () => {
+    const twentiethOfAugust = seconds(new Date(2024, 7, 20, 12));
+    formatDatesIn("en-GB");
+    expect(formatLastPlayed(twentiethOfAugust)).toBe("20 Aug 2024");
+    formatDatesIn("en-US");
+    expect(formatLastPlayed(twentiethOfAugust)).toBe("Aug 20, 2024");
   });
 });
 
@@ -216,9 +246,12 @@ describe("formatReleaseDate", () => {
     expect(formatReleaseDate(-100)).toBeNull();
   });
 
-  it("formats valid timestamp as 'D MMM YYYY'", () => {
-    // 1082592000 is 2004-04-22T00:00:00Z
-    const formatted = formatReleaseDate(1082592000);
-    expect(formatted).toMatch(/\d+\s(Apr|May)\s2004/);
+  it("formats day, short month and year in the client's language", () => {
+    const releaseDay = seconds(new Date(2004, 3, 22, 12));
+    formatDatesIn("en-GB");
+    expect(formatReleaseDate(releaseDay)).toBe("22 Apr 2004");
+    formatDatesIn("en-US");
+    expect(formatReleaseDate(releaseDay)).toBe("Apr 22, 2004");
+    vi.restoreAllMocks();
   });
 });

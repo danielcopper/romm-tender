@@ -19,6 +19,7 @@ import type { CachedGameDetail } from "../api/backend";
 import { HostTransportError } from "../api/host";
 import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import * as cachedStore from "../utils/cachedGameDetailStore";
+import { formatReleaseDate } from "../utils/formatters";
 import { getBiosStatusShared, _resetSharedReadsForTests } from "../api/sharedReads";
 import * as slotState from "../utils/slotState";
 import { isStopObserved } from "../utils/sessionManager";
@@ -3519,10 +3520,7 @@ describe("RomMGameInfoPanel", () => {
   // ------------------------------------------------------------------
 
   describe("formatReleaseDate (rendered via Game Info)", () => {
-    it("renders 'D MMM YYYY' when first_release_date > 0", async () => {
-      // 2003-01-01 00:00:00 UTC = 1041379200 → date.getDate() / getMonth() use
-      // local time; just assert the year + month-name format is applied
-      // (the day may vary by TZ).
+    it("renders the release date when first_release_date > 0", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 1,
@@ -3532,9 +3530,8 @@ describe("RomMGameInfoPanel", () => {
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
       expect(container.textContent).toContain("Release Date");
-      // Format: "D MMM YYYY" — assert the month abbreviation + year reach
-      // the DOM. (Day depends on TZ; "2003" pins the year.)
-      expect(container.textContent).toMatch(/\d+\s(Jan|Dec)\s2003/);
+      // The format is formatReleaseDate's (formatters.test.ts); this asserts it reaches the row.
+      expect(container.textContent).toContain(formatReleaseDate(1041379200));
     });
 
     it("skips Release Date row when first_release_date is null or 0", async () => {
