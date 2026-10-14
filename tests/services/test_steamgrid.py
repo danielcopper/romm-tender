@@ -33,7 +33,7 @@ from domain.artwork_slot_outcome import RULED_OUT_SECONDS, ArtworkSlotOutcome, S
 from domain.rom import Rom
 from lib.errors import Refused, SgdbApiError, SgdbRateLimitedError, SteamGridDirMissingError
 from lib.prune_conflicts import PruneConflicts
-from models.shortcut_icon import IconAnswer
+from models.shortcut_icon import IconAnswer, SlotAnswer
 from services.library import LibraryService, LibraryServiceConfig
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
 
@@ -2339,6 +2339,89 @@ class TestTheCacheUnderItsNewNames:
         await steamgrid.service.apply_sgdb_game_id(42, 8888)
 
         assert sgdb_artwork_cache.listdir(art_dir) == []
+
+
+class TestTheJobsSlotFetch:
+    """``do_fetch_slot_artwork``: the shortcut icon job's half of a wide grid or logo, before the frontend's fetch."""
+
+    def test_caches_the_chosen_image_and_records_nothing(
+        self, steamgrid, uow, slot_ready, sgdb_artwork_cache, fake_steamgrid_db_api
+    ):
+        _seed_candidates(fake_steamgrid_db_api, "grid", (11, 460, 215), (12, 920, 430))
+
+        answer = steamgrid.service.do_fetch_slot_artwork(42, ArtworkSlot.WIDE_GRID)
+
+        assert answer is SlotAnswer.READY
+        assert sgdb_artwork_cache.listdir(sgdb_artwork_cache.cache_dir()) == ["42_grid_12.png"]
+        assert uow.artwork_slot_outcomes.save_count == 0
+
+    def test_a_cached_image_is_ready_without_asking_steamgriddb(
+        self, steamgrid, slot_ready, sgdb_artwork_cache, fake_steamgrid_db_api
+    ):
+        sgdb_artwork_cache.files[os.path.join(sgdb_artwork_cache.cache_dir(), "42_logo_301.png")] = b"cached"
+
+        assert steamgrid.service.do_fetch_slot_artwork(42, ArtworkSlot.LOGO) is SlotAnswer.READY
+        assert fake_steamgrid_db_api.requested_paths == []
+
+    def test_no_candidate_is_recorded_as_none(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        fake_steamgrid_db_api.seed_raw_response("/logos/game/9999", {"success": True, "data": []})
+
+        assert steamgrid.service.do_fetch_slot_artwork(42, ArtworkSlot.LOGO) is SlotAnswer.NONE
+        assert _outcome(uow, ArtworkSlot.LOGO) == ArtworkSlotOutcome.record_none(
+            rom_id=42, slot=ArtworkSlot.LOGO, sgdb_id=9999, recorded_at=steamgrid.clock.time()
+        )
+
+    def test_a_game_steamgriddb_does_not_know_is_recorded_as_none(
+        self, steamgrid, uow, slot_ready, fake_steamgrid_db_api
+    ):
+        fake_steamgrid_db_api.request_side_effect = SgdbApiError(status_code=404, message="Game not found.")
+
+        assert steamgrid.service.do_fetch_slot_artwork(42, ArtworkSlot.WIDE_GRID) is SlotAnswer.NONE
+        recorded = _outcome(uow, ArtworkSlot.WIDE_GRID)
+        assert recorded is not None
+        assert recorded.outcome is SlotOutcome.NONE
+
+    def test_a_rom_without_a_steamgriddb_id_is_recorded_as_none_without_a_request(
+        self, steamgrid, uow, home, fake_steamgrid_db_api
+    ):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        _seed_rom(uow, 42, app_id=_APP_ID, sgdb_id=None)
+
+        assert steamgrid.service.do_fetch_slot_artwork(42, ArtworkSlot.LOGO) is SlotAnswer.NONE
+        assert fake_steamgrid_db_api.requested_paths == []
+        assert _outcome(uow, ArtworkSlot.LOGO) == ArtworkSlotOutcome.record_none(
+            rom_id=42, slot=ArtworkSlot.LOGO, sgdb_id=None, recorded_at=steamgrid.clock.time()
+        )
+
+    def test_a_429_is_rate_limited_and_records_nothing(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        fake_steamgrid_db_api.request_side_effect = SgdbRateLimitedError("Too Many Requests")
+
+        assert steamgrid.service.do_fetch_slot_artwork(42, ArtworkSlot.LOGO) is SlotAnswer.RATE_LIMITED
+        assert uow.artwork_slot_outcomes.save_count == 0
+
+    def test_a_429_from_the_image_cdn_is_rate_limited(self, steamgrid, slot_ready, fake_steamgrid_db_api):
+        _seed_candidates(fake_steamgrid_db_api, "logo", (5, 800, 300))
+        fake_steamgrid_db_api.download_image_side_effect = SgdbRateLimitedError("Too Many Requests")
+
+        assert steamgrid.service.do_fetch_slot_artwork(42, ArtworkSlot.LOGO) is SlotAnswer.RATE_LIMITED
+
+    @pytest.mark.parametrize("status", [401, 403])
+    def test_a_refused_key_is_key_refused(self, steamgrid, slot_ready, fake_steamgrid_db_api, status):
+        fake_steamgrid_db_api.request_side_effect = SgdbApiError(status_code=status, message="Unauthorized")
+
+        assert steamgrid.service.do_fetch_slot_artwork(42, ArtworkSlot.WIDE_GRID) is SlotAnswer.KEY_REFUSED
+
+    def test_a_server_error_fails_and_records_nothing(self, steamgrid, uow, slot_ready, fake_steamgrid_db_api):
+        fake_steamgrid_db_api.request_side_effect = SgdbApiError(status_code=500, message="Server Error")
+
+        assert steamgrid.service.do_fetch_slot_artwork(42, ArtworkSlot.WIDE_GRID) is SlotAnswer.FAILED
+        assert uow.artwork_slot_outcomes.save_count == 0
+
+    def test_without_a_key_nothing_is_asked(self, steamgrid, uow, fake_steamgrid_db_api):
+        _seed_rom(uow, 42, app_id=_APP_ID, sgdb_id=9999)
+
+        assert steamgrid.service.do_fetch_slot_artwork(42, ArtworkSlot.LOGO) is SlotAnswer.FAILED
+        assert fake_steamgrid_db_api.requested_paths == []
 
 
 class TestTheReplacingPathCarriesWhatTheReportNeeds:

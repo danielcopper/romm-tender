@@ -5,7 +5,8 @@
  * Artwork) and SgdbGamePickerModal (the replacing apply after a manual game-id
  * pick), so it lives here rather than on either component to keep their import
  * graph acyclic. The shortcut icon job's writes (`utils/shortcutIcons.ts`) ask
- * it whether an apply is under way.
+ * it whether an apply is under way, and set the job's wide grids and logos
+ * through it.
  */
 
 import {
@@ -97,6 +98,12 @@ function claimGeneration(appId: number): () => boolean {
   const generation = (artworkGenerations.get(appId) ?? 0) + 1;
   artworkGenerations.set(appId, generation);
   return () => artworkGenerations.get(appId) !== generation;
+}
+
+/** Note *appId*'s generation without claiming one; the answer tells whether an apply has started since. */
+function watchGeneration(appId: number): () => boolean {
+  const generation = artworkGenerations.get(appId) ?? 0;
+  return () => (artworkGenerations.get(appId) ?? 0) !== generation;
 }
 
 async function applySgdbArtwork(romId: number, appId: number): Promise<number> {
@@ -204,6 +211,9 @@ const FILLED_SLOTS: ReadonlyArray<[slot: SgdbArtworkSlot, assetType: number]> = 
   ["grid", 3],
 ];
 
+/** Steam's asset type for each slot the shortcut icon job fills. */
+const JOB_SLOT_ASSET_TYPES: Readonly<Record<RecordedSlot, number>> = { logo: 2, grid: 3 };
+
 type SlotImage = Extract<SgdbSlotArtwork, { status: "image" }>;
 
 async function fillEmptySgdbArtwork(romId: number, appId: number): Promise<number> {
@@ -265,7 +275,7 @@ async function setSlotImage(
     await SteamClient.Apps.SetCustomArtworkForApp(appId, image.base64, "png", assetType);
     return "set";
   } catch (e) {
-    detach(debugLog(`fillEmptyArtwork: Steam refused the image for appId ${appId}, asset type ${assetType}: ${e}`));
+    detach(debugLog(`Artwork: Steam refused the image for appId ${appId}, asset type ${assetType}: ${e}`));
     return "refused";
   }
 }
@@ -278,8 +288,36 @@ async function reportSlotOutcome(
   image: SlotImage,
 ): Promise<void> {
   await reportSgdbSlotArtwork(romId, slot, outcome, image.sgdb_id, image.image_id, image.sha256).catch((e) => {
-    detach(debugLog(`fillEmptyArtwork: reporting the ${slot} for rom ${romId} failed: ${e}`));
+    detach(debugLog(`Artwork: reporting the ${slot} for rom ${romId} failed: ${e}`));
   });
+}
+
+/**
+ * Set a wide grid or logo the shortcut icon job has put into the artwork cache,
+ * and report what Steam made of it. The image is fetched through the same
+ * per-slot endpoint a first visit uses, so a slot that has filled since the job
+ * looked is skipped. Nothing is written once a game page's apply for the
+ * shortcut has started, or once *stopped* answers yes. Answers whether the image
+ * was set.
+ */
+export async function setJobSlotArtwork(
+  romId: number,
+  appId: number,
+  slot: RecordedSlot,
+  stopped: () => boolean,
+): Promise<boolean> {
+  const overtaken = watchGeneration(appId);
+  const left = (): boolean => stopped() || overtaken();
+  const answer = await getSgdbSlotArtwork(romId, appId, slot).catch((e): SgdbSlotArtwork => {
+    detach(debugLog(`Shortcut icons: ${slot} fetch for appId ${appId} rejected: ${e}`));
+    return { status: "failed" };
+  });
+  if (answer.status !== "image") return false;
+  const outcome = await withPruneLeases([answer.prune_lease_token], "Shortcut icons", (signal) =>
+    setSlotImage(appId, answer, JOB_SLOT_ASSET_TYPES[slot], signal, left),
+  );
+  if (outcome !== null) await reportSlotOutcome(romId, slot, outcome, answer);
+  return outcome === "set";
 }
 
 export async function cancelArtworkApply(appId: number): Promise<void> {

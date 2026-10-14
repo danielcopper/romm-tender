@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from contextlib import AbstractAsyncContextManager
 
+    from domain.artwork_slot import ArtworkSlot
     from domain.disc_selection import Disc
     from domain.emulator_commands import LaunchingEmulator
     from domain.emulator_sources import SourcesReading
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
     from domain.update_release import LatestRelease
     from lib.partial_failure import PartialFailure
     from models.prune import InstalledContentRemoval, SaveQuarantine, SourceClaim
-    from models.shortcut_icon import IconFetch
+    from models.shortcut_icon import IconFetch, SlotAnswer
     from models.state import ShortcutRegistryEntry
     from models.sync import ClientSaveState
 
@@ -788,6 +789,41 @@ class ShortcutIconSource(Protocol):
     async def write_job_icon(self, app_id: int, icon_bytes: bytes, generation: int) -> str | None:
         """Write the icon unless the game page saved one since *generation*; answer its path or ``None``."""
         ...
+
+    def do_fetch_slot_artwork(self, rom_id: int, slot: ArtworkSlot) -> SlotAnswer:
+        """Put SteamGridDB's image for *rom_id*'s wide grid or logo into the artwork cache, and say what came of it.
+
+        Downloads only what the cache does not hold, by the one rule the game
+        page uses. ``READY`` once the cache holds it, for the frontend to fetch
+        through ``get_sgdb_slot_artwork``; ``NONE``, recorded, when SteamGridDB
+        has no candidate or does not know the game, or the ROM has no
+        SteamGridDB id stored (no request then); a 429 ``RATE_LIMITED``; a 401
+        or 403 ``KEY_REFUSED``; anything else ``FAILED``, unrecorded.
+        Synchronous — callers on the loop offload it.
+        """
+        ...
+
+
+class RendererAboveCeilingFn(Protocol):
+    """Whether Steam's renderer memory stands at or above the session budget's ceiling, by a GC-settled reading.
+
+    The composition root satisfies this with ``LibraryService.renderer_above_ceiling``,
+    which asks the sync's own ``SessionBudgetMonitor``. ``False`` when the
+    reading cannot be taken.
+    """
+
+    async def __call__(self) -> bool: ...
+
+
+class RendererAboveCeilingProvider(Protocol):
+    """Late-bound :class:`RendererAboveCeilingFn` getter consumed by the shortcut icon job.
+
+    The job is built before the library service it reads through, so bootstrap
+    hands it this getter (a ``LateBinding``). Each call returns the live
+    :class:`RendererAboveCeilingFn`.
+    """
+
+    def __call__(self) -> RendererAboveCeilingFn: ...
 
 
 class ShortcutIconJob(Protocol):

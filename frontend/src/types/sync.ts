@@ -532,12 +532,15 @@ export interface SyncApplyUnitData {
 }
 
 /**
- * A batch of icons the shortcut icon job has written into Steam's grid
- * directory, each to be pointed at with `SetShortcutIcon` under the batch's
- * prune lease.
+ * A batch from the shortcut icon job, set under the batch's prune lease: icons
+ * the backend has written into Steam's grid directory, each to be pointed at
+ * with `SetShortcutIcon`, and wide grids and logos the artwork cache holds, each
+ * to be fetched through `getSgdbSlotArtwork` and set with
+ * `SetCustomArtworkForApp`, one at a time.
  */
 export interface ShortcutIconsData {
   icons: { app_id: number; icon_path: string }[];
+  artwork: { app_id: number; rom_id: number; slot: "grid" | "logo" }[];
   prune_lease_token: string;
 }
 

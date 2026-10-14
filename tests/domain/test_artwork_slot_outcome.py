@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from domain.artwork_slot import ArtworkSlot
-from domain.artwork_slot_outcome import RULED_OUT_SECONDS, ArtworkSlotOutcome, SlotOutcome
+from domain.artwork_slot_outcome import RULED_OUT_SECONDS, ArtworkSlotOutcome, SlotOutcome, slot_waits
 
 NOW = 1_800_000_000.0
 
@@ -69,3 +69,24 @@ class TestNoneAndRefusedRuleTheSlotOutForAWeek:
         )
 
         assert not record.rules_out(sgdb_id=7, now=NOW + 1)
+
+
+class TestWhetherTheJobAsksForASlot:
+    def test_an_empty_slot_with_nothing_recorded_waits(self):
+        assert slot_waits(frozenset(), 100, ArtworkSlot.WIDE_GRID, None, sgdb_id=7, now=NOW)
+
+    def test_a_filled_slot_does_not_wait(self):
+        assert not slot_waits(frozenset({"100.png"}), 100, ArtworkSlot.WIDE_GRID, None, sgdb_id=7, now=NOW)
+
+    def test_a_slot_steamgriddb_had_nothing_for_this_week_does_not_wait(self):
+        assert not slot_waits(frozenset(), 100, ArtworkSlot.LOGO, _none(), sgdb_id=7, now=NOW + 1)
+
+    def test_it_waits_again_once_the_week_is_over(self):
+        assert slot_waits(frozenset(), 100, ArtworkSlot.LOGO, _none(), sgdb_id=7, now=NOW + RULED_OUT_SECONDS)
+
+    def test_a_set_slot_whose_file_is_gone_waits(self):
+        record = ArtworkSlotOutcome.record_set(
+            rom_id=1, slot=ArtworkSlot.LOGO, sgdb_id=7, image_id=99, image_sha256="ab" * 32, recorded_at=NOW
+        )
+
+        assert slot_waits(frozenset(), 100, ArtworkSlot.LOGO, record, sgdb_id=7, now=NOW + 1)

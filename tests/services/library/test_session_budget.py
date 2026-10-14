@@ -375,3 +375,30 @@ class TestPauseGuidanceNamesNoControl:
         from services.library.session_budget import SYNC_PAUSED_BUDGET
 
         assert SYNC_PAUSED_BUDGET.endswith(".")
+
+
+class TestTheShortcutIconJobsReading:
+    """``LibraryService.renderer_above_ceiling``: the reading the shortcut icon job takes before each batch."""
+
+    @pytest.mark.asyncio
+    async def test_at_the_ceiling_after_steam_collected_its_garbage(self, library):
+        from domain.session_budget import EFFECTIVE_CEILING_KB
+
+        library.renderer_rss.rss_kb = EFFECTIVE_CEILING_KB
+
+        assert await library.sync.renderer_above_ceiling() is True
+        assert library.renderer_gc.calls == 1
+
+    @pytest.mark.asyncio
+    async def test_below_the_ceiling(self, library):
+        from domain.session_budget import EFFECTIVE_CEILING_KB
+
+        library.renderer_rss.rss_kb = EFFECTIVE_CEILING_KB - 1
+
+        assert await library.sync.renderer_above_ceiling() is False
+
+    @pytest.mark.asyncio
+    async def test_no_reading_is_not_above_it(self, library):
+        library.renderer_rss.rss_kb = None
+
+        assert await library.sync.renderer_above_ceiling() is False

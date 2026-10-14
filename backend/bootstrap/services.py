@@ -65,7 +65,12 @@ if TYPE_CHECKING:
     from domain.app_directories import AppDirectories
     from domain.update_release import UpdateSource
     from models.shortcut_launcher import ShortcutLauncher
-    from services.protocols import InstalledRomRemoverFn, SaveDirectoriesRecorderFn, SiblingSupersedeFn
+    from services.protocols import (
+        InstalledRomRemoverFn,
+        RendererAboveCeilingFn,
+        SaveDirectoriesRecorderFn,
+        SiblingSupersedeFn,
+    )
 
     from .adapters import AdapterBundle, CallbackBundle, RuntimeBundle, StateBundle
 
@@ -187,6 +192,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     update_in_progress_binding: LateBinding[bool] = LateBinding("update_in_progress")
     migration_pending_binding: LateBinding[bool] = LateBinding("migration_pending")
     sync_in_flight_binding: LateBinding[bool] = LateBinding("sync_in_flight")
+    renderer_above_ceiling_binding: LateBinding[RendererAboveCeilingFn] = LateBinding("renderer_above_ceiling")
     conflict_rules = ConflictRuleSet(
         prune_conflicts=prune_conflicts,
         update_in_progress=update_in_progress_binding.get,
@@ -386,10 +392,12 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             conflict_rules=conflict_rules,
             emit=cfg.runtime.emit,
             sleeper=cfg.runtime.sleeper,
+            clock=cfg.runtime.clock,
             sync_in_flight=sync_in_flight_binding.get,
             cleanup_running=lambda: prune_conflicts.cleanup_running,
             removal_in_flight=removal_in_flight_binding.get,
             panel_connected=cfg.runtime.panel_connected,
+            renderer_above_ceiling=renderer_above_ceiling_binding.get,
             tender_logo=cfg.adapters.tender_logo,
             loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
@@ -438,6 +446,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     )
     pending_sync_binding.set(lambda: sync_service.pending_sync)
     sync_in_flight_binding.set(sync_service.is_sync_in_flight)
+    renderer_above_ceiling_binding.set(lambda: sync_service.renderer_above_ceiling)
 
     rom_install_recorder = RomInstallRecorder(
         config=RomInstallRecorderConfig(

@@ -1,4 +1,4 @@
-"""What one SteamGridDB icon fetch for a ROM answered."""
+"""What one SteamGridDB icon fetch, or one wide grid or logo fetch, for a ROM answered."""
 
 from __future__ import annotations
 
@@ -27,3 +27,18 @@ class IconFetch:
 
     answer: IconAnswer
     data: bytes | None = None
+
+
+class SlotAnswer(StrEnum):
+    """The five answers the icon job acts on differently for a wide grid or a logo."""
+
+    READY = "ready"
+    """The artwork cache holds the image; the frontend fetches it through ``get_sgdb_slot_artwork``."""
+    NONE = "none"
+    """SteamGridDB has no candidate, does not know the game, or the ROM has no SteamGridDB id; recorded."""
+    RATE_LIMITED = "rate_limited"
+    """SteamGridDB answered 429. Wait, then ask again."""
+    KEY_REFUSED = "key_refused"
+    """SteamGridDB answered 401 or 403: the API key is not accepted, so the run ends."""
+    FAILED = "failed"
+    """Anything else. Nothing is recorded, so the next run asks again."""

@@ -13,9 +13,13 @@ outcome and no verb-named mutators.
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from domain._aggregate import cosmic_aggregate
-from domain.artwork_slot import RECORDED_SLOTS, ArtworkSlot
+from domain.artwork_slot import RECORDED_SLOTS, ArtworkSlot, is_slot_filled
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 # How long a ``none`` or ``refused`` outcome keeps its slot from being asked
 # again; why a week is "What was found is recorded" in
@@ -104,6 +108,27 @@ class ArtworkSlotOutcome:
         if self.outcome is SlotOutcome.SET or self.sgdb_id != sgdb_id:
             return False
         return now - self.recorded_at < RULED_OUT_SECONDS
+
+
+def slot_waits(
+    file_names: Iterable[str],
+    app_id: int,
+    slot: ArtworkSlot,
+    recorded: ArtworkSlotOutcome | None,
+    *,
+    sgdb_id: int | None,
+    now: float,
+) -> bool:
+    """Whether the shortcut icon job asks for *app_id*'s wide grid or logo at *now*.
+
+    It does while no file in Steam's grid directory fills the slot
+    (:func:`domain.artwork_slot.is_slot_filled`) and *recorded*, the ROM's
+    outcome for it, does not rule it out for *sgdb_id*, the ROM's SteamGridDB id
+    now.
+    """
+    if is_slot_filled(file_names, app_id, slot):
+        return False
+    return recorded is None or not recorded.rules_out(sgdb_id=sgdb_id, now=now)
 
 
 def _require_recorded(slot: ArtworkSlot) -> None:

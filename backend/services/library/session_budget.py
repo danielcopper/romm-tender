@@ -1,7 +1,8 @@
 """Steam's per-session renderer-heap budget — measurement, pause, and reporting.
 
 Owns every renderer-RSS **reading** the sync subsystem takes, and the verdicts
-drawn from one: the GC-settled measurement itself, the chunk-boundary pause
+drawn from one: the GC-settled measurement itself, whether it stands above the
+ceiling (which the shortcut icon job asks before each batch), the chunk-boundary pause
 decision, the trim of additive chunk work to whatever headroom that decision
 left, the post-preview prognosis, the run-start baseline behind the last-run
 delta, and the live reading the QAM banners poll. The pure arithmetic behind
@@ -173,6 +174,15 @@ class SessionBudgetMonitor:
         return rss_kb
 
     # ── Decisions ────────────────────────────────────────────────
+
+    async def above_ceiling(self) -> bool:
+        """Whether a :meth:`measure_rss` reading stands at or above the effective ceiling.
+
+        The shortcut icon job asks it before each batch it hands over, outside
+        any run of the sync. Fail-open: ``False`` when no reading can be taken.
+        """
+        rss_kb = await self.measure_rss()
+        return rss_kb is not None and rss_kb >= EFFECTIVE_CEILING_KB
 
     async def maybe_pause_for_budget(
         self, *, creates: int, updates: int, limit_kb: int = EFFECTIVE_CEILING_KB

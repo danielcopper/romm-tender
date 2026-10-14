@@ -456,6 +456,10 @@ class LibraryService:
     async def get_session_budget_status(self):
         return await self._session_budget.get_session_budget_status()
 
+    async def renderer_above_ceiling(self) -> bool:
+        """Implements ``services.protocols.RendererAboveCeilingFn``, through the sync's own monitor."""
+        return await self._session_budget.above_ceiling()
+
     # Reporting
     async def report_unit_results(self, rom_id_to_app_id, run_id, unit_id, chunk_index):
         async with self._rules.hold("report_unit_results", prune=True):

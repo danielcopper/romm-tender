@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as backend from "../api/backend";
-import { applyArtwork, cancelArtworkApply, fillEmptyArtwork, isArtworkApplyInFlight } from "./artwork";
+import {
+  applyArtwork,
+  cancelArtworkApply,
+  fillEmptyArtwork,
+  isArtworkApplyInFlight,
+  setJobSlotArtwork,
+} from "./artwork";
 
 describe("applyArtwork", () => {
   beforeEach(() => {
@@ -542,5 +548,93 @@ describe("applyArtwork records the wide grid and the logo it set", () => {
     vi.mocked(backend.reportSgdbSlotArtwork).mockRejectedValue(new Error("net"));
 
     await expect(applyArtwork(42, 5000)).resolves.toBe(3);
+  });
+});
+
+describe("setJobSlotArtwork", () => {
+  const image = (base64: string, token?: string): backend.SgdbSlotArtwork => ({
+    status: "image",
+    base64,
+    image_id: 12,
+    sha256: `sha-${base64}`,
+    sgdb_id: 9999,
+    ...(token ? { prune_lease_token: token } : {}),
+  });
+  const notStopped = () => false;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubGlobal("SteamClient", {
+      Apps: {
+        SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined),
+        SetShortcutIcon: vi.fn(),
+      },
+    });
+    vi.mocked(backend.reportSgdbSlotArtwork).mockResolvedValue({ success: true });
+    vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
+  });
+
+  it("sets the image the per-slot fetch serves under its Steam asset type, and reports it set", async () => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue(image("LL=="));
+
+    await expect(setJobSlotArtwork(42, 5000, "logo", notStopped)).resolves.toBe(true);
+
+    expect(backend.getSgdbSlotArtwork).toHaveBeenCalledWith(42, 5000, "logo");
+    expect(SteamClient.Apps.SetCustomArtworkForApp).toHaveBeenCalledWith(5000, "LL==", "png", 2);
+    expect(backend.reportSgdbSlotArtwork).toHaveBeenCalledWith(42, "logo", "set", 9999, 12, "sha-LL==");
+  });
+
+  it("writes nothing into a slot that has filled since the job looked", async () => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
+
+    await expect(setJobSlotArtwork(42, 5000, "grid", notStopped)).resolves.toBe(false);
+
+    expect(SteamClient.Apps.SetCustomArtworkForApp).not.toHaveBeenCalled();
+    expect(backend.reportSgdbSlotArtwork).not.toHaveBeenCalled();
+  });
+
+  it("reports an image Steam refuses as refused", async () => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue(image("GG=="));
+    vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mockRejectedValueOnce(new Error("Steam refused"));
+
+    await expect(setJobSlotArtwork(42, 5000, "grid", notStopped)).resolves.toBe(false);
+
+    expect(backend.reportSgdbSlotArtwork).toHaveBeenCalledWith(42, "grid", "refused", 9999, 12, "sha-GG==");
+  });
+
+  it("writes nothing once a game page's apply for the shortcut has started", async () => {
+    const slow = deferred<backend.SgdbSlotArtwork>();
+    vi.mocked(backend.getSgdbSlotArtwork).mockReturnValueOnce(slow.promise).mockResolvedValue({ status: "skip" });
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false });
+
+    const setting = setJobSlotArtwork(42, 5000, "grid", notStopped);
+    await fillEmptyArtwork(42, 5000);
+    slow.resolve(image("JOB="));
+
+    await expect(setting).resolves.toBe(false);
+    expect(SteamClient.Apps.SetCustomArtworkForApp).not.toHaveBeenCalled();
+    expect(backend.reportSgdbSlotArtwork).not.toHaveBeenCalled();
+  });
+
+  it("writes nothing once the job's batch has stopped", async () => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue(image("GG=="));
+
+    await expect(setJobSlotArtwork(42, 5000, "grid", () => true)).resolves.toBe(false);
+
+    expect(SteamClient.Apps.SetCustomArtworkForApp).not.toHaveBeenCalled();
+  });
+
+  it("holds the image's lease through its Steam write", async () => {
+    const write = deferred<void>();
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue(image("GG==", "grid-lease"));
+    vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mockImplementationOnce(() => write.promise);
+
+    const setting = setJobSlotArtwork(42, 5000, "grid", notStopped);
+    await vi.waitFor(() => expect(SteamClient.Apps.SetCustomArtworkForApp).toHaveBeenCalled());
+    expect(backend.releasePruneConflictLease).not.toHaveBeenCalled();
+
+    write.resolve(undefined);
+    await setting;
+    expect(backend.releasePruneConflictLease).toHaveBeenCalledWith("grid-lease");
   });
 });

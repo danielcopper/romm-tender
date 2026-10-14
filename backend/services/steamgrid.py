@@ -41,7 +41,7 @@ from lib.errors import (
     SgdbRateLimitedError,
     SteamGridDirMissingError,
 )
-from models.shortcut_icon import IconAnswer, IconFetch
+from models.shortcut_icon import IconAnswer, IconFetch, SlotAnswer
 
 if TYPE_CHECKING:
     import logging
@@ -589,9 +589,7 @@ class SteamGridService:
         found = self._find_slot_artwork_io(rom_id, slot, sgdb_id) if sgdb_id is not None else _NoArtwork.NONE
         if found is _NoArtwork.NONE:
             if slot in RECORDED_SLOTS:
-                self._record_slot_outcome(
-                    ArtworkSlotOutcome.record_none(rom_id=rom_id, slot=slot, sgdb_id=sgdb_id, recorded_at=now)
-                )
+                self._record_none(rom_id, slot, sgdb_id, now)
             return {"status": "none"}
         if found is _NoArtwork.FAILED:
             return {"status": "failed"}
@@ -620,6 +618,11 @@ class SteamGridService:
         except Exception as e:
             self._logger.warning(f"SGDB {slot.value} fetch failed for rom_id={rom_id}: {e}")
         return _NoArtwork.FAILED
+
+    def _record_none(self, rom_id: int, slot: ArtworkSlot, sgdb_id: int | None, now: float) -> None:
+        self._record_slot_outcome(
+            ArtworkSlotOutcome.record_none(rom_id=rom_id, slot=slot, sgdb_id=sgdb_id, recorded_at=now)
+        )
 
     def _record_slot_outcome(self, record: ArtworkSlotOutcome) -> None:
         """Save *record*; a ROM with no ``roms`` row has nothing to record it against."""
@@ -854,6 +857,41 @@ class SteamGridService:
         if not self._sgdb_api.download_image(result["data"][0]["url"], cached):
             return IconAnswer.FAILED
         return None
+
+    def do_fetch_slot_artwork(self, rom_id: int, slot: ArtworkSlot) -> SlotAnswer:
+        """Implements ``services.protocols.ShortcutIconSource.do_fetch_slot_artwork``."""
+        rom_id = int(rom_id)
+        if not self._settings.get("steamgriddb_api_key"):
+            return SlotAnswer.FAILED
+        sgdb_id = self._resolve_sgdb_id_state_only(rom_id)
+        sgdb_id = int(sgdb_id) if sgdb_id else None
+        found = self._download_for_the_job_io(rom_id, slot, sgdb_id) if sgdb_id is not None else _NoArtwork.NONE
+        if found is _NoArtwork.NONE:
+            self._record_none(rom_id, slot, sgdb_id, self._clock.time())
+            return SlotAnswer.NONE
+        if found is _NoArtwork.FAILED:
+            return SlotAnswer.FAILED
+        if isinstance(found, SlotAnswer):
+            return found
+        return SlotAnswer.READY
+
+    def _download_for_the_job_io(
+        self, rom_id: int, slot: ArtworkSlot, sgdb_id: int
+    ) -> _CachedArtwork | _NoArtwork | SlotAnswer:
+        """The slot's cached image, downloaded first when needed, or the answer a 429, 401 or 403 calls for."""
+        try:
+            return self._download_sgdb_artwork_io(sgdb_id, rom_id, slot.value)
+        except SgdbRateLimitedError:
+            return SlotAnswer.RATE_LIMITED
+        except SgdbApiError as e:
+            if e.status_code == 404:
+                return _NoArtwork.NONE
+            if e.status_code in (401, 403):
+                return SlotAnswer.KEY_REFUSED
+            self._logger.warning(f"SGDB {slot.value} fetch failed for rom_id={rom_id}: HTTP {e.status_code}")
+        except Exception as e:
+            self._logger.warning(f"SGDB {slot.value} fetch failed for rom_id={rom_id}: {e}")
+        return _NoArtwork.FAILED
 
     def _downscaled(self, rom_id: int, cached: str) -> IconFetch:
         icon = self._downscale_icon(self._sgdb_artwork_cache.read_bytes(cached))

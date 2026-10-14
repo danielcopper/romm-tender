@@ -63,6 +63,7 @@ from bootstrap import (
 )
 from domain.app_directories import AppDirectories
 from domain.identity import MIN_ROMM_VERSION, PACKAGE_NAME, VERSION
+from domain.session_budget import EFFECTIVE_CEILING_KB
 from domain.sync_run_kind import SyncRunKind
 from domain.update_release import UpdateSource
 from lib.errors import Refused
@@ -846,6 +847,19 @@ class TestWireServices:
             (False, True, False),
             (False, True, True),
         ]
+        deps["loop"].close()
+
+    def test_the_icon_job_reads_steams_renderer_through_the_syncs_monitor(self, tmp_path):
+        deps = self._make_deps(tmp_path)
+        result = wire_services(self._make_config(deps))
+        job = result.shortcut_icon_service
+        deps["renderer_rss"].rss_kb = EFFECTIVE_CEILING_KB
+
+        above = deps["loop"].run_until_complete(job._renderer_above_ceiling()())
+
+        assert job._renderer_above_ceiling() == result.sync_service.renderer_above_ceiling
+        assert above is True
+        assert job._clock is deps["clock"]
         deps["loop"].close()
 
     def test_pending_sync_binding_observes_library_rebinds(self, tmp_path):
