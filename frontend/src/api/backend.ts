@@ -1587,8 +1587,12 @@ export const deleteBiosFolder = endpoint<[string, string], BiosDeleteResult>("de
 export const savesListFileVersions = endpoint<[number, string, string], ListFileVersionsResult>(
   "saves_list_file_versions",
 );
-export const savesRollbackToVersion = endpoint<[number, string, number], RollbackStatus>("saves_rollback_to_version");
-export const copySaveToSlot = endpoint<[number, number, string], CopySaveToSlotStatus>("copy_save_to_slot");
+export const savesRollbackToVersion = endpoint<[number, string, number], RollbackStatus | EndpointFailure>(
+  "saves_rollback_to_version",
+);
+export const copySaveToSlot = endpoint<[number, number, string], CopySaveToSlotStatus | EndpointFailure>(
+  "copy_save_to_slot",
+);
 
 // Achievements endpoints
 export const getAchievements = endpoint<[number], AchievementList | EndpointFailure>("get_achievements");

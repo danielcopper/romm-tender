@@ -459,7 +459,7 @@ describe("VersionHistoryPanel", () => {
       );
     });
 
-    it("a refusal with no status shows nothing and keeps the list open", async () => {
+    it("a refusal with no status toasts its reason and keeps the list open", async () => {
       vi.mocked(backend.savesRollbackToVersion).mockResolvedValue({
         success: false,
         reason: "blocked_by_update",
@@ -469,9 +469,30 @@ describe("VersionHistoryPanel", () => {
       fireEvent.click(getByText("Restore"));
       await flushAsync();
       await flushAsync();
-      expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "Couldn't restore the save: An update is being installed" }),
+      );
       expect(onRestored).not.toHaveBeenCalled();
       expect(getByText("Restore")).not.toBeDisabled();
+    });
+
+    it("a restore whose download RomM refused toasts RomM's answer and keeps the list open", async () => {
+      vi.mocked(backend.savesRollbackToVersion).mockResolvedValue({
+        success: false,
+        reason: "server_error",
+        message: "RomM reported an error (HTTP 500 Internal Server Error)",
+      });
+      const { getByText, onRestored, container } = await expand();
+      fireEvent.click(getByText("Restore"));
+      await flushAsync();
+      await flushAsync();
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: "Couldn't restore the save: RomM reported an error (HTTP 500 Internal Server Error)",
+        }),
+      );
+      expect(onRestored).not.toHaveBeenCalled();
+      expect(container.textContent).toContain("▾");
     });
 
     it("says a restore that threw could not be confirmed, with the error's message as the subtext", async () => {

@@ -6,8 +6,9 @@
  * caller.
  */
 
+import { isEndpointFailure } from "../api/backend";
 import { displaySlot, formatSaveTimeAgo } from "./saveHelpers";
-import type { CopySaveToSlotStatus, RollbackStatus, SlotDeleteInfo, SyncConflict } from "../types";
+import type { CopySaveToSlotStatus, EndpointFailure, RollbackStatus, SlotDeleteInfo, SyncConflict } from "../types";
 
 /** The toast for a restore refused as unsupported — the backend's own explanation where it gave one. */
 export function unsupportedRestoreMessage(result: Extract<RollbackStatus, { status: "unsupported" }>): string {
@@ -33,8 +34,14 @@ export function unsupportedCopyMessage(result: Extract<CopySaveToSlotStatus, { s
 
 export type CopyToSlotFeedback = { kind: "toast"; message: string } | { kind: "conflict"; conflict: SyncConflict };
 
-/** Map a CopySaveToSlotStatus to user-facing toast feedback or conflict modal requirement. */
-export function copyToSlotFeedback(result: CopySaveToSlotStatus, targetSlot: string): CopyToSlotFeedback | null {
+/** Map a copy's answer to user-facing toast feedback or conflict modal requirement. */
+export function copyToSlotFeedback(
+  result: CopySaveToSlotStatus | EndpointFailure,
+  targetSlot: string,
+): CopyToSlotFeedback | null {
+  if (isEndpointFailure(result)) {
+    return { kind: "toast", message: `Couldn't copy the save: ${result.message}` };
+  }
   switch (result.status) {
     case "ok":
       return { kind: "toast", message: `Save copied to slot '${displaySlot(targetSlot)}'` };
@@ -83,16 +90,20 @@ export function copyToSlotFeedback(result: CopySaveToSlotStatus, targetSlot: str
     case "invalid_slot_name":
       return { kind: "toast", message: "Enter a valid slot name." };
     default:
-      // A refusal from the hold in `SaveService.copy_save_to_slot`, which carries
-      // no status: it shows nothing, as for a restore (`rollbackFeedback`).
       return null;
   }
 }
 
 export type RollbackFeedback = { kind: "toast"; message: string } | { kind: "conflict"; conflict: SyncConflict };
 
-/** Map a RollbackStatus to user-facing toast feedback or conflict modal requirement. */
-export function rollbackFeedback(result: RollbackStatus, versionUpdatedAt: string | null): RollbackFeedback | null {
+/** Map a restore's answer to user-facing toast feedback or conflict modal requirement. */
+export function rollbackFeedback(
+  result: RollbackStatus | EndpointFailure,
+  versionUpdatedAt: string | null,
+): RollbackFeedback | null {
+  if (isEndpointFailure(result)) {
+    return { kind: "toast", message: `Couldn't restore the save: ${result.message}` };
+  }
   switch (result.status) {
     case "ok":
       return { kind: "toast", message: `Save restored from ${formatSaveTimeAgo(versionUpdatedAt)}` };
@@ -140,10 +151,6 @@ export function rollbackFeedback(result: RollbackStatus, versionUpdatedAt: strin
     case "unsupported":
       return { kind: "toast", message: unsupportedRestoreMessage(result) };
     default:
-      // A refusal carries no status, and the endpoint's type does not say so: the
-      // save rules' hold in `SaveService.rollback_to_version` refuses a restore
-      // while an update installs, a RetroDECK migration is pending or a
-      // removed-game cleanup runs. It shows nothing.
       return null;
   }
 }

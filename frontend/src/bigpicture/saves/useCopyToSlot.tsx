@@ -10,8 +10,8 @@
 import { useCallback } from "react";
 import { showModal } from "@decky/ui";
 import { showToast } from "../../utils/toast";
-import { copySaveToSlot, debugLog } from "../../api/backend";
-import type { CopySaveToSlotStatus, SaveSlotSummary } from "../../types";
+import { copySaveToSlot, debugLog, isEndpointFailure } from "../../api/backend";
+import type { CopySaveToSlotStatus, EndpointFailure, SaveSlotSummary } from "../../types";
 import { showSyncConflictModal } from "../../shared/SyncConflictModal";
 import { detach } from "../../utils/detach";
 import { copyToSlotFeedback } from "../../utils/saveSlotWording";
@@ -19,7 +19,11 @@ import { CopyToSlotModal } from "./CopyToSlotModal";
 import type { CopyToSlotHandler } from "./CopyToSlotButton";
 import { announceSaveSync } from "../../utils/saveSyncEvents";
 
-async function handleResult(result: CopySaveToSlotStatus, target: string, romId: number): Promise<void> {
+async function handleResult(
+  result: CopySaveToSlotStatus | EndpointFailure,
+  target: string,
+  romId: number,
+): Promise<void> {
   const feedback = copyToSlotFeedback(result, target);
   if (feedback === null) return;
   if (feedback.kind === "conflict") {
@@ -28,7 +32,7 @@ async function handleResult(result: CopySaveToSlotStatus, target: string, romId:
   }
   showToast(feedback.message);
   // Only a copy refreshes the slot views: `already_present` copied nothing.
-  if (result.status === "ok") {
+  if (!isEndpointFailure(result) && result.status === "ok") {
     announceSaveSync(romId);
   }
 }

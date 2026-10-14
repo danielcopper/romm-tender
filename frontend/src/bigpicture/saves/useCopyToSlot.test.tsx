@@ -10,9 +10,10 @@ import type { CopySaveToSlotStatus, SaveSlotSummary, SyncConflict } from "../../
 
 // Control the endpoint + the conflict modal directly; everything else (showModal,
 // toaster) comes from the global @decky/ui / `api/host` stubs.
-vi.mock("../../api/backend", () => ({
+vi.mock("../../api/backend", async () => ({
   copySaveToSlot: vi.fn(),
   debugLog: vi.fn().mockResolvedValue(undefined),
+  isEndpointFailure: (await vi.importActual<typeof import("../../api/backend")>("../../api/backend")).isEndpointFailure,
 }));
 vi.mock("../../shared/SyncConflictModal", () => ({
   showSyncConflictModal: vi.fn().mockResolvedValue("resolved"),
@@ -174,9 +175,11 @@ describe("useCopyToSlot", () => {
     expect(dataChanged).not.toHaveBeenCalled();
   });
 
-  it("a refusal with no status shows nothing and refreshes nothing", async () => {
+  it("a refusal with no status toasts its reason and refreshes nothing", async () => {
     await runCopy({ success: false, reason: "blocked_by_update", message: "An update is being installed" } as never);
-    expect(toaster.toast).not.toHaveBeenCalled();
+    expect(toaster.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ body: "Couldn't copy the save: An update is being installed" }),
+    );
     expect(showSyncConflictModal).not.toHaveBeenCalled();
     expect(dataChanged).not.toHaveBeenCalled();
   });
