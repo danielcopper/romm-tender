@@ -251,8 +251,7 @@ export interface CachedGameDetail extends BiosAnswer {
   /**
    * For an installed ROM whose recorded file and folder are both gone, the path
    * the install record names (the folder for a folder-backed download); `null`
-   * otherwise. The page then offers "Download again" and "Forget this download"
-   * instead of Play.
+   * otherwise. The page then shows its missing-file state instead of Play.
    */
   file_missing_at?: string | null;
 }

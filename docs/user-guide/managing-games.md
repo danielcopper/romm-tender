@@ -610,6 +610,11 @@ open the page. If the drive or folder comes back, the game is playable again as 
   an uninstall, and no file is touched. It is refused while the file or folder is in fact there: the drive or folder
   came back, and the page offers **Play** again at once.
 
+If RomM has [no file](#downloading-roms) for the game either, there is nothing to download again: the button reads _"No
+file on RomM"_ and is greyed out, and so is **Download again** in the menu. **File missing** and the path stay, as they
+are about your device. **Forget this download** still works and clears the record of the download; the game then shows
+the greyed-out _"No file on RomM"_ button of a game that is not downloaded.
+
 While the file is missing, the **RomM Actions** menu behind the gamepad icon at the right of the play row offers no
 **Uninstall** — there is nothing to delete — and neither the disc picker nor the **CPU button** (the emulator picker) is
 shown.
