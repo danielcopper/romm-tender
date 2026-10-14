@@ -257,6 +257,27 @@ def _detail_line(detail: str) -> str:
     return line if len(line) <= _DETAIL_LIMIT else line[: _DETAIL_LIMIT - 1] + "\u2026"
 
 
+def _reported_message(exc: RommReportedServerError) -> str:
+    """:func:`classify_error`'s message for a 5xx RomM reported itself."""
+    return f"RomM reported an error (HTTP {exc.status_code}) \u2014 {_detail_line(exc.detail)}"
+
+
+def _server_error_message(exc: RommServerError) -> str:
+    """:func:`classify_error`'s message for any other 5xx."""
+    return f"Server error ({exc.status_code or 500}) \u2014 check your RomM server logs"
+
+
+def _is_client_refusal(exc: Exception) -> bool:
+    """Whether *exc* is a RomM error carrying a 4xx status."""
+    return isinstance(exc, RommApiError) and exc.status_code is not None and 400 <= exc.status_code < 500
+
+
+def _refused_message(exc: RommApiError) -> str:
+    """:func:`classify_error`'s message for a 4xx no earlier branch answers: status and phrase, never the address."""
+    answer = f"HTTP {exc.status_code} {exc.phrase}" if exc.phrase else f"HTTP {exc.status_code}"
+    return f"RomM or a proxy in front of it refused the request ({answer})"
+
+
 def classify_error(exc):
     """Return ``(reason, user_friendly_message)`` for an exception.
 
@@ -292,10 +313,9 @@ def classify_error(exc):
     if isinstance(exc, RommRateLimitedError):
         return "rate_limited", "RomM is rate-limiting requests \u2014 try again in a moment"
     if isinstance(exc, RommReportedServerError):
-        return "server_error", f"RomM reported an error (HTTP {exc.status_code}) \u2014 {_detail_line(exc.detail)}"
+        return "server_error", _reported_message(exc)
     if isinstance(exc, RommServerError):
-        code = exc.status_code or 500
-        return ErrorCode.SERVER_UNREACHABLE.value, f"Server error ({code}) \u2014 check your RomM server logs"
+        return ErrorCode.SERVER_UNREACHABLE.value, _server_error_message(exc)
     if isinstance(exc, RommNotFoundError):
         return ErrorCode.NOT_FOUND.value, "Resource not found on server"
     if isinstance(exc, RommUnsupportedError):
@@ -307,9 +327,8 @@ def classify_error(exc):
             "device_sync_disabled",
             "Save sync is disabled for this device on the RomM server — enable it in RomM's device settings",
         )
-    if isinstance(exc, RommApiError) and exc.status_code is not None and 400 <= exc.status_code < 500:
-        answer = f"HTTP {exc.status_code} {exc.phrase}" if exc.phrase else f"HTTP {exc.status_code}"
-        return ErrorCode.UNKNOWN.value, f"RomM or a proxy in front of it refused the request ({answer})"
+    if _is_client_refusal(exc):
+        return ErrorCode.UNKNOWN.value, _refused_message(exc)
     if isinstance(exc, RommApiError):
         return ErrorCode.SERVER_UNREACHABLE.value, str(exc)
     if isinstance(exc, (ConnectionError, TimeoutError, socket.gaierror)):

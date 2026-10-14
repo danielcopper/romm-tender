@@ -122,6 +122,27 @@ class SetupWizard:
             **extra,
         }
 
+    def _listing_failure(self, rom_id: int, exc: Exception) -> tuple[str, str | None]:
+        """The ``recommended_action`` a failed server-saves query answers, and the message ``romm_refused`` carries."""
+        if isinstance(exc, RommNotFoundError):
+            # The server ANSWERED — it has no such ROM, or no such device id
+            # (#1560's shape: a RomM database wipe drops this device's
+            # registration). Reporting that as "unreachable" sends the user to
+            # check a connection that is plainly working, so it gets its own
+            # recommendation. The wizard still HOLDS: a 404 leaves the server's
+            # slot inventory just as unproven as an outage does, so
+            # auto-confirming the default slot could still clobber real server
+            # saves on the first post-confirmation sync.
+            self._logger.warning(f"get_save_setup_info({rom_id}): server has no such rom or device: {exc}")
+            return "not_found", None
+        self._logger.warning(f"get_save_setup_info({rom_id}): failed to list server saves: {exc}")
+        if not isinstance(exc, RommApiError):
+            return "server_unreachable", None
+        reason, message = classify_error(exc)
+        if reason == "server_unreachable":
+            return "server_unreachable", None
+        return "romm_refused", message
+
     async def get_save_setup_info(self, rom_id: int) -> dict[str, Any]:
         """Get info needed for the first-sync setup wizard.
 
@@ -160,49 +181,15 @@ class SetupWizard:
                     lambda: self._romm_api.list_saves(rom_id, device_id=device_id),
                 ),
             )
-        except RommNotFoundError as e:
-            # The server ANSWERED — it has no such ROM, or no such device id
-            # (#1560's shape: a RomM database wipe drops this device's
-            # registration). Reporting that as "unreachable" sends the user to
-            # check a connection that is plainly working, so it gets its own
-            # recommendation. The wizard still HOLDS: a 404 leaves the server's
-            # slot inventory just as unproven as an outage does, so
-            # auto-confirming the default slot could still clobber real server
-            # saves on the first post-confirmation sync.
-            self._logger.warning(
-                f"get_save_setup_info({rom_id}): server has no such rom or device: {e}",
-            )
-            return self._setup_query_failed(
-                local_files=local_files,
-                local_file_info=local_file_info,
-                game_state=game_state,
-                default_slot=default_slot,
-                recommended_action="not_found",
-            )
-        except RommApiError as e:
-            self._logger.warning(
-                f"get_save_setup_info({rom_id}): failed to list server saves: {e}",
-            )
-            reason, message = classify_error(e)
-            refused = reason != "server_unreachable"
-            return self._setup_query_failed(
-                local_files=local_files,
-                local_file_info=local_file_info,
-                game_state=game_state,
-                default_slot=default_slot,
-                recommended_action="romm_refused" if refused else "server_unreachable",
-                message=message if refused else None,
-            )
         except Exception as e:
-            self._logger.warning(
-                f"get_save_setup_info({rom_id}): failed to list server saves: {e}",
-            )
+            recommended_action, message = self._listing_failure(rom_id, e)
             return self._setup_query_failed(
                 local_files=local_files,
                 local_file_info=local_file_info,
                 game_state=game_state,
                 default_slot=default_slot,
-                recommended_action="server_unreachable",
+                recommended_action=recommended_action,
+                message=message,
             )
 
         # Group server saves by slot
