@@ -1,7 +1,7 @@
 ---
 status: accepted
 decided: 2026-08-12
-updated: 2026-10-05
+updated: 2026-10-14
 amended-by: [0042]
 ---
 
@@ -427,3 +427,15 @@ Tender never deletes, moves or renames such a file, nor its saves; uninstalling 
 shortcut. Tender's own downloads live in its library and keep full deletion authority there. A symlink stays an unusable
 namesake unless it is Tender's own: a link that points at a library file Tender records, which Tender removes without
 following it.
+
+## Amendment — a sibling recorded at the adoption's own path hands its record over
+
+Recorded for [#2408](https://github.com/danielcopper/romm-tender/issues/2408). The superseded sibling is not always
+somewhere else. When RomM lists a game under a new id, the new version keeps the old one's file name, so the old version
+can be recorded at the very path the adoption takes over. Such a sibling is not superseded: its install record is handed
+over and its files stay, because they are the content the dialog promises to keep. Only a sibling recorded at another
+path is removed. That sibling may itself be an adopted install rather than a download of Tender's, and it can be
+downloaded again only while RomM still holds it. A sibling bound to a shortcut of its own
+([ADR-0021](0021-sibling-group-one-shortcut-binding-active-version.md) §5) is neither removed nor handed over. Nor is
+every refusal settled before the supersede: the content is checked again after it, and a refusal that follows a
+hand-over leaves the file untouched.
