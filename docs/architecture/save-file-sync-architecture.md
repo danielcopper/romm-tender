@@ -254,6 +254,12 @@ tracking is cleared, and the slot starts fresh — with every prior save recover
 whitespace / `None` slot **name** is a different thing entirely: it is rejected up front with
 `reason="invalid_slot_name"` — the slot-less legacy bucket is no longer a switch target, see below.)
 
+On the SAVES tab every slot is a collapsible panel, and the active slot's panel starts open. A panel reads that starting
+state only when it is built, and its key carries whether its slot is active: when the active slot changes — **Activate
+Slot**, or a copy that makes its target active — the two panels whose slot gained or lost that state are rebuilt, so the
+new active slot opens and the old one closes, reading its files again when it is reopened. Every other panel keeps its
+state.
+
 #### Inside `.romm-backup` — naming and retention
 
 Backups live in `<saves_dir>/.romm-backup` and are named `<name>_<ts>[_<n>]<ext>`, where `<ts>` is the `YYYYMMDD_HHMMSS`
@@ -1271,13 +1277,21 @@ rollback API.
 - **The listing after the pre-flight fails**: switch never runs. A call that could not reach RomM is
   `server_unreachable`, a definitive 404 `not_found`, and any other RomM answer `romm_refused` with `classify_error`'s
   message, which the panel words "Couldn't restore the save: …".
-- **Step 1 (download) fails**: state is not mutated. Status: `not_found` (or surfaced error). Local file unchanged.
-  Where this device cannot write the download (`DeviceWriteError`, a full disk among them) the status is `write_failed`,
-  its message naming the system's words for the fault, and the panel words it "Couldn't restore the save: …".
+- **Step 1 (download) fails**: state is not mutated. Local file unchanged. A RomM error is not caught here: the endpoint
+  answers the shared failure shape (`success: false`) with `classify_error`'s reason and message. Where this device
+  cannot write the download (`DeviceWriteError`, a full disk among them) the status is `write_failed`, its message
+  naming the system's words for the fault, and the panel words it "Couldn't restore the save: …".
 - **Step 1 (download) succeeds, step 2 (PUT) fails**: state mutation from the download is persisted. Status:
   `put_failed`. Local file and local state both point at the target. Cross-device propagation is incomplete — other
   devices still see the original newest save. Calling `rollback_to_version` again is safe and idempotent: step 1 is
   already done, step 2 retries the PUT.
+- **Refused by the save rules**: while an update installs, a RetroDECK migration is pending or a removed-game cleanup
+  runs, the hold in `SaveService.rollback_to_version` refuses before any of the above, with the shared failure shape.
+
+The panel words both failure-shape answers "Couldn't restore the save: …", followed by the endpoint's message. After a
+restore that went through (`ok` or `put_failed`) only the restored file's Previous Versions closes, and it reads its
+list again when reopened; every other panel on the tab keeps its state, and an open version list re-reads itself on the
+`romm_data_changed` the restore dispatches.
 
 ## Copy a save to another slot
 
@@ -1328,8 +1342,10 @@ The status union mirrors `RollbackStatus`:
 server_unreachable{message} | conflict_blocked{conflicts} | preflight_failed{errors} | target_slot_busy{message} |
 already_present{existing_id} | copy_failed{message}`.
 On `ok` the frontend dispatches `romm_data_changed` so the parent re-fetches — refreshing both the source and the target
-slot views. The source slot is excluded from the target picker (a same-slot copy is just a rollback) and the legacy `""`
-bucket is excluded as a target (it stays a read-only source).
+slot views. Outside the union the endpoint answers the shared failure shape (`success: false`) when the save rules' hold
+in `SaveService.copy_save_to_slot` refuses, as for a restore; the panel words it "Couldn't copy the save: …", followed
+by the endpoint's message, and refreshes nothing. The source slot is excluded from the target picker (a same-slot copy
+is just a rollback) and the legacy `""` bucket is excluded as a target (it stays a read-only source).
 
 ## RomM Save Sync API Behaviour
 

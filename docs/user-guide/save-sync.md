@@ -150,6 +150,11 @@ A game whose save Tender does not sync is refused here too, and so are switching
 — for example a memory card every game shares (standalone PCSX2's, even though Tender knows its folder), a save written
 into the game file itself, or saves written beside it; the message says why.
 
+Copying a save and restoring an older version are also refused while Tender installs an update, while a
+[RetroDECK home migration](retrodeck-path-migration.md) is waiting, and while **Clean Up Removed RomM Games** runs.
+Either press then shows "Couldn't copy the save: …" or "Couldn't restore the save: …" with the reason, and nothing
+changes.
+
 ## Core Switch Warning
 
 When you switch the emulator core for a game (e.g., from mGBA to gpSP for GBA), Tender detects the change and shows a
