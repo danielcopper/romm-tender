@@ -527,9 +527,9 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     setActionPending("artwork");
     const admission = capturePruneLeaseAdmission(`game-detail:${appId}`);
     try {
-      // Step 1: re-download the RomM cover, rename to {app_id}p.png, and
-      // patch cover_path on the registry row so the game info panel can
-      // render the refreshed image.
+      // Re-download the RomM cover, rename to {app_id}p.png, and patch
+      // cover_path on the registry row so the game info panel can render the
+      // refreshed image.
       const coverResult = await refreshCoverArtwork(romId).catch(
         (e): { success: boolean; reason?: WireReason | "exception"; message: string; cover_path?: string } => {
           detach(debugLog(`refreshCoverArtwork rejected: ${e}`));
