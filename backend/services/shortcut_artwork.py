@@ -113,11 +113,17 @@ class ShortcutArtworkServiceConfig:
 
 @dataclass(frozen=True)
 class _Item:
-    """One shortcut's work in a pass: the slots it waits for, in order, after the logo icon where it waits for that."""
+    """One shortcut's work in a pass: the slots it waits for, in order, after the logo icon where it waits for that.
+
+    *generation* is the game page's icon generation for *app_id*, taken
+    before ``shortcuts.vdf`` was read for the plan; an icon is written and
+    handed over only while it is unchanged.
+    """
 
     rom_id: int
     app_id: int
     slots: tuple[ArtworkSlot, ...]
+    generation: int
     logo_icon: bool = False
 
 
@@ -130,6 +136,16 @@ class _Plan:
 
 
 @dataclass(frozen=True)
+class _Bound:
+    """What the plan reads before ``shortcuts.vdf``: Tender's two icons' paths, the bound ROMs and their outcomes."""
+
+    placeholder: str
+    logo_path: str | None
+    roms: dict[int, Rom]
+    outcomes: dict[tuple[int, ArtworkSlot], ArtworkSlotOutcome | None]
+
+
+@dataclass(frozen=True)
 class _Grid:
     """Steam's grid directory and its listing, ``None`` where it could not be taken."""
 
@@ -139,7 +155,7 @@ class _Grid:
 
 @dataclass(frozen=True)
 class _Finished:
-    """An icon for *app_id*, and the game-page generation the job read before it fetched.
+    """An icon for *app_id*, and the game-page generation its item carried, taken when the run was planned.
 
     *written* is SteamGridDB's icon the job wrote, whose outcome the frontend
     reports; ``None`` for the logo icon, which adds nothing to the ``none``
@@ -316,7 +332,7 @@ class ShortcutArtworkService:
             return
         self._backoff = 0.0
         self._key_refused = False
-        plan = await self._loop.run_in_executor(None, self._plan_io)
+        plan = await self._plan()
         if plan is None:
             return
         for work in plan.passes:
@@ -350,14 +366,24 @@ class ShortcutArtworkService:
             while batch and not self._stopped:
                 await self._flush(batch)
 
-    def _plan_io(self) -> _Plan | None:
-        """Lay down the two fixed icons and derive the two passes.
+    async def _plan(self) -> _Plan | None:
+        """Derive the run's two passes, taking the game page's icon generations before ``shortcuts.vdf`` is read.
 
-        ``None`` when the grid directory cannot be written or ``shortcuts.vdf``
-        cannot be read. A logo icon that cannot be read is no reason to stop: the
-        plan then has no logo icon path, and a game SteamGridDB has no icon for keeps
-        its placeholder. Where the grid directory cannot be listed, no wide grid
-        or logo is asked for, nor an icon whose path is in that directory.
+        A pick on the game page made after the file was read moves its
+        generation on, so the job neither writes nor hands over an icon over it.
+        """
+        bound = await self._loop.run_in_executor(None, self._bound_io)
+        if bound is None:
+            return None
+        generations = {app_id: self._source.icon_generation(app_id) for app_id in bound.roms}
+        return await self._loop.run_in_executor(None, self._plan_io, bound, generations)
+
+    def _bound_io(self) -> _Bound | None:
+        """Lay down the two fixed icons and read the bound ROMs with their recorded outcomes.
+
+        ``None`` when the grid directory cannot be written. A logo icon that
+        cannot be read is no reason to stop: there is then no logo icon path,
+        and a game SteamGridDB has no icon for keeps its placeholder.
         """
         try:
             placeholder = self._steam_config.ensure_grid_file(PLACEHOLDER_ICON_NAME, PLACEHOLDER_ICON_PNG)
@@ -369,6 +395,22 @@ class ShortcutArtworkService:
         except OSError as e:
             self._logger.warning(f"Shortcut artwork: could not write Tender's icons: {e}")
             return None
+        with self._uow_factory() as uow:
+            roms = {rom.shortcut_app_id: rom for rom in uow.roms.iter_all() if rom.shortcut_app_id is not None}
+            outcomes = {
+                (rom.rom_id, slot): uow.artwork_slot_outcomes.get(rom.rom_id, slot)
+                for rom in roms.values()
+                for slot in (ArtworkSlot.ICON, ArtworkSlot.WIDE_GRID, ArtworkSlot.LOGO)
+            }
+        return _Bound(placeholder, logo_path, roms, outcomes)
+
+    def _plan_io(self, bound: _Bound, generations: dict[int, int]) -> _Plan | None:
+        """Read ``shortcuts.vdf`` and list the grid directory, and derive the two passes from them and *bound*.
+
+        ``None`` when ``shortcuts.vdf`` cannot be read. Where the grid
+        directory cannot be listed, no wide grid or logo is asked for, nor an
+        icon whose path is in that directory.
+        """
         icons = self._steam_config.read_shortcut_icons()
         if icons is None:
             return None
@@ -377,15 +419,8 @@ class ShortcutArtworkService:
         except OSError as e:
             self._logger.warning(f"Shortcut artwork: could not list Steam's grid directory: {e}")
             file_names = None
-        with self._uow_factory() as uow:
-            roms = {rom.shortcut_app_id: rom for rom in uow.roms.iter_all() if rom.shortcut_app_id is not None}
-            outcomes = {
-                (rom.rom_id, slot): uow.artwork_slot_outcomes.get(rom.rom_id, slot)
-                for rom in roms.values()
-                for slot in (ArtworkSlot.ICON, ArtworkSlot.WIDE_GRID, ArtworkSlot.LOGO)
-            }
-        grid = _Grid(os.path.dirname(placeholder), file_names)
-        return _Plan(logo_path, self._passes(roms, icons, grid, outcomes))
+        grid = _Grid(os.path.dirname(bound.placeholder), file_names)
+        return _Plan(bound.logo_path, self._passes(bound.roms, icons, grid, bound.outcomes, generations))
 
     def _passes(
         self,
@@ -393,6 +428,7 @@ class ShortcutArtworkService:
         icons: dict[int, str],
         grid: _Grid,
         outcomes: dict[tuple[int, ArtworkSlot], ArtworkSlotOutcome | None],
+        generations: dict[int, int],
     ) -> tuple[list[_Item], list[_Item]]:
         """The icon and wide grid pass, then the logo pass, over *roms* keyed by app id, in ROM order."""
         missing = sum(1 for app_id in roms if app_id not in icons)
@@ -423,9 +459,9 @@ class ShortcutArtworkService:
                 icons[app_id], outcomes[(rom.rom_id, ArtworkSlot.ICON)], sgdb_id=rom.sgdb_id, now=now
             )
             if slots or logo_icon:
-                first.append(_Item(rom.rom_id, app_id, slots, logo_icon))
+                first.append(_Item(rom.rom_id, app_id, slots, generations[app_id], logo_icon))
             if waits(app_id, rom, ArtworkSlot.LOGO):
-                second.append(_Item(rom.rom_id, app_id, (ArtworkSlot.LOGO,)))
+                second.append(_Item(rom.rom_id, app_id, (ArtworkSlot.LOGO,), generations[app_id]))
         return first, second
 
     async def _work(self, queue: asyncio.Queue[_Item], batch: list[_Finished | _SlotReady], plan: _Plan) -> None:
@@ -459,12 +495,11 @@ class ShortcutArtworkService:
             else:
                 served = await self._serve_slot(item, slot, batch)
             if not served:
-                return _Item(item.rom_id, item.app_id, item.slots[index:])
+                return _Item(item.rom_id, item.app_id, item.slots[index:], item.generation)
         return None
 
     async def _serve_icon(self, item: _Item, batch: list[_Finished | _SlotReady], plan: _Plan) -> bool:
         """Put *item*'s icon into the artwork cache and write it; ``False`` after a 429, so it is asked again."""
-        generation = self._source.icon_generation(item.app_id)
         answer = await self._loop.run_in_executor(
             None, self._source.do_fetch_slot_artwork, item.rom_id, ArtworkSlot.ICON
         )
@@ -478,14 +513,14 @@ class ShortcutArtworkService:
             )
         else:
             self._backoff = 0.0
-            finished = await self._write(item, answer, generation, plan)
+            finished = await self._write(item, answer, plan)
             if finished is not None:
                 await self._add(batch, finished)
         return True
 
     async def _give_logo_icon(self, item: _Item, batch: list[_Finished | _SlotReady], plan: _Plan) -> None:
         """Queue Tender's logo icon for *item*, whose recorded ``none`` was never shown, without asking SteamGridDB."""
-        finished = await self._write(item, SlotAnswer.NONE, self._source.icon_generation(item.app_id), plan)
+        finished = await self._write(item, SlotAnswer.NONE, plan)
         if finished is not None:
             await self._add(batch, finished)
 
@@ -530,8 +565,8 @@ class ShortcutArtworkService:
         finally:
             self._not_paused.set()
 
-    async def _write(self, item: _Item, answer: SlotAnswer, generation: int, plan: _Plan) -> _Finished | None:
-        return await self._shielded(self._write_unless_the_job_yields(item, answer, generation, plan))
+    async def _write(self, item: _Item, answer: SlotAnswer, plan: _Plan) -> _Finished | None:
+        return await self._shielded(self._write_unless_the_job_yields(item, answer, plan))
 
     async def _flush(self, batch: list[_Finished | _SlotReady], *, full_only: bool = False) -> None:
         """Hand up to a batch of what is finished to the frontend under one lease, and take it out of *batch*.
@@ -608,32 +643,30 @@ class ShortcutArtworkService:
             self._stopped = True
         return self._stopped
 
-    async def _write_unless_the_job_yields(
-        self, item: _Item, answer: SlotAnswer, generation: int, plan: _Plan
-    ) -> _Finished | None:
+    async def _write_unless_the_job_yields(self, item: _Item, answer: SlotAnswer, plan: _Plan) -> _Finished | None:
         """The icon *answer* calls for: SteamGridDB's, written, for ``READY``, and the logo icon for ``NONE``.
 
         ``NONE`` also stands for a recorded ``none`` whose logo icon the
         shortcut does not show yet. ``None`` when the job yields, when the
         write answers nothing, when there is no logo icon to give, or when the
-        game page saved an icon since *generation*.
+        game page saved an icon since the item's generation was taken.
         """
         if self._yields_now():
             return None
         if answer is SlotAnswer.READY:
-            written = await self._source.write_job_icon(item.app_id, item.rom_id, generation)
+            written = await self._source.write_job_icon(item.app_id, item.rom_id, item.generation)
             if written is None:
                 return None
-            return _Finished(item.app_id, item.rom_id, written.path, generation, written)
-        if plan.logo_path is None or self._source.icon_generation(item.app_id) != generation:
+            return _Finished(item.app_id, item.rom_id, written.path, item.generation, written)
+        if plan.logo_path is None or self._source.icon_generation(item.app_id) != item.generation:
             return None
-        return _Finished(item.app_id, item.rom_id, plan.logo_path, generation, None)
+        return _Finished(item.app_id, item.rom_id, plan.logo_path, item.generation, None)
 
     async def _hand_over_unless_the_job_yields(self, finished: list[_Finished | _SlotReady]) -> str | None:
         """Emit *finished* under a lease; answer its token once a panel heard it, else ``None``."""
         if self._yields_now():
             return None
-        # A pick on the game page since the job read the generation wins: for
+        # A pick on the game page since the job took the generation wins: for
         # the logo icon the batch would otherwise set Tender's file over the pick;
         # for SteamGridDB's icon it would record the job's image over the one
         # the page wrote.

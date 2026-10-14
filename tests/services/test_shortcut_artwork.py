@@ -44,6 +44,7 @@ class _FakeSteamConfig:
         self.ensured: dict[str, bytes] = {}
         self.grid_missing = False
         self.grid_unlistable = False
+        self.on_read_icons: Any = None
 
     def ensure_grid_file(self, name: str, content: bytes) -> str:
         if self.grid_missing:
@@ -52,7 +53,10 @@ class _FakeSteamConfig:
         return f"/grid/{name}"
 
     def read_shortcut_icons(self) -> dict[int, str] | None:
-        return None if self.icons is None else dict(self.icons)
+        icons = None if self.icons is None else dict(self.icons)
+        if self.on_read_icons is not None:
+            self.on_read_icons()
+        return icons
 
     def grid_file_names(self) -> frozenset[str] | None:
         if self.grid_unlistable:
@@ -862,8 +866,8 @@ class TestWhatIsWrittenIsNotStranded:
     async def test_write_unless_yields_ignores_data_when_answer_not_icon(self):
         job = _Job(icons={}, bound={})
         plan = shortcut_artwork._Plan(logo_path="/grid/logo.png", passes=([], []))
-        item = shortcut_artwork._Item(1, 100, (ArtworkSlot.ICON,))
-        res = await job.service._write_unless_the_job_yields(item, SlotAnswer.NONE, 0, plan)
+        item = shortcut_artwork._Item(1, 100, (ArtworkSlot.ICON,), 0)
+        res = await job.service._write_unless_the_job_yields(item, SlotAnswer.NONE, plan)
         assert res is not None
         assert (res.icon_path, res.written) == ("/grid/logo.png", None)
         assert job.source.written == {}
@@ -872,9 +876,9 @@ class TestWhatIsWrittenIsNotStranded:
     async def test_write_unless_yields_suppresses_logo_when_generation_bumps(self):
         job = _Job(icons={}, bound={})
         plan = shortcut_artwork._Plan(logo_path="/grid/logo.png", passes=([], []))
-        item = shortcut_artwork._Item(1, 100, (ArtworkSlot.ICON,))
+        item = shortcut_artwork._Item(1, 100, (ArtworkSlot.ICON,), 0)
         job.source.generations[100] = 1
-        res = await job.service._write_unless_the_job_yields(item, SlotAnswer.NONE, 0, plan)
+        res = await job.service._write_unless_the_job_yields(item, SlotAnswer.NONE, plan)
         assert res is None
 
     @pytest.mark.asyncio
@@ -1464,6 +1468,46 @@ class TestTheIconIsARecordedSlot:
 
         assert job.source.fetched == [1]
         assert job.delivered() == {100: _LOGO}
+
+    @pytest.mark.asyncio
+    async def test_a_pick_made_after_the_shortcuts_were_read_keeps_the_logo_icon_back(self):
+        job = _Job(icons={100: _PLACEHOLDER}, bound={100: 1}, sgdb_ids={1: 7})
+        _record_icon_none(job, sgdb_id=7, at=job.clock.time())
+
+        def pick_on_the_game_page() -> None:
+            job.source.generations[100] = 1
+
+        job.steam_config.on_read_icons = pick_on_the_game_page
+
+        await job.run()
+
+        assert job.sink.events == []
+
+    @pytest.mark.asyncio
+    async def test_a_pick_made_after_the_shortcuts_were_read_keeps_the_fetched_icon_back(self):
+        job = _Job(icons={100: ""}, bound={100: 1})
+
+        def pick_on_the_game_page() -> None:
+            job.source.generations[100] = 1
+
+        job.steam_config.on_read_icons = pick_on_the_game_page
+
+        await job.run()
+
+        assert job.source.written == {}
+        assert job.sink.events == []
+
+    @pytest.mark.asyncio
+    async def test_a_429_on_the_wide_grid_hands_the_logo_icon_over_once(self, monkeypatch):
+        monkeypatch.setattr(shortcut_artwork, "_WORKERS", 1)
+        job = _Job(icons={100: _PLACEHOLDER}, bound={100: 1}, sgdb_ids={1: 7}, grid_files=frozenset({"100_logo.png"}))
+        _record_icon_none(job, sgdb_id=7, at=job.clock.time())
+        job.source.answer_slot(1, ArtworkSlot.WIDE_GRID, SlotAnswer.RATE_LIMITED, SlotAnswer.READY)
+
+        await job.run()
+
+        assert job.source.slots_fetched == [(1, ArtworkSlot.WIDE_GRID), (1, ArtworkSlot.WIDE_GRID)]
+        assert [icon for batch in job.batches() for icon in batch] == [{"app_id": 100, "icon_path": _LOGO}]
 
     @pytest.mark.asyncio
     async def test_a_refused_icon_within_the_week_is_not_given_the_logo_icon(self):

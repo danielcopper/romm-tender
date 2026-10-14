@@ -858,8 +858,9 @@ class SteamGridService:
     def icon_generation(self, app_id: int) -> int:
         """Implements ``services.protocols.ShortcutArtworkSource.icon_generation``.
 
-        The artwork job reads it before it fetches, and its write lands only while
-        it is unchanged, so an icon picked on the game page meanwhile wins.
+        The artwork job takes it when it plans a run, before it reads
+        ``shortcuts.vdf``, and writes and hands over an icon only while it is
+        unchanged, so an icon picked on the game page since wins.
         """
         return self._icon_generations.get(int(app_id), 0)
 
@@ -879,7 +880,7 @@ class SteamGridService:
         try:
             return self._write_cached_icon_io(app_id, rom_id)
         except Exception as e:
-            self._logger.warning(f"SGDB icon for rom_id={rom_id} could not be written: {e}")
+            self._logger.warning(f"SGDB icon for rom_id={rom_id} could not be read or written: {e}")
             return None
 
     def _write_cached_icon_io(self, app_id: int, rom_id: int) -> JobIcon | None:
