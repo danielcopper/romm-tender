@@ -181,3 +181,82 @@ describe("applyShortcutArtwork — wide grids and logos", () => {
     expect(backend.getSgdbSlotArtwork).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("applyShortcutArtwork — what Steam made of a SteamGridDB icon", () => {
+  const setShortcutIcon = vi.fn();
+  const record = { rom_id: 1, sgdb_id: 9999, image_id: 31, sha256: "sha-31" };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubGlobal("SteamClient", {
+      Apps: { SetShortcutIcon: setShortcutIcon, SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined) },
+    });
+    vi.mocked(backend.reportSgdbSlotArtwork).mockResolvedValue({ success: true });
+  });
+
+  const batch = {
+    icons: [
+      { app_id: 100, icon_path: "/grid/100_icon.png", record },
+      { app_id: 200, icon_path: "/grid/tender-icon.png" },
+    ],
+    artwork: [],
+    prune_lease_token: "icon-lease",
+  };
+
+  it("reports a set icon with its image id and hash, and nothing for the logo icon", async () => {
+    await expect(applyShortcutArtwork(batch)).resolves.toBe(2);
+
+    expect(vi.mocked(backend.reportSgdbSlotArtwork).mock.calls).toEqual([[1, "icon", "set", 9999, 31, "sha-31"]]);
+  });
+
+  it("reports an icon SetShortcutIcon throws on as refused", async () => {
+    vi.spyOn(backend, "logError").mockImplementation(() => {});
+    setShortcutIcon.mockImplementationOnce(() => {
+      throw new Error("no such app");
+    });
+
+    await expect(applyShortcutArtwork(batch)).resolves.toBe(1);
+
+    expect(vi.mocked(backend.reportSgdbSlotArtwork).mock.calls).toEqual([[1, "icon", "refused", 9999, 31, "sha-31"]]);
+  });
+
+  it("reports nothing for an icon left to the game page's apply", async () => {
+    let finish: (value: { base64: null; no_api_key: boolean }) => void = () => {};
+    vi.mocked(backend.getSgdbArtworkBase64).mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const applying = applyArtwork(42, 100);
+
+    await applyShortcutArtwork(batch);
+
+    expect(backend.reportSgdbSlotArtwork).not.toHaveBeenCalled();
+    finish({ base64: null, no_api_key: false });
+    await applying;
+  });
+
+  it("gives the batch's lease back only once the icon's report is in", async () => {
+    let finish: () => void = () => {};
+    vi.mocked(backend.reportSgdbSlotArtwork).mockReturnValue(
+      new Promise((resolve) => {
+        finish = () => resolve({ success: true });
+      }),
+    );
+
+    const applying = applyShortcutArtwork(batch);
+    await vi.waitFor(() => expect(backend.reportSgdbSlotArtwork).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(backend.releasePruneConflictLease).not.toHaveBeenCalled();
+
+    finish();
+    await applying;
+    expect(backend.releasePruneConflictLease).toHaveBeenCalledWith("icon-lease");
+  });
+
+  it("goes on when a report fails", async () => {
+    vi.mocked(backend.reportSgdbSlotArtwork).mockRejectedValue(new Error("socket closed"));
+
+    await expect(applyShortcutArtwork(batch)).resolves.toBe(2);
+  });
+});

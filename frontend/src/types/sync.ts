@@ -536,12 +536,22 @@ export interface SyncApplyUnitData {
  * the backend has written into Steam's grid directory, each to be pointed at
  * with `SetShortcutIcon`, and wide grids and logos the artwork cache holds, each
  * to be fetched through `getSgdbSlotArtwork` and set with
- * `SetCustomArtworkForApp`, one at a time.
+ * `SetCustomArtworkForApp`, one at a time. An icon from SteamGridDB carries
+ * `record`, what `reportSgdbSlotArtwork` records once Steam has taken it or
+ * refused it; Tender's logo icon carries none.
  */
 export interface ShortcutArtworkData {
-  icons: { app_id: number; icon_path: string }[];
+  icons: { app_id: number; icon_path: string; record?: ShortcutIconRecord }[];
   artwork: { app_id: number; rom_id: number; slot: "grid" | "logo" }[];
   prune_lease_token: string;
+}
+
+/** What the backend records for an icon the shortcut artwork job wrote: the ROM, its ids and the hash written. */
+export interface ShortcutIconRecord {
+  rom_id: number;
+  sgdb_id: number | null;
+  image_id: number;
+  sha256: string;
 }
 
 export interface SyncStaleData {

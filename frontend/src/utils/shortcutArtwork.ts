@@ -2,12 +2,14 @@
  * The frontend half of the shortcut artwork job
  * (docs/architecture/steam-non-steam-shortcuts.md, "Shortcut artwork"): points each
  * shortcut in a batch at the icon file the backend wrote, through SteamClient
- * (same page, "shortcuts.vdf is memory-authoritative"), then sets each wide grid
- * and logo the batch names, one image at a time.
+ * (same page, "shortcuts.vdf is memory-authoritative"), reports what Steam made
+ * of each SteamGridDB icon, then sets each wide grid and logo the batch names,
+ * one image at a time.
  */
 
-import { logError } from "../api/backend";
-import type { ShortcutArtworkData } from "../types";
+import { debugLog, logError, reportSgdbSlotArtwork } from "../api/backend";
+import type { ShortcutArtworkData, ShortcutIconRecord } from "../types";
+import { detach } from "./detach";
 import { isArtworkApplyInFlight, setJobSlotArtwork } from "./artwork";
 import { isPruneLeaseCancelled, withPruneLease } from "./pruneLease";
 
@@ -20,7 +22,7 @@ import { isPruneLeaseCancelled, withPruneLease } from "./pruneLease";
 export async function applyShortcutArtwork(data: ShortcutArtworkData): Promise<number> {
   return withPruneLease(data.prune_lease_token, "Shortcut artwork", async (signal) => {
     const stopped = (): boolean => isPruneLeaseCancelled(signal);
-    let applied = setIcons(data, stopped);
+    let applied = await setIcons(data, stopped);
     // One image at a time: each is fetched, set and reported before the next is
     // fetched, so only one is in the renderer at once — the awaits are
     // sequential by design. S9382 is raised on the await line, so its NOSONAR
@@ -39,17 +41,30 @@ export async function applyShortcutArtwork(data: ShortcutArtworkData): Promise<n
   });
 }
 
-function setIcons(data: ShortcutArtworkData, stopped: () => boolean): number {
+async function setIcons(data: ShortcutArtworkData, stopped: () => boolean): Promise<number> {
   let applied = 0;
-  for (const { app_id: appId, icon_path: iconPath } of data.icons) {
+  const reports: Promise<void>[] = [];
+  for (const { app_id: appId, icon_path: iconPath, record } of data.icons) {
     if (stopped()) break;
     if (isArtworkApplyInFlight(appId)) continue;
+    let outcome: "set" | "refused" = "set";
     try {
       SteamClient.Apps.SetShortcutIcon(appId, iconPath);
       applied++;
     } catch (e) {
+      outcome = "refused";
       logError(`Shortcut artwork: could not set the icon of appId ${appId}: ${e}`);
     }
+    if (record) reports.push(reportIcon(record, outcome));
   }
+  await Promise.all(reports);
   return applied;
+}
+
+/** Report what Steam made of a SteamGridDB icon for the backend to record. */
+async function reportIcon(record: ShortcutIconRecord, outcome: "set" | "refused"): Promise<void> {
+  const { rom_id: romId, sgdb_id: sgdbId, image_id: imageId, sha256 } = record;
+  await reportSgdbSlotArtwork(romId, "icon", outcome, sgdbId, imageId, sha256).catch((e) => {
+    detach(debugLog(`Shortcut artwork: reporting the icon for rom ${romId} failed: ${e}`));
+  });
 }
