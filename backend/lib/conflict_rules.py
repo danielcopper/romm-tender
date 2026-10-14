@@ -143,6 +143,10 @@ class ConflictRuleSet:
         """Extend the live lease *token* names; ``False`` when it is unknown or has expired."""
         return await self._prune_conflicts.renew_lease(token)
 
+    async def wait_for_lease_end(self, token: str) -> None:
+        """Return once the lease *token* names is released, disowned or past its deadline; at once if it is gone."""
+        await self._prune_conflicts.wait_for_lease_end(token)
+
     async def release_orphaned_leases(self) -> int:
         """Drop every lease a frontend holds, and answer how many there were."""
         return await self._prune_conflicts.release_orphaned_leases()

@@ -13,6 +13,7 @@ registers and releases its run claim here directly.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -70,6 +71,8 @@ class PruneConflicts:
         self._operations: dict[int, _Holder] = {}
         # Keyed by token; the value carries the lease's deadline.
         self._leases: dict[str, tuple[_Holder, float]] = {}
+        # Set when the lease their token names leaves ``_leases``, for whoever waits on it.
+        self._lease_gone: dict[str, asyncio.Event] = {}
         self._reservations = 0
         self._runs: set[str] = set()
         # Separate counters: a lease token is user-visible state the frontend
@@ -208,6 +211,7 @@ class PruneConflicts:
         async with self._lock:
             self._expire_leases()
             released = self._leases.pop(token, None)
+            self._mark_lease_gone(token)
         if released is not None:
             held = asyncio.get_running_loop().time() - released[0].acquired_at
             self._log_debug(f"[prune-conflicts] released lease {token} after {held:.0f}s")
@@ -230,6 +234,8 @@ class PruneConflicts:
             self._expire_leases()
             orphaned = list(self._leases.items())
             self._leases.clear()
+            for token, _lease in orphaned:
+                self._mark_lease_gone(token)
         now = asyncio.get_running_loop().time()
         for token, (holder, _deadline) in orphaned:
             self._logger.info(
@@ -237,6 +243,27 @@ class PruneConflicts:
                 f"{now - holder.acquired_at:.0f}s by a frontend that is no longer mounted"
             )
         return len(orphaned)
+
+    async def wait_for_lease_end(self, token: str) -> None:
+        """Return once the lease *token* names is released, disowned or past its deadline; at once if it is gone.
+
+        A renewal moves the deadline, and the wait goes on to the new one.
+        """
+        while True:
+            async with self._lock:
+                self._expire_leases()
+                lease = self._leases.get(token)
+                if lease is None:
+                    return
+                gone = self._lease_gone.setdefault(token, asyncio.Event())
+                remaining = lease[1] - asyncio.get_running_loop().time()
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(gone.wait(), timeout=remaining)
+
+    def _mark_lease_gone(self, token: str) -> None:
+        gone = self._lease_gone.pop(token, None)
+        if gone is not None:
+            gone.set()
 
     def _register_operation(self, label: str) -> int:
         registration = self._next_operation_id
@@ -257,6 +284,7 @@ class PruneConflicts:
         expired = [token for token, (_holder, deadline) in self._leases.items() if deadline <= now]
         for token in expired:
             holder, _deadline = self._leases.pop(token)
+            self._mark_lease_gone(token)
             self._logger.info(
                 f"[prune-conflicts] lease {token} ({holder.label}) expired after "
                 f"{now - holder.acquired_at:.0f}s without being released"

@@ -518,3 +518,54 @@ async def test_held_claims_sweeps_a_lease_past_its_deadline_first(monkeypatch) -
 
     assert conflicts.held_claims() == ()
     assert conflicts.conflicting_operations == 0
+
+
+# ── Waiting for a lease to end ───────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_waiting_for_a_lease_ends_once_it_is_released() -> None:
+    conflicts, _logger, _debug = _conflicts()
+    token = await conflicts.acquire_lease("shortcut_artwork")
+    waiting = asyncio.create_task(conflicts.wait_for_lease_end(token))
+    await asyncio.sleep(0)
+    assert not waiting.done()
+
+    await conflicts.release_lease(token)
+
+    await asyncio.wait_for(waiting, timeout=5)
+
+
+@pytest.mark.asyncio
+async def test_waiting_for_a_lease_ends_once_a_new_frontend_disowns_it() -> None:
+    conflicts, _logger, _debug = _conflicts()
+    token = await conflicts.acquire_lease("shortcut_artwork")
+    waiting = asyncio.create_task(conflicts.wait_for_lease_end(token))
+    await asyncio.sleep(0)
+
+    await conflicts.release_orphaned_leases()
+
+    await asyncio.wait_for(waiting, timeout=5)
+
+
+@pytest.mark.asyncio
+async def test_waiting_for_a_lease_ends_once_it_expires(monkeypatch) -> None:
+    from lib import prune_conflicts
+
+    monkeypatch.setattr(prune_conflicts, "_LEASE_SECONDS", 0.01)
+    conflicts, logger, _debug = _conflicts()
+    token = await conflicts.acquire_lease("shortcut_artwork")
+
+    await asyncio.wait_for(conflicts.wait_for_lease_end(token), timeout=5)
+
+    assert conflicts.conflicting_operations == 0
+    assert any("expired" in line for line in logger.info_lines)
+
+
+@pytest.mark.asyncio
+async def test_waiting_for_a_lease_that_is_gone_ends_at_once() -> None:
+    conflicts, _logger, _debug = _conflicts()
+    token = await conflicts.acquire_lease("shortcut_artwork")
+    await conflicts.release_lease(token)
+
+    await asyncio.wait_for(conflicts.wait_for_lease_end(token), timeout=5)

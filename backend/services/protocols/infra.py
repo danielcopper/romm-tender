@@ -357,7 +357,9 @@ class ConflictRules(Protocol):
     migration=…, sync=…)`` is a cleanup's exclusive start: it reserves the
     start first, then checks the named rules, refusing as ``hold`` does, and
     holds the reservation for the block. ``renew_lease`` extends a live lease by token,
-    and ``release_orphaned_leases`` drops every lease and answers how many.
+    ``wait_for_lease_end`` returns once a lease is released, disowned or past
+    its deadline, and ``release_orphaned_leases`` drops every lease and answers
+    how many.
     GLOSSARY.md → Conflict rules, Prune conflicts.
     """
 
@@ -382,6 +384,8 @@ class ConflictRules(Protocol):
     async def release_lease(self, token: str) -> None: ...
 
     async def renew_lease(self, token: str) -> bool: ...
+
+    async def wait_for_lease_end(self, token: str) -> None: ...
 
     async def release_orphaned_leases(self) -> int: ...
 
