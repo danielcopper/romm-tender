@@ -162,14 +162,15 @@ start-up reconcile's, and the ones `sync_complete`, `sync_stale`, `download_comp
 (`services/prune_leases.py`) renews and releases a lease by its token, and disowns the ones a gone frontend left behind;
 `Endpoints` reads none of it. The prune service takes the start's reservation through the rules' `hold_start`, before it
 asks the update, migration and sync rules. Before that it stops the shortcut artwork job (`stop_for_cleanup`), waiting
-for an icon being written or handed over, so none it writes into the grid directory or hands over lands once the start
-has reserved; no run of the job starts until a start that begins no run, or the run's end, resumes it
-(`resume_after_cleanup`). The job's batch lease is held by the frontend while it sets the icons, so a start pressed then
-is refused, naming "setting shortcut artwork" ([Shortcut artwork](steam-non-steam-shortcuts.md#shortcut-artwork)). The
-reservation lasts from the moment `hold_start` takes it until the start returns; the run claim, from the moment the
-revalidated preview becomes a run until that run ends — in the run's own `finally`, or, for a run task cancelled before
-it first ran, in the task's done callback. The run is registered before the reservation is given back, so the two
-overlap and a conflicting endpoint finds no gap between them.
+for an icon being written or a batch being handed over, so nothing it writes into the grid directory or hands over lands
+once the start has reserved; no run of the job starts until a start that begins no run, or the run's end, resumes it
+(`resume_after_cleanup`). The job's batch lease is held by the frontend while it sets the batch's icons, wide grids and
+logos, so a start pressed then is refused, naming "setting shortcut artwork"
+([Shortcut artwork](steam-non-steam-shortcuts.md#shortcut-artwork)). The reservation lasts from the moment `hold_start`
+takes it until the start returns; the run claim, from the moment the revalidated preview becomes a run until that run
+ends — in the run's own `finally`, or, for a run task cancelled before it first ran, in the task's done callback. The
+run is registered before the reservation is given back, so the two overlap and a conflicting endpoint finds no gap
+between them.
 
 The start is atomic in the part that matters: `hold_start` takes the prune conflicts' lock, refuses if any operation or
 lease is held, and takes the reservation — all in one lock hold, so no claim can slip between the check and the

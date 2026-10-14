@@ -669,16 +669,16 @@ deletes the game's rows (in `get_sgdb_resolution`, before it resolves the id). A
 slot whose file is gone is asked again. Rows are keyed by ROM rather than app id, because a re-created shortcut gets a
 new app id. The hero is not recorded.
 
-**Which image** (`domain/sgdb_artwork.py`, `choose_candidate`), in the one download path the game page, Refresh Artwork
-and the picker share (`SteamGridService._download_sgdb_artwork_io`). Images are chosen among SteamGridDB's candidates by
-their stated size and never scaled locally — decoding in pure Python takes seconds for a large logo and reads no JPEG or
-WebP. The wide grid and the logo are asked as static images only (`types=static`), the wide grid in its two sizes only,
-since `/grids` also lists the portrait covers. The wide grid prefers 920×430, Valve's own library header size, then
-460×215, then the first candidate; the logo prefers the first candidate between 640 and 2048 pixels wide, then the first
-candidate: the band keeps SteamGridDB's top-ranked logo unless it is tiny or many times larger than Steam draws it.
-SteamGridDB lists an asset's candidates in its website's "Highest Score (Beta)" order and reports a score of 0 for every
-image, so the first candidate is the best-rated one (checked for one game against the website by the maintainer). A slot
-never stays empty for want of a preferred size.
+**Which image** (`domain/sgdb_artwork.py`, `choose_candidate`), in the one download path the game page, Refresh Artwork,
+the picker and the shortcut artwork job share (`SteamGridService._download_sgdb_artwork_io`). Images are chosen among
+SteamGridDB's candidates by their stated size and never scaled locally — decoding in pure Python takes seconds for a
+large logo and reads no JPEG or WebP. The wide grid and the logo are asked as static images only (`types=static`), the
+wide grid in its two sizes only, since `/grids` also lists the portrait covers. The wide grid prefers 920×430, Valve's
+own library header size, then 460×215, then the first candidate; the logo prefers the first candidate between 640 and
+2048 pixels wide, then the first candidate: the band keeps SteamGridDB's top-ranked logo unless it is tiny or many times
+larger than Steam draws it. SteamGridDB lists an asset's candidates in its website's "Highest Score (Beta)" order and
+reports a score of 0 for every image, so the first candidate is the best-rated one (checked for one game against the
+website by the maintainer). A slot never stays empty for want of a preferred size.
 
 **The artwork cache** keeps a downloaded wide grid or logo as `{rom_id}_grid_{image_id}.png` /
 `{rom_id}_logo_{image_id}.png`: the cache is re-derivable and may vanish at any time, so which image it holds lives and
@@ -731,8 +731,8 @@ the game page.
   and no recorded outcome rules out (`domain/artwork_slot_outcome.py`, `slot_waits`; the rules are those of
   [Game page artwork](#game-page-artwork)). Derived at every run and never stored, so a stopped run leaves exactly the
   rest. The logo icon, or any other icon path — an icon somebody set by hand — is left alone. A bound shortcut the file
-  does not hold yet is counted in the log and left for the next run; where the grid directory cannot be listed, no wide
-  grid or logo is asked for.
+  does not hold yet is counted in the log and its icon left for the next run; its wide grid and logo do not depend on
+  the file. Where the grid directory cannot be listed, no wide grid or logo is asked for, and the icons still are.
 - **Two passes:** first each shortcut's icon and wide grid together, shortcut by shortcut, then the logos. A sync may
   run in the desktop client, where the icon shows in the library list, or in Big Picture, where the wide grid shows in
   search and among recent games, and neither should wait for the other; a logo shows only on the game page, which fills
@@ -745,9 +745,9 @@ the game page.
   warning.
 - **One wide grid or logo:** `SteamGridService.do_fetch_slot_artwork` puts SteamGridDB's image into the artwork cache by
   the rule the game page uses ("Which image", above) and answers that it is ready; no bytes leave the backend here. A
-  ROM with no SteamGridDB id gets a `none` record and no request, and so does a game SteamGridDB has no candidate for or
-  does not know; the record keeps the slot off the worklist for a week. A failure records nothing, so the next run asks
-  again.
+  ROM with no SteamGridDB id stored gets a `none` record without a request; a game SteamGridDB has no candidate for, or
+  does not know (a 404), gets one too. The record keeps the slot off the worklist for a week. A failure records nothing,
+  so the next run asks again.
 - **No icon:** a game SteamGridDB has no icon for, or one no SteamGridDB game can be found for, gets Tender's logo —
   `tender-icon.png`, shipped in `defaults/` and copied into the grid directory. The job does not ask again; **Refresh
   Artwork** does, and so does the game page's passive artwork apply the first time the page is opened in a session, for
@@ -769,10 +769,10 @@ the game page.
   Steam restarted, as it does at every switch between Game Mode and Desktop Mode — ends the run, and the job runs again
   once a panel is connected.
 - **Steam's memory:** before each batch the job reads the renderer's memory through the sync's own
-  `SessionBudgetMonitor` (`LibraryService.renderer_above_ceiling`; above 1.5 GB Steam collects its garbage first). At or
-  above the session budget's ceiling the run ends without handing the batch over; only a Steam restart frees that
-  memory, so the job waits for the panel to go and a panel to connect again — polled every 5 s — and the next sync asks
-  for it too. What was not handed over stays on the worklist.
+  `SessionBudgetMonitor` (`LibraryService.renderer_above_ceiling`; at or above `GC_SKIP_BELOW_KB` Steam collects its
+  garbage first, bounded at about 5 s). At or above the session budget's ceiling the run ends without handing the batch
+  over; only a Steam restart frees that memory, so the job waits for the panel to go and a panel to connect again —
+  polled every 5 s — and the next sync asks for it too. What was not handed over stays on the worklist.
 - **Triggers:** the end of every sync run — after an apply, 10 s later, so Steam has rewritten its file with the
   shortcuts the run minted — backend start once a panel is connected, the end of a removed-game cleanup and the end of a
   shortcut removal (one whose lease expires, or is released as orphaned when a panel mounts, leaves it to the next
@@ -783,15 +783,15 @@ the game page.
   next run, which the end of what it yielded to asks for. A removal stops the run under way once its claim is held
   (`stop_for_removal`), and so does its report, which may arrive after its lease is gone and a run has started. A
   cleanup's start stops it (`stop_for_cleanup`) before it reserves its start, and no run starts until the cleanup
-  resumes it (`resume_after_cleanup`). Either stop waits for a write or hand-over under way; a fetch is abandoned,
-  though its thread runs on and may still fill the artwork cache or save the game's SteamGridDB id. The job is no
-  endpoint, so it takes no conflict-rule `hold`; the lease on each batch is a claim like any event's, and a cleanup
-  pressed while the frontend holds one is refused ([Prune conflicts](removed-game-cleanup.md#prune-conflicts)).
+  resumes it (`resume_after_cleanup`). What either stop waits for, and what a fetch it abandons may still do, is
+  `ShortcutArtworkJob`'s (`services/protocols/cross_service.py`). The job is no endpoint, so it takes no conflict-rule
+  `hold`; the lease on each batch is a claim like any event's, and a cleanup pressed while the frontend holds one is
+  refused ([Prune conflicts](removed-game-cleanup.md#prune-conflicts)).
 - **A pick on the game page wins:** `save_shortcut_icon` and the job's write take turns under one lock per app id, and
   the job writes only while the page has saved no icon since it read that app's generation; the hand-over leaves out a
-  shortcut whose generation has moved since, so a logo queued before a pick is left out; and the frontend skips a
+  shortcut whose generation has moved since, so a logo icon queued before a pick is left out; and the frontend skips a
   shortcut whose artwork apply is under way (`isArtworkApplyInFlight`), and sets no wide grid or logo once a game page's
-  apply for the shortcut has started since it fetched it.
+  apply for the shortcut has started since it began fetching it.
 
 ## Pre-launch launch-options confirmation
 

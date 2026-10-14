@@ -1,4 +1,7 @@
-"""Tests for domain/shortcut_icon.py — the artwork job's worklist and Tender's own two icons."""
+"""Tests for domain/shortcut_icon.py.
+
+Which shortcuts wait for an icon from the artwork job, and the two icons that are Tender's own.
+"""
 
 from __future__ import annotations
 

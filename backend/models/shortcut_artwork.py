@@ -7,12 +7,12 @@ from enum import StrEnum
 
 
 class IconAnswer(StrEnum):
-    """The five answers the artwork job acts on differently."""
+    """The five answers the artwork job acts on differently for an icon."""
 
     ICON = "icon"
     """SteamGridDB had an icon; ``IconFetch.data`` holds it, downscaled."""
     NO_ICON = "no_icon"
-    """No icon on SteamGridDB, or no game for the ROM: the job gives the logo, and stops asking once it is set."""
+    """No icon on SteamGridDB, or no game for the ROM: the job gives the logo icon, and stops asking once it is set."""
     RATE_LIMITED = "rate_limited"
     """SteamGridDB answered 429. Wait, then ask again."""
     KEY_REFUSED = "key_refused"

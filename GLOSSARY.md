@@ -1175,7 +1175,7 @@ sync gives each shortcut it mints (an adopted shortcut keeps the icon it has), s
 one. The **logo icon** is Tender's logo, given where SteamGridDB has no icon for the game or no SteamGridDB game is
 found through its stored ids; it means "nothing found on SteamGridDB", never "not loaded yet", and is not the **logo**
 slot. A shortcut **waits** for an icon while its icon is empty or the placeholder; the logo icon and any icon set by
-hand are left alone. _Avoid_: "shortcut icon job", its name while it gave only the icon. Detail:
+hand are left alone. _Avoid_: "shortcut icon job": it gives more than the icon. Detail:
 [Shortcut artwork](docs/architecture/steam-non-steam-shortcuts.md#shortcut-artwork).
 
 ### Surface (bigpicture / desktop)

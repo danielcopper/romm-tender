@@ -836,10 +836,11 @@ class ShortcutArtworkJob(Protocol):
     async def stop_for_cleanup(self) -> None:
         """Stop the job, start no run until :meth:`resume_after_cleanup`, and wait for a write or hand-over under way.
 
-        A cleanup calls it before it reserves its start, so no icon the job
+        A cleanup calls it before it reserves its start, so nothing the job
         writes into the grid directory or hands over lands once it has. A fetch
         in flight is abandoned, though its thread runs on and may still fill the
-        artwork cache or save the game's SteamGridDB id.
+        artwork cache, save the game's SteamGridDB id, or record that SteamGridDB
+        has no wide grid or logo for it.
         """
         ...
 

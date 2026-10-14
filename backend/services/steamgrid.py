@@ -816,7 +816,7 @@ class SteamGridService:
             raise Refused("icon_write_failed", "Failed to write icon to Steam grid directory")
         return {"success": True, "icon_path": icon_path}
 
-    # -- icons for the shortcut artwork job ------------------------------------
+    # -- for the shortcut artwork job --------------------------------------
 
     def _icon_lock(self, app_id: int) -> asyncio.Lock:
         lock = self._icon_locks.get(app_id)

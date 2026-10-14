@@ -43,8 +43,8 @@ const artworkInFlight = new Map<number, number>();
 
 /**
  * Is the game page applying artwork to *appId* right now? The shortcut artwork job
- * then leaves the shortcut to that apply; if it sets no icon, the shortcut is
- * still on the job's worklist at its next run.
+ * then leaves the shortcut to that apply; whatever that apply does not set stays
+ * on the job's worklist for its next run.
  */
 export function isArtworkApplyInFlight(appId: number): boolean {
   return (artworkInFlight.get(appId) ?? 0) > 0;
@@ -297,7 +297,8 @@ async function reportSlotOutcome(
  * and report what Steam made of it. The image is fetched through the same
  * per-slot endpoint a first visit uses, so a slot that has filled since the job
  * looked is skipped. Nothing is written once a game page's apply for the
- * shortcut has started, or once *stopped* answers yes. Answers whether the image
+ * shortcut has started since this began fetching the image, or once *stopped*
+ * answers yes. Answers whether the image
  * was set.
  */
 export async function setJobSlotArtwork(

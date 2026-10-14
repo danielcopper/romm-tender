@@ -325,9 +325,9 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         "bundle_inventory",
         # RendererAboveCeilingProvider (services/protocols/cross_service.py) —
         # the shortcut artwork job's reading of Steam's renderer memory before each
-        # batch, through the sync's SessionBudgetMonitor: a /proc read, and above
-        # 1.5 GB a garbage collection over Steam's debugger (about five seconds)
-        # and a second read. Call-shaped, so the list carries the attribute the
+        # batch, through the sync's SessionBudgetMonitor: a /proc read, and at or
+        # above GC_SKIP_BELOW_KB a garbage collection over Steam's debugger
+        # (bounded at about 5 s) and a second read. Call-shaped, so the list carries the attribute the
         # job binds it to, and beside it LibraryService.renderer_above_ceiling,
         # the method a peer holding the library service would write.
         "_renderer_above_ceiling",

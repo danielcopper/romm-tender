@@ -11,7 +11,8 @@ four shortcuts at a time, writes each icon into Steam's grid directory, puts
 each wide grid and logo into the artwork cache, and hands the finished ones to
 the frontend in batches as the ``shortcut_artwork`` event, which names a wide
 grid or logo for the frontend to fetch and set. Before each batch it reads
-Steam's renderer memory, and above the session budget's ceiling the run ends.
+Steam's renderer memory, and at or above the session budget's ceiling the run
+ends.
 
 It yields to a sync, a removed-game cleanup and a shortcut removal, each of which
 asks for it again when it ends (a removal whose lease expires or is released as
@@ -82,7 +83,7 @@ class ShortcutArtworkServiceConfig:
     clock a recorded outcome is judged by, the four readings the job asks
     before it acts (a sync in flight, a removed-game cleanup running, a
     shortcut removal under way, a panel connected), the renderer-memory reading
-    it takes before each batch, the shipped logo's reader, and runtime
+    it takes before each batch, the shipped logo icon's reader, and runtime
     infrastructure.
     """
 
@@ -117,7 +118,7 @@ class _Item:
 
 @dataclass(frozen=True)
 class _Plan:
-    """One run's two passes and the logo's path, ``None`` where there is no logo to give."""
+    """One run's two passes and the logo icon's path, ``None`` where there is no logo icon to give."""
 
     logo_path: str | None
     passes: tuple[list[_Item], list[_Item]]
@@ -330,8 +331,8 @@ class ShortcutArtworkService:
         """Lay down the two fixed icons and derive the two passes.
 
         ``None`` when the grid directory cannot be written or ``shortcuts.vdf``
-        cannot be read. A logo that cannot be read is no reason to stop: the
-        plan then has no logo path, and a game SteamGridDB has no icon for keeps
+        cannot be read. A logo icon that cannot be read is no reason to stop: the
+        plan then has no logo icon path, and a game SteamGridDB has no icon for keeps
         its placeholder. Where the grid directory cannot be listed, no wide grid
         or logo is asked for.
         """
@@ -489,9 +490,9 @@ class ShortcutArtworkService:
     async def _flush(self, batch: list[_Finished | _SlotReady]) -> None:
         """Hand what is finished to the frontend under one lease, and empty *batch*.
 
-        Nothing is handed over while Steam's renderer stands above the session
-        budget's ceiling: the run ends there, and what was finished waits for the
-        next run.
+        Nothing is handed over while Steam's renderer stands at or above the
+        session budget's ceiling: the run ends there, and what was finished
+        waits for the next run.
         """
         if not batch:
             return
@@ -506,8 +507,8 @@ class ShortcutArtworkService:
             return False
         self._stopped = True
         self._logger.info(
-            "Shortcut artwork: Steam's renderer memory is above the session budget's ceiling; the job runs again "
-            "after the next sync, or once a panel connects after Steam restarts"
+            "Shortcut artwork: Steam's renderer memory is at or above the session budget's ceiling; the job "
+            "runs again after the next sync, or once a panel connects after Steam restarts"
         )
         self._wait_for_a_new_panel()
         return True
@@ -546,7 +547,7 @@ class ShortcutArtworkService:
         if self._yields_now():
             return
         # A pick on the game page since the job read the generation wins: for
-        # the logo the batch would otherwise set Tender's file over the pick.
+        # the logo icon the batch would otherwise set Tender's file over the pick.
         icons = [
             {"app_id": icon.app_id, "icon_path": icon.icon_path}
             for icon in finished
