@@ -84,10 +84,17 @@ def _artwork_slot(slot: object) -> ArtworkSlot:
         raise Refused("invalid_payload", f"Unknown artwork slot: {slot}") from e
 
 
+_KEY_REFUSED = "SteamGridDB refused the API key — check it in Settings"
+_RATE_LIMITED = "SteamGridDB is rate-limiting requests — try again in a moment"
+_ASSET_TYPES = ("hero", "logo", "grid", "icon")
+
+
 def _refusal_for(error: SgdbApiError) -> Refused:
     """The refusal an ``SgdbApiError`` answers with; never the error's own text."""
     if error.status_code in (401, 403):
         return AuthFailed("Invalid API key")
+    if error.status_code == 429:
+        return Refused("rate_limited", _RATE_LIMITED)
     if error.status_code is None:
         return ServerUnreachable("Could not reach SteamGridDB")
     return ServerUnreachable(f"SteamGridDB error: HTTP {error.status_code}")
@@ -202,6 +209,10 @@ class SteamGridService:
         cached = self._cached_artwork(rom_id, asset_type)
         if cached is not None:
             return cached
+        return self._fetch_sgdb_artwork_io(sgdb_game_id, rom_id, asset_type)
+
+    def _fetch_sgdb_artwork_io(self, sgdb_game_id, rom_id, asset_type) -> _CachedArtwork | _NoArtwork:
+        """:meth:`_download_sgdb_artwork_io` without the cache; a cached file is replaced only by a new download."""
         path = sgdb_endpoint_path(asset_type, sgdb_game_id)
         if path is None:
             return _NoArtwork.FAILED
@@ -372,7 +383,11 @@ class SteamGridService:
           found (and persisted when it came from RomM).
         - ``{"decision": "needs_pick", "candidates": [...]}`` — no id is
           stored or pending and RomM has none; offer a manual name-search
-          picker, with no candidates when the name search is refused.
+          picker, with no candidates when the name search fails.
+
+        Refuses with ``auth_failed`` when SteamGridDB refuses the key or no
+        header can carry it, and ``rate_limited`` when it answers the name
+        search with a 429.
         """
         async with self._rules.hold("get_sgdb_resolution", prune=True):
             return await self._get_sgdb_resolution(rom_id)
@@ -399,7 +414,11 @@ class SteamGridService:
         name = (rom_data or {}).get("name") or ""
         try:
             search = await self.search_sgdb_games(name)
-        except Refused:
+        except Refused as e:
+            if e.reason == AuthFailed.reason:
+                raise AuthFailed(_KEY_REFUSED) from e
+            if e.reason == "rate_limited":
+                raise
             return {"decision": "needs_pick", "candidates": []}
         return {"decision": "needs_pick", "candidates": search["games"]}
 
@@ -466,15 +485,41 @@ class SteamGridService:
 
         downloads = [
             self._loop.run_in_executor(None, self._download_sgdb_artwork, sgdb_id, rom_id, asset_type)
-            for asset_type in ("hero", "logo", "grid", "icon")
+            for asset_type in _ASSET_TYPES
         ]
         await asyncio.gather(*downloads)
         return {"success": True}
 
     def _clear_cached_artwork(self, rom_id):
         """Remove the four asset types' cached artwork for *rom_id* (sync)."""
-        for asset_type in ("hero", "logo", "grid", "icon"):
+        for asset_type in _ASSET_TYPES:
             self._drop_cached_artwork(rom_id, asset_type)
+
+    async def refresh_sgdb_artwork(self, rom_id, sgdb_id):
+        """Download *rom_id*'s hero, logo, wide grid and icon anew from SteamGridDB game *sgdb_id*.
+
+        A cached image is replaced only by a download that succeeded, so one
+        that did not keeps the image the cache held. Refuses with
+        ``no_api_key``, with ``auth_failed`` when SteamGridDB refuses the key or
+        no header can carry it, and with ``rate_limited`` on a 429.
+        """
+        async with self._rules.hold("refresh_sgdb_artwork", prune=True):
+            api_key = self._settings.get("steamgriddb_api_key")
+            if not api_key:
+                raise Refused("no_api_key", "No SteamGridDB API key configured")
+            _refuse_a_key_that_cannot_be_sent(api_key)
+            downloads = [
+                self._loop.run_in_executor(
+                    None, self._download_or_answer_io, int(rom_id), asset_type, int(sgdb_id), True
+                )
+                for asset_type in _ASSET_TYPES
+            ]
+            answers = await asyncio.gather(*downloads)
+            if SlotAnswer.KEY_REFUSED in answers:
+                raise AuthFailed(_KEY_REFUSED)
+            if SlotAnswer.RATE_LIMITED in answers:
+                raise Refused("rate_limited", _RATE_LIMITED)
+            return {"success": True}
 
     async def get_sgdb_artwork_base64(self, rom_id, asset_type_num):
         """Serve one SteamGridDB asset for *rom_id* as base64, from the cache first.
@@ -563,6 +608,8 @@ class SteamGridService:
           logo;
         - ``"failed"`` — an unsuccessful answer, a list with no usable entry, or
           a download or read that failed; nothing is recorded;
+        - ``"key_refused"`` — SteamGridDB answered 401 or 403; nothing is recorded;
+        - ``"rate_limited"`` — SteamGridDB answered 429; nothing is recorded;
         - ``"no_api_key"`` — no key configured.
 
         Refuses with ``invalid_payload`` for an unknown slot, ``no_grid_dir``
@@ -600,13 +647,15 @@ class SteamGridService:
                 recorded = uow.artwork_slot_outcomes.get(rom_id, slot)
             if recorded is not None and recorded.rules_out(sgdb_id=sgdb_id, now=now):
                 return {"status": "skip"}
-        found = self._find_slot_artwork_io(rom_id, slot, sgdb_id) if sgdb_id is not None else _NoArtwork.NONE
+        found = self._download_or_answer_io(rom_id, slot.value, sgdb_id) if sgdb_id is not None else _NoArtwork.NONE
         if found is _NoArtwork.NONE:
             if slot in RECORDED_SLOTS:
                 self._record_none(rom_id, slot, sgdb_id, now)
             return {"status": "none"}
         if found is _NoArtwork.FAILED:
             return {"status": "failed"}
+        if isinstance(found, SlotAnswer):
+            return {"status": found.value}
         try:
             data = self._sgdb_artwork_cache.read_bytes(found.path)
         except OSError as e:
@@ -619,19 +668,6 @@ class SteamGridService:
             "sha256": hashlib.sha256(data).hexdigest(),
             "sgdb_id": sgdb_id,
         }
-
-    def _find_slot_artwork_io(self, rom_id: int, slot: ArtworkSlot, sgdb_id: int) -> _CachedArtwork | _NoArtwork:
-        """The slot's cached image, downloaded first when needed; a 404 for the game is SteamGridDB having none."""
-        try:
-            return self._download_sgdb_artwork_io(sgdb_id, rom_id, slot.value)
-        except SgdbApiError as e:
-            # A game id SteamGridDB does not know, as do_fetch_shortcut_icon reads a 404.
-            if e.status_code == 404:
-                return _NoArtwork.NONE
-            self._logger.warning(f"SGDB {slot.value} fetch failed for rom_id={rom_id}: HTTP {e.status_code}")
-        except Exception as e:
-            self._logger.warning(f"SGDB {slot.value} fetch failed for rom_id={rom_id}: {e}")
-        return _NoArtwork.FAILED
 
     def _record_none(self, rom_id: int, slot: ArtworkSlot, sgdb_id: int | None, now: float) -> None:
         self._record_slot_outcome(
@@ -700,10 +736,18 @@ class SteamGridService:
         return {"success": True, "message": "API key is valid"}
 
     def save_sgdb_api_key(self, api_key):
+        """Store *api_key*; the empty string and the mask store nothing. Refuses a key no header can carry."""
         if api_key and api_key != "••••":
+            _refuse_a_key_that_cannot_be_sent(api_key)
             self._settings["steamgriddb_api_key"] = api_key
             self._settings_persister.save_settings()
         return {"success": True, "message": "SteamGridDB API key saved"}
+
+    def remove_sgdb_api_key(self):
+        """Forget the stored key; the artwork cache and the images Steam already has stay."""
+        self._settings["steamgriddb_api_key"] = ""
+        self._settings_persister.save_settings()
+        return {"success": True, "message": "SteamGridDB API key removed"}
 
     # -- cache pruning -----------------------------------------------------
 
@@ -876,7 +920,7 @@ class SteamGridService:
             return SlotAnswer.FAILED
         sgdb_id = self._resolve_sgdb_id_state_only(rom_id)
         sgdb_id = int(sgdb_id) if sgdb_id else None
-        found = self._download_for_the_job_io(rom_id, slot, sgdb_id) if sgdb_id is not None else _NoArtwork.NONE
+        found = self._download_or_answer_io(rom_id, slot.value, sgdb_id) if sgdb_id is not None else _NoArtwork.NONE
         if found is _NoArtwork.NONE:
             self._record_none(rom_id, slot, sgdb_id, self._clock.time())
             return SlotAnswer.NONE
@@ -886,12 +930,16 @@ class SteamGridService:
             return found
         return SlotAnswer.READY
 
-    def _download_for_the_job_io(
-        self, rom_id: int, slot: ArtworkSlot, sgdb_id: int
+    def _download_or_answer_io(
+        self, rom_id: int, asset_type: str, sgdb_id: int, anew: bool = False
     ) -> _CachedArtwork | _NoArtwork | SlotAnswer:
-        """The slot's cached image, downloaded first when needed, or the answer a 429, 401 or 403 calls for."""
+        """*rom_id*'s cached *asset_type*, downloaded first when needed or *anew*, or what a 429, 401 or 403 answers.
+
+        A 404 is SteamGridDB not knowing the game, as ``do_fetch_shortcut_icon`` reads it.
+        """
+        download = self._fetch_sgdb_artwork_io if anew else self._download_sgdb_artwork_io
         try:
-            return self._download_sgdb_artwork_io(sgdb_id, rom_id, slot.value)
+            return download(sgdb_id, rom_id, asset_type)
         except SgdbRateLimitedError:
             return SlotAnswer.RATE_LIMITED
         except SgdbApiError as e:
@@ -899,9 +947,9 @@ class SteamGridService:
                 return _NoArtwork.NONE
             if e.status_code in (401, 403):
                 return SlotAnswer.KEY_REFUSED
-            self._logger.warning(f"SGDB {slot.value} fetch failed for rom_id={rom_id}: HTTP {e.status_code}")
+            self._logger.warning(f"SGDB {asset_type} fetch failed for rom_id={rom_id}: HTTP {e.status_code}")
         except Exception as e:
-            self._logger.warning(f"SGDB {slot.value} fetch failed for rom_id={rom_id}: {e}")
+            self._logger.warning(f"SGDB {asset_type} fetch failed for rom_id={rom_id}: {e}")
         return _NoArtwork.FAILED
 
     def _downscaled(self, rom_id: int, cached: str) -> IconFetch:

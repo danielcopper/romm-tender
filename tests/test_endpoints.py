@@ -312,10 +312,12 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "report_sgdb_slot_artwork",
     "verify_sgdb_api_key",
     "save_sgdb_api_key",
+    "remove_sgdb_api_key",
     "save_shortcut_icon",
     "get_sgdb_resolution",
     "search_sgdb_games",
     "apply_sgdb_game_id",
+    "refresh_sgdb_artwork",
     # Metadata cache reads.
     "get_rom_metadata",
     "get_metadata_cache_page",

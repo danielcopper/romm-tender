@@ -180,6 +180,7 @@ READ_ONLY_CLAIMS: frozenset[str] = frozenset(
         "get_sgdb_resolution",
         "get_sgdb_slot_artwork",
         "refresh_save_status",
+        "refresh_sgdb_artwork",
         "test_connection",
     }
 )

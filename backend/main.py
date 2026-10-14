@@ -760,6 +760,10 @@ class Endpoints:
         return self._services.sgdb_service.save_sgdb_api_key(api_key)
 
     @route
+    def remove_sgdb_api_key(self):
+        return self._services.sgdb_service.remove_sgdb_api_key()
+
+    @route
     async def save_shortcut_icon(self, app_id, icon_base64):
         return await self._services.sgdb_service.save_shortcut_icon(app_id, icon_base64)
 
@@ -774,6 +778,10 @@ class Endpoints:
     @route
     async def apply_sgdb_game_id(self, rom_id, sgdb_id):
         return await self._services.sgdb_service.apply_sgdb_game_id(rom_id, sgdb_id)
+
+    @route
+    async def refresh_sgdb_artwork(self, rom_id, sgdb_id):
+        return await self._services.sgdb_service.refresh_sgdb_artwork(rom_id, sgdb_id)
 
     # ── Metadata delegation to MetadataService ────────────────
 
