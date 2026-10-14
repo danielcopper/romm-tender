@@ -254,11 +254,9 @@ tracking is cleared, and the slot starts fresh — with every prior save recover
 whitespace / `None` slot **name** is a different thing entirely: it is rejected up front with
 `reason="invalid_slot_name"` — the slot-less legacy bucket is no longer a switch target, see below.)
 
-On the SAVES tab every slot is a collapsible panel, and the active slot's panel starts open. A panel reads that starting
-state only when it is built, and its key carries whether its slot is active: when the active slot changes — **Activate
-Slot**, or a copy that makes its target active — the two panels whose slot gained or lost that state are rebuilt, so the
-new active slot opens and the old one closes, reading its files again when it is reopened. Every other panel keeps its
-state.
+On the SAVES tab every slot is a collapsible panel, and the active slot's panel starts open. When the active slot
+changes — **Activate Slot**, or a copy that makes its target active — the new active slot's panel opens and the old
+one's closes, reading its files again when it is reopened. Every other panel keeps its state.
 
 #### Inside `.romm-backup` — naming and retention
 
@@ -1285,8 +1283,9 @@ rollback API.
   `put_failed`. Local file and local state both point at the target. Cross-device propagation is incomplete — other
   devices still see the original newest save. Calling `rollback_to_version` again is safe and idempotent: step 1 is
   already done, step 2 retries the PUT.
-- **Refused by the save rules**: while an update installs, a RetroDECK migration is pending or a removed-game cleanup
-  runs, the hold in `SaveService.rollback_to_version` refuses before any of the above, with the shared failure shape.
+- **Refused by the conflict rules**: while an update installs, a RetroDECK migration is pending or a removed-game
+  cleanup runs, the hold in `SaveService.rollback_to_version` refuses before any of the above, with the shared failure
+  shape.
 
 The panel words both failure-shape answers "Couldn't restore the save: …", followed by the endpoint's message. After a
 restore that went through (`ok` or `put_failed`) only the restored file's Previous Versions closes, and it reads its
@@ -1332,20 +1331,21 @@ neither in place):
    server-side dedup. This is what stops a repeat-copy of already-present content from re-pointing the tracked save.
 7. `SaveCopyService._copy_save_to_slot_io` then: `confirm_slot(target)` (creates the slot if new, switches active +
    confirms) → `do_download_save` (the chosen content onto the canonical local file, quarantining the current local file
-   first, #965; a local file this device cannot write is `copy_failed`) →
+   first, #965; a local file this device cannot write is `copy_failed`, and a RomM error is not caught here) →
    `do_upload_save(server_save=None, overwrite=False)` — a POST into the now-active target slot. A **409** is
    `target_slot_busy` (the target has newer changes from another device — sync it first, then retry); any other upload
    error is `copy_failed`.
 
 The status union mirrors `RollbackStatus`:
-`ok | not_configured | invalid_slot_name | rom_not_installed | version_deleted | unsupported{reason?} |
-server_unreachable{message} | conflict_blocked{conflicts} | preflight_failed{errors} | target_slot_busy{message} |
-already_present{existing_id} | copy_failed{message}`.
+`ok | not_configured | invalid_slot_name | rom_not_installed | version_deleted | unsupported{reason?, message?} |
+server_unreachable{message} | not_found{message} | conflict_blocked{conflicts} | preflight_failed{errors} |
+target_slot_busy{message} | already_present{existing_id} | copy_failed{message}`.
 On `ok` the frontend dispatches `romm_data_changed` so the parent re-fetches — refreshing both the source and the target
-slot views. Outside the union the endpoint answers the shared failure shape (`success: false`) when the save rules' hold
-in `SaveService.copy_save_to_slot` refuses, as for a restore; the panel words it "Couldn't copy the save: …", followed
-by the endpoint's message, and refreshes nothing. The source slot is excluded from the target picker (a same-slot copy
-is just a rollback) and the legacy `""` bucket is excluded as a target (it stays a read-only source).
+slot views. Outside the union the endpoint answers the shared failure shape (`success: false`) in two cases: when the
+conflict rules' hold in `SaveService.copy_save_to_slot` refuses, as for a restore, and on a RomM error at the step-7
+download, with `classify_error`'s reason and message. The panel words it "Couldn't copy the save: …", followed by the
+endpoint's message, and refreshes nothing. The source slot is excluded from the target picker (a same-slot copy is just
+a rollback) and the legacy `""` bucket is excluded as a target (it stays a read-only source).
 
 ## RomM Save Sync API Behaviour
 
