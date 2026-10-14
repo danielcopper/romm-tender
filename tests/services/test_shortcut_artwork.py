@@ -1459,6 +1459,61 @@ class TestOneBatchAtATime:
         assert job.service._waiting_for_a_panel is not None
         await job.service.shutdown()
 
+    @pytest.mark.asyncio
+    async def test_a_stop_does_not_wait_for_the_frontend_to_finish_a_batch(self, monkeypatch):
+        monkeypatch.setattr(shortcut_artwork, "_BATCH_SIZE", 1)
+        job = _Job(icons={100: ""}, bound={100: 1})
+        job.frontend_holds = True
+        job.service.request_run()
+        await _until(lambda: len(job.held_leases) == 1)
+        await _until(lambda: job.held_leases[0] in job.prune_conflicts._lease_gone)
+
+        await asyncio.wait_for(job.service.stop_for_cleanup(), timeout=1)
+
+        assert job.prune_conflicts.held_claims() == ("shortcut_artwork",)
+        await job.prune_conflicts.release_lease(job.held_leases[0])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("stopped_for", ["cleanup", "removal"])
+    async def test_a_batch_a_stopped_run_left_out_is_finished_before_the_next_run_hands_one_over(
+        self, monkeypatch, stopped_for
+    ):
+        monkeypatch.setattr(shortcut_artwork, "_BATCH_SIZE", 1)
+        job = _Job(icons={100: ""}, bound={100: 1})
+        job.frontend_holds = True
+        leases_at_each_hand_over: list[int] = []
+        emit = job.service._emit
+
+        async def counting_emit(name: str, payload: Any, /) -> bool:
+            leases_at_each_hand_over.append(job.prune_conflicts.held_claims().count("shortcut_artwork"))
+            return await emit(name, payload)
+
+        job.service._emit = counting_emit
+        job.service.request_run()
+        await _until(lambda: len(job.held_leases) == 1)
+        await _until(lambda: job.held_leases[0] in job.prune_conflicts._lease_gone)
+
+        if stopped_for == "cleanup":
+            await job.service.stop_for_cleanup()
+            job.service.resume_after_cleanup()
+        else:
+            await job.service.stop_for_removal()
+            job.service.request_run()
+        second = job.service._task
+        assert second is not None
+        await _until(lambda: len(job.source.fetched) == 2)
+        await asyncio.sleep(0.1)
+        assert len(job.batches()) == 1
+        assert job.readings == 1
+
+        await job.prune_conflicts.release_lease(job.held_leases[0])
+        await _until(lambda: len(job.batches()) == 2)
+        await job.prune_conflicts.release_lease(job.held_leases[1])
+        await asyncio.wait_for(second, timeout=5)
+
+        assert leases_at_each_hand_over == [1, 1]
+        assert job.readings == 2
+
 
 async def _until(condition: Callable[[], bool]) -> None:
     async def poll() -> None:

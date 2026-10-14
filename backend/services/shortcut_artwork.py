@@ -184,6 +184,7 @@ class ShortcutArtworkService:
         self._not_paused = asyncio.Event()
         self._not_paused.set()
         self._one_batch_at_a_time = asyncio.Lock()
+        self._batch_out: str | None = None
         self._backoff = 0.0
 
     # -- triggers ------------------------------------------------------------
@@ -500,7 +501,9 @@ class ShortcutArtworkService:
 
         One batch at a time: the next is taken only once the frontend has
         finished this one, its lease released, disowned or expired, so the
-        renderer reading before it is taken after this one landed. With
+        renderer reading before it is taken after this one landed. That holds
+        across a stop too: a run stopped while it waited leaves the batch out,
+        and the next run waits for it before its first reading. With
         *full_only* nothing is taken unless a whole batch waits. Nothing is
         handed over while Steam's renderer stands at or above the session
         budget's ceiling: the run ends there, and what was finished waits for
@@ -511,11 +514,16 @@ class ShortcutArtworkService:
                 return
             finished = batch[:_BATCH_SIZE]
             del batch[:_BATCH_SIZE]
+            await self._wait_for_the_batch_out()
             if self._yields_now() or await self._renderer_is_full():
                 return
-            token = await self._shielded(self._hand_over_unless_the_job_yields(finished))
-            if token is not None:
-                await self._wait_for_the_frontend(token)
+            self._batch_out = await self._shielded(self._hand_over_unless_the_job_yields(finished))
+            await self._wait_for_the_batch_out()
+
+    async def _wait_for_the_batch_out(self) -> None:
+        if self._batch_out is not None:
+            await self._wait_for_the_frontend(self._batch_out)
+            self._batch_out = None
 
     async def _wait_for_the_frontend(self, token: str) -> None:
         try:
