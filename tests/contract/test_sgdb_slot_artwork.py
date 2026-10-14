@@ -132,4 +132,8 @@ async def test_the_jobs_icon_report_is_recorded_in_the_real_table(harness, grid)
 async def test_the_icon_is_not_served_by_the_per_slot_fetch(harness, grid):
     answer = await harness.endpoints.get_sgdb_slot_artwork(_ROM_ID, _ROM_ID, "icon")
 
-    assert answer == {"success": False, "reason": "invalid_payload", "message": "Unknown artwork slot: icon"}
+    assert answer == {
+        "success": False,
+        "reason": "invalid_payload",
+        "message": "The icon slot is not served by the per-slot fetch",
+    }

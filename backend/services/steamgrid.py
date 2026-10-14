@@ -90,10 +90,10 @@ _ASSET_TYPES = ("hero", "logo", "grid", "icon")
 
 
 def _grid_file_slot(slot: object) -> ArtworkSlot:
-    """The wide grid, logo or hero *slot* names; refuses any other, the icon included, whose slot no file name fills."""
+    """The wide grid, logo or hero *slot* names; refuses an unknown slot and the icon, whose slot no file name fills."""
     artwork_slot = _artwork_slot(slot)
     if artwork_slot is ArtworkSlot.ICON:
-        raise Refused("invalid_payload", f"Unknown artwork slot: {slot}")
+        raise Refused("invalid_payload", "The icon slot is not served by the per-slot fetch")
     return artwork_slot
 
 
