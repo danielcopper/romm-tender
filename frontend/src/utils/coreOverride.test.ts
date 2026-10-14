@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { toaster } from "../api/host";
 import * as backend from "../api/backend";
 import { setLaunchOptionsConfirmed } from "./steamShortcuts";
@@ -203,5 +203,49 @@ describe("coreOverride — executeGameCoreChange", () => {
       leaseOwner,
     });
     expect(toaster.toast).toHaveBeenCalledWith(expect.objectContaining({ body: "Failed to set core" }));
+  });
+
+  describe("a continuation whose lease is aborted", () => {
+    const installedAnswer = { success: true as const, launch_options: "flatpak run -e core.so", app_id: 1234 };
+
+    /** Run the continuation on *controller*'s signal instead of a real lease. */
+    function continueOn(controller: AbortController): void {
+      vi.spyOn(pruneLease, "withPruneLease").mockImplementationOnce(async (_token, _context, operation) =>
+        operation(controller.signal),
+      );
+    }
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it("writes nothing to Steam and claims nothing when aborted before the write", async () => {
+      vi.mocked(backend.setGameCore).mockResolvedValue(installedAnswer);
+      const controller = new AbortController();
+      controller.abort();
+      continueOn(controller);
+      const onSuccess = vi.fn();
+
+      await executeGameCoreChange({ romId: 42, coreLabel: "Snes9x", leaseOwner, onSuccess });
+
+      expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
+      expect(toaster.toast).not.toHaveBeenCalled();
+      expect(onSuccess).not.toHaveBeenCalled();
+    });
+
+    it("claims nothing when aborted while the launch command is written", async () => {
+      vi.mocked(backend.setGameCore).mockResolvedValue(installedAnswer);
+      const controller = new AbortController();
+      continueOn(controller);
+      vi.mocked(setLaunchOptionsConfirmed).mockImplementation(async () => {
+        controller.abort();
+        return true;
+      });
+      const onSuccess = vi.fn();
+
+      await executeGameCoreChange({ romId: 42, coreLabel: "Snes9x", leaseOwner, onSuccess });
+
+      expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(1234, "flatpak run -e core.so");
+      expect(toaster.toast).not.toHaveBeenCalled();
+      expect(onSuccess).not.toHaveBeenCalled();
+    });
   });
 });

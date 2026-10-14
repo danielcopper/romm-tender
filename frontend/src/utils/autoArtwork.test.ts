@@ -47,6 +47,20 @@ describe("useAutoArtwork", () => {
     expect(artwork.fillEmptyArtwork).toHaveBeenCalledTimes(1);
   });
 
+  it("does not apply again when the page is opened again for a pair already applied", async () => {
+    const first = renderHook(() => useAutoArtwork(100, 42));
+    await waitFor(() => expect(artwork.fillEmptyArtwork).toHaveBeenCalledTimes(1));
+    first.unmount();
+
+    // A fresh mount runs the effect again; only the session's record of the
+    // applied pair stops a second apply.
+    renderHook(() => useAutoArtwork(100, 42));
+    await Promise.resolve();
+
+    expect(artwork.fillEmptyArtwork).toHaveBeenCalledTimes(1);
+    expect(artwork.applyArtwork).not.toHaveBeenCalled();
+  });
+
   it("replaces every slot when romId changes for the same appId (version switch)", async () => {
     const { rerender } = renderHook(({ appId, romId }) => useAutoArtwork(appId, romId), {
       initialProps: { appId: 100, romId: 42 },
