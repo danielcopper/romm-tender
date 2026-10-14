@@ -1254,6 +1254,18 @@ class TestTheWideGridAndTheLogo:
         assert job.source.slots_fetched == [(1, ArtworkSlot.LOGO)]
 
     @pytest.mark.asyncio
+    async def test_it_is_not_asked_again_while_the_roms_steamgriddb_id_is_the_one_recorded(self):
+        job = _Job(icons={100: _LOGO}, bound={100: 1}, grid_files=frozenset({"100.png"}), sgdb_ids={1: 7})
+        with job.uow:
+            job.uow.artwork_slot_outcomes.save(
+                ArtworkSlotOutcome.record_none(rom_id=1, slot=ArtworkSlot.LOGO, sgdb_id=7, recorded_at=job.clock.time())
+            )
+
+        await job.run()
+
+        assert job.source.slots_fetched == []
+
+    @pytest.mark.asyncio
     async def test_a_failed_slot_is_not_handed_over_and_waits_for_the_next_run(self):
         job = _Job(icons={100: _LOGO}, bound={100: 1}, grid_files=frozenset({"100_logo.png"}))
         job.source.answer_slot(1, ArtworkSlot.WIDE_GRID, SlotAnswer.FAILED)
