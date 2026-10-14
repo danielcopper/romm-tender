@@ -758,7 +758,8 @@ the game page.
   not, so the job never replaces it. Derived at every run and never stored, so a stopped run leaves exactly the rest. A
   bound shortcut the file does not hold yet is counted in the log and its icon left for the next run; its wide grid and
   logo do not depend on the file. Where the grid directory cannot be listed, no wide grid or logo is asked for, nor an
-  icon whose path is in that directory; a stand-in still is.
+  icon whose path is in that directory; a stand-in still is. A shortcut still showing no icon whose `none` rules the
+  slot out enters too, for the logo icon alone and without a request ("No icon", below).
 - **Two passes:** first each shortcut's icon and wide grid together, shortcut by shortcut, then the logos. A sync may
   run in the desktop client, where the icon shows in the library list, or in Big Picture, where the wide grid shows in
   search and among recent games, and neither should wait for the other; a logo shows only on the game page, which fills
@@ -783,9 +784,9 @@ the game page.
   in a session, for a game whose SteamGridDB id is known. The week rules out asking SteamGridDB again, not showing the
   logo: a shortcut still showing no icon — empty or the placeholder — while its `none` rules the slot out is given the
   logo icon at the next run without a request (`domain/artwork_slot_outcome.py`, `logo_icon_waits`), so a logo icon lost
-  on its way to Steam — a batch not handed over, or a logo that could not be read, which is logged — is not replaced by
-  the placeholder for a week. A shortcut already showing the logo icon needs nothing. A timeout, an answer that says it
-  failed, or any other failure is not "no icon": nothing is recorded and the next run asks again.
+  on its way to Steam — a batch not handed over, or a logo that could not be read, which is logged — does not leave the
+  placeholder in its place for a week. A shortcut already showing the logo icon needs nothing. A timeout, an answer that
+  says it failed, or any other failure is not "no icon": nothing is recorded and the next run asks again.
 - **Pace:** four shortcuts at a time. A 429 from SteamGridDB's API or its image CDN (`SgdbRateLimitedError`) pauses
   every worker: 30 s, twice as long at each 429 in a row, at most 15 minutes, then on, with only what the 429 met asked
   again; every run starts the pause over. A 401 or 403 from the API — a key SteamGridDB does not accept — ends the run
@@ -827,10 +828,11 @@ the game page.
   `hold`; the lease on each batch is a claim like any event's, and a cleanup pressed while the frontend holds one is
   refused ([Prune conflicts](removed-game-cleanup.md#prune-conflicts)).
 - **A pick on the game page wins:** `save_shortcut_icon` and the job's write take turns under one lock per app id, and
-  the job writes only while the page has saved no icon since it read that app's generation; the hand-over leaves out a
-  shortcut whose generation has moved since, so a logo icon queued before a pick is left out; and the frontend skips a
-  shortcut whose artwork apply is under way (`isArtworkApplyInFlight`), and sets no wide grid or logo once a game page's
-  apply for the shortcut has started since it began fetching it.
+  the job writes only while the page has saved no icon since it took that app's generation, which it does when it plans
+  the run, before it reads `shortcuts.vdf`; the hand-over leaves out a shortcut whose generation has moved since, so a
+  logo icon queued before a pick is left out; and the frontend skips a shortcut whose artwork apply is under way
+  (`isArtworkApplyInFlight`), and sets no wide grid or logo once a game page's apply for the shortcut has started since
+  it began fetching it.
 
 ## Pre-launch launch-options confirmation
 
