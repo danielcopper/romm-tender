@@ -1473,12 +1473,7 @@ it, for the focused platform:
   status is "`X / Y required · A / B regions`", the plain files alone in `X / Y`, and the same plain counts feed the
   sentence; an `unknown` group reads "Readiness unknown" where it words the line, and where a missing plain file words
   it instead the status is that count followed by "regions not checked" ("`0 / 1 required · regions not checked`") —
-  except a group open only for regions it carries no option for (`unstated`), which keeps its region count
-  ("`1 / 3
-  regions · regions not checked`") and reads "`<emulator>` has a BIOS image for `<covered>`"; on the platform
-  page every group sentence is followed, where `unstated` is non-empty, by "for `<regions>` discs `<emulator>` states no
-  BIOS image, so whether they start could not be established" (the game page's own sentence names a game of such a
-  region) — never "`0 / N regions`", which is an unmet group's; region names and a file's place in a group are
+  never "`0 / N regions`", which is an unmet group's; region names and a file's place in a group are
   `frontend/src/utils/biosGroup.ts`'s. The colour is the resolver's verdict and never the module's: it words what the
   verdict means, ahead of everything: first an emulator the resolver does not cover, then a BIOS nobody chose in its
   settings (PCSX2's `[Filenames] BIOS`, read off the setting the resolver names, #2190 D6), ahead of the rest because

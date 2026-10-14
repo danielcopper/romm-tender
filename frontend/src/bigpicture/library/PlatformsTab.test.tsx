@@ -133,6 +133,7 @@ function firmwarePlatform(overrides: Partial<FirmwarePlatformExt> = {}): Firmwar
     emulator_data_reason: null,
     emulator_source: { kind: "retrodeck", starts_games: true },
     platform_system: null,
+    locating: "by-name",
     ...overrides,
   };
 }
@@ -439,7 +440,7 @@ describe("Library › Platforms", () => {
       const rows = [...container.querySelectorAll<HTMLElement>("[title]")];
       const gba = rows.find((el) => el.textContent.includes("Game Boy Advance"));
       const n64 = rows.find((el) => el.textContent.includes("Nintendo 64"));
-      expect(gba?.title).toBe("3 of 5 files the launching emulator requires are in place");
+      expect(gba?.title).toBe("3 of 5 files the launching emulator opens by name are in place");
       // The set the count was taken over, and this payload names no pick, so
       // the sentence says which emulator it is about the only way it can.
       expect(n64?.title).toBe("The launching emulator marks none of its BIOS files as required");
@@ -482,7 +483,7 @@ describe("Library › Platforms", () => {
       const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
         el.textContent.includes("Game Boy Advance"),
       );
-      expect(row?.title).toBe("All 2 files mGBA requires are in place");
+      expect(row?.title).toBe("All 2 files mGBA opens by name are in place");
     });
 
     it("says in words what the dot could not say, for a platform the read cannot speak for", async () => {
@@ -518,7 +519,7 @@ describe("Library › Platforms", () => {
       // The ratio's one home is the pane's coloured note, asserted below. The
       // row's title states the same shortfall in the shared sentence, which is
       // the pane's other half — not a second spelling of the note.
-      expect(row?.title).toBe("0 of 2 files the launching emulator requires are in place");
+      expect(row?.title).toBe("0 of 2 files the launching emulator opens by name are in place");
       expect(container.querySelector<HTMLElement>('[data-testid="bios-dot-gba"]')!.style.backgroundColor).toBe(
         biosColorForLevel("missing"),
       );
@@ -1114,7 +1115,7 @@ describe("Library › Platforms", () => {
       const byText = (start: string) =>
         [...container.querySelectorAll<HTMLElement>("div")].find((el) => el.textContent.startsWith(start));
       const facts = container.querySelector<HTMLElement>('[data-testid="platform-facts"]');
-      const note = byText("The one file the launching emulator requires");
+      const note = byText("The one file the launching emulator opens by name");
       const description = byText("GBA BIOS");
       expect([facts?.style.fontSize, note?.style.fontSize, description?.style.fontSize]).toEqual([
         NOTE_FONT,
@@ -1457,7 +1458,9 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("The one file mGBA requires is not in place (1/3 RomM library files)");
+      expect(container.textContent).toContain(
+        "The one file mGBA opens by name is not in place (1/3 RomM library files)",
+      );
     });
 
     it("states the same ratio on the pane and on the game page from one pair of counts", async () => {
@@ -1476,7 +1479,7 @@ describe("Library › Platforms", () => {
       await flushAsync();
       const gamePage = render(
         <BiosTab
-          biosStatus={{ needs_bios: true, required_count: 1, required_downloaded: 0, ...counts }}
+          biosStatus={{ needs_bios: true, locating: "by-name", required_count: 1, required_downloaded: 0, ...counts }}
           biosLevel="missing"
           coreInfo={GBA_CORE_INFO}
           isActive={true}
@@ -1501,7 +1504,7 @@ describe("Library › Platforms", () => {
       await flushAsync();
       const gamePage = render(
         <BiosTab
-          biosStatus={{ needs_bios: true, required_count: 1, required_downloaded: 0, ...counts }}
+          biosStatus={{ needs_bios: true, locating: "by-name", required_count: 1, required_downloaded: 0, ...counts }}
           biosLevel="missing"
           coreInfo={GBA_CORE_INFO}
           isActive={true}
@@ -2897,8 +2900,8 @@ describe("Library › Platforms", () => {
         expect(buttonByText(container, "Download")).toBeUndefined();
         // The header and the bulk download stay the launching emulator's.
         expect(buttonByText(container, "Download required (1)")).toBeTruthy();
-        expect(summary).toContain("The one file YabaSanshiro requires is not in place");
-        expect(container.textContent).toContain("The one file YabaSanshiro requires is not in place");
+        expect(summary).toContain("The one file YabaSanshiro opens by name is not in place");
+        expect(container.textContent).toContain("The one file YabaSanshiro opens by name is not in place");
       });
     });
 

@@ -23,6 +23,7 @@ from domain.bios_status import (
     BiosFileEntry,
     BiosStatus,
     build_file_entry,
+    classify_content_search,
     compute_bios_label,
     compute_bios_level,
     count_required,
@@ -508,3 +509,59 @@ class TestAStaleConfiguredNameChangesNothing:
         entry = build_file_entry("bios", True, "/bios/pcsx2/bios", self._FOLDER, True, "pcsx2_libretro.so")
 
         assert count_required((entry,)) == (1, 1)
+
+
+class TestWhatAContentSearchEstablished:
+    """What an emulator that searches the BIOS folder by content found, read off the resolver's words."""
+
+    _SEARCHER = CoreFirmwareVerdict(requirements_met=None, declaration="packaged", locating="by-name-then-content")
+
+    @staticmethod
+    def _row(*, satisfied: bool | None, checked: str | None = None, caveats: tuple[str, ...] = ()) -> BiosFileEntry:
+        return dataclasses.replace(
+            _withheld_folder_row(), file_name="scph5500.bin", satisfied=satisfied, checked=checked, caveats=caveats
+        )
+
+    def test_every_required_file_met_and_identified_by_its_contents_is_found(self):
+        row = self._row(satisfied=True, caveats=("firmware-image-identified",))
+
+        assert classify_content_search(self._SEARCHER, (row,)) == "found"
+
+    def test_a_file_met_by_its_configured_name_is_no_search_finding(self):
+        """Opened by name, not found by content: the answer says nothing of a search."""
+        assert classify_content_search(self._SEARCHER, (self._row(satisfied=True),)) is None
+
+    def test_a_listing_that_did_not_finish_is_incomplete(self):
+        verdict = dataclasses.replace(self._SEARCHER, caveats=("firmware-scan-incomplete",))
+
+        assert classify_content_search(verdict, ()) == "incomplete"
+
+    def test_a_file_whose_bytes_did_not_come_back_is_unreadable(self):
+        assert classify_content_search(self._SEARCHER, (self._row(satisfied=None, checked="unread"),)) == "unreadable"
+
+    @pytest.mark.parametrize(
+        ("satisfied", "checked"), [(False, None), (None, "unrecognised")], ids=["not-met", "unrecognised"]
+    )
+    def test_a_required_file_not_met_or_unrecognised_says_nothing_of_the_search(self, satisfied, checked):
+        """A search that found nothing is the emulator's own note, never read off a verdict."""
+        row = self._row(satisfied=satisfied, checked=checked)
+
+        assert classify_content_search(self._SEARCHER, (row,)) is None
+
+    def test_nothing_the_resolver_stated_is_no_answer(self):
+        """No row, no caveat: nothing is reached by elimination."""
+        assert classify_content_search(self._SEARCHER, ()) is None
+
+    def test_an_emulator_that_opens_by_name_has_no_search_to_word(self):
+        verdict = dataclasses.replace(self._SEARCHER, locating="by-name")
+
+        row = self._row(satisfied=True, caveats=("firmware-image-identified",))
+
+        assert classify_content_search(verdict, (row,)) is None
+
+    def test_a_group_speaks_for_the_search_instead(self):
+        group = GroupVerdict(state=GROUP_MET, covered=("pal",), missing=(), unchecked=())
+
+        row = self._row(satisfied=True, caveats=("firmware-image-identified",))
+
+        assert classify_content_search(self._SEARCHER, (row,), groups=(group,)) is None

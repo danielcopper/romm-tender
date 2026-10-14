@@ -39,6 +39,8 @@ from domain.firmware_wants import (
     SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
     SYSTEM_FIRMWARE_OPEN,
     SYSTEM_FIRMWARE_RUNS_WITHOUT,
+    CoreFirmwareVerdict,
+    EmulatorNote,
     FolderVerdict,
 )
 from domain.platform_system import NO_SYSTEM, SWITCHED_OFF, PlatformSystem
@@ -51,6 +53,7 @@ from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolver
 from services.cores import CoreService, CoreServiceConfig
 from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.firmware.deletion import FirmwareDeletionIncomplete
+from services.firmware.emulator_answers import EmulatorAnswer, emulator_fields
 from services.firmware.status import FirmwareStatusReader
 from services.game_detail import GameDetailService, GameDetailServiceConfig
 
@@ -6995,3 +6998,24 @@ class TestTheGamePageReadsItsOwnRegion:
     @pytest.mark.asyncio
     async def test_a_game_with_no_clear_region_keeps_the_platforms_amber(self):
         assert (await self._page(("World",), *self._JAPAN_ONLY))["bios_level"] == "partial"
+
+
+class TestTheResolversNotesReachTheWire:
+    """An emulator-level note crosses to the panel with every word a sentence is built from."""
+
+    def test_a_search_that_found_nothing_carries_its_folder_and_candidates(self):
+        note = EmulatorNote(kind="search-found-nothing", dir="/bios", candidates=2, regions=("ntsc-u",))
+        verdict = CoreFirmwareVerdict(requirements_met=False, locating="by-name-then-content", notes=(note,))
+
+        fields = emulator_fields(EmulatorAnswer(complete=True, verdict=verdict, region_decides=False, groups=()))
+
+        assert fields["emulator_notes"] == [
+            {
+                "kind": "search-found-nothing",
+                "setting": None,
+                "tied": None,
+                "dir": "/bios",
+                "candidates": 2,
+                "regions": ["ntsc-u"],
+            }
+        ]

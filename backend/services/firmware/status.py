@@ -28,13 +28,14 @@ for, says nothing about a launch that does not use it.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain import firmware_paths
 from domain.bios_status import (
     BIOS_LEVEL_MISSING,
     BIOS_LEVEL_UNKNOWN,
+    classify_content_search,
     collect_firmware_status,
     compute_bios_label,
     compute_bios_level,
@@ -42,22 +43,27 @@ from domain.bios_status import (
     count_required_withheld,
     count_wanted,
     format_bios_status,
-    game_region_level,
-    region_decides,
 )
 from domain.emulator_commands import options_to_payload, resolve_platform_option
 from domain.firmware_groups import console_regions_of, judge_groups
-from domain.firmware_wants import DECLARED_DIRECTORY, LOCATING_UNESTABLISHED
+from domain.firmware_wants import DECLARED_DIRECTORY
+from services.firmware.emulator_answers import (
+    EMULATOR_FIELDS,
+    EmulatorAnswer,
+    emulator_answer,
+    emulator_fields,
+    emulator_tabs,
+    row_payload,
+)
 
 if TYPE_CHECKING:
     import asyncio
     import logging
 
     from domain.bios_file import BiosFile
-    from domain.bios_status import BiosFileEntry
     from domain.emulator_commands import EmulatorOption, LaunchingEmulator
     from domain.firmware_groups import GroupVerdict
-    from domain.firmware_wants import CoreFirmwareVerdict, FirmwareCatalogue
+    from domain.firmware_wants import FirmwareCatalogue
     from domain.platform_system import PlatformSystem
     from domain.rom_install import RomInstall
     from services.firmware.demand import FirmwareDemand
@@ -131,7 +137,7 @@ class FirmwareStatusReader:
         verdict are the launching emulator's.
 
         The third answer is every OTHER emulator's own requirements, keyed by
-        identity — the items each one's tab is built from (:func:`_emulator_tabs`),
+        identity — the items each one's tab is built from (:func:`emulator_tabs`),
         each at that emulator's place and read in the same hop.
         """
         catalogue = self._demand.platform_catalogue(system)
@@ -226,7 +232,7 @@ class FirmwareStatusReader:
             return launching_emulator
         return self._platform_emulator(platform_slug, options)
 
-    def _bios_aggregates(self, files, platform_slug: str, answer: _EmulatorAnswer) -> dict[str, Any]:
+    def _bios_aggregates(self, files, platform_slug: str, answer: EmulatorAnswer) -> dict[str, Any]:
         """The counts, level and label every surface reads off one classified file list.
 
         One derivation for the per-game paths and the overview, so a platform
@@ -251,7 +257,7 @@ class FirmwareStatusReader:
         "could not be established" would otherwise stand as a file missing.
 
         Beside them travel the resolver's own words about the launching emulator
-        (:func:`_emulator_fields`), which the surfaces word and never weigh.
+        (:func:`emulator_fields`), which the surfaces word and never weigh.
 
         The groups are the verdicts over the launching emulator's one-of groups.
         Each is one requirement inside ``required_count``; ``one_of_groups``
@@ -279,7 +285,8 @@ class FirmwareStatusReader:
             "unknown_count": unknown_count,
             "known_count": known_count,
             "one_of_groups": [_group_payload(group) for group in groups],
-            **_emulator_fields(answer),
+            **emulator_fields(answer),
+            "content_search": classify_content_search(answer.verdict, files, groups=groups),
         }
         # The bios_level state ("unknown" / "ok" / "partial" / "missing") and the
         # compact bios_label beside it, so every consumer reads the verdict
@@ -300,7 +307,7 @@ class FirmwareStatusReader:
         self,
         files,
         platform_slug: str,
-        answer: _EmulatorAnswer,
+        answer: EmulatorAnswer,
         launching_emulator: LaunchingEmulator | None,
     ) -> dict[str, Any]:
         """The aggregates plus the per-file rows — what the per-game surfaces read.
@@ -317,7 +324,7 @@ class FirmwareStatusReader:
         return {
             **self._bios_aggregates(files, platform_slug, answer),
             "active_core_label": launching_emulator.label if launching_emulator is not None else None,
-            "files": [_row_payload(f) for f in files],
+            "files": [row_payload(f) for f in files],
         }
 
     # ── The whole-library overview ───────────────────────────
@@ -536,17 +543,17 @@ class FirmwareStatusReader:
         plat["has_games"] = slug in synced_slugs
         plat["all_downloaded"] = all(f["downloaded"] for f in plat["files"])
         self._stamp_deletable(plat, slug, records)
-        answer = _emulator_answer(catalogue, identity, judge_groups(catalogue.groups_for(identity)))
+        answer = emulator_answer(catalogue, identity, judge_groups(catalogue.groups_for(identity)))
         self._set_platform_bios_aggregates(plat, slug, files, answer)
-        plat["emulator_tabs"] = _emulator_tabs(
+        plat["emulator_tabs"] = emulator_tabs(
             catalogue, identity, plat["active_core_label"], options["options"], others
         )
 
-    def _set_platform_bios_aggregates(self, plat: dict[str, Any], slug: str, files, answer: _EmulatorAnswer) -> None:
+    def _set_platform_bios_aggregates(self, plat: dict[str, Any], slug: str, files, answer: EmulatorAnswer) -> None:
         """Stamp the per-platform BIOS aggregates onto a ``get_firmware_status`` entry.
 
         The counts, ``one_of_groups``, the resolver's own words about the
-        launching emulator (:func:`_emulator_fields`) and the ``bios_level`` state
+        launching emulator (:func:`emulator_fields`) and the ``bios_level`` state
         (``"unknown"`` / ``"ok"`` / ``"partial"`` / ``"missing"``), so the platform
         detail reads the verdict and the display counts straight off this
         payload. The whole payload comes from the same builder the per-game path
@@ -569,7 +576,7 @@ class FirmwareStatusReader:
             "required_withheld",
             "bios_level",
             "one_of_groups",
-            *_EMULATOR_FIELDS,
+            *EMULATOR_FIELDS,
         ):
             plat[key] = payload[key]
 
@@ -738,157 +745,17 @@ class FirmwareStatusReader:
         complete = catalogue.reading_complete_for(identity)
         files = collect_firmware_status(items, placements, complete, identity, catalogue.groups)
         groups = judge_groups(catalogue.groups_for(identity), console_regions_of(rom_regions))
-        answer = _emulator_answer(catalogue, identity, groups)
+        answer = emulator_answer(catalogue, identity, groups)
 
         met = answer.verdict.requirements_met if answer.verdict is not None else None
         if not files and met is not False:
             return {"needs_bios": False} if met is True else {"needs_bios": False, "bios_status_unknown": True}
 
         payload = self._bios_payload(files, platform_slug, answer, pick)
-        payload["emulator_tabs"] = _emulator_tabs(
+        payload["emulator_tabs"] = emulator_tabs(
             catalogue, identity, pick.label if pick is not None else None, options["options"], others
         )
         return payload
-
-
-@dataclass(frozen=True)
-class _EmulatorAnswer:
-    """What the resolver says about the launching emulator, as the aggregates read it.
-
-    ``complete`` is whether that emulator was read at all
-    (:meth:`FirmwareCatalogue.reading_complete_for`), ``verdict`` its entry
-    (``None`` where the answer holds none — not read, #2190 D4),
-    ``region_decides`` the region rule over its own groups
-    (:func:`domain.bios_status.region_decides`), and ``groups`` the verdicts
-    over those groups a surface words — narrowed to a game's regions where the
-    caller had one, in which case ``game_level`` is the level that region gives
-    (:func:`domain.bios_status.game_region_level`).
-    """
-
-    complete: bool
-    verdict: CoreFirmwareVerdict | None
-    region_decides: bool
-    groups: tuple[GroupVerdict, ...]
-    game_level: str | None = None
-
-
-def _emulator_answer(
-    catalogue: FirmwareCatalogue, identity: str | None, groups: tuple[GroupVerdict, ...]
-) -> _EmulatorAnswer:
-    """The launching emulator's answer out of one catalogue."""
-    verdict = catalogue.verdict_for(identity)
-    stated = catalogue.groups_for(identity)
-    return _EmulatorAnswer(
-        complete=catalogue.reading_complete_for(identity),
-        verdict=verdict,
-        region_decides=region_decides(verdict, stated),
-        groups=groups,
-        game_level=game_region_level(verdict, stated, groups),
-    )
-
-
-# The payload keys :func:`_emulator_fields` answers, which the platform entry
-# copies across with the counts.
-_EMULATOR_FIELDS = (
-    "emulator_read",
-    "locating",
-    "emulator_declaration",
-    "console_needs_image",
-    "refused",
-    "emulator_notes",
-)
-
-
-def _emulator_fields(answer: _EmulatorAnswer) -> dict[str, Any]:
-    """The resolver's own words about the launching emulator, for a surface to word.
-
-    ``emulator_read`` is whether the emulator was read at all; the verdict
-    itself reaches a surface as ``bios_level``. ``console_needs_image`` is the resolver's
-    ``system_firmware`` saying the console does not start without an image this
-    emulator does not carry, under its world-knowledge mark — which image is in
-    place is the rows' verdicts, never this (#2190 D13). ``refused`` is what
-    keeps a verdict open that a sentence names; ``emulator_notes`` the
-    statements about the emulator a surface words (#2190 D6).
-    """
-    verdict = answer.verdict
-    if verdict is None:
-        return {
-            "emulator_read": False,
-            "locating": LOCATING_UNESTABLISHED,
-            "emulator_declaration": None,
-            "console_needs_image": False,
-            "refused": [],
-            "emulator_notes": [],
-        }
-    return {
-        "emulator_read": answer.complete,
-        "locating": verdict.locating,
-        "emulator_declaration": verdict.declaration,
-        "console_needs_image": verdict.system_needs_an_image and verdict.world_knowledge,
-        "refused": [
-            {"declared": refused.declared, "required": refused.required, "reason": refused.reason}
-            for refused in verdict.refused
-        ],
-        "emulator_notes": [
-            {"kind": note.kind, "setting": note.setting, "tied": note.tied, "regions": list(note.regions)}
-            for note in verdict.notes
-        ],
-    }
-
-
-def _emulator_tabs(
-    catalogue: FirmwareCatalogue,
-    launching: str | None,
-    launching_label: str | None,
-    options: list[EmulatorOption],
-    others: dict[str, list[dict[str, Any]]],
-) -> list[dict[str, Any]]:
-    """One tab per emulator the resolver answered for, the launching one first (#2190 D15).
-
-    Each tab carries that emulator's own verdict (``requirements_met``) and its
-    label; the launching emulator's tab carries no rows of its own, because the
-    payload's ``files`` are its rows. Every other tab carries its emulator's own
-    requirements exactly as the resolver answers them — places, needs and
-    per-file verdicts, read for that emulator — in the order the resolver gave
-    the emulators. A tab changes what a surface shows and never which emulator
-    launches.
-    """
-    labels: dict[str, str] = {}
-    for option in options:
-        if option.emulator is not None:
-            labels.setdefault(option.emulator, option.label)
-
-    def verdict_of(emulator: str | None) -> bool | None:
-        verdict = catalogue.verdict_for(emulator)
-        return verdict.requirements_met if verdict is not None else None
-
-    tabs: list[dict[str, Any]] = [
-        {
-            "emulator": launching,
-            "label": launching_label or labels.get(launching or "") or launching,
-            "launching": True,
-            "requirements_met": verdict_of(launching),
-        }
-    ]
-    for emulator, items in others.items():
-        placements: dict[str, Any] = {}
-        for placement in catalogue.placements:
-            if placement.emulator == emulator:
-                placements.setdefault(placement.file_name, placement)
-        entries = collect_firmware_status(
-            items, placements, catalogue.reading_complete_for(emulator), emulator, catalogue.groups
-        )
-        rows = sorted((_row_payload(entry) for entry in entries), key=lambda row: row["declared_path"].lower())
-        tabs.append(
-            {
-                "emulator": emulator,
-                "label": labels.get(emulator, emulator),
-                "launching": False,
-                "requirements_met": verdict_of(emulator),
-                "rows": rows,
-            }
-        )
-    return tabs
 
 
 def _has_something_to_say(plat: dict[str, Any]) -> bool:
@@ -944,18 +811,6 @@ def _group_payload(group: GroupVerdict) -> dict[str, Any]:
             for option in group.options
         ],
     }
-
-
-def _row_payload(entry: BiosFileEntry) -> dict[str, Any]:
-    """One row of a game page or an emulator's tab on the wire.
-
-    Every field of the entry but ``cores``: the per-emulator entries are what
-    the domain reads a row's own ``one_of`` and need off, and no surface reads
-    them since each emulator has a tab of its own (#2190 D15).
-    """
-    row = asdict(entry)
-    del row["cores"]
-    return row
 
 
 def _wanted_fields(entry) -> dict[str, Any]:

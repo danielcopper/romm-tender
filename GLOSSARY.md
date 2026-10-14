@@ -773,6 +773,18 @@ selector a **one-of group** is judged over. _Avoid_ in user-facing text: North A
 region, which is a release's name tag (`USA`, `Germany`, `World`) and maps onto at most one console region each; RomM's
 that map onto none leave the game's console region unknown.
 
+### How an emulator finds its firmware (firmware): by name / by name, then by content / not established
+
+The resolver's world knowledge about an emulator's code (`locating`): whether the names it declares are what a launch
+opens. **By name** — the declared list is the whole requirement, and the line counts the files it "opens by name". **By
+name, then by content** — a configured name first, then a search of the BIOS folder that recognises an image by its
+bytes, so a file the declaration never names may serve; the line states what the search found, where the resolver states
+it, rather than counting it, and otherwise counts the files the emulator "requires" — never what it "opens by name".
+**Not established** — nobody has read how it does it, so the declared list is a lower bound of unknown kind; the line
+counts what it "lists as required" and says how it finds its BIOS has not been established. It words the answer and
+never moves the **BIOS level**, which stays the resolver's verdict. A word the resolver states that this list does not
+know reads as not established.
+
 ### Console's need for an image (firmware)
 
 That the console a game launches on does not start without a firmware image the launching emulator does not carry
