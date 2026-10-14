@@ -14,7 +14,6 @@ import asyncio
 import base64
 import hashlib
 import os
-import threading
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -165,9 +164,11 @@ class SteamGridService:
         self._icon_locks: dict[int, asyncio.Lock] = {}
         # Per ROM and asset type, the wide grid and logo names in the artwork
         # cache: listed once, then kept by this service's own downloads and
-        # removals, so a lookup does not list the whole cache.
-        self._slot_cache_names: dict[tuple[int, str], set[str]] | None = None
-        self._slot_cache_lock = threading.Lock()
+        # removals, so a lookup does not list the whole cache. Lookups run on
+        # executor threads and a service takes no lock, so each entry is
+        # replaced rather than changed: a reader holds a frozen snapshot. A note
+        # two threads race to lose costs one download more, nothing else.
+        self._slot_cache_names: dict[tuple[int, str], frozenset[str]] | None = None
 
     # -- SGDB lookup -------------------------------------------------------
 
@@ -267,25 +268,24 @@ class SteamGridService:
         rom_id = int(rom_id)
         if not named_by_image_id(asset_type):
             return [cached_artwork_name(rom_id, asset_type, None)]
-        with self._slot_cache_lock:
-            if self._slot_cache_names is None:
-                self._slot_cache_names = {}
-                for name in self._sgdb_artwork_cache.listdir(self._sgdb_artwork_cache.cache_dir()):
-                    slot = cached_slot_of(name)
-                    if slot is not None:
-                        self._slot_cache_names.setdefault(slot, set()).add(name)
-            return sorted(self._slot_cache_names.get((rom_id, asset_type), ()))
+        names = self._slot_cache_names
+        if names is None:
+            listed: dict[tuple[int, str], set[str]] = {}
+            for name in self._sgdb_artwork_cache.listdir(self._sgdb_artwork_cache.cache_dir()):
+                slot = cached_slot_of(name)
+                if slot is not None:
+                    listed.setdefault(slot, set()).add(name)
+            names = self._slot_cache_names = {slot: frozenset(held) for slot, held in listed.items()}
+        return sorted(names.get((rom_id, asset_type), ()))
 
     def _note_cache_name(self, rom_id, asset_type, name: str, *, held: bool) -> None:
         """Note that the cache now holds *name* for *rom_id*'s wide grid or logo, or no longer does."""
-        with self._slot_cache_lock:
-            if self._slot_cache_names is None or not named_by_image_id(asset_type):
-                return
-            names = self._slot_cache_names.setdefault((int(rom_id), asset_type), set())
-            if held:
-                names.add(name)
-            else:
-                names.discard(name)
+        names = self._slot_cache_names
+        if names is None or not named_by_image_id(asset_type):
+            return
+        key = (int(rom_id), asset_type)
+        before = names.get(key, frozenset())
+        names[key] = before | {name} if held else before - {name}
 
     # -- artwork base64 (use case) -----------------------------------------
 
