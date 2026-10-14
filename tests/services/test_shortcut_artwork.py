@@ -1069,10 +1069,10 @@ class TestASync:
         job = _Job(icons={100: ""}, bound={100: 1})
         write = job.source.write_job_icon
 
-        async def write_then_a_sync_starts(app_id: int, icon_bytes: bytes, generation: int) -> str | None:
-            path = await write(app_id, icon_bytes, generation)
+        async def write_then_a_sync_starts(app_id: int, rom_id: int, generation: int) -> JobIcon | None:
+            written = await write(app_id, rom_id, generation)
             job.sync_running = True
-            return path
+            return written
 
         job.source.write_job_icon = write_then_a_sync_starts  # type: ignore[method-assign]
 
