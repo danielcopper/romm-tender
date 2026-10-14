@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from adapters.descriptor_paths import claim_source, remove_claimed
 from domain.artwork_paths import cache_filename, cover_meta_filename
+from domain.sgdb_artwork import is_cached_artwork
 from models.prune import MutationOutcome
 
 if TYPE_CHECKING:
@@ -70,5 +71,14 @@ class PruneArtifactAdapter:
             (os.path.join(covers, cache_filename(rom_id)), "cover_cache"),
             (os.path.join(covers, cover_meta_filename(rom_id)), "cover_validator"),
         ]
-        paths.extend((os.path.join(artwork, f"{rom_id}_{kind}.png"), "sgdb_cache") for kind in _SGDB_TYPES)
+        names = {f"{rom_id}_{kind}.png" for kind in _SGDB_TYPES}
+        names.update(name for name in _listed(artwork) if any(is_cached_artwork(name, rom_id, k) for k in _SGDB_TYPES))
+        paths.extend((os.path.join(artwork, name), "sgdb_cache") for name in sorted(names))
         return paths
+
+
+def _listed(directory: str) -> list[str]:
+    """The entries of *directory*, none when it is missing; a path under a link is refused by its claim."""
+    if not os.path.isdir(directory):
+        return []
+    return os.listdir(directory)

@@ -9,7 +9,7 @@ def test_discovers_and_removes_only_named_rom_cache_files(tmp_path):
     artwork = tmp_path / "artwork"
     covers.mkdir()
     artwork.mkdir()
-    expected = [covers / "7.png", covers / "7.cover-meta.json", artwork / "7_grid.png"]
+    expected = [covers / "7.png", covers / "7.cover-meta.json", artwork / "7_grid.png", artwork / "7_logo_5.png"]
     for path in expected:
         path.write_bytes(b"x")
     unrelated = artwork / "8_grid.png"
@@ -57,3 +57,32 @@ def test_preopened_cache_writer_prevents_artifact_deletion(tmp_path):
     assert result["success"] is False
     assert "active writer" in result["message"]
     assert target.read_bytes() == b"cached"
+
+
+def test_discovers_and_removes_the_wide_grid_and_logo_named_by_their_image_id(tmp_path):
+    artwork = tmp_path / "artwork"
+    artwork.mkdir()
+    (tmp_path / "covers").mkdir()
+    owned = [artwork / "7_grid_12.png", artwork / "7_logo_5.png", artwork / "7_grid.png"]
+    for path in owned:
+        path.write_bytes(b"x")
+    unrelated = [artwork / "70_grid_12.png", artwork / "8_logo_5.png"]
+    for path in unrelated:
+        path.write_bytes(b"keep")
+    adapter = PruneArtifactAdapter(cache_dir=str(tmp_path))
+
+    sources = {Path(item["source_path"]) for item in adapter.recovery_artifacts([7])}
+
+    assert set(owned) <= sources
+    assert not set(unrelated) & sources
+    assert adapter.remove([7])["success"] is True
+    assert [path for path in owned if path.exists()] == []
+    assert all(path.exists() for path in unrelated)
+
+
+def test_no_artwork_directory_lists_only_the_names_it_always_composes(tmp_path):
+    adapter = PruneArtifactAdapter(cache_dir=str(tmp_path))
+
+    names = {Path(item["source_path"]).name for item in adapter.recovery_artifacts([7])}
+
+    assert names == {"7.png", "7.cover-meta.json", "7_hero.png", "7_logo.png", "7_grid.png", "7_icon.png"}
