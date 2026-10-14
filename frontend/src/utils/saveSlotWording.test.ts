@@ -310,34 +310,46 @@ describe("a refusal with no status", () => {
 
 describe("a restore or a copy the endpoint refused", () => {
   const refusals: EndpointFailure[] = [
-    { success: false, reason: "blocked_by_update", message: "An update is being installed" },
-    { success: false, reason: "blocked_by_migration", message: "A RetroDECK migration is pending" },
-    { success: false, reason: "prune_active", message: "A removed-game cleanup is running" },
+    {
+      success: false,
+      reason: "blocked_by_update",
+      message: "Tender is installing an update and will restart in a moment.",
+    },
+    {
+      success: false,
+      reason: "blocked_by_migration",
+      message: "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
+    },
+    {
+      success: false,
+      reason: "prune_active",
+      message: "A removed-game cleanup is in progress; wait for it to finish before changing local game data.",
+    },
   ];
 
-  it.each(refusals)("a refusal by the save rules ($reason) names its reason on a restore", (refusal) => {
+  it.each(refusals)("a refusal by the conflict rules ($reason) names its reason on a restore", (refusal) => {
     expect(rollbackFeedback(refusal, null)).toEqual({
       kind: "toast",
       message: `Couldn't restore the save: ${refusal.message}`,
     });
   });
 
-  it.each(refusals)("a refusal by the save rules ($reason) names its reason on a copy", (refusal) => {
+  it.each(refusals)("a refusal by the conflict rules ($reason) names its reason on a copy", (refusal) => {
     expect(copyToSlotFeedback(refusal, "backup")).toEqual({
       kind: "toast",
       message: `Couldn't copy the save: ${refusal.message}`,
     });
   });
 
-  it("a restore whose download RomM refused names RomM's answer", () => {
+  it("a restore whose download RomM answered with an error names RomM's answer", () => {
     const refused: EndpointFailure = {
       success: false,
       reason: "server_error",
-      message: "RomM reported an error (HTTP 500 Internal Server Error)",
+      message: "RomM reported an error (HTTP 500) — Internal Server Error",
     };
     expect(rollbackFeedback(refused, "2025-06-14T10:00:00Z")).toEqual({
       kind: "toast",
-      message: "Couldn't restore the save: RomM reported an error (HTTP 500 Internal Server Error)",
+      message: "Couldn't restore the save: RomM reported an error (HTTP 500) — Internal Server Error",
     });
   });
 

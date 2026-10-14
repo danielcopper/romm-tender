@@ -476,11 +476,11 @@ describe("VersionHistoryPanel", () => {
       expect(getByText("Restore")).not.toBeDisabled();
     });
 
-    it("a restore whose download RomM refused toasts RomM's answer and keeps the list open", async () => {
+    it("a restore whose download RomM answered with an error toasts RomM's answer and keeps the list open", async () => {
       vi.mocked(backend.savesRollbackToVersion).mockResolvedValue({
         success: false,
         reason: "server_error",
-        message: "RomM reported an error (HTTP 500 Internal Server Error)",
+        message: "RomM reported an error (HTTP 500) — Internal Server Error",
       });
       const { getByText, onRestored, container } = await expand();
       fireEvent.click(getByText("Restore"));
@@ -488,7 +488,7 @@ describe("VersionHistoryPanel", () => {
       await flushAsync();
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
         expect.objectContaining({
-          body: "Couldn't restore the save: RomM reported an error (HTTP 500 Internal Server Error)",
+          body: "Couldn't restore the save: RomM reported an error (HTTP 500) — Internal Server Error",
         }),
       );
       expect(onRestored).not.toHaveBeenCalled();

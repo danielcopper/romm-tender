@@ -67,8 +67,6 @@ export const SavesTab: FC<SavesTabProps> = ({
   const [strandedVersion, setStrandedVersion] = useState<string | null>(null);
 
   const handleVersionRestored = () => {
-    // Trigger parent refresh of saveStatus so the tracked save row reflects
-    // the new tracked_save_id / server fields without leaving the page.
     announceSaveSync(romId);
   };
 

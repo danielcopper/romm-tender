@@ -90,8 +90,8 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
     }
   };
 
-  // Self-refresh when this ROM's saves change. A copy into this slot (or a sync
-  // / external rollback) adds or removes a version, but the list is cached on
+  // Self-refresh when this ROM's saves change. A copy into this slot, a restore
+  // on this tab, or a sync adds or removes a version, but the list is cached on
   // first expand — without this it stays stale in-session until the game page is
   // re-entered. The signal is a DOM CustomEvent (`globalThis.dispatchEvent`),
   // NOT a backend emit, so we listen on `globalThis`. Invalidate on any
