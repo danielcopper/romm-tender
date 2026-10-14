@@ -1118,15 +1118,22 @@ class TestARefusedKey:
         job = _Job(icons=dict.fromkeys(bound, ""), bound=bound)
         job.source.answer(1, SlotAnswer.KEY_REFUSED)
 
-        def answer_once_the_key_is_refused(rom_id: int) -> None:
-            if rom_id == 1:
-                return
+        def refuse_once_another_fetch_is_in_flight_and_answer_that_one_after(rom_id: int) -> None:
+            # Rom 1's refusal waits for rom 2's fetch to start: a fetch that
+            # finishes inside run_in_executor's submit, as one can while a new
+            # pool thread starts, answers a future that is already done
+            # (asyncio.futures._chain_future sets it at once on the loop's own
+            # thread, CPython 3.13), and its worker would then refuse the key
+            # before the other worker had taken anything.
+            def ready() -> bool:
+                return 2 in job.source.fetched if rom_id == 1 else job.service._key_refused
+
             for _ in range(5000):
-                if job.service._key_refused:
+                if ready():
                     return
                 time.sleep(0.001)
 
-        job.source.on_fetch = answer_once_the_key_is_refused
+        job.source.on_fetch = refuse_once_another_fetch_is_in_flight_and_answer_that_one_after
 
         await job.run()
 
