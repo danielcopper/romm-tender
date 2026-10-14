@@ -2500,6 +2500,10 @@ class TestTheCacheIsListedOnce:
                 served.append((rom_id, slot, result["image_id"]))
 
         assert listings == 1
+        assert [os.path.basename(dest) for _url, dest in fake_steamgrid_db_api.downloaded] == [
+            "43_grid_12.png",
+            "43_logo_5.png",
+        ]
         assert served == [(42, "grid", 12), (42, "logo", 5), (43, "grid", 12), (43, "logo", 5)]
         assert sorted(listdir(art_dir)) == ["42_grid_12.png", "42_logo_5.png", "43_grid_12.png", "43_logo_5.png"]
 
