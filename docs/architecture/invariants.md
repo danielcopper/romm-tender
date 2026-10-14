@@ -1335,8 +1335,10 @@ Format: **invariant** — tier — enforced by.
   record goes only by something the user does: **Uninstall** and **Uninstall all ROM files** (`RomRemovalService`),
   **Forget this download** (`RomRemovalService.forget_download`, which deletes no file and refuses with `file_present`
   while the recorded file or folder exists), a download or adoption of another version of the game (the sibling
-  supersede through `remove_rom_unchecked`), and **Clean Up Removed RomM Games** (the `roms` row's delete cascades);
-  never by the start-up step, which only reports it (`StartupHealingService.report_missing_installs`). Pinned by
+  supersede through `remove_rom_unchecked`, or — for a sibling recorded at an adoption's own target path — the hand-over
+  in `DownloadService._conflicting_sibling_install_ids`, which deletes no file), and **Clean Up Removed RomM Games**
+  (the `roms` row's delete cascades); never by the start-up step, which only reports it
+  (`StartupHealingService.report_missing_installs`). Pinned by
   `tests/services/test_startup_healing.py::TestReportMissingInstalls` and `tests/contract/test_missing_download.py` for
   the start-up step and the forget; that the list of paths is complete is prompt-only — nothing fails when a new path
   that deletes `rom_installs` rows is not one the user starts

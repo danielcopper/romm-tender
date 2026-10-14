@@ -1935,7 +1935,7 @@ class _AdoptionWorld:
             )
 
 
-async def _supersede_nothing(rom_id: int) -> None:
+async def _supersede_nothing(rom_id: int, *, adopted_path: str | None = None) -> None:
     return None
 
 

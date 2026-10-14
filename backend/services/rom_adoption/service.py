@@ -502,14 +502,22 @@ class RomAdoptionService:
         :class:`AdoptionIncomplete`; a RomM error fetching the ROM propagates.
 
         **Order: validate, carry, supersede, record.** Every reason this adoption
-        could be refused is decided in the first step, because the third one
-        deletes another version's files: superseding first and refusing
-        afterwards would leave the user with a working version destroyed and
-        nothing bound in its place. The carry sits before the supersede for the
-        same reason — a rename that fails must not find a sibling already gone.
-        Recording first is no better: a supersede that then failed would leave the
-        two installed versions the rule exists to prevent, with the adoption
-        already committed.
+        could be refused is decided in the first step — all but the re-check
+        :meth:`_adopt_io` makes of content that changed across the supersede —
+        because the third one deletes another version's files: superseding first
+        and refusing afterwards would leave the user with a working version
+        destroyed and nothing bound in its place. The carry sits before the
+        supersede for the same reason — a rename that fails must not find a
+        sibling already gone. Recording first is no better: a supersede that then
+        failed would leave the two installed versions the rule exists to prevent,
+        with the adoption already committed.
+
+        A sibling whose install is recorded at this ROM's own target path is the
+        one supersede that removes no file: its files are the content being
+        adopted, so it hands its install record over and the file stays as it is
+        (the supersede is told the target as ``adopted_path``). Should the record
+        then be refused, neither version is installed — but the hand-over never
+        touched the file, so whatever is still there can be adopted again.
         """
         rom_id = int(rom_id)
         rom_detail, target = await self._loop.run_in_executor(None, self._detail_and_target_io, rom_id)
@@ -524,13 +532,9 @@ class RomAdoptionService:
             stopped = await self._loop.run_in_executor(None, worker)
             if stopped is not None:
                 return stopped
-        # At most one installed version per shortcut binding (#1298), whichever
-        # route produced it. The dialog's promise not to delete covers the
-        # content the USER placed, at this ROM's own path; a superseded sibling
-        # is a different thing at a different path — content Tender
-        # downloaded and can fetch again (ADR-0028). A removal failure aborts,
-        # exactly as it does for a download, so the rule is never half-applied.
-        await self._sibling_supersede()(rom_id)
+        # Not caught: a refused removal stops the adoption before anything is
+        # recorded, as it stops a download.
+        await self._sibling_supersede()(rom_id, adopted_path=target.path)
         return await self._loop.run_in_executor(None, self._adopt_io, rom_id, rom_detail, target)
 
     def _resolve_source(self, target: _Target, candidate_path) -> str | None:
