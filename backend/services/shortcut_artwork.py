@@ -141,7 +141,7 @@ class _Grid:
 class _Finished:
     """An icon for *app_id*, and the game-page generation the job read before it fetched.
 
-    *written* is SteamGridDB's icon the job wrote, whose ``set`` the frontend
+    *written* is SteamGridDB's icon the job wrote, whose outcome the frontend
     reports; ``None`` for the logo icon, which adds nothing to the ``none``
     already recorded.
     """
@@ -473,7 +473,9 @@ class ShortcutArtworkService:
         if answer is SlotAnswer.KEY_REFUSED:
             self._refuse_key()
         elif answer is SlotAnswer.FAILED:
-            self._log_debug(f"Shortcut artwork: no icon for rom_id={item.rom_id}; the next run asks again")
+            self._log_debug(
+                f"Shortcut artwork: the icon fetch for rom_id={item.rom_id} failed; the next run asks again"
+            )
         else:
             self._backoff = 0.0
             finished = await self._write(item, answer, generation, plan)
@@ -609,7 +611,13 @@ class ShortcutArtworkService:
     async def _write_unless_the_job_yields(
         self, item: _Item, answer: SlotAnswer, generation: int, plan: _Plan
     ) -> _Finished | None:
-        """SteamGridDB's icon written for *item* where the cache holds one, else the logo icon; ``None`` for neither."""
+        """The icon *answer* calls for: SteamGridDB's, written, for ``READY``, and the logo icon for ``NONE``.
+
+        ``NONE`` also stands for a recorded ``none`` whose logo icon the
+        shortcut does not show yet. ``None`` when the job yields, when the
+        write answers nothing, when there is no logo icon to give, or when the
+        game page saved an icon since *generation*.
+        """
         if self._yields_now():
             return None
         if answer is SlotAnswer.READY:
@@ -626,7 +634,9 @@ class ShortcutArtworkService:
         if self._yields_now():
             return None
         # A pick on the game page since the job read the generation wins: for
-        # the logo icon the batch would otherwise set Tender's file over the pick.
+        # the logo icon the batch would otherwise set Tender's file over the pick;
+        # for SteamGridDB's icon it would record the job's image over the one
+        # the page wrote.
         icons = [
             _icon_entry(icon)
             for icon in finished

@@ -3,9 +3,9 @@
 ``set`` (an image was set, with SteamGridDB's image id and a hash of the bytes),
 ``none`` (SteamGridDB has no candidate) or ``refused`` (Steam's
 ``SetCustomArtworkForApp``, or ``SetShortcutIcon`` for the icon, failed on the
-image), the ROM's SteamGridDB id at that
-time, and when. Keyed by ``(rom_id, slot)`` — by ROM, not app id, because a
-re-created shortcut gets a new app id.
+image), the ROM's SteamGridDB id at that time, and when. Keyed by
+``(rom_id, slot)`` — by ROM, not app id, because a re-created shortcut gets a
+new app id.
 
 A thin record built whole and upserted, so it carries one constructor per
 outcome and no verb-named mutators.

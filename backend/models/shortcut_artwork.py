@@ -27,7 +27,7 @@ class JobIcon:
     """An icon the artwork job wrote into Steam's grid directory, and what its ``set`` record is to carry.
 
     *sha256* is the hash of the bytes written, which are the downscaled ones;
-    *sgdb_id* is the ROM's SteamGridDB id it was found under.
+    *sgdb_id* is the ROM's SteamGridDB id when the icon was written.
     """
 
     path: str

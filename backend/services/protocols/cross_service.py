@@ -781,8 +781,9 @@ class ShortcutArtworkSource(Protocol):
 
         Answers what was written; ``None`` when the page saved an icon since,
         when the cache holds no icon for the ROM, when the downscale cannot
-        read it (it then leaves the cache), or when the file could not be
-        written.
+        read it (it then leaves the cache), or when the cached file could not
+        be read or the icon could not be written — or the cache or the
+        database could not be read on the way; each is logged, never raised.
         """
         ...
 
@@ -834,7 +835,8 @@ class ShortcutArtworkJob(Protocol):
         A cleanup calls it before it reserves its start, so nothing the job
         writes into the grid directory or hands over lands once it has. A fetch
         in flight is abandoned, though its thread runs on and may still fill the
-        artwork cache or record that SteamGridDB has no wide grid or logo for it.
+        artwork cache or record that SteamGridDB has no icon, wide grid or logo
+        for it.
         """
         ...
 

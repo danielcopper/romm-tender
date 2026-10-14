@@ -1852,7 +1852,7 @@ class Test026AddRomHasFileOnDisk:
 
 
 def _insert_slot_outcome(conn: sqlite3.Connection, rom_id: int, slot: str, outcome: str) -> None:
-    """Insert one ``artwork_slot_outcomes`` row, a ``set`` with its image id and hash."""
+    """Insert one ``artwork_slot_outcomes`` row; a ``set`` carries an image id and hash, the others none."""
     image = (11, "ab") if outcome == "set" else (None, None)
     conn.execute(
         "INSERT INTO artwork_slot_outcomes VALUES (?, ?, ?, 7, 1.5, ?, ?)",

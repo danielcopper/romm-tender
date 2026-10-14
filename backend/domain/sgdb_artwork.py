@@ -95,11 +95,10 @@ def choose_candidate(asset_type: str, data: object) -> SgdbCandidate | None:
 
     A candidate is an entry with a non-empty ``url``; for the wide grid, the
     logo and the icon it also needs an integer ``id``, which names its cache
-    file. The wide
-    grid prefers 920x430, then 460x215; the logo prefers the first candidate
-    between 640 and 2048 pixels wide. Either falls back to the first candidate,
-    and every other asset type takes the first. ``None`` when *data* holds no
-    candidate.
+    file. The wide grid prefers 920x430, then 460x215; the logo prefers the
+    first candidate between 640 and 2048 pixels wide. Either falls back to the
+    first candidate, and every other asset type takes the first. ``None`` when
+    *data* holds no candidate.
     """
     candidates = _candidates(data, needs_id=named_by_image_id(asset_type))
     if not candidates:

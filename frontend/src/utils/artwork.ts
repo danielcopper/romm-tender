@@ -150,7 +150,7 @@ async function applySgdbArtwork(romId: number, appId: number): Promise<number | 
 
       // SGDB types 1-3 (hero / logo / wide grid) map 1:1 to Steam capsule assetTypes 1-3.
       // The wide grid and the logo are recorded as the fill path records them;
-      // the hero is not. The awaits are sequential by design, one image at a
+      // the hero and the icon are not. The awaits are sequential by design, one image at a
       // time; S9382 is raised on the slot's await line, so its NOSONAR stays
       // there.
       const customArt: Array<[answer: SgdbArtwork, assetType: number, slot: RecordedSlot | null]> = [
@@ -186,7 +186,7 @@ type SgdbArtwork = Exclude<Awaited<ReturnType<typeof getSgdbArtworkBase64>>, End
 /** The answer a fetch that was rejected or refused counts as. */
 const NO_IMAGE: SgdbArtwork = { base64: null, no_api_key: false };
 
-/** The slots whose outcome the backend records. */
+/** The slots whose outcome the game page reports; the icon's is reported by the shortcut artwork job alone. */
 type RecordedSlot = "grid" | "logo";
 
 /**

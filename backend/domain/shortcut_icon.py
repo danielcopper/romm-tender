@@ -4,9 +4,11 @@ With a SteamGridDB API key, a shortcut the sync mints is given
 :data:`PLACEHOLDER_ICON_PNG` at once, and the artwork job later replaces it with
 SteamGridDB's icon, or with Tender's logo icon where SteamGridDB has none; why is
 docs/architecture/steam-non-steam-shortcuts.md, "Shortcut artwork". Both are
-stand-ins that leave the slot unfilled: whether the job asks again is the
-slot's recorded outcome (:func:`domain.artwork_slot_outcome.icon_waits`), never
-the file name.
+stand-ins that leave the slot unfilled: whether the job asks SteamGridDB again
+is the slot's recorded outcome (:func:`domain.artwork_slot_outcome.icon_waits`),
+not which of the two the shortcut shows. Which one it shows decides only whether
+the logo icon a recorded ``none`` stands for is still to be given
+(:func:`domain.artwork_slot_outcome.logo_icon_waits`).
 """
 
 from __future__ import annotations

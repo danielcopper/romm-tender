@@ -178,9 +178,9 @@ class SteamGridService:
         self._icon_generations: dict[int, int] = {}
         self._icon_locks: dict[int, asyncio.Lock] = {}
         # Per ROM and asset type, the wide grid, logo and icon names in the
-        # artwork cache: listed once, then kept by this service's own downloads and
-        # removals, so a lookup does not list the whole cache. Lookups run on
-        # executor threads and a service takes no lock, so each entry is
+        # artwork cache: listed once, then kept by this service's own downloads
+        # and removals, so a lookup does not list the whole cache. Lookups run
+        # on executor threads and a service takes no lock, so each entry is
         # replaced rather than changed: a reader holds a frozen snapshot. A note
         # two threads race to lose costs one download more, nothing else.
         self._slot_cache_names: dict[tuple[int, str], frozenset[str]] | None = None
@@ -211,8 +211,8 @@ class SteamGridService:
         The image is chosen among SteamGridDB's candidates by ``choose_candidate``.
         Answers ``NONE`` when SteamGridDB's list is empty, and ``FAILED`` for an
         unsuccessful answer, a list with no usable entry or a failed download;
-        lets the API's errors through. A downloaded wide grid, logo or icon replaces every other
-        cache file of that slot.
+        lets the API's errors through. A downloaded wide grid, logo or icon
+        replaces every other cache file of that slot.
         """
         cached = self._cached_artwork(rom_id, asset_type)
         if cached is not None:
@@ -693,10 +693,11 @@ class SteamGridService:
         *outcome* is ``"set"`` (``SetCustomArtworkForApp``, or
         ``SetShortcutIcon`` for the icon, took it) or ``"refused"`` (it failed
         on the image); *sgdb_id*, *image_id* and *sha256* are what
-        ``get_sgdb_slot_artwork`` answered, or what the shortcut artwork job's
-        batch named for an icon, passed back. Refuses with
-        ``invalid_payload`` for a slot that is not recorded, an unknown outcome,
-        or a ``set`` without its image id and hash.
+        ``get_sgdb_slot_artwork`` or ``get_sgdb_artwork_base64`` answered for a
+        wide grid or logo, or what the shortcut artwork job's batch named for an
+        icon, passed back. Refuses with ``invalid_payload`` for a slot that is
+        not recorded, an unknown outcome, or a ``set`` without its image id and
+        hash.
         """
         async with self._rules.hold("report_sgdb_slot_artwork", prune=True):
             record = self._reported_outcome(int(rom_id), slot, outcome, sgdb_id, image_id, sha256)
@@ -776,7 +777,8 @@ class SteamGridService:
                 except OSError as e:
                     self._logger.warning(f"Failed to remove artwork tmp {filename}: {e}")
                 continue
-            # Expected format: {rom_id}_{type}.png
+            # Expected format: {rom_id}_{type}.png, or {rom_id}_{type}_{image_id}.png
+            # for a wide grid, logo or icon.
             parts = filename.split("_", 1)
             rom_id = parts[0]
             if rom_id not in registry:
