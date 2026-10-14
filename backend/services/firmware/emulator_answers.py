@@ -1,9 +1,10 @@
 """What the resolver says about each emulator of a platform, as the BIOS payloads carry it.
 
 The launching emulator's answer — its verdict, the region rule over its groups
-and the words a surface puts to them — and one tab per emulator the resolver
-answered for (#2190 D15). Split out of :mod:`services.firmware.status`, which
-builds the rows and aggregates these ride beside.
+and the words a surface puts to them — and one entry per emulator the resolver
+answered for, which a BIOS table's emulator selector offers. Split
+out of :mod:`services.firmware.status`, which builds the rows and aggregates
+these ride beside.
 """
 
 from __future__ import annotations
@@ -125,60 +126,92 @@ def emulator_tabs(
     options: list[EmulatorOption],
     others: dict[str, list[dict[str, Any]]],
 ) -> list[dict[str, Any]]:
-    """One tab per emulator the resolver answered for, the launching one first (#2190 D15).
+    """One entry per emulator the resolver answered for, the launching one first.
 
-    Each tab carries that emulator's own verdict (``requirements_met``) and its
-    label; the launching emulator's tab carries no rows of its own, because the
-    payload's ``files`` are its rows. Every other tab carries its emulator's own
+    Each entry carries that emulator's own verdict (``requirements_met``) and its
+    label; the launching emulator's entry carries no rows of its own, because the
+    payload's ``files`` are its rows. Every other entry carries its emulator's own
     requirements exactly as the resolver answers them — places, needs and
     per-file verdicts, read for that emulator — in the order the resolver gave
-    the emulators. A tab changes what a surface shows and never which emulator
-    launches.
+    the emulators. Choosing an entry changes what a surface shows and never which
+    emulator launches.
+
+    An entry is named by every distinct label *options* give its identity,
+    joined " / " in their own order — RetroDECK lists ``pcsx2_libretro.so`` as
+    both LRPS2 and PCSX2 — so it reads the same whichever of them is the pick.
+    ``installed`` is ``False`` for an emulator *options* mark not
+    installed (``not_installed``), the same reading the emulator picker shows.
+
+    A launching emulator with no identity has no entry: nothing could be asked
+    about it, and an entry under a made-up name would read as an emulator.
     """
-    labels: dict[str, str] = {}
-    for option in options:
-        if option.emulator is not None:
-            labels.setdefault(option.emulator, option.label)
+    not_installed = {
+        option.emulator for option in options if option.emulator is not None and option.reason == "not_installed"
+    }
+    labels = _labels_by_emulator(options)
+
+    def label_of(emulator: str | None) -> str | None:
+        names = labels.get(emulator or "")
+        return " / ".join(names) if names else None
 
     def verdict_of(emulator: str | None) -> bool | None:
         verdict = catalogue.verdict_for(emulator)
         return verdict.requirements_met if verdict is not None else None
 
-    tabs: list[dict[str, Any]] = [
-        {
-            "emulator": launching,
-            "label": launching_label or labels.get(launching or "") or launching,
-            "launching": True,
-            "requirements_met": verdict_of(launching),
-        }
-    ]
-    for emulator, items in others.items():
-        placements: dict[str, Any] = {}
-        for placement in catalogue.placements:
-            if placement.emulator == emulator:
-                placements.setdefault(placement.file_name, placement)
-        entries = collect_firmware_status(
-            items, placements, catalogue.reading_complete_for(emulator), emulator, catalogue.groups
+    tabs: list[dict[str, Any]] = []
+    if launching is not None:
+        tabs.append(
+            {
+                "emulator": launching,
+                "label": label_of(launching) or launching_label or launching,
+                "launching": True,
+                "requirements_met": verdict_of(launching),
+                "installed": launching not in not_installed,
+            }
         )
-        rows = sorted((row_payload(entry) for entry in entries), key=lambda row: row["declared_path"].lower())
+    for emulator, items in others.items():
         tabs.append(
             {
                 "emulator": emulator,
-                "label": labels.get(emulator, emulator),
+                "label": label_of(emulator) or emulator,
                 "launching": False,
                 "requirements_met": verdict_of(emulator),
-                "rows": rows,
+                "installed": emulator not in not_installed,
+                "rows": _emulator_rows(catalogue, emulator, items),
             }
         )
     return tabs
 
 
+def _labels_by_emulator(options: list[EmulatorOption]) -> dict[str, list[str]]:
+    """Every distinct label *options* give each identity, in their own order."""
+    labels: dict[str, list[str]] = {}
+    for option in options:
+        if option.emulator is not None:
+            names = labels.setdefault(option.emulator, [])
+            if option.label not in names:
+                names.append(option.label)
+    return labels
+
+
+def _emulator_rows(catalogue: FirmwareCatalogue, emulator: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One emulator's rows, judged by that emulator's own placements, in the order of their declared paths."""
+    placements: dict[str, Any] = {}
+    for placement in catalogue.placements:
+        if placement.emulator == emulator:
+            placements.setdefault(placement.file_name, placement)
+    entries = collect_firmware_status(
+        items, placements, catalogue.reading_complete_for(emulator), emulator, catalogue.groups
+    )
+    return sorted((row_payload(entry) for entry in entries), key=lambda row: row["declared_path"].lower())
+
+
 def row_payload(entry: BiosFileEntry) -> dict[str, Any]:
-    """One row of a game page or an emulator's tab on the wire.
+    """One row of a game page or of another emulator's entry on the wire.
 
     Every field of the entry but ``cores``: the per-emulator entries are what
     the domain reads a row's own ``one_of`` and need off, and no surface reads
-    them since each emulator has a tab of its own (#2190 D15).
+    them since each emulator has an entry of its own.
     """
     row = asdict(entry)
     del row["cores"]

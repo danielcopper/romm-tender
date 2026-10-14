@@ -13,7 +13,7 @@
  */
 
 import type { FC, ReactNode } from "react";
-import { Focusable } from "@decky/ui";
+import { Focusable, type GamepadEvent } from "@decky/ui";
 import { ScrollRegion } from "./ScrollRegion";
 
 export interface Column {
@@ -37,10 +37,16 @@ export interface Column {
 
 export interface ColumnsProps {
   columns: Column[];
+  /** A gamepad button pressed anywhere in the columns, before Steam acts on it. */
+  onButtonDown?: (evt: GamepadEvent) => void;
 }
 
-export const Columns: FC<ColumnsProps> = ({ columns }) => (
-  <Focusable flow-children="horizontal" style={{ display: "flex", gap: "12px", height: "100%", minHeight: 0 }}>
+export const Columns: FC<ColumnsProps> = ({ columns, onButtonDown }) => (
+  <Focusable
+    flow-children="horizontal"
+    style={{ display: "flex", gap: "12px", height: "100%", minHeight: 0 }}
+    {...(onButtonDown ? { onButtonDown } : {})}
+  >
     {columns.map((column) => (
       <ScrollRegion
         // The id and the region key are joined rather than one standing in

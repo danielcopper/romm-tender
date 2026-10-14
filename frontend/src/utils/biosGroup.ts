@@ -1,6 +1,6 @@
 /**
- * The words for a one-of group's regions, a file's place in it, and its block
- * on the game page.
+ * The words for a one-of group's regions, a file's place in it, its block on
+ * the game page, and the need a row states under its name.
  *
  * A one-of group is ONE requirement: a launch opens exactly one of its files,
  * and which one is decided by the console region of the disc. The backend
@@ -16,7 +16,7 @@
  * nobody has worded yet still reads as regions rather than as nothing.
  */
 
-import type { OneOfGroupVerdict, OneOfMembership } from "../types";
+import type { FirmwareChecked, FirmwareWanted, OneOfGroupVerdict, OneOfMembership } from "../types";
 import { joined } from "./formatters";
 
 // The resolver's region words, as it spells them. Three, because those are the
@@ -29,14 +29,18 @@ const REGION_NAMES: Readonly<Record<string, string>> = {
 
 const EVERY_REGION = "every region";
 const FOR_EVERY_REGION = `for ${EVERY_REGION}`;
-const BOOTS_IT_FOR_EVERY_REGION = `boots it ${FOR_EVERY_REGION}`;
 const IN_PLACE = "in place";
 const MISSING = "missing";
+const WRONG_FILE = "wrong file";
+const REFUSED = "refused";
 const NOT_CHECKED = "not checked";
 const THIS_GAMES_REGION = "← this game's region";
-const MARKED_IN_PLACE = `✓ ${IN_PLACE}`;
-const MARKED_MISSING = `✗ ${MISSING}`;
 const ONE_IMAGE_PER_DISC_REGION = "one image per disc region";
+const REQUIRED = "required";
+const OPTIONAL = "optional";
+const NOT_REQUIRED = "not required";
+const NEED_NOT_ESTABLISHED = "need not established";
+const ONE_OF_THESE = "one of these ·";
 
 /**
  * Every fixed phrase this module words that is particular to it — what its
@@ -45,9 +49,10 @@ const ONE_IMAGE_PER_DISC_REGION = "one image per disc region";
  * other prose uses, so they are not searched.
  */
 export const BIOS_GROUP_PHRASES: readonly string[] = [
-  BOOTS_IT_FOR_EVERY_REGION,
   THIS_GAMES_REGION,
   ONE_IMAGE_PER_DISC_REGION,
+  NEED_NOT_ESTABLISHED,
+  ONE_OF_THESE,
 ];
 
 function nameOf(region: string): string {
@@ -69,26 +74,42 @@ function forDiscs(membership: OneOfMembership): string {
   return membership.every_region ? FOR_EVERY_REGION : `for ${regionNames(membership.regions)} discs`;
 }
 
-/**
- * A file's place in a group, on the line of the emulator whose group it is —
- * "for USA discs", or "boots it for every region" for a file that serves them
- * all. Only this file's own regions, never the group's others.
- */
-export function oneOfWords(membership: OneOfMembership): string {
-  return membership.every_region ? BOOTS_IT_FOR_EVERY_REGION : forDiscs(membership);
+/** The row fields a need is read off — both pages' row types satisfy it. */
+export interface NeedRow {
+  wanted: FirmwareWanted;
+  required_by_active: boolean;
+  one_of?: OneOfMembership | null;
 }
 
 /**
- * The line under a platform-table row that is an option of the launching
- * emulator's group — the discs it is for, then whether it is in place: "for USA
- * discs · ✓ in place". *inPlace* is the row's own verdict; `null` says nothing
- * about it, because the row's mark already says nothing settled.
+ * What the shown emulator needs of a row, for the small line under its name:
+ * "required", "optional", "one of these · for USA discs" for an option of its
+ * one-of group, and for a library file no emulator declares "not required"
+ * where the launching emulator was read and "need not established" where
+ * nothing could answer for the file. Both pages word it here for whichever
+ * emulator is shown, so a met required file and a met optional file never read
+ * alike. Whether the file is in place is never in it: the row's
+ * mark or dot, its Contents words and its note say that. The marks' tooltips
+ * keep their own words.
  */
-export function oneOfRowLine(membership: OneOfMembership, inPlace: boolean | null): string {
-  const words = forDiscs(membership);
-  if (inPlace === null) return words;
-  const mark = inPlace ? MARKED_IN_PLACE : MARKED_MISSING;
-  return `${words} · ${mark}`;
+export function needWords(row: NeedRow): string {
+  if (row.required_by_active) return REQUIRED;
+  if (row.one_of) return `${ONE_OF_THESE} ${forDiscs(row.one_of)}`;
+  if (row.wanted === "unknown") return NEED_NOT_ESTABLISHED;
+  if (row.wanted === "not_needed") return NOT_REQUIRED;
+  return OPTIONAL;
+}
+
+/**
+ * What a file whose requirement is not met IS, by the resolver's check of its
+ * bytes: "wrong file" where it is there and is not the image, "refused"
+ * where the emulator will not open it, and "missing" only where nothing settled
+ * it is there — so a mark never contradicts the Contents words beside it.
+ */
+export function unmetWord(checked: FirmwareChecked | null | undefined): string {
+  if (checked === "mismatch") return WRONG_FILE;
+  if (checked === "refused") return REFUSED;
+  return MISSING;
 }
 
 /**
@@ -119,22 +140,28 @@ export interface GroupBlock {
  * alone under the same subheading.
  *
  * *named* is the emulator's label, or the role where the pick has none.
+ * *checkedOf* is the resolver's check of an option's file, from its row, which
+ * words an image that is not met ({@link unmetWord}).
  */
-export function groupBlock(group: OneOfGroupVerdict, named: string): GroupBlock {
+export function groupBlock(
+  group: OneOfGroupVerdict,
+  named: string,
+  checkedOf: (fileName: string) => FirmwareChecked | null | undefined = () => null,
+): GroupBlock {
   const forTheGame = (option: { regions: readonly string[] }) =>
     option.regions.some((region) => group.game_regions.includes(region));
   const lines = group.options.map((option): GroupBlockLine => {
     const regions = servesEveryRegion(option, group) ? EVERY_REGION : regionNames(option.regions);
     const mark = forTheGame(option) ? ` ${THIS_GAMES_REGION}` : "";
-    const text = `${regions} · ${option.file_name} · ${stateWord(option.satisfied)}${mark}`;
+    const text = `${regions} · ${option.file_name} · ${stateWord(option.satisfied, checkedOf(option.file_name))}${mark}`;
     return { text, tone: toneOf(option, group) };
   });
   return { heading: `${named} · ${ONE_IMAGE_PER_DISC_REGION}`, lines };
 }
 
-function stateWord(satisfied: boolean | null): string {
+function stateWord(satisfied: boolean | null, checked: FirmwareChecked | null | undefined): string {
   if (satisfied === null) return NOT_CHECKED;
-  return satisfied ? IN_PLACE : MISSING;
+  return satisfied ? IN_PLACE : unmetWord(checked);
 }
 
 function toneOf(

@@ -44,7 +44,7 @@ from domain.bios_status import (
     count_wanted,
     format_bios_status,
 )
-from domain.emulator_commands import options_to_payload, resolve_platform_option
+from domain.emulator_commands import options_to_payload, resolve_firmware_option
 from domain.firmware_groups import console_regions_of, judge_groups
 from domain.firmware_wants import DECLARED_DIRECTORY
 from services.firmware.emulator_answers import (
@@ -137,7 +137,7 @@ class FirmwareStatusReader:
         verdict are the launching emulator's.
 
         The third answer is every OTHER emulator's own requirements, keyed by
-        identity — the items each one's tab is built from (:func:`emulator_tabs`),
+        identity — the items each one's entry is built from (:func:`emulator_tabs`),
         each at that emulator's place and read in the same hop.
         """
         catalogue = self._demand.platform_catalogue(system)
@@ -198,16 +198,19 @@ class FirmwareStatusReader:
     def _platform_emulator(self, platform_slug: str, options: dict[str, Any]) -> EmulatorOption | None:
         """The emulator this platform resolves to — the one pick every surface here reads.
 
-        :func:`resolve_platform_option` over the emulators ES-DE lists and the
-        per-platform override, which is the read-path precedence minus the
-        per-game layer. Both projections of it are taken from this one call: the
-        label a pane displays and the identity its BIOS answers key on.
+        :func:`resolve_firmware_option` over the emulators ES-DE lists and the
+        per-platform override: the read-path precedence minus the per-game
+        layer, and where nothing is bakeable the emulator RetroDECK declares
+        first, which its plain launch starts unless an alternative emulator is
+        set in ES-DE. Both projections of it are taken from this
+        one call: the label a pane displays and the identity its BIOS answers
+        key on.
 
         Takes the already-read *options* rather than the system name, because
         every caller needs the emulator list anyway and reading it costs a
         catalogue read plus a glob per bakeable standalone entry.
         """
-        return resolve_platform_option(options["options"], self._platform_core_reader.get_platform_core(platform_slug))
+        return resolve_firmware_option(options["options"], self._platform_core_reader.get_platform_core(platform_slug))
 
     def _resolve_launching_emulator(
         self, platform_slug: str, options: dict[str, Any], launching_emulator: LaunchingEmulator | None
@@ -446,7 +449,8 @@ class FirmwareStatusReader:
         plat["deletable_count"] = len({record.file_path for record in present})
 
         names = {record.file_name for record in present}
-        for f in plat["files"]:
+        tab_rows = [row for tab in plat.get("emulator_tabs", []) for row in tab.get("rows", [])]
+        for f in [*plat["files"], *tab_rows]:
             if f.get("declared_kind") == DECLARED_DIRECTORY:
                 root = (f.get("local_path") or "").rstrip("/")
                 f["deletable_count"] = (
@@ -473,11 +477,14 @@ class FirmwareStatusReader:
         ``active_core_label`` are the two projections of ONE pick
         (:meth:`_platform_emulator`) — the per-platform override
         (``platform_cores``) when set and still resolvable, else the es_systems
-        default — so the pane cannot name one emulator and judge by another.
+        default, else, where nothing is bakeable, the emulator RetroDECK
+        declares first — so the pane cannot name one emulator and judge by
+        another.
         ``active_core`` carries that pick's IDENTITY, which stands for a
         standalone emulator as much as for a libretro core; it is ``None`` only
         where the pick could not be made or the resolver could not identify it,
-        and the rows then fall back to every declaring emulator. The
+        and then no row is its requirement and the answer reads as not
+        established. The
         ``emulators`` list is the full classified picker payload and
         ``emulator_data_available`` flags whether the answering emulator source
         gave an emulator list, with ``emulator_data_reason`` and
@@ -542,12 +549,12 @@ class FirmwareStatusReader:
         plat["files"].sort(key=lambda f: (f.get("declared_path") or f.get("file_name", "")).lower())
         plat["has_games"] = slug in synced_slugs
         plat["all_downloaded"] = all(f["downloaded"] for f in plat["files"])
-        self._stamp_deletable(plat, slug, records)
-        answer = emulator_answer(catalogue, identity, judge_groups(catalogue.groups_for(identity)))
-        self._set_platform_bios_aggregates(plat, slug, files, answer)
         plat["emulator_tabs"] = emulator_tabs(
             catalogue, identity, plat["active_core_label"], options["options"], others
         )
+        self._stamp_deletable(plat, slug, records)
+        answer = emulator_answer(catalogue, identity, judge_groups(catalogue.groups_for(identity)))
+        self._set_platform_bios_aggregates(plat, slug, files, answer)
 
     def _set_platform_bios_aggregates(self, plat: dict[str, Any], slug: str, files, answer: EmulatorAnswer) -> None:
         """Stamp the per-platform BIOS aggregates onto a ``get_firmware_status`` entry.

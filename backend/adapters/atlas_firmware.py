@@ -338,8 +338,8 @@ def _emulator_verdicts(answer: Any) -> dict[str, CoreFirmwareVerdict]:
     required files it could not judge, and the notes a surface words.
 
     An unidentified entry is skipped; an identity the answer names twice keeps
-    the first entry, the same rule :func:`_placements` applies to a destination
-    read twice.
+    the first entry, the same rule :func:`_placements` applies to one identity's
+    declarations of one file name.
     """
     verdicts: dict[str, CoreFirmwareVerdict] = {}
     for core in answer.cores:

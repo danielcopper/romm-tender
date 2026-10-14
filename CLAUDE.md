@@ -833,8 +833,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   the platform's catalogue (whose verdict is that presence, it being no requirement), a placement Tender cannot honour,
   and the already-there check before a download (the batch and the per-row fetch). Where no BIOS download may land —
   anything that refuses one, so that `FirmwareDemand.status_root` answers `None` — the probe looks nowhere, and a row
-  only it could answer has its verdict withheld rather than read as absent (#2244 D11). `present is
-  None` leaves
+  only it could answer has its verdict withheld rather than read as absent (#2244 D11). `present is None` leaves
   `downloaded` false and the verdict withheld — a place the resolver could not look at is never missing (#2190 D3) — and
   the `RomM library files` ratio leaves a row whose verdict was withheld out (`ratio_server_count`, #2285 D3). A
   withheld verdict is not an absence: its cause is read off the row's caveat codes and a declared file's `checked`,
@@ -883,14 +882,19 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   (`TestOnePlatformOneEmulator`,
   `TestDownloadRequiredFirmware::test_it_fetches_what_the_platforms_own_pick_calls_required`,
   `TestTheAnswerNamesTheEmulatorItJudgedBy`, `TestOneRomOneEmulator`, `TestEachEmulatorsOwnPlace`); prompt-only: every
-  platform site resolves through `domain/emulator_commands.py::resolve_platform_option`, `.label` and `.emulator` come
-  off one call, the key is the emulator identity and never `.core_so`, and both game-page services ask
-  `ActiveCoreReader.active_emulator_for_rom`, never `active_core_for_rom` — and so does the game page's "Download BIOS"
-  (`download_all_firmware` with a `rom_id`,
+  platform BIOS site resolves through `domain/emulator_commands.py::resolve_firmware_option` (the platform's core read
+  names the bake pick alone, `resolve_platform_label`), `.label` and `.emulator` come off one call, the key is the
+  emulator identity and never `.core_so`, and both game-page services ask `ActiveCoreReader.active_emulator_for_rom`,
+  never `active_core_for_rom` — and so does the game page's "Download BIOS" (`download_all_firmware` with a `rom_id`,
   `TestEachEmulatorsOwnPlace::test_a_game_page_download_places_for_the_games_own_pick`); the one-of groups an answer
   judges are that same pick's (`groups_for(identity)`), and so are the rows and where a download lands
-  (`FirmwareCatalogue.placements_for(identity)`, #2190 D2/D9); every other emulator's answer is a tab of its own
-  (`emulator_tabs`) that changes the view and never the level, a count or a download. Tests on the bare
+  (`FirmwareCatalogue.placements_for(identity)`, #2190 D2/D9); every other emulator's answer is an entry of its own
+  (`emulator_tabs`) the BIOS tables' emulator selector shows, which never changes the level, the header's counts or the
+  badge — on the platform page `Download required` and a row's own download place for the emulator shown (`emulator`,
+  `None` for the pick; an identity the answer holds no verdict for is refused `emulator_unknown`,
+  `TestEachEmulatorsOwnPlace::test_download_required_fetches_for_the_shown_emulator`,
+  `::test_the_per_row_download_fetches_for_the_shown_emulator`,
+  `::test_an_emulator_the_answer_does_not_hold_is_refused`), while `Download all` places for the pick. Tests on the bare
   `FakeCoreInfoProvider` exercise a weaker default than the live adapter
 - **A platform's BIOS answer is asked for one platform at a time, and a row that has not got one yet is never rendered
   as a row nothing could be established for** — test + prompt-only —

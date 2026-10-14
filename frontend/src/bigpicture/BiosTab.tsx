@@ -5,17 +5,14 @@
  * (`biosStatus`) and the emulator it is shown against (`coreInfo`) have to reach
  * a render TOGETHER. On a core change the panel reads both in one `Promise.all`
  * and folds them into one update; split across two owners the change would land
- * as two renders, and in between the pane highlights the previous core's line
- * and names it in the Emulator column against a requirement set that has
- * already moved. The per-file LABELS are not part of that window —
- * `coreInfo.emulators` is the platform's core list, which a core switch does not
- * change.
+ * as two renders, and in between the pane names the previous emulator in the
+ * Emulator column against a requirement set that has already moved.
  *
  * The readiness line is the launching emulator's, and so is everything that acts:
  * a file another emulator demands is not a missing prerequisite for this launch.
- * Under it, one tab per emulator the resolver answered for (#2190), the
- * launching one first and selected: each tab lists its emulator's own
- * requirements, narrowed to what this page can say or do something about
+ * Under it, a selector over every emulator the resolver answered for,
+ * the launching one first and selected: the list shows the chosen emulator's
+ * own requirements, narrowed to what this page can say or do something about
  * (`rowBelongsOnThisPage`), and choosing one changes the list and nothing else.
  * What the narrowing leaves out is counted on a line that names the page listing
  * it, so a row is never dropped silently; the page that leaves nothing out is the
@@ -34,18 +31,19 @@
  * styleInjector.
  */
 
-import { FC, useState, type ReactElement } from "react";
-import type { BiosFileStatus, BiosLevel, BiosStatus, CoreInfo, EmulatorTab, FirmwareWanted } from "../types";
+import { FC, useEffect, useRef, useState, type ReactElement } from "react";
+import type { BiosFileStatus, BiosLevel, BiosStatus, CoreInfo, EmulatorTab } from "../types";
 import { BIOS_MISSING_RED, biosColorForLevel } from "../utils/biosColor";
 import { isFetchable } from "../utils/biosFetchable";
 import { biosFileDescription, biosFileNote } from "../utils/biosFileNote";
-import { oneOfRowLine, type GroupLineTone } from "../utils/biosGroup";
+import { needWords, type GroupLineTone } from "../utils/biosGroup";
 import { biosHeldRatio } from "../utils/biosHeldRatio";
 import { biosSummary, groupBlocks } from "../utils/biosSummary";
 import { emulatorClause } from "../utils/emulatorClause";
-import { selectedTab, tabLabel, tabRows } from "../utils/biosTabs";
+import { isUnclaimedLibraryRow, selectedTab, tabLabel, tabRows } from "../utils/biosTabs";
 import { emulatorDataReasonSentence } from "../utils/emulatorSourceWording";
-import { EmulatorTabs } from "./EmulatorTabs";
+import { ENTRY_FOCUS_DELAY_MS, firstBodyStop, placeEntryFocus } from "../utils/entryFocus";
+import { EmulatorSelector, SHOWN_ENTRY_ATTR } from "./EmulatorSelector";
 import { section } from "./panelSection";
 
 interface BiosTabProps {
@@ -72,8 +70,8 @@ interface BiosTabProps {
  * The header line: status dot plus the sentence for this platform's BIOS state.
  *
  * **The sentence is not this surface's to word** — `utils/biosSummary.ts` holds
- * all seven states and both surfaces read it, because before that each wrote its
- * own spelling of the same seven and nothing joined them. What stays here is the
+ * every state and both surfaces read it, because before that each wrote its
+ * own spelling of the same states and nothing joined them. What stays here is the
  * choice of WHICH of the two answers this page has room for (the sentence, since
  * a game page has no adjacent heading to hang a short note on) and what is
  * appended to it.
@@ -150,7 +148,7 @@ const SUBHEADING_STYLE = { marginTop: "12px", marginBottom: "4px" };
  * `utils/biosGroup.ts`'s and `utils/biosSummary.ts`'s; this lays it out.
  */
 function buildGroupBlock(bios: BiosStatus): ReactElement | null {
-  const blocks = groupBlocks(bios);
+  const blocks = groupBlocks(bios, bios.files ?? []);
   if (blocks.length === 0) return null;
   return (
     <div
@@ -200,7 +198,8 @@ function rowVerdict(file: BiosFileStatus): boolean | null {
  * A missing option of the launching emulator's group is red where a region it
  * serves is one the group's verdict names as missing — on the game page that is
  * the verdict for this game's own regions, so the image of another region stays
- * grey there.
+ * grey there. Another emulator's group was judged for no game, so its missing
+ * options are passed no regions and stay grey, not established.
  */
 function fileDotColor(file: BiosFileStatus, missingRegions: ReadonlySet<string>): string {
   const verdict = rowVerdict(file);
@@ -210,14 +209,25 @@ function fileDotColor(file: BiosFileStatus, missingRegions: ReadonlySet<string>)
   if (verdict) return "#5ba32b";
   if (file.required_by_active) return "#d94126";
   if (file.one_of?.regions.some((region) => missingRegions.has(region))) return "#d94126";
-  // Not met and not required here — missing, wrong or refused alike. What
-  // another emulator demands is on that emulator's own tab.
+  // Not met and not required here — missing, wrong or refused alike.
   return "#8f98a0";
 }
 
 /**
- * The lines under a file's name — the region it serves in a one-of group, then
- * what its read found.
+ * How wide the emulator selector stands on a game page, centred: about the
+ * platform page's, whose detail column is what is left of the wide panel's
+ * 806px beside its 264px list (`layout/ListDetail.tsx`). Across the whole game
+ * page its arrows sit far apart from the name and the carousel between them.
+ */
+const GAME_PAGE_SELECTOR_WIDTH = "500px";
+
+/** The need word beside a file's name: muted, and set apart from the name and
+ *  its label by the "·" the panel separates such parts with. */
+const NEED_WORD = { marginLeft: "4px", color: "rgba(255, 255, 255, 0.5)", fontSize: "12px" } as const;
+
+/**
+ * The lines under a file's name — what its read found. What the shown emulator
+ * needs of it stands on the name's own line ({@link NEED_WORD}).
  *
  * One indented block, because they are one column to the eye. The row's own
  * name stays short so the status dot beside it keeps its line: folding a
@@ -225,13 +235,12 @@ function fileDotColor(file: BiosFileStatus, missingRegions: ReadonlySet<string>)
  * orphaned the dot above it.
  *
  * **The packager's label is not among them** — it sits on the name line, where
- * it says what the file IS beside the file's own name. Under the row it read as
- * one more entry in the list of emulators that want the file, which is the one
- * thing it is not.
+ * it says what the file IS beside the file's own name. Under the row it would
+ * read as one more line about how the file stands, which is the one thing it is
+ * not.
  *
- * Which emulators want the file is no longer listed here: every emulator has a
- * tab of its own over the list (#2190), so a row is only ever its tab's
- * emulator's requirement.
+ * A row is only the shown emulator's requirement; another emulator's rows are
+ * shown when it is chosen.
  *
  * The image text is the resolver's verbatim string, and `pre-wrap` keeps the
  * column padding PCSX2 puts in its own option labels — that alignment is what
@@ -289,14 +298,14 @@ function fileLines(lines: string[]): ReactElement | null {
  * - **withheld** — nothing could judge the row (`satisfied === null`). An
  *   ignorance is something to say, never something to summarise away.
  *
- * What is left over is declared, not required for this launch, demonstrably
- * absent, and fetchable from nowhere — nothing a reader of THIS page could do
+ * What is left over is declared, not required for this launch, not met, and
+ * fetchable from nowhere — nothing a reader of THIS page could do
  * anything with. It is counted on one line instead, which names where the rows
  * are.
  *
- * Every tab asks it of its own emulator (#2190): another emulator's rows carry
- * that emulator's `required_by_active` and `one_of`, so "this launch" there
- * reads as a launch with the tab's emulator.
+ * It is asked of the shown emulator: another emulator's rows carry that
+ * emulator's `required_by_active` and `one_of`, so "this launch" there reads as
+ * a launch with that emulator.
  */
 function rowBelongsOnThisPage(file: BiosFileStatus): boolean {
   if (file.required_by_active || file.one_of) return true;
@@ -307,31 +316,31 @@ function rowBelongsOnThisPage(file: BiosFileStatus): boolean {
 }
 
 /**
- * One row per firmware file the selected tab's emulator asks for, plus notes for
- * the rest.
+ * One row per firmware file the shown emulator asks for, a note for the rest,
+ * and the library's files no emulator here declares in a section of their own.
  *
- * Each tab shows its emulator's own requirements as the resolver answers for it
- * (#2190) — nothing folded in from another emulator, whose files are on its own
- * tab — narrowed to those {@link rowBelongsOnThisPage} keeps. What the narrowing
- * leaves out is counted first among the notes below, naming the tab's emulator
- * and the page that lists every file. On the launching tab the further notes
- * keep the library's remaining answers apart (#1762): files nothing asks for are
- * a finished answer, files nothing could be asked about are not. On another
- * emulator's tab the rows are muted: a reading of that emulator's answer, never
- * this launch's.
+ * Each emulator's view shows its own requirements as the resolver answers for
+ * it — nothing folded in from another emulator — narrowed to those
+ * {@link rowBelongsOnThisPage} keeps. What the narrowing leaves out is counted on
+ * one note naming the shown emulator and the page that lists every file.
+ * Another emulator's rows are not muted; the selector says which
+ * emulator is shown. The library section is the same whichever emulator is
+ * shown, and each of its rows says, as its need, whether nothing asks for the
+ * file or nothing could be asked.
  */
 function buildBiosFileList(bios: BiosStatus, tab: EmulatorTab | null, launchingLabel: string | null): ReactElement[] {
   const files = bios.files ?? [];
   const otherTab = tab !== null && !tab.launching;
-  const missingRegions = new Set((bios.one_of_groups ?? []).flatMap((group) => group.missing));
+  const missingRegions = new Set(otherTab ? [] : (bios.one_of_groups ?? []).flatMap((group) => group.missing));
   const tabFiles = tabRows(files, bios.emulator_tabs, tab) as readonly BiosFileStatus[];
   const wantedFiles = otherTab ? tabFiles : tabFiles.filter((f) => f.wanted === "needed" || f.wanted === "optional");
   const shownFiles = wantedFiles.filter(rowBelongsOnThisPage);
-  const countOf = (wanted: FirmwareWanted) =>
-    files.filter((f) => f.wanted === wanted && (f.declared_by === undefined || f.declared_by === null)).length;
+  // The emulator the rows are its own requirements of: the shown one.
+  const emulatorName = tab !== null ? tabLabel(tab) : launchingLabel;
+  const libraryFiles = files.filter(isUnclaimedLibraryRow);
 
-  const fileElements = shownFiles.map((f) => {
-    const { note, lines } = biosFileNote(f);
+  const fileRow = (f: BiosFileStatus, named: string | null) => {
+    const { note, lines } = biosFileNote(f, named);
     // The row is headed by the file the emulator DECLARED — `declared_path`, not
     // `file_name`, which is only its basename: a `dc/dc_boot.bin` row would
     // otherwise head itself `dc_boot.bin` and a declared folder `bios`, taking
@@ -342,13 +351,10 @@ function buildBiosFileList(bios: BiosStatus, tab: EmulatorTab | null, launchingL
     // dash.
     const label = biosFileDescription(f);
     const suffix = note ? ` — ${note}` : "";
-    // A file that is an option of the emulator's one-of group says which discs
-    // it serves, where the per-emulator lines used to.
-    const groupLine = f.one_of && !f.required_by_active ? [oneOfRowLine(f.one_of, rowVerdict(f))] : [];
-    const dot = otherTab ? "#8f98a0" : fileDotColor(f, missingRegions);
+    const dot = fileDotColor(f, missingRegions);
 
     return (
-      <div key={f.file_name} className="romm-panel-file-row" style={otherTab ? { opacity: 0.6 } : undefined}>
+      <div key={f.file_name} className="romm-panel-file-row">
         <span key="dot" className="romm-status-dot" style={{ backgroundColor: dot }} />
         <span key="name" className="romm-panel-file-name">
           {f.declared_path || f.file_name}
@@ -358,10 +364,17 @@ function buildBiosFileList(bios: BiosStatus, tab: EmulatorTab | null, launchingL
           {label !== null && <span key="label" style={{ color: "rgba(255, 255, 255, 0.5)" }}>{` ${label}`}</span>}
           {suffix}
         </span>
-        {fileLines([...groupLine, ...lines])}
+        {/* What the shown emulator needs of the file, on the name's own line
+            with a little room before it, so a row with nothing more to say is
+            one line tall. */}
+        <span key="need" data-testid="bios-need" style={NEED_WORD}>
+          {`· ${needWords(f)}`}
+        </span>
+        {fileLines(lines)}
       </div>
     );
-  });
+  };
+  const fileElements = shownFiles.map((f) => fileRow(f, emulatorName));
 
   const summaryLine = (key: string, text: string) => (
     <div
@@ -378,12 +391,12 @@ function buildBiosFileList(bios: BiosStatus, tab: EmulatorTab | null, launchingL
   // platform page. Both claims hold of every row counted rather than of most of
   // them: "required" covers both spellings of the launch's requirement, and "to
   // download" is `isFetchable`, so a row that fails neither is kept above. The
-  // emulator named is the tab's, because the rows counted are its own — and on
-  // another emulator's tab the need is that emulator's, which launches nothing
-  // here (#2190 D16).
+  // emulator named is the shown one, because the rows counted are its own — and
+  // with another emulator shown the need is that emulator's, which launches
+  // nothing here.
   const elsewhere = wantedFiles.length - shownFiles.length;
   if (elsewhere > 0) {
-    const name = tab !== null ? tabLabel(tab) : (launchingLabel ?? "the emulator");
+    const name = emulatorName ?? "the emulator";
     const notRequired = otherTab ? `not required by ${name}` : "not required for this launch";
     fileElements.push(
       summaryLine(
@@ -394,28 +407,42 @@ function buildBiosFileList(bios: BiosStatus, tab: EmulatorTab | null, launchingL
     );
   }
 
-  if (otherTab) return fileElements;
-
-  for (const [wanted, phrase] of [
-    ["not_needed", "no installed emulator asks for"],
-    ["unknown", "nothing installed could answer for"],
-  ] as const) {
-    const count = countOf(wanted);
-    if (count === 0) continue;
-    fileElements.push(summaryLine(`${wanted}-note`, `${count} file${count === 1 ? "" : "s"} on server ${phrase}`));
+  if (libraryFiles.length > 0) {
+    fileElements.push(
+      <div key="library-heading" className="romm-panel-section-title" style={SUBHEADING_STYLE}>
+        In your RomM library, asked for by no emulator here
+      </div>,
+      ...libraryFiles.map((f) => fileRow(f, launchingLabel)),
+    );
   }
 
   return fileElements;
 }
 
 export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isActive, platformName }) => {
-  // Which emulator's tab the list shows: the launching one until another is
-  // chosen — a view, never a change of what launches (#2190).
+  // Which emulator the list shows: the launching one until another is chosen —
+  // a view, never a change of what launches.
   const [tabKey, setTabKey] = useState<string | null>(null);
+  const part = useRef<HTMLDivElement>(null);
+  const [steppedFromList, setSteppedFromList] = useState(false);
+  // A step that leaves the list with no row for focus to stay on puts it on the
+  // carousel's shown entry rather than letting Steam reset it to the top of the
+  // page. The list is one focus stop, so focus on it otherwise stays.
+  useEffect(() => {
+    if (!steppedFromList) return;
+    const timer = setTimeout(() => {
+      setSteppedFromList(false);
+      const root = part.current;
+      if (!root || root.querySelector(".romm-panel-file-list")) return;
+      const entry = root.querySelector<HTMLElement>(`[${SHOWN_ENTRY_ATTR}]`);
+      if (entry) placeEntryFocus(entry, firstBodyStop);
+    }, ENTRY_FOCUS_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [steppedFromList]);
   if (!isActive || !biosStatus) return null;
 
   // Left column: BIOS status, the launching emulator's group. The header is the
-  // launching emulator's whichever tab the list below shows.
+  // launching emulator's whichever emulator the list below shows.
   const biosColumn = buildBiosHeader(biosStatus, biosLevel, coreInfo, platformName || null);
   const groupBlockElement = buildGroupBlock(biosStatus);
   if (groupBlockElement) biosColumn.push(groupBlockElement);
@@ -451,9 +478,10 @@ export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isA
     biosStatus.active_core_label ?? coreInfo?.active_core_label ?? null,
   );
 
-  // The tab strip and the list sit below the header, outside its section: a
-  // section is itself a focusable button, and a tab inside it would be a button
-  // inside a button. Each tab is a stop of its own, above the list it switches.
+  // The selector and the list sit below the header, outside its section: a
+  // section is itself a focusable button, and the selector's own buttons inside
+  // it would be buttons inside a button. The selector stands above the list it
+  // switches.
   return (
     <>
       {section(
@@ -468,21 +496,27 @@ export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isA
           </div>
         </div>,
       )}
-      {tabs && tab && tabs.length > 1 && (
-        <EmulatorTabs
+      <div ref={part}>
+        <EmulatorSelector
           tabs={tabs}
-          selected={tab}
-          onSelect={(chosen) => setTabKey(chosen.launching ? null : chosen.emulator)}
+          shown={tab}
+          maxWidth={GAME_PAGE_SELECTOR_WIDTH}
+          onSelect={(chosen) => {
+            const active = part.current?.ownerDocument.activeElement ?? null;
+            const list = part.current?.querySelector(".romm-panel-file-list")?.closest(".romm-panel-section");
+            if (list?.contains(active)) setSteppedFromList(true);
+            setTabKey(chosen.launching ? null : chosen.emulator);
+          }}
         />
-      )}
-      {fileElements.length > 0 &&
-        section(
-          "bios-files",
-          null,
-          <div key="bios-file-list" className="romm-panel-file-list">
-            {fileElements}
-          </div>,
-        )}
+        {fileElements.length > 0 &&
+          section(
+            "bios-files",
+            null,
+            <div key="bios-file-list" className="romm-panel-file-list">
+              {fileElements}
+            </div>,
+          )}
+      </div>
     </>
   );
 };

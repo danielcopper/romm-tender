@@ -24,8 +24,9 @@ this launch.
 
 Where the launching emulator states a **one-of group**
 (:mod:`domain.firmware_groups`), the group is ONE requirement and is counted as
-one in the counts a surface words. Its options are rows like any other and never
-required rows — a launch needs one of them, chosen by the disc's region.
+one in the counts a surface words. Its options are rows like any other, and an
+option alone never makes its row ``required_by_active`` — a launch needs one of
+them, chosen by the disc's region.
 """
 
 from __future__ import annotations
@@ -84,8 +85,10 @@ class BiosFileEntry:
     ``wanted`` is the need of the emulator whose requirement the row is (one of
     :data:`domain.firmware_wants.WANTED_VALUES`) — its own word on a file it
     declares, and for a library file nobody declares whether that emulator was
-    read; ``required_by_active`` is the launching emulator's, and only that one
-    decides whether the file is counted as a missing prerequisite.
+    read; ``required_by_active`` is whether the emulator the row was built for
+    requires it — the launching emulator on the payload's own rows, which alone
+    decide whether the file is counted as a missing prerequisite, and the
+    entry's emulator on another emulator's entry's rows.
 
     ``on_server`` is clear for a file an installed emulator asks for that the
     RomM library does not hold. Nothing on this page can fetch such a file — so
@@ -95,7 +98,8 @@ class BiosFileEntry:
     ``satisfied`` is the row's verdict and the axis the REQUIRED counts key off:
     the resolver's own per-file answer — met, not met (absent, the
     wrong image, refused, the wrong shape), or not established (the place could
-    not be looked at, the bytes could not be read, recognised or compared). It
+    not be looked at, a folder stands where a file is opened, the bytes could
+    not be read, recognised or compared). It
     is not ``downloaded``, which answers only whether something is at the
     destination: a wrong image is there and not met, and a folder is there on
     every stock RetroDECK whatever it holds. The library's own held/offered
@@ -175,8 +179,8 @@ class BiosFileEntry:
     # ``FirmwarePlacement.missing_configured_image``. Never a verdict.
     missing_configured_image: dict[str, str | None] | None = None
     # The identity of the emulator whose requirement this row is, ``None`` for
-    # a library file no emulator claims. A surface shows a row under its own
-    # emulator's tab, and an unclaimed one under the launching emulator's.
+    # a library file no emulator claims. A surface shows a row with its own
+    # emulator, and an unclaimed one in the library's own section.
     declared_by: str | None = None
 
 
@@ -308,7 +312,7 @@ def build_file_entry(
         for want in wants
         if want.emulator is not None
     }
-    active = _active_core_answer(cores, placement, launching_emulator)
+    active = _active_core_answer(cores, launching_emulator)
     stale = placement.missing_configured_image if placement is not None else None
     return BiosFileEntry(
         file_name=file_name,
@@ -340,7 +344,7 @@ def build_file_entry(
 def _wanted(placement: FirmwarePlacement | None, complete: bool, launching_emulator: str | None) -> str:
     """The row's ``wanted``: the launching emulator's own need wherever the row is its requirement.
 
-    A row the launching emulator declares is shown under its tab, so its need
+    A row the launching emulator declares is shown with that emulator, so its need
     there is that emulator's — required or merely accepted — and never another
     emulator's requirement of the same name. Every other row keeps the
     machine's four-valued answer (:func:`classify_wanted`).
@@ -387,25 +391,23 @@ class _ActiveCoreAnswer:
     one_of: dict[str, Any] | None
 
 
-def _active_core_answer(
-    cores: Mapping[str, dict[str, Any]],
-    placement: FirmwarePlacement | None,
-    launching_emulator: str | None,
-) -> _ActiveCoreAnswer:
+def _active_core_answer(cores: Mapping[str, dict[str, Any]], launching_emulator: str | None) -> _ActiveCoreAnswer:
     """What the emulator the game will launch with says about one row.
 
     ``launching_emulator`` is that emulator's identity, or ``None`` when it could
-    not be resolved or identified; then every declaring emulator stands in for
-    it, which is the same permissive default the platform has always fallen back
-    to — and no group is that emulator's, so ``one_of`` stays silent.
+    not be resolved or identified; then no row is presented as its requirement
+    or as one it uses — no other emulator stands in for it — and no
+    group is its, so ``one_of`` stays silent. The empty required set that leaves
+    is "could not be established", never "nothing required": the verdict for
+    no identity is none, so the level is unknown and ``emulator_read`` false.
 
     ``one_of`` reads the launching emulator's own entry in ``cores``, so the row
     and the per-emulator entries cannot disagree about which group it stands in.
     """
     active_entry = cores.get(launching_emulator) if launching_emulator is not None else None
     if launching_emulator is None:
-        used_by_active = True
-        required_by_active = placement.required_by_any if placement is not None else False
+        used_by_active = False
+        required_by_active = False
     else:
         used_by_active = launching_emulator in cores if cores else True
         required_by_active = active_entry["required"] if active_entry is not None else False
@@ -496,8 +498,8 @@ def count_required_withheld(files: tuple[BiosFileEntry, ...], groups: tuple[Grou
     """How many of the launching emulator's requirements nothing could judge.
 
     The third number beside :func:`count_required`'s two, and the one that keeps
-    a declined verdict from reading as an absence. A surface that warns about
-    missing files subtracts it: what is left of ``required - withheld`` against
+    a declined verdict from reading as an absence. The sentence a surface words
+    over the counts subtracts it: what is left of ``required - withheld`` against
     ``required_downloaded`` is the requirement whose absence really was
     established. A group whose state is ``unknown`` is one such requirement.
     """

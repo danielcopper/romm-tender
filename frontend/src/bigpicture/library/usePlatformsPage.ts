@@ -257,9 +257,11 @@ export interface PlatformsPageState {
    * under the section, because "Failed" says that it did, not why.
    */
   downloadFailed: string | null;
-  downloadRequired: (slug: string) => void;
+  /** The shown emulator's required files, where that emulator opens them. */
+  downloadRequired: (slug: string, emulator: string | null) => void;
   downloadAll: (slug: string) => void;
-  downloadOne: (slug: string, fileName: string) => void;
+  /** One row's file, where the shown emulator opens it. */
+  downloadOne: (slug: string, fileName: string, emulator: string | null) => void;
   deleteBios: (slug: string) => void;
   deleteBiosFile: (slug: string, fileName: string) => void;
   deleteBiosFolder: (slug: string, folderPath: string) => void;
@@ -835,7 +837,8 @@ export function usePlatformsPage(): PlatformsPageState {
   );
 
   const downloadRequired = useCallback(
-    (slug: string) => runDownload(slug, "required", () => downloadRequiredFirmware(slug)),
+    (slug: string, emulator: string | null) =>
+      runDownload(slug, "required", () => downloadRequiredFirmware(slug, emulator)),
     [runDownload],
   );
   const downloadAll = useCallback(
@@ -843,7 +846,8 @@ export function usePlatformsPage(): PlatformsPageState {
     [runDownload],
   );
   const downloadOne = useCallback(
-    (slug: string, fileName: string) => runDownload(slug, fileName, () => downloadPlatformFirmwareFile(slug, fileName)),
+    (slug: string, fileName: string, emulator: string | null) =>
+      runDownload(slug, fileName, () => downloadPlatformFirmwareFile(slug, fileName, emulator)),
     [runDownload],
   );
 

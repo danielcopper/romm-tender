@@ -22,7 +22,7 @@
  * this wording does not appear.
  *
  * Naming the set is also why the pair need not be folded INTO that sentence. The
- * two are stated next to each other in every one of the seven states because one
+ * two are stated next to each other in every state because one
  * number built out of both would be true of neither. Sharing the FORM is not the
  * same move as folding the meanings: what lives here is how the pair is written,
  * and the two sets stay apart.

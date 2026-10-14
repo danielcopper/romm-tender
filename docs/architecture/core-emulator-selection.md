@@ -612,12 +612,15 @@ and `get_platform_firmware_status` answers whenever the page's walk reaches that
 focuses it, and never at all for a platform the page has nothing to say about. It costs one ES-DE options read and a
 `settings.json` lookup, opens no Unit of Work, and is issued once per selection.
 
-Its **`active_core_label`**, and the identically-named field `get_platform_firmware_status` carries per platform, are
-both `domain.emulator_commands.resolve_platform_label` — the platform-level projection of the read-path precedence: the
-per-platform override (`platform_cores`) when it is set and still resolves to a bakeable emulator, else the es_systems
-**default emulator** label (the first bakeable command — libretro _or_ standalone). One function, so the two readers
-cannot drift; a stale override degrades to the default rather than naming an emulator that would not launch, and a
-standalone default reads its standalone label rather than the libretro system default.
+Its **`active_core_label`** is `domain.emulator_commands.resolve_platform_label` — the platform-level projection of the
+read-path precedence: the per-platform override (`platform_cores`) when it is set and still resolves to a bakeable
+emulator, else the es_systems **default emulator** label (the first bakeable command — libretro _or_ standalone). A
+stale override degrades to the default rather than naming an emulator that would not launch, and a standalone default
+reads its standalone label rather than the libretro system default. The identically-named field
+`get_platform_firmware_status` carries per platform is the label of `resolve_firmware_option`, which takes that same
+pick and goes one rung further where nothing is bakeable: the emulator RetroDECK declares first, installed or not (#2190
+D26). The two agree wherever a bakeable emulator exists; where none does, the core read names none and the BIOS part
+names the emulator its answer is about.
 
 ### One identity space on the wire
 
@@ -626,17 +629,20 @@ resolver's own `emulator` field, `mgba_libretro.so` for a libretro entry and `DU
 places carry it and they are the same string:
 
 - the **`active_core`** of `get_platform_core_info` (per ROM, through `active_emulator_for_rom`) and of
-  `get_platform_firmware_status` (per platform, through `resolve_platform_option`);
+  `get_platform_firmware_status` (per platform, through `resolve_firmware_option`, which takes RetroDECK's first
+  declared emulator where nothing is bakeable);
 - the **`emulator`** field of every picker row in `options_to_payload`, beside its `core_so`;
-- the **`emulator`** of each tab of a BIOS answer (`emulator_tabs`) and a firmware row's `declared_by`.
+- the **`emulator`** of each entry of a BIOS answer's emulator selector (`emulator_tabs`) and a firmware row's
+  `declared_by`.
 
-That is what lets a BIOS page match each emulator's tab and rows to the picker's labels and mark the one the answer was
-scoped to ([#2190](https://github.com/danielcopper/romm-tender/issues/2190) D15). `core_so` cannot serve any of it: it
-is `None` for every standalone emulator and carries no extension for a libretro one, so matching on it named no
-standalone emulator and printed `dolphin_libretro.so` where the label said Dolphin. `label` cannot either — ES-DE lists
-one `pcsx2_libretro.so` as both `LRPS2` and `PCSX2`, so a label identifies a launch ROW and two rows can be one
-emulator. `core_so` stays on the picker payload because a surface may still need to name the libretro core itself; it is
-not a second answer to "which emulator is this".
+That is what lets a BIOS page match each emulator's entry and rows to the picker's labels, mark the one the answer was
+scoped to and tell the backend which emulator a download is for
+([#2190](https://github.com/danielcopper/romm-tender/issues/2190) D15). `core_so` cannot serve any of it: it is `None`
+for every standalone emulator and carries no extension for a libretro one, so matching on it named no standalone
+emulator and printed `dolphin_libretro.so` where the label said Dolphin. `label` cannot either — ES-DE lists one
+`pcsx2_libretro.so` as both `LRPS2` and `PCSX2`, so a label identifies a launch ROW and two rows can be one emulator.
+`core_so` stays on the picker payload because a surface may still need to name the libretro core itself; it is not a
+second answer to "which emulator is this".
 
 `active_core_for_rom`'s `(core_so, label)` is therefore **not** what a payload sends: it answers `None` for a standalone
 pick, which is the degradation this swap removed.

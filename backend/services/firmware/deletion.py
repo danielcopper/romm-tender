@@ -6,7 +6,7 @@ input: it iterates them, unlinks the path each one holds, and prunes the row.
 Nothing here consults a status listing, a file's existence, or what the library
 currently offers.
 
-Three buttons reach it — the platform's Delete BIOS, a file row's Delete, a
+Three buttons reach it — the platform-wide delete, a file row's Delete, a
 declared folder's Delete — and they share ONE removal loop, differing only in
 which records they select. A second copy of that loop is what the register's
 BIOS-delete rule warns about: the copies would drift silently, and this is the
@@ -57,7 +57,7 @@ class FirmwareDeletionIncomplete(PartialFailure):
 
 
 class PlatformBiosDeleter:
-    """The Delete BIOS action — Tender's own downloads for one platform."""
+    """The platform-wide BIOS delete — Tender's own downloads for one platform."""
 
     def __init__(self, *, config: PlatformBiosDeleterConfig) -> None:
         self._listing = config.listing
@@ -71,7 +71,7 @@ class PlatformBiosDeleter:
         """Remove Tender's own downloads for *platform_slug*, filtered by *selects*.
 
         The one removal loop, and deliberately the only one: three buttons reach
-        it — the platform's Delete BIOS, a file row's Delete, a declared folder's
+        it — the platform-wide delete, a file row's Delete, a declared folder's
         Delete — and they differ only in **which records they select**, never in
         what a removal is. A second copy of this loop is what the register warns
         about, because a divergence between the copies would be silent and this

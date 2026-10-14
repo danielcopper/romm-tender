@@ -197,17 +197,19 @@ class FirmwareService:
             with self._downloads.downloading():
                 return await self._downloads.download_all_firmware(platform_slug, rom_id)
 
-    async def download_platform_firmware_file(self, platform_slug, file_name) -> dict[str, Any]:
-        """Download the one firmware file the library holds for a platform under that name."""
+    async def download_platform_firmware_file(
+        self, platform_slug, file_name, emulator: str | None = None
+    ) -> dict[str, Any]:
+        """Download the one firmware file the library holds for a platform under that name, for *emulator*."""
         async with self._rules.hold("download_platform_firmware_file", update=True, migration=True):
             with self._downloads.downloading():
-                return await self._downloads.download_platform_firmware_file(platform_slug, file_name)
+                return await self._downloads.download_platform_firmware_file(platform_slug, file_name, emulator)
 
-    async def download_required_firmware(self, platform_slug) -> dict[str, Any]:
-        """Download only the firmware the platform's launching core will not run without."""
+    async def download_required_firmware(self, platform_slug, emulator: str | None = None) -> dict[str, Any]:
+        """Download only the firmware *emulator* — the platform's pick without one — will not run without."""
         async with self._rules.hold("download_required_firmware", update=True, migration=True):
             with self._downloads.downloading():
-                return await self._downloads.download_required_firmware(platform_slug)
+                return await self._downloads.download_required_firmware(platform_slug, emulator)
 
     async def delete_platform_bios(self, platform_slug) -> dict[str, Any] | FirmwareDeletionIncomplete:
         """Delete the BIOS files Tender downloaded for a platform."""

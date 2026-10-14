@@ -1,6 +1,7 @@
 import type { ErrorInfo, ReactElement } from "react";
 import { RomMPlaySection } from "../RomMPlaySection";
 import { RomMGameInfoPanel } from "../RomMGameInfoPanel";
+import { EmulatorStepScope } from "../emulatorStepping";
 import { PanelErrorBoundary } from "../../shared/PanelErrorBoundary";
 import { debugLog } from "../../api/backend";
 import { detach } from "../../utils/detach";
@@ -34,8 +35,17 @@ export function rommOverviewBlock(appId: number, className: string): ReactElemen
   return (
     <div key={ROMM_BLOCK_KEY} className={className} data-romm="true">
       <PanelErrorBoundary fallback={failureLine} onCatch={logFailure}>
-        <RomMPlaySection appId={appId} />
-        <RomMGameInfoPanel appId={appId} />
+        {/* L2 and R2 step the BIOS tab's emulator selector from anywhere in
+            Tender's section while that tab is open: the play row, the tab bar
+            and the tab's content each carry the scope's handler. */}
+        <EmulatorStepScope>
+          {() => (
+            <>
+              <RomMPlaySection appId={appId} />
+              <RomMGameInfoPanel appId={appId} />
+            </>
+          )}
+        </EmulatorStepScope>
       </PanelErrorBoundary>
     </div>
   );

@@ -51,6 +51,7 @@ export type WireReason =
   | "download_start_failed"
   | "duplicate_header_name"
   | "empty_header_value"
+  | "emulator_unknown"
   | "file_present"
   | "game_not_running"
   | "headers_not_a_list"

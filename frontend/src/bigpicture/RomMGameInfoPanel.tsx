@@ -20,6 +20,7 @@ import { Focusable } from "@decky/ui";
 import { refreshMigrationState, logError } from "../api/backend";
 import { AchievementsTab } from "./AchievementsTab";
 import { BiosTab } from "./BiosTab";
+import { useTriggerHandler } from "./emulatorStepping";
 import { PanelTabBar } from "./PanelTabBar";
 import { bindRomInState, loadData, type PanelReadSeqs, type PanelState } from "./panelState";
 import { wirePanelEvents } from "./panelEvents";
@@ -42,6 +43,7 @@ interface RomMGameInfoPanelProps {
 export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
   // Subscribe to version error — re-renders when global state changes
   const versionError = useVersionError();
+  const onTrigger = useTriggerHandler();
 
   const [state, setState] = useState<PanelState>({
     loading: true,
@@ -182,7 +184,12 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
         hasBios={!!state.biosStatus}
         onSelect={(tabId) => setState((prev) => ({ ...prev, activeTab: tabId }))}
       />
-      <Focusable noFocusRing={true} className="romm-tab-content" style={{ paddingBottom: "48px" }}>
+      <Focusable
+        noFocusRing={true}
+        className="romm-tab-content"
+        style={{ paddingBottom: "48px" }}
+        onButtonDown={onTrigger}
+      >
         {buildTabContent({ appId, binding: bindRomInState(romId, setState), state })}
         {/* Mounted for every ROM and rendering nothing until their tab is active.
             For achievements that is load-bearing: the list is fetched by the tab

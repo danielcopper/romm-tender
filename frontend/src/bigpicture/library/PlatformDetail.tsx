@@ -19,16 +19,16 @@ import { FaMicrochip } from "react-icons/fa";
 import type { BiosFileStatus, FirmwarePlatformExt, SystemCoreInfo } from "../../types";
 import { biosColorForLevel } from "../../utils/biosColor";
 import { fetchedAsRequired, isFetchable } from "../../utils/biosFetchable";
-import { biosFileDescription, biosFileNote } from "../../utils/biosFileNote";
-import { oneOfRowLine } from "../../utils/biosGroup";
+import { biosFileDescription, biosFileNote, contentsWords } from "../../utils/biosFileNote";
+import { needWords, unmetWord } from "../../utils/biosGroup";
 import { biosHeldRatio } from "../../utils/biosHeldRatio";
-import { biosSummary } from "../../utils/biosSummary";
-import { selectedTab, tabRows } from "../../utils/biosTabs";
+import { biosSummary, saysNoBiosChosen } from "../../utils/biosSummary";
+import { isUnclaimedLibraryRow, selectedTab, tabLabel, tabRows } from "../../utils/biosTabs";
 import { emulatorClause } from "../../utils/emulatorClause";
 import { buildEmulatorMenu } from "../../utils/emulatorMenu";
 import { emulatorDataReasonSentence, platformSystemClause } from "../../utils/emulatorSourceWording";
 import { getEventTarget } from "../../utils/events";
-import { EmulatorTabs } from "../EmulatorTabs";
+import { EmulatorSelector } from "../EmulatorSelector";
 import { pluralize } from "../../utils/pluralize";
 import { SYNC_RUNNING_HINT, useSyncRunning } from "../../utils/syncRunning";
 import {
@@ -42,6 +42,7 @@ import {
   Muted,
   NOTE_FONT,
   PALE_GREEN,
+  PANE_GUTTER,
   PANE_TABLE_REGISTER,
   PaneTableHeader,
   PaneTableRow,
@@ -49,11 +50,13 @@ import {
   ROW_BUTTON,
   SECONDARY_FONT,
   SectionTitle,
+  SubHeading,
   VIOLET,
   type ScopedStatus,
   type TableRegister,
 } from "../layout/pane";
 import type { CoreAnswer, DetailStatus, PlatformRow, PlatformsPageState, StatusScope } from "./usePlatformsPage";
+import { useBiosFocus, type BiosFocus } from "./useBiosFocus";
 
 /** The page's status line as the pane primitives read it: on this page the key
  *  a line is bound to is the platform slug. The scope type travels with it, so
@@ -88,10 +91,13 @@ const LIBRARY_MARK = { glyph: "⊘", color: VIOLET, title: "not in your RomM lib
  * the second one React's duplicate key; keyed on the sentence, it shows exactly
  * the ones the table is in.
  */
-const MARK_REQUIRED_MISSING = "required, missing";
+// A `✗` says what the file IS where its verdict is not met — missing, the wrong
+// file, or refused (`unmetWord`, off the row's `checked`) — so the mark never
+// contradicts the Contents words beside it.
+const markRequiredUnmet = (word: string) => `required, ${word}`;
 const MARK_REQUIRED_HERE = "required, here";
 const MARK_HERE = "here, not required";
-const MARK_MISSING = "missing, not required";
+const markUnmet = (word: string) => `${word}, not required`;
 // The `?` glyph's word, and it has to be true of every way a verdict is
 // withheld — which since the `checked` vocabulary arrived includes a file the
 // emulator READ and does not recognise. "could not be checked" was untrue of
@@ -104,7 +110,8 @@ const MARK_UNCHECKED = "nothing could establish this either way";
 const MARK_HERE_NEED_UNKNOWN = "here; nothing could say whether this is wanted";
 const MARK_MISSING_NEED_UNKNOWN = "missing; nothing could say whether this is wanted";
 const MARK_ONE_OF_THESE_HERE = "one of these, here";
-const MARK_ONE_OF_THESE_MISSING = "one of these, missing";
+const markOneOfTheseUnmet = (word: string) => `one of these, ${word}`;
+const UNMET_WORDS = [unmetWord(null), unmetWord("mismatch"), unmetWord("refused")];
 
 /**
  * The core picker's button in the header line — the game page's icon button, at
@@ -133,8 +140,8 @@ const CORE_BUTTON = {
  *  payload rather than restated, so a field added to it reaches here. */
 type FirmwareRow = FirmwarePlatformExt["files"][number];
 
-/** A row the BIOS table renders: the launching tab's own `files`, or another
- *  emulator's tab's rows, which carry no server record of their own. */
+/** A row the BIOS table renders: the payload's own `files`, or another
+ *  emulator's rows, which carry no server record of their own. */
 type BiosTableRow = FirmwareRow | BiosFileStatus;
 
 /**
@@ -175,11 +182,12 @@ type BiosTableRow = FirmwareRow | BiosFileStatus;
  * group is the requirement and the file one way to meet it, yet a missing one
  * leaves the regions it serves with nothing to boot. So it is strong like a
  * required row, under its own words, and it is asked after the two `?` marks
- * and before the required/not-required pair. Which region it serves is the line
- * under the row ({@link oneOfRowLine}).
+ * and before the required/not-required pair. Which region it serves is the need
+ * line under the row's name ({@link needWords}).
  *
- * The `Contents` cell reads the same `satisfied`, so the two columns are two
- * renderings of one field and cannot contradict each other.
+ * The `Contents` cell words the resolver's check behind the same verdict
+ * (`contentsWords`), so the two columns explain each other and cannot
+ * contradict each other.
  */
 function diskMark(file: BiosTableRow): { glyph: string; color: string; title: string } {
   const verdict = rowVerdict(file);
@@ -194,8 +202,9 @@ function diskMark(file: BiosTableRow): { glyph: string; color: string; title: st
     if (option) return { glyph: "✓", color: GREEN, title: MARK_ONE_OF_THESE_HERE };
     return { glyph: "✓", color: required ? GREEN : PALE_GREEN, title: required ? MARK_REQUIRED_HERE : MARK_HERE };
   }
-  if (option) return { glyph: "✗", color: RED, title: MARK_ONE_OF_THESE_MISSING };
-  return { glyph: "✗", color: required ? RED : MUTED, title: required ? MARK_REQUIRED_MISSING : MARK_MISSING };
+  const word = unmetWord(file.checked);
+  if (option) return { glyph: "✗", color: RED, title: markOneOfTheseUnmet(word) };
+  return { glyph: "✗", color: required ? RED : MUTED, title: required ? markRequiredUnmet(word) : markUnmet(word) };
 }
 
 /**
@@ -203,8 +212,8 @@ function diskMark(file: BiosTableRow): { glyph: string; color: string; title: st
  *
  * A folder's verdict is what it HOLDS, never that the folder is there — the
  * register's rule — so a payload carrying no verdict for one leaves the row
- * unestablished rather than falling back to presence. For a declared file
- * `downloaded` IS the verdict, which is the only thing the fallback is for.
+ * unestablished rather than falling back to presence. A payload from before
+ * `satisfied` existed falls back to `downloaded` for a declared file.
  */
 function rowVerdict(file: BiosTableRow): boolean | null {
   const declaredFolder = file.declared_kind === "directory";
@@ -236,11 +245,12 @@ function libraryMark(file: BiosTableRow): typeof LIBRARY_MARK | null {
 // File, On disk, Contents, and the row's own button. Every column but the first
 // is sized for the widest thing it can hold, measured on the device at the
 // Deck's scale: the `On disk` heading is 38.7px and two marks are ~34px; the
-// widest Contents value ("12 images") is 76.8px against a 46.1px heading; the
-// Download button's label is ~55px. What that leaves goes to the file name,
-// which is the column with something to say. None of them is conditional — a
-// column that appears and disappears per platform is worse than a narrow one,
-// and `Contents` is about to be filled for file rows (#1803).
+// widest image count ("12 images") is 76.8px against a 46.1px heading, and the
+// resolver's longer words for a file's check are cut at the column's edge with
+// the whole of them in the cell's title; the Download button's label is ~55px.
+// What that leaves goes to the file name, which is the column with something to
+// say. None of them is conditional — a column that appears and disappears per
+// platform is worse than a narrow one.
 const TABLE_COLUMNS = "1fr 48px 84px 92px";
 
 // A file's row and the column names over the rows are set at the 12px of the
@@ -250,7 +260,10 @@ const TABLE_COLUMNS = "1fr 48px 84px 92px";
 const BIOS_TABLE_FONT = "12px";
 const BIOS_TABLE_REGISTER: TableRegister = {
   ...PANE_TABLE_REGISTER,
+  // Half the pane's row padding: each row already carries its lines under the name.
+  rowPadding: `2px ${PANE_GUTTER}`,
   rowFont: BIOS_TABLE_FONT,
+  rowLineHeight: 1.25,
   headerFont: BIOS_TABLE_FONT,
 };
 
@@ -262,31 +275,6 @@ const BiosTableHeader: FC = () => (
     testId="bios-table-header"
   />
 );
-
-/**
- * The Contents cell — what a read of the row's destination found inside it.
- *
- * The em dash means **nothing was asked**, and must never come to mean "asked
- * and found nothing": the whole-machine inventory is deliberately unverified, so
- * a plain file row carries no content answer at all and #1803 is the work that
- * will give it one. A declared folder does carry one, because the resolver lists
- * that folder the way the core does, and the row's `satisfied` verdict is what
- * came back.
- *
- * "no image" covers both ways a folder fails its core — one holding nothing the
- * core would boot, and a plain file sitting where the core opens a folder —
- * because the core's listing reaches no image either way. Which of the two it is
- * belongs to the line under the row, whose wording is {@link biosFileNote}'s.
- */
-function contentsCell(file: BiosTableRow): string {
-  if (file.declared_kind !== "directory") return "—";
-  if (file.satisfied === true) {
-    const held = file.images?.length ?? 0;
-    if (held === 0) return "an image";
-    return held === 1 ? "1 image" : `${held} images`;
-  }
-  return file.satisfied === false ? "no image" : "unknown";
-}
 
 /**
  * What a row says under itself: its note, and the images a folder holds.
@@ -307,9 +295,9 @@ function contentsCell(file: BiosTableRow): string {
  */
 const BiosRowLines: FC<{ lines: string[] }> = ({ lines }) =>
   lines.length === 0 ? null : (
-    <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginLeft: "18px", marginTop: "2px" }}>
+    <div style={{ display: "flex", flexDirection: "column", marginLeft: "18px" }}>
       {lines.map((line) => (
-        <div key={line} style={{ fontSize: NOTE_FONT, color: MUTED, whiteSpace: "pre-wrap" }}>
+        <div key={line} style={{ fontSize: NOTE_FONT, lineHeight: 1.2, color: MUTED, whiteSpace: "pre-wrap" }}>
           {line}
         </div>
       ))}
@@ -352,15 +340,15 @@ function declaredFolder(file: BiosTableRow): string | null {
 const BiosLegend: FC<{ files: readonly BiosTableRow[] }> = ({ files }) => {
   const marks = files.map((file) => diskMark(file));
   const shown = [
-    { glyph: "✗", color: RED, text: MARK_REQUIRED_MISSING },
-    { glyph: "✗", color: RED, text: MARK_ONE_OF_THESE_MISSING },
+    ...UNMET_WORDS.map((word) => ({ glyph: "✗", color: RED, text: markRequiredUnmet(word) })),
+    ...UNMET_WORDS.map((word) => ({ glyph: "✗", color: RED, text: markOneOfTheseUnmet(word) })),
     { glyph: "✓", color: GREEN, text: MARK_REQUIRED_HERE },
     { glyph: "✓", color: GREEN, text: MARK_ONE_OF_THESE_HERE },
     { glyph: "?", color: MUTED, text: MARK_MISSING_NEED_UNKNOWN },
     { glyph: "?", color: MUTED, text: MARK_HERE_NEED_UNKNOWN },
     { glyph: "?", color: MUTED, text: MARK_UNCHECKED },
     { glyph: "✓", color: PALE_GREEN, text: MARK_HERE },
-    { glyph: "✗", color: MUTED, text: MARK_MISSING },
+    ...UNMET_WORDS.map((word) => ({ glyph: "✗", color: MUTED, text: markUnmet(word) })),
   ].filter((entry) => marks.some((mark) => mark.title === entry.text));
   if (files.some((file) => libraryMark(file) !== null)) {
     shown.push({ glyph: LIBRARY_MARK.glyph, color: LIBRARY_MARK.color, text: LIBRARY_MARK.title });
@@ -386,12 +374,30 @@ const BiosLegend: FC<{ files: readonly BiosTableRow[] }> = ({ files }) => {
   );
 };
 
-const BiosFileRow: FC<{ file: BiosTableRow; action: ReactNode; muted?: boolean }> = ({
+/** A muted line under a row's name, clipped to one line and set close under it. */
+const UNDER_NAME_LINE = {
+  marginLeft: "18px",
+  fontSize: NOTE_FONT,
+  lineHeight: 1.2,
+  color: MUTED,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+} as const;
+/** The file's name, the first of the File cell's two lines. */
+const NAME_LINE = { display: "block", overflow: "hidden", textOverflow: "ellipsis" } as const;
+/** The need under the name, inside the cell the name clips in. */
+const NEED_LINE = { ...UNDER_NAME_LINE, display: "block" } as const;
+
+const BiosFileRow: FC<{ file: BiosTableRow; action: ReactNode; emulator: string | null }> = ({
   file,
   action,
-  muted = false,
+  emulator,
 }) => {
-  const { note, lines, fromLibrary } = biosFileNote(file);
+  const { note, lines, fromLibrary } = biosFileNote(file, emulator);
+  // What the resolver's check found at the row's place, in words —
+  // `utils/biosFileNote.ts` holds them beside the row's other words.
+  const contents = contentsWords(file, emulator);
   const mark = diskMark(file);
   const library = libraryMark(file);
   const description = biosFileDescription(file);
@@ -399,11 +405,9 @@ const BiosFileRow: FC<{ file: BiosTableRow; action: ReactNode; muted?: boolean }
   // The library note is the one sentence the cell's second mark now carries, and
   // on a platform whose library holds little it was the same words under nearly
   // every row. Everything else moves under the row rather than into the cell.
-  // An option of the group says which region it serves, under the row — the
-  // mark beside the name has room for a glyph, and the region is the reason the
-  // file matters.
-  const groupLine = file.one_of && !file.required_by_active ? [oneOfRowLine(file.one_of, rowVerdict(file))] : [];
-  const rowLines = [...groupLine, ...(fromLibrary ? [] : [...(note ? [note] : []), ...lines])];
+  // A note the Contents cell already says — a wrong image — is not said twice.
+  const rowNote = note && note !== contents ? [note] : [];
+  const rowLines = fromLibrary ? [] : [...rowNote, ...lines];
   return (
     // The row is a focus stop only while it has nothing to press: an action cell
     // holds a button that is already a stop, and a second one on the wrapper
@@ -416,9 +420,6 @@ const BiosFileRow: FC<{ file: BiosTableRow; action: ReactNode; muted?: boolean }
       register={BIOS_TABLE_REGISTER}
       testId="bios-file-row"
       focusStop={!action}
-      // Another emulator's tab is a reading of its answer, not this launch's:
-      // muted, and offering nothing to press (#2190).
-      {...(muted ? { style: { opacity: 0.6 } } : {})}
       cells={[
         {
           // With the folder in front of it what gets cut is the NAME rather
@@ -427,10 +428,20 @@ const BiosFileRow: FC<{ file: BiosTableRow; action: ReactNode; muted?: boolean }
           // arrangement. The title is the mouse's way back to it; a reader on
           // the controller has none, and the only real fix is width the list
           // column currently holds.
+          //
+          // What the shown emulator needs of the file stands under the name in
+          // the same cell: the mark's colour alone does not tell a
+          // met required file from a met optional one, and a two-line cell is
+          // what the row's button is centred against.
           content: (
             <>
-              {folder && <span style={{ color: MUTED }}>{folder}</span>}
-              {file.file_name}
+              <span style={NAME_LINE}>
+                {folder && <span style={{ color: MUTED }}>{folder}</span>}
+                {file.file_name}
+              </span>
+              <span data-testid="bios-need" style={NEED_LINE}>
+                {needWords(file)}
+              </span>
             </>
           ),
           title: file.declared_path ?? file.file_name,
@@ -453,34 +464,21 @@ const BiosFileRow: FC<{ file: BiosTableRow; action: ReactNode; muted?: boolean }
           style: { display: "flex", gap: "4px", fontSize: "12px", whiteSpace: "nowrap" },
           clip: false,
         },
-        { content: contentsCell(file), style: { color: MUTED, fontSize: SECONDARY_FONT } },
+        { content: contents, title: contents, style: { color: MUTED, fontSize: SECONDARY_FONT } },
         // The button draws its focus ring outside its own box (the injected
         // sheet's outline), so this cell must not hide its overflow.
         { content: action, clip: false },
       ]}
     >
-      {/* A muted line UNDER the row, where the game page's BIOS tab puts the
-          same label beside the file's name. That is a column width rather than
-          a difference of opinion, and it is why the two are not "unified": this
-          name lives in a ~202px table cell that clips, and it already gives up
-          its folder prefix to the same shortage — hanging the label off it would
-          take the NAME off the screen, which is the one thing a reader placing a
-          file by hand needs. Under the row there is a whole width for it, on one
-          clipped line, and no list of emulators below to be mistaken for. */}
-      {description && (
-        <div
-          style={{
-            marginLeft: "18px",
-            fontSize: NOTE_FONT,
-            color: MUTED,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {description}
-        </div>
-      )}
+      {/* The description is a muted line UNDER the row, where the game page's
+          BIOS tab puts the same label beside the file's name. That is a column
+          width rather than a difference of opinion, and it is why the two are
+          not "unified": this name lives in a ~202px table cell that clips, and
+          it already gives up its folder prefix to the same shortage — hanging
+          the label off it would take the NAME off the screen, which is the one
+          thing a reader placing a file by hand needs. Under the row there is a
+          whole width for it, on one clipped line. */}
+      {description && <div style={UNDER_NAME_LINE}>{description}</div>}
       <BiosRowLines lines={rowLines} />
     </PaneTableRow>
   );
@@ -635,7 +633,13 @@ function downloadState(row: PlatformRow, state: PlatformsPageState, id: string):
   return state.downloadFailed === id ? "failed" : null;
 }
 
-const FAILED_LABEL = <span style={{ color: RED }}>Failed</span>;
+/**
+ * *text* in red while its button can be pressed. A disabled button shows only
+ * Steam's own `Disabled` look, so no colour of ours is laid over it.
+ */
+function redWhileEnabled(text: string, disabled: boolean): ReactNode {
+  return disabled ? text : <span style={{ color: RED }}>{text}</span>;
+}
 
 /** The removal confirmation's title. The count is interleaved with the
  *  platform's name, so this is the one of the three count labels `pluralize`
@@ -660,17 +664,18 @@ function coreClauseColour(gamesCannotStart: boolean, isOverride: boolean): strin
 }
 
 /** The label a download button carries right now — its own word unless its run
- *  is speaking. */
+ *  is speaking; *disabled* is that button's own state. */
 function downloadLabel(
   row: PlatformRow,
   state: PlatformsPageState,
   id: string,
   label: string,
   size: number,
+  disabled: boolean,
 ): ReactNode {
   const showing = downloadState(row, state, id);
   if (showing === "spinner") return <Spinner width={size} height={size} />;
-  return showing === "failed" ? FAILED_LABEL : label;
+  return showing === "failed" ? redWhileEnabled("Failed", disabled) : label;
 }
 
 /**
@@ -703,27 +708,40 @@ function downloadLabel(
 function rowAction(
   row: PlatformRow,
   state: PlatformsPageState,
-  file: FirmwareRow,
+  file: BiosTableRow,
   fetchable: Set<string>,
+  emulator: string | null,
+  focus: BiosFocus,
+  key: string,
 ): ReactNode | null {
   const busy = state.busySlug !== null;
+  // The pressed row's own button stays enabled while its work runs, and every
+  // other one waits greyed — still a focus stop, since Steam's
+  // `DialogButton` never disables its element, as its shipped client code
+  // shows (`steamui/sp.js`). A press on this one while anything runs does
+  // nothing.
+  const disabled = busy && focus.pressed !== key;
   if (fetchable.has(file.file_name) && !state.serverOffline) {
     return (
       <DialogButton
         style={ROW_BUTTON}
-        disabled={busy}
+        disabled={disabled}
         onClick={() => {
-          state.downloadOne(row.slug, file.file_name);
+          if (busy) return;
+          focus.mark(key);
+          state.downloadOne(row.slug, file.file_name, emulator);
         }}
       >
-        {downloadLabel(row, state, file.file_name, "Download", 11)}
+        {downloadLabel(row, state, file.file_name, "Download", 11, disabled)}
       </DialogButton>
     );
   }
   const count = file.deletable_count ?? 0;
   if (count === 0) return null;
   const folder = file.declared_kind === "directory";
-  const confirm = () =>
+  const confirm = () => {
+    if (busy) return;
+    focus.hold(key);
     showModal(
       <ConfirmModal
         strTitle={folder ? `Delete ${count} file(s) in ${file.file_name}?` : `Delete ${file.file_name}?`}
@@ -731,17 +749,28 @@ function rowAction(
         strOKButtonText="Delete"
         strCancelButtonText="Cancel"
         onOK={() => {
+          focus.mark(key);
           if (folder) state.deleteBiosFolder(row.slug, file.local_path);
           else state.deleteBiosFile(row.slug, file.file_name);
+          focus.refocus(key);
         }}
+        onCancel={() => focus.refocus(key)}
       />,
     );
+  };
   return (
-    <DialogButton style={ROW_BUTTON} disabled={busy} onClick={confirm}>
-      <span style={{ color: RED }}>{folder ? `Delete (${count})` : "Delete"}</span>
+    <DialogButton style={ROW_BUTTON} disabled={disabled} onClick={confirm}>
+      {redWhileEnabled(folder ? `Delete (${count})` : "Delete", disabled)}
     </DialogButton>
   );
 }
+
+// What `useBiosFocus` knows each focus target of the BIOS part by.
+const tableKey = (file: string) => `table:${file}`;
+const libraryKey = (file: string) => `library:${file}`;
+const BULK_REQUIRED = "bulk:required";
+const BULK_ALL = "bulk:all";
+const BULK_DELETE = "bulk:delete";
 
 const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: FirmwarePlatformExt }> = ({
   row,
@@ -749,21 +778,39 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   firmware,
 }) => {
   const files = firmware.files;
-  // Which emulator's tab the table shows: the launching one until another is
-  // chosen. A view and nothing more — what launches, the header, the counts and
-  // the downloads below stay the launching emulator's (#2190).
+  // Which emulator the table shows: the launching one until another is chosen.
+  // What launches, the header and its counts stay the launching emulator's;
+  // the table, its per-row actions and "Download required" follow the shown
+  // one. The library's files no emulator here declares are no emulator's rows,
+  // and stand in a section of their own whichever emulator is shown.
   const [tabKey, setTabKey] = useState<string | null>(null);
   const tabs = firmware.emulator_tabs;
   const tab = selectedTab(tabs, tabKey);
   const shownRows = tabRows(files, tabs, tab);
+  const busy = state.busySlug !== null;
+  const focus = useBiosFocus(
+    busy,
+    shownRows.map((file) => tableKey(file.file_name)),
+  );
+  const { slot, attachRoot } = focus;
+  const libraryRows = files.filter(isUnclaimedLibraryRow);
   const otherTab = tab !== null && !tab.launching;
+  // The emulator a download from this table is for: the shown one's identity on
+  // another emulator's view, the platform's own pick (`null`) on the launching
+  // one's — which also covers a launching emulator the answer holds no entry for.
+  const shownEmulator = otherTab ? tab.emulator : null;
+  // "Download required" fetches one emulator's requirement and is labelled with
+  // its name. Where nothing identifies the launching emulator it has no entry,
+  // so the shown entry is the first other emulator's and the button is that
+  // one's; with no entry at all there is no emulator to name and no button.
+  const shownLabel = tab ? tabLabel(tab) : null;
+  const requiredLabel = shownLabel === null ? null : `Download required for ${shownLabel}`;
   // The library's own progress, read nowhere but `allDone`, which is one of
   // `showAll`'s conditions. Counted over what the LIBRARY holds, not over the
   // rows — the rows include files no library holds, and offering to fetch those
   // is work the user cannot do. What the pane STATES is that pair narrowed to the
   // rows whose verdict was established (`utils/biosHeldRatio`, over
-  // `ratio_server_count` / `ratio_local_count`), and the optional-missing breakdown below
-  // is a local file-level axis the level doesn't model.
+  // `ratio_server_count` / `ratio_local_count`).
   const total = firmware.server_count ?? files.filter((f) => f.on_server).length;
   const done = firmware.local_count ?? files.filter((f) => f.on_server && f.downloaded).length;
   const allDone = done === total;
@@ -774,12 +821,8 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // counted, and the `sentence` under it. The order they are read in is decided
   // in there too, which is what stops this pane from reading it differently from
   // the game page's.
-  const { status: summaryLabel, sentence: summaryDescription } = biosSummary(
-    firmware,
-    files,
-    firmware.bios_level ?? null,
-    row.name || null,
-  );
+  const summary = biosSummary(firmware, files, firmware.bios_level ?? null, row.name || null);
+  const { status: summaryLabel, sentence: summaryDescription } = summary;
   // The library's own ratio rides along behind the sentence, in every state and
   // in the words the game page uses — `utils/biosHeldRatio`
   // writes it for both, because the two surfaces say one thing about a platform
@@ -802,11 +845,11 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // library behind it, and fetching from it is the one action that moves the
   // platform along at all.
   //
-  // The two further inputs below are of those same two kinds, and neither is a
-  // readiness gate either: `fetch_for_required` is the launching emulator's own
-  // demand — its required files, and the options of the regions its one-of
-  // group does not cover yet, the one rule the download itself applies — and
-  // `allDone` is the library's own finished ratio.
+  // `Download required` counts the SHOWN emulator's own rows the backend marks
+  // `fetch_for_required` — its required files, and the options of the regions
+  // its one-of group does not cover yet, the one rule the download itself
+  // applies — and `Download all` stops at the library's own finished ratio. So
+  // neither is a readiness gate either.
   //
   // Reading readiness here is what took the buttons off PS2, GameCube and PSP
   // the moment a BIOS answer was scoped to the emulator that actually launches:
@@ -817,31 +860,42 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // Which rows are fetchable at all — the library's side of it, including why a
   // declared folder is out — is `isFetchable`, shared with the game page's BIOS
   // tab so the two surfaces cannot disagree about what can be downloaded.
-  const fetchableMissing = files.filter(isFetchable);
-  const requiredMissing = fetchableMissing.filter(fetchedAsRequired).length;
-  const hasOptionalMissing = fetchableMissing.some((f) => !fetchedAsRequired(f));
+  const shownFetchable = shownRows.filter(isFetchable);
+  const requiredMissing = shownFetchable.filter(fetchedAsRequired).length;
   const showRequired = requiredMissing > 0 && !state.serverOffline;
-  const showAll = !allDone && (hasOptionalMissing || requiredMissing > 0) && !state.serverOffline;
-  const fetchable = new Set(fetchableMissing.map((f) => f.file_name));
-  // What Delete BIOS would remove — a record count, not a library one. There is
+  const showAll = !allDone && files.some(isFetchable) && !state.serverOffline;
+  const fetchable = new Set(shownFetchable.map((f) => f.file_name));
+  const libraryFetchable = new Set(libraryRows.filter(isFetchable).map((f) => f.file_name));
+  // What the delete would remove — a record count, not a library one. There is
   // no local fallback: the rows say nothing about who downloaded a file, so a
   // payload without the field offers no delete rather than guessing.
   const deletable = firmware.deletable_count ?? 0;
-  const unanswered = files.filter((f) => f.wanted === "unknown").length;
 
   const confirmDeleteBios = () =>
     showModal(
       <ConfirmModal
-        strTitle={`Delete BIOS files for ${row.name}?`}
+        strTitle={`Delete Tender's BIOS downloads for ${row.name}?`}
         strDescription="This deletes only the BIOS files Tender downloaded for this system. Files your emulator came with, or that you put there yourself, are left where they are. Games that need the deleted files won't launch until you download them again."
-        strOKButtonText="Delete BIOS Files"
+        strOKButtonText="Delete"
         strCancelButtonText="Cancel"
-        onOK={() => state.deleteBios(row.slug)}
+        onOK={() => {
+          focus.mark(BULK_DELETE);
+          state.deleteBios(row.slug);
+          focus.refocus(BULK_DELETE);
+        }}
+        onCancel={() => focus.refocus(BULK_DELETE)}
       />,
     );
+  /** A bulk button's state: the pressed one stays enabled while its own work runs. */
+  const bulkDisabled = (key: string, idle: boolean) => !idle || (busy && focus.pressed !== key);
+  const pressBulk = (key: string, work: () => void) => () => {
+    if (busy) return;
+    focus.mark(key);
+    work();
+  };
 
   return (
-    <>
+    <div ref={attachRoot}>
       {/* The ratio is stated once, here, and takes the same mapping the list's
           dot takes — the header carried a second copy of it until the device
           pass, and its width was what wrapped that line three times. Two places
@@ -850,80 +904,110 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
       <Muted fontSize={NOTE_FONT}>{`${summaryDescription}${heldRatio}`}</Muted>
       {/* The route the summary above cannot name: nothing here could say which
           files this system wants, so the reader has to be told that placing one
-          by hand still works. The line used to open "BIOS management is not
-          supported for this system yet", which is a claim about Tender and
-          not what the state means: install an emulator that declares firmware
-          for this platform and the pane answers, with nothing changed here. */}
-      {nothingEstablished && (
+          by hand still works. Not under the sentence that no BIOS is chosen in
+          the emulator's settings: there the setting is what is
+          missing, and placing a file changes nothing. */}
+      {nothingEstablished && !saysNoBiosChosen(summary) && (
         <Muted fontSize={NOTE_FONT}>You can still put BIOS files in your BIOS folder by hand.</Muted>
       )}
-      {tabs && tab && tabs.length > 1 && (
-        <EmulatorTabs
-          tabs={tabs}
-          selected={tab}
-          onSelect={(chosen) => setTabKey(chosen.launching ? null : chosen.emulator)}
-          padding="4px 16px 6px"
-        />
-      )}
+      <EmulatorSelector
+        tabs={tabs}
+        shown={tab}
+        onSelect={(chosen) => focus.step(() => setTabKey(chosen.launching ? null : chosen.emulator))}
+        padding="4px 16px 6px"
+      />
       {shownRows.length > 0 && <BiosTableHeader />}
       {shownRows.map((file) => (
-        <BiosFileRow
-          key={file.file_name}
-          file={file}
-          // The launching tab's rows are the payload's own `files`; another
-          // tab's offer nothing to press — the downloads are the launching
-          // emulator's (#2190 D9).
-          action={otherTab ? null : rowAction(row, state, file as FirmwareRow, fetchable)}
-          muted={otherTab}
-        />
+        <div key={file.file_name} ref={slot(tableKey(file.file_name))}>
+          <BiosFileRow
+            file={file}
+            // Every emulator's rows offer their download and their delete; a
+            // download lands where the SHOWN emulator opens the file.
+            action={rowAction(row, state, file, fetchable, shownEmulator, focus, tableKey(file.file_name))}
+            emulator={(otherTab ? tab.label : firmware.active_core_label) ?? null}
+          />
+        </div>
       ))}
-      {shownRows.length > 0 && <BiosLegend files={shownRows} />}
-      {unanswered > 0 && (
-        <Muted fontSize={NOTE_FONT}>
-          {unanswered === 1 ? "1 file" : `${unanswered} files`} nothing installed could answer for. Report at
-          github.com/danielcopper/romm-tender/issues if needed.
-        </Muted>
-      )}
-      {/* One row of buttons rather than three stacked full-width ones. Each
+      {/* One row of buttons rather than stacked full-width ones. Each
           `ButtonItem` is a `Field` row around a button and costs the pane a row
-          of its own; the three here fit on one.
+          of its own.
 
-          All three are always rendered and disable when there is nothing to do,
-          the ruling the user gave for the Remove group and for the same reason:
-          a button that vanishes is a state the reader has to work out, and on
-          PS2 all three vanished at once. A disabled `DialogButton` is still a
-          focus stop, so the row stays walkable.
-
-          Delete is local-only (no server needed). Its number is the backend's
-          `deletable_count` — Tender's own download records that are still on
-          disk, which is exactly what the delete unlinks. The library ratio
-          counts a different set and was wrong here in both directions,
-          including hiding the button over downloads RomM had stopped listing. */}
+          Every button is always rendered and disables when there is nothing to
+          do, the ruling the user gave for the Remove group and for the same
+          reason: a button that vanishes is a state the reader has to work out,
+          and on PS2 all of them vanished at once. A disabled `DialogButton` is
+          still a focus stop, so the row stays walkable. The one exception is
+          "Download required" where no emulator has an entry: there is no
+          requirement it could fetch, rather than nothing left to do. */}
+      {requiredLabel !== null && (
+        <ButtonRow padding="2px 16px 6px">
+          <div style={{ display: "contents" }} ref={slot(BULK_REQUIRED)}>
+            <DialogButton
+              style={FLAT_BUTTON}
+              disabled={bulkDisabled(BULK_REQUIRED, showRequired)}
+              onClick={pressBulk(BULK_REQUIRED, () => state.downloadRequired(row.slug, shownEmulator))}
+            >
+              {downloadLabel(
+                row,
+                state,
+                "required",
+                `${requiredLabel} (${requiredMissing})`,
+                12,
+                bulkDisabled(BULK_REQUIRED, showRequired),
+              )}
+            </DialogButton>
+          </div>
+        </ButtonRow>
+      )}
+      {/* The platform-wide pair, apart from the shown emulator's:
+          "Download all" fetches every file the library holds for the platform,
+          and the delete takes every download of Tender's own for it — its
+          number is the backend's `deletable_count`, the records still on disk,
+          which is exactly what the delete unlinks. Delete is local-only (no
+          server needed). */}
+      <SubHeading title={`For all of ${row.name}`} />
       <ButtonRow padding="2px 16px 6px">
-        <DialogButton
-          style={FLAT_BUTTON}
-          disabled={!showRequired || state.busySlug !== null}
-          onClick={() => state.downloadRequired(row.slug)}
-        >
-          {downloadLabel(row, state, "required", `Download required (${requiredMissing})`, 12)}
-        </DialogButton>
-        <DialogButton
-          style={FLAT_BUTTON}
-          disabled={!showAll || state.busySlug !== null}
-          onClick={() => state.downloadAll(row.slug)}
-        >
-          {downloadLabel(row, state, "all", "Download all", 12)}
-        </DialogButton>
-        <DialogButton
-          style={FLAT_BUTTON}
-          disabled={deletable === 0 || state.busySlug !== null}
-          onClick={confirmDeleteBios}
-        >
-          <span style={{ color: RED }}>{`Delete BIOS (${deletable})`}</span>
-        </DialogButton>
+        <div style={{ display: "contents" }} ref={slot(BULK_ALL)}>
+          <DialogButton
+            style={FLAT_BUTTON}
+            disabled={bulkDisabled(BULK_ALL, showAll)}
+            onClick={pressBulk(BULK_ALL, () => state.downloadAll(row.slug))}
+          >
+            {downloadLabel(row, state, "all", "Download all", 12, bulkDisabled(BULK_ALL, showAll))}
+          </DialogButton>
+        </div>
+        <div style={{ display: "contents" }} ref={slot(BULK_DELETE)}>
+          <DialogButton
+            style={FLAT_BUTTON}
+            disabled={bulkDisabled(BULK_DELETE, deletable > 0)}
+            onClick={() => {
+              if (busy) return;
+              focus.hold(BULK_DELETE);
+              confirmDeleteBios();
+            }}
+          >
+            {redWhileEnabled(`Delete downloads (${deletable})`, bulkDisabled(BULK_DELETE, deletable > 0))}
+          </DialogButton>
+        </div>
       </ButtonRow>
       <GroupStatus status={scopedStatus(state.status)} forKey={row.slug} scope="bios" />
-    </>
+      {libraryRows.length > 0 && (
+        <>
+          <SubHeading title="In your RomM library, asked for by no emulator here" />
+          <BiosTableHeader />
+          {libraryRows.map((file) => (
+            <div key={file.file_name} ref={slot(libraryKey(file.file_name))}>
+              <BiosFileRow
+                file={file}
+                action={rowAction(row, state, file, libraryFetchable, null, focus, libraryKey(file.file_name))}
+                emulator={firmware.active_core_label ?? null}
+              />
+            </div>
+          ))}
+        </>
+      )}
+      {shownRows.length + libraryRows.length > 0 && <BiosLegend files={[...shownRows, ...libraryRows]} />}
+    </div>
   );
 };
 

@@ -22,6 +22,7 @@ from domain.emulator_commands import (
     label_to_invocation,
     option_to_invocation,
     options_to_payload,
+    resolve_firmware_option,
     resolve_platform_label,
     select_default_option,
 )
@@ -230,6 +231,28 @@ class TestLabelToInvocation:
 
     def test_unknown_label_returns_none(self):
         assert label_to_invocation(self.OPTIONS, "Not A Real Emulator") is None
+
+
+class TestResolveFirmwareOption:
+    """The emulator a platform's BIOS answer is about."""
+
+    def test_the_pick_where_there_is_one(self):
+        options = [
+            classify_command("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT),
+            classify_command("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY),
+        ]
+        option = resolve_firmware_option(options, None)
+        assert option is not None
+        assert option.label == "RPCS3 Directory (Standalone)"
+
+    def test_the_emulator_retrodeck_declares_first_where_nothing_bakes(self):
+        """RetroDECK's plain launch starts its first declared emulator, installed or not."""
+        first = downgrade_if_not_installed(classify_command("MAME (Standalone)", ARCADE_MAME_STANDALONE), False)
+        options = [first, classify_command("MAME - Current", APPLE2_MAME_LIBRETRO_QUOTED)]
+        assert resolve_firmware_option(options, "MAME - Current") is first
+
+    def test_none_where_no_emulator_is_listed(self):
+        assert resolve_firmware_option([], None) is None
 
 
 class TestResolvePlatformLabel:

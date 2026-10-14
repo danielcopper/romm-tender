@@ -202,16 +202,13 @@ def fetched_as_required(
     the emulator requires on its own is fetched; so is an option of one of its
     groups that serves a region nothing in place covers yet — and nothing of a
     group whose regions are all covered. *emulator* ``None`` is a pick that
-    could not be identified, which falls back to "any emulator requires it" and
-    owns no group. A file whose place could not be looked at is never fetched
-    (:attr:`~domain.firmware_wants.FirmwarePlacement.place_unreadable`).
+    could not be identified: nothing is fetched for it, since no emulator's
+    requirement can be named. A file whose place could not be looked at is
+    never fetched (:attr:`~domain.firmware_wants.FirmwarePlacement.place_unreadable`).
     """
-    if placement is None or placement.place_unreadable:
+    if placement is None or placement.place_unreadable or emulator is None:
         return False
-    if emulator is None:
-        required = placement.required_by_any
-    else:
-        required = any(want.emulator == emulator and want.required for want in placement.wants)
+    required = any(want.emulator == emulator and want.required for want in placement.wants)
     return required or any(placement.file_name in _uncovered_options(group) for group in groups)
 
 

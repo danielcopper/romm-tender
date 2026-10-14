@@ -4,8 +4,10 @@
 // apart from "the pane was never mounted".
 
 import { describe, it, expect } from "vitest";
-import { fireEvent, render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
 import { BiosTab } from "./BiosTab";
+import { EmulatorStepScope } from "./emulatorStepping";
+import { PanelTabBar } from "./PanelTabBar";
 import { libretroEmu, standaloneEmu } from "../test-utils/coreFixtures";
 import { BIOS_MISSING_RED } from "../utils/biosColor";
 import type { BiosFileStatus, BiosStatus, CoreInfo, EmulatorOption, MissingConfiguredImage } from "../types";
@@ -515,11 +517,53 @@ describe("BiosTab", () => {
     expect(container.textContent).not.toContain("macventure.dat — ");
   });
 
+  it("states each row's need beside its name, so a met required file and a met optional one read apart on one line", () => {
+    // Both rows carry the same green dot; the word beside the name is what says
+    // which one this launch cannot do without, and a row with nothing more to
+    // say takes no second line for it.
+    const row = (file_name: string, required: boolean) => ({
+      file_name,
+      downloaded: true,
+      local_path: `/bios/${file_name}`,
+      declared_path: file_name,
+      description: file_name,
+      declaration: "read" as const,
+      wanted: required ? ("needed" as const) : ("optional" as const),
+      required_by_active: required,
+      on_server: true,
+      satisfied: true,
+    });
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          locating: "by-name",
+          required_count: 1,
+          required_downloaded: 1,
+          files: [row("dc_boot.bin", true), row("dc_flash.bin", false)],
+        }}
+        biosLevel="ok"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+
+    const rowOf = (name: string) =>
+      [...container.querySelectorAll<HTMLElement>(".romm-panel-file-row")].find(
+        (el) => el.querySelector(".romm-panel-file-name")?.textContent === name,
+      ) as HTMLElement;
+    const needBeside = (name: string) => rowOf(name).querySelector(".romm-panel-file-name")?.nextElementSibling;
+    expect(needBeside("dc_boot.bin")?.textContent).toBe("· required");
+    expect(needBeside("dc_flash.bin")?.textContent).toBe("· optional");
+    // Dot, name, need — and nothing under them.
+    expect(rowOf("dc_flash.bin").children).toHaveLength(3);
+  });
+
   it("puts the packager's label beside the name, muted, and never under the row", () => {
-    // Under the row it read as a sixth entry in the list of emulators that want
-    // the file — the one thing it is not. Beside the name it is one statement
-    // with the name: what this file IS. Muted like those emulator lines rather
-    // than like the name, because the name is what the eye lands on.
+    // Under the row it would read as one more line about how the file stands —
+    // the one thing it is not. Beside the name it is one statement with the
+    // name: what this file IS. Muted like the lines under the row rather than
+    // like the name, because the name is what the eye lands on.
     const { container } = render(
       <BiosTab
         biosStatus={{
@@ -560,8 +604,7 @@ describe("BiosTab", () => {
     const label = [...name.querySelectorAll("span")].find((el) => el.textContent.includes("(PS1 JP BIOS)"));
     expect(label).toBeTruthy();
     expect(label!.getAttribute("style")).toContain("rgba(255, 255, 255, 0.5)");
-    // Nothing under the row carries it — that block is what the read found and
-    // who wants the file.
+    // Nothing under the row carries it — that block is what the read found.
     const under = [...container.querySelectorAll("div")].map((div) => div.textContent);
     expect(under).not.toContain("(PS1 JP BIOS)");
   });
@@ -570,7 +613,7 @@ describe("BiosTab", () => {
     // The row's name and its status dot share one flex line. Folding three
     // image descriptions into that name ran it to ~150 characters, wrapped the
     // line and left the dot stranded above the text — so the images go in the
-    // indented block below, beside the per-core lines.
+    // indented block below.
     const images = [
       "USA     v02.00(14/06/2004)  Console 20040614-100909",
       "Europe  v02.00(14/06/2004)  Console 20040614-100914",
@@ -645,14 +688,14 @@ describe("BiosTab", () => {
             {
               file_name: "dc_boot.bin",
               downloaded: false,
-              local_path: "",
+              local_path: "/retrodeck/bios/dc_boot.bin",
               description: "Dreamcast boot ROM",
               declaration: "read",
               wanted: "needed",
               required_by_active: true,
               on_server: true,
               declared_kind: "file",
-              satisfied: false,
+              satisfied: null,
               caveats: ["firmware-path-inaccessible"],
             },
           ],
@@ -668,13 +711,56 @@ describe("BiosTab", () => {
     // marks it as a statement about the state rather than about the file (this
     // description names nothing the row's name already shows, so it is printed
     // whole and carries no parentheses of its own).
-    expect(container.textContent).toContain("dc_boot.bin Dreamcast boot ROM — its location could not be read");
+    expect(container.textContent).toContain(
+      "dc_boot.bin Dreamcast boot ROM — Tender could not look into bios/, so whether dc_boot.bin is there is not known",
+    );
+  });
+
+  it.each([
+    ["mismatch", "wrong file — not the image Beetle PSX expects"],
+    ["refused", "refused — Beetle PSX does not accept a file of this size"],
+  ] as const)("names the emulator on a %s required file, in the platform page's words", (checked, words) => {
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          server_count: 1,
+          local_count: 1,
+          ratio_server_count: 1,
+          ratio_local_count: 1,
+          all_downloaded: true,
+          required_count: 1,
+          required_downloaded: 0,
+          required_withheld: 0,
+          active_core_label: "Beetle PSX",
+          files: [
+            {
+              file_name: "scph5501.bin",
+              downloaded: true,
+              local_path: "",
+              declared_path: "scph5501.bin",
+              description: "",
+              wanted: "needed",
+              required_by_active: true,
+              on_server: true,
+              declared_kind: "file",
+              satisfied: false,
+              checked,
+            },
+          ],
+        }}
+        biosLevel="missing"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+    expect(container.querySelector(".romm-panel-file-name")?.textContent).toBe(`scph5501.bin — ${words}`);
   });
 
   it("draws a missing optional file's dot grey, never amber, where another emulator requires it", () => {
-    // Amber means only a one-of group whose images cover some regions (#2190
-    // D7). What another emulator demands is on that emulator's own tab, so a
-    // file this launch does not need is grey here whoever else needs it.
+    // Amber means only a one-of group whose images cover some regions. What
+    // another emulator demands is shown when that emulator is chosen,
+    // so a file this launch does not need is grey here whoever else needs it.
     const { container } = render(
       <BiosTab
         biosStatus={{
@@ -1003,13 +1089,8 @@ describe("BiosTab", () => {
       );
     });
 
-    it.each([
-      [2, "2 files on server no installed emulator asks for"],
-      [1, "1 file on server no installed emulator asks for"],
-    ])("counts server files nothing asks for in a note of their own (%i)", (count, note) => {
-      const nobodys = Array.from({ length: count }, (_, i) =>
-        row(`extra${i}.bin`, { wanted: "not_needed", on_server: true }),
-      );
+    it("lists server files nothing asks for in the library's own section, after the emulator's rows", () => {
+      const nobodys = [0, 1].map((i) => row(`extra${i}.bin`, { wanted: "not_needed", on_server: true }));
       const { container } = render(
         <BiosTab
           biosStatus={statusWith([row("dc_boot.bin", { required_by_active: true }), ...nobodys])}
@@ -1018,10 +1099,15 @@ describe("BiosTab", () => {
           isActive={true}
         />,
       );
-      expect(container.textContent).toContain(note);
-      // A note, not rows: none of them is drawn with the files an emulator wants.
       const names = [...container.querySelectorAll(".romm-panel-file-name")].map((el) => el.textContent);
-      expect(names.some((name) => name.startsWith("extra"))).toBe(false);
+      expect(names.map((name) => name.split(" — ")[0])).toEqual(["dc_boot.bin", "extra0.bin", "extra1.bin"]);
+      const heading = [...container.querySelectorAll<HTMLElement>(".romm-panel-section-title")].find(
+        (el) => el.textContent === "In your RomM library, asked for by no emulator here",
+      );
+      const firstExtra = [...container.querySelectorAll(".romm-panel-file-name")][1];
+      expect(heading?.compareDocumentPosition(firstExtra as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(container.textContent).toContain("not required");
+      expect(container.textContent).not.toContain("on server no installed emulator asks for");
     });
 
     it("moves no number in the header", () => {
@@ -1179,6 +1265,23 @@ describe("BiosTab", () => {
       const list = container.querySelector(".romm-panel-file-list");
       expect(block?.compareDocumentPosition(list as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       expect(container.querySelectorAll(".romm-panel-file-list .romm-panel-file-row")).toHaveLength(3);
+    });
+
+    it("words an image that is there but not met by what it is, in the block and on its row", () => {
+      const status = forTheGame("unmet", [], ["ntsc-j"], ["ntsc-j"]);
+      status.files = (status.files ?? []).map((row) =>
+        row.file_name === "scph5500.bin" ? { ...row, downloaded: true, checked: "mismatch" as const } : row,
+      );
+      const container = renderFor(status, "missing");
+
+      const block = container.querySelector<HTMLElement>('[data-testid="bios-group"]')?.textContent ?? "";
+      expect(block).toContain("Japan · scph5500.bin · wrong file");
+      // The row says what the file is in its note; its line under the name is
+      // its need, which no verdict changes.
+      expect(container.textContent).toContain("scph5500.bin — wrong file — not the image");
+      expect(container.textContent).toContain("one of these · for Japan discs");
+      expect(container.textContent).not.toContain("· ✗");
+      expect(block).not.toContain("scph5500.bin · missing");
     });
 
     it("heads the group with a subheading in the section label's style, the file list following it", () => {
@@ -1376,8 +1479,12 @@ describe("BiosTab", () => {
     });
   });
 
-  describe("one tab per emulator (#2190)", () => {
-    const own = (file_name: string, declared_by: string, over: Partial<BiosFileStatus> = {}): BiosFileStatus => ({
+  describe("one emulator shown at a time", () => {
+    const own = (
+      file_name: string,
+      declared_by: string | null,
+      over: Partial<BiosFileStatus> = {},
+    ): BiosFileStatus => ({
       file_name,
       downloaded: false,
       local_path: "",
@@ -1420,39 +1527,327 @@ describe("BiosTab", () => {
 
     const renderSaturn = () =>
       render(<BiosTab biosStatus={saturn()} biosLevel="missing" coreInfo={coreInfo} isActive={true} />);
-    const tabs = (container: HTMLElement) =>
-      [...container.querySelectorAll<HTMLElement>('[data-testid="emulator-tab"]')].map((tab) => tab.textContent);
+    const entries = (container: HTMLElement) =>
+      [...container.querySelectorAll<HTMLElement>('[data-testid="emulator-entry"]')].map((entry) => entry.textContent);
+    const shown = (container: HTMLElement) =>
+      `${container.querySelector('[data-testid="emulator-shown"]')?.textContent} ` +
+      `${container.querySelector('[data-testid="emulator-position"]')?.textContent}`;
+    const entryButton = (container: HTMLElement, label: string) =>
+      [...container.querySelectorAll<HTMLElement>('[data-testid="emulator-entry"]')]
+        .find((entry) => entry.textContent === label)
+        ?.closest("button") as HTMLElement;
+    const chooseKronos = (container: HTMLElement) => fireEvent.click(entryButton(container, "Kronos"));
+    const arrow = (container: HTMLElement, which: "Previous emulator" | "Next emulator") =>
+      container.querySelector(`button[aria-label="${which}"]`) as HTMLElement;
     const names = (container: HTMLElement) =>
       [...container.querySelectorAll(".romm-panel-file-name")].map((el) => el.textContent.split(" ")[0]);
 
-    it("puts the launching emulator's tab first, marked as the one that launches", () => {
-      expect(tabs(renderSaturn().container)).toEqual(["YabaSanshiro· launches", "Kronos"]);
+    it("shows the launching emulator first, marked as the one that launches, and places every emulator in the carousel", () => {
+      const { container } = renderSaturn();
+      expect(shown(container)).toBe("YabaSanshiro 1 / 2");
+      expect(entries(container)).toEqual(["YabaSanshiro", "Kronos"]);
+      const outlined = container.querySelectorAll('[data-testid="emulator-entry"][data-shown="true"]');
+      expect([...outlined].map((entry) => entry.textContent)).toEqual(["YabaSanshiro"]);
     });
 
-    it("dots each tab with its own emulator's verdict", () => {
-      const dots = [...renderSaturn().container.querySelectorAll<HTMLElement>('[data-testid="emulator-tab-dot"]')];
+    it("centres the shown emulator's dot and name on the row, with nothing beside them in that column", () => {
+      const { container } = renderSaturn();
+      const shownName = container.querySelector<HTMLElement>('[data-testid="emulator-shown"]');
+      expect(shownName?.textContent).toBe("YabaSanshiro");
+      const row = shownName?.parentElement as HTMLElement;
+      expect(row.style.display).toBe("grid");
+      // Two equal sides around the centred column.
+      const [left, centre, right] = row.style.gridTemplateColumns.split(/ (?![^(]*\))/);
+      expect(left).toBe(right);
+      expect(centre).not.toBe(left);
+      expect(row.children[1]).toBe(shownName);
+      expect(row.children[2]?.textContent).toBe("1 / 2▶R2");
+      expect(container.textContent).not.toContain("launches");
+    });
+
+    it("shows L2 beside the previous arrow and R2 beside the next one", () => {
+      const { container } = renderSaturn();
+      const glyphs = [...container.querySelectorAll('[data-testid="trigger-glyph"]')];
+      expect(glyphs.map((glyph) => glyph.textContent)).toEqual(["L2", "R2"]);
+      expect(glyphs[0]?.nextElementSibling).toBe(arrow(container, "Previous emulator"));
+      expect(glyphs[1]?.previousElementSibling).toBe(arrow(container, "Next emulator"));
+    });
+
+    it("holds the selector to about the platform page's width, centred on the wide game page", () => {
+      const selector = renderSaturn().container.querySelector<HTMLElement>('[data-testid="emulator-selector"]');
+      expect(selector?.style.maxWidth).toBe("500px");
+      expect(selector?.style.margin).toBe("0px auto");
+    });
+
+    it("sets the launching emulator's name in the accent and a not-installed one's in red, red over blue", () => {
+      const status = saturn();
+      status.emulator_tabs = (status.emulator_tabs ?? []).map((entry) =>
+        entry.launching ? entry : { ...entry, installed: false },
+      );
+      const { container } = render(
+        <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
+      );
+      const topName = () => container.querySelector<HTMLElement>('[data-testid="emulator-name"]')?.style.color;
+      const entryNames = () =>
+        [...container.querySelectorAll<HTMLElement>('[data-testid="emulator-entry-name"]')].map((el) => el.style.color);
+      // YabaSanshiro launches and is installed; Kronos is not installed.
+      expect(topName()).toBe("#1a9fff");
+      expect(entryNames()).toEqual(["#1a9fff", "#d94126"]);
+      chooseKronos(container);
+      expect(topName()).toBe("#d94126");
+      expect(container.textContent).not.toContain("not installed");
+    });
+
+    it("sets a launching emulator that is not installed in red, and leaves a plain one uncoloured", () => {
+      const status = saturn();
+      status.emulator_tabs = (status.emulator_tabs ?? []).map((entry) =>
+        entry.launching ? { ...entry, installed: false } : entry,
+      );
+      const { container } = render(
+        <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
+      );
+      const entryNames = [...container.querySelectorAll<HTMLElement>('[data-testid="emulator-entry-name"]')].map(
+        (el) => el.style.color,
+      );
+      expect(entryNames).toEqual(["#d94126", ""]);
+    });
+
+    it("outlines the launching emulator's entry in the accent, shown or not, and the shown one otherwise in grey", () => {
+      const { container } = renderSaturn();
+      const outline = (label: string) => {
+        const style = entryButton(container, label).parentElement?.style;
+        return style?.outlineStyle === "none" ? "none" : style?.outlineColor;
+      };
+      expect([outline("YabaSanshiro"), outline("Kronos")]).toEqual(["#1a9fff", "none"]);
+      chooseKronos(container);
+      expect([outline("YabaSanshiro"), outline("Kronos")]).toEqual(["#1a9fff", "#dcdedf"]);
+    });
+
+    it("carries no entry for a launching emulator nothing identifies, and opens on the first one there is", () => {
+      const status = saturn();
+      status.emulator_tabs = [
+        {
+          emulator: "eden",
+          label: "Eden (Standalone)",
+          launching: false,
+          requirements_met: false,
+          installed: false,
+          rows: [],
+        },
+        {
+          emulator: "ryubing",
+          label: "Ryubing (Standalone)",
+          launching: false,
+          requirements_met: null,
+          installed: false,
+          rows: [],
+        },
+      ];
+      const { container } = render(
+        <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
+      );
+      expect(entries(container)).toEqual(["Eden (Standalone)", "Ryubing (Standalone)"]);
+      expect(shown(container)).toBe("Eden (Standalone) 1 / 2");
+      expect(container.textContent).not.toContain("launches");
+    });
+
+    it("dots each emulator with its own verdict, in the row and in the carousel", () => {
+      const { container } = renderSaturn();
+      const dots = [
+        ...container.querySelectorAll<HTMLElement>('[data-testid="emulator-entry"] [data-testid="emulator-dot"]'),
+      ];
       expect(dots.map((dot) => dot.style.backgroundColor)).toEqual(["#d94126", "#5ba32b"]);
+      chooseKronos(container);
+      const rowDot = container.querySelector<HTMLElement>(
+        '[data-testid="emulator-shown"] [data-testid="emulator-dot"]',
+      );
+      expect(rowDot?.style.backgroundColor).toBe("#5ba32b");
+    });
+
+    it("steps with the arrows and wraps around at either end", () => {
+      const { container } = renderSaturn();
+      fireEvent.click(arrow(container, "Next emulator"));
+      expect(shown(container)).toBe("Kronos 2 / 2");
+      expect(names(container)).toEqual(["kronos/saturn_bios.bin"]);
+      fireEvent.click(arrow(container, "Next emulator"));
+      expect(shown(container)).toBe("YabaSanshiro 1 / 2");
+      fireEvent.click(arrow(container, "Previous emulator"));
+      expect(shown(container)).toBe("Kronos 2 / 2");
+    });
+
+    // Steam hands a gamepad button to the focused node and on up through its
+    // ancestors; the stub's Focusable listens for the event the same way.
+    const pull = (from: Element, button: number) =>
+      fireEvent(from, new CustomEvent("decky-button-down", { detail: { button }, bubbles: true }));
+    const L2 = 7;
+    const R2 = 8;
+
+    // Tender's section on a game page as `rommOverviewBlock` builds it: the scope
+    // around it, the tab bar beside the tab's content.
+    const gamePage = (isActive: boolean) =>
+      render(
+        <EmulatorStepScope>
+          {() => (
+            <>
+              <PanelTabBar
+                activeTab={isActive ? "bios" : "info"}
+                hasAchievements={false}
+                hasSaves={false}
+                hasBios={true}
+                onSelect={() => {}}
+              />
+              <BiosTab biosStatus={saturn()} biosLevel="missing" coreInfo={coreInfo} isActive={isActive} />
+            </>
+          )}
+        </EmulatorStepScope>,
+      );
+    const tabButton = (container: HTMLElement, label: string) =>
+      [...container.querySelectorAll("button")].find((b) => b.textContent === label) as HTMLElement;
+
+    it("steps with L2 and R2 from the tab bar while the BIOS tab is open", () => {
+      const { container } = gamePage(true);
+      pull(tabButton(container, "GAME INFO"), R2);
+      expect(shown(container)).toBe("Kronos 2 / 2");
+      pull(tabButton(container, "BIOS"), L2);
+      expect(shown(container)).toBe("YabaSanshiro 1 / 2");
+    });
+
+    it("lets L2 and R2 go on to Steam while the BIOS tab is closed", () => {
+      const { container } = gamePage(false);
+      let reachedSteam = false;
+      const listener = () => {
+        reachedSteam = true;
+      };
+      container.ownerDocument.body.addEventListener("decky-button-down", listener);
+      pull(tabButton(container, "GAME INFO"), R2);
+      container.ownerDocument.body.removeEventListener("decky-button-down", listener);
+      expect(reachedSteam).toBe(true);
+      expect(container.querySelector('[data-testid="emulator-selector"]')).toBeNull();
+    });
+
+    describe("where focus goes after a step", () => {
+      const settle = () =>
+        act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 80));
+        });
+      const listOf = (container: HTMLElement) =>
+        (container.querySelector(".romm-panel-file-list")?.closest("button") ?? null) as HTMLElement | null;
+      const stepFromList = async (status: BiosStatus) => {
+        const view = render(<BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />);
+        listOf(view.container)?.focus();
+        await act(async () => {
+          fireEvent.click(arrow(view.container, "Next emulator"));
+        });
+        await settle();
+        return view.container;
+      };
+
+      it("stays on the list where the new emulator lists files", async () => {
+        const container = await stepFromList(saturn());
+        expect(container.ownerDocument.activeElement).toBe(listOf(container));
+      });
+
+      it("goes to the carousel's shown entry where the new emulator lists no file", async () => {
+        const status = saturn();
+        const kronos = status.emulator_tabs?.[1];
+        if (kronos === undefined) throw new Error("fixture has no Kronos entry");
+        kronos.rows = [];
+        const container = await stepFromList(status);
+        expect(listOf(container)).toBeNull();
+        const active = container.ownerDocument.activeElement as HTMLElement | null;
+        expect(active?.querySelector('[data-testid="emulator-entry"]')?.textContent).toBe("Kronos");
+      });
+    });
+
+    it("chooses an emulator only when its entry is pressed, never when focus lands on it", () => {
+      const { container } = renderSaturn();
+      fireEvent.focus(entryButton(container, "Kronos"));
+      expect(shown(container)).toBe("YabaSanshiro 1 / 2");
+      chooseKronos(container);
+      expect(shown(container)).toBe("Kronos 2 / 2");
+      const outlined = container.querySelectorAll('[data-testid="emulator-entry"][data-shown="true"]');
+      expect([...outlined].map((entry) => entry.textContent)).toEqual(["Kronos"]);
+    });
+
+    it("takes every dot from the answer it is given, so a fresh answer after a download recolours it", () => {
+      const before = saturn();
+      const { container, rerender } = render(
+        <BiosTab biosStatus={before} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
+      );
+      const after = saturn();
+      after.emulator_tabs = (after.emulator_tabs ?? []).map((entry) =>
+        entry.launching ? { ...entry, requirements_met: true } : entry,
+      );
+      rerender(<BiosTab biosStatus={after} biosLevel="ok" coreInfo={coreInfo} isActive={true} />);
+
+      const rowDot = container.querySelector<HTMLElement>(
+        '[data-testid="emulator-shown"] [data-testid="emulator-dot"]',
+      );
+      expect(rowDot?.style.backgroundColor).toBe("#5ba32b");
+      const entryDot = container.querySelector<HTMLElement>(
+        '[data-testid="emulator-entry"][data-shown="true"] [data-testid="emulator-dot"]',
+      );
+      expect(entryDot?.style.backgroundColor).toBe("#5ba32b");
+      expect(container.querySelector(".romm-status-dot")?.getAttribute("style")).toContain("#5ba32b");
     });
 
     it("opens on the launching emulator's rows", () => {
       expect(names(renderSaturn().container)).toEqual(["saturn_bios.bin"]);
     });
 
-    it("shows another emulator's own rows, muted, and leaves the header the launching emulator's", () => {
+    it("shows another emulator's own rows unmuted and leaves the header the launching emulator's", () => {
       const { container } = renderSaturn();
       const header = container.querySelector(".romm-panel-value")?.textContent;
-      fireEvent.click([...container.querySelectorAll('[data-testid="emulator-tab"]')][1] as HTMLElement);
+      chooseKronos(container);
 
       expect(names(container)).toEqual(["kronos/saturn_bios.bin"]);
       const row = container.querySelector<HTMLElement>(".romm-panel-file-row");
-      expect(row?.style.opacity).toBe("0.6");
+      expect(row?.style.opacity).toBe("");
+      expect(row?.querySelector<HTMLElement>(".romm-status-dot")?.style.backgroundColor).toBe("#5ba32b");
       expect(container.querySelector(".romm-panel-value")?.textContent).toBe(header);
     });
 
-    it("narrows another emulator's tab by that emulator's own need and names it in the note", () => {
+    it("greys another emulator's missing one-of image, which no verdict for this game judged", () => {
+      const status = saturn();
+      // The launching emulator's group, narrowed to this game, misses its USA image.
+      status.one_of_groups = [
+        {
+          state: "unmet",
+          covered: [],
+          missing: ["ntsc-u"],
+          unchecked: [],
+          game_regions: ["ntsc-u"],
+          regions: ["ntsc-u"],
+          options: [{ file_name: "saturn_bios.bin", regions: ["ntsc-u"], satisfied: false }],
+        },
+      ];
+      const kronos = status.emulator_tabs?.[1];
+      if (kronos === undefined) throw new Error("fixture has no Kronos entry");
+      kronos.rows = [
+        own("sega_101.bin", "kronos_libretro.so", {
+          declared_path: "kronos/sega_101.bin",
+          wanted: "optional",
+          required_by_active: false,
+          one_of: { regions: ["ntsc-u"], every_region: false },
+          on_server: true,
+        }),
+      ];
+      const { container } = render(
+        <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
+      );
+      chooseKronos(container);
+
+      // The launching emulator's group block stays above, whichever emulator is shown.
+      const row = [...container.querySelectorAll<HTMLElement>(".romm-panel-file-row")].find((el) =>
+        el.textContent.startsWith("kronos/sega_101.bin"),
+      );
+      expect(row?.querySelector<HTMLElement>(".romm-status-dot")?.style.backgroundColor).toBe("#8f98a0");
+    });
+
+    it("narrows another emulator's list by that emulator's own need and names it in the note", () => {
       const status = saturn();
       const kronos = status.emulator_tabs?.[1];
-      if (kronos === undefined) throw new Error("fixture has no Kronos tab");
+      if (kronos === undefined) throw new Error("fixture has no Kronos entry");
       kronos.rows = [
         ...(kronos.rows ?? []),
         // Kronos's own optional cartridge image: not required by it, not there,
@@ -1467,7 +1862,7 @@ describe("BiosTab", () => {
       const { container } = render(
         <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
       );
-      fireEvent.click([...container.querySelectorAll('[data-testid="emulator-tab"]')][1] as HTMLElement);
+      chooseKronos(container);
 
       expect(names(container)).toEqual(["kronos/saturn_bios.bin"]);
       expect(container.textContent).toContain(
@@ -1476,7 +1871,7 @@ describe("BiosTab", () => {
       );
     });
 
-    it("keeps a row another emulator declares off the launching tab", () => {
+    it("keeps a row another emulator declares off the launching emulator's list", () => {
       const status = saturn();
       status.files = [...(status.files ?? []), own("mpr-17933.bin", "kronos_libretro.so")];
       const { container } = render(
@@ -1485,12 +1880,29 @@ describe("BiosTab", () => {
       expect(names(container)).toEqual(["saturn_bios.bin"]);
     });
 
-    it("draws no strip where only one emulator answered", () => {
+    it("draws no selector where only one emulator answered", () => {
       const status = { ...saturn(), emulator_tabs: (saturn().emulator_tabs ?? []).slice(0, 1) };
       const { container } = render(
         <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
       );
-      expect(container.querySelectorAll('[data-testid="emulator-tab"]')).toHaveLength(0);
+      expect(container.querySelectorAll('[data-testid="emulator-selector"]')).toHaveLength(0);
+    });
+
+    it("keeps the library's own section whichever emulator is shown", () => {
+      const status = saturn();
+      status.files = [
+        ...(status.files ?? []),
+        own("hisaturn.bin", null, { wanted: "not_needed", required_by_active: false }),
+      ];
+      const { container } = render(
+        <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
+      );
+      expect(names(container)).toEqual(["saturn_bios.bin", "hisaturn.bin"]);
+
+      chooseKronos(container);
+
+      expect(names(container)).toEqual(["kronos/saturn_bios.bin", "hisaturn.bin"]);
+      expect(container.textContent).toContain("In your RomM library, asked for by no emulator here");
     });
   });
 });

@@ -116,9 +116,19 @@ function firmwareFile(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function firmwarePlatform(overrides: Partial<FirmwarePlatformExt> = {}): FirmwarePlatformExt {
+function firmwarePlatform(
+  overrides: Omit<Partial<FirmwarePlatformExt>, "active_core_label"> & { active_core_label?: string | null } = {},
+): FirmwarePlatformExt {
+  // The backend's shape: a launching emulator that is identified has a label
+  // and an entry of its own; a platform with no pick (`active_core_label:
+  // null`, as the backend sends it) has neither.
+  const { active_core_label: given, ...rest } = overrides;
+  const label = given === undefined ? "mGBA" : given;
   return {
     platform_slug: "gba",
+    ...(label === null ? {} : { active_core_label: label }),
+    emulator_tabs:
+      label === null ? [] : [{ emulator: "mgba_libretro.so", label, launching: true, requirements_met: null }],
     files: [firmwareFile()],
     has_games: true,
     bios_level: "missing",
@@ -134,7 +144,7 @@ function firmwarePlatform(overrides: Partial<FirmwarePlatformExt> = {}): Firmwar
     emulator_source: { kind: "retrodeck", starts_games: true },
     platform_system: null,
     locating: "by-name",
-    ...overrides,
+    ...rest,
   };
 }
 
@@ -323,7 +333,11 @@ function libraryMarks(container: HTMLElement): { glyph: string; color: string }[
  *  that says nothing of the kind. */
 function contentsCells(container: HTMLElement): string[] {
   const cells = [...container.querySelectorAll("span")].map((s) => s.textContent);
-  return cells.filter((text) => /^(—|an image|\d+ images?|no image|unknown)$/.test(text));
+  return cells.filter((text) =>
+    /^(—|an image|\d+ images?|no image|not established — .*|right file|wrong file — .*|refused — .*|not comparable — .*|not recognised|could not be read|not checked)$/.test(
+      text,
+    ),
+  );
 }
 
 function lastModalProps<T = Record<string, unknown>>(): T | null {
@@ -440,10 +454,9 @@ describe("Library › Platforms", () => {
       const rows = [...container.querySelectorAll<HTMLElement>("[title]")];
       const gba = rows.find((el) => el.textContent.includes("Game Boy Advance"));
       const n64 = rows.find((el) => el.textContent.includes("Nintendo 64"));
-      expect(gba?.title).toBe("3 of 5 files the launching emulator opens by name are in place");
-      // The set the count was taken over, and this payload names no pick, so
-      // the sentence says which emulator it is about the only way it can.
-      expect(n64?.title).toBe("The launching emulator marks none of its BIOS files as required");
+      expect(gba?.title).toBe("3 of 5 files mGBA opens by name are in place");
+      // The set the count was taken over, named by the pick it was taken for.
+      expect(n64?.title).toBe("mGBA marks none of its BIOS files as required");
       expect(gba?.textContent).not.toContain("3 / 5");
       expect(container.querySelector('[data-testid="bios-dot-n64"]')).toBeTruthy();
     });
@@ -499,7 +512,7 @@ describe("Library › Platforms", () => {
       const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
         el.textContent.includes("Game Boy Advance"),
       );
-      expect(row?.title).toBe("Nothing could be established about what the launching emulator needs");
+      expect(row?.title).toBe("Nothing could be established about what mGBA needs");
     });
 
     it("states the ratio once, beside BIOS FILES, in the dot's own colour", async () => {
@@ -519,7 +532,7 @@ describe("Library › Platforms", () => {
       // The ratio's one home is the pane's coloured note, asserted below. The
       // row's title states the same shortfall in the shared sentence, which is
       // the pane's other half — not a second spelling of the note.
-      expect(row?.title).toBe("0 of 2 files the launching emulator opens by name are in place");
+      expect(row?.title).toBe("0 of 2 files mGBA opens by name are in place");
       expect(container.querySelector<HTMLElement>('[data-testid="bios-dot-gba"]')!.style.backgroundColor).toBe(
         biosColorForLevel("missing"),
       );
@@ -1011,7 +1024,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
       await act(async () => {
-        fireEvent.click(buttonByText(container, "Download required (1)")!);
+        fireEvent.click(buttonByText(container, "Download required for mGBA (1)")!);
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
       expect(within(container).getByTestId("status-bios").textContent).toBe("RomM is unreachable");
@@ -1052,13 +1065,13 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
       await act(async () => {
-        fireEvent.click(buttonByText(container, "Download required (1)")!);
+        fireEvent.click(buttonByText(container, "Download required for mGBA (1)")!);
         for (let i = 0; i < 4; i++) await Promise.resolve();
       });
 
       await focusRow(container, "Nintendo 64");
       expect(container.textContent).toContain("Working on Game Boy Advance");
-      expect(buttonByText(container, "Download required (1)")?.disabled).toBe(true);
+      expect(buttonByText(container, "Download required for mGBA (1)")?.disabled).toBe(true);
 
       await act(async () => {
         finish({ success: true, message: "Downloaded 1 required firmware files", downloaded: 1 });
@@ -1115,7 +1128,7 @@ describe("Library › Platforms", () => {
       const byText = (start: string) =>
         [...container.querySelectorAll<HTMLElement>("div")].find((el) => el.textContent.startsWith(start));
       const facts = container.querySelector<HTMLElement>('[data-testid="platform-facts"]');
-      const note = byText("The one file the launching emulator opens by name");
+      const note = byText("The one file mGBA opens by name");
       const description = byText("GBA BIOS");
       expect([facts?.style.fontSize, note?.style.fontSize, description?.style.fontSize]).toEqual([
         NOTE_FONT,
@@ -1586,7 +1599,7 @@ describe("Library › Platforms", () => {
 
       vi.mocked(backend.getPlatformFirmwareStatus).mockRejectedValue(new Error("net"));
       await act(async () => {
-        fireEvent.click(buttonByText(container, "Download required (1)")!);
+        fireEvent.click(buttonByText(container, "Download required for mGBA (1)")!);
         for (let i = 0; i < 10; i++) await Promise.resolve();
       });
 
@@ -1616,7 +1629,7 @@ describe("Library › Platforms", () => {
 
       vi.mocked(backend.getPlatformFirmwareStatus).mockRejectedValue(new Error("net"));
       await act(async () => {
-        fireEvent.click(buttonByText(container, "Download required (1)")!);
+        fireEvent.click(buttonByText(container, "Download required for mGBA (1)")!);
         for (let i = 0; i < 10; i++) await Promise.resolve();
       });
       expect(container.textContent).toContain("may be out of date");
@@ -1937,7 +1950,7 @@ describe("Library › Platforms", () => {
       await pickFromCoreMenu("VBA Next");
 
       expect(coreButton(container)).toBeDisabled();
-      expect(buttonByText(container, "Download required (1)")?.disabled).toBe(true);
+      expect(buttonByText(container, "Download required for mGBA (1)")?.disabled).toBe(true);
       // The acting pane says what it is doing, in the register the removal and
       // the save delete use — a disabled pane with nothing said is what the
       // other two already avoid.
@@ -1952,7 +1965,7 @@ describe("Library › Platforms", () => {
 
       expect(container.textContent).not.toContain("Working on Game Boy Advance");
       expect(coreButton(container)).not.toBeDisabled();
-      expect(buttonByText(container, "Download required (1)")?.disabled).toBe(false);
+      expect(buttonByText(container, "Download required for mGBA (1)")?.disabled).toBe(false);
       await focusRow(container, "Game Boy Advance");
       expect(container.querySelector('[data-testid="status-core"]')).toBeNull();
     });
@@ -2089,6 +2102,86 @@ describe("Library › Platforms", () => {
       expect(contentsCells(container)).toContain("—");
     });
 
+    it("says no BIOS is chosen for PCSX2 (Standalone) on the answer it really sends", async () => {
+      // A packaged card with no rows and an open verdict reads as not read; the
+      // resolver's note names why, and the pane says that rather than "nothing".
+      mockFirmware([
+        firmwarePlatform({
+          bios_level: "unknown",
+          required_count: 0,
+          required_downloaded: 0,
+          files: [],
+          server_count: 0,
+          ratio_server_count: 0,
+          active_core_label: "PCSX2 (Standalone)",
+          emulator_read: false,
+          locating: "unestablished",
+          emulator_declaration: "packaged",
+          emulator_notes: [{ kind: "bios-unchosen", setting: "Filenames/BIOS", tied: null, regions: [] }],
+        }),
+      ]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "No BIOS is chosen in PCSX2 (Standalone)'s settings, and no game boots until one is",
+      );
+      expect(container.textContent).not.toContain("Nothing could be established");
+      // The setting is what is missing, so the by-hand route is not offered.
+      expect(container.textContent).not.toContain("You can still put BIOS files in your BIOS folder by hand");
+    });
+
+    it("states each row's need under its name, so a met required file and a met optional one read apart", async () => {
+      // Both are a green ✓: only the shade says which is which, and the line
+      // under the name is what says it in words.
+      mockFirmware([
+        firmwarePlatform({
+          bios_level: "ok",
+          required_count: 1,
+          required_downloaded: 1,
+          files: [
+            firmwareFile({ file_name: "gba_bios.bin", downloaded: true, satisfied: true }),
+            firmwareFile({
+              id: 2,
+              file_name: "extra.bin",
+              wanted: "optional",
+              required_by_active: false,
+              downloaded: true,
+              satisfied: true,
+            }),
+            firmwareFile({ id: 3, file_name: "unclaimed.bin", wanted: "not_needed", required_by_active: false }),
+            firmwareFile({ id: 4, file_name: "unanswered.bin", wanted: "unknown", required_by_active: false }),
+          ],
+        }),
+      ]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      // The need line sits in the row beside the name cell, whichever wrapper
+      // the row is — a row with nothing to press is a focus stop of its own.
+      const needOf = (name: string) =>
+        [...container.querySelectorAll<HTMLElement>('[data-testid="bios-need"]')].find((need) =>
+          need.parentElement?.textContent.includes(name),
+        )?.textContent;
+      expect(needOf("gba_bios.bin")).toBe("required");
+      expect(needOf("extra.bin")).toBe("optional");
+      expect(needOf("unclaimed.bin")).toBe("not required");
+      expect(needOf("unanswered.bin")).toBe("need not established");
+    });
+
+    it("keeps the need in the name's own cell, the two lines the row's button is centred against", async () => {
+      mockFirmware([firmwarePlatform({ files: [firmwareFile({ file_name: "gba_bios.bin" })] })]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const need = container.querySelector<HTMLElement>('[data-testid="bios-need"]');
+      const cell = need?.parentElement as HTMLElement;
+      // The File cell is the grid's first item, and the grid centres its items.
+      expect(cell.getAttribute("title")).toBe("gba_bios.bin");
+      expect(cell.parentElement?.firstElementChild).toBe(cell);
+      expect(cell.parentElement?.style.alignItems).toBe("center");
+    });
+
     it("says whose declaration an empty required count is, under the state's own short name", async () => {
       // `required_count: 0` is ONE emulator's declaration: the pick this
       // platform launches with marks none of the files it names required. It
@@ -2122,13 +2215,16 @@ describe("Library › Platforms", () => {
       expect(container.textContent).not.toContain("cannot start this system");
     });
 
-    it("says which emulator an empty required count is about where the pick has no name", async () => {
-      // `active_core_label` is null where no option is bakeable — RetroDECK
-      // picks one at launch — and there is then no name to print. The sentence
-      // still may not drop its subject: an unnamed emulator is not the console.
+    it("never reads a platform with no pick as needing nothing", async () => {
+      // With no emulator to identify the backend sends no pick, no entry and an
+      // unknown level: the empty required count is an absence of an answer.
+      // The sentence still keeps its subject — an unnamed emulator is not the
+      // console.
       mockFirmware([
         firmwarePlatform({
-          bios_level: "ok",
+          active_core_label: null,
+          bios_level: "unknown",
+          emulator_read: false,
           required_count: 0,
           required_downloaded: 0,
           server_count: 0,
@@ -2140,8 +2236,8 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("The launching emulator marks none of its BIOS files as required");
-      // Never left subjectless: an unnamed emulator is not the console.
+      expect(container.textContent).toContain("Nothing could be established about what the launching emulator needs");
+      expect(container.textContent).not.toContain("marks none of its BIOS files as required");
       expect(container.textContent).not.toContain("cannot start this system");
     });
 
@@ -2238,17 +2334,12 @@ describe("Library › Platforms", () => {
       expect(container.textContent).toContain("missing; nothing could say whether this is wanted");
       expect(container.textContent).not.toContain("nothing could establish this either way");
       expect(container.textContent).not.toContain("nothing asked for it");
-      // …and the sentence the table's own line carries is not repeated up in the
-      // summary, where it would be the same words twice on one screen.
-      expect(container.textContent.match(/nothing installed could answer for/g)).toHaveLength(1);
-      // Two rows, so "2 files" — the pane never writes "file(s)" at the reader.
-      expect(container.textContent).toContain("2 files nothing installed could answer for");
-      expect(container.textContent).not.toContain("file(s)");
+      // The rows stand in the library's own section, which says it of each of
+      // them; no line under it counts them again.
+      expect(container.textContent).not.toContain("nothing installed could answer for");
     });
 
-    it("counts one unanswerable row as a file, not as file(s)", async () => {
-      // The game page's BIOS tab already pluralises; this surface was the one
-      // writing the parenthesis at the reader.
+    it("lists a row nothing could be asked about in the library's section, with no count line", async () => {
       mockFirmware([
         firmwarePlatform({
           files: [firmwareFile({ file_name: "one.bin", wanted: "unknown", required_by_active: false })],
@@ -2260,8 +2351,12 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("1 file nothing installed could answer for");
-      expect(container.textContent).not.toContain("file(s)");
+      const heading = [...container.querySelectorAll<HTMLElement>("span, div")].find(
+        (el) => el.textContent === "IN YOUR ROMM LIBRARY, ASKED FOR BY NO EMULATOR HERE",
+      );
+      expect(heading).toBeTruthy();
+      expect(container.textContent).toContain("need not established");
+      expect(container.textContent).not.toContain("nothing installed could answer for");
     });
 
     it("never reads a folder's presence as its verdict, even with no verdict at all", async () => {
@@ -2441,12 +2536,40 @@ describe("Library › Platforms", () => {
         expect(container.textContent).not.toContain("missing, not required");
       });
 
-      it("says under each option which region it serves", async () => {
+      it("marks an option that is there but not met by what it is, never missing", async () => {
+        const container = await renderPlatform([
+          option("scph5500.bin", "ntsc-j", { downloaded: true, checked: "mismatch" }),
+          option("scph5501.bin", "ntsc-u", { downloaded: true, satisfied: true }),
+          option("scph5502.bin", "pal", { downloaded: true, checked: "refused" }),
+        ]);
+
+        expect(diskMarkTitles(container)).toEqual([
+          "one of these, wrong file",
+          "one of these, here",
+          "one of these, refused",
+        ]);
+        // The Contents column says what each file is; nothing calls either missing.
+        expect(contentsCells(container).filter((cell) => cell.startsWith("wrong file"))).toHaveLength(1);
+        expect(contentsCells(container).filter((cell) => cell.startsWith("refused"))).toHaveLength(1);
+        expect(diskMarkTitles(container)).not.toContain("one of these, missing");
+        // The legend names the marks the table holds, in the same words.
+        const legend = container.querySelector('[data-testid="bios-legend"]')?.textContent ?? "";
+        expect(legend).toContain("one of these, wrong file");
+        expect(legend).toContain("one of these, refused");
+        expect(legend).not.toContain("one of these, missing");
+      });
+
+      it("says under each option which region it serves, as its need, and leaves whether it is there to the mark", async () => {
         const container = await renderPlatform(beetleRows());
 
-        expect(container.textContent).toContain("for Japan discs · ✗ missing");
-        expect(container.textContent).toContain("for USA discs · ✓ in place");
-        expect(container.textContent).toContain("for Europe discs · ✗ missing");
+        const needs = [...container.querySelectorAll('[data-testid="bios-need"]')].map((el) => el.textContent);
+        expect(needs).toEqual([
+          "one of these · for Japan discs",
+          "one of these · for USA discs",
+          "one of these · for Europe discs",
+        ]);
+        expect(container.textContent).not.toContain("✓ in place");
+        expect(container.textContent).not.toContain("· ✗");
       });
 
       it("says every region for the image that serves them all", async () => {
@@ -2476,7 +2599,7 @@ describe("Library › Platforms", () => {
           },
         );
 
-        expect(container.textContent).toContain("for every region · ✓ in place");
+        expect(container.textContent).toContain("one of these · for every region");
         expect(container.textContent).toContain("SwanStation has a BIOS image for every region");
         expect(statusNote(container, "3 / 3 regions")?.style.color).toBe(biosColorForLevel("ok"));
         expect(container.textContent).not.toContain("/ 1 required");
@@ -2589,7 +2712,7 @@ describe("Library › Platforms", () => {
           }),
         ]);
 
-        expect(buttonByText(container, "Download required (2)")).toBeTruthy();
+        expect(buttonByText(container, "Download required for Beetle PSX (2)")).toBeTruthy();
       });
     });
 
@@ -2805,7 +2928,7 @@ describe("Library › Platforms", () => {
       expect(contentsCells(container)).toContain("no image");
     });
 
-    it("says a folder's contents are unknown where nothing could establish them", async () => {
+    it("says a folder's contents are not established where nothing could establish them", async () => {
       mockFirmware([
         firmwarePlatform({
           files: [firmwareFile({ file_name: "bios", declared_kind: "directory", downloaded: true, satisfied: null })],
@@ -2816,17 +2939,137 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(contentsCells(container)).toContain("unknown");
+      expect(contentsCells(container)).toContain("not established — the resolver could not tell");
+      expect(contentsCells(container)).not.toContain("unknown");
     });
 
-    describe("one tab per emulator (#2190)", () => {
-      const saturn = () =>
+    it.each([
+      ["verified", "right file"],
+      ["mismatch", "wrong file — not the image mGBA expects"],
+      ["refused", "refused — mGBA does not accept a file of this size"],
+      ["not-comparable", "not comparable — this kind of file changes with the emulator version"],
+      ["unrecognised", "not recognised"],
+      ["unread", "could not be read"],
+      ["unchecked", "not checked"],
+      ["unknown", "not established — the resolver could not tell"],
+    ] as const)("words a present file's %s check in Contents", async (checked, words) => {
+      mockFirmware([
+        firmwarePlatform({
+          active_core_label: "mGBA",
+          files: [firmwareFile({ downloaded: true, checked })],
+        }),
+      ]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(contentsCells(container)).toEqual([words]);
+    });
+
+    it.each([
+      ["mismatch", "wrong file — not the image mGBA expects"],
+      ["refused", "refused — mGBA does not accept a file of this size"],
+    ] as const)(
+      "marks a %s OPTIONAL file with the muted ✗ a missing optional file gets, its Contents saying which",
+      async (checked, words) => {
+        mockFirmware([
+          firmwarePlatform({
+            active_core_label: "mGBA",
+            bios_level: "ok",
+            required_count: 0,
+            files: [
+              firmwareFile({
+                downloaded: true,
+                satisfied: false,
+                checked,
+                wanted: "optional",
+                required_by_active: false,
+              }),
+            ],
+          }),
+        ]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+
+        expect(diskMarks(container)).toEqual([{ glyph: "✗", color: GREY }]);
+        expect(contentsCells(container)).toEqual([words]);
+      },
+    );
+
+    it("offers no download for a file whose place could not be looked at, and says where", async () => {
+      mockFirmware([
+        firmwarePlatform({
+          platform_slug: "gba",
+          bios_level: "unknown",
+          required_count: 1,
+          required_downloaded: 0,
+          files: [
+            firmwareFile({
+              file_name: "saturn_bios.bin",
+              declared_path: "kronos/saturn_bios.bin",
+              local_path: "/retrodeck/bios/kronos/saturn_bios.bin",
+              satisfied: null,
+              caveats: ["firmware-path-inaccessible"],
+              fetch_for_required: false,
+            }),
+          ],
+        }),
+      ]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "Tender could not look into bios/kronos/, so whether saturn_bios.bin is there is not known",
+      );
+      expect(diskMarks(container)).toEqual([{ glyph: "?", color: GREY }]);
+      expect(buttonByText(container, "Download")).toBeFalsy();
+      expect(buttonByText(container, "Download all")).toBeDisabled();
+      expect(buttonByText(container, "Download required for mGBA (0)")).toBeDisabled();
+    });
+
+    it.each([
+      ["mismatch", "required, wrong file"],
+      ["refused", "required, refused"],
+      [null, "required, missing"],
+    ] as const)("marks a required %s file by what it is, as its Contents do", async (checked, title) => {
+      mockFirmware([
+        firmwarePlatform({
+          active_core_label: "mGBA",
+          files: [firmwareFile({ downloaded: checked !== null, satisfied: false, checked })],
+        }),
+      ]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(diskMarkTitles(container)).toEqual([title]);
+      expect(container.querySelector('[data-testid="bios-legend"]')?.textContent).toContain(title);
+    });
+
+    it.each([
+      ["mismatch", "wrong file — not the image mGBA expects"],
+      ["refused", "refused — mGBA does not accept a file of this size"],
+    ] as const)("says a %s file once — in Contents, not again under the row", async (checked, words) => {
+      mockFirmware([
+        firmwarePlatform({
+          active_core_label: "mGBA",
+          files: [firmwareFile({ downloaded: true, satisfied: false, checked })],
+        }),
+      ]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent.split(words)).toHaveLength(2);
+    });
+
+    describe("one emulator shown at a time", () => {
+      const saturn = (
+        overrides: { kronosRow?: Record<string, unknown>; files?: ReturnType<typeof firmwareFile>[] } = {},
+      ) =>
         firmwarePlatform({
           platform_slug: "gba",
           active_core_label: "YabaSanshiro",
           required_count: 1,
           required_downloaded: 0,
-          files: [
+          files: overrides.files ?? [
             firmwareFile({
               file_name: "saturn_bios.bin",
               declared_path: "saturn_bios.bin",
@@ -2853,7 +3096,10 @@ describe("Library › Platforms", () => {
                   downloaded: false,
                   satisfied: false,
                   on_server: true,
+                  declared_kind: "file",
+                  fetch_for_required: true,
                   declared_by: "kronos_libretro.so",
+                  ...overrides.kronosRow,
                 },
               ],
             },
@@ -2867,42 +3113,393 @@ describe("Library › Platforms", () => {
         );
       const fileNames = (container: HTMLElement) =>
         rowsOf(container).map((grid) => grid.firstElementChild?.getAttribute("title"));
+      const entries = (container: HTMLElement) =>
+        [...container.querySelectorAll<HTMLElement>('[data-testid="emulator-entry"]')].map((e) => e.textContent);
+      const shown = (container: HTMLElement) =>
+        `${container.querySelector('[data-testid="emulator-shown"]')?.textContent} ` +
+        `${container.querySelector('[data-testid="emulator-position"]')?.textContent}`;
       const chooseKronos = async (container: HTMLElement) => {
+        const kronos = [...container.querySelectorAll<HTMLElement>('[data-testid="emulator-entry"]')].find(
+          (entry) => entry.textContent === "Kronos",
+        );
         await act(async () => {
-          fireEvent.click([...container.querySelectorAll('[data-testid="emulator-tab"]')][1] as HTMLElement);
+          fireEvent.click(kronos?.closest("button") as HTMLElement);
         });
       };
 
-      it("draws the strip above the table, the launching emulator first and selected", async () => {
+      describe("where focus goes after a step", () => {
+        const settle = () =>
+          act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 80));
+          });
+        const kronosRow = (file_name: string) => ({
+          file_name,
+          declared_path: `kronos/${file_name}`,
+          local_path: "",
+          description: "",
+          wanted: "needed" as const,
+          required_by_active: true,
+          downloaded: false,
+          satisfied: false,
+          on_server: true,
+          declared_kind: "file" as const,
+          fetch_for_required: true,
+          declared_by: "kronos_libretro.so",
+        });
+        const withKronosRows = (rows: ReturnType<typeof kronosRow>[]) => {
+          const platform = saturn();
+          const kronos = platform.emulator_tabs?.[1];
+          if (kronos) kronos.rows = rows;
+          return platform;
+        };
+        const rowOf = (container: HTMLElement, path: string) =>
+          rowsOf(container).find((grid) => grid.firstElementChild?.getAttribute("title") === path)?.parentElement ??
+          undefined;
+        const stepFrom = async (container: HTMLElement, from: HTMLElement | null | undefined) => {
+          from?.focus();
+          await act(async () => {
+            fireEvent.click(container.querySelector('button[aria-label="Next emulator"]') as HTMLElement);
+          });
+          await settle();
+        };
+        const open = async (platform: ReturnType<typeof saturn>) => {
+          mockFirmware([platform]);
+          const view = render(<LibraryPage onBack={vi.fn()} />);
+          await flushAsync();
+          await settle();
+          return view.container;
+        };
+
+        it("stays on the same file's row where the new emulator lists it", async () => {
+          const container = await open(withKronosRows([kronosRow("saturn_bios.bin")]));
+          await stepFrom(container, rowOf(container, "saturn_bios.bin")?.querySelector("button"));
+          expect(rowOf(container, "kronos/saturn_bios.bin")?.contains(container.ownerDocument.activeElement)).toBe(
+            true,
+          );
+        });
+
+        it("goes to the new list's top row where the new emulator does not list the file", async () => {
+          const container = await open(withKronosRows([kronosRow("mpr-a.bin"), kronosRow("mpr-b.bin")]));
+          await stepFrom(container, rowOf(container, "saturn_bios.bin")?.querySelector("button"));
+          expect(rowOf(container, "kronos/mpr-a.bin")?.contains(container.ownerDocument.activeElement)).toBe(true);
+        });
+
+        it("goes to the carousel's shown entry where the new emulator lists no file", async () => {
+          const container = await open(withKronosRows([]));
+          await stepFrom(container, rowOf(container, "saturn_bios.bin")?.querySelector("button"));
+          const active = container.ownerDocument.activeElement as HTMLElement | null;
+          expect(active?.querySelector('[data-testid="emulator-entry"]')?.textContent).toBe("Kronos");
+        });
+
+        it("leaves focus that was not on a row where it is", async () => {
+          const container = await open(withKronosRows([kronosRow("mpr-a.bin")]));
+          const arrow = container.querySelector<HTMLElement>('button[aria-label="Next emulator"]');
+          await stepFrom(container, arrow);
+          expect(container.ownerDocument.activeElement).toBe(arrow);
+        });
+      });
+
+      it("draws one selector above the table, the launching emulator first and shown", async () => {
         mockFirmware([saturn()]);
         const { container } = render(<LibraryPage onBack={vi.fn()} />);
         await flushAsync();
 
-        const tabs = [...container.querySelectorAll<HTMLElement>('[data-testid="emulator-tab"]')];
-        expect(tabs.map((tab) => tab.textContent)).toEqual(["YabaSanshiro· launches", "Kronos"]);
-        expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
+        expect(shown(container)).toBe("YabaSanshiro 1 / 2");
+        expect(entries(container)).toEqual(["YabaSanshiro", "Kronos"]);
+        // Each entry carries its own emulator's verdict as a dot.
+        const dots = [
+          ...container.querySelectorAll<HTMLElement>('[data-testid="emulator-entry"] [data-testid="emulator-dot"]'),
+        ];
+        expect(dots.map((dot) => dot.style.backgroundColor)).toEqual(["#d94126", "#5ba32b"]);
+        const selector = container.querySelector<HTMLElement>('[data-testid="emulator-selector"]');
+        // The detail column is its width; only the wide game page holds it narrower.
+        expect(selector?.style.maxWidth).toBe("");
         const header = container.querySelector('[data-testid="bios-table-header"]');
-        expect(tabs[0]?.compareDocumentPosition(header as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+        expect(selector?.compareDocumentPosition(header as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
         expect(fileNames(container)).toEqual(["saturn_bios.bin"]);
       });
 
-      it("shows another emulator's own rows muted, with nothing to press, and keeps what launches", async () => {
+      it("steps with L2 and R2 from anywhere on the page, the platform list included", async () => {
+        const files = [
+          firmwareFile({
+            file_name: "saturn_bios.bin",
+            declared_path: "saturn_bios.bin",
+            declared_by: "yabasanshiro_libretro.so",
+            satisfied: false,
+            fetch_for_required: true,
+          }),
+          firmwareFile({ id: 9, file_name: "hisaturn.bin", declared_by: null, wanted: "not_needed" }),
+        ];
+        mockFirmware([saturn({ files })]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        const pull = async (from: Element, button: number) => {
+          await act(async () => {
+            fireEvent(from, new CustomEvent("decky-button-down", { detail: { button }, bubbles: true }));
+          });
+        };
+
+        // The platform's own row in the list on the left.
+        await pull(rowToggle(container, "Game Boy Advance"), 8);
+        expect(shown(container)).toBe("Kronos 2 / 2");
+        // The platform-wide pair and the library's own rows.
+        await pull(buttonByText(container, "Download all")!, 8);
+        expect(shown(container)).toBe("YabaSanshiro 1 / 2");
+        await pull(rowsOf(container)[1] as HTMLElement, 7);
+        expect(shown(container)).toBe("Kronos 2 / 2");
+        await pull(rowsOf(container)[0] as HTMLElement, 7);
+        expect(shown(container)).toBe("YabaSanshiro 1 / 2");
+        // A button that is not a trigger steps nothing — L1 is the page's tabs'.
+        await pull(rowsOf(container)[0] as HTMLElement, 5);
+        await pull(rowsOf(container)[0] as HTMLElement, 10);
+        expect(shown(container)).toBe("YabaSanshiro 1 / 2");
+      });
+
+      it("leaves L2 and R2 to Steam on a platform with one emulator", async () => {
+        const single = saturn();
+        single.emulator_tabs = (single.emulator_tabs ?? []).filter((entry) => entry.launching);
+        mockFirmware([single]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        let reachedSteam = false;
+        const listener = () => {
+          reachedSteam = true;
+        };
+        container.ownerDocument.body.addEventListener("decky-button-down", listener);
+        await act(async () => {
+          fireEvent(
+            rowToggle(container, "Game Boy Advance"),
+            new CustomEvent("decky-button-down", { detail: { button: 8 }, bubbles: true }),
+          );
+        });
+        container.ownerDocument.body.removeEventListener("decky-button-down", listener);
+        expect(reachedSteam).toBe(true);
+        expect(container.querySelector('[data-testid="emulator-selector"]')).toBeNull();
+      });
+
+      it("sets not-installed emulators' names in red, and carries no entry for one nothing identifies", async () => {
+        const marked = saturn();
+        marked.emulator_tabs = (marked.emulator_tabs ?? []).map((entry) => ({ ...entry, installed: false }));
+        mockFirmware([marked]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+
+        expect(shown(container)).toBe("YabaSanshiro 1 / 2");
+        const colours = [...container.querySelectorAll<HTMLElement>('[data-testid="emulator-entry-name"]')].map(
+          (el) => el.style.color,
+        );
+        // Red wins over the launching accent.
+        expect(colours).toEqual(["#d94126", "#d94126"]);
+        expect(container.textContent).not.toContain("not installed");
+        expect(entries(container)).not.toContain("Emulator");
+      });
+
+      it("fetches the launching emulator's files for the platform's own pick", async () => {
+        mockFirmware([saturn()]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+
+        await act(async () => {
+          fireEvent.click(buttonByText(container, "Download required for YabaSanshiro (1)")!);
+        });
+
+        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", null);
+      });
+
+      it("takes the selector's dot and the header from the same fresh answer after a download", async () => {
+        const fetched = { success: true as const, message: "Downloaded", downloaded: 1, failed: [] };
+        vi.mocked(backend.downloadRequiredFirmware).mockResolvedValue(fetched);
+        mockFirmware([saturn()]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        const shownDot = () =>
+          container.querySelector<HTMLElement>('[data-testid="emulator-shown"] [data-testid="emulator-dot"]')?.style
+            .backgroundColor;
+        const entryDot = () =>
+          container.querySelector<HTMLElement>(
+            '[data-testid="emulator-entry"][data-shown="true"] [data-testid="emulator-dot"]',
+          )?.style.backgroundColor;
+        expect([shownDot(), entryDot()]).toEqual(["#d94126", "#d94126"]);
+
+        // The re-read after the download answers the launching emulator met.
+        const met = saturn({
+          files: [firmwareFile({ file_name: "saturn_bios.bin", downloaded: true, satisfied: true })],
+        });
+        met.bios_level = "ok";
+        met.required_downloaded = 1;
+        met.emulator_tabs = (met.emulator_tabs ?? []).map((entry) =>
+          entry.launching ? { ...entry, requirements_met: true } : entry,
+        );
+        mockFirmware([met]);
+        await act(async () => {
+          fireEvent.click(buttonByText(container, "Download required for YabaSanshiro (1)")!);
+        });
+        await flushAsync();
+
+        expect([shownDot(), entryDot()]).toEqual(["#5ba32b", "#5ba32b"]);
+        // The header's note beside "BIOS files", in the level's colour.
+        const title = [...container.querySelectorAll<HTMLElement>("span")].find(
+          (el) => el.textContent === "BIOS FILES",
+        );
+        expect((title?.nextElementSibling as HTMLElement | null)?.style.color).toBe("#5ba32b");
+      });
+
+      it("downloads another emulator's files where that emulator opens them, and keeps what launches", async () => {
+        const fetched = { success: true as const, message: "Downloaded", downloaded: 1, failed: [] };
+        vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValue(fetched);
+        vi.mocked(backend.downloadRequiredFirmware).mockResolvedValue(fetched);
         mockFirmware([saturn()]);
         const { container } = render(<LibraryPage onBack={vi.fn()} />);
         await flushAsync();
         const summary = container.textContent;
-        expect(buttonByText(container, "Download")).toBeTruthy();
 
         await chooseKronos(container);
 
+        expect(shown(container)).toBe("Kronos 2 / 2");
         expect(fileNames(container)).toEqual(["kronos/saturn_bios.bin"]);
-        expect(rowsOf(container)[0]?.parentElement?.style.opacity).toBe("0.6");
-        expect(buttonByText(container, "Download")).toBeUndefined();
-        // The header and the bulk download stay the launching emulator's.
-        expect(buttonByText(container, "Download required (1)")).toBeTruthy();
+        // Not muted: another emulator's row reads and acts like any other.
+        expect(rowsOf(container)[0]?.parentElement?.style.opacity).toBe("");
+        await act(async () => {
+          fireEvent.click(buttonByText(container, "Download")!);
+        });
+        expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith(
+          "gba",
+          "saturn_bios.bin",
+          "kronos_libretro.so",
+        );
+        await flushAsync();
+        await act(async () => {
+          fireEvent.click(buttonByText(container, "Download required for Kronos (1)")!);
+        });
+        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", "kronos_libretro.so");
+        // The header stays the launching emulator's.
         expect(summary).toContain("The one file YabaSanshiro opens by name is not in place");
         expect(container.textContent).toContain("The one file YabaSanshiro opens by name is not in place");
       });
+
+      const requiredButtons = (container: HTMLElement) =>
+        [...container.querySelectorAll("button")].filter((b) => b.textContent.startsWith("Download required"));
+      const libraryOnly = [
+        firmwareFile({
+          file_name: "hisaturn.bin",
+          declared_path: "hisaturn.bin",
+          declared_by: null,
+          wanted: "not_needed",
+        }),
+      ];
+
+      it("opens on the first other emulator and offers its Download required where nothing identifies the launching one", async () => {
+        // The backend sends no launching entry for an emulator nothing identifies.
+        const { active_core_label: _label, ...unidentified } = saturn({ files: libraryOnly });
+        unidentified.emulator_tabs = (unidentified.emulator_tabs ?? []).filter((entry) => !entry.launching);
+        mockFirmware([unidentified]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+
+        expect(requiredButtons(container).map((b) => b.textContent)).toEqual(["Download required for Kronos (1)"]);
+      });
+
+      it("offers no Download required where no emulator has an entry", async () => {
+        const { active_core_label: _label, ...nothing } = saturn({ files: libraryOnly });
+        nothing.emulator_tabs = [];
+        mockFirmware([nothing]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+
+        expect(requiredButtons(container)).toEqual([]);
+        expect(buttonByText(container, "Download all")).toBeTruthy();
+      });
+
+      it("offers a delete on another emulator's row Tender downloaded", async () => {
+        mockFirmware([saturn({ kronosRow: { downloaded: true, satisfied: true, deletable_count: 1 } })]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+
+        await chooseKronos(container);
+
+        expect(buttonByText(container, "Delete")).toBeTruthy();
+      });
+
+      it("keeps the platform-wide buttons apart, under the platform's name", async () => {
+        mockFirmware([saturn()]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+
+        const heading = [...container.querySelectorAll<HTMLElement>("span, div")].find(
+          (el) => el.textContent === "FOR ALL OF GAME BOY ADVANCE",
+        );
+        expect(heading).toBeTruthy();
+        const all = buttonByText(container, "Download all");
+        const del = buttonByText(container, "Delete downloads (0)");
+        const required = buttonByText(container, "Download required for YabaSanshiro (1)");
+        expect(required?.compareDocumentPosition(heading as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+        expect(heading?.compareDocumentPosition(all as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+        expect(heading?.compareDocumentPosition(del as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      });
+
+      it("sets the platform-wide and the library headings smaller than a section title, as parts of BIOS files", async () => {
+        const files = [
+          firmwareFile({ file_name: "saturn_bios.bin", declared_by: "yabasanshiro_libretro.so" }),
+          firmwareFile({ id: 9, file_name: "hisaturn.bin", declared_by: null, wanted: "not_needed" }),
+        ];
+        mockFirmware([saturn({ files })]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        const size = (text: string) => {
+          // The innermost element carrying the text is the one its size is set on.
+          const all = [...container.querySelectorAll<HTMLElement>("span, div")].filter((e) => e.textContent === text);
+          const el = all[all.length - 1];
+          return Number.parseFloat(el?.style.fontSize ?? "");
+        };
+
+        const title = size("BIOS FILES");
+        expect(size("FOR ALL OF GAME BOY ADVANCE")).toBeLessThan(title);
+        expect(size("IN YOUR ROMM LIBRARY, ASKED FOR BY NO EMULATOR HERE")).toBeLessThan(title);
+      });
+
+      it("lists the library's files no emulator here declares in a section of their own, whichever emulator is shown", async () => {
+        const files = [
+          firmwareFile({
+            file_name: "saturn_bios.bin",
+            declared_path: "saturn_bios.bin",
+            declared_by: "yabasanshiro_libretro.so",
+            satisfied: false,
+            fetch_for_required: true,
+          }),
+          firmwareFile({
+            id: 9,
+            file_name: "hisaturn.bin",
+            declared_path: "hisaturn.bin",
+            declared_by: null,
+            wanted: "not_needed",
+            required_by_active: false,
+          }),
+        ];
+        mockFirmware([saturn({ files })]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        const section = () =>
+          [...container.querySelectorAll<HTMLElement>("span, div")].find(
+            (el) => el.textContent === "IN YOUR ROMM LIBRARY, ASKED FOR BY NO EMULATOR HERE",
+          );
+
+        expect(fileNames(container)).toEqual(["saturn_bios.bin", "hisaturn.bin"]);
+        const hisaturn = rowsOf(container)[1];
+        expect(section()?.compareDocumentPosition(hisaturn as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
+        await chooseKronos(container);
+
+        expect(fileNames(container)).toEqual(["kronos/saturn_bios.bin", "hisaturn.bin"]);
+        expect(section()).toBeTruthy();
+      });
+    });
+
+    it("keeps the em dash for a file nothing asked about", async () => {
+      mockFirmware([firmwarePlatform({ files: [firmwareFile({ downloaded: false, checked: null })] })]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(contentsCells(container)).toEqual(["—"]);
     });
 
     it("offers a Download on a missing row the library holds (#164)", async () => {
@@ -2919,7 +3516,7 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin");
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", null);
       // No notice on success: the spinner ending and the re-read rows are the
       // message, which is what the device pass asked for.
       expect(within(container).queryByTestId("status-bios")).toBeNull();
@@ -3009,6 +3606,407 @@ describe("Library › Platforms", () => {
       const row = deletes[0]!.closest("div")!.parentElement!;
       expect(row.textContent).toContain("gc-pal-12.bin");
       expect(row.textContent).not.toContain("codehandler.bin");
+    });
+
+    describe("focus stays on the row whose button was pressed", () => {
+      // The refocus waits for Steam to settle its own pointer.
+      const settle = () =>
+        act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 80));
+        });
+      const rowButton = (container: HTMLElement, name: string) =>
+        [...container.querySelectorAll<HTMLElement>('[data-testid="disk-mark"]')]
+          .map((mark) => mark.parentElement?.parentElement as HTMLElement)
+          .find((grid) => grid.firstElementChild?.getAttribute("title") === name)
+          ?.querySelector("button") as HTMLButtonElement | null;
+      const present = (file_name: string) =>
+        firmwareFile({ file_name, downloaded: true, satisfied: true, deletable_count: 1 });
+      /** The pane that scrolls, as the page's ScrollRegion renders it here. */
+      const paneOf = (el: HTMLElement) => {
+        let node = el.parentElement;
+        while (node && node.style.overflow !== "auto") node = node.parentElement;
+        return node as HTMLElement;
+      };
+      const missing = (file_name: string, over: Record<string, unknown> = {}) =>
+        firmwareFile({ file_name, downloaded: false, satisfied: false, ...over });
+
+      it("keeps a download's own button enabled and focused while it runs, and it is the Delete afterwards", async () => {
+        let finish: (value: { success: true; message: string; downloaded: number; failed: [] }) => void = () => {};
+        vi.mocked(backend.downloadPlatformFirmwareFile).mockReturnValue(
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+        );
+        mockFirmware([firmwarePlatform({ files: [missing("a.bin", { id: 1 }), missing("b.bin", { id: 2 })] })]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        // The page places its own entry focus first; the reader moves on from there.
+        await settle();
+        const pressed = rowButton(container, "a.bin");
+        pressed?.focus();
+
+        await act(async () => {
+          fireEvent.click(pressed as HTMLElement);
+        });
+        expect(pressed?.disabled).toBe(false);
+        expect(rowButton(container, "b.bin")?.disabled).toBe(true);
+
+        mockFirmware([firmwarePlatform({ files: [present("a.bin"), missing("b.bin", { id: 2 })] })]);
+        await act(async () => {
+          finish({ success: true, message: "Downloaded", downloaded: 1, failed: [] });
+        });
+        await flushAsync();
+        await settle();
+
+        expect(rowButton(container, "a.bin")).toBe(pressed);
+        expect(pressed?.textContent).toBe("Delete");
+        expect(container.ownerDocument.activeElement).toBe(pressed);
+      });
+
+      it("puts focus back on the row's button once its delete is confirmed", async () => {
+        vi.mocked(backend.deleteBiosFile).mockResolvedValue({ success: true, deleted_count: 1, message: "Deleted" });
+        mockFirmware([firmwarePlatform({ files: [present("a.bin"), present("b.bin")] })]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+
+        await act(async () => {
+          fireEvent.click(rowButton(container, "a.bin") as HTMLElement);
+        });
+        // The dialog took the focus, and Steam does not hand it back.
+        (container.ownerDocument.activeElement as HTMLElement | null)?.blur();
+        mockFirmware([firmwarePlatform({ files: [missing("a.bin"), present("b.bin")] })]);
+        await confirmLastModal();
+        await flushAsync();
+        await settle();
+
+        const button = rowButton(container, "a.bin");
+        expect(button?.textContent).toBe("Download");
+        expect(container.ownerDocument.activeElement).toBe(button);
+      });
+
+      it("keeps the pane where it stood through a row's delete, whatever Steam scrolls on the way", async () => {
+        vi.mocked(backend.deleteBiosFile).mockResolvedValue({ success: true, deleted_count: 1, message: "Deleted" });
+        mockFirmware([firmwarePlatform({ files: [present("a.bin"), present("b.bin")] })]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        await settle();
+        const button = rowButton(container, "b.bin") as HTMLElement;
+        const pane = paneOf(button);
+        pane.scrollTop = 120;
+
+        await act(async () => {
+          fireEvent.click(button);
+        });
+        // The dialog took the focus; Steam put it somewhere and scrolled there.
+        (container.ownerDocument.activeElement as HTMLElement | null)?.blur();
+        pane.scrollTop = 0;
+        mockFirmware([firmwarePlatform({ files: [present("a.bin"), missing("b.bin")] })]);
+        await confirmLastModal();
+        await flushAsync();
+        await settle();
+        await settle();
+
+        expect(container.ownerDocument.activeElement).toBe(rowButton(container, "b.bin"));
+        expect(pane.scrollTop).toBe(120);
+      });
+
+      it("focuses the row itself where its delete leaves it nothing to press", async () => {
+        vi.mocked(backend.deleteBiosFile).mockResolvedValue({ success: true, deleted_count: 1, message: "Deleted" });
+        mockFirmware([firmwarePlatform({ files: [present("a.bin"), present("b.bin")] })]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        await settle();
+        rowButton(container, "a.bin")?.focus();
+
+        await act(async () => {
+          fireEvent.click(rowButton(container, "a.bin") as HTMLElement);
+        });
+        // Not in the library, not on disk: nothing left to fetch or delete.
+        mockFirmware([firmwarePlatform({ files: [missing("a.bin", { on_server: false }), present("b.bin")] })]);
+        await confirmLastModal();
+        await flushAsync();
+        await settle();
+
+        expect(rowButton(container, "a.bin")).toBeNull();
+        const active = container.ownerDocument.activeElement as HTMLElement | null;
+        expect(active?.getAttribute("data-activate")).toBe("true");
+        expect(active?.textContent).toContain("a.bin");
+      });
+    });
+
+    describe("the bulk buttons keep focus", () => {
+      const settle = () =>
+        act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 80));
+        });
+      const button = (container: HTMLElement, start: string) =>
+        [...container.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent.startsWith(start));
+      const required = (file_name: string, id: number) =>
+        firmwareFile({ id, file_name, downloaded: false, satisfied: false, fetch_for_required: true });
+      const open = async (platform: ReturnType<typeof firmwarePlatform>) => {
+        mockFirmware([platform]);
+        const view = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        await settle();
+        return view.container;
+      };
+
+      it("keeps Download required enabled and focused while it runs, and on it while it still has work", async () => {
+        let finish: (value: { success: true; message: string; downloaded: number; failed: [] }) => void = () => {};
+        vi.mocked(backend.downloadRequiredFirmware).mockReturnValue(
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+        );
+        const container = await open(firmwarePlatform({ files: [required("a.bin", 1), required("b.bin", 2)] }));
+        const pressed = button(container, "Download required");
+        pressed?.focus();
+
+        await act(async () => {
+          fireEvent.click(pressed as HTMLElement);
+        });
+        expect(pressed?.disabled).toBe(false);
+        expect(button(container, "Download all")?.disabled).toBe(true);
+
+        mockFirmware([
+          firmwarePlatform({
+            files: [
+              firmwareFile({ id: 1, file_name: "a.bin", downloaded: true, satisfied: true }),
+              required("b.bin", 2),
+            ],
+          }),
+        ]);
+        await act(async () => {
+          finish({ success: true, message: "Downloaded", downloaded: 1, failed: [] });
+        });
+        await flushAsync();
+        await settle();
+
+        expect(button(container, "Download required")).toBe(pressed);
+        expect(container.ownerDocument.activeElement).toBe(pressed);
+      });
+
+      it("keeps the pane where it stood through a bulk download, whatever Steam scrolls on the way", async () => {
+        let finish: (value: { success: true; message: string; downloaded: number; failed: [] }) => void = () => {};
+        vi.mocked(backend.downloadRequiredFirmware).mockReturnValue(
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+        );
+        const container = await open(firmwarePlatform({ files: [required("a.bin", 1), required("b.bin", 2)] }));
+        const pressed = button(container, "Download required") as HTMLElement;
+        let pane = pressed.parentElement;
+        while (pane && pane.style.overflow !== "auto") pane = pane.parentElement;
+        if (!pane) throw new Error("no scrolling pane");
+        pane.scrollTop = 80;
+        pressed.focus();
+
+        await act(async () => {
+          fireEvent.click(pressed);
+        });
+        pane.scrollTop = 0;
+        mockFirmware([
+          firmwarePlatform({
+            files: [
+              firmwareFile({ id: 1, file_name: "a.bin", downloaded: true, satisfied: true }),
+              required("b.bin", 2),
+            ],
+          }),
+        ]);
+        await act(async () => {
+          finish({ success: true, message: "Downloaded", downloaded: 1, failed: [] });
+        });
+        await flushAsync();
+        await settle();
+        await settle();
+
+        expect(pane.scrollTop).toBe(80);
+      });
+
+      it("keeps focus on a button its own work greys", async () => {
+        vi.mocked(backend.downloadRequiredFirmware).mockResolvedValue({
+          success: true,
+          message: "Downloaded",
+          downloaded: 1,
+          failed: [],
+        });
+        const container = await open(firmwarePlatform({ files: [required("a.bin", 1)], deletable_count: 0 }));
+        const pressed = button(container, "Download required");
+        pressed?.focus();
+        mockFirmware([
+          firmwarePlatform({
+            files: [firmwareFile({ id: 1, file_name: "a.bin", downloaded: true, satisfied: true, deletable_count: 1 })],
+            deletable_count: 1,
+          }),
+        ]);
+
+        await act(async () => {
+          fireEvent.click(pressed as HTMLElement);
+        });
+        await flushAsync();
+        await settle();
+
+        // Nothing left to fetch: the button greys out and keeps the focus.
+        expect(pressed?.disabled).toBe(true);
+        expect(container.ownerDocument.activeElement).toBe(pressed);
+      });
+
+      it("does nothing on a press of a button another one's work greys", async () => {
+        let finish: (value: { success: true; message: string; downloaded: number; failed: [] }) => void = () => {};
+        vi.mocked(backend.downloadRequiredFirmware).mockReturnValue(
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+        );
+        const container = await open(firmwarePlatform({ files: [required("a.bin", 1)] }));
+        await act(async () => {
+          fireEvent.click(button(container, "Download required") as HTMLElement);
+        });
+
+        await act(async () => {
+          fireEvent.click(button(container, "Download all") as HTMLElement);
+        });
+
+        expect(backend.downloadAllFirmware).not.toHaveBeenCalled();
+        await act(async () => {
+          finish({ success: true, message: "Downloaded", downloaded: 1, failed: [] });
+        });
+        await flushAsync();
+      });
+
+      it("lays no colour of its own over a greyed button, only over one that can be pressed", async () => {
+        let finish: (value: { success: true; message: string; downloaded: number; failed: [] }) => void = () => {};
+        vi.mocked(backend.downloadRequiredFirmware).mockReturnValue(
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+        );
+        const container = await open(
+          firmwarePlatform({
+            files: [
+              required("a.bin", 1),
+              firmwareFile({ id: 2, file_name: "b.bin", downloaded: true, satisfied: true, deletable_count: 1 }),
+            ],
+            deletable_count: 1,
+          }),
+        );
+        const coloured = (b: HTMLButtonElement | undefined) =>
+          b?.querySelector<HTMLElement>("[style*='color']") ?? null;
+        const rowDelete = () =>
+          [...container.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Delete");
+        expect(coloured(button(container, "Delete downloads"))).not.toBeNull();
+        expect(coloured(rowDelete())).not.toBeNull();
+
+        await act(async () => {
+          fireEvent.click(button(container, "Download required") as HTMLElement);
+        });
+
+        // Steam's own `Disabled` grey is the whole look of a button another one's work greys.
+        expect(button(container, "Delete downloads")?.disabled).toBe(true);
+        expect(coloured(button(container, "Delete downloads"))).toBeNull();
+        expect(rowDelete()?.disabled).toBe(true);
+        expect(coloured(rowDelete())).toBeNull();
+        await act(async () => {
+          finish({ success: true, message: "Downloaded", downloaded: 1, failed: [] });
+        });
+        await flushAsync();
+      });
+
+      it("puts the pane back again once Steam's own scroll has run", async () => {
+        let finish: (value: { success: true; message: string; downloaded: number; failed: [] }) => void = () => {};
+        vi.mocked(backend.downloadRequiredFirmware).mockReturnValue(
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+        );
+        const container = await open(firmwarePlatform({ files: [required("a.bin", 1), required("b.bin", 2)] }));
+        const pressed = button(container, "Download required") as HTMLElement;
+        let pane = pressed.parentElement;
+        while (pane && pane.style.overflow !== "auto") pane = pane.parentElement;
+        if (!pane) throw new Error("no scrolling pane");
+        // Steam scrolls the pane once more just after it was put back.
+        let top = 80;
+        let steamScrollsNext = false;
+        Object.defineProperty(pane, "scrollTop", {
+          configurable: true,
+          get: () => top,
+          set: (value: number) => {
+            top = value;
+            if (steamScrollsNext && value === 80) {
+              steamScrollsNext = false;
+              queueMicrotask(() => {
+                top = 0;
+              });
+            }
+          },
+        });
+        pressed.focus();
+
+        await act(async () => {
+          fireEvent.click(pressed);
+        });
+        steamScrollsNext = true;
+        await act(async () => {
+          finish({ success: true, message: "Downloaded", downloaded: 1, failed: [] });
+        });
+        await flushAsync();
+        await settle();
+        await settle();
+
+        expect(steamScrollsNext).toBe(false);
+        expect(pane.scrollTop).toBe(80);
+      });
+
+      it("leaves the pane alone where the reader walked out of the BIOS part meanwhile", async () => {
+        let finish: (value: { success: true; message: string; downloaded: number; failed: [] }) => void = () => {};
+        vi.mocked(backend.downloadRequiredFirmware).mockReturnValue(
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+        );
+        const container = await open(firmwarePlatform({ files: [required("a.bin", 1), required("b.bin", 2)] }));
+        const pressed = button(container, "Download required") as HTMLElement;
+        let pane = pressed.parentElement;
+        while (pane && pane.style.overflow !== "auto") pane = pane.parentElement;
+        if (!pane) throw new Error("no scrolling pane");
+        pane.scrollTop = 80;
+        pressed.focus();
+
+        await act(async () => {
+          fireEvent.click(pressed);
+        });
+        button(container, "‹ Back")?.focus();
+        pane.scrollTop = 0;
+        await act(async () => {
+          finish({ success: true, message: "Downloaded", downloaded: 1, failed: [] });
+        });
+        await flushAsync();
+        await settle();
+        await settle();
+
+        expect(container.ownerDocument.activeElement?.textContent).toBe("‹ Back");
+        expect(pane.scrollTop).toBe(0);
+      });
+
+      it("puts focus back on Delete downloads once its dialog closes", async () => {
+        const container = await open(
+          firmwarePlatform({
+            files: [firmwareFile({ downloaded: true, satisfied: true, deletable_count: 1 })],
+            deletable_count: 1,
+          }),
+        );
+        await act(async () => {
+          fireEvent.click(button(container, "Delete downloads") as HTMLElement);
+        });
+        // The dialog took the focus, and Steam does not hand it back.
+        (container.ownerDocument.activeElement as HTMLElement | null)?.blur();
+        await act(async () => {
+          lastModalProps<{ onCancel?: () => void }>()?.onCancel?.();
+        });
+        await settle();
+
+        expect(container.ownerDocument.activeElement).toBe(button(container, "Delete downloads"));
+      });
     });
 
     it("deletes one BIOS file by name, says so only when it fails, and re-reads after a delete that could not finish", async () => {
@@ -3172,7 +4170,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
       await act(async () => {
-        fireEvent.click(buttonByText(container, "Download required (1)")!);
+        fireEvent.click(buttonByText(container, "Download required for mGBA (1)")!);
         for (let i = 0; i < 4; i++) await Promise.resolve();
       });
       expect(container.querySelector('[data-testid="spinner"]')).toBeTruthy();
@@ -3181,7 +4179,7 @@ describe("Library › Platforms", () => {
 
       expect(container.querySelector('[data-testid="spinner"]')).toBeNull();
       expect(container.textContent).toContain("Working on Game Boy Advance");
-      expect(buttonByText(container, "Download required (1)")).toBeDisabled();
+      expect(buttonByText(container, "Download required for mGBA (1)")).toBeDisabled();
 
       await act(async () => {
         finish({ success: true, message: "", downloaded: 1 });
@@ -3203,7 +4201,7 @@ describe("Library › Platforms", () => {
         });
 
         await act(async () => {
-          fireEvent.click(buttonByText(container, "Download required (1)")!);
+          fireEvent.click(buttonByText(container, "Download required for mGBA (1)")!);
           for (let i = 0; i < 8; i++) await Promise.resolve();
         });
 
@@ -3247,7 +4245,7 @@ describe("Library › Platforms", () => {
       );
       expect(rowButton).toBeTruthy();
       expect(buttonByText(container, "Download all")).toBeDisabled();
-      expect(buttonByText(container, "Delete BIOS (0)")).toBeDisabled();
+      expect(buttonByText(container, "Delete downloads (0)")).toBeDisabled();
       expect(within(container).queryByTestId("status-bios")).toBeNull();
 
       await act(async () => {
@@ -3284,7 +4282,7 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(buttonByText(container, "Download")).toBeUndefined();
-      expect(buttonByText(container, "Download required (1)")).toBeDisabled();
+      expect(buttonByText(container, "Download required for mGBA (1)")).toBeDisabled();
       expect(buttonByText(container, "Download all")).toBeDisabled();
     });
 
@@ -3301,11 +4299,11 @@ describe("Library › Platforms", () => {
         const { container } = render(<LibraryPage onBack={vi.fn()} />);
         await flushAsync();
         await act(async () => {
-          fireEvent.click(buttonByText(container, "Download required (1)")!);
+          fireEvent.click(buttonByText(container, "Download required for mGBA (1)")!);
           for (let i = 0; i < 8; i++) await Promise.resolve();
         });
 
-        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba");
+        expect(vi.mocked(backend.downloadRequiredFirmware)).toHaveBeenCalledWith("gba", null);
         expect(events.map((e) => e.detail.type)).toContain("bios");
       } finally {
         globalThis.removeEventListener("romm_data_changed", listener);
@@ -3334,7 +4332,7 @@ describe("Library › Platforms", () => {
       const readsBefore = vi.mocked(backend.getPlatformFirmwareStatus).mock.calls.map(([slug]) => slug);
 
       await act(async () => {
-        fireEvent.click(buttonByText(container, "Download required (1)")!);
+        fireEvent.click(buttonByText(container, "Download required for mGBA (1)")!);
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
@@ -3394,7 +4392,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
       await act(async () => {
-        fireEvent.click(buttonByText(container, "Download required (1)")!);
+        fireEvent.click(buttonByText(container, "Download required for mGBA (1)")!);
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
@@ -3402,7 +4400,7 @@ describe("Library › Platforms", () => {
         "Downloaded 1 required firmware files (1 failed: gba_bios.bin)",
       );
       expect(buttonByText(container, "Failed")).toBeUndefined();
-      expect(buttonByText(container, "Download required (1)")).not.toBeDisabled();
+      expect(buttonByText(container, "Download required for mGBA (1)")).not.toBeDisabled();
     });
 
     it("says Failed on the button of a batch in which every file it tried failed", async () => {
@@ -3445,7 +4443,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
       await act(async () => {
-        fireEvent.click(buttonByText(container, "Download required (1)")!);
+        fireEvent.click(buttonByText(container, "Download required for mGBA (1)")!);
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
@@ -3456,7 +4454,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(buttonByText(container, "Delete BIOS (0)")).toBeDisabled();
+      expect(buttonByText(container, "Delete downloads (0)")).toBeDisabled();
     });
 
     it("confirms before deleting, then deletes and announces the change", async () => {
@@ -3470,11 +4468,13 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       await act(async () => {
-        fireEvent.click(buttonByText(container, "Delete BIOS (2)")!);
+        fireEvent.click(buttonByText(container, "Delete downloads (2)")!);
         await Promise.resolve();
       });
       expect(vi.mocked(backend.deletePlatformBios)).not.toHaveBeenCalled();
-      expect(lastModalProps<{ strTitle?: string }>()?.strTitle).toBe("Delete BIOS files for Game Boy Advance?");
+      expect(lastModalProps<{ strTitle?: string }>()?.strTitle).toBe(
+        "Delete Tender's BIOS downloads for Game Boy Advance?",
+      );
 
       await confirmLastModal();
       expect(vi.mocked(backend.deletePlatformBios)).toHaveBeenCalledWith("gba");
@@ -3498,7 +4498,7 @@ describe("Library › Platforms", () => {
         const readsBefore = vi.mocked(backend.getPlatformFirmwareStatus).mock.calls.length;
 
         await act(async () => {
-          fireEvent.click(buttonByText(container, "Delete BIOS (2)")!);
+          fireEvent.click(buttonByText(container, "Delete downloads (2)")!);
           await Promise.resolve();
         });
         await confirmLastModal();
@@ -3521,7 +4521,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
       await act(async () => {
-        fireEvent.click(buttonByText(container, "Delete BIOS (2)")!);
+        fireEvent.click(buttonByText(container, "Delete downloads (2)")!);
         await Promise.resolve();
       });
       await confirmLastModal();
@@ -3546,7 +4546,7 @@ describe("Library › Platforms", () => {
         const { container } = render(<LibraryPage onBack={vi.fn()} />);
         await flushAsync();
         await act(async () => {
-          fireEvent.click(buttonByText(container, "Delete BIOS (2)")!);
+          fireEvent.click(buttonByText(container, "Delete downloads (2)")!);
           await Promise.resolve();
         });
         await confirmLastModal();
@@ -3570,6 +4570,7 @@ describe("Library › Platforms", () => {
       // withheld over a library that still holds their files.
       mockFirmware([
         firmwarePlatform({
+          active_core_label: null,
           bios_level: "unknown",
           required_withheld: 0,
           required_count: 0,
@@ -3584,9 +4585,9 @@ describe("Library › Platforms", () => {
       // The machine fact, then what the reader can do about it — and no claim
       // that Tender is the limitation, which it is not: an emulator that
       // declares firmware for this platform makes the pane answer by itself.
-      // With no pick to name (this payload carries no `active_core_label`) the
-      // sentence names the role, and claims nothing about the other emulators
-      // installed.
+      // With no pick to name (no `active_core_label`, no entry)
+      // the sentence names the role, and claims nothing about the other
+      // emulators installed.
       expect(container.textContent).toContain("Nothing could be established about what the launching emulator needs");
       expect(container.textContent).toContain("You can still put BIOS files in your BIOS folder by hand");
       expect(container.textContent).not.toContain("not supported for this system yet");
@@ -3594,9 +4595,11 @@ describe("Library › Platforms", () => {
       // bulk one under the table.
       expect(buttonByText(container, "Download")).toBeTruthy();
       expect(buttonByText(container, "Download all")).not.toBeDisabled();
-      // Nothing is REQUIRED here — no emulator could be asked — so that count is
-      // zero and its button is dead for the reason it always is.
-      expect(buttonByText(container, "Download required (0)")).toBeDisabled();
+      // No emulator could be asked, so there is no requirement to fetch and no
+      // "Download required" at all.
+      expect(
+        [...container.querySelectorAll("button")].filter((b) => b.textContent.startsWith("Download required")),
+      ).toEqual([]);
     });
 
     it("names the emulator the platform launches with, where the pick has a name", async () => {
@@ -3652,7 +4655,7 @@ describe("Library › Platforms", () => {
         for (let i = 0; i < 8; i++) await Promise.resolve();
       });
 
-      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin");
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin", null);
     });
 
     it("says the console does not start without an image where the counts would say nothing is required", async () => {
@@ -3679,7 +4682,7 @@ describe("Library › Platforms", () => {
 
       expect(container.textContent).toContain("Needs a BIOS image");
       const sentence =
-        "Game Boy Advance does not start without a BIOS image, and the one image the launching emulator knows is not in place";
+        "Game Boy Advance does not start without a BIOS image, and the one image mGBA knows is not in place";
       expect(container.textContent).toContain(sentence);
       expect(container.textContent).not.toContain("marks none of its BIOS files as required");
       const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
@@ -3782,7 +4785,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("One file the launching emulator requires could not be checked");
+      expect(container.textContent).toContain("One file mGBA opens by name could not be checked");
       expect(container.textContent).not.toContain("Whether the BIOS image");
       // Both sentences carry the same short form, so it alone cannot say which
       // one the pane chose — assert the sentence, and that the downloads the
@@ -3797,8 +4800,8 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(container.textContent).toContain("Readiness unknown");
-      expect(container.textContent).toContain("One file the launching emulator requires could not be checked");
-      expect(buttonByText(container, "Download required (1)")).toBeTruthy();
+      expect(container.textContent).toContain("One file mGBA opens by name could not be checked");
+      expect(buttonByText(container, "Download required for mGBA (1)")).toBeTruthy();
     });
   });
 
