@@ -306,10 +306,10 @@ say the same sentence for that system's games, and every other button works as u
 **Only one version of a game is kept on disk at a time.** If you tap **Download** on a version while another version of
 the same game (its [sibling group](#versions)) is already on disk, Tender removes the old install first and then
 downloads the new one — no prompt. **Use Existing Files** ([below](#when-the-game-is-already-on-your-device)) removes
-the old install the same way, just before it records the files you placed yourself. This keeps a multi-version game to a
-single copy on disk. Your **save files are never touched** by this cleanup, so switching back and re-downloading the
-earlier version rejoins its saves. Games that still carry a separate shortcut per version from an older release are left
-untouched.
+the old install the same way, just before it records the files you are using, unless those files are the old install
+itself. This keeps a multi-version game to a single copy on disk. Your **save files are never touched** by this cleanup,
+so switching back and re-downloading the earlier version rejoins its saves. Games that still carry a separate shortcut
+per version from an older release are left untouched.
 
 ### When the game is already on your device
 
@@ -322,11 +322,11 @@ and says plainly whether the two are the same size. From there you have three ch
 
 - **Use These Files** — Tender records what is already there as the installed copy. Nothing is downloaded, nothing is
   renamed, and no playlist is generated: your files are taken exactly as they are. The game becomes playable
-  immediately. One thing is removed, and only one: if another version of the same game was already on disk, that
-  version's files and its install record go — the same one-version-at-a-time cleanup a download does, without a prompt.
-  Your saves are not part of it, and while RomM still holds that version it can be downloaded again whenever you want it
-  back. The exception is a version Tender has recorded at the very place you are using: those are the files you chose,
-  so they stay exactly as they are and only the record moves over to the version you are playing.
+  immediately. One thing is removed, and only one: if another version of the same game was already on disk somewhere
+  else, that version's files and its install record go — the same one-version-at-a-time cleanup a download does, without
+  a prompt. Your saves are not part of it, and as long as RomM still has that version you can download it again whenever
+  you want it back. If that other version's files are the very ones you are using — the same name in the same place —
+  nothing is removed: the files stay exactly as they are and become this version's install.
 - **Check Against Server** — compares the files on your device against the checksums RomM published for that game. This
   reads every file, so a large game takes a few seconds to a minute; it only ever runs when you press the button. There
   are three possible answers: the files match, they differ (and the dialog names each file on its own line), or they

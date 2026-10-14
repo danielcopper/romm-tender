@@ -289,9 +289,11 @@ class DownloadService:
         Read in one short UoW (closed before the removal seam runs); which member
         is displaced, and how, is ``supersede_siblings``'s answer. A member it
         hands over — one recorded at *adopted_path* — loses its ``rom_installs``
-        row in that same UoW and is not listed, so its files are never removed. A
-        ROM with no sibling group key (solo / unbackfilled) has no siblings, so
-        the list is empty.
+        row in that same UoW and is not listed, so its files are never removed;
+        once the UoW has closed, each hand-over is logged with both rom ids and
+        the path, and the member's paused queue entry is evicted
+        (``_evict_if_paused``). A ROM with no sibling group key (solo /
+        unbackfilled) has no siblings, so the list is empty.
         """
         with self._uow_factory() as uow:
             rom = uow.roms.get(rom_id)

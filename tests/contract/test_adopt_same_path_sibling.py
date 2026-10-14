@@ -7,8 +7,9 @@ download of the bound version would write. The game page offers to use it, and
 copy, so the adoption must keep it and record it as the bound version's install.
 
 Drives the real ``RomAdoptionService`` → sibling supersede → ``RomRemovalService``
-wiring over real SQLite and real file stores under ``tmp_path``; only RomM's
-transport is the fake.
+wiring over real SQLite and real file stores under ``tmp_path``. RomM's
+transport is the fake, and the one test of a refused record also stubs the
+install recorder's ``do_record_install``.
 """
 
 from __future__ import annotations
@@ -127,7 +128,7 @@ async def test_control_a_bound_version_with_its_own_file_name_adopts_its_own_fil
 
 async def test_a_download_that_replaces_the_file_another_version_is_recorded_at_still_supersedes_it(harness, caplog):
     # Only an adoption keeps what is at its path. Replace is the user's choice to
-    # put RomM's copy there, so the version recorded at it is superseded as before.
+    # put RomM's copy there, so the version recorded at it is superseded like any other.
     path = _seed_rebound_group(harness, new_fs_name=_FS_NAME)
     harness.romm.download_payloads[f"rom:{_NEW_ID}:{_FS_NAME}"] = b"RomM's copy"
 
