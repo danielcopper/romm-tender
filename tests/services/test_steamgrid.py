@@ -2464,3 +2464,54 @@ class TestTheReplacingPathCarriesWhatTheReportNeeds:
 
         await steamgrid.prune_conflicts.release_lease(result.pop("prune_lease_token"))
         assert result == {"base64": base64.b64encode(b"hero").decode("ascii"), "no_api_key": False}
+
+
+class TestTheCacheIsListedOnce:
+    """A wide grid's or logo's cache lookup does not list the whole artwork cache each time."""
+
+    @pytest.mark.asyncio
+    async def test_the_jobs_lookups_and_the_frontends_fetches_list_it_once(
+        self, steamgrid, uow, slot_ready, sgdb_artwork_cache, fake_steamgrid_db_api, monkeypatch
+    ):
+        _seed_candidates(fake_steamgrid_db_api, "grid", (12, 920, 430))
+        _seed_candidates(fake_steamgrid_db_api, "logo", (5, 800, 300))
+        _seed_rom(uow, 43, app_id=_APP_ID + 1, sgdb_id=9999)
+        art_dir = sgdb_artwork_cache.cache_dir()
+        for name in ("42_grid_12.png", "42_logo_5.png", "43_logo.png"):
+            sgdb_artwork_cache.files[os.path.join(art_dir, name)] = b"cached"
+        listings = 0
+        listdir = sgdb_artwork_cache.listdir
+
+        def counted(directory: str) -> list[str]:
+            nonlocal listings
+            listings += 1
+            return listdir(directory)
+
+        monkeypatch.setattr(sgdb_artwork_cache, "listdir", counted)
+
+        for rom_id in (42, 43):
+            for slot in (ArtworkSlot.WIDE_GRID, ArtworkSlot.LOGO):
+                assert steamgrid.service.do_fetch_slot_artwork(rom_id, slot) is SlotAnswer.READY
+        served = []
+        for rom_id, app_id in ((42, _APP_ID), (43, _APP_ID + 1)):
+            for slot in ("grid", "logo"):
+                result = await steamgrid.service.get_sgdb_slot_artwork(rom_id, app_id, slot)
+                await steamgrid.prune_conflicts.release_lease(result["prune_lease_token"])
+                served.append((rom_id, slot, result["image_id"]))
+
+        assert listings == 1
+        assert served == [(42, "grid", 12), (42, "logo", 5), (43, "grid", 12), (43, "logo", 5)]
+        assert sorted(listdir(art_dir)) == ["42_grid_12.png", "42_logo_5.png", "43_grid_12.png", "43_logo_5.png"]
+
+    def test_a_cached_file_that_is_gone_is_downloaded_again(
+        self, steamgrid, slot_ready, sgdb_artwork_cache, fake_steamgrid_db_api
+    ):
+        _seed_candidates(fake_steamgrid_db_api, "logo", (5, 800, 300))
+        cached = os.path.join(sgdb_artwork_cache.cache_dir(), "42_logo_301.png")
+        sgdb_artwork_cache.files[cached] = b"cached"
+        assert steamgrid.service.do_fetch_slot_artwork(42, ArtworkSlot.LOGO) is SlotAnswer.READY
+        del sgdb_artwork_cache.files[cached]
+
+        assert steamgrid.service.do_fetch_slot_artwork(42, ArtworkSlot.LOGO) is SlotAnswer.READY
+        assert fake_steamgrid_db_api.requested_paths == ["/logos/game/9999?types=static"]
+        assert sgdb_artwork_cache.listdir(sgdb_artwork_cache.cache_dir()) == ["42_logo_5.png"]

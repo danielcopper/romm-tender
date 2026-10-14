@@ -11,6 +11,7 @@ from domain.sgdb_artwork import (
     build_autocomplete_path,
     cached_artwork_name,
     cached_image_id,
+    cached_slot_of,
     choose_candidate,
     classify_resolution,
     first_grid_url,
@@ -358,3 +359,16 @@ class TestCachedArtworkNames:
         assert is_cached_artwork("42_grid_7.png", 42, "grid")
         assert not is_cached_artwork("42_logo_7.png", 42, "grid")
         assert not is_cached_artwork("421_grid.png", 42, "grid")
+
+    @pytest.mark.parametrize(
+        ("name", "slot"),
+        [("42_grid_7.png", (42, "grid")), ("42_logo.png", (42, "logo")), ("421_logo_7.png", (421, "logo"))],
+    )
+    def test_a_wide_grid_or_logo_cache_file_names_its_rom_and_asset_type(self, name, slot):
+        assert cached_slot_of(name) == slot
+
+    @pytest.mark.parametrize(
+        "name", ["42_hero.png", "42_icon.png", "042_grid_7.png", "42_grid_7.png.tmp", "42_grid_abc.png", "x.png"]
+    )
+    def test_no_other_name_is_a_wide_grid_or_logo_cache_file(self, name):
+        assert cached_slot_of(name) is None

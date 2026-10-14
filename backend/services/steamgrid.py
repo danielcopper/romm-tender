@@ -14,6 +14,7 @@ import asyncio
 import base64
 import hashlib
 import os
+import threading
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -25,10 +26,10 @@ from domain.sgdb_artwork import (
     build_autocomplete_path,
     cached_artwork_name,
     cached_image_id,
+    cached_slot_of,
     choose_candidate,
     classify_resolution,
     first_grid_url,
-    is_cached_artwork,
     named_by_image_id,
     parse_autocomplete_results,
     sgdb_endpoint_path,
@@ -162,6 +163,11 @@ class SteamGridService:
         # save and the artwork job's write take turns under.
         self._icon_generations: dict[int, int] = {}
         self._icon_locks: dict[int, asyncio.Lock] = {}
+        # Per ROM and asset type, the wide grid and logo names in the artwork
+        # cache: listed once, then kept by this service's own downloads and
+        # removals, so a lookup does not list the whole cache.
+        self._slot_cache_names: dict[tuple[int, str], set[str]] | None = None
+        self._slot_cache_lock = threading.Lock()
 
     # -- SGDB lookup -------------------------------------------------------
 
@@ -221,6 +227,7 @@ class SteamGridService:
         target = os.path.join(art_dir, cached_artwork_name(rom_id, asset_type, candidate.image_id))
         if not self._sgdb_api.download_image(candidate.url, target):
             return _NoArtwork.FAILED
+        self._note_cache_name(rom_id, asset_type, os.path.basename(target), held=True)
         self._drop_cached_artwork(rom_id, asset_type, keep=os.path.basename(target))
         return _CachedArtwork(path=target, image_id=cached_image_id(os.path.basename(target), rom_id, asset_type))
 
@@ -228,28 +235,57 @@ class SteamGridService:
         """The cache file of *rom_id*'s *asset_type*, or ``None`` when the cache holds none.
 
         A wide grid or logo whose name carries no image id is not counted, so
-        it is downloaded again and replaced.
+        it is downloaded again and replaced; nor is a name the cache no longer
+        holds.
         """
         art_dir = self._sgdb_artwork_cache.cache_dir()
-        if not named_by_image_id(asset_type):
-            plain = os.path.join(art_dir, cached_artwork_name(rom_id, asset_type, None))
-            return _CachedArtwork(path=plain, image_id=None) if self._sgdb_artwork_cache.exists(plain) else None
-        for name in sorted(self._sgdb_artwork_cache.listdir(art_dir)):
+        for name in self._cache_names(rom_id, asset_type):
             image_id = cached_image_id(name, rom_id, asset_type)
-            if image_id is not None:
-                return _CachedArtwork(path=os.path.join(art_dir, name), image_id=image_id)
+            if named_by_image_id(asset_type) and image_id is None:
+                continue
+            path = os.path.join(art_dir, name)
+            if self._sgdb_artwork_cache.exists(path):
+                return _CachedArtwork(path=path, image_id=image_id)
+            self._note_cache_name(rom_id, asset_type, name, held=False)
         return None
 
     def _drop_cached_artwork(self, rom_id, asset_type, *, keep: str | None = None) -> None:
         """Remove every cache file of *rom_id*'s *asset_type* but *keep* (sync)."""
         art_dir = self._sgdb_artwork_cache.cache_dir()
-        for name in self._sgdb_artwork_cache.listdir(art_dir):
-            if name == keep or not is_cached_artwork(name, rom_id, asset_type):
+        for name in self._cache_names(rom_id, asset_type):
+            if name == keep:
                 continue
             try:
                 self._sgdb_artwork_cache.remove_file(os.path.join(art_dir, name))
             except OSError as e:
                 self._logger.warning(f"Failed to clear cached artwork {name}: {e}")
+                continue
+            self._note_cache_name(rom_id, asset_type, name, held=False)
+
+    def _cache_names(self, rom_id, asset_type) -> list[str]:
+        """The names *rom_id*'s *asset_type* may be cached under, sorted; the cache is listed only the first time."""
+        rom_id = int(rom_id)
+        if not named_by_image_id(asset_type):
+            return [cached_artwork_name(rom_id, asset_type, None)]
+        with self._slot_cache_lock:
+            if self._slot_cache_names is None:
+                self._slot_cache_names = {}
+                for name in self._sgdb_artwork_cache.listdir(self._sgdb_artwork_cache.cache_dir()):
+                    slot = cached_slot_of(name)
+                    if slot is not None:
+                        self._slot_cache_names.setdefault(slot, set()).add(name)
+            return sorted(self._slot_cache_names.get((rom_id, asset_type), ()))
+
+    def _note_cache_name(self, rom_id, asset_type, name: str, *, held: bool) -> None:
+        """Note that the cache now holds *name* for *rom_id*'s wide grid or logo, or no longer does."""
+        with self._slot_cache_lock:
+            if self._slot_cache_names is None or not named_by_image_id(asset_type):
+                return
+            names = self._slot_cache_names.setdefault((int(rom_id), asset_type), set())
+            if held:
+                names.add(name)
+            else:
+                names.discard(name)
 
     # -- artwork base64 (use case) -----------------------------------------
 

@@ -180,6 +180,21 @@ def is_cached_artwork(name: str, rom_id: int, asset_type: str) -> bool:
     return name == f"{rom_id}_{asset_type}.png" or cached_image_id(name, rom_id, asset_type) is not None
 
 
+_ID_NAMED_CACHE_FILE = re.compile(rf"(\d+)_({'|'.join(sorted(_ID_NAMED_ASSET_TYPES))})(?:_\d+)?\.png")
+
+
+def cached_slot_of(name: str) -> tuple[int, str] | None:
+    """The ROM and asset type whose wide grid or logo *name* caches, else ``None``.
+
+    Counts the same names :func:`is_cached_artwork` does.
+    """
+    match = _ID_NAMED_CACHE_FILE.fullmatch(name)
+    if match is None:
+        return None
+    rom_id, asset_type = int(match.group(1)), match.group(2)
+    return (rom_id, asset_type) if is_cached_artwork(name, rom_id, asset_type) else None
+
+
 def to_signed_app_id(app_id: int) -> int:
     """Convert an unsigned Steam shortcut app ID to its signed int32 form."""
     return struct.unpack("i", struct.pack("I", app_id & 0xFFFFFFFF))[0]
