@@ -945,7 +945,7 @@ describe("RomMPlaySection", () => {
       });
       expect(vi.mocked(backend.getSgdbResolution)).toHaveBeenCalledWith(77);
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Set a SteamGridDB API key in settings first" }),
+        expect.objectContaining({ body: "Set a SteamGridDB API key in Settings first" }),
       );
       // No artwork apply, no picker modal.
       expect(vi.mocked(backend.getSgdbArtworkBase64)).not.toHaveBeenCalled();
@@ -1002,7 +1002,7 @@ describe("RomMPlaySection", () => {
         await items[0]!.props.onClick?.();
       });
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Set a SteamGridDB API key in settings first" }),
+        expect.objectContaining({ body: "Set a SteamGridDB API key in Settings first" }),
       );
     });
 

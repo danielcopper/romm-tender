@@ -325,7 +325,7 @@ describe("SgdbGamePickerModal", () => {
       });
       await flushAsync();
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Set a SteamGridDB API key in settings first" }),
+        expect.objectContaining({ body: "Set a SteamGridDB API key in Settings first" }),
       );
     });
 

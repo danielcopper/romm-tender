@@ -6,7 +6,7 @@ describe("artworkApplyMessage", () => {
     [4, "Artwork refreshed (4/4 images applied)"],
     [1, "Artwork refreshed (1/4 images applied)"],
     [0, "No artwork available for this game"],
-    [-1, "Set a SteamGridDB API key in settings first"],
+    [-1, "Set a SteamGridDB API key in Settings first"],
   ])("says what %i images applied means", (applied, message) => {
     expect(artworkApplyMessage(applied)).toBe(message);
   });

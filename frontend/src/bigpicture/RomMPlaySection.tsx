@@ -574,7 +574,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
 
       switch (resolution.decision) {
         case "no_api_key":
-          say("Set a SteamGridDB API key in settings first");
+          say("Set a SteamGridDB API key in Settings first");
           break;
         case "resolved": {
           const refreshed = await refreshSgdbArtwork(romId, resolution.sgdb_id);
