@@ -34,6 +34,7 @@ from domain.rom_files import (
     resolve_local_file_name,
     synthetic_rom_name,
 )
+from domain.sibling_supersede import supersede_siblings
 from lib.errors import NotInstalled, Refused
 from lib.path_safety import coerce_safe_component
 
@@ -233,14 +234,16 @@ class DownloadService:
             await self._retain_started_task(result, rom_id, "start_download")
             return result
 
-    async def supersede_sibling_installs(self, rom_id: int) -> None:
+    async def supersede_sibling_installs(self, rom_id: int, *, adopted_path: str | None = None) -> None:
         """Strip any other installed version of ``rom_id``'s sibling group (#1298 T7).
 
         The single home of the supersede — ``_start_claimed_download`` once its occupancy
         gate has passed (a refusal must not already have deleted another version),
         and adoption through ``SiblingSupersedeFn`` for the same reason: an adopted
         install is an install (ADR-0028). Neither caller may copy the selection
-        rule below. The group's members are snapshotted in one short read UoW,
+        rule (``domain/sibling_supersede.py``). An adoption passes its target as
+        *adopted_path*, and a sibling recorded there hands its record over instead
+        of being removed. The group's members are snapshotted in one short UoW,
         closed before the removal seam runs — the removal opens its own UoW, which
         must not nest (ADR-0006). Each superseded install is removed through the
         canonical ``RomRemovalService.remove_rom_unchecked`` (files + ``rom_installs``
@@ -251,7 +254,7 @@ class DownloadService:
         sibling's *paused* queue entry is evicted so the queue stays coherent with
         disk (S1).
         """
-        sibling_ids = self._conflicting_sibling_install_ids(rom_id)
+        sibling_ids = self._conflicting_sibling_install_ids(rom_id, adopted_path)
         if not sibling_ids:
             return
         remove_rom = self._rom_remover()
@@ -280,31 +283,29 @@ class DownloadService:
         if entry is not None and entry.get("status") == "paused":
             self.evict(rom_id)
 
-    def _conflicting_sibling_install_ids(self, rom_id: int) -> list[int]:
-        """Sibling members with a ``rom_installs`` row that this download supersedes.
+    def _conflicting_sibling_install_ids(self, rom_id: int, adopted_path: str | None = None) -> list[int]:
+        """Sibling members with a ``rom_installs`` row that this install still has to remove.
 
-        Read in one short UoW (closed before the removal seam runs). A member is
-        superseded when it is installed and either unbound or bound to the *same*
-        shortcut as ``rom_id`` — a member bound to a **different** shortcut is a
-        grandfathered duplicate (ADR-0021 §5) with its own Steam entry and is
-        never removed. A ROM with no sibling group key (solo / unbackfilled) has
-        no siblings, so the list is empty.
+        Read in one short UoW (closed before the removal seam runs); which member
+        is displaced, and how, is ``supersede_siblings``'s answer. A member it
+        hands over — one recorded at *adopted_path* — loses its ``rom_installs``
+        row in that same UoW and is not listed, so its files are never removed. A
+        ROM with no sibling group key (solo / unbackfilled) has no siblings, so
+        the list is empty.
         """
         with self._uow_factory() as uow:
             rom = uow.roms.get(rom_id)
             if rom is None or rom.sibling_group_key is None:
                 return []
-            x_app_id = rom.shortcut_app_id
-            superseded: list[int] = []
-            for member in uow.roms.iter_by_group_key(rom.sibling_group_key):
-                if member.rom_id == rom_id:
-                    continue
-                if uow.rom_installs.get(member.rom_id) is None:
-                    continue
-                if member.shortcut_app_id is not None and member.shortcut_app_id != x_app_id:
-                    continue  # grandfathered separate shortcut — never removed
-                superseded.append(member.rom_id)
-            return superseded
+            members = uow.roms.iter_by_group_key(rom.sibling_group_key)
+            siblings = [(m, uow.rom_installs.get(m.rom_id)) for m in members if m.rom_id != rom_id]
+            displaced = supersede_siblings(rom.shortcut_app_id, siblings, adopted_path)
+            for sibling_id in displaced.handed_over:
+                uow.rom_installs.delete(sibling_id)
+        for sibling_id in displaced.handed_over:
+            self._logger.info(f"Handing the install of rom {sibling_id} at {adopted_path} over to rom {rom_id}")
+            self._evict_if_paused(sibling_id)
+        return list(displaced.removed)
 
     async def _begin_download(self, rom_id, *, resume: bool, replace_existing=False, **answer):
         """Shared core of ``start_download`` and ``resume_download``.

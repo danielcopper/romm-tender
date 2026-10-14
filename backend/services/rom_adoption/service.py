@@ -510,6 +510,13 @@ class RomAdoptionService:
         Recording first is no better: a supersede that then failed would leave the
         two installed versions the rule exists to prevent, with the adoption
         already committed.
+
+        A sibling whose install is recorded at this ROM's own target path is the
+        one supersede that deletes nothing: its files are the content being
+        adopted, so it hands its install record over and the file stays as it is
+        (the supersede is told the target as ``adopted_path``). Should the record
+        then be refused, neither version is installed — but the hand-over never
+        touched the file, so whatever is still there can be adopted again.
         """
         rom_id = int(rom_id)
         rom_detail, target = await self._loop.run_in_executor(None, self._detail_and_target_io, rom_id)
@@ -526,11 +533,12 @@ class RomAdoptionService:
                 return stopped
         # At most one installed version per shortcut binding (#1298), whichever
         # route produced it. The dialog's promise not to delete covers the
-        # content the USER placed, at this ROM's own path; a superseded sibling
-        # is a different thing at a different path — content Tender
-        # downloaded and can fetch again (ADR-0028). A removal failure aborts,
-        # exactly as it does for a download, so the rule is never half-applied.
-        await self._sibling_supersede()(rom_id)
+        # content at this ROM's own path, which is why the supersede is told it:
+        # a sibling recorded there hands its record over, and one at any other
+        # path is removed — content Tender downloaded (ADR-0028). A removal
+        # failure aborts, exactly as it does for a download, so the rule is never
+        # half-applied.
+        await self._sibling_supersede()(rom_id, adopted_path=target.path)
         return await self._loop.run_in_executor(None, self._adopt_io, rom_id, rom_detail, target)
 
     def _resolve_source(self, target: _Target, candidate_path) -> str | None:

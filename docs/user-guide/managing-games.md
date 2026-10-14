@@ -324,7 +324,9 @@ and says plainly whether the two are the same size. From there you have three ch
   renamed, and no playlist is generated: your files are taken exactly as they are. The game becomes playable
   immediately. One thing is removed, and only one: if another version of the same game was already on disk, that
   version's files and its install record go — the same one-version-at-a-time cleanup a download does, without a prompt.
-  Your saves are not part of it, and that version can be downloaded again whenever you want it back.
+  Your saves are not part of it, and while RomM still holds that version it can be downloaded again whenever you want it
+  back. The exception is a version Tender has recorded at the very place you are using: those are the files you chose,
+  so they stay exactly as they are and only the record moves over to the version you are playing.
 - **Check Against Server** — compares the files on your device against the checksums RomM published for that game. This
   reads every file, so a large game takes a few seconds to a minute; it only ever runs when you press the button. There
   are three possible answers: the files match, they differ (and the dialog names each file on its own line), or they

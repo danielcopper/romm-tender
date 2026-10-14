@@ -13,7 +13,9 @@ transport is the fake.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import logging
 from pathlib import Path
 
 import pytest
@@ -47,6 +49,15 @@ def _stage_server_rom(harness, rom_id: int, *, fs_name: str) -> None:
             }
         ],
     }
+
+
+async def _drain_background_tasks() -> None:
+    """Await the fire-and-forget download task(s) `start_download` spawned."""
+    for _ in range(6):
+        pending = [t for t in asyncio.all_tasks() if t is not asyncio.current_task() and not t.done()]
+        if not pending:
+            return
+        await asyncio.gather(*pending, return_exceptions=True)
 
 
 def _seed_rebound_group(harness, *, new_fs_name: str) -> Path:
@@ -85,6 +96,14 @@ async def test_using_the_files_another_version_is_recorded_at_keeps_them_and_ins
     installed = harness.endpoints.get_installed_rom(_NEW_ID)
     assert installed is not None
     assert installed["file_path"] == str(path)
+    assert harness.endpoints.get_installed_rom(_OLD_ID) is None
+    with harness.uow_factory() as uow:
+        assert uow.rom_installs.get(_OLD_ID) is None
+        new_rom = uow.roms.get(_NEW_ID)
+    assert new_rom is not None
+    assert result["app_id"] == _APP_ID
+    assert result["launch_options"]
+    assert new_rom.applied_launch_options == result["launch_options"]
 
 
 async def test_control_a_bound_version_with_its_own_file_name_adopts_its_own_file(harness):
@@ -104,3 +123,51 @@ async def test_control_a_bound_version_with_its_own_file_name_adopts_its_own_fil
     assert installed["file_path"] == str(new_path)
     assert harness.endpoints.get_installed_rom(_OLD_ID) is None
     assert not old_path.exists()
+
+
+async def test_a_download_that_replaces_the_file_another_version_is_recorded_at_still_supersedes_it(harness, caplog):
+    # Only an adoption keeps what is at its path. Replace is the user's choice to
+    # put RomM's copy there, so the version recorded at it is superseded as before.
+    path = _seed_rebound_group(harness, new_fs_name=_FS_NAME)
+    harness.romm.download_payloads[f"rom:{_NEW_ID}:{_FS_NAME}"] = b"RomM's copy"
+
+    with caplog.at_level(logging.INFO):
+        result = await harness.endpoints.start_download(_NEW_ID, True)
+        await _drain_background_tasks()
+
+    assert result["success"] is True
+    assert harness.endpoints.get_installed_rom(_OLD_ID) is None
+    installed = harness.endpoints.get_installed_rom(_NEW_ID)
+    assert installed is not None
+    assert installed["file_path"] == str(path)
+    assert path.read_bytes() == b"RomM's copy"
+    supersede_lines = [r.getMessage() for r in caplog.records if f"rom {_OLD_ID}" in r.getMessage()]
+    assert supersede_lines == [f"Superseding install of rom {_OLD_ID} (group of rom {_NEW_ID})"]
+
+
+async def test_a_record_refused_after_the_hand_over_leaves_the_file_to_adopt_again(harness, monkeypatch):
+    # The hand-over drops the old record before the new one is written. A record
+    # refused in between leaves neither version installed, the file untouched,
+    # and the page offering the same file again — and the second press records it.
+    path = _seed_rebound_group(harness, new_fs_name=_FS_NAME)
+    recorder = harness.app.services.rom_adoption_service._install_recorder
+    monkeypatch.setattr(recorder, "do_record_install", lambda **_: (None, "Invalid install metadata: refused"))
+
+    refused = await harness.endpoints.adopt_existing_rom(_NEW_ID)
+
+    assert refused["success"] is False
+    assert refused["reason"] == "invalid_install"
+    assert path.read_bytes() == _DATA
+    assert harness.endpoints.get_installed_rom(_OLD_ID) is None
+    assert harness.endpoints.get_installed_rom(_NEW_ID) is None
+    page = await harness.endpoints.get_cached_game_detail(_APP_ID)
+    assert page["target_path_occupied"] is True
+
+    monkeypatch.undo()
+    again = await harness.endpoints.adopt_existing_rom(_NEW_ID)
+
+    assert again["success"] is True
+    installed = harness.endpoints.get_installed_rom(_NEW_ID)
+    assert installed is not None
+    assert installed["file_path"] == str(path)
+    assert path.read_bytes() == _DATA

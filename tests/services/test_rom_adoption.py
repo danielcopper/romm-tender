@@ -237,7 +237,7 @@ class Harness:
         self.events.append((event, payload))
         return True
 
-    async def _supersede(self, rom_id: int) -> None:
+    async def _supersede(self, rom_id: int, *, adopted_path: str | None = None) -> None:
         self.superseded.append(rom_id)
         if self.supersede_refusal is not None:
             raise self.supersede_refusal
@@ -725,6 +725,24 @@ class TestAdopt:
         assert result["success"] is True
         assert h.superseded == [_ROM_ID]
 
+    async def test_the_supersede_is_told_the_path_being_adopted(self, h):
+        # A sibling recorded at this path holds the very content being adopted;
+        # only a supersede that knows the path can hand its record over instead
+        # of deleting it.
+        h.seed_rom()
+        h.stage_detail(_single_file_detail())
+        h.store.files["/roms/snes/Game.sfc"] = b"x" * 10
+        told: list[tuple[int, str | None]] = []
+
+        async def _supersede(rom_id: int, *, adopted_path: str | None = None) -> None:
+            told.append((rom_id, adopted_path))
+
+        h.service._sibling_supersede = lambda: _supersede
+
+        assert (await h.service.adopt_existing_rom(_ROM_ID))["success"] is True
+
+        assert told == [(_ROM_ID, "/roms/snes/Game.sfc")]
+
     async def test_a_failed_supersede_aborts_the_adoption_with_nothing_written(self, h):
         h.seed_rom()
         h.stage_detail(_single_file_detail())
@@ -748,7 +766,7 @@ class TestAdopt:
         h.store.files["/roms/snes/Game.sfc"] = b"x" * 10
         order: list[str] = []
 
-        async def _record_supersede(rom_id: int) -> None:
+        async def _record_supersede(rom_id: int, *, adopted_path: str | None = None) -> None:
             order.append(f"supersede:{rom_id}")
             return
 
@@ -810,7 +828,7 @@ class TestAdopt:
         witness tied to the ordering the service actually has.
         """
 
-        async def _supersede(rom_id: int) -> None:
+        async def _supersede(rom_id: int, *, adopted_path: str | None = None) -> None:
             h.superseded.append(rom_id)
             change()
 

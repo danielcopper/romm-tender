@@ -85,10 +85,13 @@ class SiblingSupersedeFn(Protocol):
 
     Which siblings qualify is deliberately **not** part of this contract — the
     "bound to the same shortcut or unbound, never a grandfathered separate
-    shortcut" rule (ADR-0021 §5) has one implementation behind this seam.
+    shortcut" rule (ADR-0021 §5) has one implementation behind this seam. What
+    is: an adoption passes the path it is about to record as *adopted_path*, and
+    a sibling whose install is recorded there hands its record over and keeps
+    its files, because those files are the content being adopted.
     """
 
-    async def __call__(self, rom_id: int) -> None: ...
+    async def __call__(self, rom_id: int, *, adopted_path: str | None = None) -> None: ...
 
 
 class SiblingSupersedeProvider(Protocol):

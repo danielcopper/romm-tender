@@ -1596,12 +1596,17 @@ just-committed install.
 ([ADR-0021](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0021-sibling-group-one-shortcut-binding-active-version.md)
 §4 amendment, #1298): before a download begins, `start_download` (and `resume_download`) strips any **other** installed
 member of the ROM's sibling group so a game keeps at most one copy on disk. `_conflicting_sibling_install_ids` reads the
-group in one short UoW (indexed `iter_by_group_key`) and returns members that are installed **and** either unbound or
-bound to the _same_ shortcut — a member bound to a **different** shortcut (a grandfathered duplicate, ADR-0021 §5) is
-exempt and never removed. Each superseded install goes through the canonical `RomRemovalService.remove_rom_unchecked`
-(files + `rom_installs` row; **saves untouched** per ADR-0007), the membership read UoW closed first so the removal's
-own UoW does not nest (ADR-0006); a removal refused with `NotInstalled` raced clean and is skipped, any other refusal
-propagates and aborts the download so the invariant stays honest. A superseded sibling's _paused_ queue entry is evicted
+group in one short UoW (indexed `iter_by_group_key`), and `supersede_siblings` (`domain/sibling_supersede.py`) picks the
+members that are installed **and** either unbound or bound to the _same_ shortcut — a member bound to a **different**
+shortcut (a grandfathered duplicate, ADR-0021 §5) is exempt and never removed. An adoption runs the same supersede and
+passes the path it is about to record as `adopted_path`: a picked member whose install is recorded at that path is
+**handed over** instead of removed — its `rom_installs` row is deleted in that same UoW and its files are left as they
+are, because they are the content being adopted. A download passes no path, since what sits at its target is either
+refused by the occupancy gate or, on an explicit replace, overwritten, so a member recorded there is superseded like any
+other. Each superseded install goes through the canonical `RomRemovalService.remove_rom_unchecked` (files +
+`rom_installs` row; **saves untouched** per ADR-0007), the membership read UoW closed first so the removal's own UoW
+does not nest (ADR-0006); a removal refused with `NotInstalled` raced clean and is skipped, any other refusal propagates
+and aborts the download so the invariant stays honest. A superseded sibling's _paused_ queue entry is evicted
 (`_evict_if_paused`) so a stale `.tmp` can't later resume into a second install. `resume_download` additionally refuses
 (`superseded`, entry dropped) when a switch has moved the group's binding to a different member since the pause — it
 won't re-download a version the picker has already left. The in-progress claim is taken before the ROM detail is fetched

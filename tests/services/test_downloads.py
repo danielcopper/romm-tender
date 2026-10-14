@@ -6236,6 +6236,57 @@ class TestSiblingSupersedeRemoval:
         ]
 
 
+class TestSiblingSupersedeHandOver:
+    """`supersede_sibling_installs(..., adopted_path=)` — a sibling recorded at the adopted path keeps its files."""
+
+    @pytest.mark.asyncio
+    async def test_a_sibling_recorded_at_the_adopted_path_loses_only_its_record(self, downloads):
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        provider = MagicMock(side_effect=AssertionError("nothing may be removed"))
+        downloads.service._rom_remover = provider
+
+        await downloads.service.supersede_sibling_installs(1, adopted_path="/roms/n64/game_2.z64")
+
+        assert downloads.uow.rom_installs.get(2) is None
+        provider.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_sibling_at_another_path_is_still_removed(self, downloads):
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        _seed_group_member(downloads.uow, 3, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        remover = AsyncMock(return_value={"success": True, "message": "ROM removed"})
+        downloads.service._rom_remover = lambda: remover
+
+        await downloads.service.supersede_sibling_installs(1, adopted_path="/roms/n64/game_3.z64")
+
+        remover.assert_awaited_once_with(2)
+        assert downloads.uow.rom_installs.get(3) is None
+
+    @pytest.mark.asyncio
+    async def test_a_handed_over_sibling_s_paused_download_is_evicted(self, downloads):
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+        downloads.service._download_queue[2] = {"rom_id": 2, "status": "paused"}
+
+        await downloads.service.supersede_sibling_installs(1, adopted_path="/roms/n64/game_2.z64")
+
+        assert 2 not in downloads.service._download_queue
+
+    @pytest.mark.asyncio
+    async def test_the_hand_over_is_logged_with_both_rom_ids_and_the_path(self, downloads, caplog):
+        _seed_group_member(downloads.uow, 1, group_key=_SUPERSEDE_GROUP, app_id=42, installed=False)
+        _seed_group_member(downloads.uow, 2, group_key=_SUPERSEDE_GROUP, app_id=None, installed=True)
+
+        with caplog.at_level(logging.INFO):
+            await downloads.service.supersede_sibling_installs(1, adopted_path="/roms/n64/game_2.z64")
+
+        assert [(r.levelno, r.getMessage()) for r in caplog.records if "Handing" in r.getMessage()] == [
+            (logging.INFO, "Handing the install of rom 2 at /roms/n64/game_2.z64 over to rom 1")
+        ]
+
+
 class TestResumeSupersede:
     """`resume_download` — the #1298 S1 stale-resume refusal + supersede-on-resume."""
 
