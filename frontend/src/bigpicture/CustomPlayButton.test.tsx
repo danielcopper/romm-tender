@@ -5628,6 +5628,64 @@ describe("CustomPlayButton — a download whose file is missing (#2188 D23)", ()
     expect(menu.getByRole("button", { name: "Forget this download" })).not.toBeDisabled();
   });
 
+  describe("where RomM holds no file either (#2399 D1)", () => {
+    const mainPart = (container: HTMLElement): HTMLButtonElement =>
+      container.querySelector<HTMLButtonElement>("button.romm-btn-download")!;
+
+    it("says No file on RomM on a disabled main part, over the File missing note", async () => {
+      mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING, has_file_on_disk: false });
+      const { container, findByText, queryByText } = render(<CustomPlayButton appId={100} />);
+      await findByText("File missing");
+
+      expect(mainPart(container).textContent).toBe("No file on RomM");
+      expect(mainPart(container)).toBeDisabled();
+      expect(queryByText("Download again")).toBeNull();
+      mainPart(container).click();
+      await act(async () => Promise.resolve());
+      expect(backend.startDownload).not.toHaveBeenCalled();
+    });
+
+    it("disables the menu's Download again, and keeps the path and Forget this download", async () => {
+      mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING, has_file_on_disk: false });
+      const { container, findByText } = render(<CustomPlayButton appId={100} />);
+      await findByText("No file on RomM");
+
+      const menu = openMissingMenu(container);
+
+      expect(await menu.findByText(MISSING)).toBeInTheDocument();
+      expect(menu.getByRole("button", { name: "Download again" })).toBeDisabled();
+      expect(menu.getByRole("button", { name: "Forget this download" })).not.toBeDisabled();
+    });
+
+    it("forgets the download", async () => {
+      mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING, has_file_on_disk: false });
+      const { container, findByText } = render(<CustomPlayButton appId={100} />);
+      await findByText("No file on RomM");
+
+      await confirm(await chooseForget(container));
+
+      expect(vi.mocked(backend.forgetDownload)).toHaveBeenCalledWith(42);
+      expect(await findByText("No file on RomM")).toBeInTheDocument();
+      expect(mainPart(container)).toBeDisabled();
+      expect(within(container).queryByText(/File missing/)).toBeNull();
+    });
+
+    it.each<[string, Partial<CachedGameDetail>]>([
+      ["holds a file", { has_file_on_disk: true }],
+      ["was not stated", {}],
+    ])("offers Download again on both parts where RomM's file %s", async (_case, stored) => {
+      mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: MISSING, ...stored });
+      const { container, findByText, queryByText } = render(<CustomPlayButton appId={100} />);
+      await findByText("File missing");
+
+      expect(mainPart(container).textContent).toBe("Download again");
+      expect(mainPart(container)).not.toBeDisabled();
+      expect(queryByText("No file on RomM")).toBeNull();
+      const menu = openMissingMenu(container);
+      expect(await menu.findByRole("button", { name: "Download again" })).not.toBeDisabled();
+    });
+  });
+
   it("is the size of the Play button", async () => {
     mockCachedDetail({ rom_id: 42, installed: true, file_missing_at: null });
     const play = render(<CustomPlayButton appId={100} />);

@@ -7,7 +7,9 @@
  *   answer either way. The same state, while the recorded file of an installed
  *   ROM is gone, is a split button the size of Play — Download again, and an
  *   arrow whose "File missing" menu names the path and offers Download again
- *   and Forget this download — over a one-line "File missing" note, and no Play
+ *   and Forget this download — over a one-line "File missing" note, and no Play.
+ *   Where RomM holds no file either, the main part reads "No file on RomM" and
+ *   is disabled, as is the menu's Download again; Forget this download stays.
  * - Play: ROM installed, launches the game (with pre-launch save sync)
  * - Checking: the launch check is running, before any sync
  * - Syncing: Save sync in progress before launch
@@ -1643,6 +1645,9 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       // The Play button's shape — a split of main action and chevron — so the
       // play row keeps its height and its stats their width. The note sits out
       // of the flow, under the button, so it adds no height either.
+      let missingMainLabel = DOWNLOAD_AGAIN_LABEL;
+      if (forgetPending) missingMainLabel = FORGETTING_LABEL;
+      else if (noFileOnRomm) missingMainLabel = NO_FILE_ON_ROMM_LABEL;
       const dropdownBg = isOffline
         ? "linear-gradient(to right, #5a6a7a, #4d5d6d)"
         : "linear-gradient(to right, #1580cc, #0062ad)";
@@ -1658,9 +1663,9 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
                 detach(handleDownload());
               }}
               onFocus={scrollToTop}
-              disabled={forgetPending || isOffline || downloadBlockedByVanished}
+              disabled={forgetPending || isOffline || downloadBlockedByVanished || downloadBlockedByNoFile}
             >
-              <span className="romm-dl-label">{forgetPending ? FORGETTING_LABEL : DOWNLOAD_AGAIN_LABEL}</span>
+              <span className="romm-dl-label">{missingMainLabel}</span>
             </DialogButton>
             <DialogButton
               className="romm-btn-dropdown"
@@ -1668,7 +1673,11 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
               title={FILE_MISSING_LABEL}
               style={{ ...dropdownArrowStyle, background: dropdownBg, color: "#fff" }}
               onClick={(e: MouseEvent) =>
-                showMissingDownloadMenu(e, missingPath, forgetPending || isOffline || downloadBlockedByVanished)
+                showMissingDownloadMenu(
+                  e,
+                  missingPath,
+                  forgetPending || isOffline || downloadBlockedByVanished || downloadBlockedByNoFile,
+                )
               }
               onFocus={scrollToTop}
               disabled={forgetPending}
