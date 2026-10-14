@@ -838,6 +838,10 @@ async def test_a_cancel_after_the_destructive_phase_started_does_not_abort_it(ha
     action = await _wait_action(harness, "repoint_shortcut")
 
     await harness.service.cancel_prune(started["run_id"])
+    # cancel_prune only requests the stop; the action token is retired by the
+    # time the run task has ended.
+    with pytest.raises(asyncio.CancelledError):
+        await task
     claim = harness.service.report_prune_action(
         {
             "run_id": started["run_id"],
@@ -861,8 +865,6 @@ async def test_a_cancel_after_the_destructive_phase_started_does_not_abort_it(ha
     )
     with pytest.raises(StaleAction):
         await complete
-    with pytest.raises(asyncio.CancelledError):
-        await task
 
     # The committed repoint is reported, not discarded as if it never happened.
     complete = [payload for name, payload in harness.events.events if name == "prune_complete"][-1]
