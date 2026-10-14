@@ -18,8 +18,8 @@ from domain._aggregate import cosmic_aggregate
 from domain.artwork_slot import RECORDED_SLOTS, ArtworkSlot
 
 # How long a ``none`` or ``refused`` outcome keeps its slot from being asked
-# again. SteamGridDB may have an image tomorrow, and a week costs one request
-# per slot rather than one after every sync.
+# again; why a week is "What was found is recorded" in
+# docs/architecture/steam-non-steam-shortcuts.md.
 RULED_OUT_SECONDS = 7 * 24 * 60 * 60
 
 
@@ -97,8 +97,9 @@ class ArtworkSlotOutcome:
         """Whether this outcome keeps the slot from being asked again at *now*.
 
         Only ``none`` and ``refused`` do, for ``RULED_OUT_SECONDS``, and only
-        while the ROM's SteamGridDB id is still *sgdb_id*'s: an id that changed
-        ends it at once. A ``set`` slot whose file is gone is asked again.
+        while *sgdb_id*, the ROM's id now, equals the id recorded: an id that
+        changed ends it at once. A ``set`` slot whose file is gone is asked
+        again.
         """
         if self.outcome is SlotOutcome.SET or self.sgdb_id != sgdb_id:
             return False

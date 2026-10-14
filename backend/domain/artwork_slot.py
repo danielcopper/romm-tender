@@ -16,14 +16,15 @@ if TYPE_CHECKING:
 
 
 class ArtworkSlot(StrEnum):
-    """A slot of a shortcut's artwork, spelled as SteamGridDB's asset type."""
+    """A slot of a shortcut's artwork, spelled as Tender's asset-type name (``domain.sgdb_artwork``)."""
 
     WIDE_GRID = "grid"
     LOGO = "logo"
     HERO = "hero"
 
 
-# The slots whose outcome is recorded; the hero is the game page's alone.
+# The slots whose outcome is recorded: no background job fetches the hero, so
+# nothing would read its record ("Game page artwork" in the doc above).
 RECORDED_SLOTS: frozenset[ArtworkSlot] = frozenset({ArtworkSlot.WIDE_GRID, ArtworkSlot.LOGO})
 
 # The extension Steam keeps the logo's position under, beside the logo itself.
@@ -41,10 +42,9 @@ def is_slot_filled(file_names: Iterable[str], app_id: int, slot: ArtworkSlot) ->
 
     A file fills it when its name is exactly the slot's name — ``<appid>`` for
     the wide grid, ``<appid>_logo``, ``<appid>_hero`` — plus one extension, any
-    but ``.json``. Which image formats Steam reads there is not documented
-    beyond PNG and JPEG, and missing one set by hand would put a second image
-    beside it. The cover (``<appid>p``) and a file named by the 64-bit game id
-    never match.
+    but ``.json``. The cover (``<appid>p``) and a file named by the 64-bit game
+    id never match. Why any extension counts is under "When a slot is filled"
+    in docs/architecture/steam-non-steam-shortcuts.md.
     """
     prefix = _slot_stem(app_id, slot) + "."
     for name in file_names:

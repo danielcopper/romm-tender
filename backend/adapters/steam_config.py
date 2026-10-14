@@ -187,9 +187,11 @@ class SteamConfigAdapter:
     # -- Grid files -------------------------------------------------------------
 
     def grid_file_names(self) -> frozenset[str] | None:
-        """The names of the regular files in Steam's grid directory, links followed; ``None`` without one.
+        """The names of the regular files in Steam's grid directory, links followed.
 
-        A link that leads nowhere, or to a directory, is left out.
+        ``None`` when no Steam user directory is found; a missing grid directory
+        is created, as :meth:`grid_dir` does. A link that leads nowhere, or to a
+        directory, is left out.
         """
         grid_dir = self.grid_dir()
         if not grid_dir:

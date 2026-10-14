@@ -1,10 +1,11 @@
 /**
- * SGDB artwork apply — downloads the four SGDB asset types for a ROM and
- * writes them onto the Steam shortcut. Shared by RomMPlaySection (passive
- * fill of the empty slots + Refresh Artwork action) and SgdbGamePickerModal
- * (re-apply after a manual game-id pick), so it lives here rather than on either
- * component to keep their import graph acyclic. The shortcut icon job's writes
- * (`utils/shortcutIcons.ts`) ask it whether an apply is under way.
+ * SGDB artwork apply — writes a ROM's SGDB hero, logo, wide grid and icon onto
+ * its Steam shortcut. Shared by RomMPlaySection (a first visit's fill of the
+ * empty slots, and the replacing apply of a version switch and of Refresh
+ * Artwork) and SgdbGamePickerModal (the replacing apply after a manual game-id
+ * pick), so it lives here rather than on either component to keep their import
+ * graph acyclic. The shortcut icon job's writes (`utils/shortcutIcons.ts`) ask
+ * it whether an apply is under way.
  */
 
 import {
@@ -26,8 +27,8 @@ import {
 } from "./pruneLease";
 
 /**
- * Newest-apply-wins guard. Each appId's most recent applyArtwork call claims a
- * generation; an earlier call for the SAME appId that is still mid-flight when a
+ * Newest-apply-wins guard. Each appId's most recent applyArtwork or
+ * fillEmptyArtwork call claims a generation; an earlier call for the SAME appId that is still mid-flight when a
  * newer one starts stops writing rather than clobber the newer art. The hazard:
  * a version switch re-points the shortcut to a new rom and fires a fresh apply
  * while the old rom's (uncached, seconds-long) artwork fetch is still pending —
@@ -36,7 +37,7 @@ import {
  */
 const artworkGenerations = new Map<number, number>();
 
-/** How many `applyArtwork` calls are under way for each appId. */
+/** How many `applyArtwork` and `fillEmptyArtwork` calls are under way for each appId. */
 const artworkInFlight = new Map<number, number>();
 
 /**
@@ -225,7 +226,7 @@ async function setSlotImage(
   }
 }
 
-/** Tell the backend what Steam made of the image, so it records it; the backend cannot see Steam's answer. */
+/** Report what Steam made of the image for the backend to record. */
 async function reportSlotOutcome(
   romId: number,
   slot: "grid" | "logo",

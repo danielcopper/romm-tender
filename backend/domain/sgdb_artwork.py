@@ -51,18 +51,16 @@ def asset_type_endpoint(asset_type: str) -> str | None:
     return _ASSET_TYPE_TO_ENDPOINT.get(asset_type)
 
 
-# The query each asset type is asked with. A wide grid is asked in the two wide
-# sizes only, because ``/grids`` also lists the portrait covers; the grid and
-# the logo are asked as static images only.
+# The query each asset type is asked with; why, under "Which image" in
+# docs/architecture/steam-non-steam-shortcuts.md.
 _ASSET_TYPE_QUERY: dict[str, str] = {
     "grid": "?dimensions=460x215,920x430&types=static",
     "logo": "?types=static",
 }
 
-# A wide grid's sizes in the order they are preferred: Valve's own library
-# header size first.
+# A wide grid's sizes in the order they are preferred, and the widths a logo is
+# preferred within; the reasons are the same doc section's.
 _WIDE_GRID_SIZES: tuple[tuple[int, int], ...] = ((920, 430), (460, 215))
-# The widths a logo is preferred within, inclusive.
 _LOGO_WIDTHS = range(640, 2048 + 1)
 
 # The asset types whose cache file carries the SteamGridDB image id in its name.

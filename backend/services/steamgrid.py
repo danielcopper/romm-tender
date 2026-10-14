@@ -70,7 +70,7 @@ class _CachedArtwork:
 
 
 class _NoArtwork(Enum):
-    """Why a download answered no file: SteamGridDB lists no candidate, or it did not succeed."""
+    """Why a download answered no file: SteamGridDB's list is empty, or the answer or download did not succeed."""
 
     NONE = "none"
     FAILED = "failed"
@@ -179,8 +179,8 @@ class SteamGridService:
     def _download_sgdb_artwork(self, sgdb_game_id, rom_id, asset_type):
         """Answer the cached file of *rom_id*'s *asset_type*, downloading it first when it is not cached.
 
-        ``None`` when SteamGridDB has no candidate or the download failed, the
-        failure logged.
+        ``None`` when SteamGridDB has no candidate or the download failed; an
+        exception is logged.
         """
         try:
             found = self._download_sgdb_artwork_io(sgdb_game_id, rom_id, asset_type)
@@ -193,9 +193,9 @@ class SteamGridService:
         """The cached file of *rom_id*'s *asset_type*, downloaded first when it is not cached.
 
         The image is chosen among SteamGridDB's candidates by ``choose_candidate``.
-        Answers ``NONE`` when SteamGridDB lists no candidate and ``FAILED`` for
-        an answer or a download that did not succeed; lets the API's errors
-        through. A downloaded wide grid or logo replaces every other cache file
+        Answers ``NONE`` when SteamGridDB's list is empty, and ``FAILED`` for an
+        unsuccessful answer, a list with no usable entry or a failed download;
+        lets the API's errors through. A downloaded wide grid or logo replaces every other cache file
         of that slot.
         """
         cached = self._cached_artwork(rom_id, asset_type)
@@ -336,9 +336,9 @@ class SteamGridService:
 
         The single explicit user action that may re-read RomM and offer the
         name search; the shortcut icon job runs the IGDB cross-ref without
-        one. It is Refresh Artwork's first step, so it first deletes the
-        game's recorded artwork slot outcomes. RomM's ``sgdb_id`` always wins
-        when present. Returns one of:
+        one. Deletes the ROM's recorded artwork slot outcomes before it
+        resolves: an explicit request asks SteamGridDB again. RomM's
+        ``sgdb_id`` always wins when present. Returns one of:
 
         - ``{"decision": "no_api_key"}`` — no key configured.
         - ``{"decision": "resolved", "sgdb_id": int}`` — a winning id was
@@ -353,8 +353,6 @@ class SteamGridService:
     async def _get_sgdb_resolution(self, rom_id):
         rom_id = int(rom_id)
         rom_id_str = str(rom_id)
-        # Refresh Artwork is an explicit request, so it forgets what was found
-        # for the game's slots before it applies them again.
         await self._loop.run_in_executor(None, self._forget_slot_outcomes, rom_id)
         if not self._settings.get("steamgriddb_api_key"):
             return {"decision": "no_api_key"}
@@ -523,9 +521,11 @@ class SteamGridService:
         - ``"skip"`` — Steam's grid directory already fills the slot
           (``domain.artwork_slot.is_slot_filled``), or a recorded ``none`` or
           ``refused`` rules it out;
-        - ``"none"`` — SteamGridDB has no candidate, or the ROM no SteamGridDB
-          id; recorded for the wide grid and the logo;
-        - ``"failed"`` — no answer this time; nothing is recorded;
+        - ``"none"`` — SteamGridDB's list is empty or it does not know the game,
+          or the ROM has no SteamGridDB id; recorded for the wide grid and the
+          logo;
+        - ``"failed"`` — an unsuccessful answer, a list with no usable entry, or
+          a download or read that failed; nothing is recorded;
         - ``"no_api_key"`` — no key configured.
 
         Refuses with ``invalid_payload`` for an unknown slot, ``no_grid_dir``

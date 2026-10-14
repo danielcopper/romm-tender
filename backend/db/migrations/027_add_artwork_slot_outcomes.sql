@@ -7,12 +7,12 @@
 --     Tender last found: `set` (an image was set), `none` (SteamGridDB has no
 --     candidate) or `refused` (Steam refused the image), the ROM's SteamGridDB
 --     id at that time, and when. A `set` row also holds SteamGridDB's image id
---     and the SHA-256 of the bytes set. A `none` or `refused` row keeps the slot
---     from being asked again for a week, unless the ROM's SteamGridDB id changes.
+--     and the SHA-256 of the bytes set. How a row is read is "Game page
+--     artwork" in docs/architecture/steam-non-steam-shortcuts.md.
 --
 -- Keyed by ROM, not app id: a re-created shortcut gets a new app id. The rows go
--- with their `roms` row. `recorded_at` is Unix-epoch seconds, as a timestamp that
--- is only ever aged is.
+-- with their `roms` row. `recorded_at` is REAL Unix-epoch seconds, the
+-- cache/TTL timestamp convention.
 --
 -- Created empty: nothing was recorded before this migration.
 --
