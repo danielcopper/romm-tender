@@ -4,7 +4,7 @@
 // apart from "the pane was never mounted".
 
 import { describe, it, expect } from "vitest";
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { BiosTab } from "./BiosTab";
 import { libretroEmu, standaloneEmu } from "../test-utils/coreFixtures";
 import { BIOS_MISSING_RED } from "../utils/biosColor";
@@ -189,113 +189,106 @@ describe("BiosTab", () => {
     expect(container.textContent).not.toContain("RomM library files");
   });
 
-  it("says the console needs at least one file where the counts would say nothing is required", () => {
-    // The PlayStation state, and the whole reason the axis exists: SwanStation
-    // marks every image it declares optional — a libretro `.info` cannot say the
-    // console needs one of them — so `required_count` is 0 and a count-only
-    // reading gives a green "Nothing required" over twenty library files while no
-    // game on the platform would start. The sentence has to say the requirement
-    // is ONE file, and to point at no set while doing it: only the images the
-    // launching core declares can answer it, and the twenty in the ratio is the
-    // library's inventory rather than that set.
-    const { container } = render(
-      <BiosTab
-        biosStatus={{
-          needs_bios: true,
-          server_count: 20,
-          local_count: 0,
-          ratio_server_count: 20,
-          ratio_local_count: 0,
-          all_downloaded: false,
-          required_count: 0,
-          required_downloaded: 0,
-          system_image: "absent",
-        }}
-        biosLevel="missing"
-        coreInfo={coreInfo}
-        isActive={true}
-      />,
-    );
-    expect(container.textContent).toContain(
-      "The launching emulator cannot start this system without a BIOS image (0/20 RomM library files)",
-    );
-    expect(container.textContent).not.toContain("marks none of its BIOS files as required");
-    expect(container.textContent).not.toContain("requires are in place");
-    expect(container.innerHTML).toContain("#d94126");
-  });
+  it.each([
+    ["PlayStation", "PlayStation"],
+    // No name held: the sentence still stands, naming the system generically.
+    ["", "This system"],
+  ])(
+    "says the console does not start without an image where the counts would say nothing is required (%j)",
+    (platformName, named) => {
+      // The PlayStation state: SwanStation marks every image it declares optional
+      // — a libretro `.info` cannot say the console needs one of them — so
+      // `required_count` is 0 while no game on the platform would start. The
+      // resolver weighs the console's need into its verdict (red), and the
+      // sentence says so over the images the emulator knows.
+      const images = ["scph5500.bin", "scph5501.bin", "scph5502.bin", "scph1001.bin", "scph7001.bin"].map(
+        (file_name) => ({
+          file_name,
+          downloaded: false,
+          local_path: "",
+          description: file_name,
+          wanted: "optional" as const,
+          required_by_active: false,
+          used_by_active: true,
+          satisfied: false,
+        }),
+      );
+      const { container } = render(
+        <BiosTab
+          biosStatus={{
+            needs_bios: true,
+            server_count: 20,
+            local_count: 0,
+            ratio_server_count: 20,
+            ratio_local_count: 0,
+            all_downloaded: false,
+            required_count: 0,
+            required_downloaded: 0,
+            console_needs_image: true,
+            files: images,
+          }}
+          biosLevel="missing"
+          coreInfo={coreInfo}
+          isActive={true}
+          platformName={platformName}
+        />,
+      );
+      // The console is RomM's name for the platform.
+      expect(container.textContent).toContain(
+        `${named} does not start without a BIOS image, and none of the five the launching emulator knows is in ` +
+          "place (0/20 RomM library files)",
+      );
+      expect(container.textContent).not.toContain("marks none of its BIOS files as required");
+      expect(container.innerHTML).toContain("#d94126");
+    },
+  );
 
-  it("says the console needs at least one file even where the level declines", () => {
-    // Today the backend never sends this pair — `absent` lands on `missing` —
-    // and the order now lives once, in `biosSummary`, which both wording
-    // surfaces read. This asserts it end to end from THIS one: were a decline
-    // added ahead of the `absent` test in `compute_bios_level`, a surface
-    // reading the level first would print an ignorance over a requirement that
-    // was demonstrated.
+  it("says the console needs an image only under a red verdict", () => {
     const { container } = render(
       <BiosTab
         biosStatus={{
           needs_bios: true,
           server_count: 20,
           local_count: 0,
-          ratio_server_count: 20,
-          ratio_local_count: 0,
           all_downloaded: false,
           required_count: 0,
           required_downloaded: 0,
-          required_withheld: 0,
-          system_image: "absent",
-        }}
-        biosLevel="unknown"
-        coreInfo={coreInfo}
-        isActive={true}
-      />,
-    );
-    expect(container.textContent).toContain(
-      "The launching emulator cannot start this system without a BIOS image (0/20 RomM library files)",
-    );
-    // The two sentences the decline would have printed instead — named as
-    // sentences, because the page shows the sentence and a status never reaches
-    // it, so asserting the short forms absent would assert nothing.
-    expect(container.textContent).not.toContain("could not be established");
-    expect(container.textContent).not.toContain("could not be checked");
-  });
-
-  it("names the readiness as the unknown where the console's own image is unsettled", () => {
-    // The requirement IS known here — this console needs an image — and it is
-    // whether one is in place that could not be established. The
-    // requirement-unknown sentence would be the wrong half.
-    const { container } = render(
-      <BiosTab
-        biosStatus={{
-          needs_bios: true,
-          server_count: 20,
-          local_count: 0,
-          ratio_server_count: 20,
-          ratio_local_count: 0,
-          all_downloaded: false,
-          required_count: 0,
-          required_downloaded: 0,
-          required_withheld: 0,
-          system_image: "unsettled",
+          console_needs_image: true,
         }}
         biosLevel="unknown"
         coreInfo={coreInfo}
         isActive={true}
       />,
     );
-    expect(container.textContent).toContain(
-      "Whether the BIOS image the launching emulator needs is in place could not be established",
-    );
-    // The requirement-unknown sentence is the wrong half, and it is the one this
-    // state would fall through to.
-    expect(container.textContent).not.toContain("Nothing could be established about what");
+    expect(container.textContent).not.toContain("does not start without a BIOS image");
   });
 
-  it("says nothing of its own for the two quiet answers", () => {
-    // `not_demanded` covers a console nothing is recorded about, and it must
-    // change nothing — its own sentence would be a claim about an unasked
-    // question.
-    for (const systemImage of ["not_demanded", "held"] as const) {
+  it("says no BIOS is chosen in the emulator's settings, in the resolver's words", () => {
+    // PCSX2 (Standalone) with `[Filenames] BIOS` empty.
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          server_count: 0,
+          local_count: 0,
+          all_downloaded: false,
+          required_count: 0,
+          required_downloaded: 0,
+          active_core_label: "PCSX2",
+          emulator_notes: [{ kind: "bios-unchosen", setting: "Filenames/BIOS", tied: null, regions: [] }],
+        }}
+        biosLevel="unknown"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+    expect(container.textContent).toContain("No BIOS is chosen in PCSX2's settings, and no game boots until one is");
+  });
+
+  it("says nothing of the console where the resolver records no need for an image", () => {
+    // A console nothing is recorded about must change nothing — its own sentence
+    // would be a claim about an unasked question.
+    for (const consoleNeedsImage of [{ console_needs_image: false }, {}]) {
       const { container } = render(
         <BiosTab
           biosStatus={{
@@ -307,7 +300,7 @@ describe("BiosTab", () => {
             all_downloaded: false,
             required_count: 0,
             required_downloaded: 0,
-            system_image: systemImage,
+            ...consoleNeedsImage,
           }}
           biosLevel="ok"
           coreInfo={coreInfo}
@@ -324,10 +317,9 @@ describe("BiosTab", () => {
   it("says whose requirement the empty count is, and never that the console needs nothing", () => {
     // `required_count: 0` is one emulator's declaration and nothing else: the
     // launching emulator marks none of the files it names required. It says
-    // nothing about the CONSOLE, which is a separate axis (`system_image`) and
-    // answers `not_demanded` for a console nobody has asked about as readily as
-    // for one shown to start with nothing — so a headline that dropped the
-    // subject was read as an all-clear the reading never gave.
+    // nothing about the CONSOLE, which nobody may have asked about — so a
+    // headline that dropped the subject was read as an all-clear the reading
+    // never gave.
     const { container } = render(
       <BiosTab
         biosStatus={{
@@ -339,7 +331,6 @@ describe("BiosTab", () => {
           all_downloaded: false,
           required_count: 0,
           required_downloaded: 0,
-          system_image: "not_demanded",
         }}
         biosLevel="ok"
         coreInfo={coreInfo}
@@ -441,7 +432,6 @@ describe("BiosTab", () => {
               declaration: "packaged",
               wanted: "needed",
               required_by_active: true,
-              cores: {},
               on_server: true,
               satisfied: false,
             },
@@ -487,7 +477,6 @@ describe("BiosTab", () => {
               declaration: "read",
               wanted: "needed",
               required_by_active: true,
-              cores: {},
               on_server: true,
               satisfied: false,
             },
@@ -500,7 +489,6 @@ describe("BiosTab", () => {
               declaration: "read",
               wanted: "needed",
               required_by_active: true,
-              cores: {},
               on_server: true,
               satisfied: false,
             },
@@ -552,7 +540,6 @@ describe("BiosTab", () => {
               declaration: "read",
               wanted: "needed",
               required_by_active: true,
-              cores: { swanstation_libretro: { required: true } },
               on_server: true,
               satisfied: false,
             },
@@ -607,7 +594,6 @@ describe("BiosTab", () => {
               description: "'pcsx2/bios' folder",
               wanted: "needed",
               required_by_active: true,
-              cores: {},
               on_server: false,
               declared_kind: "directory",
               satisfied: true,
@@ -662,7 +648,6 @@ describe("BiosTab", () => {
               declaration: "read",
               wanted: "needed",
               required_by_active: true,
-              cores: {},
               on_server: true,
               declared_kind: "file",
               satisfied: false,
@@ -684,12 +669,52 @@ describe("BiosTab", () => {
     expect(container.textContent).toContain("dc_boot.bin Dreamcast boot ROM — its location could not be read");
   });
 
-  it("draws a folder row whose contents could not be read amber, never green", () => {
+  it("draws a missing optional file's dot grey, never amber, where another emulator requires it", () => {
+    // Amber means only a one-of group whose images cover some regions (#2190
+    // D7). What another emulator demands is on that emulator's own tab, so a
+    // file this launch does not need is grey here whoever else needs it.
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          server_count: 1,
+          local_count: 0,
+          ratio_server_count: 1,
+          ratio_local_count: 0,
+          all_downloaded: false,
+          required_count: 0,
+          required_downloaded: 0,
+          required_withheld: 0,
+          files: [
+            {
+              file_name: "scph5500.bin",
+              downloaded: false,
+              local_path: "",
+              declared_path: "scph5500.bin",
+              description: "",
+              wanted: "optional",
+              required_by_active: false,
+              on_server: true,
+              declared_kind: "file",
+              satisfied: false,
+            },
+          ],
+        }}
+        biosLevel="ok"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+    const dot = container.querySelector(".romm-panel-file-row .romm-status-dot") as HTMLElement;
+    expect(dot.style.backgroundColor).toBe("#8f98a0");
+  });
+
+  it("draws a folder row whose contents could not be read grey, never green", () => {
     // The colours are the pane's own, so they are pinned here rather than
     // through the panel: `downloaded` is true for a folder — something is at the
     // destination — and green over a verdict nothing established is the false
-    // all-clear this row exists to avoid. No core matches `coreInfo`'s active
-    // one, so the amber cannot have come from the active-core highlight.
+    // all-clear this row exists to avoid. Grey is the colour of "not
+    // established"; amber is no mark of a row's.
     const { container } = render(
       <BiosTab
         biosStatus={{
@@ -711,7 +736,6 @@ describe("BiosTab", () => {
               description: "'pcsx2/bios' folder",
               wanted: "needed",
               required_by_active: true,
-              cores: {},
               on_server: false,
               declared_kind: "directory",
               satisfied: null,
@@ -724,7 +748,9 @@ describe("BiosTab", () => {
         isActive={true}
       />,
     );
-    expect(container.innerHTML).toContain("#d4a72c");
+    const dot = container.querySelector(".romm-panel-file-row .romm-status-dot") as HTMLElement;
+    expect(dot.style.backgroundColor).toBe("#8f98a0");
+    expect(container.innerHTML).not.toContain("#d4a72c");
     expect(container.innerHTML).not.toContain("#5ba32b");
   });
 
@@ -759,7 +785,6 @@ describe("BiosTab", () => {
               description: "'pcsx2/bios' folder",
               wanted: "needed",
               required_by_active: true,
-              cores: {},
               on_server: false,
               declared_kind: "directory",
               satisfied,
@@ -866,237 +891,6 @@ describe("BiosTab", () => {
     });
   });
 
-  describe("a core's line", () => {
-    // Two statements, and the line prints whichever of them has something to
-    // say. What a core marks the file is its own declaration and is never
-    // rewritten; where the file is an option of the core's one-of group, the
-    // line names the regions it serves there instead of "optional".
-    type CoreEntry = { required: boolean; one_of?: { regions: string[]; every_region: boolean } | null };
-    const psxRow = (cores: Record<string, CoreEntry>) => ({
-      needs_bios: true,
-      server_count: 1,
-      local_count: 0,
-      ratio_server_count: 1,
-      ratio_local_count: 0,
-      all_downloaded: false,
-      required_count: 0,
-      required_downloaded: 0,
-      required_withheld: 0,
-      system_image: "absent" as const,
-      files: [
-        {
-          file_name: "scph5501.bin",
-          downloaded: false,
-          local_path: "",
-          description: "PlayStation BIOS (SCPH-5501)",
-          wanted: "optional" as const,
-          required_by_active: false,
-          cores,
-          on_server: true,
-          declared_kind: "file" as const,
-          satisfied: false,
-        },
-      ],
-    });
-
-    const lineFor = (cores: Record<string, CoreEntry>, label: string): string | undefined => {
-      const { container } = render(
-        <BiosTab biosStatus={psxRow(cores)} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
-      );
-      // Leaf divs only: the block wrapping the core lines is a div too, and its
-      // text is every line run together.
-      return [...container.querySelectorAll("div")]
-        .filter((div) => div.children.length === 0)
-        .map((div) => div.textContent)
-        .find((text) => text.startsWith(label));
-    };
-
-    it("names the region a file serves as an option of the core's group", () => {
-      const cores = {
-        "mednafen_psx_libretro.so": { required: false, one_of: { regions: ["ntsc-j"], every_region: false } },
-      };
-      expect(lineFor(cores, "mednafen_psx")).toBe("mednafen_psx (for Japan discs)");
-    });
-
-    it("says every region for the image that serves them all", () => {
-      const cores = {
-        "swanstation_libretro.so": {
-          required: false,
-          one_of: { regions: ["ntsc-j", "ntsc-u", "pal"], every_region: true },
-        },
-      };
-      expect(lineFor(cores, "swanstation")).toBe("swanstation (boots it for every region)");
-    });
-
-    it("keeps the core's own word — the declaration is never rewritten", () => {
-      // "required" is what this core's `.info` says, and the console's demand
-      // adds nothing a reader would act on differently, so the line is
-      // unchanged. Reading the pair as licence to print "required" over an
-      // "optional" declaration is the misreading this shape exists to prevent.
-      expect(lineFor({ "beetle_psx_libretro.so": { required: true, one_of: null } }, "beetle_psx")).toBe(
-        "beetle_psx (required)",
-      );
-    });
-
-    it("says nothing extra for a core whose console the table has no entry for", () => {
-      // Absent is an unasked question, not "this console needs nothing" — so the
-      // line says only what the declaration said.
-      expect(lineFor({ "mgba_libretro.so": { required: false } }, "mgba")).toBe("mgba (optional)");
-    });
-
-    it("leaves a file a demanding core marks optional beside required ones plain", () => {
-      // `ps1_rom.bin` under Beetle PSX, and the line the annotation this
-      // replaced got wrong. That console does not start without an image, and
-      // what the core says about it is three OTHER files marked required — so
-      // this row carries no disjunction and the line is the declaration alone.
-      expect(lineFor({ "beetle_psx_libretro.so": { required: false } }, "beetle_psx")).toBe("beetle_psx (optional)");
-    });
-
-    it("answers each core on its own, over one file two of them declare", () => {
-      // One row, two emulators, two different consoles' answers: the pane lists
-      // both lines and neither may take the other's.
-      const cores = {
-        "mednafen_psx_libretro.so": { required: false, one_of: { regions: ["ntsc-u"], every_region: false } },
-        "pcsx_rearmed_libretro.so": { required: false, one_of: null },
-      };
-      expect(lineFor(cores, "mednafen_psx")).toBe("mednafen_psx (for USA discs)");
-      expect(lineFor(cores, "pcsx_rearmed")).toBe("pcsx_rearmed (optional)");
-    });
-  });
-
-  describe("which emulator a line names", () => {
-    // A row's `cores` map is keyed on the resolver's emulator IDENTITY, and each
-    // picker row carries the same string beside its label — that pair is the
-    // whole join, and there is no other. `core_so` cannot serve it: it is null
-    // for every standalone emulator and omits the core file's extension for a
-    // libretro one, so a page matching on it named no standalone emulator at all
-    // and printed `dolphin_libretro.so` where the label said Dolphin.
-    type CoreEntry = { required: boolean; one_of?: { regions: string[]; every_region: boolean } | null };
-
-    const statusFor = (cores: Record<string, CoreEntry>): BiosStatus => ({
-      needs_bios: true,
-      server_count: 1,
-      local_count: 0,
-      ratio_server_count: 1,
-      ratio_local_count: 0,
-      all_downloaded: false,
-      required_count: 1,
-      required_downloaded: 0,
-      required_withheld: 0,
-      files: [
-        {
-          file_name: "scph5501.bin",
-          downloaded: false,
-          local_path: "",
-          description: "PlayStation BIOS (SCPH-5501)",
-          wanted: "needed",
-          required_by_active: true,
-          cores,
-          on_server: true,
-          declared_kind: "file",
-          satisfied: false,
-        },
-      ],
-    });
-
-    const info = (emulators: EmulatorOption[], activeCore: string | null): CoreInfo => ({
-      active_core: activeCore,
-      active_core_label: null,
-      platform_core_label: null,
-      has_game_override: false,
-      emulator_data_available: true,
-      emulator_data_reason: null,
-      emulator_source: { kind: "retrodeck", starts_games: true },
-      platform_system: null,
-      emulators,
-    });
-
-    /** The per-emulator lines under the row, as elements. Leaf divs only: the
-     *  block wrapping them is a div too, and its text is every line run
-     *  together. */
-    const linesOf = (cores: Record<string, CoreEntry>, coreInfo: CoreInfo): HTMLElement[] => {
-      const { container } = render(
-        <BiosTab biosStatus={statusFor(cores)} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
-      );
-      return [...container.querySelectorAll<HTMLElement>("div")].filter((div) => div.children.length === 0);
-    };
-
-    const textsOf = (cores: Record<string, CoreEntry>, coreInfo: CoreInfo): (string | null)[] =>
-      linesOf(cores, coreInfo).map((div) => div.textContent);
-
-    const lineNamed = (cores: Record<string, CoreEntry>, coreInfo: CoreInfo, text: string): HTMLElement | undefined =>
-      linesOf(cores, coreInfo).find((div) => div.textContent === text);
-
-    it("takes a libretro core's label off the picker row carrying its identity", () => {
-      const cores = { "swanstation_libretro.so": { required: true } };
-      expect(textsOf(cores, info([libretroEmu("swanstation_libretro", "SwanStation")], null))).toContain(
-        "SwanStation (required)",
-      );
-    });
-
-    it("names a standalone emulator, which has no core file to be named after", () => {
-      // The whole reason the join is the identity: DuckStation declares firmware
-      // and carries no `core_so` at all, so nothing could put its own name on
-      // the line and the row read the resolver's spelling, DUCKSTATION.
-      expect(textsOf({ DUCKSTATION: { required: true } }, info([standaloneEmu("DuckStation")], null))).toContain(
-        "DuckStation (required)",
-      );
-    });
-
-    it("strips the core file's spelling off an identity the picker cannot name", () => {
-      // Both strips in one identity. The key is the core FILE, so taking only
-      // `_libretro` off leaves the line naming a file with an extension, and
-      // taking only `.so` off leaves the marker no reader typed.
-      expect(textsOf({ "some_obscure_libretro.so": { required: true } }, info([], null))).toContain(
-        "some_obscure (required)",
-      );
-    });
-
-    it("prints an identity that is nothing but those two parts whole", () => {
-      // Stripping both would leave an empty line, which names no emulator at all.
-      expect(textsOf({ "_libretro.so": { required: true } }, info([], null))).toContain("_libretro.so (required)");
-    });
-
-    it("takes the first declared label where two picker rows are one emulator", () => {
-      // ES-DE lists one `pcsx2_libretro.so` as both LRPS2 and PCSX2, so a label
-      // identifies a row and not an emulator. Declared order is preference order
-      // — it is the order the system default is chosen in — so the first row
-      // names the line and the second does not rename it.
-      const emulators = [libretroEmu("pcsx2_libretro", "LRPS2", true), libretroEmu("pcsx2_libretro", "PCSX2")];
-      const texts = textsOf({ "pcsx2_libretro.so": { required: true } }, info(emulators, null));
-      expect(texts).toContain("LRPS2 (required)");
-      expect(texts).not.toContain("PCSX2 (required)");
-    });
-
-    it("highlights the line of the standalone emulator the platform launches with (#955)", () => {
-      // The highlight is an identity match, so it reaches a standalone pick.
-      // `active_core` used to be the libretro `.so`, which is null for one — no
-      // line was highlighted on any platform that launches a standalone
-      // emulator, which on a stock RetroDECK is PS2, GameCube and PSP.
-      const emulators = [standaloneEmu("DuckStation", true), libretroEmu("swanstation_libretro", "SwanStation")];
-      const cores = { DUCKSTATION: { required: true }, "swanstation_libretro.so": { required: false } };
-      const active = lineNamed(cores, info(emulators, "DUCKSTATION"), "DuckStation (required)");
-      const other = lineNamed(cores, info(emulators, "DUCKSTATION"), "SwanStation (optional)");
-
-      expect(active?.style.color).toBe("#d4a72c");
-      expect(active?.style.fontWeight).toBe("bold");
-      expect(other?.style.color).toBe("rgba(255, 255, 255, 0.5)");
-      expect(other?.style.fontWeight).toBe("normal");
-    });
-
-    it("highlights a libretro core on its identity and not on its bare name", () => {
-      const emulators = [libretroEmu("swanstation_libretro", "SwanStation", true)];
-      const cores = { "swanstation_libretro.so": { required: true } };
-      const line = (activeCore: string) => lineNamed(cores, info(emulators, activeCore), "SwanStation (required)");
-
-      expect(line("swanstation_libretro.so")?.style.fontWeight).toBe("bold");
-      // The bare `core_so` is the spelling the payload used to carry. It matches
-      // no key here, so a payload still sending it highlights nothing — which is
-      // the regression this pins, not a state the backend can reach.
-      expect(line("swanstation_libretro")?.style.fontWeight).toBe("normal");
-    });
-  });
-
   describe("which rows the pane shows", () => {
     // The Dreamcast this was written for listed eight rows, six of them arcade
     // BIOSes Flycast declares because it also emulates Naomi and AtomisWave.
@@ -1112,7 +906,6 @@ describe("BiosTab", () => {
       description: "",
       wanted: "optional",
       required_by_active: false,
-      cores: { "flycast_libretro.so": { required: false } },
       on_server: false,
       declared_kind: "file",
       satisfied: false,
@@ -1172,7 +965,10 @@ describe("BiosTab", () => {
 
       const { container } = render(
         <BiosTab
-          biosStatus={statusWith([row("dc_boot.bin", { required_by_active: true }), ...arcadeRows])}
+          biosStatus={{
+            ...statusWith([row("dc_boot.bin", { required_by_active: true }), ...arcadeRows]),
+            active_core_label: "Flycast",
+          }}
           biosLevel="ok"
           coreInfo={coreInfo}
           isActive={true}
@@ -1180,27 +976,28 @@ describe("BiosTab", () => {
       );
       // Both claims hold of every row counted, and the last clause is the whole
       // point: a summary that does not say where the summarised rows are hides
-      // them.
+      // them. The emulator named is the one whose rows were counted.
       expect(container.textContent).toContain(
-        "6 more files an installed emulator asks for — none required for this launch, none to download; " +
-          "the Library page's Platforms tab lists them",
+        "6 more files Flycast lists — not required for this launch, nothing to download. " +
+          "All files are on the platform page.",
       );
     });
 
     it("counts a single left-out row in the singular", () => {
       const { container } = render(
         <BiosTab
-          biosStatus={statusWith([row("dc_boot.bin", { required_by_active: true }), row("naomi.zip")])}
+          biosStatus={{
+            ...statusWith([row("dc_boot.bin", { required_by_active: true }), row("naomi.zip")]),
+            active_core_label: "Flycast",
+          }}
           biosLevel="ok"
           coreInfo={coreInfo}
           isActive={true}
         />,
       );
-      // Every noun and verb, not just the count: "none required" over a set of
-      // one reads as a slip, so the singular is its own sentence.
       expect(container.textContent).toContain(
-        "1 more file an installed emulator asks for — not required for this launch, nothing to download; " +
-          "the Library page's Platforms tab lists it",
+        "1 more file Flycast lists — not required for this launch, nothing to download. " +
+          "All files are on the platform page.",
       );
     });
 
@@ -1209,7 +1006,7 @@ describe("BiosTab", () => {
       [1, "1 file on server no installed emulator asks for"],
     ])("counts server files nothing asks for in a note of their own (%i)", (count, note) => {
       const nobodys = Array.from({ length: count }, (_, i) =>
-        row(`extra${i}.bin`, { wanted: "not_needed", cores: {}, on_server: true }),
+        row(`extra${i}.bin`, { wanted: "not_needed", on_server: true }),
       );
       const { container } = render(
         <BiosTab
@@ -1237,7 +1034,7 @@ describe("BiosTab", () => {
         );
         return {
           label: container.querySelector(".romm-panel-value")?.textContent ?? null,
-          hasNote: container.textContent.includes("more files an installed emulator asks for —"),
+          hasNote: container.textContent.includes("lists — not required for this launch"),
         };
       };
 
@@ -1278,7 +1075,6 @@ describe("BiosTab", () => {
       description: "",
       wanted: "optional",
       required_by_active: false,
-      cores: { "mednafen_psx_libretro.so": { required: false, one_of: { regions: [region], every_region: false } } },
       one_of: { regions: [region], every_region: false },
       on_server: true,
       declared_kind: "file",
@@ -1299,7 +1095,6 @@ describe("BiosTab", () => {
       required_count: 1,
       required_downloaded: state === "met" ? 1 : 0,
       required_withheld: 0,
-      required_partial: 0,
       one_of_groups: [
         {
           state,
@@ -1326,6 +1121,26 @@ describe("BiosTab", () => {
       [...container.querySelectorAll<HTMLElement>(".romm-panel-file-row")]
         .find((row) => row.textContent.startsWith(name))
         ?.querySelector<HTMLElement>(".romm-status-dot")?.style.backgroundColor;
+
+    it("names the regions the group states nothing for on the page of a game with no clear region", () => {
+      // A World release: no game region narrows the group, so the platform's
+      // verdict stands — and with it the clause naming Europe.
+      const status = forTheGame("met", ["ntsc-u"], ["ntsc-j"], []);
+      const [group] = status.one_of_groups ?? [];
+      const open = { ...group!, state: "partial" as const, unchecked: ["pal"], unstated: ["pal"] };
+      const container = render(
+        <BiosTab
+          biosStatus={{ ...status, required_downloaded: 0, one_of_groups: [open] }}
+          biosLevel="unknown"
+          coreInfo={beetle}
+          isActive={true}
+        />,
+      ).container;
+
+      expect(container.textContent).toContain(
+        "— for Europe discs Beetle PSX states no BIOS image, so whether they start could not be established",
+      );
+    });
 
     it("says the game's own region is covered", () => {
       const container = renderFor(forTheGame("met", ["ntsc-u"], [], ["ntsc-u"]), "ok");
@@ -1364,18 +1179,14 @@ describe("BiosTab", () => {
       expect(container.querySelectorAll(".romm-panel-file-list .romm-panel-file-row")).toHaveLength(3);
     });
 
-    it("heads the group and the file list each with a subheading in the section label's style", () => {
+    it("heads the group with a subheading in the section label's style, the file list following it", () => {
       const container = renderFor(forTheGame("unmet", [], ["ntsc-j"], ["ntsc-j"]), "missing");
 
       // Written in sentence case; the class upper-cases it, as it does "BIOS".
-      expect(sectionTitles(container)).toEqual(["BIOS", "Beetle PSX · one image per disc region", "Files", "Emulator"]);
+      expect(sectionTitles(container)).toEqual(["BIOS", "Beetle PSX · one image per disc region", "Emulator"]);
       const block = container.querySelector<HTMLElement>('[data-testid="bios-group"]');
-      const files = [...container.querySelectorAll<HTMLElement>(".romm-panel-section-title")].find(
-        (title) => title.textContent === "Files",
-      );
       const list = container.querySelector(".romm-panel-file-list");
-      expect(block?.compareDocumentPosition(files as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-      expect(files?.compareDocumentPosition(list as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(block?.compareDocumentPosition(list as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       // The intro sentence the subheading replaced is gone.
       expect(container.textContent).not.toContain("needs one BIOS image per disc region");
     });
@@ -1525,7 +1336,6 @@ describe("BiosTab", () => {
           description: "",
           wanted: "needed",
           required_by_active: true,
-          cores: { "pcsx2_libretro.so": { required: true } },
           on_server: false,
           declared_kind: "directory",
           satisfied: true,
@@ -1561,6 +1371,124 @@ describe("BiosTab", () => {
       expect(withLine.querySelector(".romm-panel-value")?.textContent).toBe(
         without.querySelector(".romm-panel-value")?.textContent,
       );
+    });
+  });
+
+  describe("one tab per emulator (#2190)", () => {
+    const own = (file_name: string, declared_by: string, over: Partial<BiosFileStatus> = {}): BiosFileStatus => ({
+      file_name,
+      downloaded: false,
+      local_path: "",
+      declared_path: file_name,
+      description: "",
+      wanted: "needed",
+      required_by_active: true,
+      declared_kind: "file",
+      satisfied: false,
+      declared_by,
+      ...over,
+    });
+
+    const saturn = (): BiosStatus => ({
+      needs_bios: true,
+      server_count: 1,
+      local_count: 0,
+      all_downloaded: false,
+      required_count: 1,
+      required_downloaded: 0,
+      active_core_label: "YabaSanshiro",
+      files: [own("saturn_bios.bin", "yabasanshiro_libretro.so")],
+      emulator_tabs: [
+        { emulator: "yabasanshiro_libretro.so", label: "YabaSanshiro", launching: true, requirements_met: false },
+        {
+          emulator: "kronos_libretro.so",
+          label: "Kronos",
+          launching: false,
+          requirements_met: true,
+          rows: [
+            own("saturn_bios.bin", "kronos_libretro.so", {
+              declared_path: "kronos/saturn_bios.bin",
+              satisfied: true,
+              downloaded: true,
+            }),
+          ],
+        },
+      ],
+    });
+
+    const renderSaturn = () =>
+      render(<BiosTab biosStatus={saturn()} biosLevel="missing" coreInfo={coreInfo} isActive={true} />);
+    const tabs = (container: HTMLElement) =>
+      [...container.querySelectorAll<HTMLElement>('[data-testid="emulator-tab"]')].map((tab) => tab.textContent);
+    const names = (container: HTMLElement) =>
+      [...container.querySelectorAll(".romm-panel-file-name")].map((el) => el.textContent.split(" ")[0]);
+
+    it("puts the launching emulator's tab first, marked as the one that launches", () => {
+      expect(tabs(renderSaturn().container)).toEqual(["YabaSanshiro· launches", "Kronos"]);
+    });
+
+    it("dots each tab with its own emulator's verdict", () => {
+      const dots = [...renderSaturn().container.querySelectorAll<HTMLElement>('[data-testid="emulator-tab-dot"]')];
+      expect(dots.map((dot) => dot.style.backgroundColor)).toEqual(["#d94126", "#5ba32b"]);
+    });
+
+    it("opens on the launching emulator's rows", () => {
+      expect(names(renderSaturn().container)).toEqual(["saturn_bios.bin"]);
+    });
+
+    it("shows another emulator's own rows, muted, and leaves the header the launching emulator's", () => {
+      const { container } = renderSaturn();
+      const header = container.querySelector(".romm-panel-value")?.textContent;
+      fireEvent.click([...container.querySelectorAll('[data-testid="emulator-tab"]')][1] as HTMLElement);
+
+      expect(names(container)).toEqual(["kronos/saturn_bios.bin"]);
+      const row = container.querySelector<HTMLElement>(".romm-panel-file-row");
+      expect(row?.style.opacity).toBe("0.6");
+      expect(container.querySelector(".romm-panel-value")?.textContent).toBe(header);
+    });
+
+    it("narrows another emulator's tab by that emulator's own need and names it in the note", () => {
+      const status = saturn();
+      const kronos = status.emulator_tabs?.[1];
+      if (kronos === undefined) throw new Error("fixture has no Kronos tab");
+      kronos.rows = [
+        ...(kronos.rows ?? []),
+        // Kronos's own optional cartridge image: not required by it, not there,
+        // not in the library — nothing this page could act on.
+        own("mpr-19367-mx.ic1", "kronos_libretro.so", {
+          declared_path: "kronos/mpr-19367-mx.ic1",
+          wanted: "optional",
+          required_by_active: false,
+          on_server: false,
+        }),
+      ];
+      const { container } = render(
+        <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
+      );
+      fireEvent.click([...container.querySelectorAll('[data-testid="emulator-tab"]')][1] as HTMLElement);
+
+      expect(names(container)).toEqual(["kronos/saturn_bios.bin"]);
+      expect(container.textContent).toContain(
+        "1 more file Kronos lists — not required by Kronos, nothing to download. " +
+          "All files are on the platform page.",
+      );
+    });
+
+    it("keeps a row another emulator declares off the launching tab", () => {
+      const status = saturn();
+      status.files = [...(status.files ?? []), own("mpr-17933.bin", "kronos_libretro.so")];
+      const { container } = render(
+        <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
+      );
+      expect(names(container)).toEqual(["saturn_bios.bin"]);
+    });
+
+    it("draws no strip where only one emulator answered", () => {
+      const status = { ...saturn(), emulator_tabs: (saturn().emulator_tabs ?? []).slice(0, 1) };
+      const { container } = render(
+        <BiosTab biosStatus={status} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
+      );
+      expect(container.querySelectorAll('[data-testid="emulator-tab"]')).toHaveLength(0);
     });
   });
 });

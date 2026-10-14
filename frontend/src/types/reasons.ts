@@ -119,6 +119,7 @@ export type WireReason =
   | "padded_header_value"
   | "path_traversal"
   | "pending_uploads"
+  | "place_unreadable"
   | "platform_system_off"
   | "prune_active"
   | "rate_limited"

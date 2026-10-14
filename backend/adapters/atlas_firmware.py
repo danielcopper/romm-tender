@@ -75,13 +75,17 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from _vendor.atlas import (
+    CAVEAT_CORE_MODE_UNESTABLISHED,
     CAVEAT_EMULATOR_CATALOGUE_SEALED,
     CAVEAT_FIRMWARE_CONFIGURED_IMAGE_MISSING,
+    CAVEAT_FIRMWARE_IMAGE_AMBIGUOUS,
     CAVEAT_FIRMWARE_IMAGE_IDENTIFIED,
     CAVEAT_FIRMWARE_IMAGE_UNLISTED,
     CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE,
     CAVEAT_FIRMWARE_SCAN_INCOMPLETE,
     CAVEAT_FIRMWARE_SEARCH_UNVERIFIED,
+    CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE,
+    REASON_REGION_DECIDED_BY_DISC,
 )
 
 # Neither name is in emu-atlas's ``__all__``; whether they are public API is
@@ -92,7 +96,12 @@ from adapters.atlas_identity import emulator_identity
 from domain.firmware_wants import (
     DECLARED_DIRECTORY,
     DECLARED_FILE,
+    LOCATING_UNESTABLISHED,
+    LOCATING_VALUES,
+    NOTE_BIOS_UNCHOSEN,
+    NOTE_IMAGES_TIED,
     CoreFirmwareVerdict,
+    EmulatorNote,
     FirmwareCatalogue,
     FirmwareGroup,
     FirmwareOption,
@@ -100,6 +109,7 @@ from domain.firmware_wants import (
     FirmwareWant,
     FolderVerdict,
     MissingConfiguredImage,
+    RefusedDeclaration,
 )
 
 if TYPE_CHECKING:
@@ -140,11 +150,18 @@ _IDENTIFIED_IMAGE_CODES = frozenset({CAVEAT_FIRMWARE_IMAGE_IDENTIFIED, CAVEAT_FI
 # the verdict's precedence decides between the two
 # (:mod:`domain.firmware_groups`). The group's own ``core-mode-unestablished``
 # names regions as well: under ``regions`` the regions its options DO serve, and
-# under ``unstated`` the regions it states nothing for. A region whose every name
-# the resolver refused (it leaves the root) arrives with neither an option nor
-# one of these codes, only in ``unstated``, which this adapter does not read.
+# under ``unstated`` the regions it states nothing for — the one place a region
+# whose every name the resolver refused (it leaves the root) is named at all,
+# which :func:`_unstated_regions` reads.
 _UNCHECKED_REGION_CODES = frozenset({CAVEAT_FIRMWARE_SCAN_INCOMPLETE, CAVEAT_FIRMWARE_SEARCH_UNVERIFIED})
 _ABSENT_REGION_CODES = frozenset({CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE})
+
+# The one setting whose emptiness is a BIOS nobody chose: PCSX2's ``[Filenames]
+# BIOS``, which the resolver names under ``key`` in that spelling
+# (``_vendor/atlas/firmware.py``, the PCSX2 card's caveat). xemu states its empty
+# ``[sys.files]`` keys with the same code and shape, and two of the three do not
+# hold the launch, so the shape alone says nothing about a choice.
+_BIOS_CHOICE_SETTING = "Filenames/BIOS"
 
 
 class AtlasFirmwareAdapter:
@@ -262,7 +279,10 @@ def _stated(core: Any) -> bool:
     the finished answer that it needs nothing. ``packaged`` is a rule card
     standing in for an emulator that ships none, and it is an answer only where
     it named something: a card may identify its image by CONTENT, so a card with
-    no requirement in hand has established nothing at all. A refused declaration
+    no requirement in hand has stated nothing about what the emulator wants —
+    which is not the same as no verdict: such a card can still be answered not
+    met (``docs/architecture/backend-architecture.md``, FirmwareService notes,
+    "What the narrowest decline does decide is wording"). A refused declaration
     counts as unread too — the emulator does want something the resolver would
     not follow to a destination, so what it wants is no better known than for one
     whose declaration was missing.
@@ -304,27 +324,99 @@ def _unread_emulators(answer: Any) -> frozenset[str]:
 
 
 def _emulator_verdicts(answer: Any) -> dict[str, CoreFirmwareVerdict]:
-    """Each emulator's two answers about itself, by identity.
+    """What the resolver says about each emulator as a whole, by identity.
 
     Keyed on the emulator rather than folded onto a file row, because that is
-    what they are about: one machine's PlayStation BIOS images read one way under
+    what it is about: one machine's PlayStation BIOS images read one way under
     SwanStation and another under PCSX ReARMed, and a per-file row has no room
     for a fact that changes with the emulator the game launches with.
 
+    Everything here is the entry's own statement: its verdict, what is recorded
+    about its console and whether the table marked that, how it finds its
+    firmware, its declaration state, its refused declarations, the plain
+    required files it could not judge, and the notes a surface words.
+
     An unidentified entry is skipped; an identity the answer names twice keeps
-    the first entry, the same rule :func:`_placement_for` applies to a
-    destination read twice.
+    the first entry, the same rule :func:`_placements` applies to a destination
+    read twice.
     """
     verdicts: dict[str, CoreFirmwareVerdict] = {}
     for core in answer.cores:
         identity = emulator_identity(core)
-        if identity is None:
+        if identity is None or identity in verdicts:
             continue
-        verdicts.setdefault(
-            identity,
-            CoreFirmwareVerdict(system_firmware=core.system_firmware, requirements_met=core.requirements_met),
+        verdicts[identity] = CoreFirmwareVerdict(
+            system_firmware=core.system_firmware,
+            requirements_met=core.requirements_met,
+            system_firmware_met=core.system_firmware_met,
+            world_knowledge=any(caveat.code == CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE for caveat in core.caveats),
+            locating=_locating(core),
+            declaration=core.declaration,
+            undetermined=_plain_required(core, None),
+            unmet=_plain_required(core, False),
+            refused=tuple(
+                RefusedDeclaration(
+                    declared=refused.declared, required=refused.need == "required", reason=refused.reason
+                )
+                for refused in core.refused
+            ),
+            region_decided_by_disc=any(_decided_by_disc(caveat) for caveat in core.caveats),
+            notes=_notes(core.caveats),
         )
     return verdicts
+
+
+def _decided_by_disc(caveat: Any) -> bool:
+    """Is *caveat* the resolver's statement that a launch's console region is the disc's own?"""
+    return caveat.code == CAVEAT_CORE_MODE_UNESTABLISHED and caveat.data.get("reason") == REASON_REGION_DECIDED_BY_DISC
+
+
+def _locating(core: Any) -> str:
+    """How the entry's emulator finds its firmware, in Tender's vocabulary.
+
+    The resolver's word where it is one of :data:`LOCATING_VALUES`, and
+    ``unestablished`` for anything else — reading an unknown word as
+    ``by-name`` would claim the declared list is the whole requirement, which
+    nobody established.
+    """
+    locating = getattr(core, "locating", None)
+    return locating if locating in LOCATING_VALUES else LOCATING_UNESTABLISHED
+
+
+def _plain_required(core: Any, satisfied: bool | None) -> tuple[str, ...]:
+    """The plain required files whose resolver verdict is *satisfied* — ``None`` undetermined, ``False`` not met.
+
+    The resolver's ``undetermined`` and ``unmet`` minus what its one-of groups put
+    there: a group's own options are the group's statement, carried on the
+    group, and they are what the region rules read.
+    """
+    return tuple(
+        entry.file_name
+        for entry in core.requirements
+        if getattr(entry, "options", None) is None and entry.need == "required" and entry.satisfied is satisfied
+    )
+
+
+def _notes(caveats: tuple[Any, ...]) -> tuple[EmulatorNote, ...]:
+    """The emulator-level statements a surface words, off the entry's own caveats.
+
+    PCSX2's BIOS setting naming no file is a BIOS nobody has chosen — read off
+    the setting the resolver names (:data:`_BIOS_CHOICE_SETTING`), never off the
+    caveat's shape, which xemu's empty keys share; an ambiguity is images that rank
+    alike, with the regions it is about where the resolver states them. The
+    entry's own caveats are its statements, so no attribution is asked.
+    """
+    notes: list[EmulatorNote] = []
+    for caveat in caveats:
+        stated = caveat.data.get("regions")
+        regions = tuple(r for r in stated if isinstance(r, str)) if isinstance(stated, (list, tuple)) else ()
+        if caveat.code == CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE and caveat.data.get("key") == _BIOS_CHOICE_SETTING:
+            notes.append(EmulatorNote(kind=NOTE_BIOS_UNCHOSEN, setting=_BIOS_CHOICE_SETTING))
+        elif caveat.code == CAVEAT_FIRMWARE_IMAGE_AMBIGUOUS:
+            tied = caveat.data.get("tied")
+            count = int(tied) if isinstance(tied, str) and tied.isdigit() else None
+            notes.append(EmulatorNote(kind=NOTE_IMAGES_TIED, tied=count, regions=regions))
+    return tuple(notes)
 
 
 def _requirement_entries(core: Any) -> list[tuple[Any, bool]]:
@@ -355,7 +447,8 @@ def _groups(answer: Any) -> tuple[FirmwareGroup, ...]:
     per identity, as :func:`_wants` keeps one want per identity; a row stating
     no group takes no part in that, so it never hides a later row's group. The
     regions an entry names beside its group come off that entry's own caveats
-    (:data:`_UNCHECKED_REGION_CODES`, :data:`_ABSENT_REGION_CODES`).
+    (:data:`_UNCHECKED_REGION_CODES`, :data:`_ABSENT_REGION_CODES`,
+    :func:`_unstated_regions`).
     """
     groups: list[FirmwareGroup] = []
     seen: set[str] = set()
@@ -369,6 +462,7 @@ def _groups(answer: Any) -> tuple[FirmwareGroup, ...]:
         spoken = [caveat for caveat in core.caveats if _speaks_for(caveat, names)]
         unchecked = _caveat_regions(spoken, _UNCHECKED_REGION_CODES)
         absent = _caveat_regions(spoken, _ABSENT_REGION_CODES)
+        unstated = _unstated_regions(spoken)
         groups.extend(
             FirmwareGroup(
                 emulator=identity,
@@ -380,6 +474,8 @@ def _groups(answer: Any) -> tuple[FirmwareGroup, ...]:
                 ),
                 unchecked_regions=unchecked,
                 absent_regions=absent,
+                satisfied=entry.satisfied,
+                unstated_regions=unstated,
             )
             for entry in stated
         )
@@ -393,6 +489,22 @@ def _caveat_regions(caveats: list[Any], codes: frozenset[str]) -> tuple[str, ...
         for caveat in caveats
         if caveat.code in codes and isinstance(caveat.data.get("regions"), (list, tuple))
         for region in caveat.data["regions"]
+        if isinstance(region, str) and region
+    )
+    return tuple(dict.fromkeys(named))
+
+
+def _unstated_regions(caveats: list[Any]) -> tuple[str, ...]:
+    """The regions a group carries no option for, off its ``region-decided-by-disc`` statement's ``unstated``.
+
+    Read from that field alone (``_undecided_region_caveat`` in the vendored
+    ``firmware.py``) and never out of the message, which names them too.
+    """
+    named = (
+        region
+        for caveat in caveats
+        if _decided_by_disc(caveat) and isinstance(caveat.data.get("unstated"), (list, tuple))
+        for region in caveat.data["unstated"]
         if isinstance(region, str) and region
     )
     return tuple(dict.fromkeys(named))
@@ -453,16 +565,20 @@ def _a_file_in_a_declared_folder(requirement: Any) -> bool:
 
 
 def _placements(answer: Any) -> tuple[FirmwarePlacement, ...]:
-    """One placement per declared file name, folding every emulator that declares it.
+    """One placement per emulator and declared file name — each emulator's own requirement.
 
-    Two emulators routinely want the same file — gambatte and SameBoy both ask
-    for a Game Boy boot ROM — so the file is the key and the emulators are the
-    entries under it. That is also what keeps one file from reading differently
-    on two surfaces: there is one row per name in the whole answer.
+    Two emulators routinely want the same name — gambatte and SameBoy both ask
+    for a Game Boy boot ROM — and they do not always want it in the same place:
+    Kronos opens ``kronos/saturn_bios.bin`` where YabaSanshiro opens
+    ``saturn_bios.bin``. So nothing is folded across emulators by name:
+    each emulator's requirement is its own placement, with its own place,
+    presence and verdict, and :meth:`FirmwareCatalogue.placements_for` picks the
+    launching emulator's. Two rows of ONE identity are one placement — the
+    first stands, as the identity-keyed readings keep the first entry.
 
-    What each row then says about its own destination is
-    :func:`_placement_for`'s, and the answer's caveats are indexed once here
-    rather than per row because one index serves every name in it.
+    Which emulators declare the name at all is still read over every entry
+    (:func:`_wants`). The answer's caveats are indexed once here rather than per
+    row because one index serves every name in it.
     """
     at_path, in_dir = _caveats_by_destination(answer)
     by_name: dict[str, list[Any]] = {}
@@ -470,9 +586,16 @@ def _placements(answer: Any) -> tuple[FirmwarePlacement, ...]:
         for requirement, option in _requirement_entries(core):
             by_name.setdefault(requirement.file_name, []).append((core, requirement, option))
 
-    placements = [
-        _placement_for(file_name, pairs, answer.root, at_path, in_dir) for file_name, pairs in by_name.items()
-    ]
+    placements: list[FirmwarePlacement] = []
+    for file_name, pairs in by_name.items():
+        wants = _wants(pairs)
+        seen: set[str | None] = set()
+        for core, requirement, _option in pairs:
+            identity = emulator_identity(core)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            placements.append(_placement_for(file_name, core, requirement, wants, answer.root, at_path, in_dir))
     return tuple(sorted(placements, key=lambda placement: placement.file_name))
 
 
@@ -518,18 +641,18 @@ def _wants(pairs: list[Any]) -> tuple[FirmwareWant, ...]:
 
 def _placement_for(
     file_name: str,
-    pairs: list[Any],
+    core: Any,
+    requirement: Any,
+    wants: tuple[FirmwareWant, ...],
     root: str,
     at_path: dict[str, tuple[Any, ...]],
     in_dir: dict[str, tuple[Any, ...]],
 ) -> FirmwarePlacement:
-    """One name's row: who wants it, and what was read where it goes.
+    """One emulator's row for one name: where it opens the file, and what was read there.
 
-    The two halves answer to different things. ``wants`` is every emulator under
-    the name, because that is what the name is keyed on. Everything about the
-    DESTINATION comes from the first requirement alone — those are statements
-    about one place, and reading them off different requirements would describe
-    two places as one row.
+    ``wants`` is every emulator under the name, because that is what the name
+    is keyed on. Everything about the DESTINATION comes from this emulator's
+    requirement alone, and so does the verdict.
 
     With no location to honour the destination half goes silent together, which
     is the early return: a standalone emulator's own XDG tree holding the file
@@ -537,43 +660,47 @@ def _placement_for(
     dropped rather than travelling on to describe somewhere else. What survives
     is the declaration — its kind is what the emulator OPENS, not what is there,
     and its ``declaration`` state says which register the description is written
-    in, which is a property of the entry that stated it rather than of the place.
+    in — and the verdict, which is about the place the emulator opens wherever
+    that is.
 
-    ``checked`` goes with the destination half, and off the same entry the
-    declaration does: it is what became of the bytes AT that place, so carrying
-    it past the early return would describe a read of somewhere else.
+    ``checked`` goes with the destination half: it is what became of the bytes
+    AT that place, so carrying it past the early return would describe a read of
+    somewhere else.
     """
-    first_core, first, _ = pairs[0]
-    directory = first.declared_kind == DECLARED_DIRECTORY
+    directory = requirement.declared_kind == DECLARED_DIRECTORY
     declared_kind = DECLARED_DIRECTORY if directory else DECLARED_FILE
-    wants = _wants(pairs)
-    location = _declared_location(first, root)
+    identity = emulator_identity(core)
+    location = _declared_location(requirement, root)
     if location is None:
         return FirmwarePlacement(
             file_name=file_name,
             relative_path=None,
-            description=first.description,
+            description=requirement.description,
             wants=wants,
             declared_kind=declared_kind,
-            declaration=first_core.declaration,
+            declaration=core.declaration,
+            emulator=identity,
+            satisfied=requirement.satisfied,
         )
 
-    speaking = _speaking_for(at_path, in_dir, first, _names_of(first_core))
-    folder = _folder_verdict(first, speaking) if directory else None
-    supplied = first.supplied_by
+    speaking = _speaking_for(at_path, in_dir, requirement, _names_of(core))
+    folder = _folder_verdict(requirement, speaking) if directory else None
+    supplied = requirement.supplied_by
     return FirmwarePlacement(
         file_name=file_name,
         relative_path=location,
-        description=first.description,
+        description=requirement.description,
         wants=wants,
-        present=first.present,
+        present=requirement.present,
         declared_kind=declared_kind,
-        declaration=first_core.declaration,
+        declaration=core.declaration,
         caveats=tuple(dict.fromkeys(caveat.code for caveat in speaking)),
         folder=folder,
         supplied_by=supplied.label if supplied is not None else None,
-        checked=first.checked,
-        missing_configured_image=_missing_configured_image(first_core, speaking),
+        checked=requirement.checked,
+        missing_configured_image=_missing_configured_image(core, speaking),
+        emulator=identity,
+        satisfied=requirement.satisfied,
     )
 
 

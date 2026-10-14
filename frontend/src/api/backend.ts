@@ -19,7 +19,7 @@ import type {
   PlatformFirmwareStatus,
   FirmwareDownloadResult,
   BiosLevel,
-  SystemImage,
+  EmulatorAnswer,
   OneOfGroupVerdict,
   BiosStatus,
   BiosFileStatus,
@@ -158,30 +158,23 @@ export function isRenameCollisions(value: object): value is RenameCollisionsResu
  * alone (#1660).
  */
 export interface BiosAnswer {
-  bios_status?: {
-    needs_bios?: boolean;
-    platform_slug: string;
-    server_count: number;
-    local_count: number;
-    ratio_server_count?: number;
-    ratio_local_count?: number;
-    all_downloaded: boolean;
-    required_count?: number;
-    required_downloaded?: number;
-    required_withheld?: number;
-    /** The one-of groups among `required_count` that are covered for some
-     *  regions only — not met and not absent, so the badge leaves them out. */
-    required_partial?: number;
-    /** The console's own firmware demand on the launching core — see
-     *  {@link SystemImage}. Read by the play row's badge, which cannot rely on
-     *  the counts for it: whether any of the images is marked required is the
-     *  core author's choice, and over one PlayStation the deployed catalogue
-     *  goes both ways. */
-    system_image?: SystemImage;
-    one_of_groups?: OneOfGroupVerdict[];
-    cached_at?: number;
-    files?: BiosFileStatus[];
-  } | null;
+  bios_status?:
+    | ({
+        needs_bios?: boolean;
+        platform_slug: string;
+        server_count: number;
+        local_count: number;
+        ratio_server_count?: number;
+        ratio_local_count?: number;
+        all_downloaded: boolean;
+        required_count?: number;
+        required_downloaded?: number;
+        required_withheld?: number;
+        one_of_groups?: OneOfGroupVerdict[];
+        cached_at?: number;
+        files?: BiosFileStatus[];
+      } & EmulatorAnswer)
+    | null;
   bios_level?: BiosLevel | null;
   bios_label?: string | null;
   bios_status_unknown?: boolean;

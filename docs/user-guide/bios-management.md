@@ -23,8 +23,9 @@ Not all systems need BIOS files. Cartridge-based systems like Game Boy, SNES, an
 ## BIOS Status on the Game Detail Page
 
 When you open a game whose platform has BIOS files — on your RomM server, or asked for by the emulator that will run it
-— the game detail panel's **BIOS** tab shows the readiness line. Its dot color reflects the same
-unknown/ok/partial/missing verdict used everywhere in Tender:
+— the game detail panel's **BIOS** tab shows the readiness line. Its dot colour is the verdict of the resolver Tender
+asks — whether the emulator you launch with has everything it needs — and the same colour is used everywhere in Tender.
+No colour is worked out from counting files:
 
 - **Green** — nothing required is missing: "All 2 files mGBA requires are in place", or "mGBA marks none of its BIOS
   files as required (3/5 RomM library files)" when the emulator you launch with lists no file it needs, or "SwanStation
@@ -32,17 +33,21 @@ unknown/ok/partial/missing verdict used everywhere in Tender:
   reads "The one file DuckStation requires is in place". A line saying the required files are in place can end in "(2
   optional missing)": files that same emulator lists as optional and that are not in place. Another emulator's optional
   files are not counted there.
-- **Amber** — some required files present: "1 of 2 files mGBA requires are in place", or "Beetle PSX has a BIOS image
-  for USA only — Japan and Europe discs will not start" where the console needs one image per region and only some
-  regions have theirs
-- **Red** — no required files present yet ("The one file DuckStation requires is not in place" where there is only the
-  one), or "Beetle PSX cannot start this system without a BIOS image" where the console itself will not start without
-  one of them (see [When the console needs a BIOS image](#when-the-console-needs-a-bios-image))
-- **Grey** — no readiness claim, in one of three wordings: "Nothing could be established about what mGBA needs", where
-  Tender could not work the requirement out at all (see
-  [When the requirement is unknown](#when-the-requirement-is-unknown)), or "One file mGBA requires could not be checked"
-  and "Whether the BIOS image Beetle PSX needs is in place could not be checked", where it knows the requirement and
-  could not settle whether you have it (see [When readiness cannot be stated](#when-readiness-cannot-be-stated))
+- **Amber** — only one thing: the console needs one image per disc region, the images in place serve some regions and
+  not others, and nothing else is open — "Beetle PSX has a BIOS image for USA only — Japan and Europe discs will not
+  start". Whether a game starts then depends on its disc's region (see
+  [When the console needs a BIOS image](#when-the-console-needs-a-bios-image)).
+- **Red** — the emulator does not have what it needs: "1 of 2 files mGBA requires are in place" (the sentence still says
+  how much is there), "The one file DuckStation requires is not in place", a file that is there but is the wrong image,
+  or "PlayStation does not start without a BIOS image, and none of the five SwanStation knows is in place" where the
+  console itself will not start without one of the images
+- **Grey** — not established, in one of several wordings: "Nothing could be established about what mGBA needs", where
+  the emulator could not be asked at all (see [When the requirement is unknown](#when-the-requirement-is-unknown)); "One
+  file mGBA requires could not be checked" or "Whether the BIOS image Beetle PSX needs is in place could not be
+  checked", where the requirement is known and whether you have it could not be settled; "No BIOS is chosen in PCSX2's
+  settings, and no game boots until one is", where the emulator's own settings name no BIOS; or a required file the
+  resolver would not follow, named with its reason (see
+  [When readiness cannot be stated](#when-readiness-cannot-be-stated))
 
 Every one of those sentences is written in one place and both surfaces read it, so the game page and the Library page's
 platform pane can never word the same state differently. The pane has a heading to hang a short form on, so it shows
@@ -60,7 +65,8 @@ The line says whose requirement it is on purpose, and it is a statement about th
 It names that emulator, and the name is the one the rest of the line was worked out for — the same pick the counts
 beside it were filtered by, so the sentence and the numbers can never be about two different emulators. Where Tender
 could not settle on one, the line says "The launching emulator marks none of its BIOS files as required" instead.
-Whether the console itself starts without a BIOS image is a separate question with a line of its own (see
+Whether the console itself starts without a BIOS image is weighed into the colour by the resolver and named in a line of
+its own where it is why the line is red (see
 [When the console needs a BIOS image](#when-the-console-needs-a-bios-image)), and where nothing is recorded about the
 console Tender says nothing about it either — so a line reading only "nothing required" would have claimed an all-clear
 nobody gave.
@@ -79,52 +85,42 @@ needs, is listed whether your library holds it or not.
 The readiness line is computed against the **active core** for that game — so switching to a core that needs no BIOS (or
 that treats a file as optional) clears the warning, while switching to a core that requires a missing file surfaces it.
 
-Under the line the tab lists, one per row, the files an installed emulator asks for that this game gives you something
-to do or to know about. The rest are counted on lines of their own below them rather than listed — one line for the
-files an installed emulator asks for that this game does not need and no page can fetch, and one for the files in your
-RomM library that no emulator was found to ask for, worded by whether the emulator you launch with could be read (see
-below). A row is headed by the file the emulator declares, with its folder where it asks for one (`dc/dc_boot.bin`) —
-that is where the file has to go, and it is the one thing you need when placing one by hand. Whatever the emulator's
-packager wrote about the file follows the name on the same line, in the packager's own wording and punctuation —
-`scph5500.bin (PS1 JP BIOS)` — and only where it says something the name does not: those descriptions usually repeat the
-file name, and many are nothing else. Where the file also has something to say about its state, that comes last, behind
-a dash: `scph5500.bin (PS1 JP BIOS) — missing, not in
-your RomM library`. It is the **emulator's own** wording — a
-RetroArch core's description file — and it is shown for no other source. Where Tender's own card stands in for an
-emulator that ships no description of its own, that card explains the requirement in full sentences, which is a
-paragraph on a line meant for a few words; the row shows the file and its state instead.
+Under the line sits one **tab per emulator** of the platform — the one you launch with first, marked _launches_ and
+open, then every other installed emulator Tender could ask. Each tab carries a dot with that emulator's own answer
+(green has everything it needs, red does not, grey not established) and lists that emulator's own files, exactly where
+it opens them and with its own verdict for each: with YabaSanshiro launching Saturn, its tab shows `saturn_bios.bin`
+directly in the BIOS folder, and Kronos's tab shows `kronos/saturn_bios.bin`. Choosing a tab changes only the list —
+never which emulator launches. The line above, the **BIOS** badge beside Play and every download stay those of the
+emulator you launch with, and another emulator's tab is shown muted, with nothing to press. Files in your RomM library
+that no emulator was found to ask for are counted on lines of their own under the launching emulator's list, worded by
+whether that emulator could be read (see below). A row is headed by the file the emulator declares, with its folder
+where it asks for one (`dc/dc_boot.bin`) — that is where the file has to go, and it is the one thing you need when
+placing one by hand. Whatever the emulator's packager wrote about the file follows the name on the same line, in the
+packager's own wording and punctuation — `scph5500.bin (PS1 JP BIOS)` — and only where it says something the name does
+not: those descriptions usually repeat the file name, and many are nothing else. Where the file also has something to
+say about its state, that comes last, behind a dash: `scph5500.bin (PS1 JP BIOS) — missing, not in
+your RomM library`.
+It is the **emulator's own** wording — a RetroArch core's description file — and it is shown for no other source. Where
+Tender's own card stands in for an emulator that ships no description of its own, that card explains the requirement in
+full sentences, which is a paragraph on a line meant for a few words; the row shows the file and its state instead.
 
-Beside the Play button there is also a short **BIOS** badge, which is a shortcut into this tab. Two things raise it, and
-nothing else does. The first: a file the active core **requires** is shown to be absent from your BIOS folder. If that
-core requires nothing, or requires only files you already have, there is no badge — however many optional files are
-missing, and whether or not the requirement could be worked out at all. A required **folder** counts here like any other
-requirement: once Tender has established that it holds no BIOS image, the badge appears, because what satisfies the
-requirement is a file inside the folder and there is none. What raises no badge is a requirement nothing could settle —
-a folder Tender could not read, say — since it has not shown anything to be absent. Those cases are worth reading, but
-not worth a warning next to Play, so they live in the tab.
-
-The second: the **console itself** does not start without a BIOS image, and the image this game needs is not in place —
-none of the core's images at all ("Beetle PSX cannot start this system without a BIOS image"), or none for **this game's
-region** ("Beetle PSX needs scph5500.bin to start this game (Japan) — it is missing"; see
-[When the console needs a BIOS image](#when-the-console-needs-a-bios-image)). It follows the same rule as the first:
-shown to be absent raises it, not-yet-established does not. So a PlayStation with only a USA image raises no badge on a
-game whose region Tender cannot tell — the image may well be the one it needs — and none where whether the image is in
-place could not be checked.
+Beside the Play button there is also a short **BIOS** badge, which is a shortcut into this tab. It follows the red
+verdict and nothing else: the resolver says the emulator you launch with does not have what it needs — a required file
+absent or the wrong image, a required folder that holds no BIOS image, or a console that does not start without an image
+and has none of the emulator's in place. If that emulator requires nothing, or has everything it requires, there is no
+badge — however many optional files are missing. A verdict nothing could establish raises no badge either — a file
+Tender could not compare, a folder it could not read — since nothing has been shown to be missing; those cases are worth
+reading, but not worth a warning next to Play, so they live in the tab. And the amber case raises none: whether a game
+starts there depends on its disc's region.
 
 The badge is always **red**. It is a warning, not a status: the four-colour dot above belongs to the tab's readiness
 line, and every state that raises the badge is one where firmware the emulator needs is not there. Having one of three
 required files is not a milder version of the problem, so it does not get a milder colour, and neither does a console
-that will not boot. The badge does not predict whether a game starts — that is between the emulator and the file, and
-the declaration the badge counts is not what decides it.
+that will not boot.
 
-The badge shows one of two things. It reads _Missing_ where the image this game's region needs is not there, or the
-image the console itself needs, whatever else is missing beside it. Otherwise it counts the files the core requires, on
-their own — _1/2 required_ — and never the per-region image: with that image in place and none of the required files,
-_0/1 required_; for a core with no per-region image and none of its required files in place, _Missing_. A required file
-shown to be missing is counted even where something else could not be checked — a folder that would not read, or a
-region's image nobody could identify — so the badge reads _0/2 required_ there, with the file nothing could judge in the
-second number and never in the first. Where nothing is shown missing there is no badge, so it never reads _OK_ or
-_Unknown_.
+The badge counts the files the core requires, on their own — _1/2 required_, or _0/2 required_ beside a file nothing
+could check, which is in the second number and never in the first. Where every plain required file is there and the
+verdict is still red — the console's own image, or a per-region image with nothing in place — it reads _Missing_.
 
 A BIOS warning only ever disappears on an **answer**. When a check cannot be run at all — most often right after a BIOS
 download or delete, before the state has been read again — Tender keeps showing the last status it knew rather than
@@ -148,28 +144,30 @@ emulator itself, and what you already have comes from your BIOS folder. Your ser
 while it is unreachable you still see what is needed and what is missing, you just cannot fetch anything, and files that
 exist only in your RomM library are not listed.
 
-Below the readiness line the tab lists individual files — not every file the platform has, but the ones this game gives
-you something to do or to know: files the emulator you launch with requires, the images it would start the console from
-(one of them per region), files you already have, files you can still download, and files Tender could not judge. What
-is left over — an installed emulator names it, this launch does not require it, it is not there, and no page offers a
-download for it — is counted on one line instead: _6 more files an installed emulator asks for — none required for this
-launch, none to download; the Library page's Platforms tab lists them_.
+Each emulator's tab lists that emulator's own files — nothing borrowed from another emulator, whose files are on its own
+tab — and not every one of them, but the ones this game gives you something to do or to know: files the emulator
+requires, the images it would start the console from (one of them per region), files you already have, files you can
+still download, and files Tender could not judge. What is left over — the emulator names it, does not require it, it is
+not there, and no page offers a download for it — is counted on one line instead, naming the emulator: _6 more files
+Flycast lists — not required for this launch, nothing to download. All files are on the platform page._ On another
+emulator's tab the line names that emulator's own need instead: _not required by Kronos_.
 
 A Dreamcast is the everyday case. Flycast also emulates Naomi and AtomisWave, so it declares six arcade BIOS files
 beside the two the Dreamcast itself needs, and none of the six is anything a Dreamcast game's page could act on. The
-**Platforms** tab of the **Library** page lists every file without exception — that is where BIOS files are managed, and
-it is the page the summary line points at.
+**Platforms** tab of the **Library** page lists every file of every emulator without exception — that is where BIOS
+files are managed, and it is the page the summary line points at.
 
-Each row shows whether that file is present or missing, and lists the cores that use it (e.g. _gpSP (required)_, _mGBA
-(optional)_); the **active core**'s line is highlighted in amber so you can spot at a glance which core's requirements
-the file applies to.
+On the launching emulator's tab, each row's dot says how that file stands for this launch: green where it is in place,
+red where the launch requires it and it is not — or where it is one of the images below and its region is left uncovered
+— and grey otherwise: a file the launch does not need, whether missing, the wrong image or refused, and a file nothing
+could judge. Amber is never a row's colour.
 
-A core's word for a file is the core's own, and Tender prints it unchanged — with one exception. Where the file is one
-of the images a core needs **one of**, picked by the region of the disc, the line says which region it serves instead:
-_Beetle PSX (for Japan discs)_, or _SwanStation (boots it for every region)_ for an image that core starts every disc
-from. None of those images is _required_ on its own: each is what the discs of its own region start from, and the group,
-not the image, is the requirement. See [When the console needs a BIOS image](#when-the-console-needs-a-bios-image) for
-what the line above the list does with them.
+Where the file is one of the images an emulator needs **one of**, picked by the region of the disc, the line under it
+says which region it serves: _for Japan discs_, or _boots it for every region_ for an image that emulator starts every
+disc from. None of those images is _required_ on its own: each is what the discs of its own region start from, and the
+group, not the image, is the requirement. See
+[When the console needs a BIOS image](#when-the-console-needs-a-bios-image) for what the line above the list does with
+them.
 
 Files in your RomM library that no emulator was found to ask for are not listed one by one. One line below the list
 counts them instead, worded one of two ways — every one of those files turns on the same question, whether the emulator
@@ -229,8 +227,8 @@ reads them the way the core does:
   have to read the files to say it — a folder holding nothing even the right size for a BIOS is answered by their sizes
   alone — and the row reads the same either way.
 - Where the read could not finish — a file whose bytes would not come back, a folder that could not be listed in full,
-  or an image Tender's identity table and the emulator's own check disagree about — the row says so and gets an amber
-  dot, and the system's readiness line declines (see [When readiness cannot be stated](#when-readiness-cannot-be-stated)
+  or an image Tender's identity table and the emulator's own check disagree about — the row says so and gets a grey dot,
+  and the system's readiness line declines (see [When readiness cannot be stated](#when-readiness-cannot-be-stated)
   below). Nothing is being claimed either way.
 
 A folder that is **absent** is red like any other requirement that is not there, with no note beside it: there is
@@ -239,7 +237,7 @@ there is a folder, so there is no file to fetch into it. On a stock RetroDECK th
 which RetroDECK links onto the BIOS folder itself. (The Library page's platform detail words that row _Missing_, because
 it spells absence out where this tab leaves it to the dot.)
 
-<!-- Screenshot: Game detail page showing amber BIOS status with "2 of 5 files mGBA requires are in place" -->
+<!-- Screenshot: Game detail page showing red BIOS status with "2 of 5 files mGBA requires are in place" -->
 
 ![BIOS file list overlay showing individual required files with checkmarks and "Missing" labels](../assets/screenshot-bios.jpg)
 
@@ -252,9 +250,9 @@ and the row you focus is the one the right-hand pane describes.
 
 1. From the main QAM page, tap **Library**, then move to the **Platforms** tab with L1/R1
 2. Each row is a coloured dot, the platform's name and the sync toggle. The dot is the BIOS state at a glance — green
-   ready, amber partly there, red missing, grey where there is nothing to say — and the numbers behind it are on the
-   right-hand pane, which also states them in full. With a mouse, hovering the row states it in a sentence — once the
-   platform has been read, the same sentence the pane shows
+   ready, red missing, grey not established, amber where only the disc's region decides — and the numbers behind it are
+   on the right-hand pane, which also states them in full. With a mouse, hovering the row states it in a sentence — once
+   the platform has been read, the same sentence the pane shows
 3. The dots fill in one platform at a time, from the top, and the platform you are on is always looked at next — so the
    pane you have open does not wait behind the rows above it. A row that is still being checked draws its dot as an
    **outline** rather than a filled circle, and its pane says "Checking what this platform needs…"; that is why a grey
@@ -299,18 +297,25 @@ and the row you focus is the one the right-hand pane describes.
    line 5: pick a different one from the chip button and the numbers, the dot and the file rows are answered for it, so
    this pane and a game's BIOS tab tell you the same thing about one platform. That holds for a **standalone** emulator
    too — PCSX2, DuckStation, Cemu and melonDS are asked like any RetroArch core. Where Tender has no source for the
-   emulator, the files are shown against every emulator that declares them instead of against one
-8. Below it, a table lists the files themselves: the **file**, whether it is **on disk**, and its **contents**. Where
-   the emulator asks for the file in a subfolder, the folder is shown in front of the name (`dc/` **`dc_boot.bin`**) —
-   that is where it has to go, and it is the one thing you need when placing a file by hand. The description in
-   parentheses is printed under the row rather than beside the name, as it is on a game's page: this column is narrow
-   enough that anything after the name would push the name itself off the row. Like there, it is shown only where the
-   emulator itself wrote it. On disk holds marks and no words. The first mark carries two things — a green ✓ for a file
-   that is there and required, a red ✗ for one that is required and is not, and the paler green ✓ / grey ✗ for a file
-   the core you launch with does not need either way. Amber means nothing could be established: outside the group below,
-   a ✓ or ✗ in amber is a file whose presence is known but whose need nothing could establish — no emulator was found to
-   ask for it, and the emulator you launch with could not be read or named — and a `?` is a row that could not be
-   checked at all. Where the system needs **one image per region** (see
+   emulator, the files every other emulator declares are on those emulators' own tabs (step 8). Each row is that
+   emulator's own requirement, at the place it opens the file: with YabaSanshiro picked for Saturn, `saturn_bios.bin` is
+   the file directly in the BIOS folder, and one lying under `kronos/` — where Kronos looks — does not count for it
+8. Below it, one tab per emulator sits over the table, as on a game's page: the emulator the platform launches with
+   first and open, each with a dot for its own answer. Choosing another changes only the table — muted, with no download
+   of its own — and never what launches: the summary above and the three buttons below stay the launching emulator's.
+   The table lists the files themselves: the **file**, whether it is **on disk**, and its **contents**. Where the
+   emulator asks for the file in a subfolder, the folder is shown in front of the name (`dc/` **`dc_boot.bin`**) — that
+   is where it has to go, and it is the one thing you need when placing a file by hand. The description in parentheses
+   is printed under the row rather than beside the name, as it is on a game's page: this column is narrow enough that
+   anything after the name would push the name itself off the row. Like there, it is shown only where the emulator
+   itself wrote it. On disk holds marks and no words. The first mark carries two things — a green ✓ for a file that is
+   there and required, a red ✗ for one that is required and is not, and the paler green ✓ / grey ✗ for a file the core
+   you launch with does not need either way. Whether a file is "there" is the resolver's verdict, not just its presence:
+   a file that is the wrong image reads ✗, and one the resolver could not compare reads `?`. A grey `?` means not
+   established, either way: a row whose verdict nothing could settle — including a place that could not be looked at,
+   which is never read as missing — and a file whose need nothing could establish, because no emulator was found to ask
+   for it and the emulator you launch with could not be read or named. Its tooltip and the legend still say whether that
+   file is there. Amber is never a mark here. Where the system needs **one image per region** (see
    [When the console needs a BIOS image](#when-the-console-needs-a-bios-image)) each of those images is marked as one of
    the group: a green ✓ where it is there, a red ✗ where it is not — that region's discs have nothing to start from —
    and a line under the row says which region it serves: _for USA discs · ✓ in place_. A violet ⊘ appears **beside**
@@ -542,8 +547,8 @@ works exactly as it always did; nothing about the files changes, only what this 
 
     That state meant only \"no entry in the built-in table\", and the table is gone. Those systems now get whatever
     their emulators say, which can go three ways: **green**, where the emulator you launch with requires nothing you do
-    not have, **red or amber**, where it requires a file you do not have — or the console needs a BIOS image and none is
-    in place — and the table simply never knew, or **grey**, where Tender could not settle an answer. All three are
+    not have, **red**, where it requires a file you do not have — or the console needs a BIOS image and none is in
+    place — and the table simply never knew, or **grey**, where Tender could not settle an answer. All three are
     new, and all three are honest.
 
 ### When the console needs a BIOS image
@@ -567,16 +572,25 @@ regions — how many of the regions the core names have their image — rather t
   — one image that serves every region, or one image per region, or a mix: SwanStation may open `scph5500.bin` for Japan
   and `scph1001.bin` for USA and Europe.
 - **Amber — "Beetle PSX has a BIOS image for USA only — Japan and Europe discs will not start"**, _1 / 3 regions · USA
-  only_. Some regions have their image and some are shown not to. It counts as not met, because a Japanese disc will not
-  start, and it is amber rather than red, because a USA one will.
+  only_. Some regions have their image and the others are shown not to, and nothing else is open: whether a game starts
+  depends only on its disc's region. It is amber rather than red, because a USA disc will start — and this is the only
+  thing amber ever means.
 - **Red — "Beetle PSX cannot start this system without a BIOS image"**, _0 / 3 regions_. No image of the group is there.
 - **Grey — "Whether the BIOS image Beetle PSX needs is in place could not be checked"**. An image is there and could not
-  be read, or a region could not be checked at all — a folder that would not list, say — beside regions that do have
-  their image. The page never shows green over a region nobody checked. Where an image is there and could not be read
-  and no region has its image, the line is grey even when other regions are shown to have nothing; the rows of those
-  regions stay red. Where a region does have its image, one shown to have nothing makes the line amber whatever else
-  could not be read. Where no image is there at all, the line is red whatever else could not be checked. The pane's
-  short form stays "Readiness unknown" here, unless a missing plain file words the line (below).
+  be read, or a region could not be checked at all — a folder that would not list, say — or something else the emulator
+  requires could not be settled. Then not even the region decides it, so the line is grey and not amber, even with one
+  region's image in place; the rows keep their own marks. The page never shows green over a region nobody checked. The
+  pane's short form stays "Readiness unknown" here, unless a missing plain file words the line (below).
+
+Where the emulator states no image at all for a region, the platform pane — and the page of a game with no clear region,
+which shows the platform's answer — names that region after whichever of these lines stands: "… — for USA discs Beetle
+PSX states no BIOS image, so whether they start could not be established". Tender's emulator-knowledge library leaves a
+region without an image where it could not read the files that would answer it (nobody was asked to check their
+contents, or the folder would not list), or where the image the settings name for that region could not be followed and
+the folder search found nothing either. The line stays grey, unless no image of the group is in place at all, which is
+red; and where the only regions left open are those, it says what is covered and keeps the count: "Beetle PSX has a BIOS
+image for Japan — for USA and Europe discs Beetle PSX states no BIOS image, so whether they start could not be
+established", _1 / 3 regions · regions not checked_. A game of such a region reads grey on its own page.
 
 A region nobody could check is never counted as having its image: it is in the second number of the region count and not
 in the first. Where the emulator requires plain files beside the group, those are counted first, on their own, and the
@@ -591,7 +605,9 @@ image the core found under another of the names it tries is a row of its own.
 
 **The game page answers for the game's own region.** RomM records which regions a game was released in, and Tender reads
 them as the console's disc regions: USA and Canada as USA, Japan as Japan, and Europe, the European countries and
-Australia as Europe. With a Japanese game and only a USA image the page reads red — _Beetle PSX needs scph5500.bin to
+Australia as Europe. Everything else the emulator requires decides first: a required file that is not in place makes the
+page red, and one that could not be checked makes it grey, whatever the game's region. Otherwise the image for the
+game's region decides. With a Japanese game and only a USA image the page reads red — _Beetle PSX needs scph5500.bin to
 start this game (Japan) — it is missing_ — and the **BIOS** badge appears beside Play. With a USA game it reads green —
 _The BIOS image Beetle PSX needs for this game's region (USA) is in place_. A game released in several regions is
 covered where any of them is, and where none is the sentence names the file of each, and only the regions those files
@@ -599,7 +615,10 @@ serve — a region no image is listed for gets a clause of its own: _SwanStation
 (Europe) — it is missing, and there is no BIOS image for USA_. Where the image that covers the game is one the core
 starts every disc from, the page names it instead — _SwanStation starts this game with scph1001.bin — found in the BIOS
 folder, it serves every region_ where the core's own search of the BIOS folder found it, and _SwanStation starts this
-game with scph1001.bin, which serves every region_ where its settings named it.
+game with scph1001.bin, which serves every region_ where its settings named it. Where the image for the game's region
+could not be checked, or the emulator states no image for that region at all, the page is grey and names the region —
+_SwanStation states no BIOS image for this game's region (USA), so whether it starts could not be established_ — even
+where every image it does state is in place.
 
 Under that line the game page lists the group itself, under a subheading of its own — **BEETLE PSX · ONE IMAGE PER DISC
 REGION**, named after whichever emulator the game launches with — one indented line per option, in the order the core
@@ -616,12 +635,12 @@ it needs.
 **Download required** fetches the images of the regions that have none yet, where your RomM library holds them, and
 nothing more once every region has its image. The number on the button counts exactly those.
 
-Where a core states no such group, Tender falls back to the console's own record: a core whose console will not start
-without an image, with none of the images it lists in place, reads **"… cannot start this system without a BIOS image"**
-in red, under the Library page's **Needs a BIOS image** heading, and raises the badge; where whether one of them is in
-place could not be settled it reads **"Whether the BIOS image … needs is in place could not be established"**. PCSX
-ReARMed ships its own built-in replacement for the PlayStation BIOS, so the same page with that core selected reads
-green.
+Where a core states no such group, the console's own record still counts: the resolver weighs it into its verdict, so a
+core whose console will not start without an image, with none of the images it knows in place, reads red —
+**"PlayStation does not start without a BIOS image, and none of the five SwanStation knows is in place"**, under the
+Library page's **Needs a BIOS image** heading — and raises the badge. Which image is in place is read off each file's
+own verdict, so a file that is there but is the wrong image does not count. PCSX ReARMed ships its own built-in
+replacement for the PlayStation BIOS, so the same page with that core selected reads green.
 
 Systems Tender holds no such record for are unaffected, and this is deliberate: no record means nobody has checked that
 console, which is not the same as "this console needs nothing". Those systems keep exactly the page they had.
@@ -637,9 +656,12 @@ back, a folder it could not list in full, or an image its identity table and the
 is not the ordinary state of a PS2 system — a folder that reads cleanly is answered green or red like any other
 requirement.
 
-The second cause is the one the previous section describes: the console needs a BIOS image and whether one is in place
-could not be settled — an image there that could not be read, or a region nothing could check beside the regions that
-have their image. The requirement is known; only the answer is not.
+Other causes: a required file that is there and could not be compared with the image the emulator expects; a file the
+emulator asks for at a place outside the BIOS folder, or one Tender could not follow, which the line names with the
+reason ("PCSX2 requires …, which lies outside the BIOS folder — so whether it is ready could not be established"); a
+BIOS no one has chosen in the emulator's own settings ("No BIOS is chosen in PCSX2's settings, and no game boots until
+one is"); or one of the images of a per-region group that could not be read (the previous section). The requirement is
+known; only the answer is not.
 
 What Tender will not do is guess at the part it could not reach. A folder whose listing broke off part-way might hold a
 BIOS image in the part that was never read, or might not; calling it ready and calling it empty are both claims about
@@ -648,7 +670,7 @@ files nobody looked at. It declines instead, and says so.
 What that state does **not** do is flatten the rest of the page:
 
 - The **file rows keep their own answers.** A file that is present is still green, one that is missing is still red, and
-  only the row nothing could be established for reads amber, with the reason beside it.
+  only the row nothing could be established for reads a grey `?`, with the reason beside it.
 - **Downloads stay.** Every file your library holds is still fetchable, and fetching them is the thing that actually
   gets a PS2 system running. That holds for the state above too: what your library offers never depends on what Tender
   could work out about the emulator.

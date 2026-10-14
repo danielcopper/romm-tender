@@ -66,7 +66,7 @@ function biosTooltip(row: PlatformRow): string {
   if (row.firmwareState === "failed") return "Could not read this platform's BIOS state";
   const firmware = row.firmware;
   if (!firmware) return "Nothing is known about this platform's BIOS files";
-  return biosSummary(firmware, firmware.files, firmware.bios_level ?? null).sentence;
+  return biosSummary(firmware, firmware.files, firmware.bios_level ?? null, row.name || null).sentence;
 }
 
 const GroupHeading: FC<{ title: string; count: number }> = ({ title, count }) => (

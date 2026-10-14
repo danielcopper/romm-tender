@@ -13,8 +13,8 @@ order of precedence:
 - **missing** — the option serving it is shown not to be, or the resolver stated
   that nothing boots for it;
 - **unchecked** — nothing established either: an option serving it is there and
-  could not be read, or the resolver named it as resting on a read that settled
-  nothing.
+  could not be read, the resolver named it as resting on a read that settled
+  nothing, or it is a region the group carries no option for (``unstated``).
 
 The state follows, as one of :data:`GROUP_STATES`. ``met`` only where every
 region is covered — never green over a region nobody checked. ``partial`` where
@@ -105,6 +105,10 @@ class GroupVerdict:
     are the group's own whatever the scope — every region it speaks about and
     every option it lists — because a page lists all of them under the verdict
     and marks the game's.
+
+    ``unstated`` are the unchecked regions the resolver names as ones the group
+    carries no option for — a subset of ``unchecked``, so a surface can name
+    them without reading them out of anything else.
     """
 
     state: str
@@ -114,6 +118,7 @@ class GroupVerdict:
     game_regions: tuple[str, ...] = ()
     regions: tuple[str, ...] = ()
     options: tuple[FirmwareOption, ...] = ()
+    unstated: tuple[str, ...] = ()
 
 
 def judge_group(group: FirmwareGroup) -> GroupVerdict:
@@ -132,6 +137,7 @@ def judge_group(group: FirmwareGroup) -> GroupVerdict:
         unchecked=unchecked,
         regions=group.regions,
         options=group.options,
+        unstated=tuple(region for region in unchecked if region in group.unstated_regions),
     )
 
 
@@ -165,6 +171,7 @@ def judge_group_for_game(group: FirmwareGroup, game_regions: tuple[str, ...]) ->
         game_regions=game_regions,
         regions=group.regions,
         options=group.options,
+        unstated=tuple(region for region in unchecked if region in platform.unstated),
     )
 
 
@@ -196,9 +203,10 @@ def fetched_as_required(
     groups that serves a region nothing in place covers yet — and nothing of a
     group whose regions are all covered. *emulator* ``None`` is a pick that
     could not be identified, which falls back to "any emulator requires it" and
-    owns no group.
+    owns no group. A file whose place could not be looked at is never fetched
+    (:attr:`~domain.firmware_wants.FirmwarePlacement.place_unreadable`).
     """
-    if placement is None:
+    if placement is None or placement.place_unreadable:
         return False
     if emulator is None:
         required = placement.required_by_any

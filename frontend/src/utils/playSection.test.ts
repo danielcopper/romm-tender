@@ -153,112 +153,34 @@ describe("extractBiosInfo", () => {
   });
 
   describe("biosRequiredMissing — the play-row badge's whole rule", () => {
-    // A local check: a file the ACTIVE CORE requires is not on disk. Optional
-    // files, files other cores want, and a level the badge cannot act on are
-    // all beside the point.
-    const withRequired = (required: number, downloaded: number) => ({
+    // The badge follows the red verdict: the backend's level is
+    // `missing`, which is the resolver saying the launching emulator's
+    // requirements are not met. No count decides it.
+    const withLevel = (level: "ok" | "partial" | "missing" | "unknown", required = 2, downloaded = 1) => ({
       bios_status: { ...requirement, required_count: required, required_downloaded: downloaded },
-      bios_level: "missing" as const,
-      bios_label: "Missing",
+      bios_level: level,
+      bios_label: `${downloaded}/${required} required`,
     });
 
-    it("is set when a required file is absent", () => {
-      expect(extractBiosInfo(withRequired(2, 1))!.biosRequiredMissing).toBe(true);
+    it("is set under a verdict that is not met", () => {
+      expect(extractBiosInfo(withLevel("missing"))!.biosRequiredMissing).toBe(true);
     });
 
-    it("is clear when every required file is present", () => {
-      expect(extractBiosInfo(withRequired(2, 2))!.biosRequiredMissing).toBe(false);
+    it.each(["ok", "partial", "unknown"] as const)("is clear under a %s verdict", (level) => {
+      expect(extractBiosInfo(withLevel(level))!.biosRequiredMissing).toBe(false);
     });
 
-    it("is clear when the active core requires nothing, however much is missing", () => {
-      // Twenty-six optional files no core requires must not raise a warning.
-      const answer = {
-        bios_status: { ...requirement, server_count: 26, local_count: 0, required_count: 0, required_downloaded: 0 },
-        bios_level: "ok" as const,
-        bios_label: "OK",
-      };
-      expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(false);
-    });
-
-    it("is clear when the payload states no required counts at all", () => {
-      expect(
-        extractBiosInfo({ bios_status: requirement, bios_level: "ok", bios_label: "OK" })!.biosRequiredMissing,
-      ).toBe(false);
-    });
-
-    it("is clear for a one-of group covered for some regions where this game's region is not known", () => {
-      // The backend narrows the group to the game's own regions wherever RomM
-      // names one that maps; a group still partial here is one whose region for
-      // THIS game nobody knows, and the badge does not claim a game will not
-      // start on a guess.
-      const answer = {
-        bios_status: { ...requirement, required_count: 1, required_downloaded: 0, required_partial: 1 },
-        bios_level: "partial" as const,
-        bios_label: "OK",
-      };
-      expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(false);
-    });
-
-    it("is set for a one-of group with nothing for this game's region", () => {
-      // What the backend answers for a game whose region the group does not
-      // cover, and for a group with nothing in place: `unmet`, in the count.
-      const answer = {
-        bios_status: { ...requirement, required_count: 1, required_downloaded: 0, required_partial: 0 },
-        bios_level: "missing" as const,
-        bios_label: "Missing",
-      };
-      expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(true);
-    });
-
-    it("is set for a missing required file beside a partly covered group", () => {
-      const answer = {
-        bios_status: { ...requirement, required_count: 2, required_downloaded: 0, required_partial: 1 },
-        bios_level: "partial" as const,
-        bios_label: "0/1 required",
-      };
-      expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(true);
-    });
-
-    it("is clear when the only required file left is one nothing could judge", () => {
-      // A required row whose verdict nothing established — a declared folder
-      // the resolver could not read, say. The badge says a required file is NOT
-      // THERE, and a reading that established nothing has not shown that.
-      const answer = {
-        bios_status: { ...requirement, required_count: 2, required_downloaded: 1, required_withheld: 1 },
-        bios_level: "unknown" as const,
-        bios_label: "Unknown",
-      };
-      expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(false);
-    });
-
-    it("is set when the required folder was read and holds no image", () => {
-      // A folder answered `false` is a requirement shown to be unmet, so it is
-      // not withheld and the badge is exactly what it is for — the game will
-      // not launch.
-      const answer = {
-        bios_status: { ...requirement, required_count: 1, required_downloaded: 0, required_withheld: 0 },
-        bios_level: "missing" as const,
-        bios_label: "Missing",
-      };
-      expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(true);
-    });
-
-    it("is still set when a judgeable required file is absent beside the unjudgeable one", () => {
-      // The withheld row is taken out of the comparison, not out of the badge:
-      // GameIndex.yaml really is missing, and that is established.
-      const answer = {
-        bios_status: { ...requirement, required_count: 2, required_downloaded: 0, required_withheld: 1 },
-        bios_level: "unknown" as const,
-        bios_label: "0/2 required",
-      };
-      expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(true);
+    it("follows the verdict and never the counts", () => {
+      // Counts that read short under a met verdict, and counts that read whole
+      // under one that is not met — a wrong image is there and not met.
+      expect(extractBiosInfo(withLevel("ok", 2, 0))!.biosRequiredMissing).toBe(false);
+      expect(extractBiosInfo(withLevel("missing", 2, 2))!.biosRequiredMissing).toBe(true);
     });
 
     it("is set when the console cannot start and none of its images is in place", () => {
-      // The second absence, and the one no count can express: SwanStation marks
-      // every PlayStation BIOS image optional, so `required_count` is 0 and the
-      // comparison above is vacuously false while no game on the platform
-      // launches. Taken off the backend's `system_image`, never re-derived.
+      // SwanStation marks every PlayStation BIOS image optional, so
+      // `required_count` is 0 while no game on the platform launches; the
+      // resolver's verdict says so, and the badge reads it.
       const answer = {
         bios_status: {
           ...requirement,
@@ -266,7 +188,7 @@ describe("extractBiosInfo", () => {
           local_count: 0,
           required_count: 0,
           required_downloaded: 0,
-          system_image: "absent" as const,
+          console_needs_image: true,
         },
         bios_level: "missing" as const,
         bios_label: "Missing",
@@ -275,33 +197,10 @@ describe("extractBiosInfo", () => {
       expect(extractBiosInfo(answer)!.biosLabel).toBe("Missing");
     });
 
-    it.each(["not_demanded", "held", "unsettled"] as const)(
-      "is clear for a console demand answered %s, with nothing required",
-      (systemImage) => {
-        // The other direction, and what keeps the badge off every platform the
-        // table records nothing about: `not_demanded` covers exactly that case.
-        // `unsettled` is an absence nobody established, which this badge never
-        // claims — the same reading a withheld required row gets.
-        const answer = {
-          bios_status: {
-            ...requirement,
-            server_count: 20,
-            local_count: 0,
-            required_count: 0,
-            required_downloaded: 0,
-            system_image: systemImage,
-          },
-          bios_level: "ok" as const,
-          bios_label: "OK",
-        };
-        expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(false);
-      },
-    );
-
-    it("is clear for a payload that states no console demand at all", () => {
-      // A payload from before the field existed reads as the neutral answer.
+    it("is clear when the active core requires nothing, however much is missing", () => {
+      // Twenty-six optional files no core requires must not raise a warning.
       const answer = {
-        bios_status: { ...requirement, required_count: 0, required_downloaded: 0 },
+        bios_status: { ...requirement, server_count: 26, local_count: 0, required_count: 0, required_downloaded: 0 },
         bios_level: "ok" as const,
         bios_label: "OK",
       };

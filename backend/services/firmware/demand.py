@@ -194,8 +194,9 @@ class FirmwareDemand:
 
         A ``present`` of ``None`` on a placement we do honour is a destination
         the resolver could not look at. It is not a claim that anything is
-        there, so it reads as absent — the safe direction, since the row then
-        shows work outstanding rather than a readiness nobody established.
+        there, so ``downloaded`` reads false; the row's verdict stays the
+        resolver's withheld one, so the row is "not established" and offers no
+        download (:attr:`domain.firmware_wants.FirmwarePlacement.place_unreadable`).
 
         What this never asks is whether the requirement is MET — that is
         ``BiosFileEntry.satisfied``, and for a folder declaration the two come

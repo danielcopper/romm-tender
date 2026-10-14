@@ -1951,7 +1951,7 @@ describe("gameDetailStore", () => {
             required_count: 3,
             required_downloaded: 1,
           },
-          bios_level: "partial",
+          bios_level: "missing",
           bios_label: "1/3",
         }),
       );

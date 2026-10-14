@@ -1,13 +1,17 @@
 /**
  * Can Tender fetch this firmware row?
  *
- * Three clauses, and each excludes a row for its own reason: the RomM library
+ * Four clauses, and each excludes a row for its own reason: the RomM library
  * has to hold the file (`on_server`), it must not already be at its destination
- * (`downloaded`), and the declaration must name a FILE. A declared **folder** is
- * out whatever its state — the emulator lists that name, so there is nothing to
- * fetch into it; what would satisfy it is a BIOS image inside the folder, which
- * is a different row. That is also why the backend stamps every folder row
- * `on_server: False` and why the download batch passes such a row over.
+ * (`downloaded`), the declaration must name a FILE, and its place must be one
+ * the resolver could look at. A declared **folder** is out whatever its state —
+ * the emulator lists that name, so there is nothing to fetch into it; what
+ * would satisfy it is a BIOS image inside the folder, which is a different row.
+ * That is also why the backend stamps every folder row `on_server: False` and
+ * why the download batch passes such a row over. A place that could not be
+ * looked at (`firmware-path-inaccessible`) is out because a download there
+ * could overwrite a file nobody could see; the backend's batch passes
+ * it over and its "Download required" count leaves it out on the same caveat.
  *
  * It lives here because two surfaces ask it for two different purposes and must
  * never disagree. The **platform detail** builds its three download affordances
@@ -37,11 +41,21 @@ export interface FetchableRow {
   on_server?: boolean;
   downloaded: boolean;
   declared_kind?: FirmwareDeclaredKind;
+  caveats?: readonly string[];
 }
+
+/** The resolver's code for a place it could not look at — permissions, or
+ *  failing storage. One spelling for every reader of it in the panel. */
+export const PATH_INACCESSIBLE = "firmware-path-inaccessible";
 
 /** Whether Tender can download this row from the user's RomM library. */
 export function isFetchable(file: FetchableRow): boolean {
-  return file.on_server === true && !file.downloaded && file.declared_kind !== "directory";
+  return (
+    file.on_server === true &&
+    !file.downloaded &&
+    file.declared_kind !== "directory" &&
+    !(file.caveats ?? []).includes(PATH_INACCESSIBLE)
+  );
 }
 
 /**

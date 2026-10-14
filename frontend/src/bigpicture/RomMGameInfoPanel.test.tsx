@@ -1602,6 +1602,57 @@ describe("RomMGameInfoPanel", () => {
       expect(container.textContent).toContain("3/4");
     });
 
+    it("bios: names the console after RomM's platform name in the console's own demand", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(
+        biosNeedingDetail({ platform_name: "PlayStation", platform_slug: "psx" }),
+      );
+      vi.mocked(backend.getBiosStatus).mockResolvedValue({
+        bios_status: {
+          platform_slug: "psx",
+          needs_bios: true,
+          server_count: 1,
+          local_count: 0,
+          ratio_server_count: 1,
+          ratio_local_count: 0,
+          all_downloaded: false,
+          required_count: 0,
+          required_downloaded: 0,
+          console_needs_image: true,
+          files: [
+            {
+              file_name: "scph5501.bin",
+              downloaded: false,
+              local_path: "",
+              description: "",
+              wanted: "optional",
+              required_by_active: false,
+              used_by_active: true,
+              on_server: true,
+              declared_kind: "file",
+              satisfied: false,
+            },
+          ],
+        },
+        bios_level: "missing",
+      });
+      const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "bios", platform_slug: "psx" } }),
+        );
+      });
+      await flushAsync();
+      await act(async () => {
+        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
+      });
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "PlayStation does not start without a BIOS image, and the one image the launching emulator knows is not in place",
+      );
+    });
+
     it("bios: threads bios_level from the endpoint result into the rendered status-dot color (#461)", async () => {
       // The re-read ships bios_level straight from the backend
       // (compute_bios_level) — the handler threads it through, never re-deriving
@@ -3236,7 +3287,6 @@ describe("RomMGameInfoPanel", () => {
               downloaded: false,
               wanted: "needed",
               required_by_active: true,
-              cores: { "snes9x_libretro.so": { required: true } },
               used_by_active: true,
             },
             {
@@ -3285,233 +3335,6 @@ describe("RomMGameInfoPanel", () => {
       // rows are the files with an owning emulator, and the note says which of
       // the two remaining answers this one is.
       expect(container.textContent).toContain("1 file on server nothing installed could answer for");
-    });
-
-    it("highlights the active core's per-BIOS line and leaves non-active cores grey (#955)", async () => {
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
-        found: true,
-        rom_id: 56,
-        platform_slug: "psx",
-        bios_status: {
-          needs_bios: true,
-          platform_slug: "psx",
-          server_count: 1,
-          local_count: 0,
-          ratio_server_count: 1,
-          ratio_local_count: 0,
-          all_downloaded: false,
-          required_count: 1,
-          required_downloaded: 0,
-          files: [
-            {
-              file_name: "scph5501.bin",
-              description: "PSX BIOS",
-              downloaded: false,
-              wanted: "needed",
-              required_by_active: true,
-              cores: {
-                "beetle_psx_hw_libretro.so": { required: true },
-                "swanstation_libretro.so": { required: false },
-              },
-              used_by_active: true,
-            },
-          ],
-        } as never,
-        metadata: makeMetadata(),
-        stale_fields: [],
-      });
-      // Active core is Beetle PSX HW; SwanStation is an alternative core.
-      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
-        active_core: "beetle_psx_hw_libretro.so",
-        active_core_label: "Beetle PSX HW",
-        platform_core_label: null,
-        has_game_override: false,
-        emulator_data_available: true,
-        emulator_data_reason: null,
-        emulator_source: { kind: "retrodeck", starts_games: true },
-        platform_system: null,
-        emulators: [
-          {
-            label: "Beetle PSX HW",
-            kind: "libretro",
-            core_so: "beetle_psx_hw_libretro",
-            emulator: "beetle_psx_hw_libretro.so",
-            is_default: true,
-            bakeable: true,
-            reason: null,
-          },
-          {
-            label: "SwanStation",
-            kind: "libretro",
-            core_so: "swanstation_libretro",
-            emulator: "swanstation_libretro.so",
-            is_default: false,
-            bakeable: true,
-            reason: null,
-          },
-        ],
-      });
-      const { getByText } = render(<RomMGameInfoPanel appId={testAppId} />);
-      await flushAsync();
-      await act(async () => {
-        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
-        await Promise.resolve();
-      });
-      // Active core line: amber + bold.
-      const activeLine = getByText("Beetle PSX HW (required)");
-      expect(activeLine.style.color).toBe("#d4a72c");
-      expect(activeLine.style.fontWeight).toBe("bold");
-      // Non-active core line: grey + normal weight.
-      const inactiveLine = getByText("SwanStation (optional)");
-      expect(inactiveLine.style.color).toBe("rgba(255, 255, 255, 0.5)");
-      expect(inactiveLine.style.fontWeight).toBe("normal");
-    });
-
-    it("highlights no core line when active_core is null (#955)", async () => {
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
-        found: true,
-        rom_id: 57,
-        platform_slug: "psx",
-        bios_status: {
-          needs_bios: true,
-          platform_slug: "psx",
-          server_count: 1,
-          local_count: 0,
-          ratio_server_count: 1,
-          ratio_local_count: 0,
-          all_downloaded: false,
-          required_count: 1,
-          required_downloaded: 0,
-          files: [
-            {
-              file_name: "scph5501.bin",
-              description: "PSX BIOS",
-              downloaded: false,
-              wanted: "needed",
-              required_by_active: true,
-              cores: {
-                "beetle_psx_hw_libretro.so": { required: true },
-                "swanstation_libretro.so": { required: false },
-              },
-              used_by_active: false,
-            },
-          ],
-        } as never,
-        metadata: makeMetadata(),
-        stale_fields: [],
-      });
-      // No active core resolved → no line is highlighted.
-      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
-        active_core: null,
-        active_core_label: null,
-        platform_core_label: null,
-        has_game_override: false,
-        emulator_data_available: true,
-        emulator_data_reason: null,
-        emulator_source: { kind: "retrodeck", starts_games: true },
-        platform_system: null,
-        emulators: [
-          {
-            label: "Beetle PSX HW",
-            kind: "libretro",
-            core_so: "beetle_psx_hw_libretro",
-            emulator: "beetle_psx_hw_libretro.so",
-            is_default: false,
-            bakeable: true,
-            reason: null,
-          },
-          {
-            label: "SwanStation",
-            kind: "libretro",
-            core_so: "swanstation_libretro",
-            emulator: "swanstation_libretro.so",
-            is_default: false,
-            bakeable: true,
-            reason: null,
-          },
-        ],
-      });
-      const { getByText } = render(<RomMGameInfoPanel appId={testAppId} />);
-      await flushAsync();
-      await act(async () => {
-        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
-        await Promise.resolve();
-      });
-      const beetleLine = getByText("Beetle PSX HW (required)");
-      expect(beetleLine.style.color).toBe("rgba(255, 255, 255, 0.5)");
-      expect(beetleLine.style.fontWeight).toBe("normal");
-      const swanLine = getByText("SwanStation (optional)");
-      expect(swanLine.style.color).toBe("rgba(255, 255, 255, 0.5)");
-      expect(swanLine.style.fontWeight).toBe("normal");
-    });
-
-    it("falls back to the de-suffixed identity when an emulator is absent from coreInfo (#955)", async () => {
-      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
-        found: true,
-        rom_id: 58,
-        platform_slug: "psx",
-        bios_status: {
-          needs_bios: true,
-          platform_slug: "psx",
-          server_count: 1,
-          local_count: 0,
-          ratio_server_count: 1,
-          ratio_local_count: 0,
-          all_downloaded: false,
-          required_count: 1,
-          required_downloaded: 0,
-          files: [
-            {
-              file_name: "scph5501.bin",
-              description: "PSX BIOS",
-              downloaded: false,
-              wanted: "needed",
-              required_by_active: true,
-              cores: {
-                "some_obscure_libretro.so": { required: true },
-              },
-              used_by_active: true,
-            },
-          ],
-        } as never,
-        metadata: makeMetadata(),
-        stale_fields: [],
-      });
-      // coreInfo does NOT enumerate `some_obscure_libretro.so`, so the label map
-      // cannot answer and the fallback renders the identity with the core file's
-      // extension and the `_libretro` marker taken off. Both strips are exercised
-      // here: stripping only one of them leaves the row naming a file.
-      vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
-        active_core: "beetle_psx_hw_libretro.so",
-        active_core_label: "Beetle PSX HW",
-        platform_core_label: null,
-        has_game_override: false,
-        emulator_data_available: true,
-        emulator_data_reason: null,
-        emulator_source: { kind: "retrodeck", starts_games: true },
-        platform_system: null,
-        emulators: [
-          {
-            label: "Beetle PSX HW",
-            kind: "libretro",
-            core_so: "beetle_psx_hw_libretro",
-            emulator: "beetle_psx_hw_libretro.so",
-            is_default: true,
-            bakeable: true,
-            reason: null,
-          },
-        ],
-      });
-      const { getByText } = render(<RomMGameInfoPanel appId={testAppId} />);
-      await flushAsync();
-      await act(async () => {
-        globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
-        await Promise.resolve();
-      });
-      // Not the active emulator, so the line stays grey + normal weight.
-      const fallbackLine = getByText("some_obscure (required)");
-      expect(fallbackLine.style.color).toBe("rgba(255, 255, 255, 0.5)");
-      expect(fallbackLine.style.fontWeight).toBe("normal");
     });
   });
 
@@ -3676,7 +3499,6 @@ describe("RomMGameInfoPanel", () => {
               description: "PS1 US BIOS",
               wanted: "optional",
               required_by_active: false,
-              cores: { swanstation_libretro: { required: false } },
               used_by_active: true,
               on_server: true,
             },
@@ -3730,7 +3552,6 @@ describe("RomMGameInfoPanel", () => {
               declaration: "read",
               wanted: "needed",
               required_by_active: true,
-              cores: { dolphin_libretro: { required: true } },
               used_by_active: true,
               on_server: false,
             },
@@ -3741,7 +3562,6 @@ describe("RomMGameInfoPanel", () => {
               description: "Absent",
               wanted: "needed",
               required_by_active: true,
-              cores: { dolphin_libretro: { required: true } },
               used_by_active: true,
               on_server: false,
             },
@@ -3796,7 +3616,6 @@ describe("RomMGameInfoPanel", () => {
               declaration: "read",
               wanted: "needed",
               required_by_active: true,
-              cores: { dolphin_libretro: { required: true } },
               used_by_active: true,
               on_server: false,
               supplied_by: "RetroDECK",
@@ -3849,7 +3668,6 @@ describe("RomMGameInfoPanel", () => {
               description: "'pcsx2/bios' folder",
               wanted: "needed",
               required_by_active: true,
-              cores: { pcsx2_libretro: { required: true } },
               used_by_active: true,
               on_server: false,
               declared_kind: "directory",
@@ -3912,7 +3730,6 @@ describe("RomMGameInfoPanel", () => {
               description: "",
               wanted: "unknown",
               required_by_active: false,
-              cores: {},
               used_by_active: true,
             },
             {
@@ -3922,7 +3739,6 @@ describe("RomMGameInfoPanel", () => {
               description: "",
               wanted: "unknown",
               required_by_active: false,
-              cores: {},
               used_by_active: true,
             },
           ],
@@ -3974,7 +3790,6 @@ describe("RomMGameInfoPanel", () => {
               description: "",
               wanted: "unknown",
               required_by_active: false,
-              cores: {},
               used_by_active: true,
             },
           ],

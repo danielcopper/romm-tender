@@ -2183,8 +2183,9 @@ describe("Library › Platforms", () => {
     });
 
     it("marks a verdict nothing could establish with ?, and nothing else", async () => {
-      // `?` is the VERDICT axis alone. Amber, not red: calling it missing would
-      // claim an absence nothing established, which the register forbids.
+      // `?` is the VERDICT axis alone. Grey, not red: calling it missing would
+      // claim an absence nothing established, and grey is the colour of "not
+      // established".
       mockFirmware([
         firmwarePlatform({
           files: [firmwareFile({ file_name: "folder", declared_kind: "directory", downloaded: true, satisfied: null })],
@@ -2195,7 +2196,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(diskMarks(container)).toEqual([{ glyph: "?", color: AMBER }]);
+      expect(diskMarks(container)).toEqual([{ glyph: "?", color: GREY }]);
       // The row's own note says what the read did not settle; the mark beside it
       // says only that nothing was settled either way.
       expect(container.textContent).toContain("its contents could not be checked");
@@ -2204,11 +2205,10 @@ describe("Library › Platforms", () => {
 
     it("still says whether a row nothing could be asked about is on disk", async () => {
       // A row with no placement is `wanted: "unknown"` — nothing could be asked
-      // — but its verdict is `downloaded` and IS established. Spending the glyph
-      // on the need axis would throw that away, and a platform nothing could
-      // answer for is made entirely of such rows: it is the pane that tells the
-      // reader to place BIOS files by hand, so it must keep saying which are
-      // already there.
+      // — so its mark is a grey `?`, never the grey `✗` that means
+      // "not required". Whether it is there is still established, and a
+      // platform nothing could answer for is made entirely of such rows, so the
+      // mark's own words and the legend keep saying which are already there.
       mockFirmware([
         firmwarePlatform({
           files: [
@@ -2224,8 +2224,8 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(diskMarks(container)).toEqual([
-        { glyph: "✓", color: AMBER },
-        { glyph: "✗", color: AMBER },
+        { glyph: "?", color: GREY },
+        { glyph: "?", color: GREY },
       ]);
       // The legend must not call these unchecked — they were checked. Nor may it
       // say nothing asked for them, which is the `not_needed` claim: what these
@@ -2273,7 +2273,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(diskMarks(container)).toEqual([{ glyph: "?", color: AMBER }]);
+      expect(diskMarks(container)).toEqual([{ glyph: "?", color: GREY }]);
     });
 
     it("adds a second mark for what the library does not hold, and never trades the first for it", async () => {
@@ -2387,7 +2387,6 @@ describe("Library › Platforms", () => {
             required_count: 1,
             required_downloaded: 0,
             required_withheld: 0,
-            required_partial: 1,
             active_core_label: "Beetle PSX",
             one_of_groups: [
               {
@@ -2459,7 +2458,6 @@ describe("Library › Platforms", () => {
           {
             bios_level: "ok",
             required_downloaded: 1,
-            required_partial: 0,
             active_core_label: "SwanStation",
             one_of_groups: [
               {
@@ -2508,7 +2506,6 @@ describe("Library › Platforms", () => {
         // An invented system with two regions and nothing in place.
         const container = await renderPlatform([option("north.rom", "north"), option("south.rom", "south")], {
           bios_level: "missing",
-          required_partial: 0,
           active_core_label: "Arcadia",
           one_of_groups: [
             {
@@ -2531,16 +2528,16 @@ describe("Library › Platforms", () => {
 
       it("keeps an unestablished verdict and an unestablished need ahead of it", async () => {
         // The order in `diskMark` is load-bearing: a row nothing could judge is
-        // `?` whatever the group says, and a row no installed emulator could be
-        // asked about keeps the amber need mark.
+        // `?` whatever the group says, and so is a row no installed emulator
+        // could be asked about — both grey, the colour of "not established".
         const container = await renderPlatform([
           option("unjudged.bin", "ntsc-j", { satisfied: null }),
           option("unasked.bin", "pal", { wanted: "unknown" }),
         ]);
 
         expect(diskMarks(container)).toEqual([
-          { glyph: "?", color: AMBER },
-          { glyph: "✗", color: AMBER },
+          { glyph: "?", color: GREY },
+          { glyph: "?", color: GREY },
         ]);
         expect(diskMarkTitles(container)).toEqual([
           "nothing could establish this either way",
@@ -2565,7 +2562,6 @@ describe("Library › Platforms", () => {
       it("leaves the line out of the legend on a platform with no such row", async () => {
         const container = await renderPlatform([firmwareFile({ file_name: "required.bin" })], {
           required_count: 1,
-          required_partial: 0,
           bios_level: "missing",
           one_of_groups: [],
         });
@@ -2818,6 +2814,92 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(contentsCells(container)).toContain("unknown");
+    });
+
+    describe("one tab per emulator (#2190)", () => {
+      const saturn = () =>
+        firmwarePlatform({
+          platform_slug: "gba",
+          active_core_label: "YabaSanshiro",
+          required_count: 1,
+          required_downloaded: 0,
+          files: [
+            firmwareFile({
+              file_name: "saturn_bios.bin",
+              declared_path: "saturn_bios.bin",
+              declared_by: "yabasanshiro_libretro.so",
+              satisfied: false,
+              fetch_for_required: true,
+            }),
+          ],
+          emulator_tabs: [
+            { emulator: "yabasanshiro_libretro.so", label: "YabaSanshiro", launching: true, requirements_met: false },
+            {
+              emulator: "kronos_libretro.so",
+              label: "Kronos",
+              launching: false,
+              requirements_met: true,
+              rows: [
+                {
+                  file_name: "saturn_bios.bin",
+                  declared_path: "kronos/saturn_bios.bin",
+                  local_path: "",
+                  description: "",
+                  wanted: "needed",
+                  required_by_active: true,
+                  downloaded: false,
+                  satisfied: false,
+                  on_server: true,
+                  declared_by: "kronos_libretro.so",
+                },
+              ],
+            },
+          ],
+        });
+      // A row is found by its On-disk mark: a row with nothing to press is a
+      // focus stop, and the stub drops a Focusable's own attributes.
+      const rowsOf = (container: HTMLElement) =>
+        [...container.querySelectorAll<HTMLElement>('[data-testid="disk-mark"]')].map(
+          (mark) => mark.parentElement?.parentElement as HTMLElement,
+        );
+      const fileNames = (container: HTMLElement) =>
+        rowsOf(container).map((grid) => grid.firstElementChild?.getAttribute("title"));
+      const chooseKronos = async (container: HTMLElement) => {
+        await act(async () => {
+          fireEvent.click([...container.querySelectorAll('[data-testid="emulator-tab"]')][1] as HTMLElement);
+        });
+      };
+
+      it("draws the strip above the table, the launching emulator first and selected", async () => {
+        mockFirmware([saturn()]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+
+        const tabs = [...container.querySelectorAll<HTMLElement>('[data-testid="emulator-tab"]')];
+        expect(tabs.map((tab) => tab.textContent)).toEqual(["YabaSanshiro· launches", "Kronos"]);
+        expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
+        const header = container.querySelector('[data-testid="bios-table-header"]');
+        expect(tabs[0]?.compareDocumentPosition(header as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+        expect(fileNames(container)).toEqual(["saturn_bios.bin"]);
+      });
+
+      it("shows another emulator's own rows muted, with nothing to press, and keeps what launches", async () => {
+        mockFirmware([saturn()]);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        const summary = container.textContent;
+        expect(buttonByText(container, "Download")).toBeTruthy();
+
+        await chooseKronos(container);
+
+        expect(fileNames(container)).toEqual(["kronos/saturn_bios.bin"]);
+        expect(rowsOf(container)[0]?.parentElement?.style.opacity).toBe("0.6");
+        expect(buttonByText(container, "Download")).toBeUndefined();
+        // The header and the bulk download stay the launching emulator's.
+        expect(buttonByText(container, "Download required (1)")).toBeTruthy();
+        expect(summary).toContain("The one file YabaSanshiro requires is not in place");
+        expect(container.textContent).toContain("The one file YabaSanshiro requires is not in place");
+      });
     });
 
     it("offers a Download on a missing row the library holds (#164)", async () => {
@@ -3488,6 +3570,7 @@ describe("Library › Platforms", () => {
           bios_level: "unknown",
           required_withheld: 0,
           required_count: 0,
+          emulator_read: false,
           files: [firmwareFile({ wanted: "unknown", required_by_active: false })],
         }),
       ]);
@@ -3525,6 +3608,7 @@ describe("Library › Platforms", () => {
           required_withheld: 0,
           required_count: 0,
           active_core_label: "PCSX2",
+          emulator_read: false,
           files: [firmwareFile({ wanted: "unknown", required_by_active: false })],
         }),
       ]);
@@ -3568,142 +3652,111 @@ describe("Library › Platforms", () => {
       expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin");
     });
 
-    it("says the console needs at least one file where the counts would say nothing is required", async () => {
+    it("says the console does not start without an image where the counts would say nothing is required", async () => {
       // The PlayStation state under SwanStation: every image that core declares
       // is `optional`, so the counts alone answer that the core requires none of
-      // them, over a console that will not boot. One requirement over the images
-      // the core declares — so no ratio, here or in the list's own words, and no
-      // pointer at a file list where most rows cannot answer it.
+      // them, over a console that will not boot. The resolver's verdict is red,
+      // and the sentence says why over the images the emulator knows
+      // — no ratio, here or in the list's own words.
       mockFirmware([
         firmwarePlatform({
           bios_level: "missing",
           required_count: 0,
           required_downloaded: 0,
           required_withheld: 0,
-          system_image: "absent",
+          console_needs_image: true,
           server_count: 3,
-          files: [firmwareFile({ wanted: "optional", required_by_active: false })],
+          files: [
+            firmwareFile({ wanted: "optional", required_by_active: false, used_by_active: true, satisfied: false }),
+          ],
         }),
       ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
       expect(container.textContent).toContain("Needs a BIOS image");
-      // The sentence is about the emulator that LAUNCHES, and says so: this
-      // payload names no pick, so it names the role. What it may not say is that
-      // no BIOS file is in place — the folder can hold a working image this
-      // emulator simply does not list, which is what the old wording claimed
-      // away.
-      expect(container.textContent).toContain("The launching emulator cannot start this system without a BIOS image");
-      expect(container.textContent).not.toContain("and none is in place");
+      const sentence =
+        "Game Boy Advance does not start without a BIOS image, and the one image the launching emulator knows is not in place";
+      expect(container.textContent).toContain(sentence);
       expect(container.textContent).not.toContain("marks none of its BIOS files as required");
       const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
         el.textContent.includes("Game Boy Advance"),
       );
       // The same string the pane is asserted to show above, and deliberately
       // written out twice: the row and the pane stating one sentence is what
-      // this cut restored, and an assertion that read it off the other would be
-      // green with the two saying different things.
-      expect(row?.title).toBe("The launching emulator cannot start this system without a BIOS image");
+      // keeps them from saying two things, and reading one off the other would
+      // be green with the two disagreeing.
+      expect(row?.title).toBe(sentence);
       // The rows were answered, so what the library still holds stays fetchable.
       expect(buttonByText(container, "Download all")).not.toBeDisabled();
     });
 
-    it("names the emulator whose images are absent, where the pick has a name", async () => {
-      // The name comes off the firmware payload's own `active_core_label` — the
-      // label half of the pick the verdict beside it was scoped to — so the
-      // sentence and the state cannot be about two different emulators.
+    it("names the emulator whose images are not in place, where the pick has a name", async () => {
       mockFirmware([
         firmwarePlatform({
           bios_level: "missing",
           required_count: 0,
           required_downloaded: 0,
           required_withheld: 0,
-          system_image: "absent",
+          console_needs_image: true,
           server_count: 3,
           active_core_label: "SwanStation",
-          files: [firmwareFile({ wanted: "optional", required_by_active: false })],
+          files: [
+            firmwareFile({ wanted: "optional", required_by_active: false, used_by_active: true, satisfied: false }),
+          ],
         }),
       ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("SwanStation cannot start this system without a BIOS image");
+      expect(container.textContent).toContain(
+        "Game Boy Advance does not start without a BIOS image, and the one image SwanStation knows is not in place",
+      );
       expect(container.textContent).not.toContain("The launching emulator");
     });
 
-    it("says the console needs at least one file even where the level declines", async () => {
-      // The order the pane, the row tooltip and the game page's BIOS headline
-      // have to share — and now DO share by construction, since all three read
-      // `utils/biosSummary.ts` and the test sits once inside it. Today the
-      // backend never sends this pair (`absent` lands on `missing`), so what
-      // this pins is that both of this page's surfaces really do reach that
-      // order rather than keeping a copy: lose it and the pane alone would say
-      // nothing could be established about what its emulator needs, and offer
-      // the by-hand route in place of a requirement the rows demonstrated.
+    it("says the console needs an image only under a red verdict", async () => {
+      // Under a verdict nothing established, the console's need is no reason the
+      // reader can act on yet; the sentence that stands is the decline.
       mockFirmware([
         firmwarePlatform({
           bios_level: "unknown",
           required_count: 0,
           required_downloaded: 0,
           required_withheld: 0,
-          system_image: "absent",
+          console_needs_image: true,
           server_count: 3,
-          files: [firmwareFile({ wanted: "optional", required_by_active: false })],
+          files: [
+            firmwareFile({ wanted: "optional", required_by_active: false, used_by_active: true, satisfied: false }),
+          ],
         }),
       ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("Needs a BIOS image");
-      // The two SHORT forms rather than either sentence: the declines word their
-      // sentences with or without the pick's name, and a fixture that later
-      // carried an `active_core_label` would make a negation of one of those
-      // sentences vacuously green. The short forms do not move with the name.
-      expect(container.textContent).not.toContain("Readiness unknown");
-      expect(container.textContent).not.toContain("Requirement unknown");
-      const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
-        el.textContent.includes("Game Boy Advance"),
-      );
-      expect(row?.title).toBe("The launching emulator cannot start this system without a BIOS image");
-      // The rows were answered, so the downloads are not withdrawn either.
+      expect(container.textContent).not.toContain("Needs a BIOS image");
+      expect(container.textContent).not.toContain("does not start without a BIOS image");
       expect(buttonByText(container, "Download all")).not.toBeDisabled();
     });
 
-    it("keeps the downloads when the console's own image is the unsettled part", async () => {
-      // An unsettled demand is a declined VERDICT, not an unanswered platform:
-      // its rows have answers, so withdrawing the downloads would take away the
-      // one thing that can still move it along.
+    it("keeps the downloads where the verdict is open over an emulator that was read", async () => {
+      // A verdict the resolver left open is a declined VERDICT, not an unanswered
+      // platform: the by-hand route is for an emulator nobody read, and the
+      // downloads stay because they never read the verdict.
       mockFirmware([
         firmwarePlatform({
           bios_level: "unknown",
           required_count: 0,
           required_downloaded: 0,
           required_withheld: 0,
-          system_image: "unsettled",
+          emulator_read: true,
         }),
       ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("Readiness unknown");
-      expect(container.textContent).toContain(
-        "Whether the BIOS image the launching emulator needs is in place could not be established",
-      );
-      // The short form, not one of its two sentences, for the reason above.
-      expect(container.textContent).not.toContain("Requirement unknown");
       expect(container.textContent).not.toContain("You can still put BIOS files in your BIOS folder by hand");
       expect(buttonByText(container, "Download all")).not.toBeDisabled();
-      const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
-        el.textContent.includes("Game Boy Advance"),
-      );
-      // The row states the pane's sentence, which is the half of the answer
-      // that says WHICH gap declined the verdict. The short `Readiness unknown`
-      // asserted above is the pane's coloured note and covers two gaps, so it
-      // is not what a tooltip with no heading beside it can carry.
-      expect(row?.title).toBe(
-        "Whether the BIOS image the launching emulator needs is in place could not be established",
-      );
     });
 
     it("names the unjudged row, not the console, when both ignorances hold at once", async () => {
@@ -3721,7 +3774,6 @@ describe("Library › Platforms", () => {
           required_count: 1,
           required_downloaded: 0,
           required_withheld: 1,
-          system_image: "unsettled",
         }),
       ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);

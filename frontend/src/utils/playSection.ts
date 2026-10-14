@@ -28,27 +28,15 @@ export interface BiosInfoFields {
   biosNeeded: boolean;
   biosLabel: string;
   /** Whether this launch is missing firmware it cannot start without — the whole
-   *  of the play-row badge's rule, and the reason it is derived here rather than
-   *  at the row: it is a local fact (`required_downloaded` counts what the
-   *  reading found at each destination), and reassembling it from the numbers at
-   *  the call site is how it drifted into keying off the readiness verdict
-   *  instead.
+   *  of the play-row badge's rule: the backend's level is `"missing"`, which is
+   *  the resolver saying the launching emulator's requirements are not met.
+   *  Nothing here counts rows: a verdict nothing established raises no warning, and a
+   *  region-decided one (`"partial"`) raises none either — the badge does not
+   *  say a game will not start on a guess about its disc.
    *
-   *  **Two absences raise it, and neither can state the other.** A file the
-   *  LAUNCHING EMULATOR requires is not on disk — a required row whose verdict
-   *  was withheld is out of both sides of that comparison, being neither on
-   *  disk nor shown to be missing. Or the CONSOLE cannot start without one of
-   *  the images that emulator declares and none of them is in place
-   *  (`system_image: "absent"`), which no count can express: a libretro
-   *  declaration marks each of those images optional, so `required_count` is 0
-   *  and the comparison above is vacuously false while no game on the platform
-   *  launches. The second is read off the backend's own answer, never
-   *  re-derived from the rows here.
-   *
-   *  The four-valued `bios_level` is deliberately NOT projected. The badge has
-   *  one appearance, so it needs no colour input, and the BIOS tab reads the
-   *  level off its own payload — carrying it here as well would be a second
-   *  copy of the verdict for nobody to render. */
+   *  The four-valued `bios_level` is read and not projected. The badge has one
+   *  appearance, so it needs no colour input, and the BIOS tab reads the level
+   *  off its own payload. */
   biosRequiredMissing: boolean;
 }
 
@@ -104,8 +92,8 @@ export function applySaveSyncDisplay(
  *  re-derived here.
  *
  *  Four payloads. `bios_status` present: the requirement, and whether this launch
- *  is missing firmware it cannot start without — a file the launching emulator
- *  requires, or the image the console itself needs. `bios_status` absent: the
+ *  is missing firmware it cannot start without — the resolver's verdict for the
+ *  launching emulator, not met. `bios_status` absent: the
  *  backend answering "this emulator needs no BIOS", which clears the fields so a
  *  requirement can be taken back off the page (#1690). `bios_status_unknown`
  *  with an `"unknown"` level: a check that RAN and could not establish the
@@ -115,7 +103,7 @@ export function applySaveSyncDisplay(
  *  payload that must change nothing, so it projects to `null` and the caller
  *  writes nothing (#1693).
  *
- *  `bios_level` is read only to tell those last two apart, never projected —
+ *  `bios_level` decides the badge and tells those last two apart, and is never projected —
  *  that is the same split `panelState.biosFieldsFromCache` draws off the same
  *  payload, and a divergence would leave the badge and the BIOS tab disagreeing
  *  about whether a question was answered.
@@ -130,34 +118,10 @@ export function extractBiosInfo(answer: BiosAnswer): BiosInfoFields | null {
   if (!answer.bios_status) {
     return { biosNeeded: false, biosLabel: "", biosRequiredMissing: false };
   }
-  const requiredCount = answer.bios_status.required_count ?? 0;
-  const requiredDownloaded = answer.bios_status.required_downloaded ?? 0;
-  // A required row nothing could judge is neither present nor absent, so it is
-  // taken out of the count before the comparison: the badge says a required file
-  // is NOT THERE, and a reading that established nothing has not shown that. A
-  // row answered `false` stays in and DOES raise the badge — a declared folder
-  // the resolver listed and found no BIOS image in is exactly the state the
-  // badge is for.
-  //
-  // A one-of group covered for some regions only is taken out the same way. The
-  // backend has already narrowed it to this game's own regions wherever RomM
-  // names one that maps, so a group still partial here is one whose region for
-  // THIS game is not known — and the badge does not say a game will not start
-  // on a guess. A group with nothing in place, or one whose region for this game
-  // is not covered, is `unmet`, stays in the count, and raises it.
-  const requiredJudged =
-    requiredCount - (answer.bios_status.required_withheld ?? 0) - (answer.bios_status.required_partial ?? 0);
-  // The console's own demand, taken as the backend stated it — a second
-  // established absence beside the count rather than a second reading of the
-  // same one. Whether the count sees it at all is the core author's choice: a
-  // libretro declaration marks each file required or optional and can say
-  // nothing about the console. It is stated only for a core with no one-of
-  // group; where there is one, the group is in the count above.
-  const systemImageAbsent = answer.bios_status.system_image === "absent";
   return {
     biosNeeded: true,
     biosLabel: answer.bios_label ?? "",
-    biosRequiredMissing: systemImageAbsent || (requiredJudged > 0 && requiredDownloaded < requiredJudged),
+    biosRequiredMissing: answer.bios_level === "missing",
   };
 }
 

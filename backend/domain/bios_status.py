@@ -6,29 +6,26 @@ the readiness decision the game-detail panel, the play-section row and the Syste
 page all read. Verbose per-surface phrasing and the status-dot colour are UI
 concerns and deliberately do NOT live here.
 
+**The level is the resolver's verdict, not a count** (ADR-0042 §1).
+``requirements_met`` for the launching emulator is met (``ok``), not met
+(``missing``) or not established (``unknown``); the one exception is a one-of
+group whose answer turns on the disc's region alone, which reads ``partial``
+(:func:`region_decides`). Nothing here weighs the rows against each other to
+reach a colour: the counts below exist to WORD the answer — "2 of 3 files … are
+in place" under a red verdict — and never to decide it.
+
 Two axes run through this module and must not be folded into one. **What wants a
-file** is :mod:`domain.firmware_wants`' four-valued answer, and it is a property
-of the platform: the same file answers the same way on every surface that shows
-it. **Whether the game in front of the user is ready to launch** is scoped to the
-emulator it will launch with — libretro or standalone, one identity either way —
-which is why an entry carries ``required_by_active`` beside its ``wanted`` and
-why the counts key off the first. A file three other emulators demand is not a
-missing prerequisite for this launch.
+file** is :mod:`domain.firmware_wants`' four-valued answer. **Whether the game in
+front of the user is ready to launch** is scoped to the emulator it will launch
+with — libretro or standalone, one identity either way — which is why an entry
+carries ``required_by_active`` beside its ``wanted`` and why the counts key off
+the first. A file three other emulators demand is not a missing prerequisite for
+this launch.
 
 Where the launching emulator states a **one-of group**
 (:mod:`domain.firmware_groups`), the group is ONE requirement and is counted as
-one: it raises ``required_count`` by one, and ``required_downloaded`` only where
-every region it speaks about is covered. Its options are rows like any other and
-never required rows — a launch needs one of them, chosen by the disc's region.
-
-A third axis joins them for an emulator that states no group, and it is a THIRD
-axis rather than a third count, because it is not counted at all: the **system
-image** (:func:`classify_system_image`). Where the console does not start without
-one of the images the launching emulator declares, what is missing is one file
-out of many rather than each of many — folding it into ``required_count`` would
-report every one of them as required where the truth is "one of these". It
-carries its own value and its own sentence, and it can only ever make the
-verdict less green.
+one in the counts a surface words. Its options are rows like any other and never
+required rows — a launch needs one of them, chosen by the disc's region.
 """
 
 from __future__ import annotations
@@ -36,10 +33,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.firmware_groups import GROUP_MET, GROUP_PARTIAL, GROUP_UNKNOWN, GROUP_UNMET, fetched_as_required
+from domain.firmware_groups import GROUP_MET, GROUP_UNKNOWN, GROUP_UNMET, fetched_as_required
 from domain.firmware_wants import (
     DECLARED_FILE,
-    VERDICT_WITHHOLDING_CAVEATS,
     WANTED_NEEDED,
     WANTED_OPTIONAL,
     WANTED_UNKNOWN,
@@ -47,7 +43,7 @@ from domain.firmware_wants import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
     from domain.firmware_groups import GroupVerdict
     from domain.firmware_wants import CoreFirmwareVerdict, FirmwareGroup, FirmwarePlacement
@@ -63,57 +59,32 @@ BIOS_LEVEL_MISSING = "missing"
 BIOS_LABEL_UNKNOWN = "Unknown"
 BIOS_LABEL_MISSING = "Missing"
 
-# The four answers to "does the launching emulator have the image its CONSOLE
-# cannot start without". Not a count and never one: the requirement is
-# disjunctive.
-#
-# ``not_demanded`` is the neutral value and covers four different recordings —
-# the emulator carries its own substitute, the console was established to start
-# with nothing present, nobody has established which, and nothing is recorded
-# about the console at all. It says this axis makes no claim, and it must never
-# be read as "this console needs no firmware": the last of those four is an
-# unasked question, and reading it as an answer is the collapse
-# :mod:`domain.firmware_wants` exists to prevent.
-#
-# ``unsettled`` has two producers and no others: a row nothing could judge among
-# the ones the launching emulator declares, and a console whose demand this
-# platform's list carries no row for at all.
-SYSTEM_IMAGE_NOT_DEMANDED = "not_demanded"
-SYSTEM_IMAGE_HELD = "held"
-SYSTEM_IMAGE_ABSENT = "absent"
-SYSTEM_IMAGE_UNSETTLED = "unsettled"
-
-SYSTEM_IMAGE_VALUES = (
-    SYSTEM_IMAGE_NOT_DEMANDED,
-    SYSTEM_IMAGE_HELD,
-    SYSTEM_IMAGE_ABSENT,
-    SYSTEM_IMAGE_UNSETTLED,
-)
-
 
 @dataclass(frozen=True)
 class BiosFileEntry:
     """Status of a single BIOS/firmware file on a platform's list.
 
-    ``wanted`` is the machine's answer about the file (one of
-    :data:`domain.firmware_wants.WANTED_VALUES`); ``required_by_active`` is the
-    launching emulator's, and only that one decides whether the file is counted
-    as a missing prerequisite.
+    ``wanted`` is the need of the emulator whose requirement the row is (one of
+    :data:`domain.firmware_wants.WANTED_VALUES`) — its own word on a file it
+    declares, and for a library file nobody declares whether that emulator was
+    read; ``required_by_active`` is the launching emulator's, and only that one
+    decides whether the file is counted as a missing prerequisite.
 
     ``on_server`` is clear for a file an installed emulator asks for that the
-    RomM library does not hold. Such a file is real, and missing, and nothing on
-    this page can fetch it — so it is shown, and it is kept out of every count
-    that offers the user an action.
+    RomM library does not hold. Nothing on this page can fetch such a file — so
+    it is shown, and it is kept out of every count that offers the user an
+    action.
 
     ``satisfied`` is the row's verdict and the axis the REQUIRED counts key off:
-    the requirement is met, is not met, or nothing established which. It is not
-    ``downloaded``, which answers only whether something is at the destination —
-    for a **folder** declaration the two come apart completely, since what
-    satisfies the requirement is a file inside the folder and the folder itself
-    is always there on a stock RetroDECK. The library's own held/offered ratio
-    is a third axis and keys off neither (``on_server`` and ``downloaded``);
-    only the ratio a surface states is narrowed to the rows whose ``satisfied``
-    is not ``None``.
+    the resolver's own per-file answer — met, not met (absent, the
+    wrong image, refused, the wrong shape), or not established (the place could
+    not be looked at, the bytes could not be read, recognised or compared). It
+    is not ``downloaded``, which answers only whether something is at the
+    destination: a wrong image is there and not met, and a folder is there on
+    every stock RetroDECK whatever it holds. The library's own held/offered
+    ratio is a third axis and keys off neither (``on_server`` and
+    ``downloaded``); only the ratio a surface states is narrowed to the rows
+    whose ``satisfied`` is not ``None``.
 
     ``declared_kind`` is what the emulator opens the destination at, and it is a
     property of the DECLARATION: a folder that is not there is still a folder to
@@ -186,16 +157,26 @@ class BiosFileEntry:
     # emulator's own setting names a file in this folder that is not there —
     # ``FirmwarePlacement.missing_configured_image``. Never a verdict.
     missing_configured_image: dict[str, str | None] | None = None
+    # The identity of the emulator whose requirement this row is, ``None`` for
+    # a library file no emulator claims. A surface shows a row under its own
+    # emulator's tab, and an unclaimed one under the launching emulator's.
+    declared_by: str | None = None
 
 
 @dataclass(frozen=True)
 class BiosStatus:
-    """One platform's classified files and counts, in the shape the level decision reads.
+    """One platform's classified files and the verdict over them, in the shape the level reads.
 
     **Not a wire shape, and it never reaches the wire.** Its one caller builds it
     to ask :func:`compute_bios_level` and :func:`compute_bios_label` and keeps
     nothing else of it; what the frontend receives is the plain dict assembled
     beside it (``FirmwareStatusReader._bios_aggregates``).
+
+    ``verdict`` is what the resolver says about the launching emulator, ``None``
+    where the answer holds nothing about it — no pick, no identity, a reading
+    that did not happen, or an emulator missing from the answer, which counts as
+    not read. ``region_decides`` is :func:`region_decides` over its
+    groups, taken where the resolver's own groups are at hand.
     """
 
     platform_slug: str
@@ -205,33 +186,29 @@ class BiosStatus:
     required_count: int | None
     required_downloaded: int | None
     files: tuple[BiosFileEntry, ...]
-    # Server files some emulator asks for (``needed`` or ``optional``) —
-    # :func:`count_wanted`, which says what the pair is and is not read for.
-    # ``None`` means the caller did not supply the counts, so the "unknown"
-    # decision is not made (:func:`_nothing_established`).
+    # Server files some emulator asks for (``needed`` or ``optional``) and files
+    # nothing could answer for — :func:`count_wanted`. Carried to the wire; no
+    # level reads them.
     known_count: int | None = None
     unknown_count: int = 0
-    # Whether an absence from this platform's file list may be read as "nothing
-    # wants it" — ``FirmwareCatalogue.reading_complete_for`` asked about the
-    # emulator the game will launch with. Defaults to ``True`` so a caller that
-    # does not supply it keeps the level it always got.
-    reading_complete: bool = True
-    # The launching emulator's system-image answer (:func:`classify_system_image`),
-    # one of :data:`SYSTEM_IMAGE_VALUES`. Defaults to the neutral value so a
-    # caller that does not supply it keeps the verdict it always got.
-    system_image: str = SYSTEM_IMAGE_NOT_DEMANDED
+    verdict: CoreFirmwareVerdict | None = None
+    region_decides: bool = False
     # The verdicts over the launching emulator's one-of groups, each ONE
     # requirement already inside ``required_count``.
     groups: tuple[GroupVerdict, ...] = ()
+    # The level a game's own region gives (:func:`game_region_level`), or
+    # ``None`` where it gives none and the verdict stands.
+    game_level: str | None = None
 
 
 def format_bios_status(
     bios: dict[str, Any],
     platform_slug: str,
     *,
-    reading_complete: bool = True,
-    system_image: str = SYSTEM_IMAGE_NOT_DEMANDED,
+    verdict: CoreFirmwareVerdict | None = None,
+    region_decides: bool = False,
     groups: tuple[GroupVerdict, ...] = (),
+    game_level: str | None = None,
 ) -> BiosStatus:
     """Assemble the :class:`BiosStatus` the level decision reads, from one raw check result."""
     raw_files = bios.get("files", [])
@@ -258,6 +235,7 @@ def format_bios_status(
                 images=tuple(f.get("images", ())),
                 checked=f.get("checked"),
                 missing_configured_image=f.get("missing_configured_image"),
+                declared_by=f.get("declared_by"),
             )
             for f in raw_files
         )
@@ -274,9 +252,10 @@ def format_bios_status(
         files=files,
         known_count=bios.get("known_count"),
         unknown_count=bios.get("unknown_count", 0),
-        reading_complete=reading_complete,
-        system_image=system_image,
+        verdict=verdict,
+        region_decides=region_decides,
         groups=groups,
+        game_level=game_level,
     )
 
 
@@ -320,7 +299,7 @@ def build_file_entry(
         local_path=dest,
         declared_path=placement.destination if placement is not None else file_name,
         description=placement.description if placement is not None else file_name,
-        wanted=classify_wanted(placement, complete),
+        wanted=_wanted(placement, complete, launching_emulator),
         required_by_active=active.required_by_active,
         cores=cores,
         used_by_active=active.used_by_active,
@@ -337,7 +316,22 @@ def build_file_entry(
         missing_configured_image=(
             {"emulator_label": stale.emulator_label, "file_name": stale.file_name} if stale is not None else None
         ),
+        declared_by=placement.emulator if placement is not None else None,
     )
+
+
+def _wanted(placement: FirmwarePlacement | None, complete: bool, launching_emulator: str | None) -> str:
+    """The row's ``wanted``: the launching emulator's own need wherever the row is its requirement.
+
+    A row the launching emulator declares is shown under its tab, so its need
+    there is that emulator's — required or merely accepted — and never another
+    emulator's requirement of the same name. Every other row keeps the
+    machine's four-valued answer (:func:`classify_wanted`).
+    """
+    if placement is not None and launching_emulator is not None and placement.emulator == launching_emulator:
+        own = any(want.emulator == launching_emulator and want.required for want in placement.wants)
+        return WANTED_NEEDED if own else WANTED_OPTIONAL
+    return classify_wanted(placement, complete)
 
 
 def _groups_of(groups: tuple[FirmwareGroup, ...], emulator: str | None) -> tuple[FirmwareGroup, ...]:
@@ -367,9 +361,8 @@ def _group_membership(file_name: str, groups: tuple[FirmwareGroup, ...]) -> dict
 class _ActiveCoreAnswer:
     """The launching emulator's say about one row — the three launch-scoped fields.
 
-    ``wanted`` is the machine's answer about a file and reads the same on every
-    surface; these three are the emulator the game will launch with speaking
-    about the same row, and :class:`BiosFileEntry` carries each of them.
+    These three are the emulator the game will launch with speaking about one
+    row, and :class:`BiosFileEntry` carries each of them.
     """
 
     used_by_active: bool
@@ -409,32 +402,22 @@ def _active_core_answer(
 def _row_verdict(placement: FirmwarePlacement | None, downloaded: bool, dest: str | None) -> bool | None:
     """Is this row's requirement met? ``None`` where nothing established it.
 
-    Three shapes, and the first is the reason the axis exists at all. A **folder
-    declaration** is answered by the resolver's own listing of the folder, never
-    by the folder being there: RetroDECK links LRPS2's ``pcsx2/bios`` onto the
-    BIOS root, so it is present on every install, and reading presence as the
-    verdict would report "All required ready" over a PS2 install with no BIOS
-    file at all. No listing means no verdict.
+    Wherever an emulator declared the file it is the resolver's own verdict over
+    that requirement, read at the place the emulator opens — a wrong
+    image is not met though it is there, a file it could not compare is not
+    established though it is there, and a place it could not look at is not
+    established rather than missing. A folder declaration is answered by what
+    the folder HOLDS, never by the folder being there.
 
-    A **file** the reading found something else at — a directory in its way — is
-    withheld for the mirror-image reason: something is at the destination and it
-    is not the file, so neither "there" nor "absent" is a claim the reading
-    supports.
-
-    Everything else is ``downloaded``, which for a declared file the resolver
-    placed under this root is the resolver's own reading at the destination it
-    will be opened from. Where the declaration carries no ``relative_path`` the
-    destination is one Tender cannot honour, so the resolver read somewhere
-    else and ``FirmwareDemand.is_downloaded`` answers with its own look at the
-    path assembled here instead — and where there is no *dest* to look at,
-    because no download may land in the BIOS folder, that row's verdict is
-    withheld too: nothing established it.
+    A library file no emulator declared is no requirement of anything, so the
+    resolver has no verdict to give; there the row says only whether Tender's
+    own look found it (``FirmwareDemand.is_downloaded``), and where there is no
+    *dest* to look at, because no download may land in the BIOS folder, that is
+    withheld too.
     """
-    if placement is not None and placement.declares_directory:
-        return placement.folder.satisfied if placement.folder is not None else None
-    if (placement is None or placement.relative_path is None) and dest is None:
-        return None
-    if placement is not None and VERDICT_WITHHOLDING_CAVEATS.intersection(placement.caveats):
+    if placement is not None:
+        return placement.satisfied
+    if dest is None:
         return None
     return downloaded
 
@@ -469,31 +452,23 @@ def collect_firmware_status(
 
 
 def count_required(files: tuple[BiosFileEntry, ...], groups: tuple[GroupVerdict, ...] = ()) -> tuple[int, int]:
-    """``(required, of those downloaded)`` for the emulator the game will launch with.
+    """``(required, of those met)`` for the emulator the game will launch with.
 
     Each of its one-of *groups* is ONE requirement here, met only where every
-    region it speaks about is covered: a group partly covered is not met, and
-    :func:`count_required_partial` is what says it is partly there.
+    region it speaks about is covered.
 
-    The badge's two numbers, derived in one place so the platform detail and
-    the game-detail page can never disagree about which files count. A file the
-    library does not hold counts here — it is genuinely required and genuinely
-    absent, and excluding it would make the badge read ready over a file the
-    core declares and does not have. What the count must never do is imply a
-    download (whether anything is fetchable is a separate question, asked where
-    the buttons are) — nor a LAUNCH outcome: at the RetroArch revision RetroDECK
-    ships, the ``.info`` firmware list is read only by display surfaces
-    (``menu_displaylist.c``), and neither ``task_content.c`` nor ``runloop.c``
-    consults it, so a declaration cannot say whether a game starts.
+    The two numbers a surface WORDS — "2 of 3 files … are in place" — derived in
+    one place so the platform detail and the game-detail page can never disagree
+    about which files count. **No level is computed from them**: the
+    colour is the resolver's verdict, and these say how much of the requirement
+    is there under it. A file the library does not hold counts here — it is
+    genuinely required and genuinely absent — and nothing here implies a
+    download.
 
-    The second number is the row VERDICT, not ``downloaded``: for a folder
-    declaration the two come apart, since RetroDECK links LRPS2's ``pcsx2/bios``
-    onto the BIOS root and the folder is therefore present on every install.
-    Counting presence there would read "All required ready" over a PS2 install
-    with no BIOS file at all. A row nothing could judge raises the first number
-    and not the second, and is not counted as missing either — that is
-    :func:`count_required_withheld`, and the readiness verdict declines rather
-    than picking one of the two.
+    The second number is the row VERDICT, never ``downloaded``: a file counts as
+    in place only where the resolver judges it met, so a wrong image
+    or one it could not compare is in the first number and not the second. A
+    row nothing could judge is :func:`count_required_withheld`'s.
     """
     required = [f for f in files if f.required_by_active]
     met = sum(1 for group in groups if group.state == GROUP_MET)
@@ -513,286 +488,122 @@ def count_required_withheld(files: tuple[BiosFileEntry, ...], groups: tuple[Grou
     return sum(1 for f in files if f.required_by_active and f.satisfied is None) + withheld_groups
 
 
-def count_required_partial(groups: tuple[GroupVerdict, ...]) -> int:
-    """How many of the launching emulator's groups are covered for some regions and not others.
+def region_decides(verdict: CoreFirmwareVerdict | None, groups: Iterable[FirmwareGroup]) -> bool:
+    """Is the launching emulator's verdict not established because of the disc's region alone?
 
-    The fourth number beside the required counts: such a group is in
-    ``required_count`` and not in ``required_downloaded``, and it is not absent
-    either — a surface warning about a missing requirement subtracts it, as it
-    subtracts :func:`count_required_withheld`.
+    Every part of it is the resolver's: its verdict is not
+    established; it stated that a group's option is picked by the region of the
+    disc being booted (``region_decided_by_disc``); at least one of its groups
+    has an image met and one not met and none not established; every other
+    group is met; and nothing else in its answer is open — no plain required
+    file it could not judge, no refused required declaration. Tender counts
+    nothing of its own here.
+
+    A group naming regions that rest on a read that settled nothing (its
+    ``unchecked_regions``), or regions it carries no option for (its
+    ``unstated_regions``), is something open too, and makes this ``False``.
     """
-    return sum(1 for group in groups if group.state == GROUP_PARTIAL)
+    if verdict is None or verdict.requirements_met is not None:
+        return False
+    if not verdict.region_decided_by_disc or verdict.undetermined or verdict.refused_required:
+        return False
+    mixed = False
+    for group in groups:
+        if group.satisfied is True:
+            continue
+        images = {option.satisfied for option in group.options}
+        open_regions = group.unchecked_regions or group.unstated_regions
+        if group.satisfied is None and images == {True, False} and not open_regions:
+            mixed = True
+            continue
+        return False
+    return mixed
 
 
-def classify_system_image(
+def game_region_level(
     verdict: CoreFirmwareVerdict | None,
-    files: tuple[BiosFileEntry, ...],
-    launching_emulator: str | None,
-    *,
-    groups: tuple[GroupVerdict, ...] = (),
-) -> str:
-    """Does the launching emulator have the image its CONSOLE cannot start without?
+    groups: Iterable[FirmwareGroup],
+    narrowed: tuple[GroupVerdict, ...],
+) -> str | None:
+    """The level for a game whose own region RomM names, or ``None`` where none applies.
 
-    Only for an emulator that states no one-of *groups*: where it states one,
-    the group IS that demand, said precisely — which file serves which region —
-    and this coarser reading of the same demand stays silent rather than being
-    a second answer beside it.
+    The game page narrows to the game's region wherever the
+    launching emulator states a one-of group and the game's region maps
+    (*narrowed* are its groups judged for those regions,
+    :func:`domain.firmware_groups.judge_group_for_game`).
 
-    One of :data:`SYSTEM_IMAGE_VALUES`. The question only arises for an emulator
-    the resolver's packaged table puts in that state; every other recording — one
-    carrying its own substitute, a console established to start with nothing, an
-    open entry, no entry at all — answers :data:`SYSTEM_IMAGE_NOT_DEMANDED` and
-    leaves the file rows to speak for themselves.
-
-    **The requirement is a disjunction and is read as one.** The console asks for
-    ONE of the images the emulator declares, so a single satisfied row answers it
-    and the absent ones beside it are still one unmet requirement. That is why
-    this is a value and not a pair of counts: put into ``required_count`` it would
-    read ``0/N required files ready`` over a console that needs one image, with
-    ``N`` every row the emulator declares. The library's own ``RomM library
-    files`` ratio is a different set again: the RomM library's inventory for the
-    platform, which this answer neither counts nor is scoped to.
-
-    **The demand comes from the table, the presence comes from the rows, and
-    nothing here weighs one against the other.** ``requirements_met`` is not
-    consulted, and reading it as a second opinion on the same question would be
-    the misreading the field exists to prevent: at the resolver, ignorance is
-    always ``None``, so a ``False`` is a demonstrated statement rather than a
-    disagreement to be resolved. It has exactly two causes — a DIFFERENT required
-    file is absent, or one that is there has the wrong bytes — and both leave one
-    of our own required rows unmet, so the ordinary counts already report them,
-    by name, which this axis never could. The second cause is reachable here: the
-    per-platform reading is asked with content verification, which is what lets a
-    packaged card name an image at all. That widens what ``requirements_met``
-    could say and changes nothing about whether it may be read — the counts still
-    report the same file by name, and this axis still does not weigh it.
-
-    **A row's** ``satisfied`` **is presence, not the resolver's usability
-    verdict** — the name invites the second reading and does not carry it. For a
-    declared file it is ``FirmwareDemand.is_downloaded``, which answers from the
-    resolver's ``placement.present`` wherever the resolver placed the file under
-    this root and from Tender's own look at the destination where the
-    declaration carries no ``relative_path`` — the boundary between the two is
-    drawn at ``FirmwareDemand.is_downloaded`` itself, and is stated there. For a
-    folder declaration it is the verdict on what the folder HOLDS, and may be
-    ``None``; and where something other than the expected file occupies the
-    destination it is ``None`` too. Either
-    ``None`` reads here as not held — the safe direction, since the alternative
-    claims a readiness nothing established.
-
-    *files* is this platform's list, so the disjunction spans the rows this
-    emulator declares that the platform's own list carries — every one of them,
-    BIOS image or not: a declaration mixes images with the odd data file (LRPS2
-    lists ``GameIndex.yaml`` beside its BIOS folder) and nothing on a row says
-    which is which. That is upstream's reading too —
-    ``CoreFirmware._system_image_in_place`` folds the whole declaration in the
-    same way — so the two agree rather than one of them quietly narrowing. The
-    resolver reads it over the emulator's WHOLE declaration, which a per-system
-    answer still carries in full; the two sets come apart only for an emulator
-    serving several systems, and upstream states that none in its vector corpus
-    or on its reference machine reaches this state while declaring for more than
-    one.
+    Everything outside the groups decides first, off the resolver's own words: a
+    plain required file not met, or the console's own image shown absent
+    (``system_firmware_met`` false, which holds whatever the disc's region), is
+    ``'missing'``; a plain required file it could not judge, or a refused
+    required declaration, is ``'unknown'``. A verdict not met that nothing the
+    resolver states explains is ``'unknown'`` too — the absence is read off the
+    resolver's console-level verdict and never inferred from a group or the
+    rows. Otherwise the image serving the game's region decides: met ``'ok'``,
+    not met ``'missing'``, and not established — or no option of the group
+    serves that region — ``'unknown'``, which holds even under a met verdict,
+    because the resolver states that a region no option lists is outside its
+    verdict.
     """
-    if groups or verdict is None or launching_emulator is None or not verdict.system_needs_an_image:
-        return SYSTEM_IMAGE_NOT_DEMANDED
-    images = [f for f in files if launching_emulator in f.cores]
-    if any(f.satisfied for f in images):
-        return SYSTEM_IMAGE_HELD
-    if images and all(f.satisfied is False for f in images):
-        return SYSTEM_IMAGE_ABSENT
-    return SYSTEM_IMAGE_UNSETTLED
-
-
-def _nothing_established(status: BiosStatus) -> bool:
-    """Nothing about this platform's firmware could be established.
-
-    One shape, and it is the reading itself: the emulator this platform launches
-    with could not be asked what it wants — it ships no declaration, the resolver
-    holds no card for it, it could not be identified, or no pick could be made at
-    all. Nothing that follows can be a claim about this launch, because the one
-    emulator the claim would be about said nothing.
-
-    **The rows on the page do not rescue it, and that is the point.** They belong
-    to the platform's OTHER emulators and to the RomM library, so under an unread
-    launching emulator ``required_by_active`` is zero by construction and the
-    counts read "nothing required" — a green all-clear over a console whose
-    emulator nobody asked. A stock RetroDECK reaches that on PS2: LRPS2 declares
-    a folder and a data file, and with standalone PCSX2 launching, those two rows
-    say nothing about what PCSX2 wants.
-
-    Two narrower shapes used to be named here and both are inside this one, since
-    a row reads ``unknown`` only under an incomplete reading: a server listing
-    answered for in no part, and an empty file list. Neither can arise while the
-    launching emulator was read.
-
-    ``known_count is None`` is a caller that did not supply the counts, and the
-    decision is then left to the required-count logic as it always was.
-    """
-    return status.known_count is not None and not status.reading_complete
-
-
-def _requirement_verdict_withheld(status: BiosStatus) -> bool:
-    """Is one of the launching emulator's required files one nothing could judge?
-
-    The third shape that declines a readiness claim, and the only one that
-    coexists with a real requirement. The other two (:func:`_nothing_established`)
-    both imply ``required_count == 0``, so they can only ever displace a false
-    ``'ok'``; this one can also displace a ``'partial'`` or a ``'missing'``, and
-    that is deliberate. Where one required row cannot be judged, neither "ready"
-    nor "some of it is absent" is a claim the reading supports, and the rows
-    below the verdict still say which is which per file.
-
-    A required row the reading answered ``False`` is NOT this shape: it is a
-    requirement shown to be unmet, so the level goes to ``'missing'`` or
-    ``'partial'`` and the play row raises its badge. A folder the resolver
-    listed and found no image in is exactly that answer.
-
-    A one-of group whose state is ``unknown`` is this shape too: an option is
-    there and unread, or a region nothing checked stands beside the covered ones.
-    """
-    if any(group.state == GROUP_UNKNOWN for group in status.groups):
-        return True
-    return any(f.required_by_active and f.satisfied is None for f in status.files)
-
-
-def _counted_level(status: BiosStatus) -> str:
-    """The level the counts give — the rule that predates every decline.
-
-    A one-of group covered for some regions is counted as not met and still
-    makes the level ``'partial'``: something the requirement asks for is there.
-    """
-    req_count = status.required_count
-    req_done = status.required_downloaded
-    if req_count is not None and req_done is not None:
-        if req_done >= req_count:
-            return BIOS_LEVEL_OK
-        if req_done > 0 or _a_group_is_partial(status):
-            return BIOS_LEVEL_PARTIAL
+    stated = tuple(groups)
+    if verdict is None or not stated or not narrowed or not narrowed[0].game_regions:
+        return None
+    if verdict.unmet or verdict.system_firmware_met is False:
         return BIOS_LEVEL_MISSING
-    if status.all_downloaded:
-        return BIOS_LEVEL_OK
-    if (status.local_count or 0) > 0:
-        return BIOS_LEVEL_PARTIAL
-    return BIOS_LEVEL_MISSING
-
-
-def _a_group_is_partial(status: BiosStatus) -> bool:
-    """Is one of the launching emulator's groups covered for some regions and not others?"""
-    return any(group.state == GROUP_PARTIAL for group in status.groups)
-
-
-def _a_group_is_unmet(status: BiosStatus) -> bool:
-    """Has one of the launching emulator's groups no option in place at all?"""
-    return any(group.state == GROUP_UNMET for group in status.groups)
+    if verdict.undetermined or verdict.refused_required:
+        return BIOS_LEVEL_UNKNOWN
+    if verdict.requirements_met is False and not any(g.satisfied is False for g in stated):
+        return BIOS_LEVEL_UNKNOWN
+    states = {group.state for group in narrowed}
+    if GROUP_UNMET in states:
+        return BIOS_LEVEL_MISSING
+    return BIOS_LEVEL_OK if states == {GROUP_MET} else BIOS_LEVEL_UNKNOWN
 
 
 def compute_bios_level(status: BiosStatus) -> str:
     """Compute BIOS status level: 'unknown', 'ok', 'partial', or 'missing'.
 
-    ``'unknown'`` means no readiness claim can be made, and three shapes reach it.
-    Two are declines — see :func:`_nothing_established` and
-    :func:`_requirement_verdict_withheld` — checked before the required-count
-    logic; the first fires only when the caller supplied ``known_count`` (else
-    the decision is deferred to the existing ok/partial/missing logic). The third
-    is an unsettled system image over counts that would otherwise read ``'ok'``,
-    described below.
+    The resolver's verdict for the launching emulator: met is
+    ``'ok'``, not met is ``'missing'``, not established is ``'unknown'``. An
+    emulator the answer holds nothing about is not read, and so is
+    ``'unknown'`` — never ``'ok'`` over a launch nobody asked about.
 
-    A platform whose files are all *answered for* and wanted by nothing is a
-    different case entirely and reaches ``'ok'``: "the emulator this launches
-    with needs none of these" is a finished answer, and the file rows say which
-    files it covers.
-
-    The **system image** (:func:`classify_system_image`) enters at both ends and
-    only ever makes the answer less green. An established absence lands on
-    ``'missing'``, and is tested first so that a demonstration outranks a
-    platform nothing could be established for. **Neither decline can actually
-    reach that comparison**, so the order is a guard rather than a rule about a
-    live case. ``'absent'`` needs at least one row carrying the launching
-    emulator, every one of them answered ``False``. A withheld required row
-    contradicts that by construction — it carries the launching emulator
-    (:func:`build_file_entry`), so it is one of those rows, with ``satisfied is
-    None``. And an unread launching emulator declares nothing, so no row carries
-    it at all and the answer is ``'unsettled'``, never ``'absent'``. An unsettled
-    image can turn a green claim grey and nothing else: where the counts already
-    read ``'partial'`` or ``'missing'``, something is known to be absent, and a
-    doubt about one further file does not unsay it.
-
-    A **one-of group** with nothing in place lands on ``'missing'`` the same way
-    and for the same reason — the console does not start — and an ``unknown``
-    group declines like a withheld required row. A partly covered group counts
-    as not met and keeps the level at ``'partial'`` (:func:`_counted_level`).
+    ``'partial'`` is the one exception, and it is not a count: the verdict is
+    not established only because it depends on the disc's region
+    (:func:`region_decides`), so the platform shows the regions its images serve
+    and miss. On a game's own page, where RomM names the game's region, that
+    region decides instead (``game_level``, :func:`game_region_level`).
     """
-    if status.system_image == SYSTEM_IMAGE_ABSENT or _a_group_is_unmet(status):
+    if status.game_level is not None:
+        return status.game_level
+    verdict = status.verdict
+    if verdict is None:
+        return BIOS_LEVEL_UNKNOWN
+    if verdict.requirements_met is True:
+        return BIOS_LEVEL_OK
+    if verdict.requirements_met is False:
         return BIOS_LEVEL_MISSING
-    if _nothing_established(status) or _requirement_verdict_withheld(status):
-        return BIOS_LEVEL_UNKNOWN
-    level = _counted_level(status)
-    if status.system_image == SYSTEM_IMAGE_UNSETTLED and level == BIOS_LEVEL_OK:
-        return BIOS_LEVEL_UNKNOWN
-    return level
+    return BIOS_LEVEL_PARTIAL if status.region_decides else BIOS_LEVEL_UNKNOWN
 
 
 def compute_bios_label(status: BiosStatus) -> str:
     """Compute the compact BIOS status token (verbose phrasing stays per-surface).
 
-    Where :func:`compute_bios_level` declines, the token declines too — unless a
-    plain required file is shown missing, which is established whatever else
-    could not be judged; then it counts the plain files (:func:`_declined_label`).
-    The level is asked rather than its shapes repeated, so a token beside a grey
-    dot is a ratio only over a file whose absence was established.
+    The token words the level and never decides it. Under a not-met verdict it
+    is the plain required files' ratio where one of them is not in place —
+    "1/2 required" — and ``"Missing"`` where what is missing is no plain file (a
+    one-of group, or the console's own image). Under a met or region-decided
+    verdict it is ``"OK"`` where every plain required file is in place, and the
+    ratio otherwise; under a verdict nothing established it is ``"Unknown"``.
     """
-    if compute_bios_level(status) == BIOS_LEVEL_UNKNOWN:
-        return _declined_label(status)
-    # A console that needs one of these images and holds none: the ratio would
-    # count the wrong set, and the disjunction has no ratio to state.
-    if status.system_image == SYSTEM_IMAGE_ABSENT or _a_group_is_unmet(status):
-        return BIOS_LABEL_MISSING
-    return _counted_label(status)
-
-
-def _declined_label(status: BiosStatus) -> str:
-    """The token for a declined level: the plain files' ratio where one of them is shown missing.
-
-    A group nothing could check, a required row nothing could judge, or a
-    console demand nobody settled declines the level; none of them unsays a
-    plain required file the reading answered ``False`` for. The ratio counts
-    the plain required rows alone — a row nothing could judge is in the second
-    number and never the first — and no group at all.
-    """
+    level = compute_bios_level(status)
+    if level == BIOS_LEVEL_UNKNOWN:
+        return BIOS_LABEL_UNKNOWN
     plain = [f for f in status.files if f.required_by_active]
-    if any(f.satisfied is False for f in plain):
-        return f"{sum(1 for f in plain if f.satisfied)}/{len(plain)} required"
-    return BIOS_LABEL_UNKNOWN
-
-
-def _counted_label(status: BiosStatus) -> str:
-    """The token the plain required files give — never a one-of group.
-
-    The same token for a platform and for a game: the platform's payload carries
-    it beside its level, and the play row's badge shows the game's, whose groups
-    were narrowed to the game's own regions. Reached only once no group is
-    ``unmet`` or ``unknown``, so each group here is met, or partial — over a
-    platform, or over a game whose region is not known; the counts take each
-    once, as held only where it is met, and taking them back out leaves the
-    plain files. Beside a group the ratio is stated even with none of them in
-    place, because an image is: ``"Missing"`` would overstate it. Without a
-    group, nothing in place is ``"Missing"``, as it always was.
-    """
-    req_count = status.required_count
-    req_done = status.required_downloaded
-    if req_count is not None and req_done is not None:
-        plain_count = req_count - len(status.groups)
-        plain_done = req_done - sum(1 for group in status.groups if group.state == GROUP_MET)
-        if plain_done >= plain_count:
-            return "OK"
-        if plain_done > 0 or status.groups:
-            return f"{plain_done}/{plain_count} required"
-        return BIOS_LABEL_MISSING
-    if status.all_downloaded:
-        return "OK"
-    if (status.local_count or 0) > 0:
-        return f"{status.local_count}/{status.server_count}"
-    return BIOS_LABEL_MISSING
+    done = sum(1 for f in plain if f.satisfied)
+    if plain and done < len(plain):
+        return f"{done}/{len(plain)} required"
+    return BIOS_LABEL_MISSING if level == BIOS_LEVEL_MISSING else "OK"
 
 
 def count_wanted(files: tuple[BiosFileEntry, ...]) -> tuple[int, int]:
@@ -801,13 +612,9 @@ def count_wanted(files: tuple[BiosFileEntry, ...]) -> tuple[int, int]:
     A ``not_needed`` file is in neither: the machine answered for it, and no
     emulator asks for it.
 
-    **Neither number is read as a number.** :func:`_nothing_established` asks
-    ``known_count is not None`` — whether the caller supplied the counts at all —
-    and decides on ``reading_complete`` alone; nothing weighs either count
-    against ``server_count`` or against anything else. ``unknown_count`` has no
-    reader in either half: it travels to the wire and the frontend declares its
-    type (``frontend/src/types/firmware.ts``) without ever using it. So the pair
-    is a supplied/not-supplied flag beside a value nobody asks.
+    **Neither number is read as a number**, and no level reads either: the
+    level is the resolver's verdict. Both travel to the wire, where the frontend
+    declares their types (``frontend/src/types/firmware.ts``) without using them.
 
     **Scoped to ``on_server`` rows**, and no consumer can currently tell that
     scoping from any other. A row the library does not hold exists only because

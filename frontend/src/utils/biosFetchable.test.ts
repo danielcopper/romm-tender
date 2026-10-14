@@ -33,6 +33,12 @@ describe("isFetchable", () => {
     expect(isFetchable({ on_server: true, downloaded: false, declared_kind: "directory" })).toBe(false);
   });
 
+  it("refuses a file whose place the resolver could not look at", () => {
+    // A download there could overwrite a file nobody could see.
+    expect(isFetchable({ ...fetchableRow, caveats: ["firmware-path-inaccessible"] })).toBe(false);
+    expect(isFetchable({ ...fetchableRow, caveats: ["firmware-image-identified"] })).toBe(true);
+  });
+
   it("treats a payload that never spoke about the library as not fetchable", () => {
     // The game page's row type leaves `on_server` out of an older payload.
     // Absent is the safe direction: a row shown as unfetchable costs a button,
