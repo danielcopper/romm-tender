@@ -61,15 +61,12 @@ export const SavesTab: FC<SavesTabProps> = ({
   const [newSlotError, setNewSlotError] = useState<string | null>(null);
   const newSlotErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isOffline, setIsOffline] = useState(getRommConnectionState() === "offline");
-  // Bumped to invalidate VersionHistoryPanel caches after a restore
-  const [versionHistoryKey, setVersionHistoryKey] = useState(0);
   // Display name of an INACTIVE sibling version that is still on disk and has
   // unsynced save drift (#1298) — null when none. Reminds the user to switch back
   // and sync before those saves are lost.
   const [strandedVersion, setStrandedVersion] = useState<string | null>(null);
 
   const handleVersionRestored = () => {
-    setVersionHistoryKey((k) => k + 1);
     // Trigger parent refresh of saveStatus so the tracked save row reflects
     // the new tracked_save_id / server fields without leaving the page.
     announceSaveSync(romId);
@@ -279,7 +276,10 @@ export const SavesTab: FC<SavesTabProps> = ({
         const isActive = activeSlot !== null && slot.slot === activeSlot;
         return (
           <SlotPanel
-            key={`panel-${slot.slot}-${versionHistoryKey}`}
+            // Whether the slot is active is part of the key: a panel reads
+            // `defaultExpanded` once, so only a remount opens the new active slot
+            // and closes the old one, and every other panel keeps its state.
+            key={`panel-${slot.slot}-${isActive ? "active" : "inactive"}`}
             romId={romId}
             slot={slot}
             isActive={isActive}

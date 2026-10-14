@@ -816,26 +816,6 @@ describe("SavesTab", () => {
       }
     });
 
-    it("re-renders SlotPanel children after onVersionRestored", async () => {
-      // Render with two distinct slots so each SavesTab render produces 2
-      // captured-prop entries. The state bump in onVersionRestored triggers a
-      // re-render of all panels — the captured-props array grows by 2, not 1.
-      // The key-change behavior itself (panel-${slot}-${versionHistoryKey})
-      // forces a remount which resets SlotPanel-local state — that effect is
-      // verified manually in integration testing, not asserted here.
-      const slots = [makeSlot({ slot: "a" }), makeSlot({ slot: "b" })];
-      render(<SavesTab {...defaultProps({ activeSlot: "a", availableSlots: slots })} />);
-      // Baseline is taken after the mount probe settles, so the act() below is
-      // the only thing that can add captured props.
-      await flushAsync();
-      const initialCount = capturedSlotPanelProps.length;
-      expect(initialCount).toBe(2);
-      act(() => {
-        capturedSlotPanelProps[0]?.onVersionRestored();
-      });
-      expect(capturedSlotPanelProps.length).toBe(initialCount + 2);
-    });
-
     it("dispatches romm_data_changed when a child SlotPanel calls onSlotDeleted", async () => {
       render(<SavesTab {...defaultProps({ availableSlots: [makeSlot()] })} />);
       await flushAsync();
