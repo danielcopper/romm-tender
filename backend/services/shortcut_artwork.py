@@ -26,7 +26,7 @@ write and hand-over; how a run under way is stopped from outside is
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.artwork_slot import ArtworkSlot
@@ -427,12 +427,12 @@ class ShortcutArtworkService:
         if item.icon:
             if not await self._serve_icon(item, batch, plan):
                 return item
-            item = replace(item, icon=False)
+            item = _Item(item.rom_id, item.app_id, False, item.slots)
         for index, slot in enumerate(item.slots):
             if self._must_stop():
                 return None
             if not await self._serve_slot(item, slot, batch):
-                return replace(item, slots=item.slots[index:])
+                return _Item(item.rom_id, item.app_id, item.icon, item.slots[index:])
         return None
 
     async def _serve_icon(self, item: _Item, batch: list[_Finished | _SlotReady], plan: _Plan) -> bool:

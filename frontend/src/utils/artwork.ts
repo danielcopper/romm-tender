@@ -140,8 +140,8 @@ async function applySgdbArtwork(romId: number, appId: number): Promise<number> {
       // SGDB types 1-3 (hero / logo / wide grid) map 1:1 to Steam capsule assetTypes 1-3.
       // The wide grid and the logo are recorded as the fill path records them;
       // the hero is not. The awaits are sequential by design, one image at a
-      // time; S9382 is raised on the report's await lines, so their NOSONARs
-      // stay there.
+      // time; S9382 is raised on the slot's await line, so its NOSONAR stays
+      // there.
       const customArt: Array<[answer: SgdbArtwork, assetType: number, slot: RecordedSlot | null]> = [
         [results[0], 1, null],
         [results[1], 2, "logo"],
@@ -151,16 +151,8 @@ async function applySgdbArtwork(romId: number, appId: number): Promise<number> {
         if (!answer.base64) continue;
         if (isPruneLeaseCancelled(signal)) return applied;
         if (superseded()) return bail();
-        try {
-          await SteamClient.Apps.SetCustomArtworkForApp(appId, answer.base64, "png", assetType);
-        } catch (e) {
-          // prettier-ignore
-          if (slot) await reportReplacedSlot(romId, slot, "refused", answer); // NOSONAR(typescript:S9382)
-          throw e;
-        }
+        await setReplacedSlot(romId, appId, answer.base64, assetType, slot, answer); // NOSONAR(typescript:S9382)
         applied++;
-        // prettier-ignore
-        if (slot) await reportReplacedSlot(romId, slot, "set", answer); // NOSONAR(typescript:S9382)
       }
 
       // Type 4 = icon (a distinct apply path — see applyIcon).
@@ -182,6 +174,27 @@ type SgdbArtwork = Awaited<ReturnType<typeof getSgdbArtworkBase64>>;
 
 /** The slots whose outcome the backend records. */
 type RecordedSlot = "grid" | "logo";
+
+/**
+ * Set one image of the replacing apply and record what Steam made of it, for a
+ * slot the backend records; a refusal is recorded and then rethrown.
+ */
+async function setReplacedSlot(
+  romId: number,
+  appId: number,
+  base64: string,
+  assetType: number,
+  slot: RecordedSlot | null,
+  answer: SgdbArtwork,
+): Promise<void> {
+  try {
+    await SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", assetType);
+  } catch (e) {
+    if (slot) await reportReplacedSlot(romId, slot, "refused", answer);
+    throw e;
+  }
+  if (slot) await reportReplacedSlot(romId, slot, "set", answer);
+}
 
 /** Report what Steam made of an image the replacing apply set, as the fill path reports it. */
 async function reportReplacedSlot(
