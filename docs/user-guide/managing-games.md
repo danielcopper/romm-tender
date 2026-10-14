@@ -313,9 +313,9 @@ per version from an older release are left untouched.
 
 ### When the game is already on your device
 
-If you copied ROMs into your RetroDECK folders yourself, a game Tender has no record of may already be sitting exactly
-where a download would write. Tender never writes over it. Instead, the Play button reads **Use Existing Files**, and
-pressing it opens a dialog rather than starting a download.
+A game may already be sitting exactly where a download would write — because you copied ROMs into your RetroDECK folders
+yourself, or because another version of the same game was downloaded to that place. Tender never writes over it.
+Instead, the Play button reads **Use Existing Files**, and pressing it opens a dialog rather than starting a download.
 
 The dialog shows both sides — what is on your device (name, size, when it last changed) and what the server would send —
 and says plainly whether the two are the same size. From there you have three choices:
