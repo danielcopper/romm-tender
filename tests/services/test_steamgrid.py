@@ -20,7 +20,7 @@ from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
-from fakes.fake_shortcut_icon_job import FakeShortcutIconJob
+from fakes.fake_shortcut_artwork_job import FakeShortcutArtworkJob
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
 from fakes.running_loop import running_loop
@@ -33,7 +33,7 @@ from domain.artwork_slot_outcome import RULED_OUT_SECONDS, ArtworkSlotOutcome, S
 from domain.rom import Rom
 from lib.errors import Refused, SgdbApiError, SgdbRateLimitedError, SteamGridDirMissingError
 from lib.prune_conflicts import PruneConflicts
-from models.shortcut_icon import IconAnswer, SlotAnswer
+from models.shortcut_artwork import IconAnswer, SlotAnswer
 from services.library import LibraryService, LibraryServiceConfig
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
 
@@ -113,7 +113,7 @@ def steamgrid(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow, emi
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
-            icon_job=FakeShortcutIconJob(),
+            artwork_job=FakeShortcutArtworkJob(),
         ),
     )
 
@@ -1215,7 +1215,7 @@ class TestDebugLoggerProtocolSeam:
                 renderer_rss=FakeRendererRss(),
                 renderer_gc=FakeRendererGc(),
                 conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
-                icon_job=FakeShortcutIconJob(),
+                artwork_job=FakeShortcutArtworkJob(),
             ),
         )
 
@@ -2342,7 +2342,7 @@ class TestTheCacheUnderItsNewNames:
 
 
 class TestTheJobsSlotFetch:
-    """``do_fetch_slot_artwork``: the shortcut icon job's half of a wide grid or logo, before the frontend's fetch."""
+    """``do_fetch_slot_artwork``: the shortcut artwork job's half of a wide grid or logo, before the frontend's."""
 
     def test_caches_the_chosen_image_and_records_nothing(
         self, steamgrid, uow, slot_ready, sgdb_artwork_cache, fake_steamgrid_db_api

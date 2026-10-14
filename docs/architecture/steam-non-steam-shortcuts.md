@@ -413,7 +413,7 @@ while Steam is running (Steam holds the file in memory and rewrites it from memo
 (`adapters/steam_config.py`) still lays down artwork **files** in the grid directory, including the icon PNG. It reads
 `shortcuts.vdf` for three questions — which shortcuts the one-time relocation still has to repoint
 (`read_shortcut_exes`), what a shortcut's launch options are when Steam's reports did not confirm a write
-(`read_shortcut_launch_options`), and which shortcuts the shortcut icon job still has to give an icon
+(`read_shortcut_launch_options`), and which shortcuts the shortcut artwork job still has to give an icon
 (`read_shortcut_icons`) — and its whole-file `shortcuts.vdf` helpers (`read_shortcuts`, `write_shortcuts`) are on no
 live path since the icon write moved to `SteamClient.Apps.SetShortcutIcon`.
 
@@ -637,10 +637,10 @@ first visit to a game's page in a session sets each of the three **only where th
 slot (`applyArtwork`), and so does a version switch: once artwork was applied for one ROM of an app id, the newly bound
 ROM's is applied in the replacing mode, an image set by hand included. The replacing mode records the wide grid and the
 logo it set, or Steam refused, under the ROM now bound, as the fill does below: `get_sgdb_artwork_base64` answers a wide
-grid or logo with its image id, the hash of its bytes and the ROM's SteamGridDB id for the report. The shortcut icon job
-fills the wide grid and the logo in the background by the same rules ([Shortcut icons](#shortcut-icons)), so a first
-visit usually finds them filled; the hero is the game page's alone, and the icon keeps its own rules, under the same
-section.
+grid or logo with its image id, the hash of its bytes and the ROM's SteamGridDB id for the report. The shortcut artwork
+job fills the wide grid and the logo in the background by the same rules ([Shortcut artwork](#shortcut-artwork)), so a
+first visit usually finds them filled; the hero is the game page's alone, and the icon keeps its own rules, under the
+same section.
 
 **When a slot is filled** (`domain/artwork_slot.py`, `is_slot_filled`). A slot already holding an image is left alone,
 whoever set it — an image set by hand is never replaced. It is filled when Steam's grid directory holds a regular file,
@@ -663,7 +663,7 @@ answer back; the backend cannot see Steam's answer itself.
 ([database design](database-design.md)): `set` with the image id and the hash, `none`, or `refused`, the ROM's
 SteamGridDB id at that time, and when. A `none` or `refused` row keeps the slot from being asked again for 7 days
 (`RULED_OUT_SECONDS` in `domain/artwork_slot_outcome.py`): SteamGridDB may have an image tomorrow, and a week costs one
-request per slot instead of one at every first visit in a session and at every run of the shortcut icon job, which
+request per slot instead of one at every first visit in a session and at every run of the shortcut artwork job, which
 starts after each sync. The row stops counting at once when the ROM's SteamGridDB id changes, and **Refresh Artwork**
 deletes the game's rows (in `get_sgdb_resolution`, before it resolves the id). A `set` row never rules a slot out: a
 slot whose file is gone is asked again. Rows are keyed by ROM rather than app id, because a re-created shortcut gets a
@@ -686,11 +686,11 @@ dies with the file rather than in the database. A cached wide grid or logo named
 it is downloaded again under the rule above and replaced, once per slot. The hero and the icon keep `{rom_id}_hero.png`
 and `{rom_id}_icon.png`.
 
-### Shortcut icons
+### Shortcut artwork
 
-Every shortcut Tender manages gets its SteamGridDB icon in the background, never inside the apply loop: there a cold
-icon fetch cost about a second per minted shortcut, almost all of it SteamGridDB's image CDN missing its edge cache
-(measured by the maintainer on a Steam Deck, Steam client version 1788652215).
+Every shortcut Tender manages gets its SteamGridDB icon, wide grid and logo in the background, never inside the apply
+loop: there a cold icon fetch cost about a second per minted shortcut, almost all of it SteamGridDB's image CDN missing
+its edge cache (measured by the maintainer on a Steam Deck, Steam client version 1788652215).
 
 **What Steam shows**, measured on a Steam Deck LCD in Desktop Mode, in the desktop client, Steam client version
 1788652215 (2026-10-05):
@@ -721,8 +721,9 @@ directory, the game page's included, is downscaled to fit 64×64 with its aspect
 full-size file stays in the artwork cache. Where the vendored `png` does not load, icons are written full size and that
 is logged once.
 
-**The job** (`services/shortcut_icons.py`) also gives every bound shortcut its SteamGridDB wide grid and logo where the
-slot is empty, so a library looks complete without opening each game. The hero stays with the game page.
+**The job** (`services/shortcut_artwork.py`) gives every bound shortcut its icon by the rules above, and its SteamGridDB
+wide grid and logo where the slot is empty, so a library looks complete without opening each game. The hero stays with
+the game page.
 
 - **Worklist:** every bound shortcut whose `icon` in `shortcuts.vdf` is empty or a file named like the placeholder
   (`domain/shortcut_icon.py`, `icon_worklist`) — by name, so a placeholder minted under another Steam account's grid
@@ -757,11 +758,11 @@ slot is empty, so a library looks complete without opening each game. The hero s
   every worker: 30 s, twice as long at each 429 in a row, at most 15 minutes, then on, with only what the 429 met asked
   again; every run starts the pause over. A 401 or 403 from the API — a key SteamGridDB does not accept — ends the run
   with one warning; what was written before it is still handed over.
-- **Hand-over:** what is finished goes to the frontend as the `shortcut_icons` event in batches of up to 25 entries,
+- **Hand-over:** what is finished goes to the frontend as the `shortcut_artwork` event in batches of up to 25 entries,
   each batch under one prune lease (`emit_under_lease`): `icons`, `(app_id, icon_path)` pairs, and `artwork`,
-  `(app_id, rom_id, slot)` triples that carry no image. `applyShortcutIcons` (`utils/shortcutIcons.ts`) sets each icon,
-  then each wide grid and logo one at a time: it fetches the image's base64 through `get_sgdb_slot_artwork` — which
-  skips a slot that has filled since — sets it with `SetCustomArtworkForApp`, waits, reports the outcome through
+  `(app_id, rom_id, slot)` triples that carry no image. `applyShortcutArtwork` (`utils/shortcutArtwork.ts`) sets each
+  icon, then each wide grid and logo one at a time: it fetches the image's base64 through `get_sgdb_slot_artwork` —
+  which skips a slot that has filled since — sets it with `SetCustomArtworkForApp`, waits, reports the outcome through
   `report_sgdb_slot_artwork`, and only then fetches the next (`setJobSlotArtwork` in `utils/artwork.ts`). So one image
   at a time is in the renderer, an image too large fails only its own call, and what is set is what the cache holds at
   that moment. It gives the lease back after the last, and stops once the lease is cancelled. A batch no panel heard —

@@ -47,8 +47,8 @@ from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
 from services.saves import SaveService, SaveServiceConfig
 from services.session_lifecycle import SessionLifecycleService, SessionLifecycleServiceConfig
 from services.settings import SettingsService, SettingsServiceConfig
+from services.shortcut_artwork import ShortcutArtworkService, ShortcutArtworkServiceConfig
 from services.shortcut_file import ShortcutFileService, ShortcutFileServiceConfig
-from services.shortcut_icons import ShortcutIconService, ShortcutIconServiceConfig
 from services.shortcut_relocation import ShortcutRelocationService, ShortcutRelocationServiceConfig
 from services.shortcut_removal import ShortcutRemovalService, ShortcutRemovalServiceConfig
 from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
@@ -127,7 +127,7 @@ class ServicesBundle:
     data_inventory_service: DataInventoryService
     firmware_service: FirmwareService
     sgdb_service: SteamGridService
-    shortcut_icon_service: ShortcutIconService
+    shortcut_artwork_service: ShortcutArtworkService
     metadata_service: MetadataService
     achievements_service: AchievementsService
     migration_service: MigrationService
@@ -218,7 +218,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     # moved the files, but SaveService is built after it (it takes the migration
     # gate) — bound once both exist.
     save_directories_binding: LateBinding[SaveDirectoriesRecorderFn] = LateBinding("save_directories")
-    # The shortcut icon job yields to a shortcut removal, and the removal stops
+    # The shortcut artwork job yields to a shortcut removal, and the removal stops
     # the job — the same shape of cycle, bound once both exist.
     removal_in_flight_binding: LateBinding[bool] = LateBinding("removal_in_flight")
 
@@ -383,10 +383,10 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         ),
     )
 
-    shortcut_icon_service = ShortcutIconService(
-        config=ShortcutIconServiceConfig(
+    shortcut_artwork_service = ShortcutArtworkService(
+        config=ShortcutArtworkServiceConfig(
             steam_config=cfg.adapters.steam_config,
-            icons=sgdb_service,
+            source=sgdb_service,
             uow_factory=cfg.callbacks.uow_factory,
             settings=cfg.stores.settings,
             conflict_rules=conflict_rules,
@@ -414,7 +414,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             uow_factory=cfg.callbacks.uow_factory,
             conflict_rules=conflict_rules,
             held_claims=prune_conflicts.held_claims,
-            icon_job=shortcut_icon_service,
+            artwork_job=shortcut_artwork_service,
         ),
     )
     removal_in_flight_binding.set(shortcut_removal_service.is_removal_in_flight)
@@ -441,7 +441,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             renderer_rss=cfg.adapters.renderer_rss,
             renderer_gc=cfg.adapters.renderer_gc,
             conflict_rules=conflict_rules,
-            icon_job=shortcut_icon_service,
+            artwork_job=shortcut_artwork_service,
         ),
     )
     pending_sync_binding.set(lambda: sync_service.pending_sync)
@@ -746,7 +746,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             settings=cfg.stores.settings,
             run_claim=prune_conflicts,
             conflict_rules=conflict_rules,
-            icon_job=shortcut_icon_service,
+            artwork_job=shortcut_artwork_service,
         )
     )
 
@@ -839,7 +839,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         data_inventory_service=data_inventory_service,
         firmware_service=firmware_service,
         sgdb_service=sgdb_service,
-        shortcut_icon_service=shortcut_icon_service,
+        shortcut_artwork_service=shortcut_artwork_service,
         metadata_service=metadata_service,
         achievements_service=achievements_service,
         migration_service=migration_service,

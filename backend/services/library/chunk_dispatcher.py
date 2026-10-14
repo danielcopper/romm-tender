@@ -85,7 +85,7 @@ class ChunkDispatcherConfig:
 
     What is absent is the contract: no Unit-of-Work factory (the dispatcher
     opens no transaction), no event loop (it offloads nothing itself; the
-    placeholder path it asks for each chunk is the icon job's I/O), no settings
+    placeholder path it asks for each chunk is the artwork job's I/O), no settings
     and none of the program's directories (every decision it acts on was made
     before the round-trip began).
     """

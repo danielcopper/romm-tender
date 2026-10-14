@@ -525,20 +525,20 @@ export interface SyncApplyUnitData {
   cover_refreshes?: { rom_id: number; app_id: number }[];
   /**
    * The placeholder icon a shortcut this chunk mints is given at once
-   * (docs/architecture/steam-non-steam-shortcuts.md, "Shortcut icons"). `null`
+   * (docs/architecture/steam-non-steam-shortcuts.md, "Shortcut artwork"). `null`
    * where the backend has none to give.
    */
   icon_placeholder_path: string | null;
 }
 
 /**
- * A batch from the shortcut icon job, set under the batch's prune lease: icons
+ * A batch from the shortcut artwork job, set under the batch's prune lease: icons
  * the backend has written into Steam's grid directory, each to be pointed at
  * with `SetShortcutIcon`, and wide grids and logos the artwork cache holds, each
  * to be fetched through `getSgdbSlotArtwork` and set with
  * `SetCustomArtworkForApp`, one at a time.
  */
-export interface ShortcutIconsData {
+export interface ShortcutArtworkData {
   icons: { app_id: number; icon_path: string }[];
   artwork: { app_id: number; rom_id: number; slot: "grid" | "logo" }[];
   prune_lease_token: string;

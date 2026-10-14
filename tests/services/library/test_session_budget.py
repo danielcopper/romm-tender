@@ -377,8 +377,8 @@ class TestPauseGuidanceNamesNoControl:
         assert SYNC_PAUSED_BUDGET.endswith(".")
 
 
-class TestTheShortcutIconJobsReading:
-    """``LibraryService.renderer_above_ceiling``: the reading the shortcut icon job takes before each batch."""
+class TestTheShortcutArtworkJobsReading:
+    """``LibraryService.renderer_above_ceiling``: the reading the shortcut artwork job takes before each batch."""
 
     @pytest.mark.asyncio
     async def test_at_the_ceiling_after_steam_collected_its_garbage(self, library):

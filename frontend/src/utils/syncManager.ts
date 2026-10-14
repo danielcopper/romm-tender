@@ -263,7 +263,7 @@ async function applyCoverArtwork(appId: number, romId: number): Promise<void> {
 
 /**
  * Give a shortcut this sync minted the placeholder icon; why is
- * docs/architecture/steam-non-steam-shortcuts.md, "Shortcut icons". Fail-soft.
+ * docs/architecture/steam-non-steam-shortcuts.md, "Shortcut artwork". Fail-soft.
  */
 function applyPlaceholderIcon(appId: number, iconPath: string): void {
   try {

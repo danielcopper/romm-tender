@@ -59,7 +59,7 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_save_quarantine import FakeSaveQuarantine
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
-from fakes.fake_shortcut_icon_job import FakeShortcutIconJob
+from fakes.fake_shortcut_artwork_job import FakeShortcutArtworkJob
 from fakes.fake_steam_interface import FakeSteamInterface
 from fakes.fake_transient_units import FakeTransientUnits
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -1203,7 +1203,7 @@ def _dispatcher_over_library(romm_api: FakeRommApi, events: FakeEventSink, home:
             active_core=FakeActiveCoreResolver(default=(None, None)),
             disc_resolver=FakeDiscResolver(),
             emulator_sources=FakeEmulatorSources(),
-            icon_job=FakeShortcutIconJob(),
+            artwork_job=FakeShortcutArtworkJob(),
             renderer_rss=FakeRendererRss(),
             renderer_gc=FakeRendererGc(),
             conflict_rules=_make_conflict_rules(),
@@ -1278,7 +1278,7 @@ def _dispatcher_over_cleanup(uow_factory: Any, events: FakeEventSink) -> tuple[C
             settings={},
             run_claim=prune_conflicts,
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
-            icon_job=FakeShortcutIconJob(),
+            artwork_job=FakeShortcutArtworkJob(),
         )
     )
     endpoints = Endpoints(_make_application(_make_services_bundle(prune_service=service)), HostStatus())

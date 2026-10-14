@@ -4,7 +4,7 @@
  * empty slots, and the replacing apply of a version switch and of Refresh
  * Artwork) and SgdbGamePickerModal (the replacing apply after a manual game-id
  * pick), so it lives here rather than on either component to keep their import
- * graph acyclic. The shortcut icon job's writes (`utils/shortcutIcons.ts`) ask
+ * graph acyclic. The shortcut artwork job's writes (`utils/shortcutArtwork.ts`) ask
  * it whether an apply is under way, and set the job's wide grids and logos
  * through it.
  */
@@ -42,7 +42,7 @@ const artworkGenerations = new Map<number, number>();
 const artworkInFlight = new Map<number, number>();
 
 /**
- * Is the game page applying artwork to *appId* right now? The shortcut icon job
+ * Is the game page applying artwork to *appId* right now? The shortcut artwork job
  * then leaves the shortcut to that apply; if it sets no icon, the shortcut is
  * still on the job's worklist at its next run.
  */
@@ -211,7 +211,7 @@ const FILLED_SLOTS: ReadonlyArray<[slot: SgdbArtworkSlot, assetType: number]> = 
   ["grid", 3],
 ];
 
-/** Steam's asset type for each slot the shortcut icon job fills. */
+/** Steam's asset type for each slot the shortcut artwork job fills. */
 const JOB_SLOT_ASSET_TYPES: Readonly<Record<RecordedSlot, number>> = { logo: 2, grid: 3 };
 
 type SlotImage = Extract<SgdbSlotArtwork, { status: "image" }>;
@@ -293,7 +293,7 @@ async function reportSlotOutcome(
 }
 
 /**
- * Set a wide grid or logo the shortcut icon job has put into the artwork cache,
+ * Set a wide grid or logo the shortcut artwork job has put into the artwork cache,
  * and report what Steam made of it. The image is fetched through the same
  * per-slot endpoint a first visit uses, so a slot that has filled since the job
  * looked is skipped. Nothing is written once a game page's apply for the
@@ -309,11 +309,11 @@ export async function setJobSlotArtwork(
   const overtaken = watchGeneration(appId);
   const left = (): boolean => stopped() || overtaken();
   const answer = await getSgdbSlotArtwork(romId, appId, slot).catch((e): SgdbSlotArtwork => {
-    detach(debugLog(`Shortcut icons: ${slot} fetch for appId ${appId} rejected: ${e}`));
+    detach(debugLog(`Shortcut artwork: ${slot} fetch for appId ${appId} rejected: ${e}`));
     return { status: "failed" };
   });
   if (answer.status !== "image") return false;
-  const outcome = await withPruneLeases([answer.prune_lease_token], "Shortcut icons", (signal) =>
+  const outcome = await withPruneLeases([answer.prune_lease_token], "Shortcut artwork", (signal) =>
     setSlotImage(appId, answer, JOB_SLOT_ASSET_TYPES[slot], signal, left),
   );
   if (outcome !== null) await reportSlotOutcome(romId, slot, outcome, answer);

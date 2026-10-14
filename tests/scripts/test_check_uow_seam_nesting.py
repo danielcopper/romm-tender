@@ -442,7 +442,7 @@ class TestIoSeamsViolations:
         assert "file-I/O seam" in findings[0]
 
     @pytest.mark.parametrize("method", ["read_shortcut_icons", "grid_file_names", "renderer_above_ceiling"])
-    def test_every_read_the_shortcut_icon_job_makes_inside_uow_is_flagged(self, method: str):
+    def test_every_read_the_shortcut_artwork_job_makes_inside_uow_is_flagged(self, method: str):
         findings = check.scan_source(
             "class S:\n"
             "    def go(self):\n"

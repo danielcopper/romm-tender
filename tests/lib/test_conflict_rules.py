@@ -360,14 +360,14 @@ async def test_a_held_operation_refuses_the_start_naming_its_holder():
 
 async def test_a_shortcut_icon_hand_over_refuses_the_start_naming_it():
     rules = _Rules()
-    await rules.rules.acquire_lease("shortcut_icons")
+    await rules.rules.acquire_lease("shortcut_artwork")
 
     refusal = await _start_refusal(rules.rules, migration=True, sync=True)
 
     assert _said(refusal) == (
         "operation_active",
         (
-            "Another local-data operation is in progress (setting shortcut icons); wait for it to finish before "
+            "Another local-data operation is in progress (setting shortcut artwork); wait for it to finish before "
             "starting cleanup."
         ),
         {},

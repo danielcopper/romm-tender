@@ -129,7 +129,7 @@ class SteamConfigAdapter:
         Read like :meth:`read_shortcut_exes`, whose docstring holds the file's
         shapes and what ``None`` means. A record with no ``icon`` key answers
         ``""``. How soon the file shows a shortcut's new icon is measured in
-        docs/architecture/steam-non-steam-shortcuts.md, "Shortcut icons".
+        docs/architecture/steam-non-steam-shortcuts.md, "Shortcut artwork".
         """
         return self._read_shortcut_field("icon", missing="")
 

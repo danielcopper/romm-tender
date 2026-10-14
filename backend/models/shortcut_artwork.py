@@ -7,7 +7,7 @@ from enum import StrEnum
 
 
 class IconAnswer(StrEnum):
-    """The five answers the icon job acts on differently."""
+    """The five answers the artwork job acts on differently."""
 
     ICON = "icon"
     """SteamGridDB had an icon; ``IconFetch.data`` holds it, downscaled."""
@@ -30,7 +30,7 @@ class IconFetch:
 
 
 class SlotAnswer(StrEnum):
-    """The five answers the icon job acts on differently for a wide grid or a logo."""
+    """The five answers the artwork job acts on differently for a wide grid or a logo."""
 
     READY = "ready"
     """The artwork cache holds the image; the frontend fetches it through ``get_sgdb_slot_artwork``."""

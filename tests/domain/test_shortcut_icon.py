@@ -1,4 +1,4 @@
-"""Tests for domain/shortcut_icon.py — the icon job's worklist and Tender's own two icons."""
+"""Tests for domain/shortcut_icon.py — the artwork job's worklist and Tender's own two icons."""
 
 from __future__ import annotations
 

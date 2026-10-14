@@ -2,7 +2,7 @@
 
 Owns every renderer-RSS **reading** the sync subsystem takes, and the verdicts
 drawn from one: the GC-settled measurement itself, whether it stands above the
-ceiling (which the shortcut icon job asks before each batch), the chunk-boundary pause
+ceiling (which the shortcut artwork job asks before each batch), the chunk-boundary pause
 decision, the trim of additive chunk work to whatever headroom that decision
 left, the post-preview prognosis, the run-start baseline behind the last-run
 delta, and the live reading the QAM banners poll. The pure arithmetic behind
@@ -178,7 +178,7 @@ class SessionBudgetMonitor:
     async def above_ceiling(self) -> bool:
         """Whether a :meth:`measure_rss` reading stands at or above the effective ceiling.
 
-        The shortcut icon job asks it before each batch it hands over, outside
+        The shortcut artwork job asks it before each batch it hands over, outside
         any run of the sync. Fail-open: ``False`` when no reading can be taken.
         """
         rss_kb = await self.measure_rss()

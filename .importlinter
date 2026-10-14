@@ -179,7 +179,7 @@ modules =
     services.session_lifecycle
     services.settings
     services.shortcut_file
-    services.shortcut_icons
+    services.shortcut_artwork
     services.shortcut_relocation
     services.shortcut_removal
     services.startup_healing

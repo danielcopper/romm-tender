@@ -1166,16 +1166,17 @@ last found for a ROM's wide grid or logo — `set`, `none` or `refused` (`Artwor
 [Game page artwork](docs/architecture/steam-non-steam-shortcuts.md#game-page-artwork). _Avoid_: plain "slot", which
 means a **Save-sync slot** or a **Conditional slot**.
 
-### Shortcut icon job / placeholder icon / logo icon
+### Shortcut artwork job / placeholder icon / logo icon
 
-The **shortcut icon job** is the background run that gives every bound shortcut still waiting for an icon its
-SteamGridDB icon, and every bound shortcut its SteamGridDB wide grid and logo where the slot is not **filled**
-(`services/shortcut_icons.py`); it is never a step of a sync. The **placeholder icon** is the transparent 1×1 PNG a sync
-gives each shortcut it mints (an adopted shortcut keeps the icon it has), so the icon the job sets later replaces one.
-The **logo icon** is Tender's logo, given where SteamGridDB has no icon for the game or no SteamGridDB game is found
-through its stored ids; it means "nothing found on SteamGridDB", never "not loaded yet". A shortcut **waits** while its
-icon is empty or the placeholder; the logo and any icon set by hand are left alone. Detail:
-[Shortcut icons](docs/architecture/steam-non-steam-shortcuts.md#shortcut-icons).
+The **shortcut artwork job** is the background run that gives every bound shortcut its SteamGridDB icon where it waits
+for one, and its SteamGridDB wide grid and logo where the slot is not **filled** (`services/shortcut_artwork.py`); it is
+never a step of a sync, and the hero is left to the game page. The **placeholder icon** is the transparent 1×1 PNG a
+sync gives each shortcut it mints (an adopted shortcut keeps the icon it has), so the icon the job sets later replaces
+one. The **logo icon** is Tender's logo, given where SteamGridDB has no icon for the game or no SteamGridDB game is
+found through its stored ids; it means "nothing found on SteamGridDB", never "not loaded yet", and is not the **logo**
+slot. A shortcut **waits** for an icon while its icon is empty or the placeholder; the logo icon and any icon set by
+hand are left alone. _Avoid_: "shortcut icon job", its name while it gave only the icon. Detail:
+[Shortcut artwork](docs/architecture/steam-non-steam-shortcuts.md#shortcut-artwork).
 
 ### Surface (bigpicture / desktop)
 

@@ -1,9 +1,9 @@
-"""Which shortcuts the icon job works on, and the two icons that are Tender's own.
+"""Which shortcuts the artwork job works on, and the two icons that are Tender's own.
 
 With a SteamGridDB API key, a shortcut the sync mints is given
 :data:`PLACEHOLDER_ICON_PNG` at once, and the job later replaces it with
 SteamGridDB's icon, or with Tender's logo where SteamGridDB has none; why is
-docs/architecture/steam-non-steam-shortcuts.md, "Shortcut icons". The
+docs/architecture/steam-non-steam-shortcuts.md, "Shortcut artwork". The
 placeholder's file name is how the job tells a shortcut still waiting from one
 whose icon somebody set; the logo, like that icon, is left alone.
 """

@@ -84,8 +84,8 @@ from services.playtime import PlaytimeService
 from services.prune import PruneService
 from services.prune_leases import PruneLeaseService
 from services.saves import SaveService
+from services.shortcut_artwork import ShortcutArtworkService
 from services.shortcut_file import ShortcutFileService
-from services.shortcut_icons import ShortcutIconService
 from services.steamgrid import SteamGridService
 from services.update_check import UpdateCheckService
 from services.update_outcome import UpdateOutcomeService
@@ -822,13 +822,13 @@ class TestWireServices:
         assert isinstance(result.update_outcome_service, UpdateOutcomeService)
         assert isinstance(result.update_output_service, UpdateOutputService)
         assert isinstance(result.shortcut_file_service, ShortcutFileService)
-        assert isinstance(result.shortcut_icon_service, ShortcutIconService)
+        assert isinstance(result.shortcut_artwork_service, ShortcutArtworkService)
         deps["loop"].close()
 
-    def test_the_icon_job_reads_the_cleanup_the_sync_and_the_removal_it_yields_to(self, tmp_path):
+    def test_the_artwork_job_reads_the_cleanup_the_sync_and_the_removal_it_yields_to(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        job = result.shortcut_icon_service
+        job = result.shortcut_artwork_service
 
         async def what_the_job_reads() -> list[tuple[bool, bool, bool]]:
             seen = [(job._cleanup_running(), job._sync_in_flight(), job._removal_in_flight())]
@@ -849,10 +849,10 @@ class TestWireServices:
         ]
         deps["loop"].close()
 
-    def test_the_icon_job_reads_steams_renderer_through_the_syncs_monitor(self, tmp_path):
+    def test_the_artwork_job_reads_steams_renderer_through_the_syncs_monitor(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        job = result.shortcut_icon_service
+        job = result.shortcut_artwork_service
         deps["renderer_rss"].rss_kb = EFFECTIVE_CEILING_KB
 
         above = deps["loop"].run_until_complete(job._renderer_above_ceiling()())
@@ -946,7 +946,7 @@ class TestWireServices:
         assert save_sync_service._sync_engine._is_retrodeck_migration_pending.__self__ is migration_service  # type: ignore[union-attr]
         deps["loop"].close()
 
-    def test_icon_job_and_steamgrid_wiring(self, tmp_path):
+    def test_artwork_job_and_steamgrid_wiring(self, tmp_path):
         deps = self._make_deps(tmp_path)
         cfg = self._make_config(deps)
         result = wire_services(cfg)
@@ -965,9 +965,9 @@ class TestWireServices:
         assert cast("ConflictRuleSet", sgdb._rules)._prune_conflicts is result.prune_conflicts
         assert sgdb._downscale_icon is deps["downscale_icon"]
 
-        job = result.shortcut_icon_service
+        job = result.shortcut_artwork_service
         assert job._steam_config is deps["steam_config"]
-        assert job._icons is sgdb
+        assert job._source is sgdb
         assert job._uow_factory is deps["uow_factory"]
         assert job._settings is deps["settings"]
         assert job._rules is sgdb._rules
@@ -980,8 +980,8 @@ class TestWireServices:
         assert job._logger is deps["logger"]
         assert job._log_debug is deps["log_debug"]
 
-        assert result.shortcut_removal_service._icon_job is job
-        assert result.prune_service._icon_job is job
-        assert result.sync_service._orchestrator._icon_job is job
+        assert result.shortcut_removal_service._artwork_job is job
+        assert result.prune_service._artwork_job is job
+        assert result.sync_service._orchestrator._artwork_job is job
 
         deps["loop"].close()

@@ -24,7 +24,7 @@ LOGGER = logging.getLogger("test_bootstrap_application")
 
 # Every repair in the order it runs. ``report_missing_installs`` runs only
 # after ``detect_retrodeck_path_change`` succeeded; ``record_save_directories``,
-# ``run_due_update_checks`` and ``shortcut_icons`` start a background task rather
+# ``run_due_update_checks`` and ``shortcut_artwork`` start a background task rather
 # than performing it.
 _REPAIRS = [
     "note_update_outcome",
@@ -39,7 +39,7 @@ _REPAIRS = [
     "note_update_attempt",
     "record_save_directories",
     "run_due_update_checks",
-    "shortcut_icons",
+    "shortcut_artwork",
 ]
 
 
@@ -53,7 +53,7 @@ class _Recorded:
         self.backfill_release = asyncio.Event()
         self.backfill_ran_to_the_end = False
         self.due_checks_started = asyncio.Event()
-        self.icons_waiting = asyncio.Event()
+        self.artwork_waiting = asyncio.Event()
 
     def _step(self, name: str) -> MagicMock:
         def run() -> None:
@@ -93,15 +93,15 @@ class _Recorded:
 
         return due_checks()
 
-    def _icons_at_start(self) -> Any:
-        self.calls.append("shortcut_icons")
+    def _artwork_at_start(self) -> Any:
+        self.calls.append("shortcut_artwork")
 
         async def wait_for_a_panel() -> None:
-            self.icons_waiting.set()
+            self.artwork_waiting.set()
             try:
                 await asyncio.Event().wait()
             except asyncio.CancelledError:
-                self.calls.append("icons at start cancelled")
+                self.calls.append("artwork at start cancelled")
                 raise
 
         return wait_for_a_panel()
@@ -127,9 +127,9 @@ class _Recorded:
             ),
             save_sync_service=MagicMock(record_save_directories_once=self._backfill),
             update_check_service=MagicMock(run_due_checks=self._due_checks),
-            shortcut_icon_service=MagicMock(
-                run_when_a_panel_connects=self._icons_at_start,
-                shutdown=self._async_step("shortcut_icon_service.shutdown"),
+            shortcut_artwork_service=MagicMock(
+                run_when_a_panel_connects=self._artwork_at_start,
+                shutdown=self._async_step("shortcut_artwork_service.shutdown"),
             ),
             update_install_service=MagicMock(
                 remove_leftovers=self._step("remove_update_leftovers"),
@@ -155,7 +155,7 @@ def _application(recorded: _Recorded) -> Application:
 
 # Every service shutdown, in the order they run.
 _SHUTDOWNS = [
-    "shortcut_icon_service.shutdown",
+    "shortcut_artwork_service.shutdown",
     "update_install_service.shutdown",
     "sync_service.shutdown",
     "prune_service.shutdown",
@@ -250,7 +250,7 @@ class TestShutdown:
         app.run_startup_repairs(lambda _name: None)
         await asyncio.wait_for(recorded.backfill_started.wait(), 5)
         await asyncio.wait_for(recorded.due_checks_started.wait(), 5)
-        await asyncio.wait_for(recorded.icons_waiting.wait(), 5)
+        await asyncio.wait_for(recorded.artwork_waiting.wait(), 5)
         recorded.calls.clear()
 
         await asyncio.wait_for(app.shutdown(), 5)
@@ -258,7 +258,7 @@ class TestShutdown:
         assert recorded.calls == [
             "backfill cancelled",
             "due checks cancelled",
-            "icons at start cancelled",
+            "artwork at start cancelled",
             *_SHUTDOWNS,
         ]
 

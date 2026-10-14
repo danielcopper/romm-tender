@@ -362,7 +362,7 @@ class TestWriteShortcutIcon:
 
 
 class TestReadShortcutIcons:
-    """The reading the shortcut icon job's worklist is derived from."""
+    """The reading the shortcut artwork job's worklist is derived from."""
 
     def test_reads_every_shortcut_icon_with_none_as_an_empty_path(self, tmp_path):
         TestReadShortcutExes._write(

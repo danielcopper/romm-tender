@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from domain.update_release import LatestRelease
     from lib.partial_failure import PartialFailure
     from models.prune import InstalledContentRemoval, SaveQuarantine, SourceClaim
-    from models.shortcut_icon import IconFetch, SlotAnswer
+    from models.shortcut_artwork import IconFetch, SlotAnswer
     from models.state import ShortcutRegistryEntry
     from models.sync import ClientSaveState
 
@@ -766,8 +766,8 @@ class PlaytimeScopeNoticeClearFn(Protocol):
     def __call__(self) -> None: ...
 
 
-class ShortcutIconSource(Protocol):
-    """What the shortcut icon job asks of the SteamGridDB service: the icon, and a write the game page can overrule."""
+class ShortcutArtworkSource(Protocol):
+    """What the shortcut artwork job asks of the SteamGridDB service: an icon it may write, and a wide grid or logo."""
 
     def icon_generation(self, app_id: int) -> int:
         """How many icons the game page has saved for *app_id* in this process."""
@@ -816,7 +816,7 @@ class RendererAboveCeilingFn(Protocol):
 
 
 class RendererAboveCeilingProvider(Protocol):
-    """Late-bound :class:`RendererAboveCeilingFn` getter consumed by the shortcut icon job.
+    """Late-bound :class:`RendererAboveCeilingFn` getter consumed by the shortcut artwork job.
 
     The job is built before the library service it reads through, so bootstrap
     hands it this getter (a ``LateBinding``). Each call returns the live
@@ -826,8 +826,8 @@ class RendererAboveCeilingProvider(Protocol):
     def __call__(self) -> RendererAboveCeilingFn: ...
 
 
-class ShortcutIconJob(Protocol):
-    """What a sync, a removed-game cleanup and a shortcut removal ask of the shortcut icon job."""
+class ShortcutArtworkJob(Protocol):
+    """What a sync, a removed-game cleanup and a shortcut removal ask of the shortcut artwork job."""
 
     def request_run(self, *, settle: bool = False) -> None:
         """Run the job, or run it again once the run under way ends; *settle* waits for Steam's file to catch up."""

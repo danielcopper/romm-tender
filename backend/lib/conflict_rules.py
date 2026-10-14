@@ -154,7 +154,7 @@ class ConflictRuleSet:
         part is over. Checks no rule, like :meth:`acquire_lease`, so the caller
         keeps a cleanup from starting across it: by calling it while something
         else still refuses a cleanup's start, or by being stopped before a
-        cleanup reserves its start, as the shortcut icon job is. *emit_with* is
+        cleanup reserves its start, as the shortcut artwork job is. *emit_with* is
         the emit itself, written at the call site as a literal
         ``self._emit("<event>", …)`` so ``scripts/check_event_parity.py`` sees
         the event. Answers whether anybody heard it; the lease is released

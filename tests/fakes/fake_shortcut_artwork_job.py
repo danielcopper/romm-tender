@@ -1,9 +1,9 @@
-"""A recording ``ShortcutIconJob`` for the services that start and stop the shortcut icon job."""
+"""A recording ``ShortcutArtworkJob`` for the services that start and stop the shortcut artwork job."""
 
 from __future__ import annotations
 
 
-class FakeShortcutIconJob:
+class FakeShortcutArtworkJob:
     """Records every request for a run, every stop and every resume; answers a fixed placeholder path.
 
     ``placeholder`` is what :meth:`placeholder_path` answers; set it to ``None``

@@ -726,8 +726,8 @@ Format: **invariant** — tier — enforced by.
   `set_steam_input_config()` from `services/settings.py`, `services/shortcut_removal.py` and
   `services/library/reporter.py`, and `write_shortcut_icon()` from `services/steamgrid.py` — those are unlisted, and
   their being unlisted is a gap, not a judgement), `.read_shortcut_icons` (the same whole-file parse, for the shortcut
-  icon job's worklist, called plainly, so its entry is enforced), `.grid_file_names` (lists Steam's grid directory to
-  answer which artwork slots a shortcut has), the shortcut icon job's reading of Steam's renderer memory before each
+  artwork job's worklist, called plainly, so its entry is enforced), `.grid_file_names` (lists Steam's grid directory to
+  answer which artwork slots a shortcut has), the shortcut artwork job's reading of Steam's renderer memory before each
   batch (`_renderer_above_ceiling`, with `LibraryService.renderer_above_ceiling` beside it: a `/proc` read, and above
   1.5 GB a garbage collection over Steam's debugger and a second read), `FirmwarePlatformResolver` (reads what one
   system's emulators want WITH content verification: it opens each candidate in a declared folder and reads it the way

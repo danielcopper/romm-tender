@@ -80,7 +80,7 @@ if TYPE_CHECKING:
         Clock,
         ConflictRules,
         EventEmitter,
-        ShortcutIconJob,
+        ShortcutArtworkJob,
         UnitOfWorkFactory,
         UuidGen,
     )
@@ -144,7 +144,7 @@ class SyncOrchestratorConfig:
     ``sync_run_recorder`` peer writes the run's ``SyncRun`` row: this module
     decides which terminal status a stopped run earns, and hands that decision
     over as a method call. The ``conflict_rules`` are what a ``sync_stale``
-    event that removes shortcuts takes its lease through. The ``icon_job`` is
+    event that removes shortcuts takes its lease through. The ``artwork_job`` is
     asked for a run at every run's end: it stops while a run is in flight.
     """
 
@@ -167,7 +167,7 @@ class SyncOrchestratorConfig:
     cover_preparer: CoverPreparer
     sync_run_recorder: SyncRunRecorder
     conflict_rules: ConflictRules
-    icon_job: ShortcutIconJob
+    artwork_job: ShortcutArtworkJob
 
 
 @dataclass(frozen=True)
@@ -211,7 +211,7 @@ class SyncOrchestrator:
         self._cover_preparer = config.cover_preparer
         self._sync_run_recorder = config.sync_run_recorder
         self._rules = config.conflict_rules
-        self._icon_job = config.icon_job
+        self._artwork_job = config.artwork_job
 
     # ── Sync control ─────────────────────────────────────────────
 
@@ -479,7 +479,7 @@ class SyncOrchestrator:
             raise
         finally:
             box.finish_run(run_id)
-            self._icon_job.request_run()
+            self._artwork_job.request_run()
 
     async def _fetch_preview_unit(
         self,
@@ -906,8 +906,8 @@ class SyncOrchestrator:
             # still owns the slot (#1202).
             box.finish_run(run_id)
             # ``settle``: the shortcuts this run minted reach shortcuts.vdf a
-            # little after it, and the icon job's worklist is read from there.
-            self._icon_job.request_run(settle=True)
+            # little after it, and the artwork job's worklist is read from there.
+            self._artwork_job.request_run(settle=True)
 
     def _stamp_component_group_keys(self, roms: list[dict[str, Any]], resident_keys: dict[int, str]) -> None:
         """Stamp each fresh ROM's component sibling-group key onto its raw dict.

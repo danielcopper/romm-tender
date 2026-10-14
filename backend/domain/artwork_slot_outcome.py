@@ -119,7 +119,7 @@ def slot_waits(
     sgdb_id: int | None,
     now: float,
 ) -> bool:
-    """Whether the shortcut icon job asks for *app_id*'s wide grid or logo at *now*.
+    """Whether the shortcut artwork job asks for *app_id*'s wide grid or logo at *now*.
 
     It does while no file in Steam's grid directory fills the slot
     (:func:`domain.artwork_slot.is_slot_filled`) and *recorded*, the ROM's

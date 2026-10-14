@@ -158,14 +158,14 @@ there, retain one for detached work it starts — a background save-status check
 session's start begins — and take and release the leases the use case hands the frontend: a shortcut removal's, an
 uninstall's, a core, disc or version change's, an adoption's, an artwork fetch's, the pre-launch re-confirm's and the
 start-up reconcile's, and the ones `sync_complete`, `sync_stale`, `download_complete`, `prune_complete`,
-`migration_relaunch_options` and the shortcut icon job's `shortcut_icons` batches carry. The lease service
+`migration_relaunch_options` and the shortcut artwork job's `shortcut_artwork` batches carry. The lease service
 (`services/prune_leases.py`) renews and releases a lease by its token, and disowns the ones a gone frontend left behind;
 `Endpoints` reads none of it. The prune service takes the start's reservation through the rules' `hold_start`, before it
-asks the update, migration and sync rules. Before that it stops the shortcut icon job (`stop_for_cleanup`), waiting for
-an icon being written or handed over, so none it writes into the grid directory or hands over lands once the start has
-reserved; no run of the job starts until a start that begins no run, or the run's end, resumes it
+asks the update, migration and sync rules. Before that it stops the shortcut artwork job (`stop_for_cleanup`), waiting
+for an icon being written or handed over, so none it writes into the grid directory or hands over lands once the start
+has reserved; no run of the job starts until a start that begins no run, or the run's end, resumes it
 (`resume_after_cleanup`). The job's batch lease is held by the frontend while it sets the icons, so a start pressed then
-is refused, naming "setting shortcut icons" ([Shortcut icons](steam-non-steam-shortcuts.md#shortcut-icons)). The
+is refused, naming "setting shortcut artwork" ([Shortcut artwork](steam-non-steam-shortcuts.md#shortcut-artwork)). The
 reservation lasts from the moment `hold_start` takes it until the start returns; the run claim, from the moment the
 revalidated preview becomes a run until that run ends — in the run's own `finally`, or, for a run task cancelled before
 it first ran, in the task's done callback. The run is registered before the reservation is given back, so the two

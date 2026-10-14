@@ -249,7 +249,7 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         "read_shortcut_exes",
         "read_shortcut_launch_options",
         # SteamConfigStore.read_shortcut_icons — the same whole-file parse, for
-        # every shortcut's icon, which the shortcut icon job's worklist is
+        # every shortcut's icon, which the shortcut artwork job's worklist is
         # derived from. Its one call site names it plainly, so this entry is
         # enforced there.
         "read_shortcut_icons",
@@ -324,7 +324,7 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # it — and is here for the call site that writes it plainly.
         "bundle_inventory",
         # RendererAboveCeilingProvider (services/protocols/cross_service.py) —
-        # the shortcut icon job's reading of Steam's renderer memory before each
+        # the shortcut artwork job's reading of Steam's renderer memory before each
         # batch, through the sync's SessionBudgetMonitor: a /proc read, and above
         # 1.5 GB a garbage collection over Steam's debugger (about five seconds)
         # and a second read. Call-shaped, so the list carries the attribute the

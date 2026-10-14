@@ -5,9 +5,9 @@ not move or rename it.
 
 ## `tender-icon.png` — the icon of a game SteamGridDB has none for
 
-Tender's logo at 64×64, the bound every SteamGridDB icon is downscaled to fit. The shortcut icon job copies it into
+Tender's logo at 64×64, the bound every SteamGridDB icon is downscaled to fit. The shortcut artwork job copies it into
 Steam's grid directory and gives it to every shortcut SteamGridDB has no icon for
-([Shortcut icons](../docs/architecture/steam-non-steam-shortcuts.md#shortcut-icons)). It is `assets/logo.png` passed
+([Shortcut artwork](../docs/architecture/steam-non-steam-shortcuts.md#shortcut-artwork)). It is `assets/logo.png` passed
 through the same downscale as every other icon; after a change to the logo, regenerate it from `backend/`:
 
 ```sh

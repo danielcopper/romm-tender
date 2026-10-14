@@ -41,7 +41,7 @@ from lib.errors import (
     SgdbRateLimitedError,
     SteamGridDirMissingError,
 )
-from models.shortcut_icon import IconAnswer, IconFetch, SlotAnswer
+from models.shortcut_artwork import IconAnswer, IconFetch, SlotAnswer
 
 if TYPE_CHECKING:
     import logging
@@ -159,7 +159,7 @@ class SteamGridService:
         self._downscale_icon = config.downscale_icon
         self._clock = config.clock
         # Per app id: the count ``icon_generation`` answers, and the lock a page
-        # save and the icon job's write take turns under.
+        # save and the artwork job's write take turns under.
         self._icon_generations: dict[int, int] = {}
         self._icon_locks: dict[int, asyncio.Lock] = {}
 
@@ -340,7 +340,7 @@ class SteamGridService:
         """Resolve which SGDB game id to use for *rom_id*, picker-driven.
 
         The single explicit user action that may re-read RomM and offer the
-        name search; the shortcut icon job runs the IGDB cross-ref without
+        name search; the shortcut artwork job runs the IGDB cross-ref without
         one. Deletes the ROM's recorded artwork slot outcomes before it
         resolves: an explicit request asks SteamGridDB again. RomM's
         ``sgdb_id`` always wins when present. Returns one of:
@@ -780,7 +780,7 @@ class SteamGridService:
             raise Refused("icon_write_failed", "Failed to write icon to Steam grid directory")
         return {"success": True, "icon_path": icon_path}
 
-    # -- icons for the shortcut icon job ------------------------------------
+    # -- icons for the shortcut artwork job ------------------------------------
 
     def _icon_lock(self, app_id: int) -> asyncio.Lock:
         lock = self._icon_locks.get(app_id)
@@ -789,15 +789,15 @@ class SteamGridService:
         return lock
 
     def icon_generation(self, app_id: int) -> int:
-        """Implements ``services.protocols.ShortcutIconSource.icon_generation``.
+        """Implements ``services.protocols.ShortcutArtworkSource.icon_generation``.
 
-        The icon job reads it before it fetches, and its write lands only while
+        The artwork job reads it before it fetches, and its write lands only while
         it is unchanged, so an icon picked on the game page meanwhile wins.
         """
         return self._icon_generations.get(int(app_id), 0)
 
     async def write_job_icon(self, app_id: int, icon_bytes: bytes, generation: int) -> str | None:
-        """Write the icon job's icon for *app_id*, which its fetch downscaled; answer its path.
+        """Write the artwork job's icon for *app_id*, which its fetch downscaled; answer its path.
 
         ``None`` when the game page has saved an icon for it since *generation*
         was read, or when the file could not be written. Takes turns with the
@@ -811,7 +811,7 @@ class SteamGridService:
             return await self._loop.run_in_executor(None, self._write_icon_to_grid, app_id, icon_bytes)
 
     def do_fetch_shortcut_icon(self, rom_id: int) -> IconFetch:
-        """Implements ``services.protocols.ShortcutIconSource.do_fetch_shortcut_icon``."""
+        """Implements ``services.protocols.ShortcutArtworkSource.do_fetch_shortcut_icon``."""
         rom_id = int(rom_id)
         if not self._settings.get("steamgriddb_api_key"):
             return IconFetch(IconAnswer.FAILED)
@@ -859,7 +859,7 @@ class SteamGridService:
         return None
 
     def do_fetch_slot_artwork(self, rom_id: int, slot: ArtworkSlot) -> SlotAnswer:
-        """Implements ``services.protocols.ShortcutIconSource.do_fetch_slot_artwork``."""
+        """Implements ``services.protocols.ShortcutArtworkSource.do_fetch_slot_artwork``."""
         rom_id = int(rom_id)
         if not self._settings.get("steamgriddb_api_key"):
             return SlotAnswer.FAILED

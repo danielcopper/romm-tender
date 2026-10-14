@@ -1,13 +1,13 @@
 /**
- * The frontend half of the shortcut icon job
- * (docs/architecture/steam-non-steam-shortcuts.md, "Shortcut icons"): points each
+ * The frontend half of the shortcut artwork job
+ * (docs/architecture/steam-non-steam-shortcuts.md, "Shortcut artwork"): points each
  * shortcut in a batch at the icon file the backend wrote, through SteamClient
  * (same page, "shortcuts.vdf is memory-authoritative"), then sets each wide grid
  * and logo the batch names, one image at a time.
  */
 
 import { logError } from "../api/backend";
-import type { ShortcutIconsData } from "../types";
+import type { ShortcutArtworkData } from "../types";
 import { isArtworkApplyInFlight, setJobSlotArtwork } from "./artwork";
 import { isPruneLeaseCancelled, withPruneLease } from "./pruneLease";
 
@@ -17,8 +17,8 @@ import { isPruneLeaseCancelled, withPruneLease } from "./pruneLease";
  * applying right now is left to that apply ({@link isArtworkApplyInFlight} says
  * why).
  */
-export async function applyShortcutIcons(data: ShortcutIconsData): Promise<number> {
-  return withPruneLease(data.prune_lease_token, "Shortcut icons", async (signal) => {
+export async function applyShortcutArtwork(data: ShortcutArtworkData): Promise<number> {
+  return withPruneLease(data.prune_lease_token, "Shortcut artwork", async (signal) => {
     const stopped = (): boolean => isPruneLeaseCancelled(signal);
     let applied = setIcons(data, stopped);
     // One image at a time: each is fetched, set and reported before the next is
@@ -32,14 +32,14 @@ export async function applyShortcutIcons(data: ShortcutIconsData): Promise<numbe
         // prettier-ignore
         if (await setJobSlotArtwork(romId, appId, slot, stopped)) applied++; // NOSONAR(typescript:S9382)
       } catch (e) {
-        logError(`Shortcut icons: could not set the ${slot} of appId ${appId}: ${e}`);
+        logError(`Shortcut artwork: could not set the ${slot} of appId ${appId}: ${e}`);
       }
     }
     return applied;
   });
 }
 
-function setIcons(data: ShortcutIconsData, stopped: () => boolean): number {
+function setIcons(data: ShortcutArtworkData, stopped: () => boolean): number {
   let applied = 0;
   for (const { app_id: appId, icon_path: iconPath } of data.icons) {
     if (stopped()) break;
@@ -48,7 +48,7 @@ function setIcons(data: ShortcutIconsData, stopped: () => boolean): number {
       SteamClient.Apps.SetShortcutIcon(appId, iconPath);
       applied++;
     } catch (e) {
-      logError(`Shortcut icons: could not set the icon of appId ${appId}: ${e}`);
+      logError(`Shortcut artwork: could not set the icon of appId ${appId}: ${e}`);
     }
   }
   return applied;

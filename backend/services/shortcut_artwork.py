@@ -1,6 +1,6 @@
-"""The shortcut icon job: every bound shortcut gets its SteamGridDB icon, wide grid and logo, in the background.
+"""The shortcut artwork job: every bound shortcut gets its SteamGridDB icon, wide grid and logo, in the background.
 
-Contract: docs/architecture/steam-non-steam-shortcuts.md, "Shortcut icons". The
+Contract: docs/architecture/steam-non-steam-shortcuts.md, "Shortcut artwork". The
 job derives its worklist each time it runs and stores none of it, so a run that
 is stopped leaves exactly the rest for the next one: the icons from
 ``shortcuts.vdf`` (:func:`domain.shortcut_icon.icon_worklist`), the wide grids
@@ -9,7 +9,7 @@ and logos from Steam's grid directory and their recorded outcomes
 icon and the wide grid shortcut by shortcut first, then the logos. It fetches
 four shortcuts at a time, writes each icon into Steam's grid directory, puts
 each wide grid and logo into the artwork cache, and hands the finished ones to
-the frontend in batches as the ``shortcut_icons`` event, which names a wide
+the frontend in batches as the ``shortcut_artwork`` event, which names a wide
 grid or logo for the frontend to fetch and set. Before each batch it reads
 Steam's renderer memory, and above the session budget's ceiling the run ends.
 
@@ -17,7 +17,7 @@ It yields to a sync, a removed-game cleanup and a shortcut removal, each of whic
 asks for it again when it ends (a removal whose lease expires or is released as
 orphaned leaves that to the next trigger). Each is seen before every fetch,
 write and hand-over; how a run under way is stopped from outside is
-``services.protocols.ShortcutIconJob``'s. The job is no endpoint, so it takes no
+``services.protocols.ShortcutArtworkJob``'s. The job is no endpoint, so it takes no
 ``hold``.
 """
 
@@ -36,7 +36,7 @@ from domain.shortcut_icon import (
     icon_worklist,
 )
 from lib.errors import SteamGridDirMissingError
-from models.shortcut_icon import IconAnswer, IconFetch, SlotAnswer
+from models.shortcut_artwork import IconAnswer, IconFetch, SlotAnswer
 
 if TYPE_CHECKING:
     import logging
@@ -51,7 +51,7 @@ if TYPE_CHECKING:
         EventEmitter,
         PanelConnectedFn,
         RendererAboveCeilingProvider,
-        ShortcutIconSource,
+        ShortcutArtworkSource,
         Sleeper,
         SteamConfigStore,
         TenderLogoFn,
@@ -63,7 +63,7 @@ _WORKERS = 4
 _BATCH_SIZE = 25
 # How long a run after a sync waits for Steam to rewrite shortcuts.vdf with the
 # shortcuts it minted (docs/architecture/steam-non-steam-shortcuts.md,
-# "Shortcut icons").
+# "Shortcut artwork").
 _SETTLE_SECONDS = 10.0
 _FIRST_BACKOFF_SECONDS = 30.0
 _MAX_BACKOFF_SECONDS = 15 * 60.0
@@ -71,8 +71,8 @@ _PANEL_POLL_SECONDS = 5.0
 
 
 @dataclass(frozen=True)
-class ShortcutIconServiceConfig:
-    """Frozen wiring bundle handed to ``ShortcutIconService.__init__``.
+class ShortcutArtworkServiceConfig:
+    """Frozen wiring bundle handed to ``ShortcutArtworkService.__init__``.
 
     Holds the Steam config store the worklist is read from and the two fixed
     icons are written through, the SteamGridDB service's icon and artwork seam,
@@ -87,7 +87,7 @@ class ShortcutIconServiceConfig:
     """
 
     steam_config: SteamConfigStore
-    icons: ShortcutIconSource
+    source: ShortcutArtworkSource
     uow_factory: UnitOfWorkFactory
     settings: dict[str, Any]
     conflict_rules: ConflictRules
@@ -141,12 +141,12 @@ class _SlotReady:
     slot: ArtworkSlot
 
 
-class ShortcutIconService:
-    """Runs the shortcut icon job, one run at a time, and answers the start and end of what it yields to."""
+class ShortcutArtworkService:
+    """Runs the shortcut artwork job, one run at a time, and answers the start and end of what it yields to."""
 
-    def __init__(self, *, config: ShortcutIconServiceConfig) -> None:
+    def __init__(self, *, config: ShortcutArtworkServiceConfig) -> None:
         self._steam_config = config.steam_config
-        self._icons = config.icons
+        self._source = config.source
         self._uow_factory = config.uow_factory
         self._settings = config.settings
         self._rules = config.conflict_rules
@@ -198,7 +198,7 @@ class ShortcutIconService:
         self.request_run()
 
     async def placeholder_path(self) -> str | None:
-        """Implements ``services.protocols.ShortcutIconJob.placeholder_path``.
+        """Implements ``services.protocols.ShortcutArtworkJob.placeholder_path``.
 
         Where it answers ``None`` the sync gives the shortcuts it mints no icon
         at all.
@@ -210,21 +210,21 @@ class ShortcutIconService:
                 None, self._steam_config.ensure_grid_file, PLACEHOLDER_ICON_NAME, PLACEHOLDER_ICON_PNG
             )
         except (SteamGridDirMissingError, OSError) as e:
-            self._logger.warning(f"Shortcut icons: no placeholder to give new shortcuts: {e}")
+            self._logger.warning(f"Shortcut artwork: no placeholder to give new shortcuts: {e}")
             return None
 
     async def stop_for_cleanup(self) -> None:
-        """Implements ``services.protocols.ShortcutIconJob.stop_for_cleanup``."""
+        """Implements ``services.protocols.ShortcutArtworkJob.stop_for_cleanup``."""
         self._cleanup_holds += 1
         await self._stop()
 
     def resume_after_cleanup(self) -> None:
-        """Implements ``services.protocols.ShortcutIconJob.resume_after_cleanup``."""
+        """Implements ``services.protocols.ShortcutArtworkJob.resume_after_cleanup``."""
         self._cleanup_holds = max(0, self._cleanup_holds - 1)
         self.request_run()
 
     async def stop_for_removal(self) -> None:
-        """Implements ``services.protocols.ShortcutIconJob.stop_for_removal``.
+        """Implements ``services.protocols.ShortcutArtworkJob.stop_for_removal``.
 
         A later run yields to the removal by itself, through ``removal_in_flight``.
         """
@@ -277,17 +277,19 @@ class ShortcutIconService:
                 if not self._again:
                     return
         except Exception:
-            self._logger.exception("Shortcut icons: the run stopped on an unexpected error")
+            self._logger.exception("Shortcut artwork: the run stopped on an unexpected error")
 
     def _must_yield(self) -> bool:
         return self._sync_in_flight() or self._cleanup_running() or self._removal_in_flight()
 
     async def _run_once(self) -> None:
         if not self._settings.get("steamgriddb_api_key"):
-            self._log_debug("Shortcut icons: no SteamGridDB API key, nothing to do")
+            self._log_debug("Shortcut artwork: no SteamGridDB API key, nothing to do")
             return
         if self._must_yield():
-            self._log_debug("Shortcut icons: a sync, a cleanup or a shortcut removal is under way; its end asks again")
+            self._log_debug(
+                "Shortcut artwork: a sync, a cleanup or a shortcut removal is under way; its end asks again"
+            )
             return
         self._backoff = 0.0
         self._key_refused = False
@@ -308,7 +310,7 @@ class ShortcutIconService:
             (sum(1 for item in work if ArtworkSlot.LOGO in item.slots), "a logo"),
         )
         waiting = ", ".join(f"{count} for {what}" for count, what in counts if count)
-        self._logger.info(f"Shortcut icons: shortcut(s) waiting: {waiting}")
+        self._logger.info(f"Shortcut artwork: shortcut(s) waiting: {waiting}")
 
     async def _run_pass(self, work: list[_Item], plan: _Plan) -> None:
         queue: asyncio.Queue[_Item] = asyncio.Queue()
@@ -338,10 +340,10 @@ class ShortcutIconService:
             logo = self._tender_logo()
             logo_path = self._steam_config.ensure_grid_file(LOGO_ICON_NAME, logo) if logo else None
         except SteamGridDirMissingError as e:
-            self._logger.warning(f"Shortcut icons: {e}")
+            self._logger.warning(f"Shortcut artwork: {e}")
             return None
         except OSError as e:
-            self._logger.warning(f"Shortcut icons: could not write Tender's icons: {e}")
+            self._logger.warning(f"Shortcut artwork: could not write Tender's icons: {e}")
             return None
         icons = self._steam_config.read_shortcut_icons()
         if icons is None:
@@ -367,7 +369,7 @@ class ShortcutIconService:
         bound = {app_id: rom.rom_id for app_id, rom in roms.items()}
         missing = sum(1 for app_id in bound if app_id not in icons)
         if missing:
-            self._logger.info(f"Shortcut icons: shortcuts.vdf does not hold {missing} bound shortcut(s) yet")
+            self._logger.info(f"Shortcut artwork: shortcuts.vdf does not hold {missing} bound shortcut(s) yet")
         waiting_icons = {app_id for _rom_id, app_id in icon_worklist(bound, icons)}
         now = self._clock.time()
 
@@ -421,14 +423,14 @@ class ShortcutIconService:
 
     async def _serve_icon(self, item: _Item, batch: list[_Finished | _SlotReady], plan: _Plan) -> bool:
         """Fetch and write *item*'s icon; ``False`` after a 429, so it is asked again."""
-        generation = self._icons.icon_generation(item.app_id)
-        fetch = await self._loop.run_in_executor(None, self._icons.do_fetch_shortcut_icon, item.rom_id)
+        generation = self._source.icon_generation(item.app_id)
+        fetch = await self._loop.run_in_executor(None, self._source.do_fetch_shortcut_icon, item.rom_id)
         if fetch.answer is IconAnswer.RATE_LIMITED:
             return False
         if fetch.answer is IconAnswer.KEY_REFUSED:
             self._refuse_key()
         elif fetch.answer is IconAnswer.FAILED:
-            self._log_debug(f"Shortcut icons: no answer for rom_id={item.rom_id}; the next run asks again")
+            self._log_debug(f"Shortcut artwork: no answer for rom_id={item.rom_id}; the next run asks again")
         else:
             self._backoff = 0.0
             path = await self._write(item.app_id, fetch, generation, plan)
@@ -438,13 +440,13 @@ class ShortcutIconService:
 
     async def _serve_slot(self, item: _Item, slot: ArtworkSlot, batch: list[_Finished | _SlotReady]) -> bool:
         """Put *item*'s *slot* into the artwork cache and queue it; ``False`` after a 429, so it is asked again."""
-        answer = await self._loop.run_in_executor(None, self._icons.do_fetch_slot_artwork, item.rom_id, slot)
+        answer = await self._loop.run_in_executor(None, self._source.do_fetch_slot_artwork, item.rom_id, slot)
         if answer is SlotAnswer.RATE_LIMITED:
             return False
         if answer is SlotAnswer.KEY_REFUSED:
             self._refuse_key()
         elif answer is SlotAnswer.FAILED:
-            self._log_debug(f"Shortcut icons: no {slot.value} for rom_id={item.rom_id}; the next run asks again")
+            self._log_debug(f"Shortcut artwork: no {slot.value} for rom_id={item.rom_id}; the next run asks again")
         else:
             self._backoff = 0.0
             if answer is SlotAnswer.READY:
@@ -454,7 +456,7 @@ class ShortcutIconService:
     def _refuse_key(self) -> None:
         if not self._key_refused:
             self._key_refused = True
-            self._logger.warning("Shortcut icons: SteamGridDB refused the API key; the run ends")
+            self._logger.warning("Shortcut artwork: SteamGridDB refused the API key; the run ends")
 
     async def _add(self, batch: list[_Finished | _SlotReady], finished: _Finished | _SlotReady) -> None:
         batch.append(finished)
@@ -470,7 +472,7 @@ class ShortcutIconService:
             await self._not_paused.wait()
             return
         self._backoff = min(_MAX_BACKOFF_SECONDS, self._backoff * 2 if self._backoff else _FIRST_BACKOFF_SECONDS)
-        self._logger.info(f"Shortcut icons: SteamGridDB answered 429, waiting {self._backoff:.0f}s")
+        self._logger.info(f"Shortcut artwork: SteamGridDB answered 429, waiting {self._backoff:.0f}s")
         self._not_paused.clear()
         try:
             await self._sleeper.sleep(self._backoff)
@@ -500,7 +502,7 @@ class ShortcutIconService:
             return False
         self._stopped = True
         self._logger.info(
-            "Shortcut icons: Steam's renderer memory is above the session budget's ceiling; the job runs again "
+            "Shortcut artwork: Steam's renderer memory is above the session budget's ceiling; the job runs again "
             "after the next sync, or once a panel connects after Steam restarts"
         )
         self._wait_for_a_new_panel()
@@ -531,8 +533,8 @@ class ShortcutIconService:
         if self._yields_now():
             return None
         if fetch.answer is IconAnswer.ICON and fetch.data is not None:
-            return await self._icons.write_job_icon(app_id, fetch.data, generation)
-        if plan.logo_path is None or self._icons.icon_generation(app_id) != generation:
+            return await self._source.write_job_icon(app_id, fetch.data, generation)
+        if plan.logo_path is None or self._source.icon_generation(app_id) != generation:
             return None
         return plan.logo_path
 
@@ -544,7 +546,7 @@ class ShortcutIconService:
         icons = [
             {"app_id": icon.app_id, "icon_path": icon.icon_path}
             for icon in finished
-            if isinstance(icon, _Finished) and self._icons.icon_generation(icon.app_id) == icon.generation
+            if isinstance(icon, _Finished) and self._source.icon_generation(icon.app_id) == icon.generation
         ]
         artwork = [
             {"app_id": ready.app_id, "rom_id": ready.rom_id, "slot": ready.slot.value}
@@ -554,12 +556,12 @@ class ShortcutIconService:
         if not icons and not artwork:
             return
         heard = await self._rules.emit_under_lease(
-            "shortcut_icons",
+            "shortcut_artwork",
             lambda token: self._emit(
-                "shortcut_icons", {"icons": icons, "artwork": artwork, "prune_lease_token": token}
+                "shortcut_artwork", {"icons": icons, "artwork": artwork, "prune_lease_token": token}
             ),
         )
         if not heard:
             self._stopped = True
-            self._logger.info("Shortcut icons: no panel heard the batch; the job runs again once one connects")
+            self._logger.info("Shortcut artwork: no panel heard the batch; the job runs again once one connects")
             self._wait_for_a_panel()

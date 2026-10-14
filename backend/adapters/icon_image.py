@@ -2,7 +2,7 @@
 
 Implements ``services.protocols.IconDownscaleFn`` and
 ``services.protocols.TenderLogoFn``. Why every icon is downscaled, and why to
-that size, is docs/architecture/steam-non-steam-shortcuts.md, "Shortcut icons".
+that size, is docs/architecture/steam-non-steam-shortcuts.md, "Shortcut artwork".
 
 The vendored ``png`` is imported on the first downscale, not at module scope: a
 copy that will not load under the device's Python then costs the downscale and

@@ -6781,8 +6781,8 @@ class TestOneReadingOfTheSourcesPerRun:
         assert all(handed is reading for handed in library.core_info.default_readings)
 
 
-class TestTheShortcutIconJobAfterARun:
-    """Every run's end asks for the shortcut icon job."""
+class TestTheShortcutArtworkJobAfterARun:
+    """Every run's end asks for the shortcut artwork job."""
 
     @pytest.mark.asyncio
     async def test_an_apply_run_asks_for_it_once_steam_has_had_time_to_write_its_file(self, library, fake_romm_api):
@@ -6793,7 +6793,7 @@ class TestTheShortcutIconJobAfterARun:
 
         await library.sync._orchestrator._do_sync_per_unit()
 
-        assert library.icon_job.requests == [True]
+        assert library.artwork_job.requests == [True]
 
     @pytest.mark.asyncio
     async def test_an_apply_run_that_failed_asks_for_it_too(self, library, fake_romm_api):
@@ -6805,7 +6805,7 @@ class TestTheShortcutIconJobAfterARun:
 
         await library.sync._orchestrator._do_sync_per_unit()
 
-        assert library.icon_job.requests == [True]
+        assert library.artwork_job.requests == [True]
 
     @pytest.mark.asyncio
     async def test_a_preview_asks_for_it_without_waiting(self, library, fake_romm_api):
@@ -6815,4 +6815,4 @@ class TestTheShortcutIconJobAfterARun:
 
         await library.sync.sync_preview()
 
-        assert library.icon_job.requests == [False]
+        assert library.artwork_job.requests == [False]

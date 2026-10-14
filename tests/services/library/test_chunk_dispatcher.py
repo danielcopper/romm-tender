@@ -742,7 +742,7 @@ class TestThePlaceholderIcon:
         )
 
     @pytest.mark.asyncio
-    async def test_a_chunk_names_the_shortcut_icon_jobs_placeholder(self, library, fake_romm_api, emit):
+    async def test_a_chunk_names_the_shortcut_artwork_jobs_placeholder(self, library, fake_romm_api, emit):
         await self._apply_one_unit(library, fake_romm_api)
 
         (event,) = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
@@ -750,7 +750,7 @@ class TestThePlaceholderIcon:
 
     @pytest.mark.asyncio
     async def test_a_chunk_names_none_where_there_is_no_placeholder(self, library, fake_romm_api, emit):
-        library.icon_job.placeholder = None
+        library.artwork_job.placeholder = None
 
         await self._apply_one_unit(library, fake_romm_api)
 

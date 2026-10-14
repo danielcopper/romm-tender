@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import * as backend from "../api/backend";
 import { applyArtwork } from "./artwork";
 import { releasePruneLeasesByOwner } from "./pruneLease";
-import { applyShortcutIcons } from "./shortcutIcons";
+import { applyShortcutArtwork } from "./shortcutArtwork";
 
-describe("applyShortcutIcons", () => {
+describe("applyShortcutArtwork", () => {
   const setShortcutIcon = vi.fn();
 
   beforeEach(() => {
@@ -24,7 +24,7 @@ describe("applyShortcutIcons", () => {
   };
 
   it("points each shortcut in the batch at its icon file", async () => {
-    await expect(applyShortcutIcons(batch)).resolves.toBe(2);
+    await expect(applyShortcutArtwork(batch)).resolves.toBe(2);
 
     expect(setShortcutIcon.mock.calls).toEqual([
       [100, "/grid/100_icon.png"],
@@ -33,7 +33,7 @@ describe("applyShortcutIcons", () => {
   });
 
   it("gives the batch's lease back after the last icon is set", async () => {
-    await applyShortcutIcons(batch);
+    await applyShortcutArtwork(batch);
 
     const release = vi.mocked(backend.releasePruneConflictLease);
     expect(release).toHaveBeenCalledWith("icon-lease");
@@ -49,7 +49,7 @@ describe("applyShortcutIcons", () => {
     );
     const applying = applyArtwork(42, 200);
 
-    await expect(applyShortcutIcons(batch)).resolves.toBe(1);
+    await expect(applyShortcutArtwork(batch)).resolves.toBe(1);
 
     expect(setShortcutIcon.mock.calls).toEqual([[100, "/grid/100_icon.png"]]);
     finish({ base64: null, no_api_key: false });
@@ -62,25 +62,25 @@ describe("applyShortcutIcons", () => {
       throw new Error("no such app");
     });
 
-    await expect(applyShortcutIcons(batch)).resolves.toBe(1);
+    await expect(applyShortcutArtwork(batch)).resolves.toBe(1);
 
     expect(setShortcutIcon).toHaveBeenCalledWith(200, "/grid/tender-icon.png");
-    expect(logError).toHaveBeenCalledWith("Shortcut icons: could not set the icon of appId 100: Error: no such app");
+    expect(logError).toHaveBeenCalledWith("Shortcut artwork: could not set the icon of appId 100: Error: no such app");
     logError.mockRestore();
   });
 
   it("sets no more icons once the batch's lease is cancelled", async () => {
     setShortcutIcon.mockImplementationOnce(() => {
-      void releasePruneLeasesByOwner("Shortcut icons");
+      void releasePruneLeasesByOwner("Shortcut artwork");
     });
 
-    await expect(applyShortcutIcons(batch)).resolves.toBe(1);
+    await expect(applyShortcutArtwork(batch)).resolves.toBe(1);
 
     expect(setShortcutIcon.mock.calls).toEqual([[100, "/grid/100_icon.png"]]);
   });
 });
 
-describe("applyShortcutIcons — wide grids and logos", () => {
+describe("applyShortcutArtwork — wide grids and logos", () => {
   const setCustomArtwork = vi.fn();
   const image = (base64: string): backend.SgdbSlotArtwork => ({
     status: "image",
@@ -110,7 +110,7 @@ describe("applyShortcutIcons — wide grids and logos", () => {
   };
 
   it("sets each wide grid and logo the batch names after its icons, and counts them", async () => {
-    await expect(applyShortcutIcons(batch)).resolves.toBe(3);
+    await expect(applyShortcutArtwork(batch)).resolves.toBe(3);
 
     expect(vi.mocked(backend.getSgdbSlotArtwork).mock.calls).toEqual([
       [1, 100, "grid"],
@@ -135,7 +135,7 @@ describe("applyShortcutIcons — wide grids and logos", () => {
         }),
     );
 
-    const applying = applyShortcutIcons(batch);
+    const applying = applyShortcutArtwork(batch);
     await vi.waitFor(() => expect(setCustomArtwork).toHaveBeenCalledTimes(1));
     expect(backend.getSgdbSlotArtwork).toHaveBeenCalledTimes(1);
 
@@ -145,7 +145,7 @@ describe("applyShortcutIcons — wide grids and logos", () => {
   });
 
   it("gives the batch's lease back after the last image is set", async () => {
-    await applyShortcutIcons(batch);
+    await applyShortcutArtwork(batch);
 
     const release = vi.mocked(backend.releasePruneConflictLease);
     expect(release).toHaveBeenCalledWith("batch-lease");
@@ -163,7 +163,7 @@ describe("applyShortcutIcons — wide grids and logos", () => {
     );
     const applying = applyArtwork(42, 200);
 
-    await applyShortcutIcons(batch);
+    await applyShortcutArtwork(batch);
 
     expect(vi.mocked(backend.getSgdbSlotArtwork).mock.calls).toEqual([[1, 100, "grid"]]);
     finish({ base64: null, no_api_key: false });
@@ -172,10 +172,10 @@ describe("applyShortcutIcons — wide grids and logos", () => {
 
   it("sets no more images once the batch's lease is cancelled", async () => {
     setCustomArtwork.mockImplementationOnce(async () => {
-      void releasePruneLeasesByOwner("Shortcut icons");
+      void releasePruneLeasesByOwner("Shortcut artwork");
     });
 
-    await expect(applyShortcutIcons(batch)).resolves.toBe(2);
+    await expect(applyShortcutArtwork(batch)).resolves.toBe(2);
 
     expect(setCustomArtwork.mock.calls).toEqual([[100, "grid-100", "png", 3]]);
     expect(backend.getSgdbSlotArtwork).toHaveBeenCalledTimes(1);
