@@ -303,8 +303,8 @@ class TestWhatCountsAsACandidate:
         assert choose_candidate("grid", []) is None
         assert choose_candidate("grid", None) is None
 
-    @pytest.mark.parametrize("asset_type", ["grid", "logo"])
-    def test_a_wide_grid_or_logo_without_an_id_is_no_candidate(self, asset_type):
+    @pytest.mark.parametrize("asset_type", ["grid", "logo", "icon"])
+    def test_a_wide_grid_logo_or_icon_without_an_id_is_no_candidate(self, asset_type):
         data = [{"url": "https://cdn.example/a.png", "width": 920, "height": 430}, _image(2, 460, 215)]
 
         assert _chosen(asset_type, data).image_id == 2
@@ -331,17 +331,16 @@ class TestWhatCountsAsACandidate:
 
 
 class TestCachedArtworkNames:
-    @pytest.mark.parametrize("asset_type", ["grid", "logo"])
-    def test_a_wide_grid_or_logo_is_named_by_its_image_id(self, asset_type):
+    @pytest.mark.parametrize("asset_type", ["grid", "logo", "icon"])
+    def test_a_wide_grid_logo_or_icon_is_named_by_its_image_id(self, asset_type):
         name = cached_artwork_name(42, asset_type, 12345)
 
         assert name == f"42_{asset_type}_12345.png"
         assert cached_image_id(name, 42, asset_type) == 12345
 
-    @pytest.mark.parametrize("asset_type", ["hero", "icon"])
-    def test_a_hero_or_icon_keeps_its_plain_name(self, asset_type):
-        assert cached_artwork_name(42, asset_type, 12345) == f"42_{asset_type}.png"
-        assert cached_image_id(f"42_{asset_type}.png", 42, asset_type) is None
+    def test_a_hero_keeps_its_plain_name(self):
+        assert cached_artwork_name(42, "hero", 12345) == "42_hero.png"
+        assert cached_image_id("42_hero.png", 42, "hero") is None
 
     def test_a_wide_grid_without_an_image_id_has_no_name(self):
         with pytest.raises(ValueError, match="image id"):
@@ -362,13 +361,17 @@ class TestCachedArtworkNames:
 
     @pytest.mark.parametrize(
         ("name", "slot"),
-        [("42_grid_7.png", (42, "grid")), ("42_logo.png", (42, "logo")), ("421_logo_7.png", (421, "logo"))],
+        [
+            ("42_grid_7.png", (42, "grid")),
+            ("42_logo.png", (42, "logo")),
+            ("421_logo_7.png", (421, "logo")),
+            ("42_icon.png", (42, "icon")),
+            ("42_icon_7.png", (42, "icon")),
+        ],
     )
-    def test_a_wide_grid_or_logo_cache_file_names_its_rom_and_asset_type(self, name, slot):
+    def test_a_wide_grid_logo_or_icon_cache_file_names_its_rom_and_asset_type(self, name, slot):
         assert cached_slot_of(name) == slot
 
-    @pytest.mark.parametrize(
-        "name", ["42_hero.png", "42_icon.png", "042_grid_7.png", "42_grid_7.png.tmp", "42_grid_abc.png", "x.png"]
-    )
-    def test_no_other_name_is_a_wide_grid_or_logo_cache_file(self, name):
+    @pytest.mark.parametrize("name", ["42_hero.png", "042_grid_7.png", "42_grid_7.png.tmp", "42_grid_abc.png", "x.png"])
+    def test_no_other_name_is_a_wide_grid_logo_or_icon_cache_file(self, name):
         assert cached_slot_of(name) is None

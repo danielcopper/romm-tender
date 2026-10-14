@@ -64,7 +64,7 @@ _WIDE_GRID_SIZES: tuple[tuple[int, int], ...] = ((920, 430), (460, 215))
 _LOGO_WIDTHS = range(640, 2048 + 1)
 
 # The asset types whose cache file carries the SteamGridDB image id in its name.
-_ID_NAMED_ASSET_TYPES = frozenset({"grid", "logo"})
+_ID_NAMED_ASSET_TYPES = frozenset({"grid", "logo", "icon"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,8 +93,9 @@ def sgdb_endpoint_path(asset_type: str, sgdb_game_id: int) -> str | None:
 def choose_candidate(asset_type: str, data: object) -> SgdbCandidate | None:
     """Choose the image to use among *data*, an asset response's ``data`` list, by stated size.
 
-    A candidate is an entry with a non-empty ``url``; for the wide grid and the
-    logo it also needs an integer ``id``, which names its cache file. The wide
+    A candidate is an entry with a non-empty ``url``; for the wide grid, the
+    logo and the icon it also needs an integer ``id``, which names its cache
+    file. The wide
     grid prefers 920x430, then 460x215; the logo prefers the first candidate
     between 640 and 2048 pixels wide. Either falls back to the first candidate,
     and every other asset type takes the first. ``None`` when *data* holds no
@@ -151,10 +152,10 @@ def named_by_image_id(asset_type: str) -> bool:
 def cached_artwork_name(rom_id: int, asset_type: str, image_id: int | None) -> str:
     """The artwork cache's file name for *rom_id*'s *asset_type*.
 
-    A wide grid's and a logo's name carries the SteamGridDB image id it was
-    downloaded as (``{rom_id}_grid_{image_id}.png``), so what the cache holds
-    is known as long as the file is there. A hero's and an icon's name carries
-    none. Raises ``ValueError`` for a wide grid or a logo without an image id.
+    A wide grid's, a logo's and an icon's name carries the SteamGridDB image id
+    it was downloaded as (``{rom_id}_grid_{image_id}.png``), so what the cache
+    holds is known as long as the file is there. A hero's name carries none.
+    Raises ``ValueError`` for a wide grid, logo or icon without an image id.
     """
     if not named_by_image_id(asset_type):
         return f"{rom_id}_{asset_type}.png"
@@ -166,8 +167,8 @@ def cached_artwork_name(rom_id: int, asset_type: str, image_id: int | None) -> s
 def cached_image_id(name: str, rom_id: int, asset_type: str) -> int | None:
     """The SteamGridDB image id *name* says it caches for *rom_id*'s *asset_type*, else ``None``.
 
-    Only the wide grid's and the logo's names carry one, so a hero or an icon,
-    and a grid or logo named without an id, answer ``None``.
+    Only the wide grid's, the logo's and the icon's names carry one, so a hero,
+    and one of those three named without an id, answer ``None``.
     """
     if not named_by_image_id(asset_type):
         return None
@@ -184,7 +185,7 @@ _ID_NAMED_CACHE_FILE = re.compile(rf"(\d+)_({'|'.join(sorted(_ID_NAMED_ASSET_TYP
 
 
 def cached_slot_of(name: str) -> tuple[int, str] | None:
-    """The ROM and asset type whose wide grid or logo *name* caches, else ``None``.
+    """The ROM and asset type whose wide grid, logo or icon *name* caches, else ``None``.
 
     Counts the same names :func:`is_cached_artwork` does.
     """

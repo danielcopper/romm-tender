@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from domain.update_release import LatestRelease
     from lib.partial_failure import PartialFailure
     from models.prune import InstalledContentRemoval, SaveQuarantine, SourceClaim
-    from models.shortcut_artwork import IconFetch, SlotAnswer
+    from models.shortcut_artwork import JobIcon, SlotAnswer
     from models.state import ShortcutRegistryEntry
     from models.sync import ClientSaveState
 
@@ -770,38 +770,30 @@ class PlaytimeScopeNoticeClearFn(Protocol):
 
 
 class ShortcutArtworkSource(Protocol):
-    """What the shortcut artwork job asks of the SteamGridDB service: an icon it may write, and a wide grid or logo."""
+    """What the shortcut artwork job asks of the SteamGridDB service: a wide grid, logo or icon, and an icon's write."""
 
     def icon_generation(self, app_id: int) -> int:
         """How many icons the game page has saved for *app_id* in this process."""
         ...
 
-    def do_fetch_shortcut_icon(self, rom_id: int) -> IconFetch:
-        """Fetch *rom_id*'s SteamGridDB icon, from the cache first, downscale it, and say what came of it.
+    async def write_job_icon(self, app_id: int, rom_id: int, generation: int) -> JobIcon | None:
+        """Write *rom_id*'s cached icon, downscaled, for *app_id*, unless the game page saved one since *generation*.
 
-        A game SteamGridDB does not know or holds no icon for answers
-        ``NO_ICON``, and so does a ROM with no SteamGridDB id, without a
-        request; a 429 from the API or the image CDN ``RATE_LIMITED``; a 401 or
-        403 from the API ``KEY_REFUSED``, which the caller logs; anything else
-        that went wrong ``FAILED``, and so does an icon the downscale cannot
-        read, which leaves the cache. Synchronous — callers on the loop offload
-        it.
+        Answers what was written; ``None`` when the page saved an icon since,
+        when the cache holds no icon for the ROM, when the downscale cannot
+        read it (it then leaves the cache), or when the file could not be
+        written.
         """
         ...
 
-    async def write_job_icon(self, app_id: int, icon_bytes: bytes, generation: int) -> str | None:
-        """Write the icon unless the game page saved one since *generation*; answer its path or ``None``."""
-        ...
-
     def do_fetch_slot_artwork(self, rom_id: int, slot: ArtworkSlot) -> SlotAnswer:
-        """Put SteamGridDB's image for *rom_id*'s wide grid or logo into the artwork cache, and say what came of it.
+        """Put SteamGridDB's image for *rom_id*'s wide grid, logo or icon into the artwork cache; say what came of it.
 
         Downloads only what the cache does not hold, by the one rule the game
-        page uses. ``READY`` once the cache holds it, for the frontend to fetch
-        through ``get_sgdb_slot_artwork``; ``NONE``, recorded, when SteamGridDB
-        has no candidate or does not know the game, or the ROM has no
-        SteamGridDB id stored (no request then); a 429 ``RATE_LIMITED``; a 401
-        or 403 ``KEY_REFUSED``; anything else ``FAILED``, unrecorded.
+        page uses. ``READY`` once the cache holds it; ``NONE``, recorded, when
+        SteamGridDB has no candidate or does not know the game, or the ROM has
+        no SteamGridDB id stored (no request then); a 429 ``RATE_LIMITED``; a
+        401 or 403 ``KEY_REFUSED``; anything else ``FAILED``, unrecorded.
         Synchronous — callers on the loop offload it.
         """
         ...

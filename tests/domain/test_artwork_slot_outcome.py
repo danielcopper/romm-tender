@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 
 from domain.artwork_slot import ArtworkSlot
-from domain.artwork_slot_outcome import RULED_OUT_SECONDS, ArtworkSlotOutcome, SlotOutcome, slot_waits
+from domain.artwork_slot_outcome import RULED_OUT_SECONDS, ArtworkSlotOutcome, SlotOutcome, icon_waits, slot_waits
+from domain.shortcut_icon import LOGO_ICON_NAME
 
 NOW = 1_800_000_000.0
 
@@ -35,6 +36,13 @@ class TestTheConstructors:
             ArtworkSlotOutcome.record_set(
                 rom_id=1, slot=ArtworkSlot.LOGO, sgdb_id=7, image_id=99, image_sha256="", recorded_at=NOW
             )
+
+    def test_the_icon_has_an_outcome(self):
+        record = ArtworkSlotOutcome.record_set(
+            rom_id=1, slot=ArtworkSlot.ICON, sgdb_id=7, image_id=99, image_sha256="ab" * 32, recorded_at=NOW
+        )
+
+        assert (record.slot, record.outcome) == (ArtworkSlot.ICON, SlotOutcome.SET)
 
     def test_the_hero_has_no_outcome(self):
         with pytest.raises(ValueError, match="hero"):
@@ -90,3 +98,38 @@ class TestWhetherTheJobAsksForASlot:
         )
 
         assert slot_waits(frozenset(), 100, ArtworkSlot.LOGO, record, sgdb_id=7, now=NOW + 1)
+
+
+_GRID = "/grid"
+_LOGO_ICON = f"{_GRID}/{LOGO_ICON_NAME}"
+
+
+def _icon_none(*, sgdb_id: int | None = 7, at: float = NOW) -> ArtworkSlotOutcome:
+    return ArtworkSlotOutcome.record_none(rom_id=1, slot=ArtworkSlot.ICON, sgdb_id=sgdb_id, recorded_at=at)
+
+
+def _icon_waits(icon: str, recorded: ArtworkSlotOutcome | None, *, sgdb_id: int | None = 7, now: float = NOW) -> bool:
+    return icon_waits(icon, recorded, grid_dir=_GRID, file_names=frozenset(), sgdb_id=sgdb_id, now=now)
+
+
+class TestWhetherTheJobAsksForAnIcon:
+    def test_the_logo_icon_with_nothing_recorded_waits(self):
+        assert _icon_waits(_LOGO_ICON, None)
+
+    def test_the_logo_icon_given_for_lack_of_an_id_waits_once_the_rom_has_one(self):
+        assert not _icon_waits(_LOGO_ICON, _icon_none(sgdb_id=None), sgdb_id=None, now=NOW + 1)
+        assert _icon_waits(_LOGO_ICON, _icon_none(sgdb_id=None), sgdb_id=7, now=NOW + 1)
+
+    def test_the_logo_icon_steamgriddb_had_nothing_for_waits_only_once_the_week_is_over(self):
+        assert not _icon_waits(_LOGO_ICON, _icon_none(), now=NOW + RULED_OUT_SECONDS - 1)
+        assert _icon_waits(_LOGO_ICON, _icon_none(), now=NOW + RULED_OUT_SECONDS)
+
+    def test_an_icon_somebody_set_never_waits(self):
+        assert not _icon_waits("/home/deck/mine.png", None)
+
+    def test_a_set_icon_whose_file_is_gone_waits(self):
+        record = ArtworkSlotOutcome.record_set(
+            rom_id=1, slot=ArtworkSlot.ICON, sgdb_id=7, image_id=99, image_sha256="ab" * 32, recorded_at=NOW
+        )
+
+        assert _icon_waits(f"{_GRID}/100_icon.png", record, now=NOW + 1)

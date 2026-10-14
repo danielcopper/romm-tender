@@ -20,7 +20,7 @@ from domain.artwork_slot_outcome import RULED_OUT_SECONDS, ArtworkSlotOutcome
 from domain.rom import Rom
 from domain.shortcut_icon import LOGO_ICON_NAME, PLACEHOLDER_ICON_NAME, PLACEHOLDER_ICON_PNG
 from lib.errors import SteamGridDirMissingError
-from models.shortcut_artwork import IconAnswer, IconFetch, SlotAnswer
+from models.shortcut_artwork import JobIcon, SlotAnswer
 from services import shortcut_artwork
 from services.shortcut_artwork import ShortcutArtworkService, ShortcutArtworkServiceConfig
 
@@ -31,6 +31,8 @@ if TYPE_CHECKING:
 
 _PLACEHOLDER = f"/grid/{PLACEHOLDER_ICON_NAME}"
 _LOGO = f"/grid/{LOGO_ICON_NAME}"
+# An icon somebody set, outside Steam's grid directory: it fills the icon slot, so the job leaves it alone.
+_SET_BY_HAND = "/home/deck/mine.png"
 
 
 class _FakeSteamConfig:
@@ -66,7 +68,7 @@ class _FakeArtworkSource:
     """
 
     def __init__(self) -> None:
-        self.answers: dict[int, list[IconFetch]] = {}
+        self.answers: dict[int, list[SlotAnswer]] = {}
         self.slot_answers: dict[tuple[int, ArtworkSlot], list[SlotAnswer]] = {}
         self.slots_fetched: list[tuple[int, ArtworkSlot]] = []
         self.order: list[tuple[str, int]] = []
@@ -81,13 +83,15 @@ class _FakeArtworkSource:
         self.peak_in_flight = 0
         self._count = threading.Lock()
 
-    def answer(self, rom_id: int, *fetches: IconFetch) -> None:
-        self.answers[rom_id] = list(fetches)
+    def answer(self, rom_id: int, *answers: SlotAnswer) -> None:
+        """Script the answers to *rom_id*'s icon fetches, the last repeated."""
+        self.answers[rom_id] = list(answers)
 
     def icon_generation(self, app_id: int) -> int:
         return self.generations.get(app_id, 0)
 
-    def do_fetch_shortcut_icon(self, rom_id: int) -> IconFetch:
+    def fetch_icon(self, rom_id: int) -> SlotAnswer:
+        """The icon's fetch, which ``do_fetch_slot_artwork`` answers for the icon slot; a test may replace it."""
         with self._count:
             self.fetched.append(rom_id)
             self.order.append(("icon", rom_id))
@@ -98,7 +102,7 @@ class _FakeArtworkSource:
                 self.on_fetch(rom_id)
             if self.fetch_gate is not None:
                 self.fetch_gate.wait(timeout=5)
-            script = self.answers.get(rom_id) or [IconFetch(IconAnswer.ICON, b"icon")]
+            script = self.answers.get(rom_id) or [SlotAnswer.READY]
             return script.pop(0) if len(script) > 1 else script[0]
         finally:
             with self._count:
@@ -108,22 +112,40 @@ class _FakeArtworkSource:
         self.slot_answers[(rom_id, slot)] = list(answers)
 
     def do_fetch_slot_artwork(self, rom_id: int, slot: ArtworkSlot) -> SlotAnswer:
-        with self._count:
-            self.slots_fetched.append((rom_id, slot))
-            self.order.append((slot.value, rom_id))
-        script = self.slot_answers.get((rom_id, slot)) or [SlotAnswer.READY]
-        answer = script.pop(0) if len(script) > 1 else script[0]
+        if slot is ArtworkSlot.ICON:
+            answer = self.fetch_icon(rom_id)
+        else:
+            with self._count:
+                self.slots_fetched.append((rom_id, slot))
+                self.order.append((slot.value, rom_id))
+            script = self.slot_answers.get((rom_id, slot)) or [SlotAnswer.READY]
+            answer = script.pop(0) if len(script) > 1 else script[0]
         if answer is SlotAnswer.NONE and self.on_slot_none is not None:
             self.on_slot_none(rom_id, slot)
         return answer
 
-    async def write_job_icon(self, app_id: int, icon_bytes: bytes, generation: int) -> str | None:
+    async def write_job_icon(self, app_id: int, rom_id: int, generation: int) -> JobIcon | None:
         if self.write_gate is not None:
             await self.write_gate.wait()
         if self.icon_generation(app_id) != generation:
             return None
-        self.written[app_id] = icon_bytes
-        return f"/grid/{app_id}_icon.png"
+        self.written[app_id] = _ICON_BYTES
+        return _job_icon(app_id, rom_id)
+
+
+# The downscaled bytes the fake writes for every icon, and what it answers it wrote.
+_ICON_BYTES = b"icon"
+
+
+def _job_icon(app_id: int, rom_id: int) -> JobIcon:
+    return JobIcon(path=f"/grid/{app_id}_icon.png", image_id=500 + rom_id, sha256=f"sha-{rom_id}", sgdb_id=None)
+
+
+def _icon_entry(app_id: int, rom_id: int) -> dict[str, Any]:
+    """The batch's entry for SteamGridDB's icon the fake wrote for *app_id*."""
+    icon = _job_icon(app_id, rom_id)
+    record = {"rom_id": rom_id, "sgdb_id": icon.sgdb_id, "image_id": icon.image_id, "sha256": icon.sha256}
+    return {"app_id": app_id, "icon_path": icon.path, "record": record}
 
 
 class _RecordErrors(logging.Handler):
@@ -268,8 +290,8 @@ class TestARun:
         assert job.steam_config.ensured == {PLACEHOLDER_ICON_NAME: PLACEHOLDER_ICON_PNG, LOGO_ICON_NAME: b"logo"}
 
     @pytest.mark.asyncio
-    async def test_leaves_the_logo_and_an_icon_set_by_hand_alone(self):
-        job = _Job(icons={100: _LOGO, 200: "/home/deck/mine.png"}, bound={100: 1, 200: 2})
+    async def test_leaves_an_icon_set_by_hand_alone(self):
+        job = _Job(icons={200: _SET_BY_HAND}, bound={200: 2})
 
         await job.run()
 
@@ -279,7 +301,7 @@ class TestARun:
     @pytest.mark.asyncio
     async def test_a_game_with_no_icon_gets_the_logo(self):
         job = _Job(icons={100: _PLACEHOLDER}, bound={100: 1})
-        job.source.answer(1, IconFetch(IconAnswer.NO_ICON))
+        job.source.answer(1, SlotAnswer.NONE)
 
         await job.run()
 
@@ -289,7 +311,7 @@ class TestARun:
     @pytest.mark.asyncio
     async def test_without_a_logo_to_give_a_game_with_no_icon_keeps_its_placeholder(self):
         job = _Job(icons={100: _PLACEHOLDER}, bound={100: 1}, logo=None)
-        job.source.answer(1, IconFetch(IconAnswer.NO_ICON))
+        job.source.answer(1, SlotAnswer.NONE)
 
         await job.run()
 
@@ -298,7 +320,7 @@ class TestARun:
     @pytest.mark.asyncio
     async def test_a_failed_fetch_leaves_the_placeholder_for_the_next_run(self):
         job = _Job(icons={100: _PLACEHOLDER, 200: ""}, bound={100: 1, 200: 2})
-        job.source.answer(1, IconFetch(IconAnswer.FAILED))
+        job.source.answer(1, SlotAnswer.FAILED)
 
         await job.run()
 
@@ -317,7 +339,7 @@ class TestARun:
     @pytest.mark.asyncio
     async def test_drops_the_icon_of_a_shortcut_whose_icon_was_picked_on_the_game_page_meanwhile(self):
         job = _Job(icons={100: "", 200: ""}, bound={100: 1, 200: 2})
-        job.source.answer(2, IconFetch(IconAnswer.NO_ICON))
+        job.source.answer(2, SlotAnswer.NONE)
 
         def pick_while_fetching(rom_id: int) -> None:
             job.source.generations[100 * rom_id] = 1
@@ -331,7 +353,7 @@ class TestARun:
     @pytest.mark.asyncio
     async def test_a_pick_after_the_logo_was_queued_keeps_the_logo_out_of_the_batch(self):
         job = _Job(icons={100: _PLACEHOLDER, 200: ""}, bound={100: 1, 200: 2})
-        job.source.answer(1, IconFetch(IconAnswer.NO_ICON))
+        job.source.answer(1, SlotAnswer.NONE)
         flush = job.service._flush
 
         async def pick_then_flush(batch: list[Any]) -> None:
@@ -347,7 +369,7 @@ class TestARun:
     @pytest.mark.asyncio
     async def test_a_batch_that_a_pick_empties_is_not_handed_over(self):
         job = _Job(icons={100: _PLACEHOLDER}, bound={100: 1})
-        job.source.answer(1, IconFetch(IconAnswer.NO_ICON))
+        job.source.answer(1, SlotAnswer.NONE)
         flush = job.service._flush
 
         async def pick_then_flush(batch: list[Any]) -> None:
@@ -449,7 +471,7 @@ class TestRateLimits:
     @pytest.mark.asyncio
     async def test_a_429_pauses_then_asks_again(self):
         job = _Job(icons={100: ""}, bound={100: 1})
-        job.source.answer(1, IconFetch(IconAnswer.RATE_LIMITED), IconFetch(IconAnswer.ICON, b"icon"))
+        job.source.answer(1, SlotAnswer.RATE_LIMITED, SlotAnswer.READY)
 
         await job.run()
 
@@ -459,8 +481,8 @@ class TestRateLimits:
     @pytest.mark.asyncio
     async def test_each_429_in_a_row_doubles_the_pause_up_to_15_minutes(self):
         job = _Job(icons={100: ""}, bound={100: 1})
-        limited = IconFetch(IconAnswer.RATE_LIMITED)
-        job.source.answer(1, *([limited] * 7), IconFetch(IconAnswer.ICON, b"icon"))
+        limited = SlotAnswer.RATE_LIMITED
+        job.source.answer(1, *([limited] * 7), SlotAnswer.READY)
 
         await job.run()
 
@@ -470,9 +492,9 @@ class TestRateLimits:
     async def test_an_answer_between_two_429s_starts_the_pause_over(self, monkeypatch):
         monkeypatch.setattr(shortcut_artwork, "_WORKERS", 1)
         job = _Job(icons={100: "", 200: "", 300: ""}, bound={100: 1, 200: 2, 300: 3})
-        limited = IconFetch(IconAnswer.RATE_LIMITED)
-        job.source.answer(1, limited, IconFetch(IconAnswer.ICON, b"one"))
-        job.source.answer(3, limited, IconFetch(IconAnswer.ICON, b"three"))
+        limited = SlotAnswer.RATE_LIMITED
+        job.source.answer(1, limited, SlotAnswer.READY)
+        job.source.answer(3, limited, SlotAnswer.READY)
 
         await job.run()
 
@@ -483,7 +505,7 @@ class TestRateLimits:
     @pytest.mark.asyncio
     async def test_a_run_starts_its_pause_over_whatever_the_last_one_reached(self):
         job = _Job(icons={100: ""}, bound={100: 1})
-        job.source.answer(1, IconFetch(IconAnswer.RATE_LIMITED), IconFetch(IconAnswer.ICON, b"icon"))
+        job.source.answer(1, SlotAnswer.RATE_LIMITED, SlotAnswer.READY)
         job.service._backoff = 480.0
 
         await job.run()
@@ -493,7 +515,7 @@ class TestRateLimits:
     @pytest.mark.asyncio
     async def test_a_429_near_the_end_of_the_worklist_still_hands_every_icon_over(self):
         job = _Job(icons={100: "", 200: ""}, bound={100: 1, 200: 2})
-        job.source.answer(1, IconFetch(IconAnswer.RATE_LIMITED), IconFetch(IconAnswer.ICON, b"icon"))
+        job.source.answer(1, SlotAnswer.RATE_LIMITED, SlotAnswer.READY)
 
         async def a_pause_that_yields(seconds: float) -> None:
             job.sleeper.calls.append(seconds)
@@ -508,7 +530,7 @@ class TestRateLimits:
     @pytest.mark.asyncio
     async def test_a_sync_that_starts_during_a_pause_keeps_every_worker_from_fetching_after_it(self):
         job = _Job(icons={100: "", 200: "", 300: ""}, bound={100: 1, 200: 2, 300: 3})
-        job.source.answer(1, IconFetch(IconAnswer.RATE_LIMITED), IconFetch(IconAnswer.ICON, b"icon"))
+        job.source.answer(1, SlotAnswer.RATE_LIMITED, SlotAnswer.READY)
         pause = asyncio.Event()
 
         async def a_pause_held_by_the_test(seconds: float) -> None:
@@ -544,9 +566,9 @@ class TestRateLimits:
         four_started = threading.Event()
         started: list[int] = []
         lock = threading.Lock()
-        fetch = job.source.do_fetch_shortcut_icon
+        fetch = job.source.fetch_icon
 
-        def the_first_fetch_is_answered_429_once_four_are_in_flight(rom_id: int) -> IconFetch:
+        def the_first_fetch_is_answered_429_once_four_are_in_flight(rom_id: int) -> SlotAnswer:
             with lock:
                 started.append(rom_id)
                 first = len(started) == 1
@@ -554,7 +576,7 @@ class TestRateLimits:
                     four_started.set()
             if first:
                 four_started.wait(timeout=5)
-                return IconFetch(IconAnswer.RATE_LIMITED)
+                return SlotAnswer.RATE_LIMITED
             pause_began.wait(timeout=5)
             return fetch(rom_id)
 
@@ -563,7 +585,7 @@ class TestRateLimits:
             pause_began.set()
             await pause.wait()
 
-        job.source.do_fetch_shortcut_icon = the_first_fetch_is_answered_429_once_four_are_in_flight  # type: ignore[method-assign]
+        job.source.fetch_icon = the_first_fetch_is_answered_429_once_four_are_in_flight  # type: ignore[method-assign]
         job.sleeper.sleep = a_pause_held_by_the_test  # type: ignore[method-assign]
         job.service.request_run()
         for _ in range(500):
@@ -660,11 +682,11 @@ class TestRequests:
         job = _Job(icons={100: ""}, bound={100: 1})
         pause = asyncio.Event()
 
-        def slow_fetch(_rom_id: int) -> IconFetch:
+        def slow_fetch(_rom_id: int) -> SlotAnswer:
             pause.set()
-            return IconFetch(IconAnswer.ICON, b"icon")
+            return SlotAnswer.READY
 
-        job.source.do_fetch_shortcut_icon = slow_fetch  # type: ignore[method-assign]
+        job.source.fetch_icon = slow_fetch  # type: ignore[method-assign]
         job.service.request_run()
         await pause.wait()
         await job.service.shutdown()
@@ -676,11 +698,11 @@ class TestRequests:
     @pytest.mark.asyncio
     async def test_key_refused_resets_on_next_run(self):
         job = _Job(icons={100: ""}, bound={100: 1})
-        job.source.answer(1, IconFetch(IconAnswer.KEY_REFUSED))
+        job.source.answer(1, SlotAnswer.KEY_REFUSED)
         await job.run()
         assert job.service._key_refused is True
 
-        job.source.answer(1, IconFetch(IconAnswer.ICON, b"icon"))
+        job.source.answer(1, SlotAnswer.READY)
         await job.run()
         assert job.service._key_refused is False
         assert job.delivered() == {100: "/grid/100_icon.png"}
@@ -696,10 +718,10 @@ class TestRequests:
     async def test_an_unexpected_error_ends_the_run_with_a_log_line(self, caplog):
         job = _Job(icons={100: ""}, bound={100: 1})
 
-        def broken(_rom_id: int) -> IconFetch:
+        def broken(_rom_id: int) -> SlotAnswer:
             raise RuntimeError("boom")
 
-        job.source.do_fetch_shortcut_icon = broken  # type: ignore[method-assign]
+        job.source.fetch_icon = broken  # type: ignore[method-assign]
 
         await job.run(expect_error=True)
 
@@ -759,10 +781,10 @@ class TestMoreThatStopsARun:
         job = _Job(icons={100: ""}, bound={100: 1})
         write = job.source.write_job_icon
 
-        async def write_then_a_cleanup_starts(app_id: int, icon_bytes: bytes, generation: int) -> str | None:
-            path = await write(app_id, icon_bytes, generation)
+        async def write_then_a_cleanup_starts(app_id: int, rom_id: int, generation: int) -> JobIcon | None:
+            written = await write(app_id, rom_id, generation)
             job.prune_conflicts.register_run("cleanup")
-            return path
+            return written
 
         job.source.write_job_icon = write_then_a_cleanup_starts  # type: ignore[method-assign]
 
@@ -840,18 +862,19 @@ class TestWhatIsWrittenIsNotStranded:
     async def test_write_unless_yields_ignores_data_when_answer_not_icon(self):
         job = _Job(icons={}, bound={})
         plan = shortcut_artwork._Plan(logo_path="/grid/logo.png", passes=([], []))
-        fetch = IconFetch(IconAnswer.NO_ICON, b"ignored")
-        res = await job.service._write_unless_the_job_yields(100, fetch, 0, plan)
-        assert res == "/grid/logo.png"
+        item = shortcut_artwork._Item(1, 100, (ArtworkSlot.ICON,))
+        res = await job.service._write_unless_the_job_yields(item, SlotAnswer.NONE, 0, plan)
+        assert res is not None
+        assert (res.icon_path, res.written) == ("/grid/logo.png", None)
         assert job.source.written == {}
 
     @pytest.mark.asyncio
     async def test_write_unless_yields_suppresses_logo_when_generation_bumps(self):
         job = _Job(icons={}, bound={})
         plan = shortcut_artwork._Plan(logo_path="/grid/logo.png", passes=([], []))
-        fetch = IconFetch(IconAnswer.NO_ICON, None)
+        item = shortcut_artwork._Item(1, 100, (ArtworkSlot.ICON,))
         job.source.generations[100] = 1
-        res = await job.service._write_unless_the_job_yields(100, fetch, 0, plan)
+        res = await job.service._write_unless_the_job_yields(item, SlotAnswer.NONE, 0, plan)
         assert res is None
 
     @pytest.mark.asyncio
@@ -868,7 +891,7 @@ class TestWhatIsWrittenIsNotStranded:
             await asyncio.sleep(10)
 
         job.sleeper.sleep = pause  # type: ignore[method-assign]
-        job.source.answer(2, IconFetch(IconAnswer.RATE_LIMITED))
+        job.source.answer(2, SlotAnswer.RATE_LIMITED)
 
         await job.run(expect_error=True)
         await asyncio.sleep(0)
@@ -1065,7 +1088,7 @@ class TestARefusedKey:
         bound = {1000 + n: n for n in range(10)}
         job = _Job(icons=dict.fromkeys(bound, ""), bound=bound)
         for rom_id in bound.values():
-            job.source.answer(rom_id, IconFetch(IconAnswer.KEY_REFUSED))
+            job.source.answer(rom_id, SlotAnswer.KEY_REFUSED)
 
         with caplog.at_level(logging.WARNING, logger="test_shortcut_artwork"):
             await job.run()
@@ -1077,7 +1100,7 @@ class TestARefusedKey:
     async def test_what_was_written_before_it_is_handed_over(self, monkeypatch):
         monkeypatch.setattr(shortcut_artwork, "_WORKERS", 1)
         job = _Job(icons={100: "", 200: "", 300: ""}, bound={100: 1, 200: 2, 300: 3})
-        job.source.answer(2, IconFetch(IconAnswer.KEY_REFUSED))
+        job.source.answer(2, SlotAnswer.KEY_REFUSED)
 
         await job.run()
 
@@ -1089,7 +1112,7 @@ class TestARefusedKey:
         monkeypatch.setattr(shortcut_artwork, "_WORKERS", 2)
         bound = {100 * n: n for n in range(1, 7)}
         job = _Job(icons=dict.fromkeys(bound, ""), bound=bound)
-        job.source.answer(1, IconFetch(IconAnswer.KEY_REFUSED))
+        job.source.answer(1, SlotAnswer.KEY_REFUSED)
 
         def answer_once_the_key_is_refused(rom_id: int) -> None:
             if rom_id == 1:
@@ -1162,7 +1185,7 @@ class TestWhatTheRunLogs:
 
     @pytest.mark.asyncio
     async def test_what_each_pass_waits_for(self, caplog):
-        job = _Job(icons={100: "", 200: _LOGO}, bound={100: 1, 200: 2}, grid_files=frozenset({"100.png"}))
+        job = _Job(icons={100: "", 200: _SET_BY_HAND}, bound={100: 1, 200: 2}, grid_files=frozenset({"100.png"}))
 
         with caplog.at_level(logging.INFO, logger="test_shortcut_artwork"):
             await job.run()
@@ -1188,7 +1211,7 @@ class TestTheWideGridAndTheLogo:
         ids=["wide grid", "logo"],
     )
     async def test_an_existing_file_is_left_untouched(self, existing, asked):
-        job = _Job(icons={100: _LOGO}, bound={100: 1}, grid_files=frozenset({existing, "100p.png"}))
+        job = _Job(icons={100: _SET_BY_HAND}, bound={100: 1}, grid_files=frozenset({existing, "100p.png"}))
 
         await job.run()
 
@@ -1201,14 +1224,14 @@ class TestTheWideGridAndTheLogo:
         job = _Job(
             icons={100: "/grid/100_icon.png", 200: ""},
             bound={100: 1, 200: 2},
-            grid_files=frozenset({"100.png", "200.png", "200_logo.png"}),
+            grid_files=frozenset({"100.png", "100_icon.png", "200.png", "200_logo.png"}),
         )
 
         await job.run()
 
         assert job.source.order == [("icon", 2), ("logo", 1)]
         first, second = (payload for _name, payload in job.sink.events)
-        assert (first["icons"], first["artwork"]) == ([{"app_id": 200, "icon_path": "/grid/200_icon.png"}], [])
+        assert (first["icons"], first["artwork"]) == ([_icon_entry(200, 2)], [])
         assert (second["icons"], second["artwork"]) == ([], [{"app_id": 100, "rom_id": 1, "slot": "logo"}])
 
     @pytest.mark.asyncio
@@ -1221,7 +1244,7 @@ class TestTheWideGridAndTheLogo:
         assert job.source.order == [("icon", 1), ("grid", 1), ("icon", 2), ("grid", 2), ("logo", 1), ("logo", 2)]
         first, second = job.sink.events
         assert (first[1]["icons"], first[1]["artwork"]) == (
-            [{"app_id": 100, "icon_path": "/grid/100_icon.png"}, {"app_id": 200, "icon_path": "/grid/200_icon.png"}],
+            [_icon_entry(100, 1), _icon_entry(200, 2)],
             [{"app_id": 100, "rom_id": 1, "slot": "grid"}, {"app_id": 200, "rom_id": 2, "slot": "grid"}],
         )
         assert (second[1]["icons"], second[1]["artwork"]) == (
@@ -1231,7 +1254,7 @@ class TestTheWideGridAndTheLogo:
 
     @pytest.mark.asyncio
     async def test_a_slot_steamgriddb_had_nothing_for_is_not_asked_at_the_next_trigger(self):
-        job = _Job(icons={100: _LOGO}, bound={100: 1}, grid_files=frozenset({"100.png"}))
+        job = _Job(icons={100: _SET_BY_HAND}, bound={100: 1}, grid_files=frozenset({"100.png"}))
         job.source.answer_slot(1, ArtworkSlot.LOGO, SlotAnswer.NONE)
 
         def record_none(rom_id: int, slot: ArtworkSlot) -> None:
@@ -1251,7 +1274,7 @@ class TestTheWideGridAndTheLogo:
 
     @pytest.mark.asyncio
     async def test_it_is_asked_again_once_the_week_is_over(self):
-        job = _Job(icons={100: _LOGO}, bound={100: 1}, grid_files=frozenset({"100.png"}))
+        job = _Job(icons={100: _SET_BY_HAND}, bound={100: 1}, grid_files=frozenset({"100.png"}))
         with job.uow:
             job.uow.artwork_slot_outcomes.save(
                 ArtworkSlotOutcome.record_none(
@@ -1265,7 +1288,7 @@ class TestTheWideGridAndTheLogo:
 
     @pytest.mark.asyncio
     async def test_it_is_asked_again_once_the_roms_steamgriddb_id_changed(self):
-        job = _Job(icons={100: _LOGO}, bound={100: 1}, grid_files=frozenset({"100.png"}), sgdb_ids={1: 8})
+        job = _Job(icons={100: _SET_BY_HAND}, bound={100: 1}, grid_files=frozenset({"100.png"}), sgdb_ids={1: 8})
         with job.uow:
             job.uow.artwork_slot_outcomes.save(
                 ArtworkSlotOutcome.record_none(rom_id=1, slot=ArtworkSlot.LOGO, sgdb_id=7, recorded_at=job.clock.time())
@@ -1277,7 +1300,7 @@ class TestTheWideGridAndTheLogo:
 
     @pytest.mark.asyncio
     async def test_it_is_not_asked_again_while_the_roms_steamgriddb_id_is_the_one_recorded(self):
-        job = _Job(icons={100: _LOGO}, bound={100: 1}, grid_files=frozenset({"100.png"}), sgdb_ids={1: 7})
+        job = _Job(icons={100: _SET_BY_HAND}, bound={100: 1}, grid_files=frozenset({"100.png"}), sgdb_ids={1: 7})
         with job.uow:
             job.uow.artwork_slot_outcomes.save(
                 ArtworkSlotOutcome.record_none(rom_id=1, slot=ArtworkSlot.LOGO, sgdb_id=7, recorded_at=job.clock.time())
@@ -1289,7 +1312,7 @@ class TestTheWideGridAndTheLogo:
 
     @pytest.mark.asyncio
     async def test_a_failed_slot_is_not_handed_over_and_waits_for_the_next_run(self):
-        job = _Job(icons={100: _LOGO}, bound={100: 1}, grid_files=frozenset({"100_logo.png"}))
+        job = _Job(icons={100: _SET_BY_HAND}, bound={100: 1}, grid_files=frozenset({"100_logo.png"}))
         job.source.answer_slot(1, ArtworkSlot.WIDE_GRID, SlotAnswer.FAILED)
 
         await job.run()
@@ -1314,7 +1337,7 @@ class TestTheWideGridAndTheLogo:
     @pytest.mark.asyncio
     async def test_a_refused_key_on_a_slot_ends_the_run(self, monkeypatch, caplog):
         monkeypatch.setattr(shortcut_artwork, "_WORKERS", 1)
-        job = _Job(icons={100: _LOGO, 200: _LOGO}, bound={100: 1, 200: 2}, grid_files=frozenset())
+        job = _Job(icons={100: _SET_BY_HAND, 200: _SET_BY_HAND}, bound={100: 1, 200: 2}, grid_files=frozenset())
         job.source.answer_slot(1, ArtworkSlot.WIDE_GRID, SlotAnswer.KEY_REFUSED)
 
         with caplog.at_level(logging.WARNING, logger="test_shortcut_artwork"):
@@ -1356,6 +1379,135 @@ class TestTheWideGridAndTheLogo:
 
         assert job.source.slots_fetched == []
         assert job.sink.events == []
+
+
+def _record_icon_none(job: _Job, *, sgdb_id: int | None, at: float) -> None:
+    with job.uow:
+        job.uow.artwork_slot_outcomes.save(
+            ArtworkSlotOutcome.record_none(rom_id=1, slot=ArtworkSlot.ICON, sgdb_id=sgdb_id, recorded_at=at)
+        )
+
+
+class TestTheIconIsARecordedSlot:
+    @pytest.mark.asyncio
+    async def test_a_logo_icon_given_for_lack_of_an_id_is_fetched_once_the_rom_has_one(self):
+        job = _Job(icons={100: _LOGO}, bound={100: 1}, sgdb_ids={1: 9})
+        _record_icon_none(job, sgdb_id=None, at=job.clock.time())
+
+        await job.run()
+
+        assert job.source.fetched == [1]
+        assert job.batches() == [[_icon_entry(100, 1)]]
+
+    @pytest.mark.asyncio
+    async def test_a_logo_icon_given_for_lack_of_an_id_is_not_fetched_while_the_rom_has_none(self):
+        job = _Job(icons={100: _LOGO}, bound={100: 1})
+        _record_icon_none(job, sgdb_id=None, at=job.clock.time())
+
+        await job.run()
+
+        assert job.source.fetched == []
+
+    @pytest.mark.asyncio
+    async def test_a_logo_icon_steamgriddb_had_none_for_is_not_fetched_within_the_week(self):
+        job = _Job(icons={100: _LOGO}, bound={100: 1}, sgdb_ids={1: 7})
+        _record_icon_none(job, sgdb_id=7, at=job.clock.time() - RULED_OUT_SECONDS + 1)
+
+        await job.run()
+
+        assert job.source.fetched == []
+
+    @pytest.mark.asyncio
+    async def test_a_logo_icon_steamgriddb_had_none_for_is_fetched_once_the_week_is_over(self):
+        job = _Job(icons={100: _LOGO}, bound={100: 1}, sgdb_ids={1: 7})
+        _record_icon_none(job, sgdb_id=7, at=job.clock.time() - RULED_OUT_SECONDS)
+
+        await job.run()
+
+        assert job.source.fetched == [1]
+
+    @pytest.mark.asyncio
+    async def test_a_logo_icon_with_no_record_is_fetched_once_then_recorded(self):
+        job = _Job(icons={100: _LOGO}, bound={100: 1}, sgdb_ids={1: 7})
+        job.source.answer(1, SlotAnswer.NONE)
+
+        def record_none(rom_id: int, slot: ArtworkSlot) -> None:
+            # What SteamGridService.do_fetch_slot_artwork records for this answer.
+            with job.uow:
+                job.uow.artwork_slot_outcomes.save(
+                    ArtworkSlotOutcome.record_none(rom_id=rom_id, slot=slot, sgdb_id=7, recorded_at=job.clock.time())
+                )
+
+        job.source.on_slot_none = record_none
+
+        await job.run()
+        await job.run()
+
+        assert job.source.fetched == [1]
+        with job.uow:
+            recorded = job.uow.artwork_slot_outcomes.get(1, ArtworkSlot.ICON)
+        assert recorded is not None
+        assert recorded.outcome == "none"
+
+    @pytest.mark.asyncio
+    async def test_the_logo_icon_is_handed_over_with_nothing_to_record(self):
+        job = _Job(icons={100: _PLACEHOLDER}, bound={100: 1})
+        job.source.answer(1, SlotAnswer.NONE)
+
+        await job.run()
+
+        assert job.batches() == [[{"app_id": 100, "icon_path": _LOGO}]]
+
+    @pytest.mark.asyncio
+    async def test_a_fetched_icon_is_handed_over_with_what_its_set_record_carries(self):
+        job = _Job(icons={100: ""}, bound={100: 1})
+
+        await job.run()
+
+        ((entry,),) = job.batches()
+        assert entry["record"] == {"rom_id": 1, "sgdb_id": None, "image_id": 501, "sha256": "sha-1"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "icon",
+        [_SET_BY_HAND, "/run/media/sd/icons/game.ico", "/home/deck/.steam/steam/userdata/222/config/grid/100_icon.png"],
+        ids=["by-hand", "unmounted-drive", "another-steam-accounts-grid"],
+    )
+    async def test_an_icon_path_outside_the_grid_directory_is_never_fetched(self, icon):
+        job = _Job(icons={100: icon}, bound={100: 1}, grid_files=frozenset({"100.png", "100_logo.png"}))
+
+        await job.run()
+
+        assert job.source.fetched == []
+
+    @pytest.mark.asyncio
+    async def test_an_icon_in_the_grid_directory_whose_file_is_gone_is_fetched_again(self):
+        job = _Job(icons={100: "/grid/100_icon.png"}, bound={100: 1}, grid_files=frozenset({"100.png", "100_logo.png"}))
+
+        await job.run()
+
+        assert job.source.fetched == [1]
+
+    @pytest.mark.asyncio
+    async def test_an_icon_in_the_grid_directory_whose_file_is_there_is_left_alone(self):
+        job = _Job(
+            icons={100: "/grid/100_icon.png"},
+            bound={100: 1},
+            grid_files=frozenset({"100.png", "100_logo.png", "100_icon.png"}),
+        )
+
+        await job.run()
+
+        assert job.source.fetched == []
+
+    @pytest.mark.asyncio
+    async def test_an_icon_in_the_grid_directory_is_left_alone_where_the_directory_cannot_be_listed(self):
+        job = _Job(icons={100: "/grid/100_icon.png", 200: ""}, bound={100: 1, 200: 2})
+        job.steam_config.grid_unlistable = True
+
+        await job.run()
+
+        assert job.source.fetched == [2]
 
 
 class TestOneBatchAtATime:

@@ -41,7 +41,7 @@ from lib.errors import (
     SgdbRateLimitedError,
     SteamGridDirMissingError,
 )
-from models.shortcut_artwork import IconAnswer, IconFetch, SlotAnswer
+from models.shortcut_artwork import JobIcon, SlotAnswer
 
 if TYPE_CHECKING:
     import logging
@@ -87,6 +87,14 @@ def _artwork_slot(slot: object) -> ArtworkSlot:
 _KEY_REFUSED = "SteamGridDB refused the API key — check it in Settings"
 _RATE_LIMITED = "SteamGridDB is rate-limiting requests — try again in a moment"
 _ASSET_TYPES = ("hero", "logo", "grid", "icon")
+
+
+def _grid_file_slot(slot: object) -> ArtworkSlot:
+    """The wide grid, logo or hero *slot* names; refuses any other, the icon included, whose slot no file name fills."""
+    artwork_slot = _artwork_slot(slot)
+    if artwork_slot is ArtworkSlot.ICON:
+        raise Refused("invalid_payload", f"Unknown artwork slot: {slot}")
+    return artwork_slot
 
 
 def _refusal_for(error: SgdbApiError, *, key_refused: str = _KEY_REFUSED) -> Refused:
@@ -169,8 +177,8 @@ class SteamGridService:
         # save and the artwork job's write take turns under.
         self._icon_generations: dict[int, int] = {}
         self._icon_locks: dict[int, asyncio.Lock] = {}
-        # Per ROM and asset type, the wide grid and logo names in the artwork
-        # cache: listed once, then kept by this service's own downloads and
+        # Per ROM and asset type, the wide grid, logo and icon names in the
+        # artwork cache: listed once, then kept by this service's own downloads and
         # removals, so a lookup does not list the whole cache. Lookups run on
         # executor threads and a service takes no lock, so each entry is
         # replaced rather than changed: a reader holds a frozen snapshot. A note
@@ -203,8 +211,8 @@ class SteamGridService:
         The image is chosen among SteamGridDB's candidates by ``choose_candidate``.
         Answers ``NONE`` when SteamGridDB's list is empty, and ``FAILED`` for an
         unsuccessful answer, a list with no usable entry or a failed download;
-        lets the API's errors through. A downloaded wide grid or logo replaces every other cache file
-        of that slot.
+        lets the API's errors through. A downloaded wide grid, logo or icon replaces every other
+        cache file of that slot.
         """
         cached = self._cached_artwork(rom_id, asset_type)
         if cached is not None:
@@ -238,9 +246,9 @@ class SteamGridService:
     def _cached_artwork(self, rom_id, asset_type) -> _CachedArtwork | None:
         """The cache file of *rom_id*'s *asset_type*, or ``None`` when the cache holds none.
 
-        A wide grid or logo whose name carries no image id is not counted, so
-        it is downloaded again and replaced; nor is a name the cache no longer
-        holds.
+        A wide grid, logo or icon whose name carries no image id is not counted,
+        so it is downloaded again and replaced; nor is a name the cache no
+        longer holds.
         """
         art_dir = self._sgdb_artwork_cache.cache_dir()
         for name in self._cache_names(rom_id, asset_type):
@@ -282,7 +290,7 @@ class SteamGridService:
         return sorted(names.get((rom_id, asset_type), ()))
 
     def _note_cache_name(self, rom_id, asset_type, name: str, *, held: bool) -> None:
-        """Note that the cache now holds *name* for *rom_id*'s wide grid or logo, or no longer does."""
+        """Note that the cache now holds *name* for *rom_id*'s wide grid, logo or icon, or no longer does."""
         names = self._slot_cache_names
         if names is None or not named_by_image_id(asset_type):
             return
@@ -569,9 +577,10 @@ class SteamGridService:
     async def _artwork_answer(self, rom_id: int, cached: _CachedArtwork) -> dict[str, Any] | None:
         """The answer serving *cached*, or ``None`` when it cannot be read.
 
-        A wide grid or logo also carries its SteamGridDB image id, the SHA-256
-        of its bytes and the ROM's SteamGridDB id, which the frontend passes to
-        ``report_sgdb_slot_artwork`` once Steam has taken it or refused it.
+        A wide grid, logo or icon also carries its SteamGridDB image id, the
+        SHA-256 of its bytes and the ROM's SteamGridDB id, which the frontend
+        passes to ``report_sgdb_slot_artwork`` for a wide grid or logo once
+        Steam has taken it or refused it.
         """
         b64 = await self._read_file_as_base64(cached.path)
         if not b64:
@@ -608,7 +617,7 @@ class SteamGridService:
         - ``"rate_limited"`` — SteamGridDB answered 429; nothing is recorded;
         - ``"no_api_key"`` — no key configured.
 
-        Refuses with ``invalid_payload`` for an unknown slot, ``no_grid_dir``
+        Refuses with ``invalid_payload`` for any other slot, ``no_grid_dir``
         when Steam's grid directory cannot be found, and ``auth_failed`` for a
         key no header can carry.
         """
@@ -621,7 +630,7 @@ class SteamGridService:
     async def _get_sgdb_slot_artwork(self, rom_id, app_id, slot):
         rom_id = int(rom_id)
         app_id = int(app_id)
-        artwork_slot = _artwork_slot(slot)
+        artwork_slot = _grid_file_slot(slot)
         if not self._settings.get("steamgriddb_api_key"):
             return {"status": "no_api_key"}
         _refuse_a_key_that_cannot_be_sent(self._settings["steamgriddb_api_key"])
@@ -679,11 +688,13 @@ class SteamGridService:
             uow.artwork_slot_outcomes.save(record)
 
     async def report_sgdb_slot_artwork(self, rom_id, slot, outcome, sgdb_id, image_id, sha256):
-        """Record what Steam made of an image ``get_sgdb_slot_artwork`` served for a wide grid or logo.
+        """Record what Steam made of a wide grid, logo or icon Tender served or wrote.
 
-        *outcome* is ``"set"`` (``SetCustomArtworkForApp`` took it) or
-        ``"refused"`` (it failed on the image); *sgdb_id*, *image_id* and
-        *sha256* are the fetch's own answer, passed back. Refuses with
+        *outcome* is ``"set"`` (``SetCustomArtworkForApp``, or
+        ``SetShortcutIcon`` for the icon, took it) or ``"refused"`` (it failed
+        on the image); *sgdb_id*, *image_id* and *sha256* are what
+        ``get_sgdb_slot_artwork`` answered, or what the shortcut artwork job's
+        batch named for an icon, passed back. Refuses with
         ``invalid_payload`` for a slot that is not recorded, an unknown outcome,
         or a ``set`` without its image id and hash.
         """
@@ -850,64 +861,42 @@ class SteamGridService:
         """
         return self._icon_generations.get(int(app_id), 0)
 
-    async def write_job_icon(self, app_id: int, icon_bytes: bytes, generation: int) -> str | None:
-        """Write the artwork job's icon for *app_id*, which its fetch downscaled; answer its path.
+    async def write_job_icon(self, app_id: int, rom_id: int, generation: int) -> JobIcon | None:
+        """Implements ``services.protocols.ShortcutArtworkSource.write_job_icon``.
 
-        ``None`` when the game page has saved an icon for it since *generation*
-        was read, or when the file could not be written. Takes turns with the
-        page's save under one lock per app id, so the check and the write
-        cannot be split by one.
+        Takes turns with the page's save under one lock per app id, so the
+        check and the write cannot be split by one.
         """
         app_id = int(app_id)
         async with self._icon_lock(app_id):
             if self.icon_generation(app_id) != generation:
                 return None
-            return await self._loop.run_in_executor(None, self._write_icon_to_grid, app_id, icon_bytes)
+            return await self._loop.run_in_executor(None, self._write_job_icon_io, app_id, int(rom_id))
 
-    def do_fetch_shortcut_icon(self, rom_id: int) -> IconFetch:
-        """Implements ``services.protocols.ShortcutArtworkSource.do_fetch_shortcut_icon``."""
-        rom_id = int(rom_id)
-        if not self._settings.get("steamgriddb_api_key"):
-            return IconFetch(IconAnswer.FAILED)
+    def _write_job_icon_io(self, app_id: int, rom_id: int) -> JobIcon | None:
+        cached = self._cached_artwork(rom_id, ArtworkSlot.ICON.value)
+        if cached is None or cached.image_id is None:
+            self._log_debug(f"SGDB icon for rom_id={rom_id} is no longer cached; the next run asks again")
+            return None
         try:
-            cached = os.path.join(self._sgdb_artwork_cache.cache_dir(), f"{rom_id}_icon.png")
-            if not self._sgdb_artwork_cache.exists(cached):
-                answer = self._download_icon_io(rom_id, cached)
-                if answer is not None:
-                    return IconFetch(answer)
-            return self._downscaled(rom_id, cached)
-        except SgdbRateLimitedError:
-            return IconFetch(IconAnswer.RATE_LIMITED)
-        except SgdbApiError as e:
-            # SteamGridDB answers 404 ("Game not found.") for a game id it does
-            # not know, as its own client library, npm's steamgriddb, documents.
-            if e.status_code == 404:
-                return IconFetch(IconAnswer.NO_ICON)
-            if e.status_code in (401, 403):
-                return IconFetch(IconAnswer.KEY_REFUSED)
-            self._logger.warning(f"SGDB icon fetch failed for rom_id={rom_id}: HTTP {e.status_code}")
-            return IconFetch(IconAnswer.FAILED)
-        except Exception as e:
-            self._logger.warning(f"SGDB icon fetch failed for rom_id={rom_id}: {e}")
-            return IconFetch(IconAnswer.FAILED)
-
-    def _download_icon_io(self, rom_id: int, cached: str) -> IconAnswer | None:
-        """Download *rom_id*'s icon to *cached*; ``None`` once it is there, else what to answer instead.
-
-        Lets the API's errors through.
-        """
+            icon = self._downscale_icon(self._sgdb_artwork_cache.read_bytes(cached.path))
+        except OSError as e:
+            self._logger.warning(f"Failed to read cached artwork {cached.path}: {e}")
+            return None
+        if icon is None:
+            self._logger.warning(f"SGDB icon for rom_id={rom_id} is not an image Tender reads; removed from the cache")
+            self._drop_cached_artwork(rom_id, ArtworkSlot.ICON.value)
+            return None
+        path = self._write_icon_to_grid(app_id, icon)
+        if path is None:
+            return None
         sgdb_id = self._resolve_sgdb_id_state_only(rom_id)
-        if not sgdb_id:
-            return IconAnswer.NO_ICON
-        path = sgdb_endpoint_path("icon", sgdb_id)
-        result = self._sgdb_api.request(path) if path else None
-        if result is None or not result.get("success"):
-            return IconAnswer.FAILED
-        if not result.get("data"):
-            return IconAnswer.NO_ICON
-        if not self._sgdb_api.download_image(result["data"][0]["url"], cached):
-            return IconAnswer.FAILED
-        return None
+        return JobIcon(
+            path=path,
+            image_id=cached.image_id,
+            sha256=hashlib.sha256(icon).hexdigest(),
+            sgdb_id=int(sgdb_id) if sgdb_id else None,
+        )
 
     def do_fetch_slot_artwork(self, rom_id: int, slot: ArtworkSlot) -> SlotAnswer:
         """Implements ``services.protocols.ShortcutArtworkSource.do_fetch_slot_artwork``."""
@@ -931,7 +920,9 @@ class SteamGridService:
     ) -> _CachedArtwork | _NoArtwork | SlotAnswer:
         """*rom_id*'s cached *asset_type*, downloaded first when needed or *anew*, or what a 429, 401 or 403 answers.
 
-        A 404 is SteamGridDB not knowing the game, as ``do_fetch_shortcut_icon`` reads it.
+        SteamGridDB answers 404 ("Game not found.") for a game id it does not
+        know, as its own client library, npm's steamgriddb, documents; that is
+        SteamGridDB having none.
         """
         download = self._fetch_sgdb_artwork_io if anew else self._download_sgdb_artwork_io
         try:
@@ -947,14 +938,3 @@ class SteamGridService:
         except Exception as e:
             self._logger.warning(f"SGDB {asset_type} fetch failed for rom_id={rom_id}: {e}")
         return _NoArtwork.FAILED
-
-    def _downscaled(self, rom_id: int, cached: str) -> IconFetch:
-        icon = self._downscale_icon(self._sgdb_artwork_cache.read_bytes(cached))
-        if icon is not None:
-            return IconFetch(IconAnswer.ICON, icon)
-        self._logger.warning(f"SGDB icon for rom_id={rom_id} is not an image Tender reads; removed from the cache")
-        try:
-            self._sgdb_artwork_cache.remove_file(cached)
-        except OSError as e:
-            self._logger.warning(f"Failed to remove the cached icon for rom_id={rom_id}: {e}")
-        return IconFetch(IconAnswer.FAILED)
