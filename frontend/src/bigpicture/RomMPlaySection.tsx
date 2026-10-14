@@ -30,6 +30,7 @@ import { VersionPicker } from "./VersionPicker";
 import { WarningCard } from "./WarningCard";
 import { SgdbGamePickerModalContent } from "./SgdbGamePickerModal";
 import { applyArtwork, cancelArtworkApply, fillEmptyArtwork } from "../utils/artwork";
+import { artworkApplyMessage } from "../utils/artworkApplyMessage";
 import { hasAnySaveConflict } from "../utils/saveStatus";
 import { scrollToTop } from "../utils/scrollHelpers";
 import { getEventTarget } from "../utils/events";
@@ -38,7 +39,9 @@ import {
   probeReachability,
   getSgdbResolution,
   getRomMetadata,
+  isEndpointFailure,
   refreshCoverArtwork,
+  refreshSgdbArtwork,
   removeRom,
   downloadAllFirmware,
   deleteLocalSaves,
@@ -526,6 +529,9 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     const romId = detail.romId;
     setActionPending("artwork");
     const admission = capturePruneLeaseAdmission(`game-detail:${appId}`);
+    let coverFailure: string | null = null;
+    const say = (sgdbResult: string) =>
+      showToast(coverFailure ? `${sgdbResult} — the RomM cover could not be updated: ${coverFailure}` : sgdbResult);
     try {
       // Re-download the RomM cover, rename to {app_id}p.png, and patch
       // cover_path on the registry row so the game info panel can render the
@@ -545,6 +551,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         );
       } else {
         detach(debugLog(`refreshCoverArtwork failed: ${coverResult.reason} — ${coverResult.message}`));
+        coverFailure = coverResult.message;
       }
 
       const resolution = await getSgdbResolution(romId).catch((e): null => {
@@ -552,26 +559,29 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         return null;
       });
       if (!resolution) {
-        showToast("Failed to refresh artwork");
+        say("Failed to refresh artwork");
+        return;
+      }
+      if (isEndpointFailure(resolution)) {
+        say(resolution.message);
         return;
       }
 
       switch (resolution.decision) {
         case "no_api_key":
-          showToast("Set a SteamGridDB API key in settings first");
+          say("Set a SteamGridDB API key in settings first");
           break;
         case "resolved": {
-          const applied = await applyArtwork(romId, appId);
-          if (applied === -1) {
-            showToast("Set a SteamGridDB API key in settings first");
-          } else if (applied > 0) {
-            showToast(`Artwork refreshed (${applied}/4 images applied)`);
-          } else {
-            showToast("No artwork available for this game");
+          const refreshed = await refreshSgdbArtwork(romId, resolution.sgdb_id);
+          if (isEndpointFailure(refreshed)) {
+            say(refreshed.message);
+            break;
           }
+          say(artworkApplyMessage(await applyArtwork(romId, appId)));
           break;
         }
         case "needs_pick":
+          if (coverFailure) showToast(`The RomM cover could not be updated: ${coverFailure}`);
           showModal(
             <SgdbGamePickerModalContent
               romId={romId}
@@ -590,7 +600,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         detach(debugLog(`handleRefreshArtwork: continuation was cancelled: ${e}`));
         return;
       }
-      showToast("Failed to refresh artwork");
+      say("Failed to refresh artwork");
     } finally {
       setActionPending(null);
     }

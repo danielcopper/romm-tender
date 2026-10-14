@@ -12,9 +12,11 @@
 import {
   getSgdbArtworkBase64,
   getSgdbSlotArtwork,
+  isEndpointFailure,
   reportSgdbSlotArtwork,
   saveShortcutIcon,
   debugLog,
+  type EndpointFailure,
   type SgdbArtworkSlot,
   type SgdbSlotArtwork,
 } from "../api/backend";
@@ -68,9 +70,10 @@ async function applyIcon(appId: number, base64: string, signal: AbortSignal): Pr
 }
 
 /** Fetch SGDB artwork (hero, logo, wide grid, icon) and apply to Steam, replacing
- *  what each slot holds. Returns count of successfully applied images, or -1
- *  when no SGDB API key is configured. */
-export async function applyArtwork(romId: number, appId: number): Promise<number> {
+ *  what each slot holds. Returns count of successfully applied images, -1
+ *  when no SGDB API key is configured, or the refusal of an image's fetch, in
+ *  which case nothing is applied. */
+export async function applyArtwork(romId: number, appId: number): Promise<number | EndpointFailure> {
   return whileInFlight(appId, () => applySgdbArtwork(romId, appId));
 }
 
@@ -82,7 +85,7 @@ export async function fillEmptyArtwork(romId: number, appId: number): Promise<nu
   return whileInFlight(appId, () => fillEmptySgdbArtwork(romId, appId));
 }
 
-async function whileInFlight(appId: number, apply: () => Promise<number>): Promise<number> {
+async function whileInFlight<T>(appId: number, apply: () => Promise<T>): Promise<T> {
   artworkInFlight.set(appId, (artworkInFlight.get(appId) ?? 0) + 1);
   try {
     return await apply();
@@ -106,22 +109,28 @@ function watchGeneration(appId: number): () => boolean {
   return () => (artworkGenerations.get(appId) ?? 0) !== generation;
 }
 
-async function applySgdbArtwork(romId: number, appId: number): Promise<number> {
+async function applySgdbArtwork(romId: number, appId: number): Promise<number | EndpointFailure> {
   const leaseOwner = `artwork:${appId}`;
   mountPruneLeaseOwner(leaseOwner);
   const admission = capturePruneLeaseAdmission(leaseOwner);
   const superseded = claimGeneration(appId);
 
-  const results = await Promise.all([
-    getSgdbArtworkBase64(romId, 1).catch(() => ({ base64: null, no_api_key: false })),
-    getSgdbArtworkBase64(romId, 2).catch(() => ({ base64: null, no_api_key: false })),
-    getSgdbArtworkBase64(romId, 3).catch(() => ({ base64: null, no_api_key: false })),
-    getSgdbArtworkBase64(romId, 4).catch(() => ({ base64: null, no_api_key: false })),
-  ]);
+  const refusals: EndpointFailure[] = [];
+  const fetchArtwork = async (assetType: number): Promise<SgdbArtwork> => {
+    const answer = await getSgdbArtworkBase64(romId, assetType).catch(() => NO_IMAGE);
+    if (!isEndpointFailure(answer)) return answer;
+    refusals.push(answer);
+    return NO_IMAGE;
+  };
+  const results = await Promise.all([fetchArtwork(1), fetchArtwork(2), fetchArtwork(3), fetchArtwork(4)]);
 
-  const leaseTokens = results.map((result) => ("prune_lease_token" in result ? result.prune_lease_token : undefined));
+  const leaseTokens = results.map((result) => result.prune_lease_token);
   if (results.some((r) => r.no_api_key)) {
     return withPruneLeases(leaseTokens, "Artwork apply", async () => -1, leaseOwner, admission);
+  }
+  const refusal = refusals[0];
+  if (refusal) {
+    return withPruneLeases(leaseTokens, "Artwork apply", async () => refusal, leaseOwner, admission);
   }
 
   return withPruneLeases(
@@ -169,8 +178,11 @@ async function applySgdbArtwork(romId: number, appId: number): Promise<number> {
   );
 }
 
-/** What `getSgdbArtworkBase64` answers for one asset type. */
-type SgdbArtwork = Awaited<ReturnType<typeof getSgdbArtworkBase64>>;
+/** What `getSgdbArtworkBase64` answers for one asset type when it is not refused. */
+type SgdbArtwork = Exclude<Awaited<ReturnType<typeof getSgdbArtworkBase64>>, EndpointFailure>;
+
+/** The answer a fetch that was rejected or refused counts as. */
+const NO_IMAGE: SgdbArtwork = { base64: null, no_api_key: false };
 
 /** The slots whose outcome the backend records. */
 type RecordedSlot = "grid" | "logo";
@@ -247,6 +259,10 @@ async function fillEmptySgdbArtwork(romId: number, appId: number): Promise<numbe
       detach(debugLog(`fillEmptyArtwork: ${slot} fetch for appId ${appId} rejected: ${e}`));
       return { status: "failed" };
     });
+    if (isEndpointFailure(answer)) {
+      detach(debugLog(`fillEmptyArtwork: ${slot} fetch for appId ${appId} refused: ${answer.message}`));
+      continue;
+    }
     if (answer.status === "no_api_key") return -1;
     if (answer.status !== "image") continue;
     // prettier-ignore
@@ -263,8 +279,9 @@ async function fillEmptySgdbArtwork(romId: number, appId: number): Promise<numbe
   }
 
   if (superseded()) return applied;
-  const icon = await getSgdbArtworkBase64(romId, 4).catch(() => ({ base64: null, no_api_key: false }));
-  const iconToken = "prune_lease_token" in icon ? icon.prune_lease_token : undefined;
+  const iconAnswer = await getSgdbArtworkBase64(romId, 4).catch(() => NO_IMAGE);
+  const icon = isEndpointFailure(iconAnswer) ? NO_IMAGE : iconAnswer;
+  const iconToken = icon.prune_lease_token;
   const iconApplied = await withPruneLeases(
     [iconToken],
     "Artwork apply",
@@ -326,6 +343,10 @@ export async function setJobSlotArtwork(
     detach(debugLog(`Shortcut artwork: ${slot} fetch for appId ${appId} rejected: ${e}`));
     return { status: "failed" };
   });
+  if (isEndpointFailure(answer)) {
+    detach(debugLog(`Shortcut artwork: ${slot} fetch for appId ${appId} refused: ${answer.message}`));
+    return false;
+  }
   if (answer.status !== "image") return false;
   const outcome = await withPruneLeases([answer.prune_lease_token], "Shortcut artwork", (signal) =>
     setSlotImage(appId, answer, JOB_SLOT_ASSET_TYPES[slot], signal, left),

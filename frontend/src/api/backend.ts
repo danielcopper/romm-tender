@@ -524,14 +524,15 @@ export const cleanupOrphanedGridImages = endpoint<
  */
 export const getSgdbArtworkBase64 = endpoint<
   [number, number],
-  {
-    base64: string | null;
-    no_api_key?: boolean;
-    prune_lease_token?: string;
-    image_id?: number;
-    sha256?: string;
-    sgdb_id?: number | null;
-  }
+  | {
+      base64: string | null;
+      no_api_key?: boolean;
+      prune_lease_token?: string;
+      image_id?: number;
+      sha256?: string;
+      sgdb_id?: number | null;
+    }
+  | EndpointFailure
 >("get_sgdb_artwork_base64");
 
 /** An artwork slot the game page fills only while it is empty: the wide grid, the logo or the hero. */
@@ -548,10 +549,12 @@ export type SgdbSlotArtwork =
       sgdb_id: number;
       prune_lease_token?: string;
     }
-  | { status: "skip" | "none" | "failed" | "no_api_key" };
+  | { status: "skip" | "none" | "failed" | "key_refused" | "rate_limited" | "no_api_key" };
 
 /** Serve SteamGridDB's image for one slot of a shortcut, only while Steam's grid directory has no file for it. */
-export const getSgdbSlotArtwork = endpoint<[number, number, SgdbArtworkSlot], SgdbSlotArtwork>("get_sgdb_slot_artwork");
+export const getSgdbSlotArtwork = endpoint<[number, number, SgdbArtworkSlot], SgdbSlotArtwork | EndpointFailure>(
+  "get_sgdb_slot_artwork",
+);
 
 /** Report what `SetCustomArtworkForApp` made of a wide grid or logo the fetch served, passing its answer back. */
 export const reportSgdbSlotArtwork = endpoint<
@@ -576,9 +579,16 @@ export type SgdbResolution =
 /** Result of a manual SGDB name search. */
 export type SgdbSearchResult = { success: true; games: SgdbCandidate[] } | EndpointFailure;
 
-export const getSgdbResolution = endpoint<[number], SgdbResolution>("get_sgdb_resolution");
+export const getSgdbResolution = endpoint<[number], SgdbResolution | EndpointFailure>("get_sgdb_resolution");
 export const searchSgdbGames = endpoint<[string], SgdbSearchResult>("search_sgdb_games");
-export const applySgdbGameId = endpoint<[number, number], { success: boolean }>("apply_sgdb_game_id");
+export const applySgdbGameId = endpoint<[number, number], { success: true } | EndpointFailure>("apply_sgdb_game_id");
+/**
+ * Download a ROM's hero, logo, wide grid and icon anew from SteamGridDB game
+ * `sgdb_id`; a cached image is replaced only by a download that succeeded.
+ */
+export const refreshSgdbArtwork = endpoint<[number, number], { success: true } | EndpointFailure>(
+  "refresh_sgdb_artwork",
+);
 export const reportUnitResults = endpoint<
   [Record<string, number>, string, number | string, number],
   { success: boolean; count: number; ignored?: boolean }
@@ -620,6 +630,7 @@ export const uninstallAllRoms = endpoint<
   }
 >("uninstall_all_roms");
 export const saveSgdbApiKey = endpoint<[string], { success: boolean; message: string }>("save_sgdb_api_key");
+export const removeSgdbApiKey = endpoint<[], { success: boolean; message: string }>("remove_sgdb_api_key");
 export const verifySgdbApiKey = endpoint<[string], { success: boolean; message: string }>("verify_sgdb_api_key");
 export const saveSteamInputSetting = endpoint<[string], { success: boolean }>("save_steam_input_setting");
 export const applySteamInputSetting = endpoint<[], { success: boolean; message: string }>("apply_steam_input_setting");

@@ -422,6 +422,7 @@ describe("RomMPlaySection", () => {
       message: "Cover refreshed",
       cover_path: "/grid/p.png",
     });
+    vi.mocked(backend.refreshSgdbArtwork).mockResolvedValue({ success: true });
   });
 
   afterEach(() => {
@@ -5170,6 +5171,152 @@ describe("RomMPlaySection", () => {
       unmount();
       expect(hostEventListenerCount("download_complete")).toBe(downloadBefore);
       expect(domListenerCount("romm_rom_uninstalled")).toBe(uninstallBefore);
+    });
+  });
+
+  describe("Refresh Artwork downloads anew and says what was refused", () => {
+    const KEY_REFUSED = "SteamGridDB refused the API key — check it in Settings";
+    const RATE_LIMITED = "SteamGridDB is rate-limiting requests — try again in a moment";
+    const PRUNE_ACTIVE =
+      "A removed-game cleanup is in progress; wait for it to finish before changing local game data.";
+
+    async function openRefresh(romId = 77) {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: romId,
+        rom_name: "Test ROM",
+      });
+      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
+      vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false });
+      render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      const items = await openRomMMenuAndGetItems(testAppId);
+      vi.mocked(backend.getSgdbArtworkBase64).mockClear();
+      vi.mocked(showModal).mockClear();
+      vi.mocked(toaster.toast).mockClear();
+      return async () => {
+        await act(async () => {
+          await items[0]!.props.onClick?.();
+        });
+      };
+    }
+
+    const toasts = () => vi.mocked(toaster.toast).mock.calls.map(([t]) => (t as { body?: unknown }).body);
+
+    it("downloads the four images anew for the resolved id before applying them", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "resolved", sgdb_id: 42 });
+      vi.mocked(backend.refreshSgdbArtwork).mockResolvedValue({ success: true });
+      await refresh();
+      expect(vi.mocked(backend.refreshSgdbArtwork)).toHaveBeenCalledWith(77, 42);
+      const refreshed = vi.mocked(backend.refreshSgdbArtwork).mock.invocationCallOrder[0]!;
+      const served = vi.mocked(backend.getSgdbArtworkBase64).mock.invocationCallOrder[0]!;
+      expect(refreshed).toBeLessThan(served);
+      expect(toasts()).toEqual(["No artwork available for this game"]);
+    });
+
+    it.each([
+      ["auth_failed", KEY_REFUSED],
+      ["rate_limited", RATE_LIMITED],
+    ] as const)("a %s refusal of the download toasts its message and applies nothing", async (reason, message) => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "resolved", sgdb_id: 42 });
+      vi.mocked(backend.refreshSgdbArtwork).mockResolvedValue({ success: false, reason, message });
+      await refresh();
+      expect(toasts()).toEqual([message]);
+      expect(vi.mocked(backend.getSgdbArtworkBase64)).not.toHaveBeenCalled();
+      expect(vi.mocked(showModal)).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["auth_failed", KEY_REFUSED],
+      ["rate_limited", RATE_LIMITED],
+      ["prune_active", PRUNE_ACTIVE],
+    ] as const)("a %s refusal of the resolution toasts its message and opens no picker", async (reason, message) => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ success: false, reason, message });
+      await refresh();
+      expect(toasts()).toEqual([message]);
+      expect(vi.mocked(showModal)).not.toHaveBeenCalled();
+      expect(vi.mocked(backend.refreshSgdbArtwork)).not.toHaveBeenCalled();
+    });
+
+    it("a refused artwork request toasts its message, not 'No artwork available'", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "resolved", sgdb_id: 42 });
+      vi.mocked(backend.refreshSgdbArtwork).mockResolvedValue({ success: true });
+      vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({
+        success: false,
+        reason: "prune_active",
+        message: PRUNE_ACTIVE,
+      });
+      await refresh();
+      expect(toasts()).toEqual([PRUNE_ACTIVE]);
+    });
+
+    it("names a failed RomM cover refresh in the same toast as the SteamGridDB result", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
+        success: false,
+        reason: "no_cover",
+        message: "ROM has no cover artwork",
+      });
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "resolved", sgdb_id: 42 });
+      vi.mocked(backend.refreshSgdbArtwork).mockResolvedValue({ success: true });
+      vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: "AA==", no_api_key: false });
+      vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: true, icon_path: "/grid/icon.png" });
+      await refresh();
+      expect(toasts()).toEqual([
+        "Artwork refreshed (4/4 images applied) — the RomM cover could not be updated: ROM has no cover artwork",
+      ]);
+    });
+
+    it("names a failed RomM cover refresh beside a refused key too", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.refreshCoverArtwork).mockRejectedValue(new Error("network down"));
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "resolved", sgdb_id: 42 });
+      vi.mocked(backend.refreshSgdbArtwork).mockResolvedValue({
+        success: false,
+        reason: "auth_failed",
+        message: KEY_REFUSED,
+      });
+      await refresh();
+      expect(toasts()).toEqual([`${KEY_REFUSED} — the RomM cover could not be updated: Error: network down`]);
+    });
+
+    it("says a failed RomM cover refresh on its own when the picker opens", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
+        success: false,
+        reason: "no_cover",
+        message: "ROM has no cover artwork",
+      });
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "needs_pick", candidates: [] });
+      await refresh();
+      expect(toasts()).toEqual(["The RomM cover could not be updated: ROM has no cover artwork"]);
+      expect(vi.mocked(showModal)).toHaveBeenCalledTimes(1);
+    });
+
+    it("a version switch does not download anew", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: true, rom_id: 50 });
+      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
+      vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false });
+      render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      vi.mocked(backend.getSgdbArtworkBase64).mockClear();
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: true, rom_id: 51 });
+
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "version_switched", app_id: testAppId, rom_id: 51 } }),
+        );
+        await Promise.resolve();
+      });
+      await flushAsync();
+      await flushAsync();
+
+      expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls.map(([romId]) => romId)).toEqual([51, 51, 51, 51]);
+      expect(vi.mocked(backend.refreshSgdbArtwork)).not.toHaveBeenCalled();
     });
   });
 });

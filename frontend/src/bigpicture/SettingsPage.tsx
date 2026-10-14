@@ -22,6 +22,7 @@ import {
   connectWithPairingCode,
   signOut,
   saveSgdbApiKey,
+  removeSgdbApiKey,
   verifySgdbApiKey,
   saveSteamInputSetting,
   applySteamInputSetting,
@@ -444,8 +445,19 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   // modal always submits a non-empty key, so a successful save means a
   // configured key — reflect it as the masked "••••" display.
   const handleSaveSgdbKey = async (value: string) => {
-    await saveSgdbApiKey(value);
+    const result = await saveSgdbApiKey(value);
+    if (!result.success) throw new Error(result.message);
     setSgdbApiKey("set");
+  };
+  const handleRemoveSgdbKey = async () => {
+    try {
+      const result = await removeSgdbApiKey();
+      if (result.success) setSgdbApiKey("");
+      else showToast(result.message);
+    } catch (e) {
+      logError(`Failed to remove the SteamGridDB API key: ${e}`);
+      showToast("The SteamGridDB API key could not be removed");
+    }
   };
 
   // --- Save-sync default-slot handlers ---
@@ -648,7 +660,12 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
                 detach(handleSignOut());
               }}
             />
-            <SteamGridDBSection sgdbApiKey={sgdbApiKey} onVerifyKey={verifySgdbApiKey} onSaveKey={handleSaveSgdbKey} />
+            <SteamGridDBSection
+              sgdbApiKey={sgdbApiKey}
+              onVerifyKey={verifySgdbApiKey}
+              onSaveKey={handleSaveSgdbKey}
+              onRemoveKey={handleRemoveSgdbKey}
+            />
           </>
         );
       case "save-sync":

@@ -638,3 +638,73 @@ describe("setJobSlotArtwork", () => {
     expect(backend.releasePruneConflictLease).toHaveBeenCalledWith("grid-lease");
   });
 });
+
+describe("a refused artwork fetch", () => {
+  const refusal: backend.EndpointFailure = {
+    success: false,
+    reason: "prune_active",
+    message: "A removed-game cleanup is in progress; wait for it to finish before changing local game data.",
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubGlobal("SteamClient", {
+      Apps: {
+        SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined),
+        SetShortcutIcon: vi.fn(),
+      },
+    });
+    vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: true, icon_path: "/grid/5000_icon.png" });
+    vi.mocked(backend.reportSgdbSlotArtwork).mockResolvedValue({ success: true });
+    vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
+    vi.mocked(backend.debugLog).mockResolvedValue(undefined);
+  });
+
+  it("makes applyArtwork answer the refusal, apply nothing and give every lease back", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64)
+      .mockResolvedValueOnce({ base64: "AA==", no_api_key: false, prune_lease_token: "lease-1" })
+      .mockResolvedValueOnce(refusal)
+      .mockResolvedValueOnce({ base64: "CC==", no_api_key: false, prune_lease_token: "lease-3" })
+      .mockResolvedValueOnce({ base64: "DD==", no_api_key: false, prune_lease_token: "lease-4" });
+
+    await expect(applyArtwork(42, 5000)).resolves.toEqual(refusal);
+
+    expect(SteamClient.Apps.SetCustomArtworkForApp).not.toHaveBeenCalled();
+    expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
+    expect(
+      vi
+        .mocked(backend.releasePruneConflictLease)
+        .mock.calls.map(([token]) => token)
+        .sort(),
+    ).toEqual(["lease-1", "lease-3", "lease-4"]);
+  });
+
+  it("is logged by the first visit's fill, which goes on to the next slot", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false });
+    vi.mocked(backend.getSgdbSlotArtwork).mockImplementation(async (_romId, _appId, slot) =>
+      slot === "hero" ? refusal : { status: "skip" },
+    );
+
+    await expect(fillEmptyArtwork(42, 5000)).resolves.toBe(0);
+
+    expect(vi.mocked(backend.getSgdbSlotArtwork).mock.calls.map(([, , slot]) => slot)).toEqual([
+      "hero",
+      "logo",
+      "grid",
+    ]);
+    expect(backend.debugLog).toHaveBeenCalledWith(
+      expect.stringContaining(`hero fetch for appId 5000 refused: ${refusal.message}`),
+    );
+  });
+
+  it("makes the shortcut artwork job's slot write nothing, and is logged", async () => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue(refusal);
+
+    await expect(setJobSlotArtwork(42, 5000, "logo", () => false)).resolves.toBe(false);
+
+    expect(SteamClient.Apps.SetCustomArtworkForApp).not.toHaveBeenCalled();
+    expect(backend.debugLog).toHaveBeenCalledWith(
+      expect.stringContaining(`logo fetch for appId 5000 refused: ${refusal.message}`),
+    );
+  });
+});

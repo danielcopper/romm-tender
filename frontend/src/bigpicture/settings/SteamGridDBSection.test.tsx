@@ -44,6 +44,7 @@ function defaultProps(overrides: Partial<React.ComponentProps<typeof SteamGridDB
     sgdbApiKey: "",
     onVerifyKey: vi.fn(async () => ({ success: true, message: "" })),
     onSaveKey: vi.fn(async () => {}),
+    onRemoveKey: vi.fn(async () => {}),
     ...overrides,
   };
 }
@@ -86,6 +87,24 @@ describe("SteamGridDBSection", () => {
     it("does not open a modal until Edit is clicked", () => {
       render(<SteamGridDBSection {...defaultProps({ sgdbApiKey: "stored" })} />);
       expect(vi.mocked(showModal)).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Remove", () => {
+    it("is offered beside Edit while a key is set, and calls onRemoveKey without asking", () => {
+      const onRemoveKey = vi.fn(async () => {});
+      const { getByText } = render(<SteamGridDBSection {...defaultProps({ sgdbApiKey: "stored", onRemoveKey })} />);
+      fireEvent.click(getByText("Remove"));
+      expect(onRemoveKey).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(showModal)).not.toHaveBeenCalled();
+    });
+
+    it("is not offered while no key is set", () => {
+      const { queryByText } = render(
+        <SteamGridDBSection {...defaultProps({ sgdbApiKey: "", onRemoveKey: vi.fn(async () => {}) })} />,
+      );
+      expect(queryByText("Remove")).toBeNull();
+      expect(queryByText("Edit")).not.toBeNull();
     });
   });
 

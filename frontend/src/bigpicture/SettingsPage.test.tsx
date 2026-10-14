@@ -1476,6 +1476,44 @@ describe("SettingsPage", () => {
       // A failed save must not flip the masked display to configured.
       expect(capturedSgdb[capturedSgdb.length - 1]?.sgdbApiKey).toBe("");
     });
+
+    it("handleSaveSgdbKey rejects a refused save with its message and leaves the key unconfigured", async () => {
+      vi.mocked(backend.saveSgdbApiKey).mockResolvedValue({ success: false, message: "Invalid API key" });
+      renderPage();
+      await flushAsync();
+      await expect(capturedSgdb[capturedSgdb.length - 1]?.onSaveKey("k\n")).rejects.toThrow("Invalid API key");
+      expect(capturedSgdb[capturedSgdb.length - 1]?.sgdbApiKey).toBe("");
+    });
+
+    it("onRemoveKey removes the stored key and the row reads as not configured", async () => {
+      vi.mocked(backend.getSettings).mockResolvedValue({ ...defaultSettings(), sgdb_api_key_masked: "••••" });
+      vi.mocked(backend.removeSgdbApiKey).mockResolvedValue({ success: true, message: "SteamGridDB API key removed" });
+      renderPage();
+      await flushAsync();
+      expect(capturedSgdb[capturedSgdb.length - 1]?.sgdbApiKey).toBe("••••");
+      await act(async () => {
+        await capturedSgdb[capturedSgdb.length - 1]?.onRemoveKey();
+      });
+      expect(vi.mocked(backend.removeSgdbApiKey)).toHaveBeenCalledWith();
+      expect(capturedSgdb[capturedSgdb.length - 1]?.sgdbApiKey).toBe("");
+    });
+
+    it("onRemoveKey keeps the key and toasts when the removal is rejected", async () => {
+      vi.mocked(backend.getSettings).mockResolvedValue({ ...defaultSettings(), sgdb_api_key_masked: "••••" });
+      vi.mocked(backend.removeSgdbApiKey).mockRejectedValue(new Error("socket closed"));
+      const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+      renderPage();
+      await flushAsync();
+      await act(async () => {
+        await capturedSgdb[capturedSgdb.length - 1]?.onRemoveKey();
+      });
+      expect(capturedSgdb[capturedSgdb.length - 1]?.sgdbApiKey).toBe("••••");
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "The SteamGridDB API key could not be removed" }),
+      );
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("socket closed"));
+      logSpy.mockRestore();
+    });
   });
 
   describe("Controller handlers", () => {

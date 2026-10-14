@@ -19,8 +19,16 @@
 import { FC, useState, KeyboardEvent } from "react";
 import { ConfirmModal, DialogButton, Focusable, GamepadButton, TextField, Spinner, type GamepadEvent } from "@decky/ui";
 import { showToast } from "../utils/toast";
-import { searchSgdbGames, applySgdbGameId, debugLog, type SgdbCandidate } from "../api/backend";
+import {
+  searchSgdbGames,
+  applySgdbGameId,
+  debugLog,
+  isEndpointFailure,
+  type EndpointFailure,
+  type SgdbCandidate,
+} from "../api/backend";
 import { applyArtwork } from "../utils/artwork";
+import { artworkApplyMessage } from "../utils/artworkApplyMessage";
 import { scrollToTop, scrollFocusedToCenter } from "../utils/scrollHelpers";
 import { detach } from "../utils/detach";
 
@@ -30,8 +38,8 @@ export interface SgdbGamePickerModalProps {
   romName: string;
   /** Initial candidate list from the resolution cascade. */
   candidates?: SgdbCandidate[];
-  /** Reports how many images applyArtwork applied (or -1 for no API key). */
-  onApplied: (appliedCount: number) => void;
+  /** Reports what applyArtwork answered: the count of images applied, -1 for no API key, or its refusal. */
+  onApplied: (applied: number | EndpointFailure) => void;
   /** Injected by showModal. */
   closeModal?: () => void;
 }
@@ -117,7 +125,7 @@ export const SgdbGamePickerModalContent: FC<SgdbGamePickerModalProps> = ({
           setSearchError("No matches found.");
         }
       } else {
-        setSearchError("Search failed. Check your connection and try again.");
+        setSearchError(res?.message ?? "Search failed. Check your connection and try again.");
         setResults([]);
       }
     } finally {
@@ -129,25 +137,23 @@ export const SgdbGamePickerModalContent: FC<SgdbGamePickerModalProps> = ({
     if (applying) return;
     setApplying(true);
     try {
-      const result = await applySgdbGameId(romId, selectedId).catch((e): { success: boolean } => {
+      const result = await applySgdbGameId(romId, selectedId).catch((e): null => {
         detach(debugLog(`SgdbGamePickerModal: applySgdbGameId rejected: ${e}`));
-        return { success: false };
+        return null;
       });
-      if (!result.success) {
+      if (!result) {
         showToast("Failed to apply artwork selection");
+        return;
+      }
+      if (isEndpointFailure(result)) {
+        showToast(result.message);
         return;
       }
       const applied = await applyArtwork(romId, appId).catch((e): number => {
         detach(debugLog(`SgdbGamePickerModal: applyArtwork rejected: ${e}`));
         return 0;
       });
-      if (applied === -1) {
-        showToast("Set a SteamGridDB API key in settings first");
-      } else if (applied > 0) {
-        showToast(`Artwork refreshed (${applied}/4 images applied)`);
-      } else {
-        showToast("No artwork available for this game");
-      }
+      showToast(artworkApplyMessage(applied));
       onApplied(applied);
       closeModal?.();
     } finally {
