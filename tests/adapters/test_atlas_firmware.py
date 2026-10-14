@@ -40,6 +40,8 @@ from _vendor.atlas import LOCATING_BY_NAME as ATLAS_LOCATING_BY_NAME
 from _vendor.atlas import LOCATING_BY_NAME_THEN_CONTENT as ATLAS_LOCATING_BY_NAME_THEN_CONTENT
 from _vendor.atlas import LOCATING_UNESTABLISHED as ATLAS_LOCATING_UNESTABLISHED
 from _vendor.atlas.firmware import CAVEAT_FIRMWARE_PATH_INACCESSIBLE as ATLAS_CAVEAT_PATH_INACCESSIBLE
+from _vendor.atlas.firmware import CHECKED_UNREAD as ATLAS_CHECKED_UNREAD
+from _vendor.atlas.firmware import CHECKED_UNRECOGNISED as ATLAS_CHECKED_UNRECOGNISED
 from _vendor.atlas.firmware import (
     CORE_SYSTEM_FIRMWARE_STATES,
     SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
@@ -67,6 +69,10 @@ from adapters.atlas_firmware import _BIOS_CHOICE_SETTING, AtlasFirmwareAdapter, 
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.firmware_wants import (
     CAVEAT_PATH_INACCESSIBLE,
+    CAVEAT_SCAN_INCOMPLETE,
+    CAVEATS_IDENTIFIED_BY_CONTENT,
+    CHECKED_UNREAD,
+    CHECKED_UNRECOGNISED,
     DECLARED_DIRECTORY,
     DECLARED_FILE,
     LOCATING_BY_NAME,
@@ -1245,6 +1251,21 @@ class TestVocabularyConformance:
     def test_the_unreadable_place_code_matches(self):
         assert CAVEAT_PATH_INACCESSIBLE == ATLAS_CAVEAT_PATH_INACCESSIBLE
 
+    def test_the_incomplete_listing_code_matches(self):
+        assert CAVEAT_SCAN_INCOMPLETE == CAVEAT_FIRMWARE_SCAN_INCOMPLETE
+
+    def test_the_unread_bytes_word_matches(self):
+        assert CHECKED_UNREAD == ATLAS_CHECKED_UNREAD
+
+    def test_the_unrecognised_bytes_word_matches(self):
+        assert CHECKED_UNRECOGNISED == ATLAS_CHECKED_UNRECOGNISED
+
+    def test_the_identified_by_content_codes_match(self):
+        # Through a local name: ruff's SIM300 reads an upper-case name as more constant
+        # than a set literal and moves the name to the right, the reverse of this file's order.
+        identified_by_content = CAVEATS_IDENTIFIED_BY_CONTENT
+        assert identified_by_content == {CAVEAT_FIRMWARE_IMAGE_IDENTIFIED, CAVEAT_FIRMWARE_IMAGE_UNLISTED}
+
 
 class TestEmulatorVerdicts:
     """What is recorded about an emulator's CONSOLE, carried per emulator and never per file.
@@ -1751,6 +1772,19 @@ class TestDuckStationOverItsBiosFolder:
         assert verdict.system_firmware_met is False
         assert verdict.world_knowledge is True
 
+    def test_its_search_is_a_note_with_the_folder_and_no_count(self, tmp_path, monkeypatch, traces):
+        catalogue = self._catalogue(tmp_path, monkeypatch, traces)
+
+        verdict = catalogue.verdict_for("DUCKSTATION")
+        assert verdict is not None
+        (note,) = verdict.notes
+        assert (note.kind, note.dir, note.candidates) == (
+            "search-found-nothing",
+            str(tmp_path / "retrodeck" / "bios"),
+            None,
+        )
+        assert set(note.regions) == {"ntsc-u", "ntsc-j", "pal"}
+
     def test_a_packaged_card_with_no_requirement_still_reads_as_not_read(self, tmp_path, monkeypatch, traces):
         """Its verdict is stated; whether a file nobody declares is needed is still not (the panel words the first)."""
         catalogue = self._catalogue(tmp_path, monkeypatch, traces)
@@ -1766,6 +1800,33 @@ class TestDuckStationOverItsBiosFolder:
         assert [placement.file_name for placement in catalogue.placements] == ["unknown.bin"]
         assert verdict.system_firmware_met is not False
         assert verdict.notes == ()
+
+
+class TestWhichEmptySettingIsASearch:
+    """``firmware-path-names-no-file`` on real answers, a search told apart from an empty setting by its fields.
+
+    A search states ``dir`` with ``candidates`` or ``regions`` — DuckStation's
+    states ``regions``. PCSX2's empty BIOS setting states ``key``
+    ``Filenames/BIOS`` and a ``dir`` with neither; xemu's empty file settings
+    state no ``dir``. Only a search becomes the search note.
+    """
+
+    @staticmethod
+    def _notes(tmp_path, monkeypatch, traces, system: str, emulator: str):
+        verdict = _standalone_catalogue(tmp_path, monkeypatch, traces, system).verdict_for(emulator)
+        assert verdict is not None
+        return [(note.kind, note.setting, note.candidates) for note in verdict.notes]
+
+    def test_duckstations_empty_search_is_a_search(self, tmp_path, monkeypatch, traces):
+        assert self._notes(tmp_path, monkeypatch, traces, "psx", "DUCKSTATION") == [
+            ("search-found-nothing", None, None)
+        ]
+
+    def test_pcsx2s_empty_bios_setting_is_no_bios_chosen_and_no_search(self, tmp_path, monkeypatch, traces):
+        assert self._notes(tmp_path, monkeypatch, traces, "ps2", "PCSX2") == [("bios-unchosen", "Filenames/BIOS", None)]
+
+    def test_xemus_empty_file_settings_are_neither(self, tmp_path, monkeypatch, traces):
+        assert self._notes(tmp_path, monkeypatch, traces, "xbox", "XEMU") == []
 
 
 class TestPlatformAdapter:
@@ -2047,6 +2108,40 @@ class TestWhatTheResolverSaysAboutEachEmulator:
 
         assert self._verdict(adapter, monkeypatch, core, "XEMU").notes == ()
 
+    @pytest.mark.parametrize("candidates", [0, 2])
+    def test_a_search_that_reached_no_image_is_a_note_with_its_folder_and_candidates(
+        self, adapter, monkeypatch, candidates
+    ):
+        """A settled search of the BIOS folder that found nothing to boot (``_search_found_nothing``)."""
+        nothing = Caveat(
+            code=CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE,
+            message="no image to boot",
+            data={
+                "core_so": "swanstation_libretro.so",
+                "dir": "/home/deck/retrodeck/bios",
+                "need": "required",
+                "candidates": str(candidates),
+                "regions": ["ntsc-j", "ntsc-u", "pal"],
+            },
+        )
+
+        notes = self._verdict(adapter, monkeypatch, _core(caveats=(nothing,))).notes
+
+        assert [(n.kind, n.dir, n.candidates, n.regions) for n in notes] == [
+            ("search-found-nothing", "/home/deck/retrodeck/bios", candidates, ("ntsc-j", "ntsc-u", "pal"))
+        ]
+
+    def test_the_search_statement_is_spelled_as_the_resolver_spells_it(self):
+        """``dir`` and ``candidates`` are the keys the note is read off; a rename upstream turns this red."""
+        import inspect
+
+        from _vendor.atlas import firmware as atlas_firmware
+
+        source = inspect.getsource(atlas_firmware._search_found_nothing)
+        assert "CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE" in source
+        assert '"dir": directory' in source
+        assert '"candidates": str(len(searched.kept))' in source
+
     def test_the_bios_choice_setting_is_spelled_as_the_resolver_spells_it(self):
         """The PCSX2 card's caveat names the setting under ``key``; a rename upstream turns this red."""
         import inspect
@@ -2089,6 +2184,13 @@ class TestWhatTheResolverSaysAboutEachEmulator:
         verdict = self._verdict(adapter, monkeypatch, core)
 
         assert (verdict.world_knowledge, verdict.system_needs_an_image) == (True, True)
+
+    def test_the_entrys_own_caveat_codes_travel_once_each(self, adapter, monkeypatch):
+        """What a search of the BIOS folder established is worded off them."""
+        incomplete = Caveat(code=CAVEAT_FIRMWARE_SCAN_INCOMPLETE, message="listing broke off", data={"dir": f"{_ROOT}"})
+        core = _core(caveats=(incomplete, incomplete))
+
+        assert self._verdict(adapter, monkeypatch, core).caveats == (CAVEAT_FIRMWARE_SCAN_INCOMPLETE,)
 
 
 class TestEachPlacementIsOneEmulatorsRequirement:

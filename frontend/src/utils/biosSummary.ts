@@ -65,12 +65,14 @@
 import type {
   BiosLevel,
   EmulatorAnswer,
+  FirmwareChecked,
+  FirmwareLocating,
   FirmwareWanted,
   OneOfGroupVerdict,
   RefusedDeclaration,
 } from "../types/firmware";
 import { foundByContent } from "./biosFileNote";
-import { joined } from "./formatters";
+import { joined, lastPathSegment } from "./formatters";
 import { groupBlock, regionNames, servesEveryRegion, type GroupBlock } from "./biosGroup";
 
 /**
@@ -103,6 +105,7 @@ export interface BiosSummaryRow {
   used_by_active?: boolean;
   downloaded?: boolean;
   satisfied?: boolean | null;
+  checked?: FirmwareChecked | null;
   file_name?: string;
   caveats?: string[];
 }
@@ -135,6 +138,35 @@ const NO_BIOS_CHOSEN_TAIL = "settings, and no game boots until one is";
 const REFUSED_TAIL = "so whether it is ready could not be established";
 // Images that rank alike.
 const TIED_TAIL = "is not established";
+// How the emulator finds its firmware words what it does with a file:
+// one that opens the names it declares "opens by name", one nobody has read the
+// code of "lists as required". One that also searches its folder by content
+// "requires" them: "opens by name" would be untrue of the search, and what the
+// search found is the resolver's to state.
+const OPENS_BY_NAME = "opens by name";
+const LISTS_AS_REQUIRED = "lists as required";
+const VERB_REQUIRES = "requires";
+const ARE_IN_PLACE = "are in place";
+const IS_IN_PLACE = "is in place";
+const IS_NOT_IN_PLACE = "is not in place";
+const ARE_NOT_IN_PLACE = "are not in place";
+const COULD_NOT_BE_CHECKED_TAIL = "could not be checked";
+// How an emulator nobody has read finds its BIOS.
+const LOCATING_UNESTABLISHED_TAIL = "finds its BIOS has not been established";
+// An emulator that searches its BIOS folder by content.
+const RECOGNISES_IN_FOLDER = "in the BIOS folder";
+// A settled search that reached no image, in the resolver's own terms: the
+// folder, and how many files of a size the emulator accepts it held where the
+// search states that count.
+const FOUND_NO_IMAGE_IN = "found no BIOS image in";
+const OF_A_SIZE = "of a size";
+const RECOGNISES_NONE = "accepts, and it recognises none of them";
+const RECOGNISES_NOT_IT = "accepts, and it does not recognise it";
+const FOLDER_NOT_READ_COMPLETELY = "BIOS folder could not be read completely";
+const COULD_NOT_BE_READ = "could not be read";
+// An emulator the resolver does not cover.
+const NOT_COVERED_HEAD = "Tender cannot tell what";
+const NOT_COVERED_TAIL = "needs yet — the emulator's firmware is not covered by the resolver yet";
 // The emulator's name sits between the count and this, so the searchable run
 // starts at `requires` — and it has to, because a bare "could not be checked" is
 // also the platform pane's mark for a row whose own verdict was withheld, and a
@@ -143,12 +175,6 @@ const REQUIRES_UNCHECKED = "requires could not be checked";
 const IMAGE_UNSETTLED_HEAD = "Whether the BIOS image";
 const NOTHING_ESTABLISHED_HEAD = "Nothing could be established about what";
 const NOTHING_ESTABLISHED_TAIL = "needs";
-const REQUIRES_ARE_IN_PLACE = "requires are in place";
-// The same tail for a requirement of exactly one file. It is a separate run
-// rather than a built one because the verb moves with the count, and a
-// sentence assembled out of "are"/"is" would be searchable as neither.
-const REQUIRES_IS_IN_PLACE = "requires is in place";
-const REQUIRES_IS_NOT_IN_PLACE = "requires is not in place";
 const MARKS_NONE_REQUIRED = "marks none of its BIOS files as required";
 const OPTIONAL_MISSING_TAIL = "optional missing";
 // The one-of group's own sentences. The runs below are the halves no other
@@ -181,6 +207,9 @@ const GROUP_UNSTATED_TAIL = "states no BIOS image, so whether they start could n
 
 const STATUS_NEEDS_IMAGE = "Needs a BIOS image";
 const STATUS_NO_BIOS_CHOSEN = "No BIOS chosen";
+const STATUS_FOUND_BY_CONTENT = "Found by content";
+const STATUS_NO_IMAGE_FOUND = "No BIOS image found";
+const STATUS_NONE_RECOGNISED = "No image recognised";
 const STATUS_READINESS_UNKNOWN = "Readiness unknown";
 const STATUS_REGIONS_NOT_CHECKED = "regions not checked";
 const STATUS_REQUIREMENT_UNKNOWN = "Requirement unknown";
@@ -209,9 +238,15 @@ export const BIOS_SUMMARY_PHRASES: readonly string[] = [
   REQUIRES_UNCHECKED,
   IMAGE_UNSETTLED_HEAD,
   NOTHING_ESTABLISHED_HEAD,
-  REQUIRES_ARE_IN_PLACE,
-  REQUIRES_IS_IN_PLACE,
-  REQUIRES_IS_NOT_IN_PLACE,
+  OPENS_BY_NAME,
+  LISTS_AS_REQUIRED,
+  LOCATING_UNESTABLISHED_TAIL,
+  FOUND_NO_IMAGE_IN,
+  RECOGNISES_NONE,
+  RECOGNISES_NOT_IT,
+  FOLDER_NOT_READ_COMPLETELY,
+  NOT_COVERED_HEAD,
+  NOT_COVERED_TAIL,
   MARKS_NONE_REQUIRED,
   OPTIONAL_MISSING_TAIL,
   GROUP_MET_TAIL,
@@ -237,6 +272,9 @@ export const BIOS_SUMMARY_PHRASES: readonly string[] = [
   `"${ROLE_MID}"`,
   STATUS_NEEDS_IMAGE,
   STATUS_NO_BIOS_CHOSEN,
+  STATUS_FOUND_BY_CONTENT,
+  STATUS_NO_IMAGE_FOUND,
+  STATUS_NONE_RECOGNISED,
   STATUS_READINESS_UNKNOWN,
   STATUS_REGIONS_NOT_CHECKED,
   STATUS_REQUIREMENT_UNKNOWN,
@@ -285,7 +323,11 @@ function stateWords(
   const groups = source.one_of_groups ?? [];
   const plain = plainRequirements(groups, requiredCount, requiredDone, withheld);
 
-  // 1. The emulator nobody read: nothing that follows can be about it.
+  // 1. The emulator nobody read: nothing that follows can be about it. One the
+  //    resolver does not cover says so.
+  if (source.emulator_declaration === "unsupported") {
+    return { status: STATUS_REQUIREMENT_UNKNOWN, sentence: `${NOT_COVERED_HEAD} ${named} ${NOT_COVERED_TAIL}` };
+  }
   if (source.emulator_read === false) return nothingEstablished(named);
 
   // 2. What keeps the verdict from being read at all, in the resolver's words.
@@ -316,7 +358,16 @@ function stateWords(
     }
   }
 
-  // 4. A one-of group the launching emulator states.
+  // 4. What an emulator that searches its BIOS folder by content found (#1883
+  //    D1, D2) — stated rather than counted: "1 / 1 required" would be true and
+  //    useless. Only where no group speaks instead, and only off the resolver's
+  //    own statements: a search that found nothing is its note, never a verdict.
+  const nothing = groups.length === 0 ? foundNothingSummary(source, named, leading) : null;
+  if (nothing) return nothing;
+  const searched = contentSearchSummary(source, rows, level, leading);
+  if (searched) return searched;
+
+  // 5. A one-of group the launching emulator states.
   const group = groupToWord(groups);
   if (group) {
     const regions = regionCount(group);
@@ -326,18 +377,18 @@ function stateWords(
       return groupSummary(group, named, leading, ratio, rows);
     }
     if (plain.missing > 0) {
-      return requiredFilesSummary(named, rows, plain.done, plain.count, level, ` · ${regions}`);
+      return requiredFilesSummary(source.locating, named, rows, plain, level, ` · ${regions}`);
     }
     return declinedSummary(named, plain.withheld);
   }
 
-  // 5. The level declined.
+  // 6. The level declined.
   if (level === "unknown") return declinedSummary(named, withheld);
 
-  // 6. The emulator's own required files, held or short.
-  if (requiredCount > 0) return requiredFilesSummary(named, rows, requiredDone, requiredCount, level);
+  // 7. The emulator's own required files, held or short.
+  if (requiredCount > 0) return requiredFilesSummary(source.locating, named, rows, plain, level);
 
-  // 7. A finished answer, and the set it was taken over is named: a bare
+  // 8. A finished answer, and the set it was taken over is named: a bare
   //    "Nothing required" was read as the CONSOLE needing no BIOS.
   return { status: STATUS_NOTHING_REQUIRED, sentence: `${leading} ${MARKS_NONE_REQUIRED}` };
 }
@@ -384,8 +435,70 @@ function tiedNotes(source: BiosSummarySource): string[] {
     .map((note) => {
       const count = note.tied !== null ? spelled(note.tied) : "several";
       const where = note.regions.length > 0 ? `for ${regionNames(note.regions)} ` : "";
-      return `${where}${count} images are in place, and which one ${named} uses ${TIED_TAIL}`;
+      return `${where}${count} images are in place; which one ${named} uses ${TIED_TAIL}`;
     });
+}
+
+/** What a by-content search found, where the backend states one and the verdict says which way. */
+function contentSearchSummary(
+  source: BiosSummarySource,
+  rows: readonly BiosSummaryRow[],
+  level: BiosLevel | null,
+  leading: string,
+): BiosSummary | null {
+  const required = rows.filter((row) => row.required_by_active);
+  switch (source.content_search) {
+    case "found": {
+      const files = required.filter((row) => row.satisfied === true).map((row) => row.file_name ?? "");
+      if (level !== "ok" || files.length === 0) return null;
+      return {
+        status: STATUS_FOUND_BY_CONTENT,
+        sentence: `${leading} recognises ${joined(files)} ${RECOGNISES_IN_FOLDER}`,
+      };
+    }
+
+    case "incomplete":
+      return level === "unknown"
+        ? { status: STATUS_READINESS_UNKNOWN, sentence: `${leading}'s ${FOLDER_NOT_READ_COMPLETELY}` }
+        : null;
+    case "unreadable": {
+      if (level !== "unknown") return null;
+      const unread = required.find((row) => row.checked === "unread")?.file_name ?? "A BIOS image";
+      return { status: STATUS_READINESS_UNKNOWN, sentence: `${unread} ${COULD_NOT_BE_READ}` };
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * A settled search of a folder that reached no image to boot, as the resolver
+ * states it (`search-found-nothing`: the folder, how many files of a size the
+ * emulator accepts it held, and the regions). DuckStation's search states no
+ * count and is worded by the folder alone: in the state RetroDECK ships, the
+ * regions it carries are every launch's, and naming them would read as a
+ * condition.
+ */
+function foundNothingSummary(source: BiosSummarySource, named: string, leading: string): BiosSummary | null {
+  const note = (source.emulator_notes ?? []).find((candidate) => candidate.kind === "search-found-nothing");
+  if (note?.dir == null) return null;
+  const folder = folderWords(note.dir);
+  if (note.candidates == null) {
+    return { status: STATUS_NO_IMAGE_FOUND, sentence: `${leading} ${FOUND_NO_IMAGE_IN} ${folder}` };
+  }
+  if (note.candidates === 0) {
+    const regions = note.regions.length > 0 ? ` for a ${regionNames(note.regions)} console` : "";
+    return { status: STATUS_NO_IMAGE_FOUND, sentence: `${leading} ${FOUND_NO_IMAGE_IN} ${folder}${regions}` };
+  }
+  const files = note.candidates === 1 ? "1 file" : `${note.candidates} files`;
+  const tail = note.candidates === 1 ? RECOGNISES_NOT_IT : RECOGNISES_NONE;
+  return { status: STATUS_NONE_RECOGNISED, sentence: `${folder} holds ${files} ${OF_A_SIZE} ${named} ${tail}` };
+}
+
+/** A folder the way the rows name places: its own name with a trailing slash — "bios/". */
+function folderWords(dir: string): string {
+  const name = lastPathSegment(dir);
+  return name ? `${name}/` : "the BIOS folder";
 }
 
 function nothingEstablished(named: string): BiosSummary {
@@ -409,12 +522,19 @@ const GROUP_PRECEDENCE: readonly OneOfGroupVerdict["state"][] = ["unmet", "unkno
  * taking the groups back out is the plain required files alone. A group is
  * never counted as a file here.
  */
+interface PlainRequirements {
+  count: number;
+  done: number;
+  missing: number;
+  withheld: number;
+}
+
 function plainRequirements(
   groups: readonly OneOfGroupVerdict[],
   requiredCount: number,
   requiredDone: number,
   withheld: number,
-): { count: number; done: number; missing: number; withheld: number } {
+): PlainRequirements {
   const count = (state: OneOfGroupVerdict["state"]) => groups.filter((group) => group.state === state).length;
   const plainCount = requiredCount - groups.length;
   const plainDone = requiredDone - count("met");
@@ -631,33 +751,32 @@ function declinedSummary(named: string, withheld: number): BiosSummary {
 }
 
 /**
- * States 5-6: the emulator's own required files, held or short.
+ * The emulator's own required files, held or short — one answer read two ways.
  *
- * They are one function because they are one answer read two ways: both state
- * the same ratio, and which sentence stands is the level's verdict over exactly
- * the comparison that ratio is. Splitting them would put the ratio in two
- * places and invite a second readiness rule beside the one the level already
- * made. *groupTail* is a one-of group's region count, appended to the status
- * where the counts passed in are the plain files beside that group.
+ * Both state the same ratio, and which sentence stands is the level's verdict;
+ * the ratio never decides it. How the emulator finds its firmware words what it
+ * does with them (#1883 D4): it "opens by name" the files it declares, or — where
+ * nobody has read how it finds them — "lists as required", with a note saying
+ * so (#1883 D3). A file shown missing beside one nothing could check names both
+ * (#1883 D5). *groupTail* is a one-of group's region count, appended to the
+ * status where the counts passed in are the plain files beside that group.
  */
 function requiredFilesSummary(
+  locating: FirmwareLocating | undefined,
   named: string,
   rows: readonly BiosSummaryRow[],
-  requiredDone: number,
-  requiredCount: number,
+  plain: PlainRequirements,
   level: BiosLevel | null,
   groupTail = "",
 ): BiosSummary {
-  const ratio = `${requiredDone} / ${requiredCount} required${groupTail}`;
-  // "Ready" is the level, which decides it on exactly this comparison — the
-  // fallback is that same comparison, not a second rule.
-  const ready = level === null ? requiredDone >= requiredCount : level === "ok";
-  // A requirement of ONE file is worded on its own, because the two count
-  // sentences read "All 1 files" and "0 of 1 files" there, and both halves are
-  // reachable rather than theoretical: DuckStation requires exactly one image
-  // on a stock RetroDECK (`scph1001.bin`), so a PlayStation reads state 5 while
-  // that file is in place and state 6 while it is not.
-  const one = requiredCount === 1;
+  const unestablished = locating === "unestablished";
+  const verb = unestablished ? LISTS_AS_REQUIRED : locating === "by-name" ? OPENS_BY_NAME : VERB_REQUIRES;
+  const note = unestablished ? `. How ${named} ${LOCATING_UNESTABLISHED_TAIL}` : "";
+  const withheldTail = plain.withheld > 0 && plain.missing > 0 ? ` · ${plain.withheld} not checked` : "";
+  const status = `${plain.done} / ${plain.count} required${withheldTail}${groupTail}`;
+  // "Ready" is the level — the fallback for a payload with none is the same
+  // comparison, not a second rule.
+  const ready = level === null ? plain.done >= plain.count : level === "ok";
   if (ready) {
     // The optional set of the emulator the sentence names (`used_by_active`),
     // never of another emulator, whose files are on its own tab.
@@ -669,15 +788,41 @@ function requiredFilesSummary(
         !row.downloaded,
     ).length;
     const tail = optionalMissing > 0 ? ` (${optionalMissing} ${OPTIONAL_MISSING_TAIL})` : "";
-    const held = one
-      ? `The one file ${named} ${REQUIRES_IS_IN_PLACE}`
-      : `All ${requiredCount} files ${named} ${REQUIRES_ARE_IN_PLACE}`;
-    return { status: ratio, sentence: `${held}${tail}` };
+    // A requirement of ONE file is worded on its own: "All 1 files" is reachable
+    // — gpSP lists exactly one, gba_bios.bin.
+    const held =
+      plain.count === 1
+        ? `The one file ${named} ${verb} ${IS_IN_PLACE}`
+        : `All ${plain.count} files ${named} ${verb} ${ARE_IN_PLACE}`;
+    return { status, sentence: `${held}${tail}${note}` };
   }
-  return {
-    status: ratio,
-    sentence: one
-      ? `The one file ${named} ${REQUIRES_IS_NOT_IN_PLACE}`
-      : `${requiredDone} of ${requiredCount} files ${named} ${REQUIRES_ARE_IN_PLACE}`,
-  };
+  return { status, sentence: `${shortSentence(verb, named, rows, plain, unestablished)}${note}` };
+}
+
+/** The sentence over required files the verdict says are not all in place. */
+function shortSentence(
+  verb: string,
+  named: string,
+  rows: readonly BiosSummaryRow[],
+  plain: PlainRequirements,
+  unestablished: boolean,
+): string {
+  if (plain.withheld > 0 && plain.missing > 0) {
+    const missing =
+      plain.missing === 1
+        ? `One file ${named} ${verb} ${IS_NOT_IN_PLACE}`
+        : `${plain.missing} files ${named} ${verb} ${ARE_NOT_IN_PLACE}`;
+    const unchecked = plain.withheld === 1 ? "one" : String(plain.withheld);
+    return `${missing}, and ${unchecked} ${COULD_NOT_BE_CHECKED_TAIL}`;
+  }
+  const missingNames = rows
+    .filter((row) => row.required_by_active && row.satisfied === false)
+    .map((row) => row.file_name ?? "");
+  if (unestablished && missingNames.length > 0) {
+    const state = missingNames.length === 1 ? IS_NOT_IN_PLACE : ARE_NOT_IN_PLACE;
+    return `${joined(missingNames)}, which ${named} ${verb}, ${state}`;
+  }
+  return plain.count === 1
+    ? `The one file ${named} ${verb} ${IS_NOT_IN_PLACE}`
+    : `${plain.done} of ${plain.count} files ${named} ${verb} ${ARE_IN_PLACE}`;
 }

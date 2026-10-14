@@ -140,3 +140,12 @@ export function joined(names: readonly string[], word = "and"): string {
   const last = names.slice(-1).join("");
   return `${names.slice(0, -1).join(", ")} ${word} ${last}`;
 }
+
+/** The last non-empty segment of a `/`-separated path, or "" where it has none: "bios" for "/a/bios/". */
+export function lastPathSegment(path: string): string {
+  // String code rather than `/\/+$/`, which backtracks super-linearly, or
+  // `findLast`, which ES2020 does not have.
+  let end = path.length;
+  while (end > 0 && path[end - 1] === "/") end--;
+  return path.slice(path.lastIndexOf("/", end - 1) + 1, end);
+}

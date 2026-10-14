@@ -76,6 +76,9 @@ _ENTRY_KEYS = {
     "console_needs_image",
     "refused",
     "emulator_notes",
+    # Not in a5777746 either: what the launching emulator's search of the BIOS
+    # folder established, for an emulator that searches by content.
+    "content_search",
     # Not in a5777746: one tab per emulator the resolver answered for (#2190).
     "emulator_tabs",
 }

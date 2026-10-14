@@ -100,6 +100,7 @@ from domain.firmware_wants import (
     LOCATING_VALUES,
     NOTE_BIOS_UNCHOSEN,
     NOTE_IMAGES_TIED,
+    NOTE_SEARCH_FOUND_NOTHING,
     CoreFirmwareVerdict,
     EmulatorNote,
     FirmwareCatalogue,
@@ -362,6 +363,7 @@ def _emulator_verdicts(answer: Any) -> dict[str, CoreFirmwareVerdict]:
             ),
             region_decided_by_disc=any(_decided_by_disc(caveat) for caveat in core.caveats),
             notes=_notes(core.caveats),
+            caveats=tuple(dict.fromkeys(caveat.code for caveat in core.caveats)),
         )
     return verdicts
 
@@ -403,20 +405,66 @@ def _notes(caveats: tuple[Any, ...]) -> tuple[EmulatorNote, ...]:
     PCSX2's BIOS setting naming no file is a BIOS nobody has chosen — read off
     the setting the resolver names (:data:`_BIOS_CHOICE_SETTING`), never off the
     caveat's shape, which xemu's empty keys share; an ambiguity is images that rank
-    alike, with the regions it is about where the resolver states them. The
-    entry's own caveats are its statements, so no attribution is asked.
+    alike, with the regions it is about where the resolver states them. A search
+    that reached no image is the same code with the folder it searched (``dir``)
+    and the regions it searched for, in one of two shapes the vendored
+    ``firmware.py`` builds: a libretro core's search adds how many files of an
+    accepted size the folder held (``candidates``, ``_search_found_nothing``),
+    and DuckStation's states no count (``_duckstation_search``), so its note
+    carries none. A code with neither shape words nothing. The entry's own
+    caveats are its statements, so no attribution is asked.
     """
     notes: list[EmulatorNote] = []
     for caveat in caveats:
-        stated = caveat.data.get("regions")
-        regions = tuple(r for r in stated if isinstance(r, str)) if isinstance(stated, (list, tuple)) else ()
+        regions = _stated_regions(caveat.data)
         if caveat.code == CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE and caveat.data.get("key") == _BIOS_CHOICE_SETTING:
             notes.append(EmulatorNote(kind=NOTE_BIOS_UNCHOSEN, setting=_BIOS_CHOICE_SETTING))
-        elif caveat.code == CAVEAT_FIRMWARE_IMAGE_AMBIGUOUS:
-            tied = caveat.data.get("tied")
-            count = int(tied) if isinstance(tied, str) and tied.isdigit() else None
-            notes.append(EmulatorNote(kind=NOTE_IMAGES_TIED, tied=count, regions=regions))
+        if caveat.code == CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE and _searched(caveat.data):
+            notes.append(_search_note(caveat.data, regions))
+        if caveat.code == CAVEAT_FIRMWARE_IMAGE_AMBIGUOUS:
+            notes.append(EmulatorNote(kind=NOTE_IMAGES_TIED, tied=_tied_count(caveat.data), regions=regions))
     return tuple(notes)
+
+
+def _stated_regions(data: dict[str, Any]) -> tuple[str, ...]:
+    """The regions a caveat's data states, or none where it states no list of them."""
+    stated = data.get("regions")
+    return tuple(r for r in stated if isinstance(r, str)) if isinstance(stated, (list, tuple)) else ()
+
+
+def _search_note(data: dict[str, Any], regions: tuple[str, ...]) -> EmulatorNote:
+    """The note for a search :func:`_searched` recognised, its count ``None`` where the search states none."""
+    candidates = data.get("candidates")
+    return EmulatorNote(
+        kind=NOTE_SEARCH_FOUND_NOTHING,
+        dir=data["dir"],
+        candidates=int(candidates) if candidates is not None else None,
+        regions=regions,
+    )
+
+
+def _tied_count(data: dict[str, Any]) -> int | None:
+    """How many images an ambiguity says rank alike, or ``None`` where it states no count."""
+    tied = data.get("tied")
+    return int(tied) if isinstance(tied, str) and tied.isdigit() else None
+
+
+def _searched(data: dict[str, Any]) -> bool:
+    """Does a caveat's data state a search: its folder, and its count of candidates or the regions it searched for?
+
+    ``firmware-path-names-no-file`` is stated for searches and for settings
+    that name no file alike, and the fields tell them apart: a search states
+    ``dir`` with ``candidates`` (a libretro core's) or ``regions``
+    (DuckStation's). A setting's statement states neither beside its ``dir`` —
+    PCSX2's empty BIOS setting names where a BIOS would be picked from, not a
+    folder that was searched — or no ``dir`` at all (xemu's, melonDS's).
+    """
+    if not isinstance(data.get("dir"), str):
+        return False
+    candidates = data.get("candidates")
+    if candidates is None:
+        return isinstance(data.get("regions"), (list, tuple))
+    return isinstance(candidates, str) and candidates.isdigit()
 
 
 def _requirement_entries(core: Any) -> list[tuple[Any, bool]]:

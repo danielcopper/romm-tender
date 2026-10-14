@@ -3416,6 +3416,7 @@ describe("RomMGameInfoPanel", () => {
         ratio_server_count: required_count ?? 1,
         ratio_local_count: local_count,
         all_downloaded,
+        locating: "by-name",
       };
       if (required_count !== null) bios.required_count = required_count;
       if (required_downloaded !== null) bios.required_downloaded = required_downloaded;
@@ -3439,13 +3440,13 @@ describe("RomMGameInfoPanel", () => {
     it("done >= total → green (#5ba32b) status dot", async () => {
       const { container } = await renderWithBios(5, 5, 5, true);
       expect(container.innerHTML).toContain("#5ba32b");
-      expect(container.textContent).toContain("All 5 files the launching emulator requires are in place");
+      expect(container.textContent).toContain("All 5 files the launching emulator opens by name are in place");
     });
 
     it("0 < done < total → amber (#d4a72c) status dot", async () => {
       const { container } = await renderWithBios(2, 5, 2, false);
       expect(container.innerHTML).toContain("#d4a72c");
-      expect(container.textContent).toContain("2 of 5 files the launching emulator requires are in place");
+      expect(container.textContent).toContain("2 of 5 files the launching emulator opens by name are in place");
     });
 
     it("done = 0 → red (#d94126) status dot", async () => {
@@ -3515,7 +3516,7 @@ describe("RomMGameInfoPanel", () => {
         await Promise.resolve();
       });
 
-      expect(container.textContent).not.toContain("requires are in place");
+      expect(container.textContent).not.toContain("opens by name are in place");
       expect(container.textContent).toContain(
         "The launching emulator marks none of its BIOS files as required (0/20 RomM library files)",
       );

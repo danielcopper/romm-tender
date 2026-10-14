@@ -478,9 +478,15 @@ export interface RefusedDeclaration {
  *  until one is chosen (`setting` names it); `images-tied` — `tied` images rank
  *  alike, for `regions` where stated, and which one boots is not established. */
 export interface EmulatorNote {
-  kind: "bios-unchosen" | "images-tied";
+  kind: "bios-unchosen" | "images-tied" | "search-found-nothing";
   setting: string | null;
   tied: number | null;
+  /** The folder a search looked in, for `search-found-nothing`. */
+  dir?: string | null;
+  /** How many files of a size the emulator accepts that folder held, for
+   *  `search-found-nothing` — `null` where the search states no count
+   *  (DuckStation's). */
+  candidates?: number | null;
   regions: string[];
 }
 
@@ -503,6 +509,10 @@ export interface EmulatorAnswer {
   console_needs_image?: boolean;
   refused?: RefusedDeclaration[];
   emulator_notes?: EmulatorNote[];
+  /** What the emulator's search of the BIOS folder established, for one that
+   *  searches by content and states no one-of group — `null` for every other.
+   *  Words the answer and moves no colour. */
+  content_search?: ContentSearch | null;
   /** One tab per emulator the resolver answered for, the launching one first —
    *  see {@link EmulatorTab}. Absent on a payload from before the field. */
   emulator_tabs?: EmulatorTab[];
@@ -522,6 +532,12 @@ export interface EmulatorTab {
   requirements_met: boolean | null;
   rows?: BiosFileStatus[];
 }
+
+/** What a by-content search of the BIOS folder established: every required
+ *  file met, a listing that did not finish, or a file it reached that could not
+ *  be read. A search that found nothing is the emulator's note instead
+ *  (`search-found-nothing`). */
+export type ContentSearch = "found" | "incomplete" | "unreadable";
 
 export interface BiosStatus extends EmulatorAnswer {
   needs_bios: boolean;

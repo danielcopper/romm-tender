@@ -35,7 +35,11 @@ from typing import TYPE_CHECKING, Any
 
 from domain.firmware_groups import GROUP_MET, GROUP_UNKNOWN, GROUP_UNMET, fetched_as_required
 from domain.firmware_wants import (
+    CAVEAT_SCAN_INCOMPLETE,
+    CAVEATS_IDENTIFIED_BY_CONTENT,
+    CHECKED_UNREAD,
     DECLARED_FILE,
+    LOCATING_BY_NAME_THEN_CONTENT,
     WANTED_NEEDED,
     WANTED_OPTIONAL,
     WANTED_UNKNOWN,
@@ -58,6 +62,19 @@ BIOS_LEVEL_MISSING = "missing"
 # function still has to name the label that goes with it.
 BIOS_LABEL_UNKNOWN = "Unknown"
 BIOS_LABEL_MISSING = "Missing"
+
+# What the launching emulator's search of the BIOS folder established, for an
+# emulator that finds its firmware ``by-name-then-content`` and states no one-of
+# group (:func:`classify_content_search`) — words for a surface, never a colour.
+# ``found``: every file it requires is met and was identified by its contents.
+# The other two are the ways its search did not settle, each one a statement of
+# the resolver's: its listing did not finish (``incomplete``), or a file the
+# search reached could not be read (``unreadable``). A search that settled and
+# found nothing is the emulator's own note (``search-found-nothing``), never
+# read off a verdict here.
+CONTENT_SEARCH_FOUND = "found"
+CONTENT_SEARCH_INCOMPLETE = "incomplete"
+CONTENT_SEARCH_UNREADABLE = "unreadable"
 
 
 @dataclass(frozen=True)
@@ -518,6 +535,42 @@ def region_decides(verdict: CoreFirmwareVerdict | None, groups: Iterable[Firmwar
             continue
         return False
     return mixed
+
+
+def classify_content_search(
+    verdict: CoreFirmwareVerdict | None,
+    files: tuple[BiosFileEntry, ...],
+    *,
+    groups: tuple[GroupVerdict, ...] = (),
+) -> str | None:
+    """What the launching emulator's search of the BIOS folder established, or ``None``.
+
+    For an emulator that finds its firmware ``by-name-then-content`` and states
+    no one-of *groups* — where it states one, the group says region by region
+    what the search reached, and this stays silent rather than being a second
+    answer beside it. ``None`` for every other emulator.
+
+    Every input is the resolver's: the rows' per-file verdicts, ``checked`` and
+    caveat codes, and the emulator's own caveat codes. ``found`` needs the
+    resolver to state that each file was identified by its contents — a file
+    opened by its configured name is met and was no search's finding, so the
+    answer says nothing of a search there. Nothing is reached by elimination:
+    where none of the three statements is made, the answer is ``None`` — a
+    required file not met is the verdict's, and a search that found nothing is
+    the emulator's note. It words the answer and decides no colour.
+    """
+    if groups or verdict is None or verdict.locating != LOCATING_BY_NAME_THEN_CONTENT:
+        return None
+    required = [f for f in files if f.required_by_active]
+    if required and all(
+        f.satisfied is True and CAVEATS_IDENTIFIED_BY_CONTENT.intersection(f.caveats) for f in required
+    ):
+        return CONTENT_SEARCH_FOUND
+    if CAVEAT_SCAN_INCOMPLETE in verdict.caveats:
+        return CONTENT_SEARCH_INCOMPLETE
+    if any(f.checked == CHECKED_UNREAD for f in required):
+        return CONTENT_SEARCH_UNREADABLE
+    return None
 
 
 def game_region_level(

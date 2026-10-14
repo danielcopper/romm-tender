@@ -1506,14 +1506,15 @@ The BIOS subsystem is a façade over four sub-services plus the demand reader th
 the RomM library holds are two different questions, and the split is drawn where they meet: `demand.py` answers the
 first and `listing.py` the second, and every surface below joins them rather than asking either source twice.
 
-| Module         | Role                                                                                                                                                                                                                                                                                                                                                                 |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `service.py`   | `FirmwareService` façade — public use cases; wires the sub-services and delegates                                                                                                                                                                                                                                                                                    |
-| `listing.py`   | `FirmwareListing` — the subsystem's only `list_firmware` caller and the owner of its TTL cache, in memory and in the SQLite `firmware_cache` table. A download and a delete both invalidate it through this one instance                                                                                                                                             |
-| `demand.py`    | `FirmwareDemand` — the machine's side: the per-platform verified reading, the whole-machine one the two callers with no platform to name fall back to, each file's destination under the BIOS root, the presence answer, and the rows for files the emulators want that the library never held. Sole owner of both resolver seams and of the BIOS root               |
-| `status.py`    | `FirmwareStatusReader` — `get_firmware_status` (which platforms the Library page can speak for, and nothing about any of them), `get_platform_firmware_status` (one platform's whole entry, the call that pays the reading) and `check_platform_bios` (the per-game check), the per-row build and the aggregates they answer from, and the per-platform delete count |
-| `downloads.py` | `FirmwareDownloader` — the three download entry points, the batch and its eligibility skips, and the `downloaded_bios` record each successful fetch leaves behind                                                                                                                                                                                                    |
-| `deletion.py`  | `PlatformBiosDeleter` — Delete BIOS, driven by those records and nothing else                                                                                                                                                                                                                                                                                        |
+| Module                | Role                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `service.py`          | `FirmwareService` façade — public use cases; wires the sub-services and delegates                                                                                                                                                                                                                                                                                    |
+| `listing.py`          | `FirmwareListing` — the subsystem's only `list_firmware` caller and the owner of its TTL cache, in memory and in the SQLite `firmware_cache` table. A download and a delete both invalidate it through this one instance                                                                                                                                             |
+| `demand.py`           | `FirmwareDemand` — the machine's side: the per-platform verified reading, the whole-machine one the two callers with no platform to name fall back to, each file's destination under the BIOS root, the presence answer, and the rows for files the emulators want that the library never held. Sole owner of both resolver seams and of the BIOS root               |
+| `status.py`           | `FirmwareStatusReader` — `get_firmware_status` (which platforms the Library page can speak for, and nothing about any of them), `get_platform_firmware_status` (one platform's whole entry, the call that pays the reading) and `check_platform_bios` (the per-game check), the per-row build and the aggregates they answer from, and the per-platform delete count |
+| `emulator_answers.py` | What the resolver says about each emulator of a platform: the launching emulator's answer and the words a surface puts to it (`emulator_fields`), and one tab per emulator it answered for (`emulator_tabs`, #2190 D15)                                                                                                                                              |
+| `downloads.py`        | `FirmwareDownloader` — the three download entry points, the batch and its eligibility skips, and the `downloaded_bios` record each successful fetch leaves behind                                                                                                                                                                                                    |
+| `deletion.py`         | `PlatformBiosDeleter` — Delete BIOS, driven by those records and nothing else                                                                                                                                                                                                                                                                                        |
 
 The two resolver seams, the scope that tells them apart, and the reasoning behind every answer they produce are in the
 _FirmwareService notes — the live firmware resolver_ section below.
@@ -2667,21 +2668,29 @@ is `unknown` — and an emulator the answer holds no entry for is not read, so `
 page's amber, and it too is read rather than counted (`region_decides`, #2190 D10): the verdict is open, the resolver
 stated that the disc's region decides it, a group of the emulator's has an image met and one not met and none not
 established, every other group is met, and nothing else is open — no plain required file it could not judge, no refused
-required declaration. Anything else open leaves it `unknown`. The counts beside it word it — "1 of 2 files mGBA requires
-are in place" under a red verdict — and `compute_bios_label` words it as the play row's token. A required row the
-resolver could not judge travels as `required_withheld`, which the shared `utils/biosSummary.ts` reads to say "One file
-X requires could not be checked". The play-row badge reads none of these: it rises on `missing`, the red verdict. What a
-withheld row SAYS comes from its caveat codes and, for a declared FILE, from its `checked` — the resolver's own word for
-what became of the bytes, carried from the same entry `declaration` is, because a file the emulator read and does not
-recognise WAS checked while one whose bytes never came back was not, and one withheld verdict cannot say which. The
-verdict is the answer alone and carries none of its causes; the verdict decides only which family of codes can apply and
-what to say when none of them is recognised, which is the one sentence written off it —
-`frontend/src/utils/biosFileNote.ts` is the one place both surfaces derive what a row says from — a sentence, the lines
-under it, which is how a satisfied folder's images arrive as a list rather than folded into the row's own name, and the
-description on its own line under the row (`biosFileDescription`). A row is headed by the file it declares on both
-surfaces and never by its description: that is the packager's prose out of a core's `.info`, outside the resolver's
-contract, and it routinely spells the row's own name into its words — so the shared rule takes the name back out and
-answers `null` where nothing is left.
+required declaration. Anything else open leaves it `unknown`. The counts beside it word it — "2 of 3 files melonDS opens
+by name are in place" under a red verdict — and `compute_bios_label` words it as the play row's token. A required row
+the resolver could not judge travels as `required_withheld`, which the shared `utils/biosSummary.ts` reads to say "One
+file X requires could not be checked". The play-row badge reads none of these: it rises on `missing`, the red verdict.
+How the emulator finds its firmware (`locating`, carried as the resolver spells it) words the counts — "opens by name",
+"lists as required" — and for an emulator that searches its BIOS folder by content,
+`domain/bios_status.py::classify_content_search` says what the search found, off the rows' verdicts, `checked` and
+caveat codes and the emulator's own caveat codes ([#1883](https://github.com/danielcopper/romm-tender/issues/1883)) —
+"found" only where the resolver states each file identified by its contents, and nothing at all where it states none of
+the three answers; neither moves the level. A search that settled and reached no image is not among them: the resolver
+states it as `firmware-path-names-no-file` with the folder it searched (`dir`) and how many files of an accepted size it
+held (`candidates`), and `adapters/atlas_firmware.py::_notes` carries exactly that shape as the emulator's
+`search-found-nothing` note — a required file not met is never read as one. What a withheld row SAYS comes from its
+caveat codes and, for a declared FILE, from its `checked` — the resolver's own word for what became of the bytes,
+carried from the same entry `declaration` is, because a file the emulator read and does not recognise WAS checked while
+one whose bytes never came back was not, and one withheld verdict cannot say which. The verdict is the answer alone and
+carries none of its causes; the verdict decides only which family of codes can apply and what to say when none of them
+is recognised, which is the one sentence written off it — `frontend/src/utils/biosFileNote.ts` is the one place both
+surfaces derive what a row says from — a sentence, the lines under it, which is how a satisfied folder's images arrive
+as a list rather than folded into the row's own name, and the description on its own line under the row
+(`biosFileDescription`). A row is headed by the file it declares on both surfaces and never by its description: that is
+the packager's prose out of a core's `.info`, outside the resolver's contract, and it routinely spells the row's own
+name into its words — so the shared rule takes the name back out and answers `null` where nothing is left.
 
 **No unknown withdraws a download, because the two questions are independent.** What the resolver could establish is the
 emulator's DEMAND; what is fetchable is what the RomM library HOLDS, and neither answers the other. A platform nothing

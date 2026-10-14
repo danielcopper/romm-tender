@@ -109,14 +109,32 @@ LOCATING_VALUES = (LOCATING_BY_NAME, LOCATING_BY_NAME_THEN_CONTENT, LOCATING_UNE
 # The emulator-level notes a surface words (:class:`EmulatorNote`). ``bios-unchosen``:
 # a setting that names the emulator's BIOS file is empty, so no game boots until
 # one is chosen. ``images-tied``: several images rank alike for the same console,
-# and which one the emulator opens is not established.
+# and which one the emulator opens is not established. ``search-found-nothing``:
+# a settled search of a folder reached no image to boot — no file of a size the
+# emulator accepts, or files of that size it recognises none of.
 NOTE_BIOS_UNCHOSEN = "bios-unchosen"
 NOTE_IMAGES_TIED = "images-tied"
+NOTE_SEARCH_FOUND_NOTHING = "search-found-nothing"
+
+# The listing of a directory an emulator searches did not finish, so the search
+# saw only part of what a launch would see. Spelled as the resolver spells it.
+CAVEAT_SCAN_INCOMPLETE = "firmware-scan-incomplete"
 
 # The place an emulator opens a file at could not be looked at (permissions or an
 # I/O failure), so whether anything is there is unknown. Spelled as the resolver
 # spells it.
 CAVEAT_PATH_INACCESSIBLE = "firmware-path-inaccessible"
+
+# The ``checked`` values a reading of an emulator's search is worded by: bytes
+# asked for that did not come back, and bytes read that no table the emulator
+# keeps knows. Spelled as the resolver spells them.
+CHECKED_UNREAD = "unread"
+CHECKED_UNRECOGNISED = "unrecognised"
+
+# The codes with which the resolver states that a search identified a file by
+# its contents: an image its table names, and one the emulator's own test
+# accepts that the table does not list. Spelled as the resolver spells them.
+CAVEATS_IDENTIFIED_BY_CONTENT = frozenset({"firmware-image-identified", "firmware-image-unlisted"})
 
 
 @dataclass(frozen=True)
@@ -178,8 +196,10 @@ class RefusedDeclaration:
 class EmulatorNote:
     """One statement the resolver makes about the emulator rather than about a file.
 
-    ``kind`` is one of :data:`NOTE_BIOS_UNCHOSEN` / :data:`NOTE_IMAGES_TIED`.
-    ``setting`` names the empty setting, ``tied`` how many images rank alike,
+    ``kind`` is one of :data:`NOTE_BIOS_UNCHOSEN` / :data:`NOTE_IMAGES_TIED` /
+    :data:`NOTE_SEARCH_FOUND_NOTHING`. ``setting`` names the empty setting,
+    ``tied`` how many images rank alike, ``dir`` the folder a search looked in
+    and ``candidates`` how many files of a size the emulator accepts it held,
     and ``regions`` the console regions the statement is about — each ``None``
     or empty where the resolver did not state it.
     """
@@ -187,6 +207,8 @@ class EmulatorNote:
     kind: str
     setting: str | None = None
     tied: int | None = None
+    dir: str | None = None
+    candidates: int | None = None
     regions: tuple[str, ...] = ()
 
 
@@ -225,10 +247,11 @@ class CoreFirmwareVerdict:
 
     ``undetermined`` names the plain required files whose verdict was not
     established and ``unmet`` those shown not met, ``refused`` every declaration
-    the resolver would not follow,
-    and ``region_decided_by_disc`` whether the resolver stated that a one-of
-    group's option is picked by the region of the disc being booted. ``notes``
-    are the emulator-level statements a surface words (:class:`EmulatorNote`).
+    the resolver would not follow, and ``region_decided_by_disc`` whether the
+    resolver stated that a one-of group's option is picked by the region of the
+    disc being booted. ``notes`` are the emulator-level statements a surface
+    words (:class:`EmulatorNote`), and ``caveats`` the stable codes stated on
+    the emulator's own entry.
     """
 
     system_firmware: str | None = None
@@ -242,6 +265,7 @@ class CoreFirmwareVerdict:
     refused: tuple[RefusedDeclaration, ...] = ()
     region_decided_by_disc: bool = False
     notes: tuple[EmulatorNote, ...] = ()
+    caveats: tuple[str, ...] = ()
 
     @property
     def system_needs_an_image(self) -> bool:

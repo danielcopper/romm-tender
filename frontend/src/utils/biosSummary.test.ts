@@ -12,7 +12,7 @@ import type { BiosLevel, OneOfGroupVerdict } from "../types/firmware";
 const EMULATOR = "SwanStation";
 
 function summary(source: BiosSummarySource, level: BiosLevel | null = "ok", rows: readonly BiosSummaryRow[] = []) {
-  return biosSummary({ active_core_label: EMULATOR, ...source }, rows, level);
+  return biosSummary({ active_core_label: EMULATOR, locating: "by-name", ...source }, rows, level);
 }
 
 // SwanStation's five PlayStation images, none of them in place — all optional, as a
@@ -77,7 +77,7 @@ describe("the states", () => {
   it("says nothing of a refused optional declaration, which changes no verdict", () => {
     const refused = [{ declared: "../outside.bin", required: false, reason: "firmware-path-escapes-root" }];
     expect(summary({ refused, required_count: 1, required_downloaded: 1 }, "ok").sentence).toBe(
-      "The one file SwanStation requires is in place",
+      "The one file SwanStation opens by name is in place",
     );
   });
 
@@ -93,8 +93,8 @@ describe("the states", () => {
     const notes = [{ kind: "images-tied" as const, setting: null, tied: 2, regions: ["pal"] }];
     const words = summary({ emulator_notes: notes, required_count: 1, required_downloaded: 1 }, "ok");
     expect(words.sentence).toBe(
-      "The one file SwanStation requires is in place — " +
-        "for Europe two images are in place, and which one SwanStation uses is not established",
+      "The one file SwanStation opens by name is in place — " +
+        "for Europe two images are in place; which one SwanStation uses is not established",
     );
     expect(words.status).toBe("1 / 1 required");
   });
@@ -116,7 +116,7 @@ describe("the states", () => {
   it("states the required files as held where the level says ready", () => {
     expect(summary({ required_count: 3, required_downloaded: 3 }, "ok")).toEqual({
       status: "3 / 3 required",
-      sentence: "All 3 files SwanStation requires are in place",
+      sentence: "All 3 files SwanStation opens by name are in place",
     });
   });
 
@@ -127,7 +127,7 @@ describe("the states", () => {
       { wanted: "optional", required_by_active: false, used_by_active: true, downloaded: true },
     ];
     expect(summary({ required_count: 2, required_downloaded: 2 }, "ok", rows).sentence).toBe(
-      "All 2 files SwanStation requires are in place (2 optional missing)",
+      "All 2 files SwanStation opens by name are in place (2 optional missing)",
     );
   });
 
@@ -138,7 +138,7 @@ describe("the states", () => {
       { wanted: "needed", required_by_active: false, used_by_active: true, downloaded: false },
     ];
     expect(summary({ required_count: 2, required_downloaded: 2 }, "ok", rows).sentence).toBe(
-      "All 2 files SwanStation requires are in place (1 optional missing)",
+      "All 2 files SwanStation opens by name are in place (1 optional missing)",
     );
   });
 
@@ -147,7 +147,7 @@ describe("the states", () => {
       { wanted: "optional", required_by_active: false, used_by_active: false, downloaded: false },
     ];
     expect(summary({ required_count: 2, required_downloaded: 2 }, "ok", rows).sentence).toBe(
-      "All 2 files SwanStation requires are in place",
+      "All 2 files SwanStation opens by name are in place",
     );
   });
 
@@ -158,7 +158,7 @@ describe("the states", () => {
       { wanted: "unknown", required_by_active: false, used_by_active: true, downloaded: false },
     ];
     expect(summary({ required_count: 2, required_downloaded: 2 }, "ok", rows).sentence).toBe(
-      "All 2 files SwanStation requires are in place",
+      "All 2 files SwanStation opens by name are in place",
     );
   });
 
@@ -170,21 +170,21 @@ describe("the states", () => {
     ];
     expect(summary({ required_count: 1, required_downloaded: 1 }, "ok", rows)).toEqual({
       status: "1 / 1 required",
-      sentence: "The one file SwanStation requires is in place (1 optional missing)",
+      sentence: "The one file SwanStation opens by name is in place (1 optional missing)",
     });
   });
 
   it("states the shortfall where the level is not ready", () => {
     expect(summary({ required_count: 4, required_downloaded: 1 }, "partial")).toEqual({
       status: "1 / 4 required",
-      sentence: "1 of 4 files SwanStation requires are in place",
+      sentence: "1 of 4 files SwanStation opens by name are in place",
     });
   });
 
   it("says ONE file rather than `0 of 1 files` where that one is not there", () => {
     expect(summary({ required_count: 1, required_downloaded: 0 }, "missing")).toEqual({
       status: "0 / 1 required",
-      sentence: "The one file SwanStation requires is not in place",
+      sentence: "The one file SwanStation opens by name is not in place",
     });
   });
 
@@ -233,6 +233,323 @@ describe("the game page's own region", () => {
   });
 });
 
+describe("how the emulator finds its firmware words the answer", () => {
+  const required = (name: string, satisfied: boolean | null): BiosSummaryRow => ({
+    file_name: name,
+    wanted: "needed",
+    required_by_active: true,
+    used_by_active: true,
+    downloaded: satisfied === true,
+    satisfied,
+  });
+
+  it("counts what an emulator that opens its files by name has in place, under a red verdict", () => {
+    const rows = [required("bios7.bin", true), required("bios9.bin", true), required("firmware.bin", false)];
+    expect(
+      biosSummary(
+        { active_core_label: "melonDS", locating: "by-name", required_count: 3, required_downloaded: 2 },
+        rows,
+        "missing",
+      ),
+    ).toEqual({ status: "2 / 3 required", sentence: "2 of 3 files melonDS opens by name are in place" });
+  });
+
+  it("says every file it opens by name is in place under a met verdict", () => {
+    expect(summary({ locating: "by-name", required_count: 2, required_downloaded: 2 }, "ok").sentence).toBe(
+      "All 2 files SwanStation opens by name are in place",
+    );
+  });
+
+  it("says what an emulator nobody read lists, with the note that how it finds its BIOS is not established", () => {
+    const rows = [required("mpr-17933.bin", true), required("saturn_bios.bin", true)];
+    expect(
+      biosSummary(
+        { active_core_label: "Beetle Saturn", locating: "unestablished", required_count: 2, required_downloaded: 2 },
+        rows,
+        "ok",
+      ).sentence,
+    ).toBe(
+      "All 2 files Beetle Saturn lists as required are in place. How Beetle Saturn finds its BIOS has not been established",
+    );
+  });
+
+  it("names the missing file such an emulator lists, red, with the same note", () => {
+    expect(
+      biosSummary(
+        { active_core_label: "gpSP", locating: "unestablished", required_count: 1, required_downloaded: 0 },
+        [required("gba_bios.bin", false)],
+        "missing",
+      ).sentence,
+    ).toBe(
+      "gba_bios.bin, which gpSP lists as required, is not in place. How gpSP finds its BIOS has not been established",
+    );
+  });
+
+  it("keeps an emulator that marks nothing required at Nothing required, without the note", () => {
+    expect(summary({ locating: "unestablished", required_count: 0 }, "ok")).toEqual({
+      status: "Nothing required",
+      sentence: "SwanStation marks none of its BIOS files as required",
+    });
+  });
+
+  it("says Tender cannot tell what an emulator the resolver does not cover needs", () => {
+    expect(biosSummary({ active_core_label: "PPSSPP", emulator_declaration: "unsupported" }, [], "unknown")).toEqual({
+      status: "Requirement unknown",
+      sentence: "Tender cannot tell what PPSSPP needs yet — the emulator's firmware is not covered by the resolver yet",
+    });
+  });
+
+  it("names a missing file and one nothing could check together, red", () => {
+    const rows = [required("GameIndex.yaml", false), required("bios", null)];
+    expect(
+      summary(
+        { locating: "by-name", required_count: 2, required_downloaded: 0, required_withheld: 1 },
+        "missing",
+        rows,
+      ),
+    ).toEqual({
+      status: "0 / 2 required · 1 not checked",
+      sentence: "One file SwanStation opens by name is not in place, and one could not be checked",
+    });
+  });
+
+  it("states what a search by content found rather than counting it", () => {
+    expect(
+      biosSummary(
+        {
+          active_core_label: "DuckStation",
+          locating: "by-name-then-content",
+          content_search: "found",
+          required_count: 1,
+          required_downloaded: 1,
+        },
+        [required("scph5500.bin", true)],
+        "ok",
+      ),
+    ).toEqual({ status: "Found by content", sentence: "DuckStation recognises scph5500.bin in the BIOS folder" });
+  });
+
+  // A settled search of the folder that reached no image is the resolver's own
+  // statement (`firmware-path-names-no-file` with `dir` and `candidates`),
+  // carried as the emulator's note — never read off the verdict.
+  const foundNothing = (candidates: number | null) => ({
+    kind: "search-found-nothing" as const,
+    setting: null,
+    tied: null,
+    dir: "/home/deck/retrodeck/bios",
+    candidates,
+    regions: ["ntsc-j", "ntsc-u", "pal"],
+  });
+  const searcher = (label: string, candidates: number | null) => ({
+    active_core_label: label,
+    locating: "by-name-then-content" as const,
+    required_count: 1,
+    required_downloaded: 0,
+    emulator_notes: [foundNothing(candidates)],
+  });
+
+  it.each(["DuckStation", "SwanStation"])("says %s found no image in the folder it searched", (label) => {
+    expect(biosSummary(searcher(label, 0), [required("scph5501.bin", false)], "missing")).toEqual({
+      status: "No BIOS image found",
+      sentence: `${label} found no BIOS image in bios/ for a Japan, USA and Europe console`,
+    });
+  });
+
+  it.each([
+    [2, "bios/ holds 2 files of a size DuckStation accepts, and it recognises none of them"],
+    [1, "bios/ holds 1 file of a size DuckStation accepts, and it does not recognise it"],
+  ])("says the folder holds %i candidates the emulator recognises none of", (candidates, sentence) => {
+    expect(biosSummary(searcher("DuckStation", candidates), [required("scph5501.bin", false)], "missing")).toEqual({
+      status: "No image recognised",
+      sentence,
+    });
+  });
+
+  // The shape a libretro core's search arrives in (SwanStation's): no requirement
+  // rows, nothing required, and a statement of the search with its count — all
+  // there is to word.
+  const searchOnly = (candidates: number, label = "SwanStation") => ({
+    active_core_label: label,
+    locating: "by-name-then-content" as const,
+    required_count: 0,
+    required_downloaded: 0,
+    emulator_notes: [foundNothing(candidates)],
+  });
+
+  it.each([
+    [0, "No BIOS image found", "SwanStation found no BIOS image in bios/ for a Japan, USA and Europe console"],
+    [2, "No image recognised", "bios/ holds 2 files of a size SwanStation accepts, and it recognises none of them"],
+  ])(
+    "words the search ahead of the open verdict, on an answer that holds nothing but the search (%i)",
+    (candidates, status, sentence) => {
+      expect(biosSummary(searchOnly(candidates), [], "unknown")).toEqual({ status, sentence });
+    },
+  );
+
+  it("leaves the search unsaid where a one-of group speaks for it", () => {
+    const group: OneOfGroupVerdict = {
+      state: "met",
+      covered: ["ntsc-j", "ntsc-u", "pal"],
+      missing: [],
+      unchecked: [],
+      game_regions: [],
+      regions: ["ntsc-j", "ntsc-u", "pal"],
+      options: [{ file_name: "scph1001.bin", regions: ["ntsc-j", "ntsc-u", "pal"], satisfied: true }],
+    };
+    const words = biosSummary(
+      { ...searcher("SwanStation", 0), required_count: 1, required_downloaded: 1, one_of_groups: [group] },
+      [],
+      "ok",
+    );
+    expect(words.sentence).toBe("SwanStation has a BIOS image for every region");
+  });
+
+  // The answer DuckStation (Standalone) really sends over an empty BIOS folder:
+  // no row, read as not read, a verdict of not met, and a search that states its
+  // folder but no count.
+  const emptyFolder = {
+    active_core_label: "DuckStation (Standalone)",
+    emulator_read: false,
+    locating: "by-name-then-content" as const,
+    emulator_declaration: "packaged" as const,
+    console_needs_image: true,
+    refused: [],
+    emulator_notes: [foundNothing(null)],
+    content_search: null,
+    required_count: 0,
+    required_downloaded: 0,
+    required_withheld: 0,
+  };
+
+  it("states the console's need and then the search, where the emulator names no image", () => {
+    expect(biosSummary(emptyFolder, [], "missing", "PlayStation")).toEqual({
+      status: "Needs a BIOS image",
+      sentence:
+        "PlayStation does not start without a BIOS image — DuckStation (Standalone) found no BIOS image in bios/",
+    });
+  });
+
+  it("never counts zero images the emulator knows", () => {
+    expect(biosSummary({ ...emptyFolder, emulator_notes: [] }, [], "missing", "PlayStation").sentence).toBe(
+      "PlayStation does not start without a BIOS image",
+    );
+  });
+
+  it.each(["missing", "ok"] as const)(
+    "words a verdict the resolver stated over an emulator read as not read (%s)",
+    (level) => {
+      expect(biosSummary(emptyFolder, [], level, "PlayStation").sentence).not.toContain("Nothing could be established");
+    },
+  );
+
+  it("states the console's need first and the search after it, where both apply", () => {
+    const words = biosSummary(
+      {
+        active_core_label: "SwanStation",
+        locating: "by-name-then-content",
+        console_needs_image: true,
+        emulator_notes: [foundNothing(2)],
+      },
+      FIVE_IMAGES,
+      "missing",
+      "PlayStation",
+    );
+    expect(words).toEqual({
+      status: "Needs a BIOS image",
+      sentence:
+        "PlayStation does not start without a BIOS image, and none of the five SwanStation knows is in place — " +
+        "bios/ holds 2 files of a size SwanStation accepts, and it recognises none of them",
+    });
+  });
+
+  // Each way of finding firmware with an emulator the resolver answers it for,
+  // and a file that emulator declares; the refusal is the code's input alone.
+  it.each([
+    ["by-name", "melonDS", "bios7.bin", "opens by name"],
+    ["unestablished", "gpSP", "gba_bios.bin", "lists as required"],
+    ["by-name-then-content", "DuckStation", "scph5501.bin", "requires"],
+  ] as const)(
+    "words a file nothing could check and a refused one with the count's own verb (%s)",
+    (locating, label, file, verb) => {
+      const named = { active_core_label: label, locating };
+      expect(biosSummary({ ...named, required_withheld: 1 }, [], "unknown").sentence).toBe(
+        `One file ${label} ${verb} could not be checked`,
+      );
+      const refused = [{ declared: `../${file}`, required: true, reason: "firmware-path-escapes-root" }];
+      expect(biosSummary({ ...named, refused }, [], "unknown").sentence).toBe(
+        `${label} ${verb} ../${file}, which lies outside the BIOS folder — so whether it is ready could not be established`,
+      );
+    },
+  );
+
+  it("never says a searching emulator opens by name where the resolver stated nothing of its search", () => {
+    const words = biosSummary(
+      { active_core_label: "DuckStation", locating: "by-name-then-content", required_count: 1, required_downloaded: 0 },
+      [required("scph5501.bin", false)],
+      "missing",
+    );
+    expect(words.sentence).not.toContain("opens by name");
+    expect(words.sentence).toBe("The one file DuckStation requires is not in place");
+  });
+
+  it("words neither sentence over a search note that names no folder", () => {
+    // The backend makes no such note — an empty setting with no folder (xemu's)
+    // is no search — so one that arrives states nothing the panel can word.
+    const note = { ...foundNothing(0), dir: null };
+    const words = biosSummary(
+      { ...searcher("xemu", 0), emulator_notes: [note] },
+      [required("mcpx_1.0.bin", false)],
+      "missing",
+    );
+    expect(words.sentence).not.toContain("found no BIOS image");
+    expect(words.sentence).not.toContain("of a size");
+    expect(words.status).not.toBe("No BIOS chosen");
+  });
+
+  it("words a search that states no count by its folder alone", () => {
+    // DuckStation's search: the folder, and no count of candidates.
+    expect(
+      biosSummary({ ...searchOnly(0, "DuckStation"), emulator_notes: [foundNothing(null)] }, [], "unknown"),
+    ).toEqual({
+      status: "No BIOS image found",
+      sentence: "DuckStation found no BIOS image in bios/",
+    });
+  });
+
+  // The folder is named by the last segment of the resolver's `dir`, however
+  // many slashes end it or sit inside it; a `dir` with no segment at all names
+  // the BIOS folder instead.
+  it.each([
+    ["/home/deck/retrodeck/bios", "bios/"],
+    ["/home/deck/retrodeck/bios/", "bios/"],
+    ["/home/deck/retrodeck/bios///", "bios/"],
+    ["/home/deck//retrodeck//bios", "bios/"],
+    ["bios", "bios/"],
+    ["/", "the BIOS folder"],
+    ["", "the BIOS folder"],
+  ])("names the folder searched at %j as %s", (dir, folder) => {
+    const source = { ...searchOnly(0, "DuckStation"), emulator_notes: [{ ...foundNothing(null), dir }] };
+    expect(biosSummary(source, [], "unknown").sentence).toBe(`DuckStation found no BIOS image in ${folder}`);
+  });
+
+  it.each([
+    ["incomplete", [], "DuckStation's BIOS folder could not be read completely"],
+    [
+      "unreadable",
+      [{ ...required("scph5501.bin", null), checked: "unread" as const }],
+      "scph5501.bin could not be read",
+    ],
+  ] as const)("words a search that found nothing by what it found: %s", (search, rows, sentence) => {
+    expect(
+      biosSummary(
+        { active_core_label: "DuckStation", locating: "by-name-then-content", content_search: search },
+        rows,
+        "unknown",
+      ),
+    ).toEqual({ status: "Readiness unknown", sentence });
+  });
+});
+
 describe("the emulator's name", () => {
   it("falls back to the role where the pick carries no label", () => {
     expect(biosSummary({ required_count: 0 }, [], "ok").sentence).toBe(
@@ -262,16 +579,16 @@ describe("reading the payload", () => {
     ];
     expect(summary({}, "partial", rows)).toEqual({
       status: "1 / 2 required",
-      sentence: "1 of 2 files SwanStation requires are in place",
+      sentence: "1 of 2 files SwanStation opens by name are in place",
     });
   });
 
   it("decides readiness by the count comparison where the payload carries no level", () => {
     expect(summary({ required_count: 2, required_downloaded: 2 }, null).sentence).toBe(
-      "All 2 files SwanStation requires are in place",
+      "All 2 files SwanStation opens by name are in place",
     );
     expect(summary({ required_count: 2, required_downloaded: 1 }, null).sentence).toBe(
-      "1 of 2 files SwanStation requires are in place",
+      "1 of 2 files SwanStation opens by name are in place",
     );
   });
 });
@@ -477,7 +794,7 @@ describe("a one-of group", () => {
     );
     expect(both).toEqual({
       status: "0 / 1 required · regions not checked",
-      sentence: "The one file SwanStation requires is not in place",
+      sentence: "The one file SwanStation opens by name is not in place",
     });
   });
 
@@ -677,7 +994,7 @@ describe("a one-of group", () => {
     // The plain file alone is counted, in the status and in the sentence.
     expect(both).toEqual({
       status: "0 / 1 required · 1 / 1 regions",
-      sentence: "The one file SwanStation requires is not in place",
+      sentence: "The one file SwanStation opens by name is not in place",
     });
   });
 
@@ -708,7 +1025,7 @@ describe("a one-of group", () => {
     );
     expect(both).toEqual({
       status: "0 / 1 required · regions not checked",
-      sentence: "The one file SwanStation requires is not in place",
+      sentence: "The one file SwanStation opens by name is not in place",
     });
   });
 

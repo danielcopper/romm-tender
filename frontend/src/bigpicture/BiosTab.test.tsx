@@ -45,6 +45,7 @@ const biosStatus: BiosStatus = {
   all_downloaded: false,
   required_count: 1,
   required_downloaded: 0,
+  locating: "by-name",
 };
 
 describe("BiosTab", () => {
@@ -53,7 +54,7 @@ describe("BiosTab", () => {
       <BiosTab biosStatus={biosStatus} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
     );
     expect(container.textContent).toContain(
-      "The one file the launching emulator requires is not in place (0/1 RomM library files)",
+      "The one file the launching emulator opens by name is not in place (0/1 RomM library files)",
     );
     expect(container.textContent).toContain("Snes9x");
   });
@@ -144,8 +145,8 @@ describe("BiosTab", () => {
   });
 
   it.each([
-    [2, "All 2 files the launching emulator requires are in place (5/20 RomM library files)"],
-    [1, "The one file the launching emulator requires is in place (5/20 RomM library files)"],
+    [2, "All 2 files the launching emulator opens by name are in place (5/20 RomM library files)"],
+    [1, "The one file the launching emulator opens by name is in place (5/20 RomM library files)"],
   ])("states a ready requirement of %i beside a library ratio that counts a different set", (required, sentence) => {
     const { container } = render(
       <BiosTab
@@ -158,6 +159,7 @@ describe("BiosTab", () => {
           all_downloaded: false,
           required_count: required,
           required_downloaded: required,
+          locating: "by-name",
         }}
         biosLevel="ok"
         coreInfo={coreInfo}

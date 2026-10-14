@@ -8,6 +8,7 @@ import {
   formatTimestampWithYear,
   formatTimeAgo,
   formatUninstallStatus,
+  lastPathSegment,
   resolveLastPlayed,
 } from "./formatters";
 
@@ -284,5 +285,21 @@ describe("formatReleaseDate", () => {
     formatDatesIn("en-GB");
     expect(formatReleaseDate(seconds(new Date(2004, 3, 5, 12)))).toBe("5 Apr 2004");
     vi.restoreAllMocks();
+  });
+});
+
+describe("lastPathSegment", () => {
+  // The shapes the BIOS folder's callers see: the resolver's `dir`, and what a
+  // `local_path` holds ahead of its declared path.
+  it.each([
+    ["/a/bios", "bios"],
+    ["/a/bios/", "bios"],
+    ["/a/bios///", "bios"],
+    ["/a//b//bios", "bios"],
+    ["bios", "bios"],
+    ["/", ""],
+    ["", ""],
+  ])("answers %j with %j", (path, segment) => {
+    expect(lastPathSegment(path)).toBe(segment);
   });
 });

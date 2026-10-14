@@ -37,10 +37,12 @@ No colour is worked out from counting files:
   not others, and nothing else is open — "Beetle PSX has a BIOS image for USA only — Japan and Europe discs will not
   start". Whether a game starts then depends on its disc's region (see
   [When the console needs a BIOS image](#when-the-console-needs-a-bios-image)).
-- **Red** — the emulator does not have what it needs: "1 of 2 files mGBA requires are in place" (the sentence still says
-  how much is there), "The one file DuckStation requires is not in place", a file that is there but is the wrong image,
-  or "PlayStation does not start without a BIOS image, and none of the five SwanStation knows is in place" where the
-  console itself will not start without one of the images
+- **Red** — the emulator does not have what it needs: "2 of 3 files melonDS opens by name are in place" (the sentence
+  still says how much is there), "The one file DuckStation requires is not in place", a file that is there but is the
+  wrong image, or "PlayStation does not start without a BIOS image, and none of the five SwanStation knows is in place"
+  where the console itself will not start without one of the images — and, for an emulator that names no image but
+  searches your BIOS folder, "PlayStation does not start without a BIOS image — DuckStation (Standalone) found no BIOS
+  image in bios/"
 - **Grey** — not established, in one of several wordings: "Nothing could be established about what mGBA needs", where
   the emulator could not be asked at all (see [When the requirement is unknown](#when-the-requirement-is-unknown)); "One
   file mGBA requires could not be checked" or "Whether the BIOS image Beetle PSX needs is in place could not be
@@ -48,6 +50,31 @@ No colour is worked out from counting files:
   settings, and no game boots until one is", where the emulator's own settings name no BIOS; or a required file the
   resolver would not follow, named with its reason (see
   [When readiness cannot be stated](#when-readiness-cannot-be-stated))
+
+The line also says **how the emulator finds its BIOS**, because that decides what a list of file names means. An
+emulator that opens the files it names says so — "2 of 3 files melonDS opens by name are in place". One that searches
+your BIOS folder and recognises an image by its contents (where the resolver says it found the image that way) is not
+counted at all, because "1 / 1 required" would be true and useless: "DuckStation recognises scph5500.bin in the BIOS
+folder" (short form **Found by content**). Where the resolver states that the search reached no image, the line says
+what the folder held: "SwanStation found no BIOS image in bios/ for a Japan, USA and Europe console" (**No BIOS image
+found**) where it holds no file of a size the emulator accepts — "DuckStation (Standalone) found no BIOS image in bios/"
+where the search states no count of files — or "bios/ holds 2 files of a size SwanStation accepts, and it recognises
+none of them" (**No image recognised**). Where the console itself does not start without an image (see
+[When the console needs a BIOS image](#when-the-console-needs-a-bios-image)), that sentence comes first and this one
+follows it as a note: "PlayStation does not start without a BIOS image, and none of the five SwanStation knows is in
+place — bios/ holds 2 files of a size SwanStation accepts, and it recognises none of them". Where the search did not
+settle, grey, by why — "DuckStation's BIOS folder could not be read completely", or "scph5501.bin could not be read".
+Where the resolver states nothing about the search, the line counts the files the emulator **requires** — "The one file
+DuckStation requires is not in place" — and never says it opens them by name, because it would also search the folder.
+Where nobody has established how an emulator finds its BIOS, the line says what it **lists**, with a note: "All 2 files
+Beetle Saturn lists as required are in place. How Beetle Saturn finds its BIOS has not been established", or, red,
+"gba_bios.bin, which gpSP lists as required, is not in place" with the same note. A required file that is not in place
+beside one that could not be checked names both: "One file melonDS opens by name is not in place, and one could not be
+checked", with "1 / 3 required · 1 not checked" as its short form. An emulator the resolver Tender asks does not cover
+yet reads grey: "Tender cannot tell what PPSSPP needs yet — the emulator's firmware is not covered by the resolver yet".
+The same words — "opens by name", "lists as required" or "requires" — also word a required file nothing could check and
+a declaration the resolver would not follow, so one emulator is never described two ways. None of this moves the colour,
+which stays the resolver's verdict.
 
 Every one of those sentences is written in one place and both surfaces read it, so the game page and the Library page's
 platform pane can never word the same state differently. The pane has a heading to hang a short form on, so it shows
