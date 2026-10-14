@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from domain.emulator_commands import LaunchingEmulator
     from domain.rom_install import RomInstall
     from services.protocols import (
+        ActiveCoreReader,
         Clock,
         ConflictRules,
         CoreInfoProvider,
@@ -65,6 +66,7 @@ class FirmwareServiceConfig:
     core_info: CoreInfoProvider
     platform_systems: PlatformSystems
     platform_core_reader: PlatformCoreReader
+    active_core: ActiveCoreReader
     uow_factory: UnitOfWorkFactory
     conflict_rules: ConflictRules
 
@@ -134,6 +136,7 @@ class FirmwareService:
                 core_info=config.core_info,
                 platform_systems=config.platform_systems,
                 platform_core_reader=config.platform_core_reader,
+                active_core=config.active_core,
                 firmware_file_store=config.firmware_file_store,
                 clock=config.clock,
                 uow_factory=config.uow_factory,

@@ -1379,6 +1379,7 @@ def _dispatcher_over_firmware(
             core_info=FakeCoreInfoProvider(),
             platform_systems=FakePlatformSystems(),
             platform_core_reader=FakePlatformCoreReader(),
+            active_core=FakeActiveCoreResolver(),
             uow_factory=FakeUnitOfWorkFactory(uow),
             conflict_rules=_make_conflict_rules(),
         )

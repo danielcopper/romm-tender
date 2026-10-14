@@ -628,14 +628,15 @@ places carry it and they are the same string:
 - the **`active_core`** of `get_platform_core_info` (per ROM, through `active_emulator_for_rom`) and of
   `get_platform_firmware_status` (per platform, through `resolve_platform_option`);
 - the **`emulator`** field of every picker row in `options_to_payload`, beside its `core_so`;
-- the **keys** of a firmware row's `cores` map.
+- the **`emulator`** of each tab of a BIOS answer (`emulator_tabs`) and a firmware row's `declared_by`.
 
-That is what lets the BIOS pane join a row's per-emulator lines onto the picker's labels and highlight the one the
-answer was scoped to (#955). `core_so` cannot serve any of it: it is `None` for every standalone emulator and carries no
-extension for a libretro one, so matching on it named no standalone emulator and printed `dolphin_libretro.so` where the
-label said Dolphin. `label` cannot either — ES-DE lists one `pcsx2_libretro.so` as both `LRPS2` and `PCSX2`, so a label
-identifies a launch ROW and two rows can be one emulator. `core_so` stays on the picker payload because a surface may
-still need to name the libretro core itself; it is not a second answer to "which emulator is this".
+That is what lets a BIOS page match each emulator's tab and rows to the picker's labels and mark the one the answer was
+scoped to ([#2190](https://github.com/danielcopper/romm-tender/issues/2190) D15). `core_so` cannot serve any of it: it
+is `None` for every standalone emulator and carries no extension for a libretro one, so matching on it named no
+standalone emulator and printed `dolphin_libretro.so` where the label said Dolphin. `label` cannot either — ES-DE lists
+one `pcsx2_libretro.so` as both `LRPS2` and `PCSX2`, so a label identifies a launch ROW and two rows can be one
+emulator. `core_so` stays on the picker payload because a surface may still need to name the libretro core itself; it is
+not a second answer to "which emulator is this".
 
 `active_core_for_rom`'s `(core_so, label)` is therefore **not** what a payload sends: it answers `None` for a standalone
 pick, which is the degradation this swap removed.

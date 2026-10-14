@@ -149,6 +149,58 @@ class TestJudgeGroup:
         assert group.regions_of("psxonpsp660.bin") == (REGION_NTSC_J, REGION_PAL)
 
 
+def _two_regions(*, ntsc_j: bool | None, ntsc_u: bool | None, **regions) -> FirmwareGroup:
+    """A group carrying options for Japan and USA only — the rest of its route's regions it states nothing for."""
+    return FirmwareGroup(
+        emulator=_BEETLE,
+        options=(
+            FirmwareOption("scph5500.bin", (REGION_NTSC_J,), ntsc_j),
+            FirmwareOption("scph5501.bin", (REGION_NTSC_U,), ntsc_u),
+        ),
+        **regions,
+    )
+
+
+class TestARegionTheGroupStatesNothingFor:
+    """The resolver's ``unstated``: a region the route knows and no option serves is open, and named as such."""
+
+    def test_it_is_unchecked_and_named_beside_a_covered_and_a_missing_region(self):
+        verdict = judge_group(_two_regions(ntsc_j=True, ntsc_u=False, unstated_regions=(REGION_PAL,)))
+
+        assert verdict.covered == (REGION_NTSC_J,)
+        assert verdict.missing == (REGION_NTSC_U,)
+        assert verdict.unchecked == (REGION_PAL,)
+        assert verdict.unstated == (REGION_PAL,)
+        assert verdict.regions == (REGION_NTSC_J, REGION_NTSC_U, REGION_PAL)
+
+    def test_it_keeps_a_covered_group_from_reading_green(self):
+        verdict = judge_group(_two_regions(ntsc_j=True, ntsc_u=True, unstated_regions=(REGION_PAL,)))
+
+        assert verdict.state == GROUP_UNKNOWN
+        assert verdict.unstated == (REGION_PAL,)
+
+    def test_a_region_also_stated_to_boot_nothing_is_missing_and_not_named_unstated(self):
+        verdict = judge_group(
+            _two_regions(ntsc_j=True, ntsc_u=True, unstated_regions=(REGION_PAL,), absent_regions=(REGION_PAL,))
+        )
+
+        assert verdict.missing == (REGION_PAL,)
+        assert verdict.unstated == ()
+
+    def test_a_game_of_that_region_is_unknown_and_its_region_named(self):
+        group = _two_regions(ntsc_j=True, ntsc_u=False, unstated_regions=(REGION_PAL,))
+
+        verdict = judge_group_for_game(group, (REGION_PAL,))
+
+        assert verdict.state == GROUP_UNKNOWN
+        assert verdict.unstated == (REGION_PAL,)
+
+    def test_a_game_of_another_region_names_none(self):
+        group = _two_regions(ntsc_j=True, ntsc_u=False, unstated_regions=(REGION_PAL,))
+
+        assert judge_group_for_game(group, (REGION_NTSC_U,)).unstated == ()
+
+
 class TestTheVerdictCarriesWhatAPageListsUnderIt:
     """A page lists the group's options under its verdict, so the verdict carries them whole."""
 
@@ -291,6 +343,19 @@ class TestFetchedAsRequired:
         placement = _placement("gba_bios.bin", FirmwareWant("mgba_libretro.so", required=True))
 
         assert fetched_as_required(placement, "mgba_libretro.so", ()) is True
+
+    def test_a_file_whose_place_could_not_be_looked_at_is_never_fetched(self):
+        # A download there could overwrite a file nobody could see.
+        placement = FirmwarePlacement(
+            file_name="gba_bios.bin",
+            relative_path="gba_bios.bin",
+            description="gba_bios.bin",
+            wants=(FirmwareWant("mgba_libretro.so", required=True),),
+            caveats=("firmware-path-inaccessible",),
+        )
+
+        assert fetched_as_required(placement, "mgba_libretro.so", ()) is False
+        assert fetched_as_required(placement, None, ()) is False
 
     def test_an_option_of_an_uncovered_region_is_fetched(self):
         placement = _placement("scph5500.bin", FirmwareWant(_BEETLE, required=False))

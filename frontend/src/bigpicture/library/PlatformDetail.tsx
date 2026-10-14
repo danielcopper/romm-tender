@@ -13,20 +13,22 @@
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Library.
  */
 
-import type { FC, ReactNode } from "react";
+import { useState, type FC, type ReactNode } from "react";
 import { ConfirmModal, DialogButton, Focusable, showContextMenu, showModal, Spinner } from "@decky/ui";
 import { FaMicrochip } from "react-icons/fa";
-import type { FirmwarePlatformExt, SystemCoreInfo } from "../../types";
+import type { BiosFileStatus, FirmwarePlatformExt, SystemCoreInfo } from "../../types";
 import { biosColorForLevel } from "../../utils/biosColor";
 import { fetchedAsRequired, isFetchable } from "../../utils/biosFetchable";
 import { biosFileDescription, biosFileNote } from "../../utils/biosFileNote";
 import { oneOfRowLine } from "../../utils/biosGroup";
 import { biosHeldRatio } from "../../utils/biosHeldRatio";
 import { biosSummary } from "../../utils/biosSummary";
+import { selectedTab, tabRows } from "../../utils/biosTabs";
 import { emulatorClause } from "../../utils/emulatorClause";
 import { buildEmulatorMenu } from "../../utils/emulatorMenu";
 import { emulatorDataReasonSentence, platformSystemClause } from "../../utils/emulatorSourceWording";
 import { getEventTarget } from "../../utils/events";
+import { EmulatorTabs } from "../EmulatorTabs";
 import { pluralize } from "../../utils/pluralize";
 import { SYNC_RUNNING_HINT, useSyncRunning } from "../../utils/syncRunning";
 import {
@@ -131,6 +133,10 @@ const CORE_BUTTON = {
  *  payload rather than restated, so a field added to it reaches here. */
 type FirmwareRow = FirmwarePlatformExt["files"][number];
 
+/** A row the BIOS table renders: the launching tab's own `files`, or another
+ *  emulator's tab's rows, which carry no server record of their own. */
+type BiosTableRow = FirmwareRow | BiosFileStatus;
+
 /**
  * The first mark in one row's `On disk` cell, as a glyph and a colour.
  *
@@ -142,25 +148,23 @@ type FirmwareRow = FirmwarePlatformExt["files"][number];
  *   LRPS2's `pcsx2/bios` onto the BIOS root, so the folder is always there and
  *   what satisfies the core is a file inside it.
  * - **the colour is the NEED** — strong where the core the platform launches
- *   with requires the file, muted where it does not, **amber where nothing
- *   could say**. Keyed on `required_by_active`, not `wanted`, because the
- *   summary above the table counts the same way and the two must not disagree
- *   about what "required" means.
+ *   with requires the file, muted where it does not. Keyed on
+ *   `required_by_active`, not `wanted`, because the summary above the table
+ *   counts the same way and the two must not disagree about what "required"
+ *   means.
  *
- * The two axes are read in that order, and the order is load-bearing. A
- * `wanted: "unknown"` row has no placement and a launching emulator whose
- * reading is incomplete (`reading_complete_for`, `domain/firmware_wants.py`),
- * and its verdict is `downloaded` all the same (`domain/bios_status.py`,
- * `_row_verdict(None, …)`), so it IS established. Testing the need axis first
- * would spend the glyph on a need-axis fact and throw that verdict away, and a
- * platform nothing could be asked about is made entirely of such rows: that is
- * the pane telling the reader they can place BIOS files by hand, so which ones
- * are already there is the one thing it must not stop saying.
+ * **Every "not established" is a grey `?`** — a verdict nothing
+ * could establish, and a need nothing could establish: a file whose need
+ * nobody answered is no file "not required", so it does not wear that grey `✗`.
+ * Whether such a file is there is still the row's own verdict, and the mark's
+ * title and the legend line keep saying it — a platform nothing could be asked
+ * about is made entirely of such rows, and which ones are already there is the
+ * one thing the pane must not stop saying.
  *
- * So the four states come out as required + met green `✓`, required + unmet red
- * `✗`, not required + met pale green `✓`, not required + unmet grey `✗`; a need
- * nothing could establish keeps its glyph and goes amber; and only a verdict
- * nothing could establish becomes `?`.
+ * So the states come out as required + met green `✓`, required + unmet red
+ * `✗`, not required + met pale green `✓`, not required + unmet grey `✗`, and
+ * grey `?` wherever the verdict or the need is not established. Amber is never a
+ * mark here: it means only a one-of group whose images serve some regions.
  *
  * `not_needed` and `optional` share the muted branch on purpose: for the core
  * about to launch, a file it does not require is not a gap either way.
@@ -170,27 +174,26 @@ type FirmwareRow = FirmwarePlatformExt["files"][number];
  * shade of the fourth: the emulator marks no such file required, because the
  * group is the requirement and the file one way to meet it, yet a missing one
  * leaves the regions it serves with nothing to boot. So it is strong like a
- * required row, under its own words, and it is asked between the two above and
- * the required/not-required pair below: an unestablished verdict is still `?`,
- * and an unestablished NEED is still amber, both tested first. Which region it
- * serves is the line under the row ({@link oneOfRowLine}).
+ * required row, under its own words, and it is asked after the two `?` marks
+ * and before the required/not-required pair. Which region it serves is the line
+ * under the row ({@link oneOfRowLine}).
  *
  * The `Contents` cell reads the same `satisfied`, so the two columns are two
  * renderings of one field and cannot contradict each other.
  */
-function diskMark(file: FirmwareRow): { glyph: string; color: string; title: string } {
+function diskMark(file: BiosTableRow): { glyph: string; color: string; title: string } {
   const verdict = rowVerdict(file);
-  if (verdict === null) return { glyph: "?", color: AMBER, title: MARK_UNCHECKED };
+  if (verdict === null) return { glyph: "?", color: MUTED, title: MARK_UNCHECKED };
+  if (file.wanted === "unknown") {
+    return { glyph: "?", color: MUTED, title: verdict ? MARK_HERE_NEED_UNKNOWN : MARK_MISSING_NEED_UNKNOWN };
+  }
 
-  const needUnknown = file.wanted === "unknown";
   const required = file.required_by_active;
   const option = Boolean(file.one_of) && !required;
   if (verdict) {
-    if (needUnknown) return { glyph: "✓", color: AMBER, title: MARK_HERE_NEED_UNKNOWN };
     if (option) return { glyph: "✓", color: GREEN, title: MARK_ONE_OF_THESE_HERE };
     return { glyph: "✓", color: required ? GREEN : PALE_GREEN, title: required ? MARK_REQUIRED_HERE : MARK_HERE };
   }
-  if (needUnknown) return { glyph: "✗", color: AMBER, title: MARK_MISSING_NEED_UNKNOWN };
   if (option) return { glyph: "✗", color: RED, title: MARK_ONE_OF_THESE_MISSING };
   return { glyph: "✗", color: required ? RED : MUTED, title: required ? MARK_REQUIRED_MISSING : MARK_MISSING };
 }
@@ -203,7 +206,7 @@ function diskMark(file: FirmwareRow): { glyph: string; color: string; title: str
  * unestablished rather than falling back to presence. For a declared file
  * `downloaded` IS the verdict, which is the only thing the fallback is for.
  */
-function rowVerdict(file: FirmwareRow): boolean | null {
+function rowVerdict(file: BiosTableRow): boolean | null {
   const declaredFolder = file.declared_kind === "directory";
   const fallback = declaredFolder ? null : file.downloaded;
   return file.satisfied !== undefined ? file.satisfied : fallback;
@@ -226,7 +229,7 @@ function rowVerdict(file: FirmwareRow): boolean | null {
  * refuses to produce for the same reason, and the same reason keeps folder rows
  * out of the download filter and out of the download batch.
  */
-function libraryMark(file: FirmwareRow): typeof LIBRARY_MARK | null {
+function libraryMark(file: BiosTableRow): typeof LIBRARY_MARK | null {
   return file.on_server === false && file.declared_kind !== "directory" ? LIBRARY_MARK : null;
 }
 
@@ -275,7 +278,7 @@ const BiosTableHeader: FC = () => (
  * because the core's listing reaches no image either way. Which of the two it is
  * belongs to the line under the row, whose wording is {@link biosFileNote}'s.
  */
-function contentsCell(file: FirmwareRow): string {
+function contentsCell(file: BiosTableRow): string {
   if (file.declared_kind !== "directory") return "—";
   if (file.satisfied === true) {
     const held = file.images?.length ?? 0;
@@ -323,7 +326,7 @@ const BiosRowLines: FC<{ lines: string[] }> = ({ lines }) =>
  * `ep128emu/roms/exos21.rom` — and their descriptions spell it in only 115 of
  * those, so the description is not a substitute for the declaration.
  */
-function declaredFolder(file: FirmwareRow): string | null {
+function declaredFolder(file: BiosTableRow): string | null {
   const declared = file.declared_path;
   if (!declared?.includes("/")) return null;
   return `${declared.slice(0, declared.lastIndexOf("/"))}/`;
@@ -346,16 +349,16 @@ function declaredFolder(file: FirmwareRow): string | null {
  * The entries carry the same strings the rows' tooltips do, and match on them:
  * see the `MARK_*` block for why the glyph and colour cannot be the identity.
  */
-const BiosLegend: FC<{ files: FirmwareRow[] }> = ({ files }) => {
+const BiosLegend: FC<{ files: readonly BiosTableRow[] }> = ({ files }) => {
   const marks = files.map((file) => diskMark(file));
   const shown = [
     { glyph: "✗", color: RED, text: MARK_REQUIRED_MISSING },
     { glyph: "✗", color: RED, text: MARK_ONE_OF_THESE_MISSING },
     { glyph: "✓", color: GREEN, text: MARK_REQUIRED_HERE },
     { glyph: "✓", color: GREEN, text: MARK_ONE_OF_THESE_HERE },
-    { glyph: "✗", color: AMBER, text: MARK_MISSING_NEED_UNKNOWN },
-    { glyph: "✓", color: AMBER, text: MARK_HERE_NEED_UNKNOWN },
-    { glyph: "?", color: AMBER, text: MARK_UNCHECKED },
+    { glyph: "?", color: MUTED, text: MARK_MISSING_NEED_UNKNOWN },
+    { glyph: "?", color: MUTED, text: MARK_HERE_NEED_UNKNOWN },
+    { glyph: "?", color: MUTED, text: MARK_UNCHECKED },
     { glyph: "✓", color: PALE_GREEN, text: MARK_HERE },
     { glyph: "✗", color: MUTED, text: MARK_MISSING },
   ].filter((entry) => marks.some((mark) => mark.title === entry.text));
@@ -383,7 +386,11 @@ const BiosLegend: FC<{ files: FirmwareRow[] }> = ({ files }) => {
   );
 };
 
-const BiosFileRow: FC<{ file: FirmwareRow; action: ReactNode }> = ({ file, action }) => {
+const BiosFileRow: FC<{ file: BiosTableRow; action: ReactNode; muted?: boolean }> = ({
+  file,
+  action,
+  muted = false,
+}) => {
   const { note, lines, fromLibrary } = biosFileNote(file);
   const mark = diskMark(file);
   const library = libraryMark(file);
@@ -409,6 +416,9 @@ const BiosFileRow: FC<{ file: FirmwareRow; action: ReactNode }> = ({ file, actio
       register={BIOS_TABLE_REGISTER}
       testId="bios-file-row"
       focusStop={!action}
+      // Another emulator's tab is a reading of its answer, not this launch's:
+      // muted, and offering nothing to press (#2190).
+      {...(muted ? { style: { opacity: 0.6 } } : {})}
       cells={[
         {
           // With the folder in front of it what gets cut is the NAME rather
@@ -739,6 +749,14 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   firmware,
 }) => {
   const files = firmware.files;
+  // Which emulator's tab the table shows: the launching one until another is
+  // chosen. A view and nothing more — what launches, the header, the counts and
+  // the downloads below stay the launching emulator's (#2190).
+  const [tabKey, setTabKey] = useState<string | null>(null);
+  const tabs = firmware.emulator_tabs;
+  const tab = selectedTab(tabs, tabKey);
+  const shownRows = tabRows(files, tabs, tab);
+  const otherTab = tab !== null && !tab.launching;
   // The library's own progress, read nowhere but `allDone`, which is one of
   // `showAll`'s conditions. Counted over what the LIBRARY holds, not over the
   // rows — the rows include files no library holds, and offering to fetch those
@@ -750,41 +768,35 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   const done = firmware.local_count ?? files.filter((f) => f.on_server && f.downloaded).length;
   const allDone = done === total;
 
-  const requiredWithheld = firmware.required_withheld ?? 0;
-  const systemImage = firmware.system_image ?? "not_demanded";
-  // **The pane words none of the seven states itself** — `utils/biosSummary.ts`
-  // holds them, and this surface takes both halves of one answer: the short
-  // `status` as the section's coloured note, where the title beside it says what
-  // is being counted, and the `sentence` under it. The console's own demand
-  // outranking the level's decline is decided in there too, which is what stops
-  // this pane from reading that order differently from the game page's.
+  // **The pane words none of the states itself** — `utils/biosSummary.ts` holds
+  // them, and this surface takes both halves of one answer: the short `status`
+  // as the section's coloured note, where the title beside it says what is being
+  // counted, and the `sentence` under it. The order they are read in is decided
+  // in there too, which is what stops this pane from reading it differently from
+  // the game page's.
   const { status: summaryLabel, sentence: summaryDescription } = biosSummary(
     firmware,
     files,
     firmware.bios_level ?? null,
+    row.name || null,
   );
-  // The library's own ratio rides along behind the sentence, in every one of the
-  // seven states and in the words the game page uses — `utils/biosHeldRatio`
+  // The library's own ratio rides along behind the sentence, in every state and
+  // in the words the game page uses — `utils/biosHeldRatio`
   // writes it for both, because the two surfaces say one thing about a platform
   // and a fact one of them carries is a fact the other is missing.
   const heldRatio = biosHeldRatio(firmware);
-  // The narrowest of the declines: not one row on the platform was answered, so
-  // the pane has nothing to point the reader at and says where a file can be put
-  // instead. A withheld required row and an unsettled console demand are both
-  // declined VERDICTS over rows that DID answer, and neither reaches this. It
-  // decides one extra LINE only — what the pane offers to fetch is a separate
-  // question with a separate input, below.
-  const nothingEstablished =
-    firmware.bios_level === "unknown" &&
-    systemImage !== "absent" &&
-    requiredWithheld === 0 &&
-    systemImage !== "unsettled";
+  // The narrowest of the declines: the emulator this platform launches with was
+  // not read at all, so the pane has nothing to point the reader at and says
+  // where a file can be put instead. A verdict the resolver left open over an
+  // emulator it DID read is not this. It decides one extra LINE only — what the
+  // pane offers to fetch is a separate question with a separate input, below.
+  const nothingEstablished = firmware.bios_level === "unknown" && firmware.emulator_read === false;
 
   // The download affordances key off what is missing AND fetchable, and read
-  // the VERDICT nowhere — not `bios_level`, not `required_withheld`, not
-  // `system_image`. They are two independent questions: what the RESOLVER could
-  // establish is the emulator's demand, what is FETCHABLE is what the RomM
-  // library holds, and neither answers the other. A required file the library
+  // the VERDICT nowhere — not `bios_level`, not `required_withheld`. They are
+  // two independent questions: what the RESOLVER could establish is the
+  // emulator's demand, what is FETCHABLE is what the RomM library holds, and
+  // neither answers the other. A required file the library
   // does not hold leaves the platform not ready and still gives the user
   // nothing to press here; a platform nothing could be read for still has a
   // library behind it, and fetching from it is the one action that moves the
@@ -845,11 +857,27 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
       {nothingEstablished && (
         <Muted fontSize={NOTE_FONT}>You can still put BIOS files in your BIOS folder by hand.</Muted>
       )}
-      {files.length > 0 && <BiosTableHeader />}
-      {files.map((file) => (
-        <BiosFileRow key={file.file_name} file={file} action={rowAction(row, state, file, fetchable)} />
+      {tabs && tab && tabs.length > 1 && (
+        <EmulatorTabs
+          tabs={tabs}
+          selected={tab}
+          onSelect={(chosen) => setTabKey(chosen.launching ? null : chosen.emulator)}
+          padding="4px 16px 6px"
+        />
+      )}
+      {shownRows.length > 0 && <BiosTableHeader />}
+      {shownRows.map((file) => (
+        <BiosFileRow
+          key={file.file_name}
+          file={file}
+          // The launching tab's rows are the payload's own `files`; another
+          // tab's offer nothing to press — the downloads are the launching
+          // emulator's (#2190 D9).
+          action={otherTab ? null : rowAction(row, state, file as FirmwareRow, fetchable)}
+          muted={otherTab}
+        />
       ))}
-      {files.length > 0 && <BiosLegend files={files} />}
+      {shownRows.length > 0 && <BiosLegend files={shownRows} />}
       {unanswered > 0 && (
         <Muted fontSize={NOTE_FONT}>
           {unanswered === 1 ? "1 file" : `${unanswered} files`} nothing installed could answer for. Report at
@@ -1101,7 +1129,7 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
         </Muted>
       )}
       {firmware ? (
-        <BiosSection row={row} state={state} firmware={firmware} />
+        <BiosSection key={row.slug} row={row} state={state} firmware={firmware} />
       ) : (
         <>
           <SectionTitle title="BIOS files" />

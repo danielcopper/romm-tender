@@ -670,9 +670,8 @@ and this launch does not use never makes the answer doubtful.
 Keeping the last two apart is the whole point of the vocabulary — "nothing wants this" is a finished answer and "nothing
 could be established" is the absence of one, and a single boolean called both _not required_. **Wanted** is a property
 of the platform's own emulators and does not move with which of them the user picked; the launch-scoped question is
-**required by the launching emulator**, which is what the missing-BIOS badge counts — beside **system image**, the
-console's own demand, which no count carries and which raises that same badge. The foil to **BIOS level** (the
-platform-wide readiness verdict: unknown / ok / partial / missing).
+**required by the launching emulator**, which the counts a sentence words are taken over. The foil to **BIOS level**
+(the resolver's readiness verdict for the launching emulator: unknown / ok / partial / missing).
 
 A wanted file need not be one the RomM library holds — the two sets overlap without either containing the other, and a
 platform's list is their **union**. A row the library does not hold is marked **not on server**: it counts towards
@@ -681,38 +680,28 @@ because nothing in Tender can fetch it.
 
 ### Row verdict (firmware): met / unmet / withheld
 
-Whether one row's requirement is met, and the axis the **readiness** counts key off. It is **not** whether something is
-at the destination: for a **folder declaration** the two come apart completely, since what satisfies the core is a file
-_inside_ the folder and RetroDECK links LRPS2's `pcsx2/bios` onto the BIOS root, so the folder is there on every
-install. Every statement below is scoped to a **required by the launching emulator** row first — a row that emulator
-does not require moves no count whatever its verdict — and the library's own held/offered ratio is a third axis again,
-counting what the RomM library holds rather than what is met.
+Whether one row's requirement is met: the resolver's own verdict over that file, read at the place the launching
+emulator opens it (#2190 D3) — never presence. A wrong image is there and unmet; a file the resolver could not compare
+is there and withheld; for a **folder declaration** the verdict is what the folder _holds_, and RetroDECK links LRPS2's
+`pcsx2/bios` onto the BIOS root, so the folder is there on every install. The rows a launch reads are the **launching
+emulator**'s own requirements, each at the place the resolver names for that emulator: with YabaSanshiro launching
+Saturn, `saturn_bios.bin` is the file directly under the BIOS root, whatever lies under Kronos's `kronos/`. Every
+statement below is scoped to a **required by the launching emulator** row first, and the library's own held/offered
+ratio is a third axis again, counting what the RomM library holds rather than what is met.
 
-- **met** — raises `required_downloaded`. For a declared folder, the resolver listed it and an image inside passes the
-  core's own content check. For a declared file it is presence at the destination, answered by the resolver wherever it
-  placed the file under the BIOS root and by Tender's own probe for the rest — a library file no core declares, and a
-  file an emulator keeps in its own tree.
-- **unmet** — counted as a file shown to be absent, so it reads red and raises the play row's **BIOS badge**. A folder
-  the resolver listed and found no image in is exactly this, and so is one that is not there at all.
-- **withheld** — the reading established neither. It raises neither count, and while a required row carries one the
-  **BIOS level** declines to `unknown` rather than claiming either. The rows below keep their own answers; only the
-  one-line verdict declines.
+- **met** — raises `required_downloaded`, the "in place" a sentence counts. The resolver established that the right file
+  is where the emulator opens it — or, for a declared folder, that an image inside passes the emulator's own check. A
+  library file no emulator declares is no requirement of anything, so the resolver has no verdict for it; its row says
+  only whether Tender's own look found it.
+- **unmet** — the resolver showed the requirement is not met: the file is absent, the bytes are the wrong image, the
+  emulator refuses it on its size, or something of the wrong shape is at the place. Worded with which of these it is.
+- **withheld** — the resolver established neither: the file could not be recognised, read or compared, or the place
+  could not be looked at at all. A place the resolver could not look at is never read as missing.
 
-The CAUSE of a withheld verdict is read off the resolver's **caveat codes** carried on the row — a folder read that
-could not finish, a candidate the identity table and the core's own header check disagree about, a directory obstructing
-a destination the emulator opens as a file — because the verdict is deliberately the answer alone and carries none of
-it. What the verdict does decide is which family of codes can apply, and what a surface says when none of them is
-recognised.
-
-For a declared **file** the cause is the **byte reading** below, which the row carries beside the verdict.
-
-Not every unestablished thing is withheld here. A declared file whose _bytes_ were never verified is not — and for
-almost every such file the reason is simply that nobody asked: the verified question is put to one core at a time and
-only where a folder row is open, so on a platform whose cores declare no folder nothing is verified at all. Where it
-_is_ asked, it verifies that core's declared files too — each one the packaged identity table covers at a matching size,
-and no others — and their **verdicts** are dropped unread. Either way, reading an unasked content question as a withheld
-verdict would decline readiness for every row on every platform. The foil to **not on server**, which is a settled
-absence and does count towards readiness.
+No colour is computed from these: the **BIOS level** is the resolver's verdict over the emulator, and a row's verdict is
+what the sentence beside it counts and what the row's own mark shows. The CAUSE of a withheld or unmet verdict is read
+off the row's **byte reading** and the resolver's **caveat codes**, because the verdict is deliberately the answer
+alone.
 
 ### Byte reading (firmware): what became of a row's bytes
 
@@ -748,13 +737,17 @@ that is a plain declaration and an option is one row.
 
 Judged region by region, each region the group speaks about is **covered** (an option serving it is in place),
 **missing** (its option is shown not to be, or the resolver stated nothing boots for it) or **unchecked** (an option
-serving it is there and could not be read, or the resolver named it as resting on a read that settled nothing). The
-state follows:
+serving it is there and could not be read, the resolver named it as resting on a read that settled nothing, or it is a
+region of the emulator's route the group carries no option for, which the resolver names as `unstated` — named after
+every group sentence wherever no game region narrows the group, whatever the group's state; a line a missing plain
+required file words names none). The state follows:
 
 - **met** — every region is covered. Never over an unchecked one.
-- **partial** — some region is covered and some is missing. Counted as not met; the **BIOS level** is `partial`.
-- **unmet** — no option is in place or might be. The **BIOS level** is `missing`, as for an **absent** system image; an
-  unchecked region does not lift it.
+- **partial** — some region is covered and some is missing. Counted as not met. Where the resolver's verdict is open
+  because of the disc's region alone (#2190 D10) the **BIOS level** is `partial`, the platform page's amber; anything
+  else open beside it leaves the level the resolver's `unknown`.
+- **unmet** — no option is in place or might be. The resolver's verdict is not met, so the **BIOS level** is `missing`;
+  an unchecked region does not lift it.
 - **unknown** — an option is there and unread and no region is covered, or an unchecked region stands beside covered
   ones and none is missing. A declined verdict, like a withheld required row; never folded into a colour of its own.
   Where nothing is covered, an unread option makes it unknown even beside regions shown missing: the headline is grey,
@@ -780,35 +773,23 @@ selector a **one-of group** is judged over. _Avoid_ in user-facing text: North A
 region, which is a release's name tag (`USA`, `Germany`, `World`) and maps onto at most one console region each; RomM's
 that map onto none leave the game's console region unknown.
 
-### System image (firmware): held / absent / unsettled / not demanded
+### Console's need for an image (firmware)
 
-Whether the core a game launches with has the firmware image its **console** cannot start without — the coarse reading
-of that demand, for a core that states no **one-of group**. Where the core states one, the group IS the demand, said
-region by region, and this answers **not demanded**. A `.info` marks each file **needed** or **optional** and nothing
-else: no way to say "one of these", and no way to say the console will not boot without one. The console's own answer is
-world knowledge rather than a reading of the machine — the resolver keeps a source-cited table of it, per system.
+That the console a game launches on does not start without a firmware image the launching emulator does not carry
+itself. A `.info` marks each file **needed** or **optional** and nothing else — no way to say the console will not boot
+without one of them — so the resolver answers this from a source-cited table of world knowledge, per system
+(`system_firmware`), marked on the answer where it stated something (`system-firmware-world-knowledge`). It weighs that
+need into its own verdict, so the **BIOS level** already carries it: Tender keeps no reading of its own over it (#2190
+D13).
 
-It is a **disjunction**, and that is what keeps it out of the counts. The console asks for _one_ of the images the core
-declares, not for each of them, so it is a single requirement over the whole list rather than one requirement per file.
-Folded into **required by the launching emulator** it would report every image the core declares as required; carried as
-its own axis it is worded as the console's demand and never as a ratio. The **library inventory** below is a different
-set again.
-
-- **held** — one of the images is at its destination. Which one is not asked: any of them answers the whole requirement.
-- **absent** — the console needs one and every row the launching emulator declares was established to be absent. The
-  **BIOS level** goes to `missing`, tested ahead of the declines so a demonstration outranks a platform nothing could be
-  established for. A withheld required row cannot hold with it: that row is one of the rows the disjunction is read
-  over, so it leaves the answer **unsettled** instead.
-- **unsettled** — the console needs one and whether it is there could not be established. It can turn a green verdict
-  grey and nothing else: where the counts already read `partial` or `missing`, something is known to be absent and a
-  doubt about one further file does not unsay it.
-- **not demanded** — the axis makes no claim, and the file rows speak for themselves. The core stating a **one-of
-  group** reaches it, and so do four recordings of the table: the core carries its own substitute (PCSX ReARMed's HLE
-  BIOS), the console was established to start with nothing present, the question is recorded as open, or **nothing is
-  recorded about the console at all**. The last is an unasked question and may never be read as "this console needs no
-  firmware" — the same rule that keeps **unknown** apart from **not needed** one axis over.
-
-Scoped to the **launching emulator** — the scope **required by the launching emulator** shares and **wanted** does not.
+It reaches a surface only as words, under a verdict that is not met: "PlayStation does not start without a BIOS image,
+and none of the five SwanStation knows is in place". That the console needs one comes from the resolver's table; which
+image is in place comes from the **row verdicts**, never from presence; whether the console's image is shown absent —
+the fact a game's page reads red on whatever the game's region — is the resolver's console-level verdict
+(`system_firmware_met`), never inferred from a group or the rows. An emulator that names no image at all gets the need
+without a count, and the search's own statement after it: "PlayStation does not start without a BIOS image — DuckStation
+(Standalone) found no BIOS image in bios/". A system the table records nothing about is an unasked question and is never
+read as "this console needs no firmware".
 
 ### Declaration register (firmware): read / packaged
 
@@ -820,17 +801,17 @@ resolver explaining the REQUIREMENT in whole sentences. One field, two kinds of 
 a row: the second is a paragraph on a line sized for a label, and it broke off mid-sentence on the platform pane and
 filled the row on the game page.
 
-It is the register of the ONE entry the description came from — a file several emulators declare carries the prose of
-the first of them — and never a property of the file, the row or the emulator behind it. The resolver states three
-further words (`absent`, `unreadable`, `unsupported`), none of which can reach a row: an entry in one of those states
-carries no requirement, so it declares no file. A row nothing declared states no register at all, and its description is
-its own file name.
+It is the register of the ONE entry the description came from — each row is one emulator's own requirement (#2190 D2),
+so the prose is that emulator's — and never a property of the file, the row or the emulator behind it. The resolver
+states three further words (`absent`, `unreadable`, `unsupported`), none of which can reach a row: an entry in one of
+those states carries no requirement, so it declares no file. A row nothing declared states no register at all, and its
+description is its own file name.
 
 ### Library inventory (firmware): offered / held
 
 What the RomM library has for a platform, and how much of it is on this machine — the third counted set beside the
-**required by the launching emulator** files and the console's own **system image** demand. **offered** (`server_count`)
-is every firmware file the library holds for the platform; **held** (`local_count`) is how many of those Tender found at
+**required by the launching emulator** files and the **console's need for an image**. **offered** (`server_count`) is
+every firmware file the library holds for the platform; **held** (`local_count`) is how many of those Tender found at
 their destination. Both are counted over the library's files alone, so a row the library does not have — **not on
 server** — is in neither, however required it is. The code calls the pair the **held/offered ratio**.
 

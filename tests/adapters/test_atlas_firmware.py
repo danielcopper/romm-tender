@@ -15,10 +15,12 @@ too — a fixture that could not come off a real machine fails to construct.
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from _standalone_firmware import SYSTEMS, lay_down_standalone_emulators
 from _vendor.atlas import (
     CAVEAT_CORE_FILE_FOREIGN,
     CAVEAT_CORE_MODE_UNESTABLISHED,
@@ -34,6 +36,10 @@ from _vendor.atlas import (
     CAVEAT_FIRMWARE_SEARCH_UNVERIFIED,
     HEALTH_ISSUE_NOT_SET_UP,
 )
+from _vendor.atlas import LOCATING_BY_NAME as ATLAS_LOCATING_BY_NAME
+from _vendor.atlas import LOCATING_BY_NAME_THEN_CONTENT as ATLAS_LOCATING_BY_NAME_THEN_CONTENT
+from _vendor.atlas import LOCATING_UNESTABLISHED as ATLAS_LOCATING_UNESTABLISHED
+from _vendor.atlas.firmware import CAVEAT_FIRMWARE_PATH_INACCESSIBLE as ATLAS_CAVEAT_PATH_INACCESSIBLE
 from _vendor.atlas.firmware import (
     CORE_SYSTEM_FIRMWARE_STATES,
     SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
@@ -57,12 +63,15 @@ from _vendor.atlas.firmware import DECLARED_FILE as ATLAS_DECLARED_FILE
 from _vendor.atlas.machine import KIND_DIRECTORY, KIND_FILE, KIND_INACCESSIBLE, KIND_MISSING, PathKind
 from _vendor.atlas.placement import Caveat
 
-from adapters.atlas_firmware import AtlasFirmwareAdapter, AtlasPlatformFirmwareAdapter
+from adapters.atlas_firmware import _BIOS_CHOICE_SETTING, AtlasFirmwareAdapter, AtlasPlatformFirmwareAdapter
 from adapters.emulator_sources import EmulatorSourcesAdapter
 from domain.firmware_wants import (
-    CAVEAT_PATH_OBSTRUCTED,
+    CAVEAT_PATH_INACCESSIBLE,
     DECLARED_DIRECTORY,
     DECLARED_FILE,
+    LOCATING_BY_NAME,
+    LOCATING_BY_NAME_THEN_CONTENT,
+    LOCATING_UNESTABLISHED,
     SYSTEM_FIRMWARE_STATES,
     WANTED_UNKNOWN,
     FirmwareWant,
@@ -254,7 +263,7 @@ def catalogue_emulators(catalogue) -> set[str | None]:
 
 
 class TestPlacements:
-    def test_one_row_per_file_folds_every_core_that_declares_it(self, adapter, monkeypatch):
+    def test_each_core_that_declares_a_file_has_a_placement_of_its_own(self, adapter, monkeypatch):
         answer = _answer(
             _core(core_so="mednafen_psx_libretro.so", requirements=(_requirement(file_name="scph5501.bin"),)),
             _core(
@@ -266,13 +275,16 @@ class TestPlacements:
 
         catalogue = adapter()
 
-        assert [p.file_name for p in catalogue.placements] == ["scph5501.bin"]
-        placement = catalogue.placements[0]
-        assert {(w.emulator, w.required) for w in placement.wants} == {
-            ("mednafen_psx_libretro.so", True),
-            ("swanstation_libretro.so", False),
-        }
-        assert placement.required_by_any is True
+        assert [(p.file_name, p.emulator) for p in catalogue.placements] == [
+            ("scph5501.bin", "mednafen_psx_libretro.so"),
+            ("scph5501.bin", "swanstation_libretro.so"),
+        ]
+        for placement in catalogue.placements:
+            assert {(w.emulator, w.required) for w in placement.wants} == {
+                ("mednafen_psx_libretro.so", True),
+                ("swanstation_libretro.so", False),
+            }
+            assert placement.required_by_any is True
 
     def test_the_identifier_is_the_resolvers_own_spelling(self, adapter, monkeypatch):
         """One identity per emulator, stated by the resolver and never rewritten here.
@@ -854,6 +866,60 @@ class TestOneOfGroups:
 
         assert catalogue.groups[0].unchecked_regions == ()
 
+    @staticmethod
+    def _decided_by_disc(*, unstated: tuple[str, ...], reason: str = "region-decided-by-disc", **attribution):
+        """The statement ``_undecided_region_caveat`` makes beside a group, in its data's shape."""
+        return Caveat(
+            code=CAVEAT_CORE_MODE_UNESTABLISHED,
+            message="the region is the disc's — and nothing is stated for a pal console",
+            data={
+                **(attribution or {"core_so": "mednafen_psx_libretro.so"}),
+                "reason": reason,
+                "dir": _ROOT,
+                "regions": ["ntsc-j", "ntsc-u"],
+                "unstated": list(unstated),
+            },
+        )
+
+    def _two_regions(self, *caveats: Caveat) -> CoreFirmware:
+        """A group carrying options for Japan and USA only."""
+        group = FirmwareAlternatives(
+            options=(_option("scph5500.bin", ("ntsc-j",)), _option("scph5501.bin", ("ntsc-u",)))
+        )
+        return _core(core_so="mednafen_psx_libretro.so", requirements=(group,), caveats=caveats)
+
+    def test_the_regions_the_group_states_nothing_for_reach_it_from_unstated(self, adapter, monkeypatch):
+        catalogue = self._catalogue(adapter, monkeypatch, self._two_regions(self._decided_by_disc(unstated=("pal",))))
+
+        (group,) = catalogue.groups
+        assert group.unstated_regions == ("pal",)
+        assert group.unchecked_regions == ()
+        assert group.absent_regions == ()
+        assert group.regions == ("ntsc-j", "ntsc-u", "pal")
+
+    def test_unstated_is_read_only_off_the_region_statement(self, adapter, monkeypatch):
+        """Another reason of the same code says nothing about the group's regions."""
+        other = self._decided_by_disc(unstated=("pal",), reason="emulator-build-unestablished")
+        catalogue = self._catalogue(adapter, monkeypatch, self._two_regions(other))
+
+        assert catalogue.groups[0].unstated_regions == ()
+
+    def test_another_emulators_unstated_stays_off_the_group(self, adapter, monkeypatch):
+        foreign = self._decided_by_disc(unstated=("pal",), core_so="swanstation_libretro.so")
+        catalogue = self._catalogue(adapter, monkeypatch, self._two_regions(foreign))
+
+        assert catalogue.groups[0].unstated_regions == ()
+
+    def test_unstated_is_spelled_as_the_resolver_spells_it(self):
+        """The key the regions are read off; a rename upstream turns this red."""
+        import inspect
+
+        from _vendor.atlas import firmware as atlas_firmware
+
+        source = inspect.getsource(atlas_firmware._undecided_region_caveat)
+        assert '"reason": REASON_REGION_DECIDED_BY_DISC' in source
+        assert '"unstated": list(unstated)' in source
+
     def test_an_entry_with_no_identity_states_no_group(self, adapter, monkeypatch):
         group = FirmwareAlternatives(options=(_option("scph5501.bin", ("ntsc-u",), core_so=None),))
         catalogue = self._catalogue(adapter, monkeypatch, _core(core_so=None, emulator=None, requirements=(group,)))
@@ -1166,11 +1232,18 @@ class TestVocabularyConformance:
     def test_the_declaration_kinds_match(self):
         assert (DECLARED_FILE, DECLARED_DIRECTORY) == (ATLAS_DECLARED_FILE, ATLAS_DECLARED_DIRECTORY)
 
-    def test_the_obstruction_code_matches(self):
-        assert CAVEAT_PATH_OBSTRUCTED == CAVEAT_FIRMWARE_PATH_OBSTRUCTED
+    def test_the_locating_words_match(self):
+        assert (LOCATING_BY_NAME, LOCATING_BY_NAME_THEN_CONTENT, LOCATING_UNESTABLISHED) == (
+            ATLAS_LOCATING_BY_NAME,
+            ATLAS_LOCATING_BY_NAME_THEN_CONTENT,
+            ATLAS_LOCATING_UNESTABLISHED,
+        )
 
     def test_the_system_firmware_states_match(self):
         assert SYSTEM_FIRMWARE_STATES == CORE_SYSTEM_FIRMWARE_STATES
+
+    def test_the_unreadable_place_code_matches(self):
+        assert CAVEAT_PATH_INACCESSIBLE == ATLAS_CAVEAT_PATH_INACCESSIBLE
 
 
 class TestEmulatorVerdicts:
@@ -1226,12 +1299,10 @@ class TestEmulatorVerdicts:
         assert verdict.system_needs_an_image is False
 
     def test_the_resolvers_own_verdict_travels_beside_it(self, adapter, monkeypatch):
-        """``requirements_met`` is atlas's, not ours — carried, and read by nothing.
+        """``requirements_met`` is atlas's, not ours — carried as it stands.
 
-        The adapter still passes it through, so a future consumer meets the
-        resolver's own answer rather than one this layer invented. What no
-        consumer may do is weigh it against the file rows: see
-        ``domain/bios_status.py::classify_system_image``.
+        It is the readiness verdict every BIOS colour is taken from,
+        so this layer passes it through and never rebuilds it from the rows.
         """
         answer = _answer(
             _core(
@@ -1243,6 +1314,31 @@ class TestEmulatorVerdicts:
         _detect(monkeypatch, _detecting(_Installation(answer)))
 
         assert adapter().verdict_for("swanstation_libretro.so").requirements_met is False
+
+    @pytest.mark.parametrize(
+        ("system_firmware", "present", "met"),
+        [
+            (SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, False, False),
+            (SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, True, True),
+            (None, False, None),
+        ],
+    )
+    def test_the_resolvers_console_level_verdict_travels_beside_it(
+        self, adapter, monkeypatch, system_firmware, present, met
+    ):
+        """``system_firmware_met`` is atlas's own answer whether the console has an image; carried as it stands."""
+        image = _requirement(
+            core_so="swanstation_libretro.so",
+            need="optional",
+            found=KIND_FILE if present else KIND_MISSING,
+            checked="verified" if present else None,
+        )
+        answer = _answer(
+            _core(core_so="swanstation_libretro.so", requirements=(image,), system_firmware=system_firmware)
+        )
+        _detect(monkeypatch, _detecting(_Installation(answer)))
+
+        assert adapter().verdict_for("swanstation_libretro.so").system_firmware_met is met
 
     def test_a_standalone_emulator_is_keyed_like_any_other(self, adapter, monkeypatch):
         answer = _answer(
@@ -1608,6 +1704,70 @@ def platform_adapter(traces):
     return AtlasPlatformFirmwareAdapter(sources=_sources(traces), log_debug=traces.append)
 
 
+def _standalone_catalogue(tmp_path, monkeypatch, traces, system: str, *images: str):
+    """*system*'s answer from the real resolver, over a RetroDECK with DuckStation, PCSX2 and xemu set up."""
+    monkeypatch.setattr(
+        "_vendor.atlas.installations._FLATPAK_DEPLOY_SYSTEM", str(tmp_path / "no_system_flatpak" / "app")
+    )
+    home = tmp_path / "home"
+    rd_home = tmp_path / "retrodeck"
+    systems = (
+        home
+        / ".local/share/flatpak/app/net.retrodeck.retrodeck/current/active/files/retrodeck/components"
+        / "es-de/share/es-de/resources/systems/linux/es_systems.xml"
+    )
+    systems.parent.mkdir(parents=True)
+    systems.write_text(SYSTEMS, encoding="utf-8")
+    marker = home / ".var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json"
+    marker.parent.mkdir(parents=True)
+    marker.write_text(
+        json.dumps({"paths": {"rd_home_path": str(rd_home), "bios_path": str(rd_home / "bios")}}), encoding="utf-8"
+    )
+    lay_down_standalone_emulators(str(home), str(rd_home / "bios"), *images)
+    sources = EmulatorSourcesAdapter(user_home=str(home), settings={}, log_debug=traces.append)
+    return AtlasPlatformFirmwareAdapter(sources=sources, log_debug=traces.append)(system)
+
+
+class TestDuckStationOverItsBiosFolder:
+    """DuckStation as the real resolver answers it, over a RetroDECK laid down under ``tmp_path``.
+
+    It names no BIOS file and searches its folder, so over a folder holding
+    nothing of a size it accepts the answer states no requirement at all —
+    and still a verdict, not met, with the console's image shown absent.
+    """
+
+    def _catalogue(self, tmp_path, monkeypatch, traces, *images: str):
+        return _standalone_catalogue(tmp_path, monkeypatch, traces, "psx", *images)
+
+    def test_an_empty_folder_is_not_met_with_the_console_image_shown_absent(self, tmp_path, monkeypatch, traces):
+        catalogue = self._catalogue(tmp_path, monkeypatch, traces)
+
+        verdict = catalogue.verdict_for("DUCKSTATION")
+        assert verdict is not None
+        assert catalogue.placements == ()
+        assert verdict.declaration == "packaged"
+        assert verdict.requirements_met is False
+        assert verdict.system_firmware == SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT
+        assert verdict.system_firmware_met is False
+        assert verdict.world_knowledge is True
+
+    def test_a_packaged_card_with_no_requirement_still_reads_as_not_read(self, tmp_path, monkeypatch, traces):
+        """Its verdict is stated; whether a file nobody declares is needed is still not (the panel words the first)."""
+        catalogue = self._catalogue(tmp_path, monkeypatch, traces)
+
+        assert catalogue.reading_complete_for("DUCKSTATION") is False
+
+    def test_a_file_its_search_keeps_is_a_requirement_and_no_absence(self, tmp_path, monkeypatch, traces):
+        """The control: an image its table does not know still boots, so nothing is shown absent."""
+        catalogue = self._catalogue(tmp_path, monkeypatch, traces, "unknown.bin")
+
+        verdict = catalogue.verdict_for("DUCKSTATION")
+        assert verdict is not None
+        assert [placement.file_name for placement in catalogue.placements] == ["unknown.bin"]
+        assert verdict.system_firmware_met is not False
+        assert verdict.notes == ()
+
+
 class TestPlatformAdapter:
     """The per-system reading: what one platform's emulators want, contents and all."""
 
@@ -1781,3 +1941,214 @@ class TestPlatformAdapter:
 
         assert catalogue.resolved is False
         assert catalogue.placements == ()
+
+
+class TestWhatTheResolverSaysAboutEachEmulator:
+    """The facts the BIOS sentences word, carried off the entry as the resolver states them and never rebuilt."""
+
+    @staticmethod
+    def _verdict(adapter, monkeypatch, core: CoreFirmware, identity: str = "mgba_libretro.so"):
+        _detect(monkeypatch, _detecting(_Installation(_answer(core))))
+        return adapter().verdict_for(identity)
+
+    def test_how_it_finds_its_firmware_travels_as_the_resolver_spells_it(self, adapter, monkeypatch):
+        core = replace(_core(requirements=(_requirement(),)), locating=ATLAS_LOCATING_BY_NAME)
+
+        assert self._verdict(adapter, monkeypatch, core).locating == LOCATING_BY_NAME
+
+    def test_a_word_it_does_not_know_reads_unestablished(self, adapter, monkeypatch):
+        """A later resolver's new word; set past the constructor, which knows only today's three."""
+        core = _core(requirements=(_requirement(),))
+        object.__setattr__(core, "locating", "by-smell")
+
+        assert self._verdict(adapter, monkeypatch, core).locating == LOCATING_UNESTABLISHED
+
+    def test_its_refused_declarations_travel_with_their_need_and_reason(self, adapter, monkeypatch):
+        core = _core(
+            requirements=(_requirement(),),
+            refused=(
+                RefusedDeclaration(declared="../a.bin", need="required", reason="firmware-path-escapes-root"),
+                RefusedDeclaration(declared="../b.bin", need="optional", reason="firmware-path-unresolvable"),
+            ),
+        )
+
+        verdict = self._verdict(adapter, monkeypatch, core)
+
+        assert [(r.declared, r.required, r.reason) for r in verdict.refused] == [
+            ("../a.bin", True, "firmware-path-escapes-root"),
+            ("../b.bin", False, "firmware-path-unresolvable"),
+        ]
+        assert [r.declared for r in verdict.refused_required] == ["../a.bin"]
+
+    def test_the_plain_required_files_it_could_not_judge_are_named_and_no_group_option(self, adapter, monkeypatch):
+        group = FirmwareAlternatives(
+            options=(_requirement(file_name="scph5500.bin", regions=("ntsc-j",), found=KIND_FILE, checked="unchecked"),)
+        )
+        core = _core(
+            requirements=(
+                _requirement(file_name="gba_bios.bin", found=KIND_FILE, checked="not-comparable"),
+                _requirement(file_name="opt.bin", need="optional", found=KIND_FILE, checked="unchecked"),
+                group,
+            )
+        )
+
+        assert self._verdict(adapter, monkeypatch, core).undetermined == ("gba_bios.bin",)
+
+    def test_the_plain_required_files_shown_not_met_are_named(self, adapter, monkeypatch):
+        """A game's own region decides only once nothing outside the group is shown not met (#2190 D5)."""
+        core = _core(
+            requirements=(
+                _requirement(file_name="gba_bios.bin"),
+                _requirement(file_name="opt.bin", need="optional"),
+            )
+        )
+
+        assert self._verdict(adapter, monkeypatch, core).unmet == ("gba_bios.bin",)
+
+    def test_the_region_note_is_read_off_its_reason(self, adapter, monkeypatch):
+        decided = Caveat(
+            code=CAVEAT_CORE_MODE_UNESTABLISHED,
+            message="region from the disc",
+            data={"core_so": "mgba_libretro.so", "reason": "region-decided-by-disc", "regions": ["ntsc-j"]},
+        )
+        other = Caveat(
+            code=CAVEAT_CORE_MODE_UNESTABLISHED, message="another mode", data={"reason": "emulator-build-unestablished"}
+        )
+
+        assert self._verdict(adapter, monkeypatch, _core(caveats=(decided,))).region_decided_by_disc is True
+        assert self._verdict(adapter, monkeypatch, _core(caveats=(other,))).region_decided_by_disc is False
+
+    def test_a_bios_nobody_chose_is_a_note(self, adapter, monkeypatch):
+        """PCSX2 with ``[Filenames] BIOS`` empty: the setting names no file, so no game boots until one is chosen."""
+        empty = Caveat(
+            code=CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE,
+            message="no BIOS chosen",
+            data={"token": "PCSX2", "key": "Filenames/BIOS", "declared": "", "need": "required"},
+        )
+        core = _core(core_so=None, emulator="PCSX2", declaration="packaged", caveats=(empty,))
+
+        notes = self._verdict(adapter, monkeypatch, core, "PCSX2").notes
+
+        assert [(n.kind, n.setting) for n in notes] == [("bios-unchosen", "Filenames/BIOS")]
+
+    @pytest.mark.parametrize("key", ["sys.files/bootrom_path", "sys.files/flashrom_path", "sys.files/hdd_path"])
+    def test_an_empty_xemu_file_setting_is_no_bios_nobody_chose(self, adapter, monkeypatch, key):
+        """xemu states its empty ``[sys.files]`` keys with the same code and shape.
+
+        Two of the three do not hold the launch, so a "no BIOS chosen" sentence
+        over them would sit beside a green xemu.
+        """
+        empty = Caveat(
+            code=CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE,
+            message="names no file",
+            data={"token": "XEMU", "key": key, "declared": "", "need": "required"},
+        )
+        core = _core(core_so=None, emulator="XEMU", declaration="packaged", caveats=(empty,))
+
+        assert self._verdict(adapter, monkeypatch, core, "XEMU").notes == ()
+
+    def test_the_bios_choice_setting_is_spelled_as_the_resolver_spells_it(self):
+        """The PCSX2 card's caveat names the setting under ``key``; a rename upstream turns this red."""
+        import inspect
+
+        from _vendor.atlas import firmware as atlas_firmware
+
+        assert f'"key": "{_BIOS_CHOICE_SETTING}"' in inspect.getsource(atlas_firmware)
+
+    def test_a_region_nothing_boots_for_is_no_bios_nobody_chose(self, adapter, monkeypatch):
+        """The same code with ``regions`` is a one-of group's statement, and the group carries it."""
+        absent = Caveat(
+            code=CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE,
+            message="nothing for pal",
+            data={"core_so": "mgba_libretro.so", "declared": "", "regions": ["pal"]},
+        )
+
+        assert self._verdict(adapter, monkeypatch, _core(caveats=(absent,))).notes == ()
+
+    def test_images_that_rank_alike_are_a_note_with_their_count_and_regions(self, adapter, monkeypatch):
+        tied = Caveat(
+            code="firmware-image-ambiguous",
+            message="two rank alike",
+            data={"core_so": "mgba_libretro.so", "tied": "2", "regions": ["pal"]},
+        )
+
+        notes = self._verdict(adapter, monkeypatch, _core(caveats=(tied,))).notes
+
+        assert [(n.kind, n.tied, n.regions) for n in notes] == [("images-tied", 2, ("pal",))]
+
+    def test_the_world_knowledge_mark_travels(self, adapter, monkeypatch):
+        marked = Caveat(
+            code="system-firmware-world-knowledge", message="table", data={"system": "gba", "evidence": "verified"}
+        )
+        core = _core(
+            requirements=(_requirement(need="optional"),),
+            caveats=(marked,),
+            system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
+        )
+
+        verdict = self._verdict(adapter, monkeypatch, core)
+
+        assert (verdict.world_knowledge, verdict.system_needs_an_image) == (True, True)
+
+
+class TestEachPlacementIsOneEmulatorsRequirement:
+    """A placement carries its emulator, its own place and the resolver's verdict over it."""
+
+    def test_two_places_for_one_name_stay_two_placements(self, adapter, monkeypatch):
+        kronos = _core(
+            core_so="kronos_libretro.so",
+            requirements=(
+                _requirement(
+                    core_so="kronos_libretro.so",
+                    file_name="saturn_bios.bin",
+                    declared="kronos/saturn_bios.bin",
+                    path=f"{_ROOT}/kronos/saturn_bios.bin",
+                    found=KIND_FILE,
+                    checked="verified",
+                ),
+            ),
+        )
+        yaba = _core(
+            core_so="yabasanshiro_libretro.so",
+            requirements=(_requirement(core_so="yabasanshiro_libretro.so", file_name="saturn_bios.bin"),),
+        )
+        _detect(monkeypatch, _detecting(_Installation(_answer(kronos, yaba))))
+
+        catalogue = adapter()
+
+        kronos_row = catalogue.placements_for("kronos_libretro.so")["saturn_bios.bin"]
+        yaba_row = catalogue.placements_for("yabasanshiro_libretro.so")["saturn_bios.bin"]
+        assert (kronos_row.relative_path, kronos_row.satisfied) == ("kronos/saturn_bios.bin", True)
+        assert (yaba_row.relative_path, yaba_row.satisfied) == ("saturn_bios.bin", False)
+
+    def test_a_wrong_image_is_not_met_though_it_is_there(self, adapter, monkeypatch):
+        core = _core(requirements=(_requirement(found=KIND_FILE, checked="mismatch"),))
+        _detect(monkeypatch, _detecting(_Installation(_answer(core))))
+
+        placement = adapter().placements[0]
+
+        assert (placement.present, placement.satisfied, placement.emulator) == (True, False, "mgba_libretro.so")
+
+    def test_a_place_it_could_not_look_at_is_not_established(self, adapter, monkeypatch):
+        core = _core(requirements=(_requirement(found=KIND_INACCESSIBLE),))
+        _detect(monkeypatch, _detecting(_Installation(_answer(core))))
+
+        assert adapter().placements[0].satisfied is None
+
+    def test_the_groups_own_verdict_travels(self, adapter, monkeypatch):
+        group = FirmwareAlternatives(
+            options=(
+                _requirement(file_name="scph5500.bin", regions=("ntsc-j",), found=KIND_FILE, checked="verified"),
+                _requirement(file_name="scph5501.bin", regions=("ntsc-u",), found=KIND_FILE, checked="verified"),
+            )
+        )
+        mixed = FirmwareAlternatives(
+            options=(
+                _requirement(file_name="scph5500.bin", regions=("ntsc-j",), found=KIND_FILE, checked="verified"),
+                _requirement(file_name="scph5501.bin", regions=("ntsc-u",)),
+            )
+        )
+        _detect(monkeypatch, _detecting(_Installation(_answer(_core(requirements=(group,))))))
+        assert adapter().groups[0].satisfied is True
+        _detect(monkeypatch, _detecting(_Installation(_answer(_core(requirements=(mixed,))))))
+        assert adapter().groups[0].satisfied is None

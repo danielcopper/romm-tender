@@ -201,6 +201,7 @@ export const RomMGameInfoPanel: FC<RomMGameInfoPanelProps> = ({ appId }) => {
           biosLevel={state.biosLevel}
           coreInfo={state.coreInfo}
           isActive={state.activeTab === "bios"}
+          platformName={state.platformName}
         />
       </Focusable>
     </div>

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from domain.firmware_wants import (
     DECLARED_DIRECTORY,
@@ -59,6 +59,17 @@ class FakeFirmwareResolver:
     :meth:`state_group` states a one-of group. It declares nothing on its own: a
     real reading lists every option's file as a placement too, and a test that
     wants the rows declares them beside it.
+
+    **The resolver's verdicts are simulated, the way it reaches them.** A
+    placement's ``satisfied`` follows its ``present``, ``checked``, kind and
+    folder verdict as the resolver's per-file verdict does, unless
+    :meth:`declare` pins it. Each emulator the fake knows of — one a want, a
+    group or :meth:`describe_emulator` names — gets an entry whose
+    ``requirements_met`` folds its own required placements and groups the way
+    the resolver's does (any not met → ``False``, else any not established →
+    ``None``, else ``True``), unless a test pins it with :meth:`record_system`.
+    An emulator in ``unread_emulators`` answers ``None``; one the fake never
+    heard of has no entry at all, which is an emulator missing from the answer.
     """
 
     def __init__(
@@ -72,12 +83,16 @@ class FakeFirmwareResolver:
         present_probe: Callable[[str], bool] = os.path.exists,
     ) -> None:
         self.placements: list[FirmwarePlacement] = list(placements or [])
+        # What :meth:`declare` pinned as each placement's verdict, by its index.
+        self._declared_satisfied: dict[tuple[str, str | None, int], bool | None | EllipsisType] = {}
         self.unread_emulators = unread_emulators
         self.resolved = resolved
         self.caveats = caveats
         self.bios_root = bios_root
         self.present_probe = present_probe
         self.emulator_verdicts: dict[str, CoreFirmwareVerdict] = {}
+        # The verdicts a test pinned rather than left to be folded.
+        self._pinned_met: set[str] = set()
         self.groups: list[FirmwareGroup] = []
         self.calls: list[str] = []
 
@@ -87,13 +102,21 @@ class FakeFirmwareResolver:
         *options: tuple[str, tuple[str, ...], bool | None],
         unchecked_regions: tuple[str, ...] = (),
         absent_regions: tuple[str, ...] = (),
+        unstated_regions: tuple[str, ...] = (),
     ) -> FirmwareGroup:
-        """State that *emulator* needs one of *options* — ``(file name, regions, satisfied)`` each."""
+        """State that *emulator* needs one of *options* — ``(file name, regions, satisfied)`` each.
+
+        The group's own verdict is the resolver's lift over its options: every
+        option met, every one not met, or neither.
+        """
+        verdicts = {satisfied for _name, _regions, satisfied in options}
         group = FirmwareGroup(
             emulator=emulator,
             options=tuple(FirmwareOption(name, regions, satisfied) for name, regions, satisfied in options),
             unchecked_regions=unchecked_regions,
             absent_regions=absent_regions,
+            satisfied=True if verdicts == {True} else False if verdicts == {False} else None,
+            unstated_regions=unstated_regions,
         )
         self.groups.append(group)
         return group
@@ -105,14 +128,30 @@ class FakeFirmwareResolver:
         system_firmware: str | None,
         requirements_met: bool | None = None,
     ) -> None:
-        """State what the packaged table records about *emulator*'s console.
+        """State what the packaged table records about *emulator*'s console, and pin its verdict.
 
-        An emulator no test records anything for is one the table holds no entry
-        for, which is the ordinary case and the one that must change nothing.
+        The verdict is pinned as given — the resolver weighs the console's need
+        into it, which the fold over the rows cannot.
         """
-        self.emulator_verdicts[emulator] = CoreFirmwareVerdict(
-            system_firmware=system_firmware, requirements_met=requirements_met
+        known = self.emulator_verdicts.get(emulator, CoreFirmwareVerdict(declaration="read"))
+        self.emulator_verdicts[emulator] = replace(
+            known,
+            system_firmware=system_firmware,
+            requirements_met=requirements_met,
+            world_knowledge=system_firmware is not None,
         )
+        self._pinned_met.add(emulator)
+
+    def describe_emulator(self, emulator: str, **fields: Any) -> None:
+        """State what *emulator*'s own entry says beyond its files — any :class:`CoreFirmwareVerdict` field.
+
+        Naming an emulator here is also how a test says it was read and
+        declares nothing. Passing ``requirements_met`` pins the verdict.
+        """
+        known = self.emulator_verdicts.get(emulator, CoreFirmwareVerdict(declaration="read"))
+        self.emulator_verdicts[emulator] = replace(known, **fields)
+        if "requirements_met" in fields:
+            self._pinned_met.add(emulator)
 
     def declare(
         self,
@@ -129,6 +168,7 @@ class FakeFirmwareResolver:
         supplied_by: str | None = None,
         checked: str | None = None,
         missing_configured_image: MissingConfiguredImage | None = None,
+        satisfied: bool | None | EllipsisType = ...,
     ) -> FirmwarePlacement:
         """State that some emulators ask for *file_name*, and return the placement.
 
@@ -151,8 +191,54 @@ class FakeFirmwareResolver:
         Unset is the ordinary answer — a reading that asked no byte question —
         and a test spells it out only where what was DONE to the file is what it
         is pinning, which ``present`` cannot say.
+
+        One placement is stated per declaring emulator, each that emulator's own
+        requirement at the same place, as the resolver states two emulators that
+        open one file; the first is returned. A test stating one name at two
+        places declares it twice. ``satisfied`` left unset is the resolver's own
+        per-file verdict over what the reading found (:meth:`_read`).
         """
-        placement = FirmwarePlacement(
+        owners: list[str | None] = [*required_by, *optional_for] or [None]
+        for owner in owners:
+            self._declared_satisfied[(file_name, owner, len(self.placements))] = satisfied
+            self.placements.append(
+                self._placement(
+                    file_name,
+                    owner,
+                    required_by=required_by,
+                    optional_for=optional_for,
+                    relative_path=relative_path,
+                    description=description,
+                    present=present,
+                    declares_directory=declares_directory,
+                    folder=folder,
+                    caveats=caveats,
+                    supplied_by=supplied_by,
+                    checked=checked,
+                    missing_configured_image=missing_configured_image,
+                )
+            )
+        return self.placements[-len(owners)]
+
+    @staticmethod
+    def _placement(
+        file_name: str,
+        owner: str | None,
+        *,
+        required_by: tuple[str, ...] | list[str],
+        optional_for: tuple[str, ...] | list[str],
+        relative_path: str | None | EllipsisType,
+        description: str | None,
+        present: bool | None,
+        declares_directory: bool,
+        folder: FolderVerdict | None,
+        caveats: tuple[str, ...],
+        supplied_by: str | None,
+        checked: str | None,
+        missing_configured_image: MissingConfiguredImage | None,
+    ) -> FirmwarePlacement:
+        """One emulator's placement as :meth:`declare` states it."""
+        return FirmwarePlacement(
             file_name=file_name,
             relative_path=file_name if relative_path is ... else relative_path,
             description=description if description is not None else file_name,
@@ -167,30 +253,102 @@ class FakeFirmwareResolver:
             supplied_by=supplied_by,
             checked=checked,
             missing_configured_image=missing_configured_image,
+            emulator=owner,
         )
-        self.placements.append(placement)
-        return placement
 
-    def _read(self, placement: FirmwarePlacement) -> FirmwarePlacement:
+    def _read(self, index: int, placement: FirmwarePlacement) -> FirmwarePlacement:
         """The placement as the reading would answer it, looked up under ``bios_root``.
 
-        ``replace`` rather than a fresh construction: this changes ONE field, and
-        a field-by-field copy silently drops whatever the placement grows next —
-        which would make a seeded value vanish only on the tests that pass a
-        ``bios_root``, and only for the fields a test happens to seed.
+        ``replace`` rather than a fresh construction: this changes the read
+        fields only, and a field-by-field copy silently drops whatever the
+        placement grows next.
         """
-        if placement.present is not None or not self.bios_root:
-            return placement
-        there = self.present_probe(os.path.join(self.bios_root, placement.destination))
-        return replace(placement, present=there)
+        present = placement.present
+        if present is None and self.bios_root:
+            present = self.present_probe(os.path.join(self.bios_root, placement.destination))
+        pinned = self._declared_satisfied.get((placement.file_name, placement.emulator, index), ...)
+        satisfied = _verdict_over(placement, present) if pinned is ... else pinned
+        return replace(placement, present=present, satisfied=satisfied)
+
+    def _verdicts(self, placements: tuple[FirmwarePlacement, ...]) -> dict[str, CoreFirmwareVerdict]:
+        """Every emulator the fake knows of, with the verdict the resolver would fold for it."""
+        known = dict.fromkeys(
+            [
+                *(want.emulator for placement in placements for want in placement.wants if want.emulator),
+                *(group.emulator for group in self.groups),
+                *self.emulator_verdicts,
+            ]
+        )
+        verdicts: dict[str, CoreFirmwareVerdict] = {}
+        for emulator in known:
+            stated = self.emulator_verdicts.get(emulator, CoreFirmwareVerdict(declaration="read"))
+            if emulator in self._pinned_met:
+                verdicts[emulator] = stated
+            elif emulator in self.unread_emulators:
+                verdicts[emulator] = replace(stated, requirements_met=None, declaration="unreadable")
+            else:
+                verdicts[emulator] = replace(
+                    stated,
+                    requirements_met=self._fold(emulator, placements),
+                    undetermined=stated.undetermined or self._plain_required(emulator, placements, None),
+                    unmet=stated.unmet or self._plain_required(emulator, placements, False),
+                )
+        return verdicts
+
+    @staticmethod
+    def _plain_required(
+        emulator: str, placements: tuple[FirmwarePlacement, ...], satisfied: bool | None
+    ) -> tuple[str, ...]:
+        """*emulator*'s required placements whose verdict is *satisfied*, as the resolver names them."""
+        return tuple(
+            placement.file_name
+            for placement in placements
+            if placement.emulator == emulator
+            and placement.satisfied is satisfied
+            and any(want.emulator == emulator and want.required for want in placement.wants)
+        )
+
+    def _fold(self, emulator: str, placements: tuple[FirmwarePlacement, ...]) -> bool | None:
+        """``requirements_met`` over *emulator*'s required placements and its groups."""
+        verdicts = [
+            placement.satisfied
+            for placement in placements
+            if placement.emulator == emulator
+            and any(want.emulator == emulator and want.required for want in placement.wants)
+        ]
+        verdicts += [group.satisfied for group in self.groups if group.emulator == emulator]
+        if any(verdict is False for verdict in verdicts):
+            return False
+        return None if any(verdict is None for verdict in verdicts) else True
 
     def __call__(self, system: str | None = None) -> FirmwareCatalogue:
         self.calls.append("" if system is None else system)
+        placements = tuple(self._read(index, placement) for index, placement in enumerate(self.placements))
         return FirmwareCatalogue(
-            placements=tuple(self._read(placement) for placement in self.placements),
+            placements=placements,
             unread_emulators=self.unread_emulators,
             resolved=self.resolved,
             caveats=self.caveats,
-            emulator_verdicts=dict(self.emulator_verdicts),
+            emulator_verdicts=self._verdicts(placements) if self.resolved else {},
             groups=tuple(self.groups),
         )
+
+
+# What comparing the bytes established, where it settles the verdict either way.
+_NOT_MET = frozenset({"mismatch", "refused"})
+_NOT_ESTABLISHED = frozenset({"unchecked", "not-comparable", "unrecognised", "unread"})
+
+
+def _verdict_over(placement: FirmwarePlacement, present: bool | None) -> bool | None:
+    """The resolver's per-file verdict over what the reading found at the placement."""
+    if present is None:
+        return None
+    if present is False:
+        return False
+    if placement.declares_directory:
+        return placement.folder.satisfied if placement.folder is not None else None
+    if "firmware-path-obstructed" in placement.caveats:
+        return None
+    if placement.checked in _NOT_MET:
+        return False
+    return None if placement.checked in _NOT_ESTABLISHED else True

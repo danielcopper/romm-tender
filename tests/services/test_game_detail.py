@@ -116,6 +116,7 @@ def game_detail(clock, active_core_resolver, path_probe) -> GameDetailHarness:
             core_info=FakeCoreInfoProvider(),
             platform_systems=FakePlatformSystems(),
             platform_core_reader=FakePlatformCoreReader(),
+            active_core=FakeActiveCoreResolver(),
             uow_factory=FakeUnitOfWorkFactory(),
             conflict_rules=_make_conflict_rules(),
         ),

@@ -37,6 +37,7 @@
  */
 
 import type { BiosFileStatus } from "../types";
+import { PATH_INACCESSIBLE } from "./biosFetchable";
 
 /** The subset of a row this note is derived from — both surfaces' row shapes
  *  satisfy it, so neither has to be converted into the other's. */
@@ -112,10 +113,6 @@ const FOUND_IN_THE_BIOS_FOLDER = "found in the BIOS folder";
 /** The folder could not be listed in full, or a candidate's bytes would not come
  *  back — a read failure, never a finding about what is in there. */
 const READ_INCOMPLETE = ["firmware-scan-incomplete", "firmware-unreadable"];
-/** The destination could not be looked at at all — permissions, or failing
- *  storage. Emitted for either declaration kind, and worded only for a file:
- *  a folder's own unreadable-destination row is withheld and says so. */
-const PATH_INACCESSIBLE = "firmware-path-inaccessible";
 
 /**
  * What the reading established about *row*, or `""` where it has nothing to add.
