@@ -874,15 +874,18 @@ class SteamGridService:
             return await self._loop.run_in_executor(None, self._write_job_icon_io, app_id, int(rom_id))
 
     def _write_job_icon_io(self, app_id: int, rom_id: int) -> JobIcon | None:
+        try:
+            return self._write_cached_icon_io(app_id, rom_id)
+        except Exception as e:
+            self._logger.warning(f"SGDB icon for rom_id={rom_id} could not be written: {e}")
+            return None
+
+    def _write_cached_icon_io(self, app_id: int, rom_id: int) -> JobIcon | None:
         cached = self._cached_artwork(rom_id, ArtworkSlot.ICON.value)
         if cached is None or cached.image_id is None:
             self._log_debug(f"SGDB icon for rom_id={rom_id} is no longer cached; the next run asks again")
             return None
-        try:
-            icon = self._downscale_icon(self._sgdb_artwork_cache.read_bytes(cached.path))
-        except OSError as e:
-            self._logger.warning(f"Failed to read cached artwork {cached.path}: {e}")
-            return None
+        icon = self._downscale_icon(self._sgdb_artwork_cache.read_bytes(cached.path))
         if icon is None:
             self._logger.warning(f"SGDB icon for rom_id={rom_id} is not an image Tender reads; removed from the cache")
             self._drop_cached_artwork(rom_id, ArtworkSlot.ICON.value)

@@ -3,6 +3,7 @@ import base64
 import hashlib
 import logging
 import os
+import sqlite3
 from dataclasses import dataclass
 from typing import Any
 
@@ -1706,6 +1707,42 @@ class TestTheJobsIcon:
 
         assert await steamgrid.service.write_job_icon(7, 1, 0) is None
         assert written == {}
+
+    @pytest.mark.asyncio
+    async def test_a_cache_root_that_cannot_be_listed_answers_nothing(self, steamgrid, sgdb_artwork_cache, monkeypatch):
+        steamgrid.service._loop = asyncio.get_running_loop()
+
+        def unreadable() -> str:
+            raise PermissionError("Permission denied: '/cache/sgdb'")
+
+        monkeypatch.setattr(sgdb_artwork_cache, "cache_dir", unreadable)
+
+        assert await steamgrid.service.write_job_icon(7, 1, 0) is None
+
+    @pytest.mark.asyncio
+    async def test_a_cached_icon_that_cannot_be_read_answers_nothing(self, steamgrid, sgdb_artwork_cache, monkeypatch):
+        steamgrid.service._loop = asyncio.get_running_loop()
+        _cache_icon(sgdb_artwork_cache, 1, b"icon")
+
+        def unreadable(_path: str) -> bytes:
+            raise OSError("Input/output error")
+
+        monkeypatch.setattr(sgdb_artwork_cache, "read_bytes", unreadable)
+
+        assert await steamgrid.service.write_job_icon(7, 1, 0) is None
+
+    @pytest.mark.asyncio
+    async def test_a_database_that_cannot_be_read_answers_nothing(self, steamgrid, sgdb_artwork_cache, tmp_path):
+        _record_icon_writes(steamgrid, tmp_path)
+        steamgrid.service._loop = asyncio.get_running_loop()
+        _cache_icon(sgdb_artwork_cache, 1, b"icon")
+
+        def locked() -> Any:
+            raise sqlite3.OperationalError("database is locked")
+
+        steamgrid.service._uow_factory = locked
+
+        assert await steamgrid.service.write_job_icon(7, 1, 0) is None
 
     @pytest.mark.asyncio
     async def test_an_icon_that_could_not_be_written_answers_nothing(self, steamgrid, sgdb_artwork_cache):
