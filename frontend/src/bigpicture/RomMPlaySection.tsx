@@ -530,8 +530,13 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     setActionPending("artwork");
     const admission = capturePruneLeaseAdmission(`game-detail:${appId}`);
     let coverFailure: string | null = null;
-    const say = (sgdbResult: string) =>
-      showToast(coverFailure ? `${sgdbResult} — the RomM cover could not be updated: ${coverFailure}` : sgdbResult);
+    const say = (sgdbResult: string) => {
+      if (!coverFailure || coverFailure === sgdbResult) {
+        showToast(sgdbResult);
+        return;
+      }
+      showToast(`${sgdbResult.replace(/\.$/, "")}. The RomM cover could not be updated: ${coverFailure}`);
+    };
     try {
       // Re-download the RomM cover, rename to {app_id}p.png, and patch
       // cover_path on the registry row so the game info panel can render the
@@ -539,7 +544,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       const coverResult = await refreshCoverArtwork(romId).catch(
         (e): { success: boolean; reason?: WireReason | "exception"; message: string; cover_path?: string } => {
           detach(debugLog(`refreshCoverArtwork rejected: ${e}`));
-          return { success: false, reason: "exception", message: String(e) };
+          return { success: false, reason: "exception", message: "the request did not complete" };
         },
       );
       if (coverResult.success) {

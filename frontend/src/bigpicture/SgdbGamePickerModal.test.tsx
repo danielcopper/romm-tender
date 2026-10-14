@@ -290,7 +290,7 @@ describe("SgdbGamePickerModal", () => {
       return { ...ui, onApplied, closeModal };
     }
 
-    it("applySgdbGameId failure → 'Failed to apply artwork selection', no applyArtwork, no close", async () => {
+    it("a refused applySgdbGameId toasts the refusal's message, no applyArtwork, no close", async () => {
       const message = "A removed-game cleanup is in progress; wait for it to finish before changing local game data.";
       vi.mocked(backend.applySgdbGameId).mockResolvedValue({ success: false, reason: "prune_active", message });
       const { container, onApplied, closeModal } = renderCandidate();

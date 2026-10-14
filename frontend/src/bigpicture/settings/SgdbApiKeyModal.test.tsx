@@ -2,7 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import { createElement, forwardRef } from "react";
-import { SgdbApiKeyModal } from "./SgdbApiKeyModal";
+import { SgdbApiKeyModal, SgdbKeySaveRefused } from "./SgdbApiKeyModal";
 
 // Local @decky/ui mock (mirrors ConnectModal.test.tsx): ModalRoot passes its
 // children through (the modal owns its own footer buttons); DialogButton renders
@@ -171,6 +171,19 @@ describe("SgdbApiKeyModal", () => {
       expect(getByTestId("sgdb-key-error").textContent).toBe(
         "The key is valid, but saving it failed. Check your connection and try again.",
       );
+      expect(closeModal).not.toHaveBeenCalled();
+    });
+
+    it("shows the refusal's own message and stays open when the save is refused", async () => {
+      const closeModal = vi.fn();
+      const onSave = vi.fn().mockRejectedValue(new SgdbKeySaveRefused("Invalid API key"));
+      const { getByTestId, getByText } = render(
+        <SgdbApiKeyModal closeModal={closeModal} onVerify={verifyOk()} onSave={onSave} />,
+      );
+      fireEvent.change(field(getByTestId), { target: { value: "good_key" } });
+      fireEvent.click(getByText("Save"));
+      await flushSubmit();
+      expect(getByTestId("sgdb-key-error").textContent).toBe("Invalid API key");
       expect(closeModal).not.toHaveBeenCalled();
     });
 

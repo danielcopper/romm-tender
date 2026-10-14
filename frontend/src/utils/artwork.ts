@@ -79,8 +79,9 @@ export async function applyArtwork(romId: number, appId: number): Promise<number
 
 /** Give the shortcut SteamGridDB's hero, logo and wide grid where Steam's grid
  *  directory has no image for the slot, and its icon as `applyArtwork` does. A
- *  slot that already has one is left alone, whoever set it. Returns the count of
- *  images applied, or -1 when no SGDB API key is configured. */
+ *  slot that already has one is left alone, whoever set it. Stops asking once
+ *  SteamGridDB has refused the key. Returns the count of images applied, or -1
+ *  when no SGDB API key is configured. */
 export async function fillEmptyArtwork(romId: number, appId: number): Promise<number> {
   return whileInFlight(appId, () => fillEmptySgdbArtwork(romId, appId));
 }
@@ -264,6 +265,7 @@ async function fillEmptySgdbArtwork(romId: number, appId: number): Promise<numbe
       continue;
     }
     if (answer.status === "no_api_key") return -1;
+    if (answer.status === "key_refused") return applied;
     if (answer.status !== "image") continue;
     // prettier-ignore
     const outcome = await withPruneLeases( // NOSONAR(typescript:S9382)
@@ -280,6 +282,9 @@ async function fillEmptySgdbArtwork(romId: number, appId: number): Promise<numbe
 
   if (superseded()) return applied;
   const iconAnswer = await getSgdbArtworkBase64(romId, 4).catch(() => NO_IMAGE);
+  if (isEndpointFailure(iconAnswer)) {
+    detach(debugLog(`fillEmptyArtwork: icon fetch for appId ${appId} refused: ${iconAnswer.message}`));
+  }
   const icon = isEndpointFailure(iconAnswer) ? NO_IMAGE : iconAnswer;
   const iconToken = icon.prune_lease_token;
   const iconApplied = await withPruneLeases(

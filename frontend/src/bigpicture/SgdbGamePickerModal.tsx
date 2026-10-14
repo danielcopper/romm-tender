@@ -5,7 +5,7 @@
  *
  * A search field (prefilled with the ROM name) lets the user search SGDB and
  * pick any result. Selecting a result applies that game via applySgdbGameId,
- * re-runs the artwork apply for the appId, then reports the applied count back
+ * re-runs the artwork apply for the appId, then reports what the apply answered
  * and closes.
  *
  * Wrapped in Steam's focus-managed ConfirmModal (same pattern as

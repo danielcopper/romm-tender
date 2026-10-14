@@ -5267,7 +5267,7 @@ describe("RomMPlaySection", () => {
       vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: true, icon_path: "/grid/icon.png" });
       await refresh();
       expect(toasts()).toEqual([
-        "Artwork refreshed (4/4 images applied) — the RomM cover could not be updated: ROM has no cover artwork",
+        "Artwork refreshed (4/4 images applied). The RomM cover could not be updated: ROM has no cover artwork",
       ]);
     });
 
@@ -5281,7 +5281,39 @@ describe("RomMPlaySection", () => {
         message: KEY_REFUSED,
       });
       await refresh();
-      expect(toasts()).toEqual([`${KEY_REFUSED} — the RomM cover could not be updated: Error: network down`]);
+      expect(toasts()).toEqual([`${KEY_REFUSED}. The RomM cover could not be updated: the request did not complete`]);
+    });
+
+    it("says a message the cover and SteamGridDB share once, ending in one full stop", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
+        success: false,
+        reason: "prune_active",
+        message: PRUNE_ACTIVE,
+      });
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({
+        success: false,
+        reason: "prune_active",
+        message: PRUNE_ACTIVE,
+      });
+      await refresh();
+      expect(toasts()).toEqual([PRUNE_ACTIVE]);
+    });
+
+    it("joins a SteamGridDB message that ends in a full stop to the cover failure with one", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
+        success: false,
+        reason: "no_cover",
+        message: "ROM has no cover artwork",
+      });
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({
+        success: false,
+        reason: "prune_active",
+        message: PRUNE_ACTIVE,
+      });
+      await refresh();
+      expect(toasts()).toEqual([`${PRUNE_ACTIVE} The RomM cover could not be updated: ROM has no cover artwork`]);
     });
 
     it("says a failed RomM cover refresh on its own when the picker opens", async () => {

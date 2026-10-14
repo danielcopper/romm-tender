@@ -72,6 +72,7 @@ import { ROW_MARKER_GAP, ROW_MARKER_WIDTH, SELECTION_ACCENT } from "./layout/pan
 import { pendingEdits } from "./settings/TextInputModal";
 import { ConnectionSection } from "./settings/ConnectionSection";
 import { SteamGridDBSection } from "./settings/SteamGridDBSection";
+import { SgdbKeySaveRefused } from "./settings/SgdbApiKeyModal";
 import { SaveSyncSection } from "./settings/SaveSyncSection";
 import { RegisteredDevicesSection } from "./settings/RegisteredDevicesSection";
 import { ControllerSection } from "./settings/ControllerSection";
@@ -446,7 +447,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   // configured key — reflect it as the masked "••••" display.
   const handleSaveSgdbKey = async (value: string) => {
     const result = await saveSgdbApiKey(value);
-    if (!result.success) throw new Error(result.message);
+    if (!result.success) throw new SgdbKeySaveRefused(result.message);
     setSgdbApiKey("set");
   };
   const handleRemoveSgdbKey = async () => {

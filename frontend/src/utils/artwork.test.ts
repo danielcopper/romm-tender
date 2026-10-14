@@ -697,6 +697,28 @@ describe("a refused artwork fetch", () => {
     );
   });
 
+  it("is logged for the first visit's icon, which is then not applied", async () => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue(refusal);
+
+    await expect(fillEmptyArtwork(42, 5000)).resolves.toBe(0);
+
+    expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
+    expect(backend.debugLog).toHaveBeenCalledWith(
+      expect.stringContaining(`icon fetch for appId 5000 refused: ${refusal.message}`),
+    );
+  });
+
+  it("stops the first visit's fill at a refused key, asking for no further slot or icon", async () => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "key_refused" });
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false });
+
+    await expect(fillEmptyArtwork(42, 5000)).resolves.toBe(0);
+
+    expect(vi.mocked(backend.getSgdbSlotArtwork).mock.calls.map(([, , slot]) => slot)).toEqual(["hero"]);
+    expect(backend.getSgdbArtworkBase64).not.toHaveBeenCalled();
+  });
+
   it("makes the shortcut artwork job's slot write nothing, and is logged", async () => {
     vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue(refusal);
 
