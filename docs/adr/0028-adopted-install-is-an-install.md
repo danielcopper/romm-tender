@@ -430,12 +430,13 @@ following it.
 
 ## Amendment — a sibling recorded at the adoption's own path hands its record over
 
-Recorded for [#2408](https://github.com/danielcopper/romm-tender/issues/2408). The superseded sibling is not always
+Recorded for [#2408](https://github.com/danielcopper/romm-tender/issues/2408), whose D1 changed the behaviour, and
+[#2411](https://github.com/danielcopper/romm-tender/issues/2411). The sibling an adoption displaces is not always
 somewhere else. When RomM lists a game under a new id, the new version keeps the old one's file name, so the old version
 can be recorded at the very path the adoption takes over. Such a sibling is not superseded: its install record is handed
-over and its files stay, because they are the content the dialog promises to keep. Only a sibling recorded at another
-path is removed. That sibling may itself be an adopted install rather than a download of Tender's, and it can be
-downloaded again only while RomM still holds it. A sibling bound to a shortcut of its own
-([ADR-0021](0021-sibling-group-one-shortcut-binding-active-version.md) §5) is neither removed nor handed over. Nor is
-every refusal settled before the supersede: the content is checked again after it, and a refusal that follows a
-hand-over leaves the file untouched.
+over and its files stay, because they are the very content being adopted. A sibling bound to a shortcut of its own
+([ADR-0021](0021-sibling-group-one-shortcut-binding-active-version.md) §5) is neither removed nor handed over, wherever
+it is recorded. Every other installed sibling is removed; it may itself be an adopted install rather than a download of
+Tender's, and it can be downloaded again only while RomM still holds it. Nor is every refusal settled before the
+supersede: the content is checked again after it, and the record can still be refused. A refusal that follows a
+hand-over leaves the file as it is; neither version is installed then, but whatever is still there can be adopted again.
