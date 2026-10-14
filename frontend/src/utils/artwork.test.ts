@@ -493,3 +493,54 @@ describe("fillEmptyArtwork", () => {
     expect(isArtworkApplyInFlight(5000)).toBe(false);
   });
 });
+
+describe("applyArtwork records the wide grid and the logo it set", () => {
+  const replaced = (base64: string, imageId: number) => ({
+    base64,
+    no_api_key: false,
+    image_id: imageId,
+    sha256: `sha-${base64}`,
+    sgdb_id: 9999,
+  });
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubGlobal("SteamClient", {
+      Apps: {
+        SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined),
+        SetShortcutIcon: vi.fn(),
+      },
+    });
+    vi.mocked(backend.reportSgdbSlotArtwork).mockResolvedValue({ success: true });
+    vi.mocked(backend.getSgdbArtworkBase64)
+      .mockResolvedValueOnce({ base64: "HH==", no_api_key: false })
+      .mockResolvedValueOnce(replaced("LL==", 5))
+      .mockResolvedValueOnce(replaced("GG==", 12))
+      .mockResolvedValueOnce({ base64: null, no_api_key: false });
+  });
+
+  it("reports each as set under the ROM it was applied for, with its image id and hash, and no hero", async () => {
+    await expect(applyArtwork(42, 5000)).resolves.toBe(3);
+
+    expect(vi.mocked(backend.reportSgdbSlotArtwork).mock.calls).toEqual([
+      [42, "logo", "set", 9999, 5, "sha-LL=="],
+      [42, "grid", "set", 9999, 12, "sha-GG=="],
+    ]);
+  });
+
+  it("reports an image Steam refuses as refused, and fails the apply as before", async () => {
+    vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Steam refused"));
+
+    await expect(applyArtwork(42, 5000)).rejects.toThrow("Steam refused");
+
+    expect(vi.mocked(backend.reportSgdbSlotArtwork).mock.calls).toEqual([[42, "logo", "refused", 9999, 5, "sha-LL=="]]);
+  });
+
+  it("goes on when a report fails", async () => {
+    vi.mocked(backend.reportSgdbSlotArtwork).mockRejectedValue(new Error("net"));
+
+    await expect(applyArtwork(42, 5000)).resolves.toBe(3);
+  });
+});

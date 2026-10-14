@@ -517,9 +517,21 @@ export const cleanupOrphanedGridImages = endpoint<
     message?: string;
   }
 >("cleanup_orphaned_grid_images");
+/**
+ * One SteamGridDB image for a ROM, from the artwork cache first. A wide grid or
+ * logo also carries SteamGridDB's image id, the hash of its bytes and the ROM's
+ * SteamGridDB id, which `reportSgdbSlotArtwork` records once Steam has taken it.
+ */
 export const getSgdbArtworkBase64 = endpoint<
   [number, number],
-  { base64: string | null; no_api_key?: boolean; prune_lease_token?: string }
+  {
+    base64: string | null;
+    no_api_key?: boolean;
+    prune_lease_token?: string;
+    image_id?: number;
+    sha256?: string;
+    sgdb_id?: number | null;
+  }
 >("get_sgdb_artwork_base64");
 
 /** An artwork slot the game page fills only while it is empty: the wide grid, the logo or the hero. */

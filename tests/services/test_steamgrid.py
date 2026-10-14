@@ -2339,3 +2339,45 @@ class TestTheCacheUnderItsNewNames:
         await steamgrid.service.apply_sgdb_game_id(42, 8888)
 
         assert sgdb_artwork_cache.listdir(art_dir) == []
+
+
+class TestTheReplacingPathCarriesWhatTheReportNeeds:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("asset_type_num", "asset_type"), [(2, "logo"), (3, "grid")])
+    async def test_a_wide_grid_or_logo_carries_its_image_id_hash_and_steamgriddb_id(
+        self, steamgrid, slot_ready, fake_steamgrid_db_api, asset_type_num, asset_type
+    ):
+        _seed_candidates(fake_steamgrid_db_api, asset_type, (12, 920, 430))
+
+        result = await steamgrid.service.get_sgdb_artwork_base64(42, asset_type_num)
+
+        await steamgrid.prune_conflicts.release_lease(result.pop("prune_lease_token"))
+        assert result == {
+            "base64": base64.b64encode(b"image 12").decode("ascii"),
+            "no_api_key": False,
+            "image_id": 12,
+            "sha256": hashlib.sha256(b"image 12").hexdigest(),
+            "sgdb_id": 9999,
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_cached_one_carries_it_too(self, steamgrid, slot_ready, sgdb_artwork_cache):
+        sgdb_artwork_cache.files[os.path.join(sgdb_artwork_cache.cache_dir(), "42_logo_301.png")] = b"cached"
+
+        result = await steamgrid.service.get_sgdb_artwork_base64(42, 2)
+
+        await steamgrid.prune_conflicts.release_lease(result.pop("prune_lease_token"))
+        assert (result["image_id"], result["sha256"], result["sgdb_id"]) == (
+            301,
+            hashlib.sha256(b"cached").hexdigest(),
+            9999,
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_hero_carries_none_of_it(self, steamgrid, slot_ready, sgdb_artwork_cache):
+        sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "hero")] = b"hero"
+
+        result = await steamgrid.service.get_sgdb_artwork_base64(42, 1)
+
+        await steamgrid.prune_conflicts.release_lease(result.pop("prune_lease_token"))
+        assert result == {"base64": base64.b64encode(b"hero").decode("ascii"), "no_api_key": False}

@@ -182,12 +182,17 @@ class SteamGridService:
         ``None`` when SteamGridDB has no candidate or the download failed; an
         exception is logged.
         """
+        found = self._download_cached_artwork(sgdb_game_id, rom_id, asset_type)
+        return found.path if found is not None else None
+
+    def _download_cached_artwork(self, sgdb_game_id, rom_id, asset_type) -> _CachedArtwork | None:
+        """:meth:`_download_sgdb_artwork`, answering the cached file with the image id its name carries."""
         try:
             found = self._download_sgdb_artwork_io(sgdb_game_id, rom_id, asset_type)
         except Exception as e:
             self._logger.warning(f"SGDB {asset_type} download failed for game {sgdb_game_id}: {e}")
             return None
-        return found.path if isinstance(found, _CachedArtwork) else None
+        return found if isinstance(found, _CachedArtwork) else None
 
     def _download_sgdb_artwork_io(self, sgdb_game_id, rom_id, asset_type) -> _CachedArtwork | _NoArtwork:
         """The cached file of *rom_id*'s *asset_type*, downloaded first when it is not cached.
@@ -481,9 +486,9 @@ class SteamGridService:
         cached = await self._loop.run_in_executor(None, self._cached_artwork, rom_id, asset_type)
         if cached is not None:
             self._log_debug(f"SGDB artwork cache hit: {cached.path}")
-            b64 = await self._read_file_as_base64(cached.path)
-            if b64:
-                return {"base64": b64, "no_api_key": False}
+            answer = await self._artwork_answer(rom_id, cached)
+            if answer is not None:
+                return answer
 
         if not self._settings.get("steamgriddb_api_key"):
             self._log_debug("SGDB artwork skipped: no API key configured")
@@ -495,16 +500,34 @@ class SteamGridService:
             self._log_debug(f"SGDB artwork skipped: no SGDB game found for rom_id={rom_id}")
             return {"base64": None, "no_api_key": False}
 
-        path = await self._loop.run_in_executor(None, self._download_sgdb_artwork, sgdb_id, rom_id, asset_type)
-        if path and self._sgdb_artwork_cache.exists(path):
+        found = await self._loop.run_in_executor(None, self._download_cached_artwork, sgdb_id, rom_id, asset_type)
+        if found is not None and self._sgdb_artwork_cache.exists(found.path):
             self._log_debug(f"SGDB artwork download success: rom_id={rom_id}, asset_type={asset_type}")
-            b64 = await self._read_file_as_base64(path)
-            if b64:
-                return {"base64": b64, "no_api_key": False}
+            answer = await self._artwork_answer(rom_id, found)
+            if answer is not None:
+                return answer
         else:
             self._log_debug(f"SGDB artwork download failed: rom_id={rom_id}, asset_type={asset_type}")
 
         return {"base64": None, "no_api_key": False}
+
+    async def _artwork_answer(self, rom_id: int, cached: _CachedArtwork) -> dict[str, Any] | None:
+        """The answer serving *cached*, or ``None`` when it cannot be read.
+
+        A wide grid or logo also carries its SteamGridDB image id, the SHA-256
+        of its bytes and the ROM's SteamGridDB id, which the frontend passes to
+        ``report_sgdb_slot_artwork`` once Steam has taken it or refused it.
+        """
+        b64 = await self._read_file_as_base64(cached.path)
+        if not b64:
+            return None
+        answer: dict[str, Any] = {"base64": b64, "no_api_key": False}
+        if cached.image_id is not None:
+            sgdb_id = self._resolve_sgdb_id_state_only(rom_id)
+            answer["image_id"] = cached.image_id
+            answer["sha256"] = hashlib.sha256(base64.b64decode(b64)).hexdigest()
+            answer["sgdb_id"] = int(sgdb_id) if sgdb_id else None
+        return answer
 
     # -- one artwork slot, filled only when empty (use cases) ---------------
 

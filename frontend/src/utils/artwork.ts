@@ -131,17 +131,29 @@ async function applySgdbArtwork(romId: number, appId: number): Promise<number> {
       };
 
       // SGDB types 1-3 (hero / logo / wide grid) map 1:1 to Steam capsule assetTypes 1-3.
-      const customArt: Array<[base64: string | null, assetType: number]> = [
-        [results[0].base64, 1],
-        [results[1].base64, 2],
-        [results[2].base64, 3],
+      // The wide grid and the logo are recorded as the fill path records them;
+      // the hero is not. The awaits are sequential by design, one image at a
+      // time; S9382 is raised on the report's await lines, so their NOSONARs
+      // stay there.
+      const customArt: Array<[answer: SgdbArtwork, assetType: number, slot: RecordedSlot | null]> = [
+        [results[0], 1, null],
+        [results[1], 2, "logo"],
+        [results[2], 3, "grid"],
       ];
-      for (const [base64, assetType] of customArt) {
-        if (!base64) continue;
+      for (const [answer, assetType, slot] of customArt) {
+        if (!answer.base64) continue;
         if (isPruneLeaseCancelled(signal)) return applied;
         if (superseded()) return bail();
-        await SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", assetType);
+        try {
+          await SteamClient.Apps.SetCustomArtworkForApp(appId, answer.base64, "png", assetType);
+        } catch (e) {
+          // prettier-ignore
+          if (slot) await reportReplacedSlot(romId, slot, "refused", answer); // NOSONAR(typescript:S9382)
+          throw e;
+        }
         applied++;
+        // prettier-ignore
+        if (slot) await reportReplacedSlot(romId, slot, "set", answer); // NOSONAR(typescript:S9382)
       }
 
       // Type 4 = icon (a distinct apply path — see applyIcon).
@@ -156,6 +168,33 @@ async function applySgdbArtwork(romId: number, appId: number): Promise<number> {
     leaseOwner,
     admission,
   );
+}
+
+/** What `getSgdbArtworkBase64` answers for one asset type. */
+type SgdbArtwork = Awaited<ReturnType<typeof getSgdbArtworkBase64>>;
+
+/** The slots whose outcome the backend records. */
+type RecordedSlot = "grid" | "logo";
+
+/** Report what Steam made of an image the replacing apply set, as the fill path reports it. */
+async function reportReplacedSlot(
+  romId: number,
+  slot: RecordedSlot,
+  outcome: "set" | "refused",
+  answer: SgdbArtwork,
+): Promise<void> {
+  try {
+    await reportSgdbSlotArtwork(
+      romId,
+      slot,
+      outcome,
+      answer.sgdb_id ?? null,
+      answer.image_id ?? null,
+      answer.sha256 ?? null,
+    );
+  } catch (e) {
+    detach(debugLog(`applyArtwork: reporting the ${slot} for rom ${romId} failed: ${e}`));
+  }
 }
 
 /** The slots the game page fills only while empty, each with Steam's asset type for it. */
@@ -234,7 +273,7 @@ async function setSlotImage(
 /** Report what Steam made of the image for the backend to record. */
 async function reportSlotOutcome(
   romId: number,
-  slot: "grid" | "logo",
+  slot: RecordedSlot,
   outcome: "set" | "refused",
   image: SlotImage,
 ): Promise<void> {
