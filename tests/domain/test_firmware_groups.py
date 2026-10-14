@@ -377,10 +377,12 @@ class TestFetchedAsRequired:
 
         assert fetched_as_required(placement, _BEETLE, ()) is False
 
-    def test_an_unidentified_pick_falls_back_to_any_emulator_requiring_it(self):
+    def test_an_unidentified_pick_fetches_nothing(self):
+        # No emulator's requirement can be named, so none is guessed at from
+        # whichever emulator requires the file.
         placement = _placement("scph5501.bin", FirmwareWant("DUCKSTATION", required=True))
 
-        assert fetched_as_required(placement, None, ()) is True
+        assert fetched_as_required(placement, None, ()) is False
 
     def test_a_file_nothing_declares_is_never_fetched(self):
         assert fetched_as_required(None, _BEETLE, (_beetle(),)) is False

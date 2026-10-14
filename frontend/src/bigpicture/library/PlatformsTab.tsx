@@ -26,6 +26,7 @@
 
 import type { FC, ReactNode } from "react";
 import { DialogButton, Focusable, ToggleField } from "@decky/ui";
+import { EmulatorStepScope } from "../emulatorStepping";
 import { ListDetail, type ListDetailItem } from "../layout/ListDetail";
 import { ROW_CONTENT_INSET, ROW_MARKER_GAP, ROW_MARKER_WIDTH, SELECTION_ACCENT } from "../layout/pane";
 import { LoadingRow } from "../LoadingRow";
@@ -38,7 +39,7 @@ import type { PlatformRow, PlatformsPageState } from "./usePlatformsPage";
  * What the row's dot means, in words — its `title`.
  *
  * **The BIOS states are not this surface's to word.** `utils/biosSummary.ts`
- * holds all seven, and this is the third surface to read it. It worded them for
+ * holds every one, and this is the third surface to read it. It worded them for
  * itself until it drifted: the list went on saying an emulator "requires none of
  * the files it names" after the other two had moved to naming the declaration,
  * so one platform was described in two vocabularies a keypress apart — the exact
@@ -220,17 +221,24 @@ export const PlatformsTab: FC<{ state: PlatformsPageState }> = ({ state }) => {
     </>
   );
 
+  // L2 and R2 step the shown platform's emulator selector wherever focus is on
+  // this page, the list included.
   return (
-    <ListDetail
-      items={items}
-      listHeader={listHeader}
-      selectedId={state.selectedSlug}
-      onSelect={state.select}
-      renderDetail={(slug) => {
-        const row = slug === null ? undefined : state.rows.get(slug);
-        if (!row) return <div style={{ padding: "16px", color: "#8f98a0" }}>Pick a platform on the left.</div>;
-        return <PlatformDetail row={row} state={state} />;
-      }}
-    />
+    <EmulatorStepScope>
+      {(onButtonDown) => (
+        <ListDetail
+          items={items}
+          listHeader={listHeader}
+          selectedId={state.selectedSlug}
+          onSelect={state.select}
+          onButtonDown={onButtonDown}
+          renderDetail={(slug) => {
+            const row = slug === null ? undefined : state.rows.get(slug);
+            if (!row) return <div style={{ padding: "16px", color: "#8f98a0" }}>Pick a platform on the left.</div>;
+            return <PlatformDetail row={row} state={state} />;
+          }}
+        />
+      )}
+    </EmulatorStepScope>
   );
 };

@@ -11,9 +11,10 @@
 // any module-scope mock state isolated.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, act } from "@testing-library/react";
+import { render, act, fireEvent } from "@testing-library/react";
 import { createElement, useSyncExternalStore, type ComponentProps } from "react";
 import { RomMGameInfoPanel } from "./RomMGameInfoPanel";
+import { EmulatorStepScope, useStepOnTriggers } from "./emulatorStepping";
 import * as backend from "../api/backend";
 import type { CachedGameDetail } from "../api/backend";
 import { HostTransportError } from "../api/host";
@@ -361,6 +362,35 @@ describe("RomMGameInfoPanel", () => {
       // loadData stays pending by design, but the sibling refreshMigrationState
       // effect does resolve — its store writes have to land inside act.
       await flushAsync();
+    });
+
+    it("hands L2 and R2 from the tab content to the BIOS tab's emulator selector", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: 77,
+        save_sync_enabled: true,
+        metadata: makeMetadata(),
+        stale_fields: [],
+      });
+      const step = vi.fn();
+      const Selector = () => {
+        useStepOnTriggers(step);
+        return null;
+      };
+      const { container } = render(
+        <EmulatorStepScope>
+          {() => (
+            <>
+              <Selector />
+              <RomMGameInfoPanel appId={testAppId} />
+            </>
+          )}
+        </EmulatorStepScope>,
+      );
+      await flushAsync();
+      const content = container.querySelector(".romm-tab-content") as HTMLElement;
+      fireEvent(content, new CustomEvent("decky-button-down", { detail: { button: 8 }, bubbles: true }));
+      expect(step).toHaveBeenCalledWith(1);
     });
 
     it("returns null when cached.found=false → state.error='failed' and romId=null", async () => {
@@ -1934,6 +1964,8 @@ describe("RomMGameInfoPanel", () => {
         emulators: [
           {
             label: "INITIAL_CORE",
+            labels: ["INITIAL_CORE"],
+            name: "INITIAL_CORE",
             kind: "libretro",
             core_so: "initial_core.so",
             emulator: "initial_core.so",
@@ -2053,6 +2085,8 @@ describe("RomMGameInfoPanel", () => {
         emulators: [
           {
             label: "FROM_CORE_CHANGED",
+            labels: ["FROM_CORE_CHANGED"],
+            name: "FROM_CORE_CHANGED",
             kind: "libretro",
             core_so: "from_core_changed.so",
             emulator: "from_core_changed.so",
@@ -2169,6 +2203,8 @@ describe("RomMGameInfoPanel", () => {
         emulators: [
           {
             label: "INITIAL_CORE",
+            labels: ["INITIAL_CORE"],
+            name: "INITIAL_CORE",
             kind: "libretro",
             core_so: "initial_core.so",
             emulator: "initial_core.so",
@@ -3314,6 +3350,8 @@ describe("RomMGameInfoPanel", () => {
         emulators: [
           {
             label: "Snes9x",
+            labels: ["Snes9x"],
+            name: "Snes9x",
             kind: "libretro",
             core_so: "snes9x_libretro",
             emulator: "snes9x_libretro.so",
@@ -3331,10 +3369,11 @@ describe("RomMGameInfoPanel", () => {
       });
       expect(container.textContent).toContain("Emulator");
       expect(container.textContent).toContain("Snes9x");
-      // A file no emulator asks for keeps its own note rather than a row: the
-      // rows are the files with an owning emulator, and the note says which of
-      // the two remaining answers this one is.
-      expect(container.textContent).toContain("1 file on server nothing installed could answer for");
+      // A file no emulator asks for stands in the library's own section, apart
+      // from the files an emulator owns, and its need line says which of the
+      // two remaining answers this one is.
+      expect(container.textContent).toContain("In your RomM library, asked for by no emulator here");
+      expect(container.textContent).toContain("need not established");
     });
   });
 
@@ -3762,7 +3801,11 @@ describe("RomMGameInfoPanel", () => {
       // back to every declaring core only when no active core resolves), and the
       // point here is that it could not be asked.
       expect(container.textContent).toContain("Nothing could be established about what the launching emulator needs");
-      expect(container.textContent).toContain("2 files on server nothing installed could answer for");
+      expect(container.textContent).toContain("In your RomM library, asked for by no emulator here");
+      expect([...container.querySelectorAll(".romm-panel-file-name")].map((el) => el.textContent)).toEqual([
+        "a.bin",
+        "b.bin",
+      ]);
       expect(container.textContent).not.toContain("marks none of its BIOS files as required");
       // Swallowed-note fix: the note renders even though no file has a row.
     });
@@ -3866,6 +3909,8 @@ describe("RomMGameInfoPanel", () => {
         emulators: [
           {
             label: "MyCore",
+            labels: ["MyCore"],
+            name: "MyCore",
             kind: "libretro",
             core_so: "mycore.so",
             emulator: "mycore.so",
@@ -4933,6 +4978,8 @@ describe("RomMGameInfoPanel", () => {
         emulators: [
           {
             label,
+            labels: [label],
+            name: label,
             kind: "libretro",
             core_so: coreSo,
             emulator: `${coreSo}.so`,

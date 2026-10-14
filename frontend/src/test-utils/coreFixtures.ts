@@ -2,10 +2,10 @@
  * Builders for `EmulatorOption` test fixtures (#1210).
  *
  * The picker payloads (`get_platform_core_info` / `get_firmware_status`) carry
- * a classified emulator list; these helpers keep the full seven-field shape in
+ * a classified emulator list; these helpers keep the full nine-field shape in
  * one place so tests read as `libretroEmu("mgba_libretro", "mGBA", true)`
- * instead of repeating `{ label, kind, core_so, emulator, is_default, bakeable,
- * reason }`.
+ * instead of repeating `{ label, labels, name, kind, core_so, emulator,
+ * is_default, bakeable, reason }`.
  *
  * The identity a libretro row carries is its core file's basename, which is the
  * bare `core_so` plus `.so` — the resolver states it in the spelling the launch
@@ -19,7 +19,17 @@ import type { EmulatorOption } from "../types";
 
 /** A bakeable libretro emulator option (the common case). */
 export function libretroEmu(core_so: string, label: string, is_default = false): EmulatorOption {
-  return { label, kind: "libretro", core_so, emulator: `${core_so}.so`, is_default, bakeable: true, reason: null };
+  return {
+    label,
+    labels: [label],
+    name: label,
+    kind: "libretro",
+    core_so,
+    emulator: `${core_so}.so`,
+    is_default,
+    bakeable: true,
+    reason: null,
+  };
 }
 
 /** A standalone emulator option; pass overrides to make it un-bakeable. */
@@ -30,6 +40,8 @@ export function standaloneEmu(
 ): EmulatorOption {
   return {
     label,
+    labels: [label],
+    name: label,
     kind: "standalone",
     core_so: null,
     emulator: label.toUpperCase(),
@@ -38,4 +50,9 @@ export function standaloneEmu(
     reason: null,
     ...overrides,
   };
+}
+
+/** *entry* as the one picker entry several labels share — RetroDECK lists LRPS2 and PCSX2 under one command. */
+export function sharedBy(entry: EmulatorOption, labels: string[]): EmulatorOption {
+  return { ...entry, label: labels[0] ?? entry.label, labels, name: labels.join(" / ") };
 }

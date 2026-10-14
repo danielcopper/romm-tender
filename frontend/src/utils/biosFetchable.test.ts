@@ -17,7 +17,8 @@ describe("isFetchable", () => {
   });
 
   it("refuses a file the RomM library does not hold", () => {
-    // It still counts towards readiness — there is simply nothing to press.
+    // Where the launch requires it, it still counts in the required counts —
+    // there is simply nothing to press.
     expect(isFetchable({ ...fetchableRow, on_server: false })).toBe(false);
   });
 

@@ -599,15 +599,17 @@ Three distinct notions in core selection, kept separate because they have differ
   read consumer (BIOS requirement, save path, game-detail badge), so the launched emulator never diverges from what
   those reads assume. On the wire the pair is still spelled `active_core` / `active_core_label`, and `active_core` there
   is the **emulator identity** rather than a core file: `core_so` is absent for every standalone emulator, so a reader
-  reaching for it answers `None` for one and falls back to every declaring emulator — the degradation the identity work
-  removed. _Avoid_: **active core** for this, and "required by active core" for the row axis, which is **required by the
-  launching emulator** — the field it expands is spelled `required_by_active` and carries no "core" at all, so the
-  expansion added the one word that is wrong over a standalone pick. The identifiers `active_core`, `active_core_label`
-  and `required_by_active` keep their spellings; the prose around them does not expand them into a core.
+  reaching for it answers `None` for one and treats a standalone pick as an emulator nothing identified — the
+  degradation the identity work removed. A launch with no identity is answered as not established (#2190 D26). _Avoid_:
+  **active core** for this, and "required by active core" for the row axis, which is **required by the launching
+  emulator** — the field it expands is spelled `required_by_active` and carries no "core" at all, so the expansion added
+  the one word that is wrong over a standalone pick. The identifiers `active_core`, `active_core_label` and
+  `required_by_active` keep their spellings; the prose around them does not expand them into a core.
 - **Platform pick** — the same resolution asked of a PLATFORM rather than a ROM, so with no per-game layer to apply: the
-  per-platform override when its label still names a bakeable emulator, else the default emulator. It is one pick with
-  two projections — the name a surface displays, and the **emulator identity** its BIOS answers key on — and resolving
-  those separately is what let one pane name an emulator and judge by another.
+  per-platform override when its label still names a bakeable emulator, else the default emulator. A platform's BIOS
+  answers go one rung further: where nothing is bakeable they are about the emulator RetroDECK declares first, installed
+  or not (#2190 D26). It is one pick with two projections — the name a surface displays, and the **emulator identity**
+  its BIOS answers key on — and resolving those separately is what let one pane name an emulator and judge by another.
 - **Emulator identity** — which emulator an answer is about, in the spelling its own launch command uses: a libretro
   entry's core file basename (`dolphin_libretro.so`), a standalone entry's own command name (`DUCKSTATION`, `PCSX2`).
   The resolver states it on both the emulator catalogue and the firmware answer, which is what lets a pick be matched
@@ -668,26 +670,27 @@ game will launch with: it stated what it wants and did not name this file (**not
 and this launch does not use never makes the answer doubtful.
 
 Keeping the last two apart is the whole point of the vocabulary — "nothing wants this" is a finished answer and "nothing
-could be established" is the absence of one, and a single boolean called both _not required_. **Wanted** is a property
-of the platform's own emulators and does not move with which of them the user picked; the launch-scoped question is
-**required by the launching emulator**, which the counts a sentence words are taken over. The foil to **BIOS level**
-(the resolver's readiness verdict for the launching emulator: unknown / ok / partial / missing).
+could be established" is the absence of one, and a single boolean called both _not required_. On a row an emulator
+declares, **wanted** is the need of the emulator whose list the row is on — the launching emulator's on its own rows,
+the shown emulator's where a BIOS table shows another; on a library file nobody declares it is the machine's answer. The
+launch-scoped question is **required by the launching emulator**, which the counts a sentence words are taken over. The
+foil to **BIOS level** (the resolver's readiness verdict for the launching emulator: unknown / ok / partial / missing).
 
 A wanted file need not be one the RomM library holds — the two sets overlap without either containing the other, and a
-platform's list is their **union**. A row the library does not hold is marked **not on server**: it counts towards
-readiness, because it is a real prerequisite that is really absent, and never towards a download or a progress ratio,
-because nothing in Tender can fetch it.
+platform's list is their **union**. A row the library does not hold is marked **not on server**: where the launching
+emulator requires it, it counts in the required counts like any other prerequisite, and it never counts towards a
+download or a progress ratio, because nothing in Tender can fetch it.
 
 ### Row verdict (firmware): met / unmet / withheld
 
 Whether one row's requirement is met: the resolver's own verdict over that file, read at the place the launching
-emulator opens it (#2190 D3) — never presence. A wrong image is there and unmet; a file the resolver could not compare
-is there and withheld; for a **folder declaration** the verdict is what the folder _holds_, and RetroDECK links LRPS2's
-`pcsx2/bios` onto the BIOS root, so the folder is there on every install. The rows a launch reads are the **launching
-emulator**'s own requirements, each at the place the resolver names for that emulator: with YabaSanshiro launching
-Saturn, `saturn_bios.bin` is the file directly under the BIOS root, whatever lies under Kronos's `kronos/`. Every
-statement below is scoped to a **required by the launching emulator** row first, and the library's own held/offered
-ratio is a third axis again, counting what the RomM library holds rather than what is met.
+emulator opens it — never presence. A wrong image is there and unmet; a file the resolver could not compare is there and
+withheld; for a **folder declaration** the verdict is what the folder _holds_, and RetroDECK links LRPS2's `pcsx2/bios`
+onto the BIOS root, so the folder is there on every install. The rows a launch reads are the **launching emulator**'s
+own requirements, each at the place the resolver names for that emulator: with YabaSanshiro launching Saturn,
+`saturn_bios.bin` is the file directly under the BIOS root, whatever lies under Kronos's `kronos/`. Every statement
+below is scoped to a **required by the launching emulator** row first, and the library's own held/offered ratio is a
+third axis again, counting what the RomM library holds rather than what is met.
 
 - **met** — raises `required_downloaded`, the "in place" a sentence counts. The resolver established that the right file
   is where the emulator opens it — or, for a declared folder, that an image inside passes the emulator's own check. A
@@ -695,8 +698,9 @@ ratio is a third axis again, counting what the RomM library holds rather than wh
   only whether Tender's own look found it.
 - **unmet** — the resolver showed the requirement is not met: the file is absent, the bytes are the wrong image, the
   emulator refuses it on its size, or something of the wrong shape is at the place. Worded with which of these it is.
-- **withheld** — the resolver established neither: the file could not be recognised, read or compared, or the place
-  could not be looked at at all. A place the resolver could not look at is never read as missing.
+- **withheld** — the resolver established neither: the file could not be recognised, read or compared, a folder stands
+  where the emulator opens a file, or the place could not be looked at at all. A place the resolver could not look at is
+  never read as missing.
 
 No colour is computed from these: the **BIOS level** is the resolver's verdict over the emulator, and a row's verdict is
 what the sentence beside it counts and what the row's own mark shows. The CAUSE of a withheld or unmet verdict is read
@@ -714,12 +718,14 @@ emulator **read and does not recognise** was checked — DuckStation boots such 
 the verdict stays withheld while "could not be checked" is simply untrue of it. Beside that sit a file whose **bytes did
 not come back**, which is a statement about Tender's own read and no evidence the launch cannot read it, and one the
 emulator **refuses** on its size before reading a byte, which arrives with the verdict already unmet and needs the
-reason rather than a verdict. Everything else — the bytes matched, they did not, nothing asked — leaves the row to the
-axes it always had.
+reason rather than a verdict, and one that is there and is **not the image** the emulator expects, which arrives unmet
+too and is worded as the wrong file rather than as one that is missing. Everything else — the bytes matched, nothing
+asked — leaves the row to the axes it always had.
 
-Where each of the three is worded is `frontend/src/utils/biosFileNote.ts`, the one place both surfaces derive a row's
-note from. The mark in the platform pane's `On disk` cell stays the verdict alone and says only that nothing was settled
-either way.
+Where each of these is worded is `frontend/src/utils/biosFileNote.ts`, the one place both surfaces derive a row's note
+from. The platform pane's **Contents** column words every value, from the same module (`contentsWords`): right file,
+wrong file, refused, not comparable, not recognised, could not be read, not checked, not established. The mark in its
+`On disk` cell stays the verdict alone, so the two columns explain each other.
 
 ### One-of group (firmware): met / partial / unmet / unknown
 
@@ -744,8 +750,8 @@ required file words names none). The state follows:
 
 - **met** — every region is covered. Never over an unchecked one.
 - **partial** — some region is covered and some is missing. Counted as not met. Where the resolver's verdict is open
-  because of the disc's region alone (#2190 D10) the **BIOS level** is `partial`, the platform page's amber; anything
-  else open beside it leaves the level the resolver's `unknown`.
+  because of the disc's region alone the **BIOS level** is `partial`, the platform page's amber; anything else open
+  beside it leaves the level the resolver's `unknown`.
 - **unmet** — no option is in place or might be. The resolver's verdict is not met, so the **BIOS level** is `missing`;
   an unchecked region does not lift it.
 - **unknown** — an option is there and unread and no region is covered, or an unchecked region stands beside covered
@@ -761,7 +767,7 @@ where any of them is, missing where they are shown to be, unknown otherwise. A g
 Asia, Korea, Brazil, none recorded — takes the platform's verdict.
 
 Scoped to the **launching emulator**, like **required by the launching emulator**: the group is that emulator's, and a
-platform's other emulators' groups are carried only as their own lines on a row. Nothing in the vocabulary is
+platform's other emulators' groups are shown where a BIOS table shows that emulator. Nothing in the vocabulary is
 PlayStation's — every group the resolver states for any console is judged the same way. _Avoid_: candidate, spare — the
 words of the file-by-file reading this replaced.
 
@@ -791,8 +797,7 @@ That the console a game launches on does not start without a firmware image the 
 itself. A `.info` marks each file **needed** or **optional** and nothing else — no way to say the console will not boot
 without one of them — so the resolver answers this from a source-cited table of world knowledge, per system
 (`system_firmware`), marked on the answer where it stated something (`system-firmware-world-knowledge`). It weighs that
-need into its own verdict, so the **BIOS level** already carries it: Tender keeps no reading of its own over it (#2190
-D13).
+need into its own verdict, so the **BIOS level** already carries it: Tender keeps no reading of its own over it.
 
 It reaches a surface only as words, under a verdict that is not met: "PlayStation does not start without a BIOS image,
 and none of the five SwanStation knows is in place". That the console needs one comes from the resolver's table; which
@@ -813,11 +818,11 @@ resolver explaining the REQUIREMENT in whole sentences. One field, two kinds of 
 a row: the second is a paragraph on a line sized for a label, and it broke off mid-sentence on the platform pane and
 filled the row on the game page.
 
-It is the register of the ONE entry the description came from — each row is one emulator's own requirement (#2190 D2),
-so the prose is that emulator's — and never a property of the file, the row or the emulator behind it. The resolver
-states three further words (`absent`, `unreadable`, `unsupported`), none of which can reach a row: an entry in one of
-those states carries no requirement, so it declares no file. A row nothing declared states no register at all, and its
-description is its own file name.
+It is the register of the ONE entry the description came from — each row is one emulator's own requirement, so the prose
+is that emulator's — and never a property of the file, the row or the emulator behind it. The resolver states three
+further words (`absent`, `unreadable`, `unsupported`), none of which can reach a row: an entry in one of those states
+carries no requirement, so it declares no file. A row nothing declared states no register at all, and its description is
+its own file name.
 
 ### Library inventory (firmware): offered / held
 

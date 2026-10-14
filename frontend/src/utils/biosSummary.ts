@@ -1,8 +1,8 @@
 /**
  * The one place a BIOS state is put into words.
  *
- * Seven states and a one-of group's, and before this module each surface worded
- * the seven for itself: the game page's BIOS tab, the platform pane, and the
+ * Every state and a one-of group's, and before this module each surface worded
+ * them for itself: the game page's BIOS tab, the platform pane, and the
  * platform list's tooltip all held their own spelling of them, some naming the
  * launching emulator and some not. Nothing joined them, so the drift was
  * invisible to every test — each surface's own expectations passed while the
@@ -32,20 +32,28 @@
  *
  * **Every sentence names the emulator**, because every one of these states is
  * about ONE emulator's declaration and nothing else — the pick the whole answer
- * was scoped to, carried on the payload as `active_core_label`. On the game
- * page the same emulator is named two inches away, under the pane's Emulator
- * heading, so a sentence about "the launching emulator" says less than everything
- * around it. Where the payload carries no label the pick could not be made or has
- * no name of its own, and the sentences fall back to naming the role rather than
- * inventing one.
+ * was scoped to, named as its selector entry names it ({@link launchingName}).
+ * On the game page the same pick is named two inches away, under the pane's
+ * Emulator heading, so a sentence about "the launching emulator" says less than
+ * everything around it. The two names can differ: the BIOS part names the
+ * emulator, the Emulator heading the launch entry
+ * (docs/architecture/core-emulator-selection.md, "The BIOS part names the
+ * emulator; the launch places name the entry"). Where the payload carries no label the pick could not
+ * be made or has no name of its own, and the sentences fall back to naming the
+ * role rather than inventing one.
  *
  * **The colour is never decided here.** It is the backend's level — the
  * resolver's verdict for the launching emulator — and this module
  * only says what that verdict means. **The order of the conditions is
  * load-bearing**: what keeps the verdict from being read at all comes first (an
- * emulator nobody read, a BIOS nobody chose in its settings, a required
- * declaration the resolver would not follow), then the console's own demand
- * where none of the images the emulator knows is in place (#2190 D13), then a
+ * emulator the resolver does not cover, then a BIOS nobody chose in its
+ * settings — ahead of the emulator nobody read, since that empty setting is why
+ * PCSX2's card reads as not read — then an emulator nobody read, under a
+ * verdict nothing established, then a required declaration the resolver would
+ * not follow), then the console's own demand where none of the images the
+ * emulator knows is in place, with a search that found nothing behind it as a
+ * note where both apply,
+ * then what a search of the BIOS folder by content found, then a
  * one-of group the launching emulator states, then the level's decline, then
  * the emulator's required files. A group with nothing in place keeps its
  * sentence whatever else is open, because the console does not start either
@@ -110,8 +118,18 @@ export interface BiosSummaryRow {
   caveats?: string[];
 }
 
+/**
+ * The launching emulator's name: its selector entry's label, which carries every
+ * label the emulator goes by ("LRPS2 / PCSX2"), so the sentences name it as the
+ * selector and the rows do. `active_core_label` is the one label that was
+ * picked, and stands only where no entry is the launching emulator's.
+ */
+function launchingName(source: BiosSummarySource): string | null {
+  return source.emulator_tabs?.find((tab) => tab.launching)?.label ?? source.active_core_label ?? null;
+}
+
 // The role a sentence names where the pick carries no label. Two spellings of
-// one fallback, because two of the seven sentences open with the emulator and
+// one fallback, because some sentences open with the emulator and
 // the rest name it mid-sentence — and a real label is never recased, since
 // `mGBA` is the name its own catalogue spells.
 const ROLE_MID = "the launching emulator";
@@ -167,11 +185,10 @@ const COULD_NOT_BE_READ = "could not be read";
 // An emulator the resolver does not cover.
 const NOT_COVERED_HEAD = "Tender cannot tell what";
 const NOT_COVERED_TAIL = "needs yet — the emulator's firmware is not covered by the resolver yet";
-// The emulator's name sits between the count and this, so the searchable run
-// starts at `requires` — and it has to, because a bare "could not be checked" is
-// also the platform pane's mark for a row whose own verdict was withheld, and a
-// lock searching for that would fire on a string this module does not own.
-const REQUIRES_UNCHECKED = "requires could not be checked";
+// The emulator's name and the verb sit between the count and this. A bare
+// "could not be checked" is also the platform pane's mark for a row whose own
+// verdict was withheld, so the lock searches the runs that start at each verb.
+const UNCHECKED_TAIL = "could not be checked";
 const IMAGE_UNSETTLED_HEAD = "Whether the BIOS image";
 const NOTHING_ESTABLISHED_HEAD = "Nothing could be established about what";
 const NOTHING_ESTABLISHED_TAIL = "needs";
@@ -235,7 +252,7 @@ export const BIOS_SUMMARY_PHRASES: readonly string[] = [
   NO_BIOS_CHOSEN_HEAD,
   NO_BIOS_CHOSEN_TAIL,
   REFUSED_TAIL,
-  REQUIRES_UNCHECKED,
+  ...[OPENS_BY_NAME, LISTS_AS_REQUIRED, VERB_REQUIRES].map((verb) => `${verb} ${UNCHECKED_TAIL}`),
   IMAGE_UNSETTLED_HEAD,
   NOTHING_ESTABLISHED_HEAD,
   OPENS_BY_NAME,
@@ -313,24 +330,80 @@ function stateWords(
   level: BiosLevel | null,
   consoleName: string | null,
 ): BiosSummary {
-  const emulator = source.active_core_label ?? null;
+  const emulator = launchingName(source);
   const named = emulator ?? ROLE_MID;
   const leading = emulator ?? ROLE_LEADING;
+  const counts = requiredCounts(source, rows);
+
+  // 1. and 2. The emulator nobody read, and what else keeps the verdict from
+  //    being read at all.
+  const unread = unreadSummary(source, level, named, leading);
+  if (unread) return unread;
+
+  // What a search of the BIOS folder that found nothing states —
+  // only where no group speaks instead, and only off the resolver's own
+  // statement: never a verdict read as one.
+  const nothing = counts.groups.length === 0 ? foundNothingSummary(source, named, leading) : null;
+
+  // 3. The console's own demand, with none of the images the emulator knows in
+  //    place — and what the search found after it, where it states that too.
+  const demand = consoleDemandSummary(source, rows, level, consoleName ?? THIS_SYSTEM, named, counts.plain, nothing);
+  if (demand) return demand;
+
+  // 4. What an emulator that searches its BIOS folder by content found —
+  //    stated rather than counted: "1 / 1 required" would be true and useless.
+  if (nothing) return nothing;
+  const searched = contentSearchSummary(source, rows, level, leading);
+  if (searched) return searched;
+
+  // 5. A one-of group the launching emulator states.
+  const group = oneOfGroupSummary(source, rows, level, counts.groups, counts.plain, named, leading);
+  if (group) return group;
+
+  // 6. The level declined.
+  if (level === "unknown") return declinedSummary(named, verbOf(source.locating), counts.withheld);
+
+  // 7. The emulator's own required files, held or short.
+  if (counts.count > 0) return requiredFilesSummary(source.locating, named, rows, counts.plain, level);
+
+  // 8. A finished answer, and the set it was taken over is named: a bare
+  //    "Nothing required" was read as the CONSOLE needing no BIOS.
+  return { status: STATUS_NOTHING_REQUIRED, sentence: `${leading} ${MARKS_NONE_REQUIRED}` };
+}
+
+/** The required counts the states read, and the one-of groups they take once each. */
+interface RequiredCounts {
+  count: number;
+  withheld: number;
+  groups: readonly OneOfGroupVerdict[];
+  plain: PlainRequirements;
+}
+
+/** The payload's required counts, each falling back to the rows where the payload states none. */
+function requiredCounts(source: BiosSummarySource, rows: readonly BiosSummaryRow[]): RequiredCounts {
   const withheld = source.required_withheld ?? 0;
   const requiredRows = rows.filter((row) => row.required_by_active);
-  const requiredCount = source.required_count ?? requiredRows.length;
-  const requiredDone = source.required_downloaded ?? requiredRows.filter((row) => row.downloaded).length;
+  const count = source.required_count ?? requiredRows.length;
+  const done = source.required_downloaded ?? requiredRows.filter((row) => row.downloaded).length;
   const groups = source.one_of_groups ?? [];
-  const plain = plainRequirements(groups, requiredCount, requiredDone, withheld);
+  return { count, withheld, groups, plain: plainRequirements(groups, count, done, withheld) };
+}
 
+/** What keeps the verdict from being read at all, in the header's order; `null` where nothing does. */
+function unreadSummary(
+  source: BiosSummarySource,
+  level: BiosLevel | null,
+  named: string,
+  leading: string,
+): BiosSummary | null {
   // 1. The emulator nobody read: nothing that follows can be about it. One the
   //    resolver does not cover says so.
   if (source.emulator_declaration === "unsupported") {
     return { status: STATUS_REQUIREMENT_UNKNOWN, sentence: `${NOT_COVERED_HEAD} ${named} ${NOT_COVERED_TAIL}` };
   }
-  if (source.emulator_read === false) return nothingEstablished(named);
-
-  // 2. What keeps the verdict from being read at all, in the resolver's words.
+  // A BIOS nobody chose in the emulator's settings is said ahead of "not read":
+  // an empty setting is why PCSX2's card establishes nothing, so the reading
+  // that counts it as not read is the same answer that names the cause.
   if ((source.emulator_notes ?? []).some((note) => note.kind === "bios-unchosen")) {
     return { status: STATUS_NO_BIOS_CHOSEN, sentence: `${NO_BIOS_CHOSEN_HEAD} ${named}'s ${NO_BIOS_CHOSEN_TAIL}` };
   }
@@ -342,55 +415,64 @@ function stateWords(
   // 2. What else keeps the verdict from being read at all, in the resolver's words.
   const [refused, ...othersRefused] = (source.refused ?? []).filter((declaration) => declaration.required);
   if (level === "unknown" && refused !== undefined) {
-    return { status: STATUS_READINESS_UNKNOWN, sentence: refusedSentence(leading, refused, othersRefused.length) };
+    return {
+      status: STATUS_READINESS_UNKNOWN,
+      sentence: refusedSentence(leading, verbOf(source.locating), refused, othersRefused.length),
+    };
   }
+  return null;
+}
 
-  // 3. The console's own demand, with none of the images the emulator knows in place.
+/**
+ * The console's own demand, with *nothing* — what a search found — after it;
+ * `null` where the demand does not stand.
+ */
+function consoleDemandSummary(
+  source: BiosSummarySource,
+  rows: readonly BiosSummaryRow[],
+  level: BiosLevel | null,
+  consoleName: string,
+  named: string,
+  plain: PlainRequirements,
+  nothing: BiosSummary | null,
+): BiosSummary | null {
   if (level === "missing" && source.console_needs_image === true && plain.missing === 0) {
     const images = rows.filter(
       (row) => row.used_by_active === true && (row.wanted === "needed" || row.wanted === "optional"),
     );
     if (!images.some((row) => row.satisfied === true)) {
-      return {
-        status: STATUS_NEEDS_IMAGE,
-        sentence: consoleSentence(consoleName ?? THIS_SYSTEM, named, images.length),
-      };
+      const sentence = consoleSentence(consoleName, named, images.length);
+      return { status: STATUS_NEEDS_IMAGE, sentence: nothing ? `${sentence} — ${nothing.sentence}` : sentence };
     }
   }
+  return null;
+}
 
-  // 4. What an emulator that searches its BIOS folder by content found (#1883
-  //    D1, D2) — stated rather than counted: "1 / 1 required" would be true and
-  //    useless. Only where no group speaks instead, and only off the resolver's
-  //    own statements: a search that found nothing is its note, never a verdict.
-  const nothing = groups.length === 0 ? foundNothingSummary(source, named, leading) : null;
-  if (nothing) return nothing;
-  const searched = contentSearchSummary(source, rows, level, leading);
-  if (searched) return searched;
-
-  // 5. A one-of group the launching emulator states.
+/**
+ * The one-of group the launching emulator states, or the plain file it gives
+ * way to (see the header); `null` where the emulator states no group.
+ */
+function oneOfGroupSummary(
+  source: BiosSummarySource,
+  rows: readonly BiosSummaryRow[],
+  level: BiosLevel | null,
+  groups: readonly OneOfGroupVerdict[],
+  plain: PlainRequirements,
+  named: string,
+  leading: string,
+): BiosSummary | null {
   const group = groupToWord(groups);
-  if (group) {
-    const regions = regionCount(group);
-    if (group.state === "unmet" || (plain.missing === 0 && plain.withheld === 0)) {
-      const own = coveredButUnstated(group) ? `${regionTally(group)} · ${STATUS_REGIONS_NOT_CHECKED}` : regions;
-      const ratio = plain.count > 0 ? `${plain.done} / ${plain.count} required · ${own}` : own;
-      return groupSummary(group, named, leading, ratio, rows);
-    }
-    if (plain.missing > 0) {
-      return requiredFilesSummary(source.locating, named, rows, plain, level, ` · ${regions}`);
-    }
-    return declinedSummary(named, plain.withheld);
+  if (!group) return null;
+  const regions = regionCount(group);
+  if (group.state === "unmet" || (plain.missing === 0 && plain.withheld === 0)) {
+    const own = coveredButUnstated(group) ? `${regionTally(group)} · ${STATUS_REGIONS_NOT_CHECKED}` : regions;
+    const ratio = plain.count > 0 ? `${plain.done} / ${plain.count} required · ${own}` : own;
+    return groupSummary(group, named, leading, ratio, rows);
   }
-
-  // 6. The level declined.
-  if (level === "unknown") return declinedSummary(named, withheld);
-
-  // 7. The emulator's own required files, held or short.
-  if (requiredCount > 0) return requiredFilesSummary(source.locating, named, rows, plain, level);
-
-  // 8. A finished answer, and the set it was taken over is named: a bare
-  //    "Nothing required" was read as the CONSOLE needing no BIOS.
-  return { status: STATUS_NOTHING_REQUIRED, sentence: `${leading} ${MARKS_NONE_REQUIRED}` };
+  if (plain.missing > 0) {
+    return requiredFilesSummary(source.locating, named, rows, plain, level, ` · ${regions}`);
+  }
+  return declinedSummary(named, verbOf(source.locating), plain.withheld);
 }
 
 // Small counts are spelled out, as a sentence would — "none of the five".
@@ -421,15 +503,15 @@ const REFUSAL_REASONS: Readonly<Record<string, string>> = {
 };
 
 /** A required declaration the resolver would not follow, named with its reason. */
-function refusedSentence(leading: string, first: RefusedDeclaration, others: number): string {
+function refusedSentence(leading: string, verb: string, first: RefusedDeclaration, others: number): string {
   const reason = REFUSAL_REASONS[first.reason] ?? `could not be followed (${first.reason})`;
   const more = others > 0 ? ` (and ${others} more)` : "";
-  return `${leading} requires ${first.declared}, which ${reason}${more} — ${REFUSED_TAIL}`;
+  return `${leading} ${verb} ${first.declared}, which ${reason}${more} — ${REFUSED_TAIL}`;
 }
 
 /** The resolver's statements that two images tie, each as a clause. */
 function tiedNotes(source: BiosSummarySource): string[] {
-  const named = source.active_core_label ?? ROLE_MID;
+  const named = launchingName(source) ?? ROLE_MID;
   return (source.emulator_notes ?? [])
     .filter((note) => note.kind === "images-tied")
     .map((note) => {
@@ -495,7 +577,7 @@ function foundNothingSummary(source: BiosSummarySource, named: string, leading: 
   return { status: STATUS_NONE_RECOGNISED, sentence: `${folder} holds ${files} ${OF_A_SIZE} ${named} ${tail}` };
 }
 
-/** A folder the way the rows name places: its own name with a trailing slash — "bios/". */
+/** The folder's own name — the last segment of the path the resolver states — with a trailing slash: "bios/". */
 function folderWords(dir: string): string {
   const name = lastPathSegment(dir);
   return name ? `${name}/` : "the BIOS folder";
@@ -509,8 +591,8 @@ function nothingEstablished(named: string): BiosSummary {
 }
 
 // The order a group is picked to be worded in, where an emulator states more
-// than one: the one the level rests on first — nothing in place is `missing`,
-// an unchecked one declines, a partial one is amber.
+// than one: the one furthest from met first — nothing in place, then one
+// nothing could check, then one partly covered. The colour stays the verdict's.
 const GROUP_PRECEDENCE: readonly OneOfGroupVerdict["state"][] = ["unmet", "unknown", "partial", "met"];
 
 /**
@@ -724,13 +806,26 @@ function missingClause(files: number): string {
 }
 
 /**
+ * Is *summary* the answer that no BIOS is chosen in the emulator's settings?
+ * The platform page leaves its by-hand note out under it.
+ */
+export function saysNoBiosChosen(summary: BiosSummary): boolean {
+  return summary.status === STATUS_NO_BIOS_CHOSEN;
+}
+
+/**
  * The launching emulator's groups as the game page lists them under its
  * headline, each headed by the emulator's name — or by its role, where the pick
- * carries no label, in the same spelling the sentences use.
+ * carries no label, in the same spelling the sentences use. *files* are the
+ * rows, whose resolver check words an option that is not met.
  */
-export function groupBlocks(source: BiosSummarySource): GroupBlock[] {
-  const leading = source.active_core_label ?? ROLE_LEADING;
-  return (source.one_of_groups ?? []).map((group) => groupBlock(group, leading));
+export function groupBlocks(
+  source: BiosSummarySource,
+  files: readonly { file_name: string; checked?: FirmwareChecked | null }[] = [],
+): GroupBlock[] {
+  const leading = launchingName(source) ?? ROLE_LEADING;
+  const checkedOf = (fileName: string) => files.find((row) => row.file_name === fileName)?.checked;
+  return (source.one_of_groups ?? []).map((group) => groupBlock(group, leading, checkedOf));
 }
 
 /**
@@ -739,15 +834,25 @@ export function groupBlocks(source: BiosSummarySource): GroupBlock[] {
  * note explains itself — or nothing the payload can point at, which names only
  * the emulator.
  */
-function declinedSummary(named: string, withheld: number): BiosSummary {
+function declinedSummary(named: string, verb: string, withheld: number): BiosSummary {
   if (withheld > 0) {
     const files = withheld === 1 ? "One file" : `${withheld} files`;
     return {
       status: STATUS_READINESS_UNKNOWN,
-      sentence: `${files} ${named} ${REQUIRES_UNCHECKED}`,
+      sentence: `${files} ${named} ${verb} ${UNCHECKED_TAIL}`,
     };
   }
   return nothingEstablished(named);
+}
+
+/**
+ * The verb every sentence about the emulator's required files takes, by how it
+ * finds its firmware — the count, a file nothing could check, and a refused
+ * declaration alike, so one emulator is never worded two ways.
+ */
+function verbOf(locating: FirmwareLocating | undefined): string {
+  if (locating === "unestablished") return LISTS_AS_REQUIRED;
+  return locating === "by-name" ? OPENS_BY_NAME : VERB_REQUIRES;
 }
 
 /**
@@ -755,11 +860,13 @@ function declinedSummary(named: string, withheld: number): BiosSummary {
  *
  * Both state the same ratio, and which sentence stands is the level's verdict;
  * the ratio never decides it. How the emulator finds its firmware words what it
- * does with them (#1883 D4): it "opens by name" the files it declares, or — where
- * nobody has read how it finds them — "lists as required", with a note saying
- * so (#1883 D3). A file shown missing beside one nothing could check names both
- * (#1883 D5). *groupTail* is a one-of group's region count, appended to the
- * status where the counts passed in are the plain files beside that group.
+ * does with them ({@link verbOf}): it "opens by name" the files it
+ * declares, "requires" them where it also searches its folder by content, or —
+ * where nobody has read how it finds them — "lists as required", with a note
+ * saying so. A file shown missing beside one nothing could check
+ * names both. *groupTail* is a one-of group's region count, appended
+ * to the status where the counts passed in are the plain files beside that
+ * group.
  */
 function requiredFilesSummary(
   locating: FirmwareLocating | undefined,
@@ -770,7 +877,7 @@ function requiredFilesSummary(
   groupTail = "",
 ): BiosSummary {
   const unestablished = locating === "unestablished";
-  const verb = unestablished ? LISTS_AS_REQUIRED : locating === "by-name" ? OPENS_BY_NAME : VERB_REQUIRES;
+  const verb = verbOf(locating);
   const note = unestablished ? `. How ${named} ${LOCATING_UNESTABLISHED_TAIL}` : "";
   const withheldTail = plain.withheld > 0 && plain.missing > 0 ? ` · ${plain.withheld} not checked` : "";
   const status = `${plain.done} / ${plain.count} required${withheldTail}${groupTail}`;
@@ -779,7 +886,7 @@ function requiredFilesSummary(
   const ready = level === null ? plain.done >= plain.count : level === "ok";
   if (ready) {
     // The optional set of the emulator the sentence names (`used_by_active`),
-    // never of another emulator, whose files are on its own tab.
+    // never of another emulator, whose files are shown when it is chosen.
     const optionalMissing = rows.filter(
       (row) =>
         row.used_by_active === true &&

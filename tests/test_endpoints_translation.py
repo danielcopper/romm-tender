@@ -1428,7 +1428,9 @@ class TestTheFirmwareAnswersOnTheWire:
         ]
         dispatcher = _dispatcher_over_firmware(romm_api, FakeFirmwareFileStore(), FakeUnitOfWork())
 
-        message = json.loads(await dispatcher.dispatch(1, "download_platform_firmware_file", ["n64", "dc_boot.bin"]))
+        message = json.loads(
+            await dispatcher.dispatch(1, "download_platform_firmware_file", ["n64", "dc_boot.bin", None])
+        )
 
         assert message["type"] == TYPE_REPLY
         assert message["result"] == {

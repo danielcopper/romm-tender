@@ -179,8 +179,8 @@ interface FirmwareVerdict {
   /** See {@link MissingConfiguredImage}. Absent or `null` claims nothing. */
   missing_configured_image?: MissingConfiguredImage | null;
   /** The identity of the emulator whose requirement this row is, `null` for a
-   *  library file no emulator claims. A row is shown under its own emulator's
-   *  tab ({@link EmulatorTab}), and an unclaimed one under the launching one's. */
+   *  library file no emulator claims. A row is shown with its own emulator
+   *  ({@link EmulatorTab}), and an unclaimed one in the library's own section. */
   declared_by?: string | null;
 }
 
@@ -204,9 +204,11 @@ interface FirmwareFile extends FirmwareVerdict {
   downloaded: boolean;
   description: string;
   wanted: FirmwareWanted;
-  /** Whether the platform's launching core is the one that requires it — the
-   *  axis the "BIOS needed" badge and the required counts key off, distinct
-   *  from `wanted`, which is about every installed emulator. */
+  /** Whether the platform's launching emulator requires it — the axis the
+   *  "BIOS needed" badge and the required counts key off. Another emulator's
+   *  entry carries its rows as {@link BiosFileStatus}, where the same field is
+   *  that emulator's. `wanted` states the same need in the four-valued
+   *  vocabulary. */
   required_by_active: boolean;
   /** Whether the platform's launching emulator declares the file at all,
    *  required or optional. Also true of a row no emulator declares, and of every
@@ -257,15 +259,27 @@ export interface FirmwarePlatformNamed {
  * `emulator` is the resolver's identity for the emulator behind the row and the
  * only field that names one for BOTH kinds — `dolphin_libretro.so` for a
  * libretro entry, `DUCKSTATION` for a standalone one. It is what a BIOS answer's
- * tabs and rows (`EmulatorTab.emulator`, `declared_by`) are keyed on, so it is the
+ * entries and rows (`EmulatorTab.emulator`, `declared_by`) are keyed on, so it is the
  * join between a picker row and a BIOS answer; `core_so` carries no extension
- * and is null for every standalone emulator, and `label` identifies a ROW rather
- * than an emulator — ES-DE lists one `pcsx2_libretro.so` as both `LRPS2` and
- * `PCSX2`. `null` is an emulator the resolver could not identify, which nothing
- * may be keyed on.
+ * and is null for every standalone emulator, and `label` identifies an entry
+ * rather than an emulator — RetroDECK lists RPCS3 as one entry by game serial
+ * and another from a folder or an ISO. `null` is an emulator the resolver could
+ * not identify, which nothing may be keyed on.
+ *
+ * One entry stands for every label that runs the same launch command —
+ * RetroDECK's `LRPS2` and `PCSX2` are one entry — while one emulator launched
+ * different ways is one entry per way. `labels` are the entry's labels in
+ * RetroDECK's order and `name` is them joined " / ", which is what a launch
+ * place prints — the BIOS part names the emulator instead
+ * (docs/architecture/core-emulator-selection.md, "The BIOS part names the
+ * emulator; the launch places name the entry"); `label` is the first of them,
+ * the one a pick stores. An override
+ * stored under any of `labels` reads as this entry (`utils/emulatorEntries.ts`).
  */
 export interface EmulatorOption {
   label: string;
+  labels: string[];
+  name: string;
   kind: "libretro" | "standalone";
   core_so: string | null;
   emulator: string | null;
@@ -296,7 +310,7 @@ export interface CoreInfo {
   platform_system: PlatformSystemAnswer | null;
   /** The IDENTITY of the emulator this ROM launches with — the same spelling the
    *  picker rows carry in {@link EmulatorOption.emulator} and the same one a
-   *  BIOS answer's tabs and rows (`EmulatorTab.emulator`, `declared_by`) are
+   *  BIOS answer's entries and rows (`EmulatorTab.emulator`, `declared_by`) are
    *  keyed on. Never the bare `core_so`: that names no
    *  standalone emulator and is a second spelling of a libretro one. */
   active_core: string | null;
@@ -391,7 +405,7 @@ export interface FirmwarePlatformExt extends FirmwarePlatformNamed, EmulatorAnsw
   ratio_local_count?: number;
   known_count?: number;
   unknown_count?: number;
-  /** How many files Delete BIOS would remove: download records Tender
+  /** How many files the platform-wide delete would remove: download records Tender
    *  wrote whose file is still on disk. Deliberately not `local_count` — that is
    *  the library's progress ratio, which counts files nothing here put on disk
    *  and drops our own downloads once RomM stops listing them. */
@@ -433,9 +447,10 @@ export interface BiosFileStatus extends FirmwareVerdict {
   declared_path?: string;
   description: string;
   wanted: FirmwareWanted;
-  /** Whether the emulator THIS game launches with requires the file. `wanted` is
-   *  the need of the emulator whose requirement the row is; this one is the
-   *  launch's. */
+  /** Whether the emulator whose list the row is on requires the file: the one
+   *  THIS game launches with for the payload's own `files`, and the entry's
+   *  emulator on an `emulator_tabs` row. `wanted` states that same emulator's
+   *  need in the four-valued vocabulary. */
   required_by_active: boolean;
   used_by_active?: boolean;
   /** False for a file an emulator asks for that the RomM library does not hold.
@@ -446,6 +461,10 @@ export interface BiosFileStatus extends FirmwareVerdict {
    *  to a display form of ours. Absent claims nothing: the resolver states it
    *  only where it established the provenance. */
   supplied_by?: string | null;
+  /** How many of Tender's own downloads a delete on this row would remove — see
+   *  the platform row's field of the same name. Carried on another emulator's
+   *  rows on the platform page; absent offers no delete. */
+  deletable_count?: number;
 }
 
 /**
@@ -454,8 +473,10 @@ export interface BiosFileStatus extends FirmwareVerdict {
  * `"unknown"` not established — including an emulator the answer says nothing
  * about, which counts as not read. `"partial"` is the one exception: the
  * verdict is open only because the disc's region decides it, and a
- * one-of group's images serve some regions. No colour is ever computed here from
- * a count.
+ * one-of group's images serve some regions. On a game's page the image serving
+ * the game's own region decides, and the level is `"unknown"` where
+ * no image serves that region, even under a met verdict. No colour is ever
+ * computed here from a count.
  */
 export type BiosLevel = "ok" | "partial" | "missing" | "unknown";
 
@@ -513,23 +534,27 @@ export interface EmulatorAnswer {
    *  searches by content and states no one-of group — `null` for every other.
    *  Words the answer and moves no colour. */
   content_search?: ContentSearch | null;
-  /** One tab per emulator the resolver answered for, the launching one first —
+  /** One entry per emulator the resolver answered for, the launching one first —
    *  see {@link EmulatorTab}. Absent on a payload from before the field. */
   emulator_tabs?: EmulatorTab[];
 }
 
 /**
- * One emulator's tab over the BIOS table (#2190): its own verdict and label, and
- * — for every emulator but the launching one — its own requirements exactly as
- * the resolver answers for it. The launching tab carries no `rows`: its rows
- * are the payload's `files`, which the counts and the downloads read. A tab
- * changes what a surface shows and never which emulator launches.
+ * One emulator the BIOS tables' selector offers: its own verdict and
+ * label, and — for every emulator but the launching one — its own requirements
+ * exactly as the resolver answers for it. The launching entry carries no
+ * `rows`: its rows are the payload's `files`, which the header's counts read.
+ * Choosing an entry changes what a surface shows and never which emulator
+ * launches.
  */
 export interface EmulatorTab {
   emulator: string | null;
   label: string | null;
   launching: boolean;
   requirements_met: boolean | null;
+  /** `false` where the emulator is not installed; it is listed all the same,
+   *  since what it would need is answered either way. Absent reads as installed. */
+  installed?: boolean;
   rows?: BiosFileStatus[];
 }
 

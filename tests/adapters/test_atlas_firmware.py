@@ -2056,7 +2056,7 @@ class TestWhatTheResolverSaysAboutEachEmulator:
         assert self._verdict(adapter, monkeypatch, core).undetermined == ("gba_bios.bin",)
 
     def test_the_plain_required_files_shown_not_met_are_named(self, adapter, monkeypatch):
-        """A game's own region decides only once nothing outside the group is shown not met (#2190 D5)."""
+        """A game's own region decides only once nothing outside the group is shown not met."""
         core = _core(
             requirements=(
                 _requirement(file_name="gba_bios.bin"),
@@ -2091,6 +2091,36 @@ class TestWhatTheResolverSaysAboutEachEmulator:
         notes = self._verdict(adapter, monkeypatch, core, "PCSX2").notes
 
         assert [(n.kind, n.setting) for n in notes] == [("bios-unchosen", "Filenames/BIOS")]
+
+    def test_a_bios_nobody_chose_is_a_note_on_the_answer_pcsx2_really_sends(self, adapter, monkeypatch):
+        """PCSX2 (Standalone) on a machine with ``[Filenames] BIOS`` empty, as the resolver answers it.
+
+        A packaged card with no rows and an open verdict, so the emulator reads as
+        not read — and the caveat carries the searched ``dir`` beside the setting,
+        but no ``candidates``: it is the setting's statement, not a search's.
+        """
+        empty = Caveat(
+            code=CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE,
+            message="PCSX2 (Standalone) has no BIOS image chosen — [Filenames] BIOS is empty",
+            data={
+                "label": "PCSX2 (Standalone)",
+                "token": "PCSX2",
+                "key": "Filenames/BIOS",
+                "declared": "",
+                "need": "required",
+                "dir": "/run/media/deck/Emulation/retrodeck/bios",
+            },
+        )
+        packaged = Caveat(code="firmware-packaged-declaration", message="card", data={"token": "PCSX2"})
+        core = _core(core_so=None, emulator="PCSX2", declaration="packaged", caveats=(packaged, empty))
+        _detect(monkeypatch, _detecting(_Installation(_answer(core))))
+        catalogue = adapter()
+
+        assert [(n.kind, n.setting) for n in catalogue.verdict_for("PCSX2").notes] == [
+            ("bios-unchosen", "Filenames/BIOS")
+        ]
+        # Not read: which is why the panel's "nothing established" must not word over it.
+        assert catalogue.reading_complete_for("PCSX2") is False
 
     @pytest.mark.parametrize("key", ["sys.files/bootrom_path", "sys.files/flashrom_path", "sys.files/hdd_path"])
     def test_an_empty_xemu_file_setting_is_no_bios_nobody_chose(self, adapter, monkeypatch, key):
@@ -2138,9 +2168,11 @@ class TestWhatTheResolverSaysAboutEachEmulator:
         from _vendor.atlas import firmware as atlas_firmware
 
         source = inspect.getsource(atlas_firmware._search_found_nothing)
-        assert "CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE" in source
-        assert '"dir": directory' in source
-        assert '"candidates": str(len(searched.kept))' in source
+        # The keys of the settled search's own statement — not of the
+        # unverified one before it, which carries the same two keys.
+        settled = source[source.index("CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE,") :]
+        assert '"dir": directory' in settled
+        assert '"candidates": str(len(searched.kept))' in settled
 
     def test_the_bios_choice_setting_is_spelled_as_the_resolver_spells_it(self):
         """The PCSX2 card's caveat names the setting under ``key``; a rename upstream turns this red."""

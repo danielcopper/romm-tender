@@ -51,6 +51,8 @@ _GBA_FIRMWARE = [
 
 _MGBA_ENTRY = {
     "label": "mGBA",
+    "labels": ["mGBA"],
+    "name": "mGBA",
     "kind": "libretro",
     "core_so": "mgba_libretro",
     "emulator": "mgba_libretro.so",
@@ -60,6 +62,8 @@ _MGBA_ENTRY = {
 }
 _VBA_NEXT_ENTRY = {
     "label": "VBA Next",
+    "labels": ["VBA Next"],
+    "name": "VBA Next",
     "kind": "libretro",
     "core_so": "vba_next_libretro",
     "emulator": "vba_next_libretro.so",
@@ -388,6 +392,8 @@ async def test_a_standalone_whose_component_is_absent_never_becomes_the_default(
     assert result["emulators"] == [
         {
             "label": "Ryubing (Standalone)",
+            "labels": ["Ryubing (Standalone)"],
+            "name": "Ryubing (Standalone)",
             "kind": "standalone",
             "core_so": None,
             "emulator": "RYUBING",
@@ -397,6 +403,8 @@ async def test_a_standalone_whose_component_is_absent_never_becomes_the_default(
         },
         {
             "label": "Yuzu",
+            "labels": ["Yuzu"],
+            "name": "Yuzu",
             "kind": "libretro",
             "core_so": "yuzu_libretro",
             "emulator": "yuzu_libretro.so",

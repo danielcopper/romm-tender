@@ -94,19 +94,68 @@ describe("biosFileNote", () => {
     ).toBe("a folder is here, where the emulator opens a file");
   });
 
-  it("says a file's destination could not be read, rather than leaving it to read as absent", () => {
-    // The row is red and counted unmet either way — what Tender cannot read
-    // the emulator cannot open — so the note says the READ failed and claims
-    // nothing about whether the file is there.
-    expect(
+  it("names the place that could not be looked into, rather than leaving the file to read as absent", () => {
+    // The verdict is withheld — the resolver could not look — so the note says
+    // the LOOK failed, names where, and claims nothing about whether the file
+    // is there. It is also why the row offers no download.
+    const unreadable = (declared_path: string, local_path: string) =>
       noteOf({
+        file_name: declared_path.split("/").pop() ?? declared_path,
+        declared_path,
+        local_path,
         downloaded: false,
         on_server: true,
         declared_kind: "file",
-        satisfied: false,
+        satisfied: null,
+        caveats: ["firmware-path-inaccessible"],
+      });
+
+    expect(unreadable("kronos/saturn_bios.bin", "/retrodeck/bios/kronos/saturn_bios.bin")).toBe(
+      "Tender could not look into bios/kronos/, so whether saturn_bios.bin is there is not known",
+    );
+    expect(unreadable("dc_boot.bin", "/retrodeck/bios/dc_boot.bin")).toBe(
+      "Tender could not look into bios/, so whether dc_boot.bin is there is not known",
+    );
+  });
+
+  it.each([
+    ["/home/deck/retrodeck/bios/kronos/saturn_bios.bin", "bios/kronos/"],
+    ["/home/deck/retrodeck/bios//kronos/saturn_bios.bin", "bios/kronos/"],
+    ["/home/deck//retrodeck/bios/kronos/saturn_bios.bin", "bios/kronos/"],
+    ["/kronos/saturn_bios.bin", "kronos/"],
+    ["kronos/saturn_bios.bin", "kronos/"],
+    ["/home/deck/retrodeck/bios/saturn_bios.bin", "kronos/"],
+  ])("names the BIOS folder under %j by its last segment, as %s", (local_path, place) => {
+    // The BIOS folder's name is the last segment of what `local_path` holds
+    // ahead of the declared path; a path that holds nothing ahead of it, or
+    // does not end in it, leaves the declared folder alone.
+    expect(
+      noteOf({
+        file_name: "saturn_bios.bin",
+        declared_path: "kronos/saturn_bios.bin",
+        local_path,
+        downloaded: false,
+        on_server: true,
+        declared_kind: "file",
+        satisfied: null,
         caveats: ["firmware-path-inaccessible"],
       }),
-    ).toBe("its location could not be read");
+    ).toBe(`Tender could not look into ${place}, so whether saturn_bios.bin is there is not known`);
+  });
+
+  it("names the BIOS folder itself for a file declared at its top with nothing ahead of it", () => {
+    expect(
+      noteOf({
+        file_name: "dc_boot.bin",
+        declared_path: "dc_boot.bin",
+        local_path: "/dc_boot.bin",
+        downloaded: false,
+        on_server: true,
+        declared_kind: "file",
+        satisfied: null,
+        caveats: ["firmware-path-inaccessible"],
+      }),
+    ).toBe("Tender could not look into the BIOS folder, so whether dc_boot.bin is there is not known");
   });
 
   describe("what became of a file's bytes", () => {
@@ -138,20 +187,28 @@ describe("biosFileNote", () => {
       expect(noteOf(file(null, "unread"))).toBe("its bytes could not be read");
     });
 
-    it("gives a refused file the reason beside its already-red verdict", () => {
+    it("gives a refused file the reason, naming the emulator", () => {
       // `refused` arrives with the verdict settled `false` — the emulator will
       // not open a file of this size at all — so this row is red with or without
       // the note. Without it the page says a file sitting right there is
       // missing.
-      expect(noteOf(file(false, "refused"))).toBe("the emulator refuses a file of this size");
+      expect(biosFileNote(file(false, "refused"), "SwanStation").note).toBe(
+        "refused — SwanStation does not accept a file of this size",
+      );
+    });
+
+    it("names the emulator a wrong image is not the image of", () => {
+      // Unmet with a file sitting right there: without the sentence the row
+      // reads as missing. The words are the Contents column's.
+      expect(biosFileNote(file(false, "mismatch"), "Beetle PSX").note).toBe(
+        "wrong file — not the image Beetle PSX expects",
+      );
     });
 
     it("says nothing for the values that are the row's ordinary answer", () => {
-      // `verified` is the met row and `mismatch` an unmet one the surfaces
-      // already word; `null` is a reading that asked no byte question, which is
-      // every absent file.
+      // `verified` is the met row; `null` is a reading that asked no byte
+      // question, which is every absent file.
       expect(noteOf(file(true, "verified"))).toBe("");
-      expect(noteOf(file(false, "mismatch"))).toBe("");
       expect(noteOf(file(false, null))).toBe("");
       // A payload from before the field existed carries no key at all, which is
       // a third shape and has to read like the stated absence.
@@ -208,6 +265,15 @@ describe("a stale configured image name", () => {
       "USA v02.00(14/06/2004)",
       "ℹ LRPS2's settings name scph10000.bin, which is not here — it uses another BIOS from this folder instead.",
     ]);
+  });
+
+  it("names the emulator the way the surface shows it, every label of it, over the answer's one label", () => {
+    // RetroDECK lists pcsx2_libretro.so as LRPS2 and as PCSX2; the selector
+    // above the row names it "LRPS2 / PCSX2", and the line names it the same.
+    const { lines } = biosFileNote(stale("LRPS2", "scph10000.bin"), "LRPS2 / PCSX2");
+    expect(lines[lines.length - 1]).toBe(
+      "ℹ LRPS2 / PCSX2's settings name scph10000.bin, which is not here — it uses another BIOS from this folder instead.",
+    );
   });
 
   it("leaves out what the answer did not state rather than guessing it", () => {

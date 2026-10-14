@@ -649,15 +649,19 @@ export const getPlatformFirmwareStatus = endpoint<[string], PlatformFirmwareStat
 export const downloadAllFirmware = endpoint<[string, number | null], FirmwareDownloadResult | EndpointFailure>(
   "download_all_firmware",
 );
-export const downloadRequiredFirmware = endpoint<[string], FirmwareDownloadResult | EndpointFailure>(
+// The emulator is the identity the page shows — the files land where IT opens
+// them; `null` places them for the platform's own pick.
+export const downloadRequiredFirmware = endpoint<[string, string | null], FirmwareDownloadResult | EndpointFailure>(
   "download_required_firmware",
 );
 // One row's Download button (#164). Addressed by file name within the platform,
-// like the two bulk buttons beside it — never by RomM's firmware id, which the
-// status row may have been holding since before the listing moved on.
-export const downloadPlatformFirmwareFile = endpoint<[string, string], FirmwareDownloadResult | EndpointFailure>(
-  "download_platform_firmware_file",
-);
+// like the two bulk downloads — never by RomM's firmware id, which the status
+// row may have been holding since before the listing moved on. The emulator is
+// the one the page shows, as for `downloadRequiredFirmware`.
+export const downloadPlatformFirmwareFile = endpoint<
+  [string, string, string | null],
+  FirmwareDownloadResult | EndpointFailure
+>("download_platform_firmware_file");
 export const checkPlatformBios = endpoint<[string], BiosStatus>("check_platform_bios");
 export const getBiosStatus = endpoint<[number], BiosAnswer>("get_bios_status");
 /**

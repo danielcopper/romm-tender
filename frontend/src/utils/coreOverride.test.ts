@@ -28,6 +28,15 @@ describe("coreOverride — executeGameCoreChange", () => {
     vi.mocked(toaster.toast).mockReset();
   });
 
+  it("names the pinned emulator in its toast by the name it is given", async () => {
+    vi.mocked(backend.setGameCore).mockResolvedValue({ success: true });
+
+    await executeGameCoreChange({ romId: 42, coreLabel: "LRPS2", coreName: "LRPS2 / PCSX2", leaseOwner });
+
+    expect(backend.setGameCore).toHaveBeenCalledWith(42, "LRPS2");
+    expect(toaster.toast).toHaveBeenCalledWith(expect.objectContaining({ body: "Core set to LRPS2 / PCSX2" }));
+  });
+
   it("pins a core override and confirms launch options on success", async () => {
     vi.mocked(backend.setGameCore).mockResolvedValue({
       success: true,

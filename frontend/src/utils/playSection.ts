@@ -127,13 +127,13 @@ export function extractBiosInfo(answer: BiosAnswer): BiosInfoFields | null {
 
 /** Project a CoreInfo response (from the dedicated `get_platform_core_info`
  *  path, #923) into the core-selection fields the play-section row needs. The
- *  launching emulator counts as "default" when it equals the default emulator
- *  or no override is set. */
+ *  launching emulator counts as "default" when its label is one of the default
+ *  entry's or no override is set. */
 export function extractCoreInfo(coreInfo: CoreInfo): CoreInfoFields {
   const activeCoreLabel = coreInfo.active_core_label ?? null;
   const emulators = coreInfo.emulators;
   const defaultEmulator = emulators.find((e) => e.is_default);
-  const activeCoreIsDefault = !activeCoreLabel || activeCoreLabel === defaultEmulator?.label;
+  const activeCoreIsDefault = !activeCoreLabel || (defaultEmulator?.labels.includes(activeCoreLabel) ?? false);
   return {
     activeCoreLabel,
     activeCoreIsDefault,

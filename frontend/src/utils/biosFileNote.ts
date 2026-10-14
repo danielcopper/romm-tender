@@ -38,6 +38,7 @@
 
 import type { BiosFileStatus } from "../types";
 import { PATH_INACCESSIBLE } from "./biosFetchable";
+import { lastPathSegment } from "./formatters";
 
 /** The subset of a row this note is derived from — both surfaces' row shapes
  *  satisfy it, so neither has to be converted into the other's. */
@@ -52,7 +53,8 @@ export type BiosNoteRow = Pick<
   | "images"
   | "checked"
   | "missing_configured_image"
->;
+> &
+  Partial<Pick<BiosFileStatus, "file_name" | "declared_path" | "local_path">>;
 
 /** The subset {@link biosFileDescription} reads — the same both-surfaces rule. */
 export type BiosDescriptionRow = Pick<
@@ -134,21 +136,44 @@ const READ_INCOMPLETE = ["firmware-scan-incomplete", "firmware-unreadable"];
  * `firmware-path-inaccessible`, which is worded only on the file half. The
  * fallback claims nothing either way, which is the honest answer to all three.
  *
- * That asymmetry follows the verdicts rather than breaking from them. An
- * unreadable destination leaves a folder row withheld, where "its contents
- * could not be checked" already says the read is what failed; it leaves a file
- * row UNMET, where the surfaces would otherwise print their own word for
- * absence over a file nobody established the absence of. Both notes are
- * statements about the read, and neither claims the file is or is not there —
- * the verdict beside them says the requirement is not met, which is what
- * follows from a destination the emulator cannot open either.
+ * An unreadable destination leaves the verdict withheld for a folder and a file
+ * alike — the resolver answers `satisfied: None` over a path it could not look
+ * at. A folder row says "its contents could not be checked"; a file row names
+ * the place that could not be looked into (`placeNotLookedAt`). Both notes are
+ * statements about the read, and neither claims the file is or is not there.
  */
-function verdictNote(row: BiosNoteRow): BiosFileWords {
+function verdictNote(row: BiosNoteRow, emulator: string | null): BiosFileWords {
   const has = (code: string) => (row.caveats ?? []).includes(code);
-  if (row.declared_kind !== "directory") return fileAtItsDestination(has, row.checked);
+  if (row.declared_kind !== "directory") {
+    if (has(PATH_INACCESSIBLE) && !has(PATH_OBSTRUCTED)) return said(placeNotLookedAt(row));
+    return fileAtItsDestination(has, row.checked, emulator);
+  }
   if (row.satisfied === true) return folderHolding(row.images ?? []);
   if (row.satisfied === false) return folderUnmet(has);
   return folderWithheld(row.satisfied, has);
+}
+
+/**
+ * A file whose place the resolver could not look at, naming that place.
+ *
+ * "Tender could not look into bios/kronos/, so whether saturn_bios.bin is there
+ * is not known" — a statement about the read, never that the file is missing,
+ * and the reason the row offers no download: one there could overwrite
+ * a file nobody could see. The place is the declared folder under the BIOS
+ * folder's own name, read off `local_path`, which is the declared path joined
+ * under that folder.
+ */
+function placeNotLookedAt(row: BiosNoteRow): string {
+  const declared = row.declared_path || row.file_name || "";
+  const slash = declared.lastIndexOf("/");
+  const folder = declared.slice(0, slash + 1);
+  const name = declared.slice(slash + 1);
+  const local = row.local_path ?? "";
+  const root = declared && local.endsWith(declared) ? local.slice(0, local.length - declared.length) : "";
+  const rootName = lastPathSegment(root);
+  const place = rootName ? `${rootName}/${folder}` : folder || "the BIOS folder";
+  const what = name || "the file";
+  return `Tender could not look into ${place}, so whether ${what} is there is not known`;
 }
 
 /** One line and nothing under it — every group but a satisfied folder's. */
@@ -159,7 +184,7 @@ const said = (note: string): BiosFileWords => ({ note, lines: [], fromLibrary: f
  *
  * The shape of the destination comes first — a folder standing where a file is
  * opened says nothing about bytes, because there were none to read. Then what
- * became of the bytes, which is `checked` and is three distinct things the row's
+ * became of the bytes, which is `checked` and is four distinct things the row's
  * verdict cannot tell apart:
  *
  * - **`unrecognised`** — the emulator read the file and no table it keeps knows
@@ -167,33 +192,41 @@ const said = (note: string): BiosFileWords => ({ note, lines: [], fromLibrary: f
  *   that failed; and it is no failure either — DuckStation boots such an image
  *   and says it is using an unknown BIOS — so the verdict stays withheld and the
  *   note says what was established rather than what was not.
- * - **`unread`** — the bytes were asked for and did not come back. This is the
- *   one the old single sentence was right about, and it is a statement about the
- *   BACKEND's read rather than about the emulator's: that this process could not
- *   read the file is no evidence the launch cannot.
+ * - **`unread`** — the bytes were asked for and did not come back. It is a
+ *   statement about the BACKEND's read rather than about the emulator's: that
+ *   this process could not read the file is no evidence the launch cannot.
  * - **`refused`** — the emulator will not open the file at all, on its size,
  *   before reading a byte. It arrives with the verdict already `false`, so the
- *   row is red with or without this note; what the note adds is the reason, and
- *   without it the row says a file that is sitting right there is missing. The
- *   resolver reaches that size gate only for a file a per-region BIOS setting
- *   NAMES — SwanStation's (`swanstation_BIOS_PathNTSCJ` / `PathNTSCU` /
- *   `PathPAL`) or DuckStation's (`PathNTSCU` / `PathNTSCJ` / `PathPAL`), cited
- *   in `backend/_vendor/atlas/data/core_firmware.json` and
+ *   row is unmet with or without this note; what the note adds is the reason,
+ *   in the Contents column's words, and without it the row says a file that is
+ *   sitting right there is missing. The resolver reaches that size gate only
+ *   for a file a per-region BIOS setting NAMES — SwanStation's
+ *   (`swanstation_BIOS_PathNTSCJ` / `PathNTSCU` / `PathPAL`) or DuckStation's
+ *   (`PathNTSCU` / `PathNTSCJ` / `PathPAL`), cited in
+ *   `backend/_vendor/atlas/data/core_firmware.json` and
  *   `backend/_vendor/atlas/data/standalone_firmware.json`. Whether it reaches a
- *   ROW is a further question that has not been shown: a row carries the
- *   reading of the first declaration under its name, and for SwanStation's
- *   default names that is its `.info` row, not the one the setting names.
+ *   ROW is a further question that has not been shown: a row carries its own
+ *   emulator's reading of the name, and for SwanStation's default names that
+ *   may be its `.info` declaration rather than the one the setting names.
  *
- * `verified` and `mismatch` get no note: the first is the ordinary met row and
- * the second is an unmet one whose surfaces already say so. Every other value,
- * and the absent field, leave the note to the library half below.
+ * - **`mismatch`** — the file is there and is not the image *emulator* expects.
+ *   Its verdict is `false`, and without the sentence the row would read as a
+ *   file that is missing. The words are the Contents column's, so
+ *   both pages say it alike.
+ *
+ * `verified` gets no note: it is the ordinary met row. Every other value, and
+ * the absent field, leave the note to the library half below.
  */
-function fileAtItsDestination(has: (code: string) => boolean, checked: BiosNoteRow["checked"]): BiosFileWords {
+function fileAtItsDestination(
+  has: (code: string) => boolean,
+  checked: BiosNoteRow["checked"],
+  emulator: string | null,
+): BiosFileWords {
   if (has(PATH_OBSTRUCTED)) return said("a folder is here, where the emulator opens a file");
-  if (has(PATH_INACCESSIBLE)) return said("its location could not be read");
   if (checked === "unrecognised") return said("the emulator does not recognise this file");
   if (checked === "unread") return said("its bytes could not be read");
-  if (checked === "refused") return said("the emulator refuses a file of this size");
+  if (checked === "refused") return said(refusedFile(emulator));
+  if (checked === "mismatch") return said(wrongFile(emulator));
   return said("");
 }
 
@@ -322,6 +355,70 @@ export function biosFileDescription(file: BiosDescriptionRow): string | null {
   return rest || null;
 }
 
+/** The fields the Contents column is read off — the platform detail's row shape satisfies it. */
+export type ContentsRow = Pick<BiosFileStatus, "declared_kind" | "satisfied" | "images" | "checked">;
+
+/**
+ * The platform detail's Contents cell — the resolver's check of what is at the
+ * row's place, in words, never Tender's own judgement.
+ *
+ * A declared FOLDER answers with what it holds: how many images, none, or that
+ * nothing established it. A declared FILE answers with `checked`, the resolver's
+ * own word for what comparing its bytes established; the em dash means nothing
+ * was asked — the ordinary answer for a file that is not there — and must never
+ * come to mean "asked and found nothing". *emulator* names the emulator whose
+ * image the file is checked as, or the role where the pick has no name.
+ *
+ * The cell's colour is the row's mark beside it, so these words explain that
+ * colour and never contradict it: a wrong image is a `✗` and "wrong file" — red
+ * where the file is required, the muted grey of a missing optional file where
+ * it is not — and one that could not be compared a grey `?` and "not
+ * comparable". The word "unknown" is never one of them — it would read as the
+ * need column's word.
+ */
+export function contentsWords(row: ContentsRow, emulator: string | null): string {
+  if (row.declared_kind === "directory") {
+    if (row.satisfied === true) {
+      const held = row.images?.length ?? 0;
+      if (held === 0) return "an image";
+      return held === 1 ? "1 image" : `${held} images`;
+    }
+    return row.satisfied === false ? "no image" : CONTENTS_NOT_ESTABLISHED;
+  }
+  switch (row.checked) {
+    case "verified":
+      return "right file";
+    case "mismatch":
+      return wrongFile(emulator);
+    case "refused":
+      return refusedFile(emulator);
+    case "not-comparable":
+      return "not comparable — this kind of file changes with the emulator version";
+    case "unrecognised":
+      return "not recognised";
+    case "unread":
+      return "could not be read";
+    case "unchecked":
+      return "not checked";
+    case "unknown":
+      return CONTENTS_NOT_ESTABLISHED;
+    default:
+      return "—";
+  }
+}
+
+const CONTENTS_NOT_ESTABLISHED = "not established — the resolver could not tell";
+
+/** A file the emulator will not open on its size, in the one wording both pages use. */
+function refusedFile(emulator: string | null): string {
+  return `refused — ${emulator ?? "the emulator"} does not accept a file of this size`;
+}
+
+/** A wrong image, in the one wording both pages use — naming the emulator whose image it is not. */
+function wrongFile(emulator: string | null): string {
+  return `wrong file — not the image ${emulator ?? "the emulator"} expects`;
+}
+
 /** Did the reading identify *row*'s file by its contents — the emulator's search of the BIOS folder? */
 export function foundByContent(row: { caveats?: string[] }): boolean {
   return IDENTIFIED_BY_CONTENT.some((code) => (row.caveats ?? []).includes(code));
@@ -333,11 +430,13 @@ export function foundByContent(row: { caveats?: string[] }): boolean {
  * The note is `""` for a plain library file, present or missing alike: what the
  * surfaces disagree about is how to say "missing", so that word is left to them
  * (the platform detail marks it in its On-disk cell; the tab's dot carries it).
+ * *emulator* names the emulator the row is shown for — the one a wrong image is
+ * checked against, and whose settings name a file that is not there.
  */
-export function biosFileNote(row: BiosNoteRow): BiosFileWords {
-  const words = rowWords(row);
+export function biosFileNote(row: BiosNoteRow, emulator: string | null = null): BiosFileWords {
+  const words = rowWords(row, emulator);
   const stale = row.missing_configured_image;
-  return stale ? { ...words, lines: [...words.lines, configuredImageLine(stale)] } : words;
+  return stale ? { ...words, lines: [...words.lines, configuredImageLine(stale, emulator)] } : words;
 }
 
 /**
@@ -347,20 +446,28 @@ export function biosFileNote(row: BiosNoteRow): BiosFileWords {
  *
  * It changes nothing about the row: the emulator lists the folder instead, so
  * the folder's verdict is what the launch rests on, and the dot and the counts
- * read that verdict alone. The emulator's name and the file's come from the
- * answer; a half it did not state is left out of the sentence rather than
- * guessed.
+ * read that verdict alone. The emulator is named as the surface names the
+ * emulator it shows, *emulator*: the answer's `emulator_label` is the one label
+ * of the entry the reading came from, and RetroDECK gives `pcsx2_libretro.so`
+ * two, so the selector's "LRPS2 / PCSX2" would sit above a line naming LRPS2
+ * alone. The answer's label stands only where the surface names none. The
+ * file's name comes from the answer; a half nothing stated is left out of the
+ * sentence rather than guessed.
  */
-function configuredImageLine(stale: NonNullable<BiosNoteRow["missing_configured_image"]>): string {
-  const whose = stale.emulator_label ? `${stale.emulator_label}'s settings` : "The emulator's settings";
+function configuredImageLine(
+  stale: NonNullable<BiosNoteRow["missing_configured_image"]>,
+  emulator: string | null,
+): string {
+  const name = emulator ?? stale.emulator_label;
+  const whose = name ? `${name}'s settings` : "The emulator's settings";
   const named = stale.file_name ? `name ${stale.file_name}, which is not here` : "name a BIOS file that is not here";
   return `ℹ ${whose} ${named} — it uses another BIOS from this folder instead.`;
 }
 
 /** Everything the row says before the configured-image line — see {@link biosFileNote}. */
-function rowWords(row: BiosNoteRow): BiosFileWords {
+function rowWords(row: BiosNoteRow, emulator: string | null): BiosFileWords {
   if (row.supplied_by) return { note: `provided by ${row.supplied_by}`, lines: [], fromLibrary: false };
-  const verdict = verdictNote(row);
+  const verdict = verdictNote(row, emulator);
   if (verdict.note || verdict.lines.length > 0) return verdict;
   // No RomM library holds a folder — the emulator lists that name — so the
   // library note would describe a download nobody can make.

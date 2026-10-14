@@ -327,10 +327,32 @@ would look complete. An empty list carrying none of those codes is that real "kn
 `emulator-catalogue-exclusive` is not a refusal at all: a custom `es_systems.xml` declaring itself the whole catalogue
 gives a complete answer, merely a small one. The test is the codes and never an empty caveat list — a broken
 installation states health findings on every answer it gives. `options_to_payload` projects the list to the frontend
-picker shape (`{label, kind, core_so, is_default, bakeable, reason}`): bakeable entries are clickable, the default is
-marked, and `needs_setup` / `unbakeable` entries are disabled with their reason. See
+picker shape (`{label, labels, name, kind, core_so, emulator, is_default, bakeable, reason}`): bakeable entries are
+clickable, the default is marked, and `needs_setup` / `unbakeable` entries are disabled with their reason.
+
+**One entry per launch command, not per label.** Options whose command text is identical — compared as
+`classify_command` keeps it, stripped and otherwise verbatim — are one entry (`same_command_groups`): RetroDECK lists
+`pcsx2_libretro.so` under one command as `LRPS2` and as `PCSX2`, and RPCS3's Directory and ISO labels share one command.
+`labels` are the entry's labels in declared order, `name` is them joined " / " and is what the launch places print
+(below), and `label` is the first of them, the one a pick stores. An override stored under any of `labels` reads as that
+entry (`frontend/src/utils/emulatorEntries.ts`): its ✓, "(default)", "(system)" and "Use System Override (X)" are
+decided by membership, so a pin stored under the second label before the two were joined needs no migration, and
+launching is unchanged because every member runs the same command. Labels of one emulator that run different commands
+stay apart — RPCS3 by game serial against its Directory / ISO entry, EKA2L1's device variants — because each is its own
+way to launch ([#2190](https://github.com/danielcopper/romm-tender/issues/2190) D37). See
 [ADR-0020](../adr/0020-live-es-systems-emulator-resolution.md) — including the 27 default flips this selection rule
 produces relative to the old first-libretro default.
+
+**The BIOS part names the emulator; the launch places name the entry.** Two names stand on a page, and they answer two
+questions. Where Tender offers or names what a platform or game launches with — the emulator menus on the platform page
+and a game's page, the platform header, the game page's Emulator column, the toast after a game's switch, the line under
+the button while a platform switches, and the emulator RetroDECK would fall back to — it prints the picker entry's
+`name`, one per launch command (D37). The BIOS part — its selector, its header sentence, the tie clause, the group
+headings and the row notes — names the emulator by its identity, every label the resolver gives that identity joined in
+the list's order (`_labels_by_emulator`, D28), because the firmware is the same for every way an emulator launches. The
+two agree wherever an emulator has one launch command (LRPS2 / PCSX2 is both one entry and one emulator) and differ
+where it has several: on PlayStation 3 the header can read "RPCS3 Directory (Standalone) / RPCS3 ISO (Standalone)" while
+the BIOS sentences name RPCS3 by every label the resolver gives it.
 
 Adding a new standalone system needs **no change to Tender** — the moment a RetroDECK update lists its emulator in
 `es_systems.xml` in preference order, Tender's default follows.
@@ -612,12 +634,15 @@ and `get_platform_firmware_status` answers whenever the page's walk reaches that
 focuses it, and never at all for a platform the page has nothing to say about. It costs one ES-DE options read and a
 `settings.json` lookup, opens no Unit of Work, and is issued once per selection.
 
-Its **`active_core_label`**, and the identically-named field `get_platform_firmware_status` carries per platform, are
-both `domain.emulator_commands.resolve_platform_label` — the platform-level projection of the read-path precedence: the
-per-platform override (`platform_cores`) when it is set and still resolves to a bakeable emulator, else the es_systems
-**default emulator** label (the first bakeable command — libretro _or_ standalone). One function, so the two readers
-cannot drift; a stale override degrades to the default rather than naming an emulator that would not launch, and a
-standalone default reads its standalone label rather than the libretro system default.
+Its **`active_core_label`** is `domain.emulator_commands.resolve_platform_label` — the platform-level projection of the
+read-path precedence: the per-platform override (`platform_cores`) when it is set and still resolves to a bakeable
+emulator, else the es_systems **default emulator** label (the first bakeable command — libretro _or_ standalone). A
+stale override degrades to the default rather than naming an emulator that would not launch, and a standalone default
+reads its standalone label rather than the libretro system default. The identically-named field
+`get_platform_firmware_status` carries per platform is the label of `resolve_firmware_option`, which takes that same
+pick and goes one rung further where nothing is bakeable: the emulator RetroDECK declares first, installed or not (#2190
+D26). The two agree wherever a bakeable emulator exists; where none does, the core read names none and the BIOS part
+names the emulator its answer is about.
 
 ### One identity space on the wire
 
@@ -626,17 +651,21 @@ resolver's own `emulator` field, `mgba_libretro.so` for a libretro entry and `DU
 places carry it and they are the same string:
 
 - the **`active_core`** of `get_platform_core_info` (per ROM, through `active_emulator_for_rom`) and of
-  `get_platform_firmware_status` (per platform, through `resolve_platform_option`);
+  `get_platform_firmware_status` (per platform, through `resolve_firmware_option`, which takes RetroDECK's first
+  declared emulator where nothing is bakeable);
 - the **`emulator`** field of every picker row in `options_to_payload`, beside its `core_so`;
-- the **`emulator`** of each tab of a BIOS answer (`emulator_tabs`) and a firmware row's `declared_by`.
+- the **`emulator`** of each entry of a BIOS answer's emulator selector (`emulator_tabs`) and a firmware row's
+  `declared_by`.
 
-That is what lets a BIOS page match each emulator's tab and rows to the picker's labels and mark the one the answer was
-scoped to ([#2190](https://github.com/danielcopper/romm-tender/issues/2190) D15). `core_so` cannot serve any of it: it
-is `None` for every standalone emulator and carries no extension for a libretro one, so matching on it named no
-standalone emulator and printed `dolphin_libretro.so` where the label said Dolphin. `label` cannot either — ES-DE lists
-one `pcsx2_libretro.so` as both `LRPS2` and `PCSX2`, so a label identifies a launch ROW and two rows can be one
-emulator. `core_so` stays on the picker payload because a surface may still need to name the libretro core itself; it is
-not a second answer to "which emulator is this".
+That is what lets a BIOS page match each emulator's entry and rows to the picker's labels, mark the one the answer was
+scoped to and tell the backend which emulator a download is for
+([#2190](https://github.com/danielcopper/romm-tender/issues/2190) D15). `core_so` cannot serve any of it: it is `None`
+for every standalone emulator and carries no extension for a libretro one, so matching on it named no standalone
+emulator and printed `dolphin_libretro.so` where the label said Dolphin. `label` cannot either — ES-DE lists one
+`pcsx2_libretro.so` as both `LRPS2` and `PCSX2`, so a label identifies a launch ROW and two rows can be one emulator —
+and a picker entry, which joins labels by command, can still be one of several entries for one emulator (RPCS3).
+`core_so` stays on the picker payload because a surface may still need to name the libretro core itself; it is not a
+second answer to "which emulator is this".
 
 `active_core_for_rom`'s `(core_so, label)` is therefore **not** what a payload sends: it answers `None` for a standalone
 pick, which is the degradation this swap removed.

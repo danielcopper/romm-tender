@@ -428,11 +428,11 @@ class FirmwarePlacement:
 
     ``checked`` is what became of the BYTES at that destination, in the
     resolver's own stable vocabulary, and it is read off the same entry
-    ``declaration`` is. It is carried
-    rather than interpreted because the eight values are not one axis: three of
-    them say a comparison HAPPENED and differ only in what it found, and folding
-    them into the verdict beside them is what made a file the emulator read and
-    did not recognise indistinguishable from one whose bytes never came back.
+    ``declaration`` is. It is carried rather than interpreted because the eight
+    values are not one axis: three of them say a comparison HAPPENED and differ
+    only in what it found, and folding them into the verdict beside them would
+    make a file the emulator read and did not recognise indistinguishable from
+    one whose bytes never came back.
     ``None`` is no statement at all — the ordinary answer for a file that is
     simply absent, and for every reading that asked no content question.
 

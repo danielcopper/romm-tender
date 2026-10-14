@@ -8,6 +8,7 @@
  */
 
 import type { SystemCoreInfo } from "../types";
+import { emulatorName } from "./emulatorEntries";
 
 /** What the clause reads, and whether it names a state the games cannot start
  *  in — the one a surface draws in red. */
@@ -38,7 +39,11 @@ export function emulatorClause(core: EmulatorClauseSource | null): EmulatorClaus
   // the games do not start in.
   const fallbackMissing = core.active_core_label === null && core.emulators[0]?.reason === "not_installed";
   return {
-    text: core.active_core_label ?? fallbackText(noEmulator, fallbackMissing),
+    // Named by every label its picker entry carries, whichever one is stored.
+    text:
+      core.active_core_label === null
+        ? fallbackText(noEmulator, fallbackMissing)
+        : emulatorName(core.emulators, core.active_core_label),
     gamesCannotStart: noEmulator || fallbackMissing,
   };
 }

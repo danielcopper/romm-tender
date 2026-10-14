@@ -9,10 +9,10 @@ import {
 import { componentSources } from "../test-utils/componentSources";
 import type { BiosLevel, OneOfGroupVerdict } from "../types/firmware";
 
-const EMULATOR = "SwanStation";
+const EMULATOR = "Example Emulator";
 
 function summary(source: BiosSummarySource, level: BiosLevel | null = "ok", rows: readonly BiosSummaryRow[] = []) {
-  return biosSummary({ active_core_label: EMULATOR, locating: "by-name", ...source }, rows, level);
+  return biosSummary({ active_core_label: EMULATOR, locating: "by-name-then-content", ...source }, rows, level);
 }
 
 // SwanStation's five PlayStation images, none of them in place — all optional, as a
@@ -29,7 +29,12 @@ const FIVE_IMAGES: BiosSummaryRow[] = ["scph5500", "scph5501", "scph5502", "scph
 describe("the states", () => {
   it("says the console does not start without an image, and none of the emulator's is in place", () => {
     expect(
-      biosSummary({ active_core_label: EMULATOR, console_needs_image: true }, FIVE_IMAGES, "missing", "PlayStation"),
+      biosSummary(
+        { active_core_label: "SwanStation", console_needs_image: true },
+        FIVE_IMAGES,
+        "missing",
+        "PlayStation",
+      ),
     ).toEqual({
       status: "Needs a BIOS image",
       sentence: "PlayStation does not start without a BIOS image, and none of the five SwanStation knows is in place",
@@ -37,9 +42,9 @@ describe("the states", () => {
   });
 
   it("names the system as itself where the caller has no name for it", () => {
-    expect(summary({ console_needs_image: true }, "missing", FIVE_IMAGES).sentence).toBe(
-      "This system does not start without a BIOS image, and none of the five SwanStation knows is in place",
-    );
+    expect(
+      summary({ active_core_label: "SwanStation", console_needs_image: true }, "missing", FIVE_IMAGES).sentence,
+    ).toBe("This system does not start without a BIOS image, and none of the five SwanStation knows is in place");
   });
 
   it("states the console's demand only under a verdict that is not met", () => {
@@ -54,13 +59,13 @@ describe("the states", () => {
   it("says the requirement is known and the readiness is not, for one withheld row", () => {
     expect(summary({ required_withheld: 1 }, "unknown")).toEqual({
       status: "Readiness unknown",
-      sentence: "One file SwanStation requires could not be checked",
+      sentence: "One file Example Emulator requires could not be checked",
     });
   });
 
   it("counts the withheld rows where there is more than one", () => {
     expect(summary({ required_withheld: 3 }, "unknown").sentence).toBe(
-      "3 files SwanStation requires could not be checked",
+      "3 files Example Emulator requires could not be checked",
     );
   });
 
@@ -69,7 +74,7 @@ describe("the states", () => {
     expect(summary({ refused }, "unknown")).toEqual({
       status: "Readiness unknown",
       sentence:
-        "SwanStation requires ../outside.bin, which lies outside the BIOS folder — " +
+        "Example Emulator requires ../outside.bin, which lies outside the BIOS folder — " +
         "so whether it is ready could not be established",
     });
   });
@@ -77,7 +82,7 @@ describe("the states", () => {
   it("says nothing of a refused optional declaration, which changes no verdict", () => {
     const refused = [{ declared: "../outside.bin", required: false, reason: "firmware-path-escapes-root" }];
     expect(summary({ refused, required_count: 1, required_downloaded: 1 }, "ok").sentence).toBe(
-      "The one file SwanStation opens by name is in place",
+      "The one file Example Emulator requires is in place",
     );
   });
 
@@ -89,12 +94,34 @@ describe("the states", () => {
     });
   });
 
+  it("says no BIOS is chosen on the answer PCSX2 (Standalone) really sends, where it was not read", () => {
+    // A packaged card with no rows and an open verdict counts as not read; the
+    // empty setting is WHY nothing could be established, so it is what is said.
+    const answer = {
+      active_core_label: "PCSX2 (Standalone)",
+      emulator_read: false,
+      locating: "unestablished" as const,
+      emulator_declaration: "packaged" as const,
+      console_needs_image: false,
+      refused: [],
+      emulator_notes: [{ kind: "bios-unchosen" as const, setting: "Filenames/BIOS", tied: null, regions: [] }],
+      content_search: null,
+      required_count: 0,
+      required_downloaded: 0,
+      required_withheld: 0,
+    };
+    expect(biosSummary(answer, [], "unknown")).toEqual({
+      status: "No BIOS chosen",
+      sentence: "No BIOS is chosen in PCSX2 (Standalone)'s settings, and no game boots until one is",
+    });
+  });
+
   it("adds a tie between two images without moving the verdict", () => {
     const notes = [{ kind: "images-tied" as const, setting: null, tied: 2, regions: ["pal"] }];
     const words = summary({ emulator_notes: notes, required_count: 1, required_downloaded: 1 }, "ok");
     expect(words.sentence).toBe(
-      "The one file SwanStation opens by name is in place — " +
-        "for Europe two images are in place; which one SwanStation uses is not established",
+      "The one file Example Emulator requires is in place — " +
+        "for Europe two images are in place; which one Example Emulator uses is not established",
     );
     expect(words.status).toBe("1 / 1 required");
   });
@@ -102,21 +129,36 @@ describe("the states", () => {
   it("says nothing could be established about an emulator nobody read, ahead of everything else", () => {
     expect(summary({ emulator_read: false, required_withheld: 1 }, "unknown")).toEqual({
       status: "Requirement unknown",
-      sentence: "Nothing could be established about what SwanStation needs",
+      sentence: "Nothing could be established about what Example Emulator needs",
     });
+  });
+
+  it("never reads a launch with no identified emulator as needing nothing", () => {
+    // What the backend answers where no launching emulator was identified: no
+    // row is its requirement, so the required set is empty — and that empty set
+    // is "could not be established", not "nothing required".
+    const answer = { required_count: 0, required_downloaded: 0, required_withheld: 0, emulator_read: false };
+    const words = biosSummary({ ...answer, active_core_label: null }, [], "unknown");
+    expect(words).toEqual({
+      status: "Requirement unknown",
+      sentence: "Nothing could be established about what the launching emulator needs",
+    });
+    expect(words.status).not.toBe("Nothing required");
+    expect(words.sentence).not.toContain("marks none");
+    expect(words.sentence).not.toContain("are in place");
   });
 
   it("says nothing could be established where neither gap applies", () => {
     expect(summary({}, "unknown")).toEqual({
       status: "Requirement unknown",
-      sentence: "Nothing could be established about what SwanStation needs",
+      sentence: "Nothing could be established about what Example Emulator needs",
     });
   });
 
   it("states the required files as held where the level says ready", () => {
     expect(summary({ required_count: 3, required_downloaded: 3 }, "ok")).toEqual({
       status: "3 / 3 required",
-      sentence: "All 3 files SwanStation opens by name are in place",
+      sentence: "All 3 files Example Emulator requires are in place",
     });
   });
 
@@ -127,18 +169,18 @@ describe("the states", () => {
       { wanted: "optional", required_by_active: false, used_by_active: true, downloaded: true },
     ];
     expect(summary({ required_count: 2, required_downloaded: 2 }, "ok", rows).sentence).toBe(
-      "All 2 files SwanStation opens by name are in place (2 optional missing)",
+      "All 2 files Example Emulator requires are in place (2 optional missing)",
     );
   });
 
   // The sentence names one emulator, so its tail counts that emulator's set.
-  // `wanted` is about every installed emulator and cannot say which one.
+  // `wanted` alone does not say which emulator's need it is.
   it("counts a file the named emulator marks optional where another emulator requires it", () => {
     const rows: BiosSummaryRow[] = [
       { wanted: "needed", required_by_active: false, used_by_active: true, downloaded: false },
     ];
     expect(summary({ required_count: 2, required_downloaded: 2 }, "ok", rows).sentence).toBe(
-      "All 2 files SwanStation opens by name are in place (1 optional missing)",
+      "All 2 files Example Emulator requires are in place (1 optional missing)",
     );
   });
 
@@ -147,7 +189,7 @@ describe("the states", () => {
       { wanted: "optional", required_by_active: false, used_by_active: false, downloaded: false },
     ];
     expect(summary({ required_count: 2, required_downloaded: 2 }, "ok", rows).sentence).toBe(
-      "All 2 files SwanStation opens by name are in place",
+      "All 2 files Example Emulator requires are in place",
     );
   });
 
@@ -158,7 +200,7 @@ describe("the states", () => {
       { wanted: "unknown", required_by_active: false, used_by_active: true, downloaded: false },
     ];
     expect(summary({ required_count: 2, required_downloaded: 2 }, "ok", rows).sentence).toBe(
-      "All 2 files SwanStation opens by name are in place",
+      "All 2 files Example Emulator requires are in place",
     );
   });
 
@@ -170,28 +212,28 @@ describe("the states", () => {
     ];
     expect(summary({ required_count: 1, required_downloaded: 1 }, "ok", rows)).toEqual({
       status: "1 / 1 required",
-      sentence: "The one file SwanStation opens by name is in place (1 optional missing)",
+      sentence: "The one file Example Emulator requires is in place (1 optional missing)",
     });
   });
 
   it("states the shortfall where the level is not ready", () => {
     expect(summary({ required_count: 4, required_downloaded: 1 }, "partial")).toEqual({
       status: "1 / 4 required",
-      sentence: "1 of 4 files SwanStation opens by name are in place",
+      sentence: "1 of 4 files Example Emulator requires are in place",
     });
   });
 
   it("says ONE file rather than `0 of 1 files` where that one is not there", () => {
     expect(summary({ required_count: 1, required_downloaded: 0 }, "missing")).toEqual({
       status: "0 / 1 required",
-      sentence: "The one file SwanStation opens by name is not in place",
+      sentence: "The one file Example Emulator requires is not in place",
     });
   });
 
   it("names the set a zero count was taken over", () => {
     expect(summary({ required_count: 0 }, "ok")).toEqual({
       status: "Nothing required",
-      sentence: "SwanStation marks none of its BIOS files as required",
+      sentence: "Example Emulator marks none of its BIOS files as required",
     });
   });
 });
@@ -218,7 +260,9 @@ describe("the game page's own region", () => {
     expect(
       summary({ one_of_groups: [group], required_count: 1, required_downloaded: 0, required_withheld: 1 }, "unknown")
         .sentence,
-    ).toBe("Whether the BIOS image SwanStation needs for this game's region (USA) is in place could not be checked");
+    ).toBe(
+      "Whether the BIOS image Example Emulator needs for this game's region (USA) is in place could not be checked",
+    );
   });
 
   it("names the region no image is stated for", () => {
@@ -228,7 +272,7 @@ describe("the game page's own region", () => {
     ).toEqual({
       status: "Readiness unknown",
       sentence:
-        "SwanStation states no BIOS image for this game's region (USA), so whether it starts could not be established",
+        "Example Emulator states no BIOS image for this game's region (USA), so whether it starts could not be established",
     });
   });
 });
@@ -255,9 +299,10 @@ describe("how the emulator finds its firmware words the answer", () => {
   });
 
   it("says every file it opens by name is in place under a met verdict", () => {
-    expect(summary({ locating: "by-name", required_count: 2, required_downloaded: 2 }, "ok").sentence).toBe(
-      "All 2 files SwanStation opens by name are in place",
-    );
+    expect(
+      summary({ active_core_label: "melonDS", locating: "by-name", required_count: 3, required_downloaded: 3 }, "ok")
+        .sentence,
+    ).toBe("All 3 files melonDS opens by name are in place");
   });
 
   it("says what an emulator nobody read lists, with the note that how it finds its BIOS is not established", () => {
@@ -288,7 +333,7 @@ describe("how the emulator finds its firmware words the answer", () => {
   it("keeps an emulator that marks nothing required at Nothing required, without the note", () => {
     expect(summary({ locating: "unestablished", required_count: 0 }, "ok")).toEqual({
       status: "Nothing required",
-      sentence: "SwanStation marks none of its BIOS files as required",
+      sentence: "Example Emulator marks none of its BIOS files as required",
     });
   });
 
@@ -300,16 +345,22 @@ describe("how the emulator finds its firmware words the answer", () => {
   });
 
   it("names a missing file and one nothing could check together, red", () => {
-    const rows = [required("GameIndex.yaml", false), required("bios", null)];
+    const rows = [required("bios7.bin", false), required("bios9.bin", null), required("firmware.bin", true)];
     expect(
       summary(
-        { locating: "by-name", required_count: 2, required_downloaded: 0, required_withheld: 1 },
+        {
+          active_core_label: "melonDS",
+          locating: "by-name",
+          required_count: 3,
+          required_downloaded: 1,
+          required_withheld: 1,
+        },
         "missing",
         rows,
       ),
     ).toEqual({
-      status: "0 / 2 required · 1 not checked",
-      sentence: "One file SwanStation opens by name is not in place, and one could not be checked",
+      status: "1 / 3 required · 1 not checked",
+      sentence: "One file melonDS opens by name is not in place, and one could not be checked",
     });
   });
 
@@ -568,6 +619,55 @@ describe("the emulator's name", () => {
       "mGBA marks none of its BIOS files as required",
     );
   });
+
+  describe("an emulator listed under two labels", () => {
+    // RetroDECK lists pcsx2_libretro.so as LRPS2 and as PCSX2. The selector
+    // names it "LRPS2 / PCSX2" whichever label was picked, and so does every
+    // sentence about it — never the one picked label alone.
+    const twoLabels = {
+      active_core_label: "PCSX2",
+      emulator_tabs: [
+        { emulator: "pcsx2_libretro.so", label: "LRPS2 / PCSX2", launching: true, requirements_met: true },
+      ],
+    };
+
+    it("names it by both in the headline", () => {
+      expect(biosSummary({ ...twoLabels, required_count: 2, required_downloaded: 2 }, [], "ok").sentence).toBe(
+        "All 2 files LRPS2 / PCSX2 requires are in place",
+      );
+    });
+
+    it("names it by both in a tie between two images", () => {
+      const notes = [{ kind: "images-tied" as const, setting: null, tied: 2, regions: ["pal"] }];
+      const words = biosSummary(
+        { ...twoLabels, emulator_notes: notes, required_count: 1, required_downloaded: 1 },
+        [],
+        "ok",
+      );
+      expect(words.sentence).toContain("which one LRPS2 / PCSX2 uses is not established");
+    });
+
+    it("names it by both over each one-of group", () => {
+      const group: OneOfGroupVerdict = {
+        state: "met",
+        covered: ["ntsc-u"],
+        missing: [],
+        unchecked: [],
+        game_regions: [],
+        regions: ["ntsc-u"],
+        options: [],
+      };
+      expect(groupBlocks({ ...twoLabels, one_of_groups: [group] })[0]?.heading).toBe(
+        "LRPS2 / PCSX2 · one image per disc region",
+      );
+    });
+
+    it("takes the picked label where the payload carries no entries", () => {
+      expect(biosSummary({ active_core_label: "PCSX2", required_count: 0 }, [], "ok").sentence).toBe(
+        "PCSX2 marks none of its BIOS files as required",
+      );
+    });
+  });
 });
 
 describe("reading the payload", () => {
@@ -579,16 +679,16 @@ describe("reading the payload", () => {
     ];
     expect(summary({}, "partial", rows)).toEqual({
       status: "1 / 2 required",
-      sentence: "1 of 2 files SwanStation opens by name are in place",
+      sentence: "1 of 2 files Example Emulator requires are in place",
     });
   });
 
   it("decides readiness by the count comparison where the payload carries no level", () => {
     expect(summary({ required_count: 2, required_downloaded: 2 }, null).sentence).toBe(
-      "All 2 files SwanStation opens by name are in place",
+      "All 2 files Example Emulator requires are in place",
     );
     expect(summary({ required_count: 2, required_downloaded: 1 }, null).sentence).toBe(
-      "1 of 2 files SwanStation opens by name are in place",
+      "1 of 2 files Example Emulator requires are in place",
     );
   });
 });
@@ -644,7 +744,7 @@ describe("a one-of group", () => {
     });
     expect(met).toEqual({
       status: "3 / 3 regions",
-      sentence: "SwanStation has a BIOS image for every region",
+      sentence: "Example Emulator has a BIOS image for every region",
     });
   });
 
@@ -794,12 +894,12 @@ describe("a one-of group", () => {
     );
     expect(both).toEqual({
       status: "0 / 1 required · regions not checked",
-      sentence: "The one file SwanStation opens by name is not in place",
+      sentence: "The one file Example Emulator requires is not in place",
     });
   });
 
   it("says a core has an image for every region however many images it takes", () => {
-    // SwanStation may open one image for Japan and another for USA and Europe.
+    // A core may open one image for Japan and another for USA and Europe.
     const several: OneOfGroupVerdict = {
       ...group("met", ["ntsc-j", "ntsc-u", "pal"], []),
       options: [
@@ -811,7 +911,7 @@ describe("a one-of group", () => {
 
     expect(summary({ required_count: 1, required_downloaded: 1, one_of_groups: [several] })).toEqual({
       status: "3 / 3 regions",
-      sentence: "SwanStation has a BIOS image for every region",
+      sentence: "Example Emulator has a BIOS image for every region",
     });
     expect(
       biosSummary(
@@ -922,7 +1022,7 @@ describe("a one-of group", () => {
     const rows: BiosSummaryRow[] = [{ file_name: "scph1001.bin", caveats: ["firmware-image-identified"] }];
     const met = summary({ required_count: 1, required_downloaded: 1, one_of_groups: [swanstation] }, "ok", rows);
     expect(met.sentence).toBe(
-      "SwanStation starts this game with scph1001.bin — found in the BIOS folder, it serves every region",
+      "Example Emulator starts this game with scph1001.bin — found in the BIOS folder, it serves every region",
     );
   });
 
@@ -931,7 +1031,7 @@ describe("a one-of group", () => {
     // name and no search was made.
     const rows: BiosSummaryRow[] = [{ file_name: "scph1001.bin", caveats: [] }];
     const met = summary({ required_count: 1, required_downloaded: 1, one_of_groups: [swanstation] }, "ok", rows);
-    expect(met.sentence).toBe("SwanStation starts this game with scph1001.bin, which serves every region");
+    expect(met.sentence).toBe("Example Emulator starts this game with scph1001.bin, which serves every region");
   });
 
   it("names three files with none of them in place", () => {
@@ -944,7 +1044,7 @@ describe("a one-of group", () => {
       ],
     };
     expect(summary({ required_count: 1, required_downloaded: 0, one_of_groups: [three] }, "missing").sentence).toBe(
-      "SwanStation needs scph5500.bin, scph5501.bin or scph5502.bin to start this game (Japan, USA and Europe) — none of them is in place",
+      "Example Emulator needs scph5500.bin, scph5501.bin or scph5502.bin to start this game (Japan, USA and Europe) — none of them is in place",
     );
   });
 
@@ -955,7 +1055,7 @@ describe("a one-of group", () => {
       options: [{ file_name: "scph5502.bin", regions: ["pal"], satisfied: false }],
     };
     expect(summary({ required_count: 1, required_downloaded: 0, one_of_groups: [mixed] }, "missing").sentence).toBe(
-      "SwanStation needs scph5502.bin to start this game (Europe) — it is missing, and there is no BIOS image for USA",
+      "Example Emulator needs scph5502.bin to start this game (Europe) — it is missing, and there is no BIOS image for USA",
     );
   });
 
@@ -994,7 +1094,7 @@ describe("a one-of group", () => {
     // The plain file alone is counted, in the status and in the sentence.
     expect(both).toEqual({
       status: "0 / 1 required · 1 / 1 regions",
-      sentence: "The one file SwanStation opens by name is not in place",
+      sentence: "The one file Example Emulator requires is not in place",
     });
   });
 
@@ -1008,7 +1108,7 @@ describe("a one-of group", () => {
       } as BiosSummarySource,
       "unknown",
     );
-    expect(both.sentence).toBe("One file SwanStation requires could not be checked");
+    expect(both.sentence).toBe("One file Example Emulator requires could not be checked");
   });
 
   it("words a missing plain file beside an unknown group as the missing file it is", () => {
@@ -1025,7 +1125,7 @@ describe("a one-of group", () => {
     );
     expect(both).toEqual({
       status: "0 / 1 required · regions not checked",
-      sentence: "The one file SwanStation opens by name is not in place",
+      sentence: "The one file Example Emulator requires is not in place",
     });
   });
 
@@ -1039,7 +1139,7 @@ describe("a one-of group", () => {
       },
       "unknown",
     );
-    expect(both.sentence).toBe("One file SwanStation requires could not be checked");
+    expect(both.sentence).toBe("One file Example Emulator requires could not be checked");
   });
 
   it("keeps an unmet group's sentence beside a missing plain file", () => {
@@ -1047,7 +1147,7 @@ describe("a one-of group", () => {
       { required_count: 2, required_downloaded: 0, one_of_groups: [group("unmet", [], ["ntsc-u"])] },
       "missing",
     );
-    expect(both.sentence).toBe("SwanStation cannot start this system without a BIOS image");
+    expect(both.sentence).toBe("Example Emulator cannot start this system without a BIOS image");
   });
 
   it("speaks for the group where one of its images is in place, whatever the console needs", () => {
@@ -1061,7 +1161,7 @@ describe("a one-of group", () => {
       "ok",
       [{ file_name: "scph5501.bin", used_by_active: true, wanted: "optional", satisfied: true }],
     );
-    expect(both.sentence).toBe("SwanStation has a BIOS image for every region");
+    expect(both.sentence).toBe("Example Emulator has a BIOS image for every region");
   });
 });
 

@@ -570,9 +570,9 @@ Format: **invariant** — tier — enforced by.
   the answer**, which is deliberate — it says nothing about a launch that does not use it — and the cost is that
   switching a platform's emulator can move it from a finished answer to a withheld one. A launching emulator the answer
   holds no entry for at all counts as not read too ([#2190](https://github.com/danielcopper/romm-tender/issues/2190)
-  D4): no entry is no verdict, so the level that follows is the resolver's `unknown`, never a green "Nothing required"
-  over the rows of other emulators, and `reading_complete_for` is False for it, so a library file nobody declared is
-  `unknown` rather than `not_needed`
+  D4): no entry is no verdict, so the level that follows is `unknown`, never a green "Nothing required" over the rows of
+  other emulators, and `reading_complete_for` is False for it, so a library file nobody declared is `unknown` rather
+  than `not_needed`
   (`tests/domain/test_bios_status.py::TestTheLevelIsTheResolversVerdict::test_an_emulator_missing_from_the_answer_counts_as_not_read`,
   `tests/domain/test_firmware_wants.py::TestReadingCompleteFor::test_a_launching_emulator_the_answer_holds_no_entry_for_is_never_complete`,
   `tests/services/test_firmware.py::TestCheckPlatformBiosUnknown::test_a_launching_emulator_missing_from_the_answer_leaves_library_files_unknown`).
@@ -599,18 +599,18 @@ Format: **invariant** — tier — enforced by.
   On-disk cell's second mark (`⊘`), and that one is display alone: it neither counts nor gates, which is what keeps it
   out of all three folds below. **A sixth reader is the game page's BIOS tab** (`BiosTab.tsx`'s `rowBelongsOnThisPage`),
   and it is display alone in the same sense: it decides whether a row gets a LINE — a file no page can fetch, that the
-  tab's emulator does not require and that is not there, is nothing that page can act on — and gates no count and offers
-  no action, so it belongs to none of the three folds below either. It is asked on every emulator's tab of that tab's
-  emulator (#2190). What holds the two surfaces together is that they call one predicate rather than spelling the three
-  clauses twice: a second copy would let the game page point at a download button the platform page does not offer, or
-  leave off a row it does. What must NOT be shared is the game page's rule around it — required for this launch, an
-  option of the emulator's one-of group, present, fetchable, or unjudged — which is that page's alone; the platform
-  detail has no such rule, and a shared "visibility" module would invent a notion only one surface has. Each fold has
-  its own quiet failure: drop the row from the required counts and a sentence reads "all in place" under a red verdict;
-  add it to the ratio and a SNES page reports `0 / 26 files, 26 missing` for twenty-six optional files no core wants;
-  add it to the buttons and the page offers a download that cannot succeed. `on_server` is the one field all three read;
-  the row's `id: None` is an honest absence with no consumer at all, so nothing breaks if it is filled in and nothing is
-  guarded by leaving it empty
+  shown emulator does not require and whose verdict is not met, is nothing that page can act on — and gates no count and
+  offers no action, so it belongs to none of the three folds below either. It is asked about whichever emulator the page
+  shows. What holds the two surfaces together is that they call one predicate rather than spelling the three clauses
+  twice: a second copy would let the game page point at a download button the platform page does not offer, or leave off
+  a row it does. What must NOT be shared is the game page's rule around it — required for this launch, an option of the
+  emulator's one-of group, present, fetchable, or unjudged — which is that page's alone; the platform detail has no such
+  rule, and a shared "visibility" module would invent a notion only one surface has. Each fold has its own quiet
+  failure: drop the row from the required counts and a sentence reads "all in place" under a red verdict; add it to the
+  ratio and a SNES page reports `0 / 26 files, 26 missing` for twenty-six optional files no core wants; add it to the
+  buttons and the page offers a download that cannot succeed. `on_server` is the one field all three read; the row's
+  `id: None` is an honest absence with no consumer at all, so nothing breaks if it is filled in and nothing is guarded
+  by leaving it empty
 - **No download lands in a place the resolver could not look at (`firmware-path-inaccessible`)** — test + prompt-only —
   a download there could overwrite a file nobody could see, which is the backup-or-confirm rule's concern, and a place
   the resolver cannot read is usually one the emulator cannot read either (#2190). The row's verdict is withheld, grey,
@@ -1218,8 +1218,7 @@ Format: **invariant** — tier — enforced by.
   anything that refuses one, so that `FirmwareDemand.status_root` answers `None` — the probe looks nowhere, and a row
   only it could answer has its verdict withheld rather than read as absent (#2244 D11). Everything else reads the
   resolver's `present`, which follows symlinks Tender would have to re-implement — the PS2 folder is one directory
-  reached through two spellings. `present
-  is None` leaves `downloaded` false and the row's verdict withheld, and the
+  reached through two spellings. `present is None` leaves `downloaded` false and the row's verdict withheld, and the
   `RomM library files` ratio counts only the rows whose verdict was established (`ratio_server_count` /
   `ratio_local_count`): there a withheld row would read as a file missing
   ([#2285](https://github.com/danielcopper/romm-tender/issues/2285) D3). **Nothing enforces either crossing point.** A
@@ -1306,7 +1305,7 @@ Format: **invariant** — tier — enforced by.
   (`TestAOneOfGroupIsOneRequirement`, the group cases of `TestOnePlatformOneEmulator` and `TestOneRomOneEmulator`, and
   `TestDownloadRequiredFirmware`'s group cases) pins it end to end, the ROM's own region, and that the button's count
   and the download are one set; the frontend halves are `frontend/src/utils/biosSummary.test.ts`, `biosGroup.test.ts`,
-  `playSection.test.ts`, `BiosTab.test.tsx` and `library/PlatformsTab.test.tsx`. The rule spans the adapter
+  `BiosTab.test.tsx` and `library/PlatformsTab.test.tsx`. The rule spans the adapter
   (`adapters/atlas_firmware.py::_wants` and `_groups`), two domain modules (`domain/firmware_groups.py` judges,
   `domain/bios_status.py` counts), the service (`services/firmware/status.py`, `downloads.py`, `game_detail.py` passing
   the ROM's regions), five frontend modules (`utils/biosSummary.ts`, `utils/biosGroup.ts`, `utils/biosFetchable.ts`,
@@ -1334,52 +1333,67 @@ Format: **invariant** — tier — enforced by.
   longer lists, a pin whose command cannot be baked) rather than pinning today's value, because a value test would pass
   for a third resolution that diverges on some other configuration;
   `::TestDownloadRequiredFirmware::test_it_fetches_what_the_platforms_own_pick_calls_required` holds the download button
-  to the same pick. The pick is `domain/emulator_commands.py::resolve_platform_option` — the per-platform override
-  (`settings.json` `platform_cores`) when its label still names a bakeable emulator, else the es_systems default — and
-  it is the read-path precedence `ActiveCoreResolver` applies minus the per-game layer. Three call sites read it today:
+  to the same pick. The pick is `domain/emulator_commands.py::resolve_firmware_option` — the per-platform override
+  (`settings.json` `platform_cores`) when its label still names a bakeable emulator, else the es_systems default
+  (`resolve_platform_option`), and where nothing is bakeable the emulator RetroDECK declares first, installed or not,
+  which its plain launch starts unless an alternative emulator is set in ES-DE (#2190 D26) — and it is the read-path
+  precedence `ActiveCoreResolver` applies minus the per-game layer. Two call sites read it today:
   `FirmwareStatusReader._platform_emulator` (which serves BOTH the overview's `active_core` / `active_core_label` and
-  `check_platform_bios`'s `launching_emulator=None` fallback) and `FirmwareDownloader._platform_emulator_identity`.
-  **Nothing joins them**, and a fourth resolution is exactly what this entry is about: the pane displayed a just-picked
-  PCSX ReARMed and judged the platform by the libretro system default beside it, so one PlayStation read `not_demanded`
-  / `ok` on the game page and `absent` / `missing` on the pane. `.label` and `.emulator` must come off ONE call — two
-  calls agree by coincidence, which is what the old pair did until an override was set. **One seam now carries the pick
-  rather than a projection of it**: `BiosChecker` takes a `LaunchingEmulator` (`domain/emulator_commands.py` —
-  `emulator` and `label`, both read-only), so the per-game caller hands over the whole resolution and
-  `check_platform_bios` reads both projections off that one value. A mismatched pair is not representable there, which
-  is why the answer may state its own `active_core_label`: it is the label half of the pick those very counts were
-  filtered by, and the game page's BIOS headline names the emulator from it (`TestTheAnswerNamesTheEmulatorItJudgedBy`,
-  which hands the check two picks differing only in label and holds the name to moving while the judgment does not).
-  That covers this seam and no other — the remaining sites still pair by discipline. **The key is the emulator IDENTITY,
-  not `.core_so`** (#1821): the identity names a standalone pick as readily as a libretro one, where `core_so` is `None`
-  for every standalone emulator and sent the rows back to "every declaring emulator". Reaching for `.core_so` here again
-  restores that degradation silently, because the field is still there and still right for the picker payload beside it.
-  `CoreInfoProvider.get_active_core` — the "first libretro entry, bakeable or not" reading these sites used — has no
-  production caller left. **The ROM scope is the same rule one layer in, over a different pair of modules**: the game
-  page is assembled by two services that each ask `ActiveCoreReader.active_emulator_for_rom` for themselves —
-  `services/cores.py::get_platform_core_info` names the pick in the picker, `services/game_detail.py::get_bios_status`
-  scopes the BIOS question to it — and `::TestOneRomOneEmulator` asserts they agree across every way a ROM arrives at an
-  emulator (nothing pinned, the platform's pick, a per-game override, the override over a platform pick naming something
-  else, a standalone pick, a stale pin that degrades). They read one seam today and nothing says they must; the picker
-  reaching for `active_core_for_rom` — the `.so`-space projection right beside it — would answer `None` for every
-  standalone pick and send the BIOS rows back to the platform's own, which is the platform-scoped defect above, per ROM.
-  The one-of groups an answer judges are that same pick's too (`FirmwareCatalogue.groups_for(identity)`), and both
-  classes hold the group verdicts in their agreement (`_emulator_dependent`), so a second resolution feeding the groups
-  would show as a disagreement there rather than as a group judged for another emulator. So are the rows and where a
-  download lands ([#2190](https://github.com/danielcopper/romm-tender/issues/2190) D2, D9):
+  `check_platform_bios`'s `launching_emulator=None` fallback) and `FirmwareDownloader._platform_emulator_identity`
+  (which also answers a game's "Download BIOS" where the game resolves to no emulator). The platform's core read
+  (`CoreService.get_system_core_info`) is not one of them: its `active_core_label` is the bake pick alone
+  (`resolve_platform_label`), and agrees with the BIOS pick wherever a bakeable emulator exists. **Nothing joins them**,
+  and a fourth resolution is exactly what this entry is about: the pane displayed a just-picked PCSX ReARMed and judged
+  the platform by the libretro system default beside it, so one PlayStation read `ok` on the game page and `missing` on
+  the pane. `.label` and `.emulator` must come off ONE call — two calls agree by coincidence, which is what the old pair
+  did until an override was set. **One seam now carries the pick rather than a projection of it**: `BiosChecker` takes a
+  `LaunchingEmulator` (`domain/emulator_commands.py` — `emulator` and `label`, both read-only), so the per-game caller
+  hands over the whole resolution and `check_platform_bios` reads both projections off that one value. A mismatched pair
+  is not representable there, which is why the answer may state its own `active_core_label`: it is the label half of the
+  pick those very counts were filtered by (`TestTheAnswerNamesTheEmulatorItJudgedBy`, which hands the check two picks
+  differing only in label and holds the label to moving while the judgment does not). That covers this seam and no other
+  — the remaining sites still pair by discipline. The game page's BIOS headline names the emulator by the answer's
+  launching entry in `emulator_tabs` — every label its identity goes by (#2190 D28, D38) — and by `active_core_label`
+  only where no entry is the launching emulator's (`launchingName` in `frontend/src/utils/biosSummary.ts`). **The key is
+  the emulator IDENTITY, not `.core_so`** (#1821): the identity names a standalone pick as readily as a libretro one,
+  where `core_so` is `None` for every standalone emulator, and a pick with no identity is answered as not established
+  (#2190 D26). Reaching for `.core_so` here again would turn every standalone pick into that answer silently, because
+  the field is still there and still right for the picker payload beside it. `CoreInfoProvider.get_active_core` — the
+  "first libretro entry, bakeable or not" reading these sites used — has no production caller left. **The ROM scope is
+  the same rule one layer in, over a different pair of modules**: the game page is assembled by two services that each
+  ask `ActiveCoreReader.active_emulator_for_rom` for themselves — `services/cores.py::get_platform_core_info` names the
+  pick in the picker, `services/game_detail.py::get_bios_status` scopes the BIOS question to it — and
+  `::TestOneRomOneEmulator` asserts they agree across every way a ROM arrives at an emulator (nothing pinned, the
+  platform's pick, a per-game override, the override over a platform pick naming something else, a standalone pick, a
+  stale pin that degrades). They read one seam today and nothing says they must; the picker reaching for
+  `active_core_for_rom` — the `.so`-space projection right beside it — would answer `None` for every standalone pick and
+  send the BIOS rows back to the platform's own, which is the platform-scoped defect above, per ROM. The one-of groups
+  an answer judges are that same pick's too (`FirmwareCatalogue.groups_for(identity)`), and both classes hold the group
+  verdicts in their agreement (`_emulator_dependent`), so a second resolution feeding the groups would show as a
+  disagreement there rather than as a group judged for another emulator. So are the rows and where a download lands
+  ([#2190](https://github.com/danielcopper/romm-tender/issues/2190) D2, D9):
   `FirmwareCatalogue.placements_for(identity)` answers each file name with the launching emulator's own requirement —
   its place, its presence, its verdict — wherever it declares that name, so with YabaSanshiro picked for Saturn the row
   and the download are `saturn_bios.bin` directly under the BIOS root whatever lies under Kronos's `kronos/`
   (`tests/services/test_firmware.py::TestEachEmulatorsOwnPlace`). A game page's "Download BIOS" places for that game's
   own pick (`download_all_firmware` with a `rom_id` asks `active_emulator_for_rom`), so a game set to Kronos on a
   YabaSanshiro platform gets `kronos/saturn_bios.bin` (`::test_a_game_page_download_places_for_the_games_own_pick`).
-  Every OTHER emulator the resolver answered for is a tab of its own (`emulator_tabs`, `::TestOneTabPerEmulator`), its
-  rows that emulator's own requirements; a tab changes the view and never the level, a count, the badge or a download. A
-  reader keying a launch's rows on `by_file_name()` instead would take the first declarer's place and go green on every
-  platform whose emulators agree. **What the ROM sibling cannot pin is the fixture's own default**:
-  `FakeCoreInfoProvider.get_default_emulator` builds its invocation from the `active_core` tuple, which carries no
-  identity, so a test on the bare fake resolves an unpinned ROM to a `None` where the live adapter resolves it to an
-  emulator — `_DeclaredDefaultCoreInfo` in that file renders the declared default the way `AtlasCatalogueAdapter` does,
-  and every other fixture on the bare fake still exercises the weaker resolution
+  Every OTHER emulator the resolver answered for is an entry of its own (`emulator_tabs`, `::TestOneEntryPerEmulator`),
+  its rows that emulator's own requirements, which the BIOS tables' emulator selector shows; choosing one never changes
+  the level, the header's counts or the badge. What it does change on the platform page is where a download lands:
+  `Download required` and a row's own download carry the shown emulator's identity (`emulator`, `None` for the pick) and
+  place for THAT emulator — with Kronos shown, `saturn_bios.bin` goes to `kronos/` on a YabaSanshiro platform
+  (`::test_download_required_fetches_for_the_shown_emulator`,
+  `::test_the_per_row_download_fetches_for_the_shown_emulator`) — and an identity the answer holds no verdict for is
+  refused with `emulator_unknown`, because `placements_for` would answer it with the first declarer's place
+  (`::test_an_emulator_the_answer_does_not_hold_is_refused`). `Download all` places for the platform's pick. A reader
+  keying a launch's rows on `by_file_name()` instead would read the first declarer's place and verdict wherever two
+  emulators declare one name at different places — Saturn green under YabaSanshiro over a file only under `kronos/`.
+  **What the ROM sibling cannot pin is the fixture's own default**: `FakeCoreInfoProvider.get_default_emulator` builds
+  its invocation from the `active_core` tuple, which carries no identity, so a test on the bare fake resolves an
+  unpinned ROM to a `None` where the live adapter resolves it to an emulator — `_DeclaredDefaultCoreInfo` in that file
+  renders the declared default the way `AtlasCatalogueAdapter` does, and every other fixture on the bare fake still
+  exercises the weaker resolution
 - **A platform's BIOS answer is asked for one platform at a time, and a row that has not got one yet is never rendered
   as a row nothing could be established for** — test + prompt-only —
   `frontend/src/bigpicture/library/PlatformsTab.test.tsx` pins the four halves that can be seen from a test: the two
@@ -1472,14 +1486,14 @@ Format: **invariant** — tier — enforced by.
   written in the download path and nowhere else. So the records are the delete's whole input: it iterates them, not a
   status listing, which is also what keeps a download RomM has since dropped deletable instead of gated behind a file
   list that no longer names it. The authorisations a reader reaches for instead are wrong in opposite directions.
-  `downloaded` is `os.path.exists` and nothing more: authorise on it and Delete BIOS destroys firmware RetroDECK ships
-  with its own components, which no RomM library holds and nothing here can fetch back — it did exactly that to
-  `<bios>/dolphin-emu/Sys/codehandler.bin` on a real device. `on_server` describes what the library holds _now_, not who
-  wrote the file: authorise on it and a file dropped from RomM after we downloaded it is stranded on disk with nothing
-  in the UI able to remove it. The PATH has its own version of the same trap: a status row's `local_path` is recomputed
-  from today's placement, so for a file fetched before an emu-atlas bump moved it the name still matches our record
-  while the path names whatever now occupies the new destination — RetroDECK's own `codehandler.bin`, in the case that
-  motivated this. The count the UI offers is bound to the same set: `deletable_count` on the
+  `downloaded` is `os.path.exists` and nothing more: authorise on it and the platform-wide delete destroys firmware
+  RetroDECK ships with its own components, which no RomM library holds and nothing here can fetch back — it did exactly
+  that to `<bios>/dolphin-emu/Sys/codehandler.bin` on a real device. `on_server` describes what the library holds _now_,
+  not who wrote the file: authorise on it and a file dropped from RomM after we downloaded it is stranded on disk with
+  nothing in the UI able to remove it. The PATH has its own version of the same trap: a status row's `local_path` is
+  recomputed from today's placement, so for a file fetched before an emu-atlas bump moved it the name still matches our
+  record while the path names whatever now occupies the new destination — RetroDECK's own `codehandler.bin`, in the case
+  that motivated this. The count the UI offers is bound to the same set: `deletable_count` on the
   `get_platform_firmware_status` payload is records-still-on-disk, counted as distinct paths, because `local_count` is
   the library's progress ratio and is wrong in both directions — it hid the button entirely for a platform whose
   downloads had all left the library. **Since #1815 the same field is stamped per ROW** (`_stamp_deletable`), and the

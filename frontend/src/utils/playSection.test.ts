@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { resolveSaveSyncLabel, applySaveSyncDisplay, extractBiosInfo, extractCoreInfo, timeoutMs } from "./playSection";
-import { libretroEmu } from "../test-utils/coreFixtures";
+import { libretroEmu, sharedBy } from "../test-utils/coreFixtures";
 import type { CoreInfo, SaveStatus, SaveSyncDisplay } from "../types";
 
 describe("resolveSaveSyncLabel", () => {
@@ -233,6 +233,15 @@ describe("extractCoreInfo", () => {
     expect(result.emulatorDataAvailable).toBe(true);
     expect(result.platformCoreLabel).toBeNull();
     expect(result.hasGameOverride).toBe(false);
+  });
+
+  it("counts a game stored under the second label of the default entry as following the default", () => {
+    const result = extractCoreInfo({
+      ...baseCoreInfo,
+      active_core_label: "PCSX2",
+      emulators: [sharedBy(libretroEmu("pcsx2_libretro", "LRPS2", true), ["LRPS2", "PCSX2"])],
+    });
+    expect(result.activeCoreIsDefault).toBe(true);
   });
 
   it("maps has_game_override=true through to hasGameOverride (#211)", () => {
