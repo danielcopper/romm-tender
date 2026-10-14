@@ -10,7 +10,8 @@ icon and the wide grid shortcut by shortcut first, then the logos. It fetches
 four shortcuts at a time, writes each icon into Steam's grid directory, puts
 each wide grid and logo into the artwork cache, and hands the finished ones to
 the frontend in batches as the ``shortcut_artwork`` event, which names a wide
-grid or logo for the frontend to fetch and set. Before each batch it reads
+grid or logo for the frontend to fetch and set; it hands the next batch over
+only once the frontend has finished the last. Before each batch it reads
 Steam's renderer memory, and at or above the session budget's ceiling the run
 ends.
 
@@ -69,6 +70,12 @@ _SETTLE_SECONDS = 10.0
 _FIRST_BACKOFF_SECONDS = 30.0
 _MAX_BACKOFF_SECONDS = 15 * 60.0
 _PANEL_POLL_SECONDS = 5.0
+# The longest the job waits for the frontend to finish a batch. A healthy batch
+# of 25 images takes seconds. The frontend gives a batch up after five minutes
+# (CONTINUATION_TIMEOUT_MS, frontend/src/utils/pruneLease.ts), and a lease
+# nobody renews expires 300 s later, so a lease outlives this only where
+# something has gone wrong, and the run then ends rather than wait on it.
+_BATCH_WAIT_SECONDS = 10 * 60.0
 
 
 @dataclass(frozen=True)
@@ -176,6 +183,7 @@ class ShortcutArtworkService:
         self._no_write.set()
         self._not_paused = asyncio.Event()
         self._not_paused.set()
+        self._one_batch_at_a_time = asyncio.Lock()
         self._backoff = 0.0
 
     # -- triggers ------------------------------------------------------------
@@ -324,7 +332,7 @@ class ShortcutArtworkService:
         finally:
             for worker in workers:
                 worker.cancel()
-            if not self._stopped:
+            while batch and not self._stopped:
                 await self._flush(batch)
 
     def _plan_io(self) -> _Plan | None:
@@ -466,7 +474,7 @@ class ShortcutArtworkService:
     async def _add(self, batch: list[_Finished | _SlotReady], finished: _Finished | _SlotReady) -> None:
         batch.append(finished)
         if len(batch) >= _BATCH_SIZE:
-            await self._flush(batch)
+            await self._flush(batch, full_only=True)
 
     async def _wait_out_rate_limit(self) -> None:
         """Pause every worker, twice as long at each 429 in a row, up to the cap.
@@ -487,20 +495,37 @@ class ShortcutArtworkService:
     async def _write(self, app_id: int, fetch: IconFetch, generation: int, plan: _Plan) -> str | None:
         return await self._shielded(self._write_unless_the_job_yields(app_id, fetch, generation, plan))
 
-    async def _flush(self, batch: list[_Finished | _SlotReady]) -> None:
-        """Hand what is finished to the frontend under one lease, and empty *batch*.
+    async def _flush(self, batch: list[_Finished | _SlotReady], *, full_only: bool = False) -> None:
+        """Hand up to a batch of what is finished to the frontend under one lease, and take it out of *batch*.
 
-        Nothing is handed over while Steam's renderer stands at or above the
-        session budget's ceiling: the run ends there, and what was finished
-        waits for the next run.
+        One batch at a time: the next is taken only once the frontend has
+        finished this one, its lease released, disowned or expired, so the
+        renderer reading before it is taken after this one landed. With
+        *full_only* nothing is taken unless a whole batch waits. Nothing is
+        handed over while Steam's renderer stands at or above the session
+        budget's ceiling: the run ends there, and what was finished waits for
+        the next run.
         """
-        if not batch:
-            return
-        finished = list(batch)
-        batch.clear()
-        if self._yields_now() or await self._renderer_is_full():
-            return
-        await self._shielded(self._hand_over_unless_the_job_yields(finished))
+        async with self._one_batch_at_a_time:
+            if not batch or (full_only and len(batch) < _BATCH_SIZE):
+                return
+            finished = batch[:_BATCH_SIZE]
+            del batch[:_BATCH_SIZE]
+            if self._yields_now() or await self._renderer_is_full():
+                return
+            token = await self._shielded(self._hand_over_unless_the_job_yields(finished))
+            if token is not None:
+                await self._wait_for_the_frontend(token)
+
+    async def _wait_for_the_frontend(self, token: str) -> None:
+        try:
+            await asyncio.wait_for(self._rules.wait_for_lease_end(token), timeout=_BATCH_WAIT_SECONDS)
+        except TimeoutError:
+            self._stopped = True
+            self._logger.warning(
+                f"Shortcut artwork: the frontend has not finished a batch after {_BATCH_WAIT_SECONDS:.0f}s; "
+                "the run ends"
+            )
 
     async def _renderer_is_full(self) -> bool:
         if not await self._renderer_above_ceiling()():
@@ -543,9 +568,10 @@ class ShortcutArtworkService:
             return None
         return plan.logo_path
 
-    async def _hand_over_unless_the_job_yields(self, finished: list[_Finished | _SlotReady]) -> None:
+    async def _hand_over_unless_the_job_yields(self, finished: list[_Finished | _SlotReady]) -> str | None:
+        """Emit *finished* under a lease; answer its token once a panel heard it, else ``None``."""
         if self._yields_now():
-            return
+            return None
         # A pick on the game page since the job read the generation wins: for
         # the logo icon the batch would otherwise set Tender's file over the pick.
         icons = [
@@ -559,14 +585,18 @@ class ShortcutArtworkService:
             if isinstance(ready, _SlotReady)
         ]
         if not icons and not artwork:
-            return
-        heard = await self._rules.emit_under_lease(
-            "shortcut_artwork",
-            lambda token: self._emit(
+            return None
+        sent: list[str] = []
+
+        async def emit(token: str) -> bool:
+            sent.append(token)
+            return await self._emit(
                 "shortcut_artwork", {"icons": icons, "artwork": artwork, "prune_lease_token": token}
-            ),
-        )
-        if not heard:
-            self._stopped = True
-            self._logger.info("Shortcut artwork: no panel heard the batch; the job runs again once one connects")
-            self._wait_for_a_panel()
+            )
+
+        if await self._rules.emit_under_lease("shortcut_artwork", emit):
+            return sent[0]
+        self._stopped = True
+        self._logger.info("Shortcut artwork: no panel heard the batch; the job runs again once one connects")
+        self._wait_for_a_panel()
+        return None

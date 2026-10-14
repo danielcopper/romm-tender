@@ -25,6 +25,8 @@ from services import shortcut_artwork
 from services.shortcut_artwork import ShortcutArtworkService, ShortcutArtworkServiceConfig
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from lib.prune_conflicts import PruneConflicts
 
 _PLACEHOLDER = f"/grid/{PLACEHOLDER_ICON_NAME}"
@@ -164,6 +166,11 @@ class _Job:
         self.readings = 0
         self.clock = FakeClock()
         self.prune_conflicts = prune_conflicts or _make_prune_conflicts()
+        # The frontend: it gives a heard batch's lease back once it is done
+        # with the batch, unless a test holds them in ``held_leases``.
+        self.frontend_holds = False
+        self.held_leases: list[str] = []
+        self._releases: set[asyncio.Task[None]] = set()
         self.uow = uow = FakeUnitOfWork()
         with uow:
             for app_id, rom_id in bound.items():
@@ -190,7 +197,7 @@ class _Job:
                 uow_factory=FakeUnitOfWorkFactory(uow=uow),
                 settings=self.settings,
                 conflict_rules=_make_conflict_rules(prune_conflicts=self.prune_conflicts),
-                emit=self.sink.emit,
+                emit=self._emit,
                 sleeper=self.sleeper,
                 clock=self.clock,
                 sync_in_flight=lambda: self.sync_running,
@@ -204,6 +211,18 @@ class _Job:
                 log_debug=lambda msg: None,
             )
         )
+
+    async def _emit(self, name: str, payload: Any, /) -> bool:
+        heard = await self.sink.emit(name, payload)
+        if heard and name == "shortcut_artwork":
+            token = payload["prune_lease_token"]
+            if self.frontend_holds:
+                self.held_leases.append(token)
+            else:
+                release = asyncio.get_running_loop().create_task(self.prune_conflicts.release_lease(token))
+                self._releases.add(release)
+                release.add_done_callback(self._releases.discard)
+        return heard
 
     async def run(self, expect_error: bool = False, **options: Any) -> None:
         self.service.request_run(**options)
@@ -1113,7 +1132,7 @@ class TestABatchNobodyHeard:
 
         assert job.source.fetched == [1, 1, 2]
         assert job.delivered() == {100: "/grid/100_icon.png", 200: "/grid/200_icon.png"}
-        assert job.prune_conflicts.held_claims().count("shortcut_artwork") == 2
+        assert job.prune_conflicts.held_claims() == ()
 
     @pytest.mark.asyncio
     async def test_shutdown_cancels_waiting_for_a_panel(self):
@@ -1337,6 +1356,116 @@ class TestTheWideGridAndTheLogo:
 
         assert job.source.slots_fetched == []
         assert job.sink.events == []
+
+
+class TestOneBatchAtATime:
+    """The next batch goes out only once the frontend has finished the one before it."""
+
+    @pytest.mark.asyncio
+    async def test_the_next_batch_is_not_handed_over_before_the_last_ones_lease_ends(self, monkeypatch):
+        monkeypatch.setattr(shortcut_artwork, "_BATCH_SIZE", 1)
+        job = _Job(icons={100: "", 200: ""}, bound={100: 1, 200: 2})
+        job.frontend_holds = True
+        job.service.request_run()
+        task = job.service._task
+        assert task is not None
+
+        await _until(lambda: len(job.batches()) == 1)
+        for _ in range(20):
+            await asyncio.sleep(0)
+        assert len(job.batches()) == 1
+
+        await job.prune_conflicts.release_lease(job.held_leases[0])
+        await _until(lambda: len(job.batches()) == 2)
+        await job.prune_conflicts.release_lease(job.held_leases[1])
+        await asyncio.wait_for(task, timeout=5)
+
+        assert job.delivered() == {100: "/grid/100_icon.png", 200: "/grid/200_icon.png"}
+
+    @pytest.mark.asyncio
+    async def test_the_reading_before_a_batch_is_taken_once_the_one_before_it_is_given_back(self, monkeypatch):
+        monkeypatch.setattr(shortcut_artwork, "_BATCH_SIZE", 1)
+        job = _Job(icons={100: "", 200: ""}, bound={100: 1, 200: 2})
+        job.frontend_holds = True
+        steps: list[str] = []
+        reading = job.service._renderer_above_ceiling()
+
+        async def recorded_reading() -> bool:
+            steps.append("reading")
+            return await reading()
+
+        job.service._renderer_above_ceiling = lambda: recorded_reading
+        job.service.request_run()
+        task = job.service._task
+        assert task is not None
+
+        await _until(lambda: len(job.held_leases) == 1)
+        for _ in range(20):
+            await asyncio.sleep(0)
+        steps.append("released")
+        await job.prune_conflicts.release_lease(job.held_leases[0])
+        await _until(lambda: len(job.held_leases) == 2)
+        await job.prune_conflicts.release_lease(job.held_leases[1])
+        await asyncio.wait_for(task, timeout=5)
+
+        assert steps == ["reading", "released", "reading"]
+
+    @pytest.mark.asyncio
+    async def test_a_lease_that_expires_ends_the_wait(self, monkeypatch):
+        from lib import prune_conflicts
+
+        monkeypatch.setattr(shortcut_artwork, "_BATCH_SIZE", 1)
+        monkeypatch.setattr(prune_conflicts, "_LEASE_SECONDS", 0.01)
+        job = _Job(icons={100: "", 200: ""}, bound={100: 1, 200: 2})
+        job.frontend_holds = True
+        job.service.request_run()
+        task = job.service._task
+        assert task is not None
+
+        await asyncio.wait_for(task, timeout=5)
+
+        assert job.delivered() == {100: "/grid/100_icon.png", 200: "/grid/200_icon.png"}
+
+    @pytest.mark.asyncio
+    async def test_a_batch_the_frontend_does_not_finish_within_the_bound_ends_the_run(self, monkeypatch, caplog):
+        monkeypatch.setattr(shortcut_artwork, "_BATCH_SIZE", 1)
+        monkeypatch.setattr(shortcut_artwork, "_BATCH_WAIT_SECONDS", 0.01)
+        job = _Job(icons={100: "", 200: ""}, bound={100: 1, 200: 2})
+        job.frontend_holds = True
+        job.service.request_run()
+        task = job.service._task
+        assert task is not None
+
+        with caplog.at_level(logging.WARNING, logger="test_shortcut_artwork"):
+            await asyncio.wait_for(task, timeout=5)
+
+        assert len(job.batches()) == 1
+        assert "has not finished a batch" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_a_batch_nobody_heard_is_not_waited_for(self, monkeypatch):
+        monkeypatch.setattr(shortcut_artwork, "_BATCH_SIZE", 1)
+        job = _Job(icons={100: ""}, bound={100: 1})
+        job.sink.delivers = False
+        job.connected = False
+        job.sleeper.sleep = lambda _sec: asyncio.sleep(10)  # type: ignore[method-assign]
+        job.service.request_run()
+        task = job.service._task
+        assert task is not None
+
+        await asyncio.wait_for(task, timeout=5)
+
+        assert job.prune_conflicts.held_claims() == ()
+        assert job.service._waiting_for_a_panel is not None
+        await job.service.shutdown()
+
+
+async def _until(condition: Callable[[], bool]) -> None:
+    async def poll() -> None:
+        while not condition():
+            await asyncio.sleep(0)
+
+    await asyncio.wait_for(poll(), timeout=5)
 
 
 class TestSteamsRendererMemory:

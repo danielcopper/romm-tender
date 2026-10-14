@@ -763,16 +763,19 @@ the game page.
   `(app_id, rom_id, slot)` triples that carry no image. `applyShortcutArtwork` (`utils/shortcutArtwork.ts`) sets each
   icon, then each wide grid and logo one at a time: it fetches the image's base64 through `get_sgdb_slot_artwork` —
   which skips a slot that has filled since — sets it with `SetCustomArtworkForApp`, waits, reports the outcome through
-  `report_sgdb_slot_artwork`, and only then fetches the next (`setJobSlotArtwork` in `utils/artwork.ts`). So one image
-  at a time is in the renderer, an image too large fails only its own call, and what is set is what the cache holds at
-  that moment. It gives the lease back after the last, and stops once the lease is cancelled. A batch no panel heard —
-  Steam restarted, as it does at every switch between Game Mode and Desktop Mode — ends the run, and the job runs again
-  once a panel is connected.
-- **Steam's memory:** before each batch the job reads the renderer's memory through the sync's own
-  `SessionBudgetMonitor` (`LibraryService.renderer_above_ceiling`; at or above `GC_SKIP_BELOW_KB` Steam collects its
-  garbage first, bounded at about 5 s). At or above the session budget's ceiling the run ends without handing the batch
-  over; only a Steam restart frees that memory, so the job waits for the panel to go and a panel to connect again —
-  polled every 5 s — and the next sync asks for it too. What was not handed over stays on the worklist.
+  `report_sgdb_slot_artwork`, and only then fetches the next (`setJobSlotArtwork` in `utils/artwork.ts`). It gives the
+  lease back after the last, and stops once the lease is cancelled. The job hands the next batch over only once that
+  lease has ended — given back, disowned by a panel that mounts, or expired — so one image at a time is in the renderer
+  across batches too, an image too large fails only its own call, and what is set is what the cache holds at that
+  moment. It waits at most 10 minutes (`_BATCH_WAIT_SECONDS`), past the frontend's 5-minute bound on a batch and the
+  lease's 300 s expiry, and ends the run when a batch outlasts that. A batch no panel heard — Steam restarted, as it
+  does at every switch between Game Mode and Desktop Mode — ends the run, and the job runs again once a panel is
+  connected.
+- **Steam's memory:** before each batch, so after the batch before it has been set, the job reads the renderer's memory
+  through the sync's own `SessionBudgetMonitor` (`LibraryService.renderer_above_ceiling`; at or above `GC_SKIP_BELOW_KB`
+  Steam collects its garbage first, bounded at about 5 s). At or above the session budget's ceiling the run ends without
+  handing the batch over; only a Steam restart frees that memory, so the job waits for the panel to go and a panel to
+  connect again — polled every 5 s — and the next sync asks for it too. What was not handed over stays on the worklist.
 - **Triggers:** the end of every sync run — after an apply, 10 s later, so Steam has rewritten its file with the
   shortcuts the run minted — backend start once a panel is connected, the end of a removed-game cleanup and the end of a
   shortcut removal (one whose lease expires, or is released as orphaned when a panel mounts, leaves it to the next
