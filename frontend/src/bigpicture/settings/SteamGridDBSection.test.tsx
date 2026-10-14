@@ -12,6 +12,7 @@ type AnyProps = Record<string, unknown> & { children?: unknown };
 vi.mock("@decky/ui", () => ({
   PanelSection: (p: AnyProps) => createElement("section", {}, p.children as never),
   PanelSectionRow: (p: AnyProps) => createElement("div", {}, p.children as never),
+  Focusable: (p: AnyProps) => createElement("div", {}, p.children as never),
   Field: (p: AnyProps & { label?: unknown; description?: unknown }) =>
     createElement(
       "div",

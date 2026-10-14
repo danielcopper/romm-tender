@@ -6,7 +6,7 @@
  */
 
 import { FC } from "react";
-import { PanelSection, PanelSectionRow, DialogButton, Field, showModal } from "@decky/ui";
+import { PanelSection, PanelSectionRow, DialogButton, Field, Focusable, showModal } from "@decky/ui";
 import { SgdbApiKeyModal } from "./SgdbApiKeyModal";
 import type { VerifyKeyResult } from "./SgdbApiKeyModal";
 import { detach } from "../../utils/detach";
@@ -28,20 +28,19 @@ export const SteamGridDBSection: FC<SteamGridDBSectionProps> = ({
     <PanelSection title="SteamGridDB">
       <PanelSectionRow>
         <Field label="API Key" description={sgdbApiKey ? "••••" : "Not configured"}>
-          <DialogButton
-            style={{ minWidth: "auto", width: "auto" }}
-            onClick={() => showModal(<SgdbApiKeyModal onVerify={onVerifyKey} onSave={onSaveKey} />)}
-          >
-            Edit
-          </DialogButton>
-          {sgdbApiKey && (
+          <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
             <DialogButton
-              style={{ minWidth: "auto", width: "auto", marginLeft: "8px" }}
-              onClick={() => detach(onRemoveKey())}
+              style={{ minWidth: "auto", width: "auto" }}
+              onClick={() => showModal(<SgdbApiKeyModal onVerify={onVerifyKey} onSave={onSaveKey} />)}
             >
-              Remove
+              Edit
             </DialogButton>
-          )}
+            {sgdbApiKey && (
+              <DialogButton style={{ minWidth: "auto", width: "auto" }} onClick={() => detach(onRemoveKey())}>
+                Remove
+              </DialogButton>
+            )}
+          </Focusable>
         </Field>
       </PanelSectionRow>
     </PanelSection>
