@@ -1,7 +1,7 @@
 /**
- * Multi-disc selection logic both surfaces' disc pickers share: what the picker
- * shows for a selection, fetching it, and applying a pick under a prune lease.
- * The glyphs and the menu's options are UI, in `shared/DiscGlyphs.tsx`.
+ * A multi-disc game's disc selection: what the picker shows for it, reading it,
+ * and applying a pick under a prune lease. The glyphs and the menu's options are
+ * UI, in `shared/DiscGlyphs.tsx`.
  */
 
 import { getDiscSelection, selectDisc, logError, logWarn } from "../api/backend";
@@ -30,12 +30,16 @@ export function computeDiscDisplayState(
   selection: DiscSelection | null | undefined,
   selected: DiscOptionData,
 ): DiscDisplayState | null {
+  // Single-disc / unknown / not-installed → render nothing.
   if (!selection?.multi_disc || !selection.discs || !selection.default) return null;
 
   const { discs, default: dflt } = selection;
   const isM3u = dflt.kind === "m3u";
+  // The effective pin: an explicit selection, else the default target (null for
+  // m3u, disc 1's filename otherwise).
   const effectiveSelected: DiscOptionData = selected ?? (isM3u ? null : dflt.filename);
   const isPinned = selected !== null;
+  // The m3u playlist is active only when the default is m3u and nothing is pinned.
   const showPlaylistFace = isM3u && selected === null;
   const activeDisc = discs.find((d) => d.filename === effectiveSelected);
   const activeNum = activeDisc ? (/\d+/.exec(activeDisc.label)?.[0] ?? String(activeDisc.index)) : "";
@@ -70,18 +74,8 @@ export interface ExecuteDiscSelectionParams {
   logTag?: string;
 }
 
-/**
- * Executes a disc selection change with prune lease protection.
- *
- * If backend selection succeeds:
- * - Reconciles re-baked launch options if provided.
- * - Confirms with SteamClient shortcuts.
- * - Invokes `onSelected` with the updated selected disc.
- *
- * If backend selection fails or is cancelled:
- * - Prune lease cancellations are logged as warnings and suppressed.
- * - Unexpected errors and failure reasons surface a user toast.
- */
+/** Pin the disc *data* (`null` follows the default again) and confirm the re-baked
+ *  launch command on the shortcut; *onSelected* hears the pin once it holds. */
 export async function executeDiscSelection({
   appId,
   romId,

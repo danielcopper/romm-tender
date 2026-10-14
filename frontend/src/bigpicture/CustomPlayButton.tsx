@@ -874,14 +874,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   };
 
   // Resume an already-running game: bring it to the foreground instead of
-  // launching (#1313). Foregrounding is pure UI focus navigation the way Steam's
-  // own gamescope "Resume Game" does it — `SteamUIStore.SetRunningApp(appId)` +
-  // `NavigateToRunningApp()` — NOT a launch: it fires no `GameActionStart` (so the
-  // launch interceptor never re-enters) and shows no "already running" dialog, so
-  // the pre-launch sync funnel never runs mid-session (which would upload the save
-  // while the emulator holds the file open). `RaiseWindowForGame` (the prior
-  // approach) is a DESKTOP-overlay call that silently no-ops in gamescope Game Mode
-  // — it reports Success but does nothing — so it is not used here.
+  // launching (`activateRunningApp` says how, and why it is not a launch).
   const handleResumeGame = async () => {
     // Liveness gate: the overlay can go stale (a session that ended without a stop
     // event reaching this button). If nothing is actually running, clear the
@@ -1026,13 +1019,10 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   };
 
   /**
-   * Run a forget of this ROM's install record (an uninstall goes through
-   * `executeRomUninstall`) and, once the backend has answered success, reset
-   * the shortcut's now-stale launch command to the uninstalled "" placeholder
-   * under the removal's lease and announce the ROM as not installed. The reset
-   * keeps a raced-past not_installed launch from exec'ing a stale
-   * `flatpak run … '<path>'` (#1051); it is best-effort, so a launch-options
-   * hiccup never turns a removal that happened into an error.
+   * Run a forget of this ROM's install record and, once the backend has answered
+   * success, reset the shortcut's launch command under the removal's lease and
+   * announce the ROM as not installed — the reset `executeRomUninstall` makes after
+   * an uninstall, for the reason given there.
    */
   const removeInstallRecord = async <R extends { success: boolean; prune_lease_token?: string }>(
     rid: number,

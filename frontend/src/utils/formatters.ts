@@ -20,12 +20,15 @@ export function formatLastPlayed(timestamp: number): string {
   return date.toLocaleDateString(undefined, { ...SHORT_DATE, year: "numeric" });
 }
 
-/**
- * Resolve the last-played label, preferring the restored ISO timestamp over
- * Steam's recorded unix seconds when present. A restored value without an offset
- * is a RomM play-session `end_time`, which RomM sends in UTC, so it is read as UTC
- * rather than as local time; the end times Tender records carry their offset.
- */
+/** Resolve the LAST PLAYED display, preferring our restored cross-device
+ *  `last_played` (ISO-8601, from `reconcile_playtime` / native play sessions,
+ *  #1294) over Steam's device-local `rt_last_time_played`. Steam synthesizes the
+ *  latter to "now" after a device cutover, so the restored value wins whenever
+ *  it parses; a null or unparseable restored value falls back to Steam's
+ *  Unix-seconds value. Both route through `formatLastPlayed` so the rendered
+ *  format is identical either way. A restored value without an offset is a RomM
+ *  play-session `end_time`, which RomM sends in UTC, so it is read as UTC rather
+ *  than as local time; the end times Tender records carry their offset. */
 export function resolveLastPlayed(restoredIso: string | null, steamUnixSeconds: number): string {
   if (restoredIso) {
     const normalized =

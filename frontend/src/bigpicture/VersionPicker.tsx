@@ -202,23 +202,19 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
   }, [appId, leaseOwner]);
 
   // Lazily fetch a cover for every version once the list is known, via the
-  // cache-first fetchCoverBase64 (#1346).
+  // cache-first fetchCoverBase64 (#1346): a synced version resolves from the
+  // per-ROM cover cache, and a not-yet-synced sibling downloads its cover from
+  // RomM once (coversRequested dedupes). Loading here — on the list load, not on
+  // menu open — is deliberate: showContextMenu renders a static element, so a
+  // cover fetched after the menu opened would not appear until it reopened;
+  // loading now means covers are ready by the first open, and cache-first keeps
+  // repeat renders cheap. Rows still without art keep the FaCompactDisc fallback.
   useEffect(() => {
     return fetchVersionCovers(versionList?.versions, coversRequested.current, (romId, base64) => {
       setCovers((prev) => ({ ...prev, [romId]: base64 }));
     });
   }, [versionList]);
 
-  // Apply a successful switch: confirm-write the target's launch command onto the
-  // Steam shortcut (blank for an uninstalled target — intended, so the shortcut
-  // never keeps the old version's command), then invalidate the cache and
-  // broadcast the switch so sibling surfaces re-read the new binding.
-  //
-  // The backend rebind is ALREADY committed by the time we get here, so the
-  // cache-invalidate + broadcast must always run — even if the launch-command
-  // write fails or throws. A missed confirm only leaves the shortcut on a stale
-  // command; it self-heals at the next startup/sync reconcile, so we warn and
-  // nudge the user rather than reporting the whole switch as failed.
   const refreshAfterVanishedRefusal = (): Promise<void> => {
     const loader = loadVersionListRef.current;
     if (loader?.appId !== appId) return Promise.resolve();

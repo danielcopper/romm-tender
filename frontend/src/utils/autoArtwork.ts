@@ -1,6 +1,5 @@
 /**
- * Auto-artwork for a ROM shortcut's game page: SteamGridDB artwork once per
- * (appId, romId) pair.
+ * The game page's automatic SteamGridDB artwork apply.
  */
 
 import { useEffect } from "react";
@@ -17,8 +16,6 @@ export function _resetArtworkAppliedForTests(): void {
 }
 
 /**
- * Hook to auto-apply SteamGridDB artwork once per (appId, romId) pair.
- *
  * @param appId Steam shortcut App ID
  * @param romId RomM ROM ID, or null if unassigned / unknown
  * @param logContext Prefix for debug logging on failure

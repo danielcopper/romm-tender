@@ -1,12 +1,12 @@
 /**
  * SGDB artwork apply — writes a ROM's SGDB hero, logo, wide grid and icon onto
- * its Steam shortcut. Shared by RomMPlaySection (a first visit's fill of the
- * empty slots, and the replacing apply of a version switch and of Refresh
- * Artwork) and SgdbGamePickerModal (the replacing apply after a manual game-id
- * pick), so it lives here rather than on either component to keep their import
- * graph acyclic. The shortcut artwork job's writes (`utils/shortcutArtwork.ts`) ask
- * it whether an apply is under way, and set the job's wide grids and logos
- * through it.
+ * its Steam shortcut. Shared by the game page — `useAutoArtwork`'s fill of the
+ * empty slots on a first visit and replacing apply after a version switch, and
+ * RomMPlaySection's Refresh Artwork — and SgdbGamePickerModal (the replacing
+ * apply after a manual game-id pick), so it lives here rather than on any one
+ * component to keep their import graph acyclic. The shortcut artwork job's
+ * writes (`utils/shortcutArtwork.ts`) ask it whether an apply is under way, and
+ * set the job's wide grids and logos through it.
  */
 
 import {

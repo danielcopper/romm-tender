@@ -1,10 +1,6 @@
 /**
- * Core change detection utility.
- *
- * Detects whether the emulator core configured for a game changed since its last
- * launch. If changed, prompts the user via a UI-appropriate confirmation dialog
- * (Big Picture modal or Desktop dialog) warning of potential save-compatibility
- * issues.
+ * Whether a game's core changed since its last launch, and asking about it before
+ * the launch goes on.
  */
 
 import { checkCoreChange } from "../api/backend";

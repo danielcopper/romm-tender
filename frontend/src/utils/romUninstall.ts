@@ -1,12 +1,6 @@
 /**
- * ROM uninstallation lifecycle utility.
- *
- * Encapsulates the complete removal workflow shared between Desktop and Big Picture:
- *   1. Capturing prune lease admission
- *   2. Invoking backend `remove_rom`
- *   3. Executing the prune lease continuation (clearing shortcut launch options
- *      and dispatching `romm_rom_uninstalled`)
- *   4. Surfacing toast feedback and handling unmount/cancellation without false error toasts
+ * Uninstalling a ROM: the backend removal, the launch-command reset that follows
+ * it, and saying how it went.
  */
 
 import { removeRom, debugLog } from "../api/backend";
@@ -41,8 +35,11 @@ export async function executeRomUninstall(options: RomUninstallOptions): Promise
       return false;
     }
 
-    // Why the launch command is reset, and why best-effort: `removeInstallRecord`'s
-    // docstring in `bigpicture/CustomPlayButton.tsx`.
+    // Reset the shortcut's now-stale launch command to the uninstalled ""
+    // placeholder under the removal's lease. The reset keeps a raced-past
+    // not_installed launch from exec'ing a stale `flatpak run … '<path>'` (#1051);
+    // it is best-effort, so a launch-options hiccup never turns a removal that
+    // happened into an error.
     await withPruneLease(
       result.prune_lease_token,
       context,
@@ -53,15 +50,17 @@ export async function executeRomUninstall(options: RomUninstallOptions): Promise
       leaseOwner,
       currentAdmission,
     );
-    // The backend has removed the ROM whether or not the reset above ran to the
-    // end, so the game page and the pickers hear about it either way.
+    // The backend has removed the ROM whether the reset above ran to the end or
+    // its signal aborted it, so the game page and the pickers hear about it in
+    // both cases.
     globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: romId } }));
 
     showToast(`${romName || "ROM"} uninstalled`);
     return true;
   } catch (e) {
-    // The backend uninstall already committed before the continuation was torn
-    // down; reporting it as a failure would be a lie the user can't act on.
+    // A throw once the page's admission is stale is its teardown, not a failure the
+    // user can act on: the page is gone, and where the lease was refused the backend
+    // uninstall had already committed.
     if (isPruneLeaseCancellation(e, currentAdmission)) {
       detach(debugLog(`${tag}: continuation was cancelled: ${e}`));
       return false;

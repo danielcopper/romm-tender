@@ -1,6 +1,5 @@
 /**
- * The faces of a multi-disc picker, and the options its menu lists — what both
- * surfaces' disc pickers draw over `utils/discSelection.ts`.
+ * The faces of a multi-disc picker, and the options its menu lists.
  */
 
 import type { FC, ReactNode } from "react";
@@ -13,11 +12,9 @@ import type { DiscOptionData } from "../utils/discSelection";
 export const DISC_GREY = "#dcdedf";
 export const DISC_ACCENT = "#59b6ff";
 
-/**
- * Two CDs stacked top-left -> bottom-right: the front (opaque) disc at the
+/** Two CDs stacked top-left → bottom-right: the front (opaque) disc at the
  * top-left, one behind it trailing down-right and faded — the m3u "all discs"
- * face. The back disc renders first so the front one is on top.
- */
+ * face. The back disc renders first so the front one is on top. */
 export const DiscStack: FC<{ size: number; color: string }> = ({ size, color }) => {
   const step = Math.round(size * 0.3);
   return (
