@@ -29,7 +29,8 @@ import { DiscSelector } from "./DiscSelector";
 import { VersionPicker } from "./VersionPicker";
 import { WarningCard } from "./WarningCard";
 import { SgdbGamePickerModalContent } from "./SgdbGamePickerModal";
-import { applyArtwork, cancelArtworkApply, fillEmptyArtwork } from "../utils/artwork";
+import { applyArtwork, cancelArtworkApply } from "../utils/artwork";
+import { useAutoArtwork } from "../utils/autoArtwork";
 import { hasAnySaveConflict } from "../utils/saveStatus";
 import { scrollToTop } from "../utils/scrollHelpers";
 import { getEventTarget } from "../utils/events";
@@ -39,29 +40,23 @@ import {
   getSgdbResolution,
   getRomMetadata,
   refreshCoverArtwork,
-  removeRom,
   downloadAllFirmware,
   deleteLocalSaves,
-  setGameCore,
-  clearGameCore,
-  reconcilePlaytime,
   debugLog,
 } from "../api/backend";
 import { isStrandedPanelFailure } from "../api/host";
 import { executeManualSaveSync } from "../utils/manualSaveSync";
-import { setLaunchOptionsConfirmed } from "../utils/steamShortcuts";
+import { executeRomUninstall } from "../utils/romUninstall";
 import {
   capturePruneLeaseAdmission,
-  isPruneLeaseCancelled,
   isPruneLeaseCancellation,
   mountPruneLeaseOwner,
   releasePruneLeasesByOwner,
-  withPruneLease,
-  type PruneLeaseAdmission,
 } from "../utils/pruneLease";
-import { updatePlaytimeDisplay } from "../utils/metadataPatches";
+import { applyGameCoreChange } from "../utils/coreOverride";
+import { useGamePlaytime } from "../utils/playtimeReconcile";
 import { buildEmulatorMenu } from "../utils/emulatorMenu";
-import { formatBytes, formatLastPlayed, formatPlaytime } from "../utils/formatters";
+import { formatBytes } from "../utils/formatters";
 import { BIOS_MISSING_RED } from "../utils/biosColor";
 import { timeoutMs } from "../utils/playSection";
 import {
@@ -72,11 +67,6 @@ import {
   refreshSaveStatus,
   useGameDetail,
 } from "../utils/gameDetailStore";
-
-/** Which rom_id each appId has had auto-artwork applied for this session. Keyed
- *  on the pair, not the appId alone: a version switch re-binds the appId to a
- *  new rom_id whose artwork has to be applied afresh (#1298 item 3). */
-const artworkApplied = new Map<number, number>();
 
 /** How long the authoritative connection check may run before the wait itself is
  *  worth a log line. It is NOT a deadline after which the server counts as
@@ -94,21 +84,6 @@ let connectionCheckSeq = 0;
  *  abandoned before it answers (its page closed while the server was still
  *  thinking) from silencing the verdict of a page that is still open. */
 let lastSettledCheckId = 0;
-
-/** Resolve the LAST PLAYED display, preferring our restored cross-device
- *  `last_played` (ISO-8601, from `reconcile_playtime` / native play sessions,
- *  #1294) over Steam's device-local `rt_last_time_played`. Steam synthesizes the
- *  latter to "now" after a device cutover, so the restored value wins whenever
- *  it parses; a null or unparseable restored value falls back to Steam's
- *  Unix-seconds value. Both route through `formatLastPlayed` so the rendered
- *  format is identical either way. */
-function resolveLastPlayed(restoredIso: string | null, steamUnixSeconds: number): string {
-  if (restoredIso) {
-    const ms = Date.parse(restoredIso);
-    if (!Number.isNaN(ms)) return formatLastPlayed(Math.floor(ms / 1000));
-  }
-  return formatLastPlayed(steamUnixSeconds);
-}
 
 /** Read this ROM's save status through the store and tell the other save-sync
  *  surfaces what came back.
@@ -149,21 +124,6 @@ async function readAndBroadcastSaveStatus(appId: number, isCancelled: () => bool
 interface RomMPlaySectionProps {
   appId: number;
 }
-
-/** The play section's own display state. Everything the game page's surfaces
- *  share — rom identity, install state, save sync, BIOS, core — lives in the
- *  per-appId game-detail store instead; what stays here is the PLAYTIME /
- *  LAST PLAYED pair, which is read from Steam's overview and belongs to this
- *  row alone. */
-interface PlaytimeState {
-  lastPlayed: string;
-  /** Restored cross-device `last_played` (ISO-8601) from `reconcile_playtime`,
-   *  or `null` until the server yields one. Preferred over Steam's device-local
-   *  `rt_last_time_played` when rendering LAST PLAYED (#1294). */
-  restoredLastPlayed: string | null;
-  playtime: string;
-}
-
 import {
   onRommConnectionChange,
   setRommConnectionState,
@@ -187,22 +147,11 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   const versionError = useVersionError();
   const migration = useMigrationStatus();
 
-  // Read playtime from Steam's own overview synchronously (already written by metadataPatches)
-  // This avoids an unnecessary render from setting it inside the async effect.
-  const overview = appStore.GetAppOverviewByAppID(appId);
-  const initialLastPlayed = formatLastPlayed(overview?.rt_last_time_played ?? 0);
-  const initialPlaytime = formatPlaytime(overview?.minutes_playtime_forever ?? 0);
-
   // Every field the game page's surfaces share — rom identity, install state,
   // save sync, BIOS, core selection — comes from the per-appId store, which owns
   // the reads and the romm_data_changed fold for all of them (#993).
   const detail = useGameDetail(appId);
   const fileMissing = detail.fileMissingAt !== null;
-  const [playtimeInfo, setPlaytimeInfo] = useState<PlaytimeState>({
-    lastPlayed: initialLastPlayed,
-    restoredLastPlayed: null,
-    playtime: initialPlaytime,
-  });
   // Badge derives from the shared store so it appears/disappears live on any
   // reachability signal (mount check, a failed/succeeded call, or the offline
   // recovery probe), not just at this mount's check (#1345).
@@ -224,24 +173,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     };
   }, [appId]);
 
-  // Apply SGDB artwork once per (appId, rom_id). A first visit fills only the
-  // empty slots, so an image already there keeps it; a version switch (an
-  // earlier rom_id applied for this appId) replaces every slot, as Refresh
-  // Artwork does. Marked applied once the apply resolves, so a slot whose fetch
-  // failed is asked again in the next session; an apply that throws — cut
-  // short by leaving the page, or a Steam write failing in the replacing apply
-  // — is not marked, and the next visit applies again.
-  useEffect(() => {
-    const romId = detail.romId;
-    const appliedRomId = artworkApplied.get(appId);
-    if (!romId || appliedRomId === romId) return;
-    const apply = appliedRomId === undefined ? fillEmptyArtwork : applyArtwork;
-    apply(romId, appId)
-      .then(() => {
-        artworkApplied.set(appId, romId);
-      })
-      .catch((e) => debugLog(`Auto-artwork error: ${e}`));
-  }, [appId, detail.romId]);
+  useAutoArtwork(appId, detail.romId, "Auto-artwork error");
 
   // Connection check — exactly one per mount, issued before this page's other
   // RomM reads rather than behind them. Keyed on appId alone: the verdict is
@@ -435,77 +367,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     };
   }, [appId]);
 
-  // Reconcile-on-view (#868) — pull-only: folds RomM's play-session history into
-  // the local total so a session played on another device shows up the moment the
-  // detail page opens. INTENTIONALLY NOT gated on connectivity (#1345): reconcile
-  // returns the LOCAL total even when the server is unreachable, so it re-injects
-  // real playtime into a rebuilt/rebound Steam overview instead of leaving it at
-  // "PLAYTIME None". Runs once romId is known (its own effect, so it fires after
-  // the store resolves romId rather than racing the connection check). Pushes
-  // the total through updatePlaytimeDisplay (the write-chokepoint), which emits
-  // romm_playtime_changed; the reactive PLAYTIME effect (#869) refreshes the
-  // display on the same mount. A 0 total no-ops in updatePlaytimeDisplay.
-  useEffect(() => {
-    const romId = detail.romId;
-    if (!romId) return;
-    let cancelled = false;
-
-    async function doReconcilePlaytime(rid: number, isCancelled: () => boolean) {
-      try {
-        const result = await reconcilePlaytime(rid);
-        if (isCancelled()) return;
-        if ("success" in result) {
-          detach(debugLog(`RomMPlaySection: playtime reconcile deferred: ${result.message}`));
-          return;
-        }
-        if (!result.server_query_failed) {
-          // Connected: adopt the restored cross-device last_played (#1294) and
-          // refresh the display from it. Set BEFORE updatePlaytimeDisplay so the
-          // synchronous romm_playtime_changed handler reads the new value; also
-          // covers the sub-minute total case where updatePlaytimeDisplay emits no
-          // signal. Skipped on a failed read — no cross-device push offline.
-          const steamSecs = appStore.GetAppOverviewByAppID(appId)?.rt_last_time_played ?? 0;
-          setPlaytimeInfo((prev) => ({
-            ...prev,
-            restoredLastPlayed: result.last_played,
-            lastPlayed: resolveLastPlayed(result.last_played, steamSecs),
-          }));
-        }
-        // Re-inject the local total regardless of connectivity (offline fix #1345).
-        updatePlaytimeDisplay(appId, result.total_seconds, false);
-      } catch (e) {
-        detach(debugLog(`RomMPlaySection: playtime reconcile error: ${e}`));
-      }
-    }
-
-    detach(doReconcilePlaytime(romId, () => cancelled));
-    return () => {
-      cancelled = true;
-    };
-  }, [detail.romId, appId]);
-
-  // Reactive PLAYTIME display (#869) — re-read Steam's overview whenever the
-  // playtime write-chokepoint (updatePlaytimeDisplay) fires romm_playtime_changed
-  // for this appId. Drives the displayed PLAYTIME / LAST PLAYED from the source
-  // of truth (the overview) instead of a mount-only snapshot, so a session end
-  // (handleGameStop) or a multi-device reconcile-on-view refreshes the value on
-  // the SAME mount — no navigate-away/back remount required.
-  useEffect(() => {
-    const onPlaytimeChanged = (e: WindowEventMap["romm_playtime_changed"]) => {
-      if (e.detail.appId !== appId) return;
-      const ov = appStore.GetAppOverviewByAppID(appId);
-      if (!ov) return;
-      setPlaytimeInfo((prev) => ({
-        ...prev,
-        playtime: formatPlaytime(ov.minutes_playtime_forever ?? 0),
-        lastPlayed: resolveLastPlayed(prev.restoredLastPlayed, ov.rt_last_time_played ?? 0),
-      }));
-    };
-    globalThis.addEventListener("romm_playtime_changed", onPlaytimeChanged);
-    return () => {
-      globalThis.removeEventListener("romm_playtime_changed", onPlaytimeChanged);
-    };
-  }, [appId]);
+  const playtimeInfo = useGamePlaytime(appId, detail.romId, "RomMPlaySection");
 
   // Helper: create an info item with header and value (Steam's two-line pattern)
   const infoItem = (key: string, header: string, value: string, extraClass?: string) => (
@@ -650,34 +512,15 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   const handleUninstall = async () => {
     if (actionPending || !detail.romId) return;
     setActionPending("uninstall");
-    const admission = capturePruneLeaseAdmission(`game-detail:${appId}`);
     try {
-      const result = await removeRom(detail.romId);
-      if (result.success) {
-        await withPruneLease(
-          result.prune_lease_token,
-          "Game detail uninstall",
-          async (signal) => {
-            if (isPruneLeaseCancelled(signal)) return;
-            await setLaunchOptionsConfirmed(appId, "").catch(() => false);
-            if (isPruneLeaseCancelled(signal)) return;
-            globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: detail.romId } }));
-          },
-          `game-detail:${appId}`,
-          admission,
-        );
-        showToast(`${detail.romName || "ROM"} uninstalled`);
-      } else {
-        showToast(result.message || "Uninstall failed");
-      }
-    } catch (e) {
-      // The backend uninstall already committed before the continuation was torn
-      // down; reporting it as a failure would be a lie the user can't act on.
-      if (isPruneLeaseCancellation(e, admission)) {
-        detach(debugLog(`handleUninstall: continuation was cancelled: ${e}`));
-        return;
-      }
-      showToast("Uninstall failed");
+      await executeRomUninstall({
+        romId: detail.romId,
+        appId,
+        romName: detail.romName,
+        leaseOwner: `game-detail:${appId}`,
+        context: "Game detail uninstall",
+        tag: "handleUninstall",
+      });
     } finally {
       setActionPending(null);
     }
@@ -727,80 +570,30 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     );
   };
 
-  /** Apply the result of a set/clear override call. The backend re-bakes the
-   *  launch_options + returns the bound app_id for an installed ROM; we
-   *  confirm-set them on the Steam shortcut BEFORE toasting success (R1). An
-   *  unconfirmed bake gets a DISTINCT "restart Steam" toast and the DB row is
-   *  KEPT — migration/re-sync re-bake from the pin. Uninstalled/unbound ROMs
-   *  carry no launch_options/app_id: persist-only, no SetAppLaunchOptions. */
-  const applyCoreResult = async (
-    result: Awaited<ReturnType<typeof setGameCore>>,
-    platformSlug: string,
-    successBody: string,
-    admission: PruneLeaseAdmission,
-  ) => {
-    await withPruneLease(result.success ? result.prune_lease_token : undefined, "Core selection", async (signal) => {
-      if (!result.success) {
-        showToast(result.message || "Failed to set core");
-        return;
-      }
-      // Installed + bound: confirm the re-baked launch_options landed before
-      // claiming success. app_id can be null/undefined for an unbound ROM.
-      if (result.launch_options !== undefined && result.app_id != null) {
-        if (isPruneLeaseCancelled(signal)) return;
-        const confirmed = await setLaunchOptionsConfirmed(result.app_id, result.launch_options);
-        if (isPruneLeaseCancelled(signal)) return;
-        if (!confirmed) {
-          // Never toast success on an unconfirmed bake. Keep the DB row — a Steam
-          // restart (or the next migration/re-sync) re-bakes from the override.
-          showToast("Core saved — restart Steam to apply");
-          return;
-        }
-      }
-      // Confirmed (or uninstalled/unbound: nothing to confirm) → success.
-      showToast(successBody);
-      await refreshCoreDisplay(platformSlug);
-    }, `game-detail:${appId}`, admission);
-  };
-
   const handleChangeGameCore = async (coreLabel: string) => {
     const romId = detail.romId;
     if (!romId || !detail.platformSlug) return;
     const platformSlug = detail.platformSlug;
-    detach(debugLog(`handleChangeGameCore: romId=${romId} coreLabel=${coreLabel}`));
-    const admission = capturePruneLeaseAdmission(`game-detail:${appId}`);
-    try {
-      const result = await setGameCore(romId, coreLabel);
-      detach(debugLog(`handleChangeGameCore: result success=${result.success}`));
-      await applyCoreResult(result, platformSlug, `Core set to ${coreLabel}`, admission);
-    } catch (e) {
-      // The core pin is persisted before the Steam continuation runs, so a
-      // teardown cancellation is not a "failed to set core" the user must see.
-      if (isPruneLeaseCancellation(e, admission)) {
-        detach(debugLog(`handleChangeGameCore: continuation was cancelled: ${e}`));
-        return;
-      }
-      showToast("Failed to set core");
-    }
+    await applyGameCoreChange({
+      romId,
+      coreLabel,
+      leaseOwner: `game-detail:${appId}`,
+      onSuccess: () => refreshCoreDisplay(platformSlug),
+      logTag: "handleChangeGameCore",
+    });
   };
 
   const handleResetGameCore = async () => {
     const romId = detail.romId;
     if (!romId || !detail.platformSlug) return;
     const platformSlug = detail.platformSlug;
-    detach(debugLog(`handleResetGameCore: romId=${romId}`));
-    const admission = capturePruneLeaseAdmission(`game-detail:${appId}`);
-    try {
-      const result = await clearGameCore(romId);
-      detach(debugLog(`handleResetGameCore: result success=${result.success}`));
-      await applyCoreResult(result, platformSlug, "Now following the system core", admission);
-    } catch (e) {
-      if (isPruneLeaseCancellation(e, admission)) {
-        detach(debugLog(`handleResetGameCore: continuation was cancelled: ${e}`));
-        return;
-      }
-      showToast("Failed to reset core");
-    }
+    await applyGameCoreChange({
+      romId,
+      coreLabel: null,
+      leaseOwner: `game-detail:${appId}`,
+      onSuccess: () => refreshCoreDisplay(platformSlug),
+      logTag: "handleResetGameCore",
+    });
   };
 
   const showCoreMenu = (e: Event) => {

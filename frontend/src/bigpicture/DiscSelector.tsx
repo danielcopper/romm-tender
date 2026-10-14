@@ -15,57 +15,27 @@
  * be multi-disc) and hides on `romm_rom_uninstalled`.
  */
 
-import { useState, useEffect, useRef, FC, ReactNode } from "react";
+import { useState, useEffect, useRef, type FC } from "react";
 import { addEventListener, removeEventListener } from "../api/host";
 import { Menu, MenuItem, showContextMenu, DialogButton } from "@decky/ui";
-import { FaCompactDisc, FaChevronDown } from "react-icons/fa";
-import { getCachedGameDetail, getDiscSelection, selectDisc, logError, logWarn } from "../api/backend";
+import { FaChevronDown } from "react-icons/fa";
+import { getCachedGameDetail, logError } from "../api/backend";
 import type { DiscSelection } from "../api/backend";
-import { setLaunchOptionsConfirmed } from "../utils/steamShortcuts";
 import { getEventTarget } from "../utils/events";
 import { detach } from "../utils/detach";
-import { showToast } from "../utils/toast";
 import type { DownloadCompleteEvent } from "../types";
+import { mountPruneLeaseOwner, releasePruneLeasesByOwner } from "../utils/pruneLease";
 import {
-  capturePruneLeaseAdmission,
-  isPruneLeaseCancellation,
-  mountPruneLeaseOwner,
-  releasePruneLeasesByOwner,
-  withPruneLease,
-} from "../utils/pruneLease";
+  type DiscOptionData,
+  computeDiscDisplayState,
+  fetchDiscSelection,
+  executeDiscSelection,
+} from "../utils/discSelection";
+import { DISC_GREY, DISC_ACCENT, DiscStack, DiscWithNumber, buildDiscOptions } from "../shared/DiscGlyphs";
 
 interface DiscSelectorProps {
   appId: number;
 }
-
-/** A disc option's `data` value: a disc filename, or `null` for the m3u default. */
-type DiscOptionData = string | null;
-
-// Neutral grey for the m3u default; Steam accent blue when a specific disc is
-// pinned — an instant "this isn't the default" read.
-const DISC_GREY = "#dcdedf";
-const DISC_ACCENT = "#59b6ff";
-
-/** Two CDs stacked top-left → bottom-right: the front (opaque) disc at the
- * top-left, one behind it trailing down-right and faded — the m3u "all discs"
- * face. The back disc renders first so the front one is on top. */
-const DiscStack: FC<{ size: number; color: string }> = ({ size, color }) => {
-  const step = Math.round(size * 0.3);
-  return (
-    <span style={{ position: "relative", display: "inline-block", width: size + step, height: size + step, color }}>
-      <FaCompactDisc size={size} style={{ position: "absolute", left: step, top: step, opacity: 0.55 }} />
-      <FaCompactDisc size={size} style={{ position: "absolute", left: 0, top: 0, opacity: 1 }} />
-    </span>
-  );
-};
-
-/** One CD + its number — the "Disc N" face. */
-const DiscWithNumber: FC<{ size: number; color: string; num: string }> = ({ size, color, num }) => (
-  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", color }}>
-    <FaCompactDisc size={size} />
-    <span style={{ fontWeight: 600, fontSize: `${Math.round(size * 0.6)}px` }}>{num}</span>
-  </span>
-);
 
 export const DiscSelector: FC<DiscSelectorProps> = ({ appId }) => {
   const leaseOwner = `disc-selector:${appId}`;
@@ -77,12 +47,10 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId }) => {
 
   // Resolve rom_id from the cached detail and fetch the disc selection.
   const fetchSelection = async (rid: number): Promise<void> => {
-    try {
-      const result = await getDiscSelection(rid);
+    const result = await fetchDiscSelection(rid, "DiscSelector");
+    if (result) {
       setSelection(result);
       setSelected(result.selected ?? null);
-    } catch (e) {
-      logError(`DiscSelector: getDiscSelection failed: ${e}`);
     }
   };
 
@@ -138,60 +106,21 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId }) => {
   const handleChange = async (data: DiscOptionData): Promise<void> => {
     const rid = romIdRef.current;
     if (rid == null) return;
-    const admission = capturePruneLeaseAdmission(leaseOwner);
-    try {
-      const result = await selectDisc(rid, data);
-      await withPruneLease(
-        result.success ? result.prune_lease_token : undefined,
-        "DiscSelector",
-        async (signal) => {
-          if (result.success) {
-            if (result.launch_options !== undefined) {
-              if (signal.aborted) return;
-              await setLaunchOptionsConfirmed(appId, result.launch_options);
-            }
-            if (signal.aborted) return;
-            setSelected(result.selected ?? null);
-          } else {
-            showToast(result.message || "Failed to select disc");
-          }
-        },
-        leaseOwner,
-        admission,
-      );
-    } catch (e) {
-      // Leaving the game page cancels the pick's continuation — the disc is
-      // already persisted backend-side, so that is teardown and not a failure.
-      if (isPruneLeaseCancellation(e, admission)) {
-        logWarn(`DiscSelector: disc selection continuation was cancelled: ${e}`);
-        return;
-      }
-      // Observable catch effect: surface the failure so the user knows the pick
-      // didn't take, and leave `selected` unchanged (revert to the prior pin).
-      logError(`DiscSelector: selectDisc failed: ${e}`);
-      showToast("Failed to select disc");
-    }
+    await executeDiscSelection({
+      appId,
+      romId: rid,
+      data,
+      leaseOwner,
+      onSelected: setSelected,
+      logTag: "DiscSelector",
+    });
   };
 
-  // Single-disc / unknown / not-installed → render nothing.
-  if (!selection?.multi_disc || !selection.discs || !selection.default) return null;
+  const displayState = computeDiscDisplayState(selection, selected);
+  if (!displayState || !selection) return null;
 
-  const { discs, default: dflt } = selection;
-  const isM3u = dflt.kind === "m3u";
-
-  // The effective pin: an explicit selection, else the default target (null for
-  // m3u, disc 1's filename otherwise).
-  const effectiveSelected: DiscOptionData = selected ?? (isM3u ? null : dflt.filename);
-  const isPinned = selected !== null;
-  // The m3u playlist is active only when the default is m3u and nothing is pinned.
-  const showPlaylistFace = isM3u && selected === null;
-  const activeDisc = discs.find((d) => d.filename === effectiveSelected);
-  const activeNum = activeDisc ? (activeDisc.label.match(/\d+/)?.[0] ?? String(activeDisc.index)) : "";
-
-  // Options: the m3u "all discs" default (when present) followed by each disc.
-  const options: { data: DiscOptionData; icon: ReactNode; text: string }[] = [];
-  if (isM3u) options.push({ data: null, icon: <DiscStack size={16} color={DISC_GREY} />, text: dflt.label });
-  for (const disc of discs) options.push({ data: disc.filename, icon: <FaCompactDisc size={16} />, text: disc.label });
+  const { effectiveSelected, isPinned, showPlaylistFace, activeNum } = displayState;
+  const options = buildDiscOptions(selection);
 
   // A custom compact trigger + showContextMenu for the anchored list. Steam's
   // <Dropdown> renders full-width and clips a custom icon face, so we own the

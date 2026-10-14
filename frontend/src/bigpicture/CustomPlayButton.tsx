@@ -19,11 +19,10 @@
  */
 
 import { useState, useEffect, useRef, useCallback, FC, ReactElement } from "react";
-import { addEventListener, isStrandedPanelFailure, removeEventListener, strandedAnswer } from "../api/host";
+import { addEventListener, removeEventListener, strandedAnswer } from "../api/host";
 import { showToast } from "../utils/toast";
-import { tellStrandedPress, useStrandedAnswer } from "../utils/strandedPanelStore";
-import { strandedPanelSentence } from "../utils/strandedPanelWording";
-import { Focusable, DialogButton, Menu, MenuItem, MenuSeparator, Navigation, showContextMenu } from "@decky/ui";
+import { useStrandedAnswer } from "../utils/strandedPanelStore";
+import { Focusable, DialogButton, Menu, MenuItem, MenuSeparator, showContextMenu } from "@decky/ui";
 import { appActionButtonClasses, basicAppDetailsSectionStylerClasses } from "../utils/deckyUiInternals";
 import { hideNativePlaySection, showNativePlaySection } from "../utils/styleInjector";
 import { hasAnySaveConflict } from "../utils/saveStatus";
@@ -43,11 +42,17 @@ import {
   isSaveTrackingConfigured,
   getSaveSetupInfo,
   confirmSlotChoice,
-  checkCoreChange,
   probeReachability,
   checkLocalDrift,
-  stopRunningGame,
 } from "../api/backend";
+import { confirmCoreChangeIfNeeded as confirmCoreChangeUtil } from "../utils/coreChange";
+import { activateRunningApp, executeStopRunningGame } from "../utils/runningGame";
+import {
+  formatProgress,
+  getDownloadFillGradient,
+  getDownloadPulseColor,
+  getDownloadBaseBackground,
+} from "../utils/downloadProgress";
 import { getRommConnectionState, onRommConnectionChange, reportServerReachable } from "../utils/connectionState";
 import { isBoundVanished, onBoundVanishedChange } from "../utils/vanishedBinding";
 import { scrollToTop } from "../utils/scrollHelpers";
@@ -141,34 +146,6 @@ interface DownloadProgress {
    * Pause-Resume chevron.
    */
   extracting: boolean;
-}
-
-function lerpColor(a: [number, number, number], b: [number, number, number], t: number): string {
-  const r = Math.round(a[0] + (b[0] - a[0]) * t);
-  const g = Math.round(a[1] + (b[1] - a[1]) * t);
-  const bl = Math.round(a[2] + (b[2] - a[2]) * t);
-  return `rgb(${r}, ${g}, ${bl})`;
-}
-
-// Download button blue gradient stops
-const BLUE_LEFT: [number, number, number] = [26, 159, 255]; // #1a9fff
-const BLUE_RIGHT: [number, number, number] = [0, 120, 212]; // #0078d4
-// Play button visible green (computed from gradient + backgroundSize 330% + backgroundPosition 25%)
-const GREEN_LEFT: [number, number, number] = [80, 200, 47]; // #50c82f
-const GREEN_RIGHT: [number, number, number] = [24, 177, 78]; // #18b14e
-
-/** Say that Stop cannot reach the backend of a stranded panel, *sentence* being the answer that backend gave it. */
-function tellStrandedStop(sentence: string): void {
-  tellStrandedPress("Couldn't stop the game", sentence);
-}
-
-function formatProgress(downloaded: number, total: number): string {
-  // Show "x / y MB" with unit only on the total
-  if (total < 1024) return `${downloaded} / ${total} B`;
-  if (total < 1024 * 1024) return `${(downloaded / 1024).toFixed(1)} / ${(total / 1024).toFixed(1)} KB`;
-  if (total < 1024 * 1024 * 1024)
-    return `${(downloaded / (1024 * 1024)).toFixed(1)} / ${(total / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(downloaded / (1024 * 1024 * 1024)).toFixed(2)} / ${(total / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 interface CustomPlayButtonProps {
@@ -634,18 +611,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // Detects emulator core change since last launch; if changed, surfaces the
   // core-change confirm modal. Returns true to proceed, false to bail.
   const confirmCoreChangeIfNeeded = async (rid: number): Promise<boolean> => {
-    const coreCheck = await boundedOr(
-      checkCoreChange(rid),
-      LOCAL_CALL_LIMIT_MS,
-      (): { changed: boolean; old_core?: string; new_core?: string; old_label?: string; new_label?: string } => ({
-        changed: false,
-      }),
-    );
-    if (!coreCheck.changed) return true;
-    return showCoreChangeModal(
-      coreCheck.old_label ?? coreCheck.old_core ?? "Unknown",
-      coreCheck.new_label ?? coreCheck.new_core ?? "Unknown",
-    );
+    return confirmCoreChangeUtil(rid, showCoreChangeModal);
   };
 
   // Online pre-launch sync, mapped onto the gate's PreLaunchSyncOutcome (the
@@ -934,33 +900,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       return;
     }
 
-    // NOSONAR(typescript:S7741) — SteamUIStore is an ambient Steam SP global; the
-    // typeof guard keeps a genuinely-absent one from throwing ReferenceError.
-    if (typeof SteamUIStore !== "undefined" && SteamUIStore) {
-      // A present-but-broken store is the exact failure class this button was born
-      // from (RaiseWindowForGame reporting Success while doing nothing) — a
-      // throwing `SetRunningApp` / `NavigateToRunningApp` getter must NOT strand the
-      // user with no foreground and no backstop. Any throw is swallowed and falls
-      // through to the route nav below, mirroring how runningApps.ts wraps every
-      // Steam-global access in try/catch.
-      try {
-        SteamUIStore.SetRunningApp(appId);
-        if (typeof SteamUIStore.NavigateToRunningApp === "function") {
-          SteamUIStore.NavigateToRunningApp();
-          detach(debugLog(`CustomPlayButton: resumed appId=${appId} via SteamUIStore.NavigateToRunningApp`));
-          return;
-        }
-      } catch (e) {
-        detach(debugLog(`CustomPlayButton: resume — SteamUIStore threw, falling back to Navigate: ${e}`));
-      }
-    }
-    // Older SteamUI without `NavigateToRunningApp` (API drift), an absent store, or a
-    // store whose `SetRunningApp` / `NavigateToRunningApp` threw — navigate to the
-    // running-app route directly. When the store was present and `SetRunningApp`
-    // succeeded it already selected this app, so the foreground lands on it (the
-    // decky-rocketjump fallback path).
-    Navigation.Navigate("/apprunning");
-    detach(debugLog(`CustomPlayButton: resumed appId=${appId} via Navigation.Navigate`));
+    activateRunningApp(appId, "CustomPlayButton");
   };
 
   // Drop the running overlay back to the underlying button state. Clearing
@@ -989,95 +929,15 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
   // RetroDECK can have several live at once (a second game, ES-DE opened on its
   // own), and only the one running this ROM may be signalled.
   const handleStopGame = async () => {
-    // A stop is already running — do not start a second one. The disabled menu
-    // item makes this hard to reach; this is the guard for the paths that
-    // bypass the render (a menu opened before the flag flipped, a double-fire
-    // within one frame).
-    if (stopInFlightRef.current) {
-      detach(debugLog(`CustomPlayButton: Stop ignored for appId=${appId} — a stop is already in flight`));
-      return;
-    }
-
-    // Stale-overlay self-heal, mirroring handleResumeGame: if nothing is
-    // actually running, the overlay is stale — clear it back to Play without
-    // prompting or touching the backend.
-    if (!readGameRunning(appId, romId).running) {
-      detach(debugLog(`CustomPlayButton: Stop on appId=${appId} but nothing is running — clearing stale overlay`));
-      clearRunningOverlay();
-      return;
-    }
-
-    // A menu opened before the strand still offers Stop Game, and a panel the
-    // backend already refused cannot stop anything, so it says so before asking
-    // to confirm a stop that cannot happen.
-    const stranded = strandedAnswer();
-    if (stranded) {
-      detach(debugLog(`CustomPlayButton: Stop on appId=${appId} from a stranded panel — not stopping`));
-      tellStrandedStop(strandedPanelSentence(stranded));
-      return;
-    }
-
-    // Without the rom id the backend cannot tell this game's instance from any
-    // other live one, and stopping "whichever" is exactly the bug this argument
-    // exists to fix. The detail lookup that fills `romId` normally lands long
-    // before a running overlay can be pressed; if it somehow has not, say so and
-    // leave the overlay up so Resume stays reachable.
-    if (romId == null) {
-      detach(debugLog(`CustomPlayButton: Stop on appId=${appId} but the rom id is not resolved yet — not stopping`));
-      showToast("Couldn't stop the game — still loading its details");
-      return;
-    }
-
-    // Destructive and unrecoverable: the emulator gets one chance to flush and
-    // is forced after that, so anything unsaved is gone. Confirm first.
-    if (!(await showStopGameModal())) {
-      detach(debugLog(`CustomPlayButton: Stop cancelled for appId=${appId}`));
-      return;
-    }
-
-    // Claimed only once the user has actually confirmed — an abandoned modal
-    // must not leave Stop Game stuck reading "Stopping...".
-    stopInFlightRef.current = true;
-    setStopPending(true);
-    try {
-      const result = await stopRunningGame(romId);
-      if (result.success || result.reason === "not_running") {
-        // "not_running" is the same stale-overlay case caught one layer down:
-        // the backend found nothing of RetroDECK's alive. Either way the game is
-        // not running now, so the overlay must come down.
-        detach(
-          debugLog(
-            `CustomPlayButton: stop_running_game for appId=${appId} — success=${result.success} ` +
-              `reason=${result.reason ?? "none"} stopped=${result.stopped ?? 0} forced=${result.force_killed ?? 0}`,
-          ),
-        );
-        clearRunningOverlay();
-        return;
-      }
-      // Every other failure leaves the overlay UP on purpose. That includes
-      // "game_not_running": RetroDECK is alive but the backend could not tie any
-      // of its instances to this ROM, so it signalled nothing — the game may
-      // well still be running, and Resume has to stay reachable either way.
-      detach(
-        debugLog(`CustomPlayButton: stop_running_game refused for appId=${appId} — reason=${result.reason ?? "none"}`),
-      );
-      showToast(result.message || "Couldn't stop the game");
-    } catch (e) {
-      // The overlay deliberately stays up: the call never reached a verdict, so
-      // the game may well still be running and Resume must stay reachable.
-      detach(debugLog(`CustomPlayButton: stop_running_game threw for appId=${appId}: ${e}`));
-      if (isStrandedPanelFailure(e)) {
-        // The failure's message is the answer the backend gave this panel.
-        tellStrandedStop(e.message);
-      } else {
-        showToast("Couldn't stop the game");
-      }
-    } finally {
-      // Released on every path, so a failed stop can be retried deliberately
-      // (the backend, not this flag, is what makes a retry safe).
-      stopInFlightRef.current = false;
-      setStopPending(false);
-    }
+    await executeStopRunningGame({
+      appId,
+      romId,
+      tag: "CustomPlayButton",
+      stopInFlightRef,
+      onClearOverlay: clearRunningOverlay,
+      onSetPending: setStopPending,
+      confirmModal: showStopGameModal,
+    });
   };
 
   // Chevron menu for the running overlay — the single destructive Stop Game
@@ -1523,28 +1383,12 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     // Fill color shifts from blue to green as download progresses. Extraction
     // begins right after the transfer hit 100% green, so it keeps the solid
     // green fill for visual continuity.
-    let fillColor: string;
-    if (extracting) {
-      fillColor = `linear-gradient(to right, rgb(${GREEN_LEFT.join(",")}), rgb(${GREEN_RIGHT.join(",")}))`;
-    } else if (downloading) {
-      fillColor = `linear-gradient(to right, ${lerpColor(BLUE_LEFT, GREEN_LEFT, t)}, ${lerpColor(BLUE_RIGHT, GREEN_RIGHT, t)})`;
-    } else {
-      fillColor = "linear-gradient(to right, #1a9fff, #0078d4)";
-    }
+    const fillColor = getDownloadFillGradient(t, { extracting, downloading: Boolean(downloading) });
 
     // Pulse color shifts from blue to green with progress; a paused download
     // freezes to a dim amber so the whole group reads as "halted, not running".
     // Extraction holds the green pulse — it just finished the transfer.
-    let pulseColor: string;
-    if (paused) {
-      pulseColor = "rgba(212,167,44,0.7)";
-    } else if (extracting) {
-      pulseColor = `rgb(${GREEN_LEFT.join(", ")})`;
-    } else if (downloading) {
-      pulseColor = lerpColor(BLUE_LEFT, GREEN_LEFT, t);
-    } else {
-      pulseColor = "rgba(26,159,255,0.7)";
-    }
+    const pulseColor = getDownloadPulseColor(t, { paused, extracting, downloading: Boolean(downloading) });
 
     let dlLabel: string;
     if (extracting) {
@@ -1582,16 +1426,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
 
     // Unfilled portion: darker shade of the current fill color. Extraction
     // keeps a dim green base (the transfer just completed green).
-    let baseBg: string;
-    if (isOffline) {
-      baseBg = "linear-gradient(to right, #6b7b8b, #5a6a7a)";
-    } else if (extracting) {
-      baseBg = "linear-gradient(to right, #1a4d1a, #0f3320)";
-    } else if (downloading) {
-      baseBg = `linear-gradient(to right, ${lerpColor([10, 50, 90], [5, 35, 65], t)}, ${lerpColor([5, 35, 65], [5, 50, 30], t)})`;
-    } else {
-      baseBg = "linear-gradient(to right, #1a9fff, #0078d4)";
-    }
+    const baseBg = getDownloadBaseBackground(t, { isOffline, extracting, downloading: Boolean(downloading) });
 
     // While a download is actively running, the main button shares the row
     // with a right-side action section (the cancel X or a Pause/Resume

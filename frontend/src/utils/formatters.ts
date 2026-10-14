@@ -20,6 +20,26 @@ export function formatLastPlayed(timestamp: number): string {
   return `${day}. ${month}. ${year}`;
 }
 
+/**
+ * Resolve the last-played label, preferring the restored ISO timestamp over
+ * Steam's recorded unix seconds when present.
+ */
+export function resolveLastPlayed(restoredIso: string | null, steamUnixSeconds: number): string {
+  if (restoredIso) {
+    const ms = Date.parse(restoredIso);
+    if (!Number.isNaN(ms)) return formatLastPlayed(Math.floor(ms / 1000));
+  }
+  return formatLastPlayed(steamUnixSeconds);
+}
+
+/** Format a Unix timestamp (seconds) as a release date string (e.g. "15 Mar 2003") */
+export function formatReleaseDate(timestamp: number | null): string | null {
+  if (!timestamp || timestamp <= 0) return null;
+  const date = new Date(timestamp * 1000);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+}
+
 /** Format a byte count as a human-readable string (e.g. "12.4 KB", "1.23 GB"). Empty string for null. */
 export function formatBytes(bytes: number | null): string {
   if (bytes == null) return "";

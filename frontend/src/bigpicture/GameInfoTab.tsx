@@ -12,6 +12,7 @@
 
 import { FC, type ReactElement } from "react";
 import type { InstalledRom, RomMetadata } from "../types";
+import { formatReleaseDate } from "../utils/formatters";
 import { infoRow, section } from "./panelSection";
 
 interface GameInfoTabProps {
@@ -25,14 +26,6 @@ interface GameInfoTabProps {
   coverBase64: string | null;
   installed: boolean;
   installedRom: InstalledRom | null;
-}
-
-/** Format a Unix timestamp (seconds) as a release date string (e.g. "15 Mar 2003") */
-function formatReleaseDate(timestamp: number | null): string | null {
-  if (!timestamp || timestamp <= 0) return null;
-  const date = new Date(timestamp * 1000);
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 /** The rows a RomM metadata record contributes, in display order. */

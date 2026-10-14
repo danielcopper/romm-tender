@@ -664,7 +664,7 @@ frontend/src/                        # Frontend TypeScript
     saves/                           # Slot and save-file components, shared across the game-detail panel's tabs
     patches/                         # The game-detail route patch
   desktop/                           # The desktop-client surface — peer of bigpicture/, see its README
-  shared/                            # UI that belongs to both surfaces — the launch prompts; imports neither surface
+  shared/                            # UI that belongs to both surfaces — launch prompts, disc glyphs; imports neither surface
   api/backend.ts                     # endpoint() wrappers (typed)
   types/                             # TypeScript interfaces and Steam API declarations — types only; imports nothing else in src/
   utils/                             # Shortcut CRUD, sync, downloads, collections, session manager, store patches

@@ -3,10 +3,12 @@ import {
   formatBytes,
   formatLastPlayed,
   formatPlaytime,
+  formatReleaseDate,
   formatTimestamp,
   formatTimestampWithYear,
   formatTimeAgo,
   formatUninstallStatus,
+  resolveLastPlayed,
 } from "./formatters";
 
 describe("formatBytes", () => {
@@ -188,5 +190,35 @@ describe("formatUninstallStatus", () => {
     // The label intentionally keeps the simple plural form; documenting that
     // here so a future change is a conscious decision, not a drift.
     expect(formatUninstallStatus(1, 1)).toBe("Removed 1 ROMs (1 errors)");
+  });
+});
+
+describe("resolveLastPlayed", () => {
+  it("resolves from restoredIso when present and valid", () => {
+    const iso = new Date("2024-05-10T15:30:00Z").toISOString();
+    const result = resolveLastPlayed(iso, 0);
+    expect(result).not.toBe("Never");
+  });
+
+  it("falls back to steamUnixSeconds when restoredIso is null", () => {
+    expect(resolveLastPlayed(null, 0)).toBe("Never");
+  });
+
+  it("falls back to steamUnixSeconds when restoredIso is invalid", () => {
+    expect(resolveLastPlayed("invalid-date-string", 0)).toBe("Never");
+  });
+});
+
+describe("formatReleaseDate", () => {
+  it("returns null for null, 0, or negative timestamp", () => {
+    expect(formatReleaseDate(null)).toBeNull();
+    expect(formatReleaseDate(0)).toBeNull();
+    expect(formatReleaseDate(-100)).toBeNull();
+  });
+
+  it("formats valid timestamp as 'D MMM YYYY'", () => {
+    // 1082592000 is 2004-04-22T00:00:00Z
+    const formatted = formatReleaseDate(1082592000);
+    expect(formatted).toMatch(/\d+\s(Apr|May)\s2004/);
   });
 });
