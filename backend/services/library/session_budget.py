@@ -1,9 +1,8 @@
 """Steam's per-session renderer-heap budget — measurement, pause, and reporting.
 
 Owns every renderer-RSS **reading** the sync subsystem takes, and the verdicts
-drawn from one: the GC-settled measurement itself, whether it stands above the
-ceiling (which the shortcut artwork job asks before each batch), the chunk-boundary pause
-decision, the trim of additive chunk work to whatever headroom that decision
+drawn from one: the GC-settled measurement itself, whether it stands at or above
+the ceiling, the chunk-boundary pause decision, the trim of additive chunk work to whatever headroom that decision
 left, the post-preview prognosis, the run-start baseline behind the last-run
 delta, and the live reading the QAM banners poll. The pure arithmetic behind
 every one of those decisions is :mod:`domain.session_budget`; the ``/proc``
@@ -156,15 +155,7 @@ class SessionBudgetMonitor:
         if box.budget_measure_unavailable_logged:
             return None
         try:
-            raw_kb = await self._loop.run_in_executor(None, self._renderer_rss)
-            if raw_kb is None:
-                box.budget_measure_unavailable_logged = True
-                self._logger.debug("Session-budget measurement unavailable: renderer RSS not readable")
-                return None
-            if raw_kb < GC_SKIP_BELOW_KB:
-                return raw_kb
-            await self._loop.run_in_executor(None, self._renderer_gc)
-            rss_kb = await self._loop.run_in_executor(None, self._renderer_rss)
+            rss_kb = await self._settled_rss()
         except Exception as e:  # fail-open: measurement must never block a sync
             self._logger.debug(f"Session-budget measurement skipped: {e}")
             return None
@@ -173,15 +164,29 @@ class SessionBudgetMonitor:
             self._logger.debug("Session-budget measurement unavailable: renderer RSS not readable")
         return rss_kb
 
+    async def _settled_rss(self) -> int | None:
+        """The reading behind :meth:`measure_rss`, without its run latch; raises what a seam raises."""
+        raw_kb = await self._loop.run_in_executor(None, self._renderer_rss)
+        if raw_kb is None or raw_kb < GC_SKIP_BELOW_KB:
+            return raw_kb
+        await self._loop.run_in_executor(None, self._renderer_gc)
+        return await self._loop.run_in_executor(None, self._renderer_rss)
+
     # ── Decisions ────────────────────────────────────────────────
 
     async def above_ceiling(self) -> bool:
-        """Whether a :meth:`measure_rss` reading stands at or above the effective ceiling.
+        """Whether a GC-settled reading stands at or above the effective ceiling.
 
-        The shortcut artwork job asks it before each batch it hands over, outside
-        any run of the sync. Fail-open: ``False`` when no reading can be taken.
+        Taken as :meth:`measure_rss` takes it, but it neither reads nor sets that
+        method's run latch: it is asked outside any run of the sync, where
+        nothing would clear the latch again. Fail-open: ``False`` when no reading
+        can be taken.
         """
-        rss_kb = await self.measure_rss()
+        try:
+            rss_kb = await self._settled_rss()
+        except Exception as e:  # fail-open: a reading must never stop its caller
+            self._logger.debug(f"Session-budget ceiling reading skipped: {e}")
+            return False
         return rss_kb is not None and rss_kb >= EFFECTIVE_CEILING_KB
 
     async def maybe_pause_for_budget(
