@@ -1169,11 +1169,12 @@ means a **Save-sync slot** or a **Conditional slot**.
 ### Shortcut icon job / placeholder icon / logo icon
 
 The **shortcut icon job** is the background run that gives every bound shortcut still waiting for an icon its
-SteamGridDB icon (`services/shortcut_icons.py`); it is never a step of a sync. The **placeholder icon** is the
-transparent 1×1 PNG a sync gives each shortcut it mints (an adopted shortcut keeps the icon it has), so the icon the job
-sets later replaces one. The **logo icon** is Tender's logo, given where SteamGridDB has no icon for the game or no
-SteamGridDB game is found through its stored ids; it means "nothing found on SteamGridDB", never "not loaded yet". A
-shortcut **waits** while its icon is empty or the placeholder; the logo and any icon set by hand are left alone. Detail:
+SteamGridDB icon, and every bound shortcut its SteamGridDB wide grid and logo where the slot is not **filled**
+(`services/shortcut_icons.py`); it is never a step of a sync. The **placeholder icon** is the transparent 1×1 PNG a sync
+gives each shortcut it mints (an adopted shortcut keeps the icon it has), so the icon the job sets later replaces one.
+The **logo icon** is Tender's logo, given where SteamGridDB has no icon for the game or no SteamGridDB game is found
+through its stored ids; it means "nothing found on SteamGridDB", never "not loaded yet". A shortcut **waits** while its
+icon is empty or the placeholder; the logo and any icon set by hand are left alone. Detail:
 [Shortcut icons](docs/architecture/steam-non-steam-shortcuts.md#shortcut-icons).
 
 ### Surface (bigpicture / desktop)

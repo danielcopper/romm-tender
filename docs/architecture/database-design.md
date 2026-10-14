@@ -724,9 +724,10 @@ deleted.
 set, `none` when SteamGridDB has no candidate, or `refused` when Steam refused the image, beside the ROM's SteamGridDB
 id at that time and `recorded_at` in REAL Unix-epoch seconds, the cache/TTL timestamp convention. `CHECK`s keep the
 image id and the hash on a `set` row and off the others, and the slot to the two that are recorded. How a row rules a
-slot out, and what reads and writes the rows, is [Game page artwork](steam-non-steam-shortcuts.md#game-page-artwork).
-Keyed by ROM rather than app id, because a re-created shortcut gets a new app id, and the rows go with their `roms` row
-(`ON DELETE CASCADE`). Created empty.
+slot out, and what reads and writes the rows, is [Game page artwork](steam-non-steam-shortcuts.md#game-page-artwork)
+and, for the shortcut icon job, [Shortcut icons](steam-non-steam-shortcuts.md#shortcut-icons). Keyed by ROM rather than
+app id, because a re-created shortcut gets a new app id, and the rows go with their `roms` row (`ON DELETE CASCADE`).
+Created empty.
 
 ## The runtime Unit of Work
 

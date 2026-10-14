@@ -8,8 +8,8 @@ games appear in the Steam Library with cover art, metadata, and organized into c
 1. Tender fetches all ROMs from your RomM server (filtered by your enabled platforms)
 2. For each ROM, a Non-Steam shortcut is created in Steam via the SteamClient API — no restart required
 3. Cover art from RomM is applied as the portrait grid image
-4. If you have a SteamGridDB API key configured, a game's hero banner, logo and wide grid image arrive the first time
-   its page is opened (see [Artwork](#artwork))
+4. If you have a SteamGridDB API key configured, every game gets its icon, wide grid image and logo in the background
+   after the sync, and its hero banner the first time its page is opened (see [Artwork](#artwork))
 5. Metadata (description, developer, genres, release date) is cached and displayed in Tender's custom game detail panel
 6. Steam collections are created per platform (e.g. "RomM: Game Boy Advance (steamdeck)")
 
@@ -459,19 +459,24 @@ Cover art is always applied from RomM. The other four types require a
 [SteamGridDB API key](configuration.md#steamgriddb-api-key); games without a SteamGridDB match show Steam's default
 placeholders for hero, logo and wide grid, and Tender's logo as their icon.
 
-Icons arrive in the background, without opening each game: after every sync and when Tender starts, every game Tender
-manages that has no icon yet gets one, a few at a time. A game the sync has just added shows an empty spot in the
-desktop client's library list until its icon arrives. Without a SteamGridDB API key no icon is fetched, and a game the
-sync adds keeps Steam's default icon instead. The background job leaves an icon you set yourself alone, and does not ask
-again for a game SteamGridDB had none for; **Refresh Artwork** does, and so does opening the game's page for a game
-Tender already knows on SteamGridDB (opening the page also replaces an icon you set yourself). A game that had no icon
-at all before shows its first one after Steam restarts, which switching between Game Mode and Desktop Mode does.
+Icons, wide grids and logos arrive in the background, without opening each game: after every sync and when Tender
+starts, every game Tender manages gets the ones it has none of yet, a few games at a time. The icon and the wide grid
+come first, game by game, so a new game shows in the desktop client's library list and in Big Picture's search with its
+images; the logos follow, since a logo shows only on the game's page. A game the sync has just added shows an empty spot
+in the desktop client's library list until its icon arrives. Without a SteamGridDB API key nothing is fetched, and a
+game the sync adds keeps Steam's default icon instead. When Steam's memory is nearly full the background job stops, and
+goes on after Steam restarts or after the next sync.
 
-The hero banner, logo and wide grid are set the first time a game's page is opened in a session, and only where the game
-has none yet: an image you set yourself, in Steam's own artwork options or with another tool, stays, until you switch
-the game to another version, which replaces all three. When SteamGridDB has no logo or wide grid for a game, or Steam
-does not accept the image, opening the page does not ask again for a week, or until the game's SteamGridDB match
-changes.
+The background job leaves an image you set yourself alone. It does not ask again for an icon SteamGridDB had none for;
+**Refresh Artwork** does, and so does opening the game's page for a game Tender already knows on SteamGridDB (opening
+the page also replaces an icon you set yourself). A game that had no icon at all before shows its first one after Steam
+restarts, which switching between Game Mode and Desktop Mode does.
+
+The hero banner is set the first time a game's page is opened in a session, and so are a logo and a wide grid the
+background job has not set yet; each only where the game has none: an image you set yourself, in Steam's own artwork
+options or with another tool, stays, until you switch the game to another version, which replaces all three. When
+SteamGridDB has no logo or wide grid for a game, or Steam does not accept the image, neither the background job nor
+opening the page asks again for a week, or until the game's SteamGridDB match changes.
 
 You can refresh artwork for any individual game from its
 [game detail page](managing-games.md#refreshing-artwork-and-metadata); that replaces every image, one you set yourself
