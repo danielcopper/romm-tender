@@ -8,7 +8,8 @@ games appear in the Steam Library with cover art, metadata, and organized into c
 1. Tender fetches all ROMs from your RomM server (filtered by your enabled platforms)
 2. For each ROM, a Non-Steam shortcut is created in Steam via the SteamClient API — no restart required
 3. Cover art from RomM is applied as the portrait grid image
-4. If you have a SteamGridDB API key configured, hero banners, logos, and wide grid images are also fetched
+4. If you have a SteamGridDB API key configured, a game's hero banner, logo and wide grid image arrive the first time
+   its page is opened (see [Artwork](#artwork))
 5. Metadata (description, developer, genres, release date) is cached and displayed in Tender's custom game detail panel
 6. Steam collections are created per platform (e.g. "RomM: Game Boy Advance (steamdeck)")
 

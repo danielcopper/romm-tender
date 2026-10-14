@@ -1164,7 +1164,7 @@ A slot is **filled** when Steam's grid directory holds an image file for it, who
 left alone except by **Refresh Artwork**, the SteamGridDB picker and a version switch. A **slot outcome** is what was
 last found for a ROM's wide grid or logo — `set`, `none` or `refused` (`ArtworkSlotOutcome`). Detail:
 [Game page artwork](docs/architecture/steam-non-steam-shortcuts.md#game-page-artwork). _Avoid_: plain "slot", which
-means a **Save-sync slot**.
+means a **Save-sync slot** or a **Conditional slot**.
 
 ### Shortcut icon job / placeholder icon / logo icon
 

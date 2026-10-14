@@ -647,21 +647,22 @@ else counts: not `<appid>p`, the cover; not a link that leads nowhere; not a fil
 tools write. `SteamConfigAdapter.grid_file_names` lists the regular files; the rule reads the names.
 
 **One slot at a time.** For each slot the frontend asks `get_sgdb_slot_artwork(rom_id, app_id, slot)`, which answers
-`skip` for a filled slot or one a record rules out, `none` when SteamGridDB has no candidate (or the ROM no SteamGridDB
-id), `failed` when there is no answer this time, or the image's base64 with SteamGridDB's image id, the SHA-256 of its
-bytes, the ROM's SteamGridDB id and an `sgdb_artwork` lease. The frontend sets the image under that lease, waits for it,
-and only then asks for the next slot, so one image at a time is in the renderer. For the wide grid and the logo it then
-reports what Steam made of it through `report_sgdb_slot_artwork` — `set`, or `refused` when `SetCustomArtworkForApp`
-failed — passing the fetch's answer back; the backend cannot see Steam's answer itself.
+`skip` for a filled slot or one a record rules out, `none` when SteamGridDB's list is empty or it does not know the game
+(a 404), or the ROM has no SteamGridDB id, `failed` for an unsuccessful answer, a list with no usable entry or a
+download that failed, or the image's base64 with SteamGridDB's image id, the SHA-256 of its bytes, the ROM's SteamGridDB
+id and an `sgdb_artwork` lease. The frontend sets the image under that lease, waits for it, and only then asks for the
+next slot, so one image at a time is in the renderer. For the wide grid and the logo it then reports what Steam made of
+it through `report_sgdb_slot_artwork` — `set`, or `refused` when `SetCustomArtworkForApp` failed — passing the fetch's
+answer back; the backend cannot see Steam's answer itself.
 
 **What was found is recorded** per ROM and slot, for the wide grid and the logo, in `artwork_slot_outcomes`
 ([database design](database-design.md)): `set` with the image id and the hash, `none`, or `refused`, the ROM's
 SteamGridDB id at that time, and when. A `none` or `refused` row keeps the slot from being asked again for 7 days
 (`RULED_OUT_SECONDS` in `domain/artwork_slot_outcome.py`): SteamGridDB may have an image tomorrow, and a week costs one
-request per slot instead of one at every visit. The row stops counting at once when the ROM's SteamGridDB id changes,
-and **Refresh Artwork** deletes the game's rows (in `get_sgdb_resolution`, its first step). A `set` row never rules a
-slot out: a slot whose file is gone is asked again. Rows are keyed by ROM rather than app id, because a re-created
-shortcut gets a new app id. The hero is not recorded.
+request per slot instead of one at every first visit in a session. The row stops counting at once when the ROM's
+SteamGridDB id changes, and **Refresh Artwork** deletes the game's rows (in `get_sgdb_resolution`, before it resolves
+the id). A `set` row never rules a slot out: a slot whose file is gone is asked again. Rows are keyed by ROM rather than
+app id, because a re-created shortcut gets a new app id. The hero is not recorded.
 
 **Which image** (`domain/sgdb_artwork.py`, `choose_candidate`), in the one download path the game page, Refresh Artwork
 and the picker share (`SteamGridService._download_sgdb_artwork_io`). Images are chosen among SteamGridDB's candidates by
@@ -669,9 +670,10 @@ their stated size and never scaled locally — decoding in pure Python takes sec
 WebP. The wide grid and the logo are asked as static images only (`types=static`), the wide grid in its two sizes only,
 since `/grids` also lists the portrait covers. The wide grid prefers 920×430, Valve's own library header size, then
 460×215, then the first candidate; the logo prefers the first candidate between 640 and 2048 pixels wide, then the first
-candidate. SteamGridDB lists an asset's candidates in its website's "Highest Score (Beta)" order and reports a score of
-0 for every image, so the first candidate is the best-rated one (checked for one game against the website by the
-maintainer). A slot never stays empty for want of a preferred size.
+candidate: the band keeps SteamGridDB's top-ranked logo unless it is tiny or many times larger than Steam draws it.
+SteamGridDB lists an asset's candidates in its website's "Highest Score (Beta)" order and reports a score of 0 for every
+image, so the first candidate is the best-rated one (checked for one game against the website by the maintainer). A slot
+never stays empty for want of a preferred size.
 
 **The artwork cache** keeps a downloaded wide grid or logo as `{rom_id}_grid_{image_id}.png` /
 `{rom_id}_logo_{image_id}.png`: the cache is re-derivable and may vanish at any time, so which image it holds lives and
@@ -784,7 +786,7 @@ the timeout above still does.
 | `frontend/src/utils/metadataPatches.ts`               | Store patches for description, associations, categories, release date display                                                                                                                                                                                                                                                                  |
 | `backend/adapters/steam_config.py`                    | `SteamConfigAdapter` — VDF read/write, grid dir, shortcut icon write, Steam Input config                                                                                                                                                                                                                                                       |
 | `backend/services/library/`                           | LibraryService — builds shortcut data, drives per-unit sync apply                                                                                                                                                                                                                                                                              |
-| `backend/domain/sgdb_artwork.py`                      | `to_signed_app_id`, SGDB asset-type/endpoint maps                                                                                                                                                                                                                                                                                              |
+| `backend/domain/sgdb_artwork.py`                      | `to_signed_app_id`, SGDB asset-type/endpoint maps and their queries, the image choice by stated size (`choose_candidate`), the artwork cache's file names (`cached_artwork_name`, `cached_image_id`)                                                                                                                                           |
 | `bin/tender-rom-launcher`                             | Pure `exec "$@"` wrapper invoked by Steam — runs the full launch command baked into the shortcut's launch options; owns no state, no path resolution, no emulator knowledge. Shipped here, **run from `<bin root>/tender-rom-launcher`**: `bootstrap()` installs this copy there at every start (ADR-0038)                                     |
 
 ## Common Pitfalls
