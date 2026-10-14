@@ -1172,10 +1172,10 @@ The **shortcut artwork job** is the background run that gives every bound shortc
 for one, and its SteamGridDB wide grid and logo where the slot is not **filled** (`services/shortcut_artwork.py`); it is
 never a step of a sync, and the hero is left to the game page. The **placeholder icon** is the transparent 1×1 PNG a
 sync gives each shortcut it mints (an adopted shortcut keeps the icon it has), so the icon the job sets later replaces
-one. The **logo icon** is Tender's logo, given where SteamGridDB has no icon for the game or no SteamGridDB game is
-found through its stored ids; it means "nothing found on SteamGridDB", never "not loaded yet", and is not the **logo**
-slot. A shortcut **waits** for an icon while its icon is empty or the placeholder; the logo icon and any icon set by
-hand are left alone. _Avoid_: "shortcut icon job": it gives more than the icon. Detail:
+one. The **logo icon** is Tender's logo, given where SteamGridDB has no icon for the game, does not know its id, or the
+ROM has no SteamGridDB id stored; it means "no SteamGridDB icon to give", never "not loaded yet", and is not the
+**logo** slot. A shortcut **waits** for an icon while its icon is empty or the placeholder; the logo icon and any icon
+set by hand are left alone. _Avoid_: "shortcut icon job": it gives more than the icon. Detail:
 [Shortcut artwork](docs/architecture/steam-non-steam-shortcuts.md#shortcut-artwork).
 
 ### Surface (bigpicture / desktop)
