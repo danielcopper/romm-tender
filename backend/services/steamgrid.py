@@ -89,10 +89,10 @@ _RATE_LIMITED = "SteamGridDB is rate-limiting requests — try again in a moment
 _ASSET_TYPES = ("hero", "logo", "grid", "icon")
 
 
-def _refusal_for(error: SgdbApiError) -> Refused:
-    """The refusal an ``SgdbApiError`` answers with; never the error's own text."""
+def _refusal_for(error: SgdbApiError, *, key_refused: str = _KEY_REFUSED) -> Refused:
+    """The refusal an ``SgdbApiError`` answers with, *key_refused* for a 401 or 403; never the error's own text."""
     if error.status_code in (401, 403):
-        return AuthFailed("Invalid API key")
+        return AuthFailed(key_refused)
     if error.status_code == 429:
         return Refused("rate_limited", _RATE_LIMITED)
     if error.status_code is None:
@@ -212,7 +212,10 @@ class SteamGridService:
         return self._fetch_sgdb_artwork_io(sgdb_game_id, rom_id, asset_type)
 
     def _fetch_sgdb_artwork_io(self, sgdb_game_id, rom_id, asset_type) -> _CachedArtwork | _NoArtwork:
-        """:meth:`_download_sgdb_artwork_io` without the cache; a cached file is replaced only by a new download."""
+        """:meth:`_download_sgdb_artwork_io` without its cache check.
+
+        It drops the slot's other cache files only once the download succeeded.
+        """
         path = sgdb_endpoint_path(asset_type, sgdb_game_id)
         if path is None:
             return _NoArtwork.FAILED
@@ -415,9 +418,7 @@ class SteamGridService:
         try:
             search = await self.search_sgdb_games(name)
         except Refused as e:
-            if e.reason == AuthFailed.reason:
-                raise AuthFailed(_KEY_REFUSED) from e
-            if e.reason == "rate_limited":
+            if e.reason in (AuthFailed.reason, "rate_limited"):
                 raise
             return {"decision": "needs_pick", "candidates": []}
         return {"decision": "needs_pick", "candidates": search["games"]}
@@ -469,6 +470,10 @@ class SteamGridService:
         "Refresh Artwork" on an otherwise-unresolvable rom stays
         ``needs_pick`` and reopens the picker, giving the user a free
         re-pick. The previously applied art stays visible until replaced.
+
+        The previous pick's cached images go only once SteamGridDB has answered
+        without refusing: ``auth_failed`` for a refused key, ``rate_limited``
+        for a 429, as :meth:`refresh_sgdb_artwork` refuses.
         """
         async with self._rules.hold("apply_sgdb_game_id", prune=True):
             return await self._apply_sgdb_game_id(rom_id, sgdb_id)
@@ -477,23 +482,24 @@ class SteamGridService:
         rom_id = int(rom_id)
         sgdb_id = int(sgdb_id)
         _refuse_a_key_that_cannot_be_sent(self._settings.get("steamgriddb_api_key", ""))
-
-        # Start clean: ``_download_sgdb_artwork`` early-returns an
-        # existing cache file, so a re-pick of a different game must
-        # evict the prior PNGs before downloading.
-        await self._loop.run_in_executor(None, self._clear_cached_artwork, rom_id)
-
-        downloads = [
-            self._loop.run_in_executor(None, self._download_sgdb_artwork, sgdb_id, rom_id, asset_type)
-            for asset_type in _ASSET_TYPES
-        ]
-        await asyncio.gather(*downloads)
+        answers = await self._download_all_anew(rom_id, sgdb_id)
+        for asset_type, answer in zip(_ASSET_TYPES, answers, strict=True):
+            if not isinstance(answer, _CachedArtwork):
+                await self._loop.run_in_executor(None, self._drop_cached_artwork, rom_id, asset_type)
         return {"success": True}
 
-    def _clear_cached_artwork(self, rom_id):
-        """Remove the four asset types' cached artwork for *rom_id* (sync)."""
-        for asset_type in _ASSET_TYPES:
-            self._drop_cached_artwork(rom_id, asset_type)
+    async def _download_all_anew(self, rom_id: int, sgdb_id: int) -> list[_CachedArtwork | _NoArtwork | SlotAnswer]:
+        """Download the four asset types past the cache, in ``_ASSET_TYPES`` order; refuses a refused key or a 429."""
+        downloads = [
+            self._loop.run_in_executor(None, self._download_or_answer_io, rom_id, asset_type, sgdb_id, True)
+            for asset_type in _ASSET_TYPES
+        ]
+        answers = await asyncio.gather(*downloads)
+        if SlotAnswer.KEY_REFUSED in answers:
+            raise AuthFailed(_KEY_REFUSED)
+        if SlotAnswer.RATE_LIMITED in answers:
+            raise Refused("rate_limited", _RATE_LIMITED)
+        return answers
 
     async def refresh_sgdb_artwork(self, rom_id, sgdb_id):
         """Download *rom_id*'s hero, logo, wide grid and icon anew from SteamGridDB game *sgdb_id*.
@@ -508,17 +514,7 @@ class SteamGridService:
             if not api_key:
                 raise Refused("no_api_key", "No SteamGridDB API key configured")
             _refuse_a_key_that_cannot_be_sent(api_key)
-            downloads = [
-                self._loop.run_in_executor(
-                    None, self._download_or_answer_io, int(rom_id), asset_type, int(sgdb_id), True
-                )
-                for asset_type in _ASSET_TYPES
-            ]
-            answers = await asyncio.gather(*downloads)
-            if SlotAnswer.KEY_REFUSED in answers:
-                raise AuthFailed(_KEY_REFUSED)
-            if SlotAnswer.RATE_LIMITED in answers:
-                raise Refused("rate_limited", _RATE_LIMITED)
+            await self._download_all_anew(int(rom_id), int(sgdb_id))
             return {"success": True}
 
     async def get_sgdb_artwork_base64(self, rom_id, asset_type_num):
@@ -730,7 +726,7 @@ class SteamGridService:
             data = await self._loop.run_in_executor(None, self._sgdb_api.verify_api_key, api_key)
         except SgdbApiError as e:
             self._logger.warning(f"SGDB API key verification failed: {e}")
-            raise _refusal_for(e) from e
+            raise _refusal_for(e, key_refused="Invalid API key") from e
         if not data.get("success"):
             raise AuthFailed("API key rejected by SteamGridDB")
         return {"success": True, "message": "API key is valid"}

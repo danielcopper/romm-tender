@@ -1636,6 +1636,7 @@ class TestTheSteamGridDBRefusalsOnTheWire:
             ("get_sgdb_resolution", [42]),
             ("apply_sgdb_game_id", [42, 7]),
             ("get_sgdb_artwork_base64", [42, 1]),
+            ("refresh_sgdb_artwork", [42, 7]),
         ],
     )
     async def test_a_key_no_header_can_carry_reaches_neither_the_reply_nor_a_log_line(

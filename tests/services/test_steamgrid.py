@@ -720,7 +720,10 @@ class TestSearchSgdbGames:
         with pytest.raises(Refused) as refused:
             await searching
 
-        assert (refused.value.reason, refused.value.message) == ("auth_failed", "Invalid API key")
+        assert (refused.value.reason, refused.value.message) == (
+            "auth_failed",
+            "SteamGridDB refused the API key — check it in Settings",
+        )
 
     @pytest.mark.asyncio
     async def test_a_server_error_names_its_status(self, steamgrid, fake_steamgrid_db_api):
@@ -2683,3 +2686,69 @@ class TestAVersionSwitchDownloadsOnlyWhatIsMissing:
             "/grids/game/8888",
             "/icons/game/8888",
         ]
+
+
+class TestTheKeyDialogsVerification:
+    @pytest.mark.asyncio
+    async def test_a_429_refuses_rate_limited(self, steamgrid, fake_steamgrid_db_api):
+        fake_steamgrid_db_api.verify_api_key_side_effect = SgdbRateLimitedError("Too Many Requests")
+
+        with pytest.raises(Refused) as refused:
+            await steamgrid.service.verify_sgdb_api_key("some-key")
+
+        assert (refused.value.reason, refused.value.message) == (
+            "rate_limited",
+            "SteamGridDB is rate-limiting requests — try again in a moment",
+        )
+
+
+class TestAPickRefusesLikeRefresh:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("error", "reason", "message"),
+        [
+            (
+                SgdbApiError(status_code=401, message="Unauthorized"),
+                "auth_failed",
+                "SteamGridDB refused the API key — check it in Settings",
+            ),
+            (
+                SgdbApiError(status_code=403, message="Forbidden"),
+                "auth_failed",
+                "SteamGridDB refused the API key — check it in Settings",
+            ),
+            (
+                SgdbRateLimitedError("Too Many Requests"),
+                "rate_limited",
+                "SteamGridDB is rate-limiting requests — try again in a moment",
+            ),
+        ],
+        ids=["401", "403", "429"],
+    )
+    async def test_it_is_refused_and_the_previous_pick_stays_cached(
+        self, steamgrid, sgdb_artwork_cache, fake_steamgrid_db_api, error, reason, message
+    ):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        old = _seed_cached_artwork(sgdb_artwork_cache, 42)
+        fake_steamgrid_db_api.request_side_effect = error
+
+        with pytest.raises(Refused) as refused:
+            await steamgrid.service.apply_sgdb_game_id(42, 8888)
+
+        assert (refused.value.reason, refused.value.message) == (reason, message)
+        assert sgdb_artwork_cache.files == dict.fromkeys(old.values(), b"old")
+
+    @pytest.mark.asyncio
+    async def test_an_image_the_picked_game_has_none_of_drops_the_previous_picks(
+        self, steamgrid, sgdb_artwork_cache, fake_steamgrid_db_api
+    ):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        old = _seed_cached_artwork(sgdb_artwork_cache, 42)
+        fake_steamgrid_db_api.seed_artwork(8888, "hero", "https://example.com/hero.png", 900)
+        fake_steamgrid_db_api.seed_image_bytes("https://example.com/hero.png", b"new hero")
+        for asset_type in ("logo", "grid", "icon"):
+            endpoint = {"logo": "logos", "grid": "grids", "icon": "icons"}[asset_type]
+            fake_steamgrid_db_api.seed_raw_response(f"/{endpoint}/game/8888", {"success": True, "data": []})
+
+        assert await steamgrid.service.apply_sgdb_game_id(42, 8888) == {"success": True}
+        assert sgdb_artwork_cache.files == {old["hero"]: b"new hero"}
