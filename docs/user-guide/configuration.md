@@ -221,6 +221,9 @@ To set this up:
 4. Tap **Save** — the key is checked against SteamGridDB first, so an invalid key is rejected inline and only a working
    key is stored
 
+To remove the key, tap **Remove** beside **Edit**; it is there only while a key is stored, and the row then reads "Not
+configured". The artwork Tender already downloaded and the images already set in Steam stay; only new downloads stop.
+
 <!-- Screenshot: SteamGridDB API Key section with the Edit button -->
 
 Without an API key, games will still have cover art from RomM but the hero banner, logo overlay, wide grid image, and

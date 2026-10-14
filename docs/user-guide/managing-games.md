@@ -650,9 +650,11 @@ This is useful if metadata has changed on your RomM server.
 
 Opening a game's page sets its hero banner, logo and wide grid only where the game has none yet, so an image you set
 yourself stays. Switching the game to another version replaces all three with that version's, an image you set yourself
-included. **Refresh Artwork** is the way to replace them otherwise: it applies every image again, one you set yourself
-included, and asks SteamGridDB again for a logo or wide grid it had none for — useful when artwork was missing, as
-SteamGridDB may have new images by now.
+included; it uses the images Tender already downloaded for that version and downloads only the ones it has not.
+**Refresh Artwork** is the way to replace them otherwise: it downloads the hero banner, logo, wide grid and icon from
+SteamGridDB anew and applies them, an image you set yourself included, so a newer image on SteamGridDB reaches the game.
+An image whose new download fails keeps the one Tender had. It also asks SteamGridDB again for a logo or wide grid it
+had none for, which helps when artwork was missing.
 
 When you tap **Refresh Artwork**, Tender asks your RomM server which SteamGridDB game the ROM maps to and applies the
 hero banner, logo, wide grid, and icon for that game. **RomM is the source of truth**: whenever your server has a
@@ -660,8 +662,13 @@ SteamGridDB id for a game, that id wins — on both sync and refresh. Where RomM
 one, is under [Game not found on SteamGridDB](troubleshooting.md#game-not-found-on-steamgriddb). If neither RomM nor
 Tender has an id, a picker opens, where you search SteamGridDB by name and choose from the results (with thumbnails). A
 name pick is applied immediately. Because a manual pick isn't stored as the resolved id, you can change it any time:
-just tap **Refresh Artwork** again and the picker reopens. A game you picked keeps the picked images on **Refresh
-Artwork**, even once RomM has an id for it, until you pick again.
+just tap **Refresh Artwork** again and the picker reopens. Once RomM has an id for a game you picked, **Refresh
+Artwork** replaces the picked images with that game's. Only **Refresh Artwork** does this: opening the game's page and
+the background artwork job keep using the images Tender already downloaded for the game.
+
+When SteamGridDB refuses your API key, **Refresh Artwork** says "SteamGridDB refused the API key — check it in Settings"
+and opens no picker; when SteamGridDB is rate-limiting requests, it says that instead. Opening a game's page stays quiet
+about both. When the RomM cover could not be updated, the same message says why, after the SteamGridDB result.
 
 The full set of per-game actions — refresh artwork, refresh metadata, sync save files, download BIOS, and uninstall — is
 available from the RomM Actions menu in the game detail panel.

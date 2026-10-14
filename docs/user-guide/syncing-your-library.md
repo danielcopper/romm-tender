@@ -479,8 +479,8 @@ SteamGridDB has no logo or wide grid for a game, or Steam does not accept the im
 opening the page asks again for a week, or until the game's SteamGridDB match changes.
 
 You can refresh artwork for any individual game from its
-[game detail page](managing-games.md#refreshing-artwork-and-metadata); that replaces every image, one you set yourself
-included.
+[game detail page](managing-games.md#refreshing-artwork-and-metadata); that downloads every image anew and replaces it,
+one you set yourself included.
 
 ## Re-Syncing
 
