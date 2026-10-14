@@ -348,7 +348,11 @@ class ShortcutArtworkService:
         icons = self._steam_config.read_shortcut_icons()
         if icons is None:
             return None
-        file_names = self._steam_config.grid_file_names()
+        try:
+            file_names = self._steam_config.grid_file_names()
+        except OSError as e:
+            self._logger.warning(f"Shortcut artwork: could not list Steam's grid directory: {e}")
+            file_names = None
         with self._uow_factory() as uow:
             roms = {rom.shortcut_app_id: rom for rom in uow.roms.iter_all() if rom.shortcut_app_id is not None}
             outcomes = {

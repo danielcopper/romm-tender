@@ -39,6 +39,7 @@ class _FakeSteamConfig:
         self.grid_files = grid_files
         self.ensured: dict[str, bytes] = {}
         self.grid_missing = False
+        self.grid_unlistable = False
 
     def ensure_grid_file(self, name: str, content: bytes) -> str:
         if self.grid_missing:
@@ -50,6 +51,8 @@ class _FakeSteamConfig:
         return None if self.icons is None else dict(self.icons)
 
     def grid_file_names(self) -> frozenset[str] | None:
+        if self.grid_unlistable:
+            raise PermissionError("grid directory not readable")
         return self.grid_files
 
 
@@ -1310,6 +1313,18 @@ class TestTheWideGridAndTheLogo:
 
         assert job.source.slots_fetched == []
         assert job.delivered() == {100: "/grid/100_icon.png"}
+
+    @pytest.mark.asyncio
+    async def test_a_grid_directory_that_cannot_be_read_still_lets_the_icons_through(self, caplog):
+        job = _Job(icons={100: ""}, bound={100: 1})
+        job.steam_config.grid_unlistable = True
+
+        with caplog.at_level(logging.WARNING, logger="test_shortcut_artwork"):
+            await job.run()
+
+        assert job.source.slots_fetched == []
+        assert job.delivered() == {100: "/grid/100_icon.png"}
+        assert "could not list Steam's grid directory" in caplog.text
 
     @pytest.mark.asyncio
     async def test_a_cleanup_that_starts_between_the_icon_and_the_wide_grid_keeps_the_wide_grid_from_being_asked(
