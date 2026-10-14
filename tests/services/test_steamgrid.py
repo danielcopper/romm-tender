@@ -333,7 +333,7 @@ class TestGetSgdbArtworkBase64:
 
         assert result["base64"] is None
         assert result["no_api_key"] is False
-        # No RomM read and no IGDB request happened on the passive path.
+        # No RomM read happened on the passive path.
         assert not any(name == "get_rom" for name, _a, _k in fake_romm_api.call_log)
         assert not any(p.startswith("/games/igdb/") for p in fake_steamgrid_db_api.requested_paths)
 
@@ -398,9 +398,8 @@ class TestGetSgdbArtworkBase64:
 
         result = await steamgrid.service.get_sgdb_artwork_base64(42, 3)  # 3 = grid
 
-        # No IGDB request is sent when sgdb_id is cached.
         assert not any(p.startswith("/games/igdb/") for p in fake_steamgrid_db_api.requested_paths)
-        # The artwork request must use the cached sgdb_id (9999), not 7777.
+        # The artwork request uses the cached sgdb_id.
         assert any("/grids/game/9999" in p for p in fake_steamgrid_db_api.requested_paths)
         assert result["base64"] is not None
 

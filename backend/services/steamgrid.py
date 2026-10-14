@@ -363,17 +363,16 @@ class SteamGridService:
         """Resolve which SGDB game id to use for *rom_id*, picker-driven.
 
         The single explicit user action that may re-read RomM and offer the
-        name search; the shortcut artwork job reads only the stored id.
-        Deletes the ROM's recorded artwork slot outcomes before it resolves:
-        an explicit request asks SteamGridDB again. RomM's ``sgdb_id`` always
-        wins when present. Returns one of:
+        name search. Deletes the ROM's recorded artwork slot outcomes before
+        it resolves: an explicit request asks SteamGridDB again. RomM's
+        ``sgdb_id`` always wins when present. Returns one of:
 
         - ``{"decision": "no_api_key"}`` — no key configured.
         - ``{"decision": "resolved", "sgdb_id": int}`` — a winning id was
           found (and persisted when it came from RomM).
-        - ``{"decision": "needs_pick", "candidates": [...]}`` — neither the
-          ROM row nor RomM holds an id; offer a manual name-search picker,
-          with no candidates when the name search is refused.
+        - ``{"decision": "needs_pick", "candidates": [...]}`` — no id is
+          stored or pending and RomM has none; offer a manual name-search
+          picker, with no candidates when the name search is refused.
         """
         async with self._rules.hold("get_sgdb_resolution", prune=True):
             return await self._get_sgdb_resolution(rom_id)

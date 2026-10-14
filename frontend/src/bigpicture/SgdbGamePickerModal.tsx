@@ -1,13 +1,12 @@
 /**
  * SgdbGamePickerModal — the manual resolution surface for the SGDB artwork
- * cascade. Opened by RomMPlaySection's "Refresh Artwork" action only when the
- * backend has no SteamGridDB game id at all (neither the ROM row nor RomM
- * holds one).
+ * cascade. Opened by RomMPlaySection's "Refresh Artwork" action when the
+ * resolution answers `needs_pick`.
  *
  * A search field (prefilled with the ROM name) lets the user search SGDB and
- * pick any result. Selecting a result downloads that game's artwork via
- * applySgdbGameId, which stores no id, re-runs the artwork apply for the appId,
- * then reports the applied count back and closes.
+ * pick any result. Selecting a result applies that game via applySgdbGameId,
+ * re-runs the artwork apply for the appId, then reports the applied count back
+ * and closes.
  *
  * Wrapped in Steam's focus-managed ConfirmModal (same pattern as
  * TextInputModal / NewSlotModal) so the on-screen keyboard and d-pad / left

@@ -776,12 +776,13 @@ class ShortcutArtworkSource(Protocol):
     def do_fetch_shortcut_icon(self, rom_id: int) -> IconFetch:
         """Fetch *rom_id*'s SteamGridDB icon, from the cache first, downscale it, and say what came of it.
 
-        A ROM with no SteamGridDB id stored answers ``NO_ICON`` without a
-        request, and so does a game SteamGridDB does not know or holds no icon
-        for; a 429 from the API or the image CDN ``RATE_LIMITED``; a 401 or 403
-        from the API ``KEY_REFUSED``, which the caller logs; anything else that
-        went wrong ``FAILED``, and so does an icon the downscale cannot read,
-        which leaves the cache. Synchronous — callers on the loop offload it.
+        A game SteamGridDB does not know or holds no icon for answers
+        ``NO_ICON``, and so does a ROM with no SteamGridDB id, without a
+        request; a 429 from the API or the image CDN ``RATE_LIMITED``; a 401 or
+        403 from the API ``KEY_REFUSED``, which the caller logs; anything else
+        that went wrong ``FAILED``, and so does an icon the downscale cannot
+        read, which leaves the cache. Synchronous — callers on the loop offload
+        it.
         """
         ...
 
@@ -838,8 +839,7 @@ class ShortcutArtworkJob(Protocol):
         A cleanup calls it before it reserves its start, so nothing the job
         writes into the grid directory or hands over lands once it has. A fetch
         in flight is abandoned, though its thread runs on and may still fill the
-        artwork cache, save the game's SteamGridDB id, or record that SteamGridDB
-        has no wide grid or logo for it.
+        artwork cache or record that SteamGridDB has no wide grid or logo for it.
         """
         ...
 
