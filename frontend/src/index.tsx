@@ -978,8 +978,6 @@ const tender = definePanel(() => {
     logInfo(`sync_collections received: ${Object.keys(data.platform_app_ids).length} platforms`);
   });
 
-  // The shortcut artwork job's batches: icons the backend has written, to point
-  // each shortcut at under the batch's lease.
   addEventListener<ShortcutArtworkData>("shortcut_artwork", (data: ShortcutArtworkData) => {
     detach(
       applyShortcutArtwork(data).catch((e: unknown) => {
