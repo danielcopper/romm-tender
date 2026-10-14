@@ -9,7 +9,7 @@ import {
   withPruneLease,
 } from "./pruneLease";
 
-export interface ApplyGameCoreChangeParams {
+export interface GameCoreChangeParams {
   romId: number;
   coreLabel: string | null;
   leaseOwner: string;
@@ -23,13 +23,13 @@ export interface ApplyGameCoreChangeParams {
  *  success (R1). An unconfirmed bake gets a DISTINCT "restart Steam" toast and
  *  the DB row is KEPT — migration/re-sync re-bake from the pin. Uninstalled/unbound
  *  ROMs carry no launch_options/app_id: persist-only, no SetAppLaunchOptions. */
-export async function applyGameCoreChange({
+export async function executeGameCoreChange({
   romId,
   coreLabel,
   leaseOwner,
   onSuccess,
   logTag = "Core selection",
-}: ApplyGameCoreChangeParams): Promise<void> {
+}: GameCoreChangeParams): Promise<void> {
   const isClear = coreLabel === null;
   const failureMessage = isClear ? "Failed to reset core" : "Failed to set core";
   detach(debugLog(isClear ? `${logTag}: romId=${romId}` : `${logTag}: romId=${romId} coreLabel=${coreLabel}`));

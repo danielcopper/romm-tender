@@ -26,7 +26,7 @@ export async function confirmCoreChangeIfNeeded(
   const coreCheck = await boundedOr(
     checkCoreChange(romId),
     LOCAL_CALL_LIMIT_MS,
-    (e): { changed: boolean; old_core?: string; new_core?: string; old_label?: string; new_label?: string } => {
+    (e): Awaited<ReturnType<typeof checkCoreChange>> => {
       onError?.(e);
       return { changed: false };
     },

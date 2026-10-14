@@ -4,7 +4,7 @@ import * as backend from "../api/backend";
 import { setLaunchOptionsConfirmed } from "./steamShortcuts";
 import * as pruneLease from "./pruneLease";
 import { mountPruneLeaseOwner } from "./pruneLease";
-import { applyGameCoreChange } from "./coreOverride";
+import { executeGameCoreChange } from "./coreOverride";
 
 vi.mock("../api/backend", () => ({
   setGameCore: vi.fn(),
@@ -16,7 +16,7 @@ vi.mock("./steamShortcuts", () => ({
   setLaunchOptionsConfirmed: vi.fn().mockResolvedValue(true),
 }));
 
-describe("coreOverride — applyGameCoreChange", () => {
+describe("coreOverride — executeGameCoreChange", () => {
   const leaseOwner = "test-core-owner";
 
   beforeEach(() => {
@@ -36,7 +36,7 @@ describe("coreOverride — applyGameCoreChange", () => {
     });
     const onSuccess = vi.fn();
 
-    await applyGameCoreChange({
+    await executeGameCoreChange({
       romId: 42,
       coreLabel: "Snes9x",
       leaseOwner,
@@ -57,7 +57,7 @@ describe("coreOverride — applyGameCoreChange", () => {
     vi.mocked(setLaunchOptionsConfirmed).mockResolvedValue(false);
     const onSuccess = vi.fn();
 
-    await applyGameCoreChange({
+    await executeGameCoreChange({
       romId: 42,
       coreLabel: "Snes9x",
       leaseOwner,
@@ -75,7 +75,7 @@ describe("coreOverride — applyGameCoreChange", () => {
     });
     const onSuccess = vi.fn();
 
-    await applyGameCoreChange({
+    await executeGameCoreChange({
       romId: 42,
       coreLabel: "Genesis Plus GX",
       leaseOwner,
@@ -94,7 +94,7 @@ describe("coreOverride — applyGameCoreChange", () => {
     });
     const onSuccess = vi.fn();
 
-    await applyGameCoreChange({
+    await executeGameCoreChange({
       romId: 42,
       coreLabel: null,
       leaseOwner,
@@ -114,7 +114,7 @@ describe("coreOverride — applyGameCoreChange", () => {
     });
     const onSuccess = vi.fn();
 
-    await applyGameCoreChange({
+    await executeGameCoreChange({
       romId: 42,
       coreLabel: "Snes9x",
       leaseOwner,
@@ -132,7 +132,7 @@ describe("coreOverride — applyGameCoreChange", () => {
     });
     const onSuccess = vi.fn();
 
-    await applyGameCoreChange({
+    await executeGameCoreChange({
       romId: 42,
       coreLabel: null,
       leaseOwner,
@@ -145,7 +145,7 @@ describe("coreOverride — applyGameCoreChange", () => {
   it("toasts 'Failed to reset core' on a clear that throws", async () => {
     vi.mocked(backend.clearGameCore).mockRejectedValue(new Error("RPC failed"));
 
-    await applyGameCoreChange({ romId: 42, coreLabel: null, leaseOwner });
+    await executeGameCoreChange({ romId: 42, coreLabel: null, leaseOwner });
 
     expect(toaster.toast).toHaveBeenCalledWith(expect.objectContaining({ body: "Failed to reset core" }));
   });
@@ -154,8 +154,8 @@ describe("coreOverride — applyGameCoreChange", () => {
     vi.mocked(backend.setGameCore).mockResolvedValue({ success: true });
     vi.mocked(backend.clearGameCore).mockResolvedValue({ success: false, reason: "not_found", message: "" });
 
-    await applyGameCoreChange({ romId: 42, coreLabel: "Snes9x", leaseOwner, logTag: "handleChangeGameCore" });
-    await applyGameCoreChange({ romId: 42, coreLabel: null, leaseOwner, logTag: "handleResetGameCore" });
+    await executeGameCoreChange({ romId: 42, coreLabel: "Snes9x", leaseOwner, logTag: "handleChangeGameCore" });
+    await executeGameCoreChange({ romId: 42, coreLabel: null, leaseOwner, logTag: "handleResetGameCore" });
 
     expect(vi.mocked(backend.debugLog).mock.calls.map(([line]) => line)).toEqual([
       "handleChangeGameCore: romId=42 coreLabel=Snes9x",
@@ -169,7 +169,7 @@ describe("coreOverride — applyGameCoreChange", () => {
     vi.mocked(backend.setGameCore).mockResolvedValue({ success: true, prune_lease_token: "tok" });
     const withPruneLease = vi.spyOn(pruneLease, "withPruneLease");
 
-    await applyGameCoreChange({ romId: 42, coreLabel: "Snes9x", leaseOwner, logTag: "handleChangeGameCore" });
+    await executeGameCoreChange({ romId: 42, coreLabel: "Snes9x", leaseOwner, logTag: "handleChangeGameCore" });
 
     expect(withPruneLease).toHaveBeenCalledWith(
       "tok",
@@ -185,7 +185,7 @@ describe("coreOverride — applyGameCoreChange", () => {
     const { PruneLeaseAdmissionCancelled } = await import("./pruneLease");
     vi.mocked(backend.setGameCore).mockRejectedValue(new PruneLeaseAdmissionCancelled("unmounted"));
 
-    await applyGameCoreChange({
+    await executeGameCoreChange({
       romId: 42,
       coreLabel: "Snes9x",
       leaseOwner,
@@ -197,7 +197,7 @@ describe("coreOverride — applyGameCoreChange", () => {
   it("toasts generic failure on unexpected exception", async () => {
     vi.mocked(backend.setGameCore).mockRejectedValue(new Error("RPC failed"));
 
-    await applyGameCoreChange({
+    await executeGameCoreChange({
       romId: 42,
       coreLabel: "Snes9x",
       leaseOwner,

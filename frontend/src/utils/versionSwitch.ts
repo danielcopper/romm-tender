@@ -23,10 +23,13 @@ import { capturePruneLeaseAdmission, isPruneLeaseAdmissionCurrent, isPruneLeaseC
 import { showToast } from "./toast";
 import { detach } from "./detach";
 
+/** What the user chose in the unsynced-saves switch confirm (#1298). */
 export type UnsyncedSavesChoice = "sync_and_switch" | "switch_anyway" | "cancel";
 
 export interface UnsyncedSavesPromptArgs {
+  /** Display name of the currently-bound version that would be stranded. */
   versionName: string;
+  /** Whether RomM is reachable — decides if "Sync now & switch" is offered. */
   serverReachable: boolean;
 }
 

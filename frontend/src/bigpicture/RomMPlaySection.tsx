@@ -53,7 +53,7 @@ import {
   mountPruneLeaseOwner,
   releasePruneLeasesByOwner,
 } from "../utils/pruneLease";
-import { applyGameCoreChange } from "../utils/coreOverride";
+import { executeGameCoreChange } from "../utils/coreOverride";
 import { useGamePlaytime } from "../utils/playtimeReconcile";
 import { buildEmulatorMenu } from "../utils/emulatorMenu";
 import { formatBytes } from "../utils/formatters";
@@ -574,7 +574,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     const romId = detail.romId;
     if (!romId || !detail.platformSlug) return;
     const platformSlug = detail.platformSlug;
-    await applyGameCoreChange({
+    await executeGameCoreChange({
       romId,
       coreLabel,
       leaseOwner: `game-detail:${appId}`,
@@ -587,7 +587,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     const romId = detail.romId;
     if (!romId || !detail.platformSlug) return;
     const platformSlug = detail.platformSlug;
-    await applyGameCoreChange({
+    await executeGameCoreChange({
       romId,
       coreLabel: null,
       leaseOwner: `game-detail:${appId}`,

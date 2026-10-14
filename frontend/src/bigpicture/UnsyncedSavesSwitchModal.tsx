@@ -1,14 +1,5 @@
 import { ConfirmModal, showModal } from "@decky/ui";
-
-/** What the user chose in the unsynced-saves switch confirm (#1298). */
-export type UnsyncedSavesChoice = "sync_and_switch" | "switch_anyway" | "cancel";
-
-interface UnsyncedSavesModalArgs {
-  /** Display name of the currently-bound version that would be stranded. */
-  versionName: string;
-  /** Whether RomM is reachable — decides if "Sync now & switch" is offered. */
-  serverReachable: boolean;
-}
+import type { UnsyncedSavesChoice, UnsyncedSavesPromptArgs } from "../utils/versionSwitch";
 
 /**
  * Unsynced-saves confirm for switching away from a downloaded version (#1298).
@@ -29,7 +20,7 @@ interface UnsyncedSavesModalArgs {
 export function showUnsyncedSavesModal({
   versionName,
   serverReachable,
-}: UnsyncedSavesModalArgs): Promise<UnsyncedSavesChoice> {
+}: UnsyncedSavesPromptArgs): Promise<UnsyncedSavesChoice> {
   return new Promise<UnsyncedSavesChoice>((resolve) => {
     const description = serverReachable
       ? `"${versionName}" has save changes that were never uploaded to RomM. They stay on disk, but won't sync until you switch back.`
