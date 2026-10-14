@@ -101,8 +101,10 @@ class ErrorCode(StrEnum):
     one is raised is the module docstring's.
 
     The transport categories collapse several exception types onto one slug:
-    ``SERVER_UNREACHABLE`` folds connection/timeout/SSL/5xx/generic-API
-    failures; ``AUTH_FAILED`` folds 401 and 403 (same slug, distinct
+    ``SERVER_UNREACHABLE`` folds connection/timeout/SSL failures, a 5xx RomM
+    did not report itself and a status-less API error — never an answer
+    carrying a 4xx status, which is ``UNKNOWN`` where it has no reason of its
+    own; ``AUTH_FAILED`` folds 401 and 403 (same slug, distinct
     ``message`` so a Cloudflare bot-fight 403 stays distinguishable from
     wrong credentials). ``VERSION_ERROR`` / ``STALE_CONFLICT`` stay distinct
     because the frontend routes on them.

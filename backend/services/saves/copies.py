@@ -25,7 +25,7 @@ from domain.save_answer import (
 )
 from domain.save_slot import save_in_slot
 from domain.save_status import compute_multi_file_slot
-from lib.errors import RommConflictError, RommNotFoundError
+from lib.errors import RommApiError, RommConflictError, RommNotFoundError, classify_error, with_system_text
 from services.saves._helpers import local_save_target
 from services.saves._save_state import write_save_state
 from services.saves._settings import resolve_default_slot
@@ -166,7 +166,8 @@ class SaveCopyService:
            purely from ``active_slot`` (``_resolve_upload_slot``), so this must
            precede the POST for the copy to land in the target.
         3. Download the chosen save's content onto the canonical local file
-           (quarantines the current local file first, #965).
+           (quarantines the current local file first, #965). Where this device
+           cannot write it, the copy is ``copy_failed``.
         4. POST that content into the now-active target slot
            (``server_save=None`` → a new save, ``overwrite=false`` → the 409
            backstop guards a busy target). A 409 is ``target_slot_busy`` (the
@@ -195,9 +196,18 @@ class SaveCopyService:
         # Bring the chosen save's content down onto the canonical local file. The
         # existing local file (the current slot's save) is quarantined into
         # ``.romm-backup`` first, so nothing that lives only on disk is lost.
-        self._sync_engine.do_download_save(
-            target_save, saves_dir, canonical, save_state, device_id, system, default_slot
-        )
+        try:
+            self._sync_engine.do_download_save(
+                target_save, saves_dir, canonical, save_state, device_id, system, default_slot
+            )
+        except OSError as e:
+            self._logger.error(
+                "_copy_save_to_slot_io: save %s could not be written for rom=%s: %s",
+                save_id,
+                rom_id,
+                e,
+            )
+            return {"status": "copy_failed", "message": with_system_text("it could not be written on this device", e)}
 
         try:
             self._sync_engine.do_upload_save(
@@ -263,7 +273,8 @@ class SaveCopyService:
            a transport failure is ``server_unreachable``, a definitive 404 (the
            server answered that it has no such ROM or device id) is ``not_found``
            — distinct so the copy surface never reports an answering server
-           offline (#1570).
+           offline (#1570) — and any other RomM answer ``classify_error`` does
+           not call unreachable is ``copy_failed`` with its message.
         8. The copy proper runs in :meth:`_copy_save_to_slot_io`.
 
         A dedup pre-check between the ``list_saves`` and the copy short-circuits
@@ -360,6 +371,14 @@ class SaveCopyService:
                 # Persist whatever the pre-flight mutated before bailing.
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "not_found", "message": str(e)}
+            except RommApiError as e:
+                self._log_debug(f"copy_save_to_slot: failed to list saves: {e}")
+                # Persist whatever the pre-flight mutated before bailing.
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
+                reason, message = classify_error(e)
+                if reason == "server_unreachable":
+                    return {"status": "server_unreachable", "message": str(e)}
+                return {"status": "copy_failed", "message": message}
             except Exception as e:
                 self._log_debug(f"copy_save_to_slot: failed to list saves: {e}")
                 # Persist whatever the pre-flight mutated before bailing.

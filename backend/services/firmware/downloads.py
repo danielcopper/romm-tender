@@ -21,7 +21,7 @@ from domain.emulator_commands import resolve_platform_option
 from domain.firmware_groups import fetched_as_required
 from domain.retrodeck_folders import BIOS_DOWNLOAD
 from domain.rom_files import TMP_EXT
-from lib.errors import Refused, RommApiError, romm_error_log_level
+from lib.errors import Refused, RommApiError, romm_error_log_level, with_system_text
 from lib.path_safety import PathTraversalError
 
 if TYPE_CHECKING:
@@ -160,10 +160,10 @@ class FirmwareDownloader:
 
         A RomM error propagates unlogged: whoever answers it logs it. Every
         refusal raised here is logged here. Where this device cannot create the
-        folder, the ``.tmp`` is removed and the download refuses with
-        ``bios_download_failed``. The adapter answers everything in the transfer
-        as a RomM error, including a ``.tmp`` it could not open or write, so an
-        ``OSError`` here is this device's.
+        folder or write the ``.tmp`` — the adapter raises the latter as
+        ``DeviceWriteError`` — the ``.tmp`` is removed and the download refuses
+        with ``bios_download_failed``. Every other failure of the transfer
+        reaches here as a RomM error, so an ``OSError`` here is this device's.
         """
         firmware_id = int(firmware_id)
         fw = await self._loop.run_in_executor(None, self._romm_api.get_firmware, firmware_id)
@@ -186,7 +186,7 @@ class FirmwareDownloader:
             if isinstance(e, OSError):
                 raise Refused(
                     "bios_download_failed",
-                    f"{file_name} could not be downloaded: its folder could not be created on this device",
+                    with_system_text(f"{file_name} could not be downloaded: it could not be written on this device", e),
                 ) from e
             raise
 

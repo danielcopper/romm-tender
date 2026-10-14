@@ -7,7 +7,7 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import save_shape_message, unestablished_answer
-from lib.errors import RommNotFoundError
+from lib.errors import DeviceWriteError, RommNotFoundError, RommRateLimitedError
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
@@ -224,6 +224,17 @@ class TestListFileVersions:
         assert "error" not in result
         # Must NOT be the same shape as the happy-path empty case.
         assert result != {"status": "ok", "versions": []}
+
+    @pytest.mark.asyncio
+    async def test_a_429_on_the_listing_returns_romm_refused_not_unreachable(self, tmp_path):
+        """RomM rate-limiting the listing answered — the panel names that, never an outage."""
+        svc, fake = make_service(tmp_path)
+
+        fake.fail_on_next(RommRateLimitedError("Rate limited"))
+
+        result = await svc.list_file_versions(42, "default", "pokemon.srm")
+
+        assert result == {"status": "romm_refused", "message": "RomM is rate-limiting requests — try again in a moment"}
 
     @pytest.mark.asyncio
     async def test_definitive_404_returns_not_found_not_server_unreachable(self, tmp_path):
@@ -677,6 +688,33 @@ class TestRollbackToVersion:
         assert result["status"] != "version_deleted"
 
     @pytest.mark.asyncio
+    async def test_a_post_preflight_429_returns_romm_refused_not_unreachable(self, tmp_path):
+        """RomM rate-limiting the listing answered — the restore names that, never an outage."""
+        svc, fake = make_service(tmp_path)
+        _create_save(tmp_path)
+        local_hash = _file_md5(str(tmp_path / "saves" / "gba" / "pokemon.srm"))
+        self._setup_state(svc, tmp_path, tracked_id=100, last_sync_hash=local_hash)
+        fake.saves[100] = self._tracked_save(100)
+        fake.saves[50] = _server_save(save_id=50, rom_id=42, slot="default", updated_at="2026-02-01T10:00:00Z")
+
+        original_list = fake.list_saves
+        call_count = {"n": 0}
+
+        def rate_limit_second_list(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] >= 2:
+                raise RommRateLimitedError("Rate limited")
+            return original_list(*args, **kwargs)
+
+        fake.list_saves = rate_limit_second_list  # type: ignore[method-assign]
+        try:
+            result = await svc.rollback_to_version(42, "default", 50)
+        finally:
+            fake.list_saves = original_list  # type: ignore[method-assign]
+
+        assert result == {"status": "romm_refused", "message": "RomM is rate-limiting requests — try again in a moment"}
+
+    @pytest.mark.asyncio
     async def test_post_preflight_definitive_404_returns_not_found(self, tmp_path):
         """The 404 twin of the test above — three outcomes stay distinct (#1570).
 
@@ -861,6 +899,25 @@ class TestRollbackToVersion:
         # so disk file and state file remain consistent.
         file_state = _require_save_state(svc, 42).files["pokemon.srm"]
         assert file_state.tracked_save_id == 50
+
+    @pytest.mark.asyncio
+    async def test_a_version_this_device_cannot_write_is_write_failed(self, tmp_path):
+        """The chosen version cannot be written here — an answer of the restore's own, never a transport error."""
+        svc, fake = make_service(tmp_path)
+        _create_save(tmp_path)
+        local_hash = _file_md5(str(tmp_path / "saves" / "gba" / "pokemon.srm"))
+        self._setup_state(svc, tmp_path, tracked_id=100, last_sync_hash=local_hash)
+        fake.saves[100] = self._tracked_save(100)
+        fake.saves[50] = _server_save(save_id=50, rom_id=42, slot="default", updated_at="2026-02-01T10:00:00Z")
+        fake.fail_download_on(50, DeviceWriteError(28, "No space left on device"))
+
+        result = await svc.rollback_to_version(42, "default", 50)
+
+        assert result == {
+            "status": "write_failed",
+            "message": "it could not be written on this device (No space left on device)",
+        }
+        assert not any(call[0] == "upload_save" for call in fake.call_log)
 
     @pytest.mark.asyncio
     async def test_rollback_ignores_confirm_download_failure(self, tmp_path):

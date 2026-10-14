@@ -364,14 +364,14 @@ preconditions (a registered device — otherwise the #1478 upload guard would on
 and an installed ROM), then downloads every target to a scratch `.tmp` sibling (never the real save files) and
 classifies it. A **wholesale** failure _before_ the apply phase confirms **nothing**: the device/install precheck
 refuses with `device_not_registered` or `not_installed`, a RomM error from `list_saves` or a phase-1 download answers
-`classify_error`'s reason and message, and a save file on this device that cannot be read, or a saves folder that cannot
-be created, refuses with `migration_failed`. A failure writing the scratch download is not among them: the RomM adapter
-reports it as a connection error, so it answers `server_unreachable`. The scratch temps are cleared and the wizard stays
-open on the message, so the user can simply retry Track. Once the apply phase begins, a **per-target** upload failure is
-**counted, not fatal** (`Could not migrate N save(s)`): the slot is still confirmed and the failed source is left in
-place, so no save that lives only in the legacy bucket is ever lost. (A migration whose server had no legacy saves is a
-no-op that confirms the slot silently; a requested migration can never return `success: true` with nothing migrated
-while legacy saves existed.)
+`classify_error`'s reason and message, and a save file on this device that cannot be read or written — the scratch
+download included, which the RomM adapter raises as `DeviceWriteError` rather than a RomM error — or a saves folder that
+cannot be created, refuses with `migration_failed`. The scratch temps are cleared and the wizard stays open on the
+message, so the user can simply retry Track. Once the apply phase begins, a **per-target** upload failure is **counted,
+not fatal** (`Could not migrate N save(s)`): the slot is still confirmed and the failed source is left in place, so no
+save that lives only in the legacy bucket is ever lost. (A migration whose server had no legacy saves is a no-op that
+confirms the slot silently; a requested migration can never return `success: true` with nothing migrated while legacy
+saves existed.)
 
 The wizard names the target slot on **every** surface — the pre-click explainer under the legacy entry ("the archived
 save itself is left untouched"), the confirm modal ("Copy the archived save into 'default'? If a local save differs,
@@ -1176,7 +1176,9 @@ This matches the convention used by the official RomM clients [Argosy](https://g
 The version-history UI (`list_file_versions`) reflects the same principle: it returns every save in the active slot
 except the currently-tracked one, with no filename filter. A user can switch to any save in the slot — even ones
 uploaded by another client with a different name — and the destructive switch lands the content at the canonical local
-path.
+path. A listing that could not reach RomM answers `server_unreachable` and the panel offers a retry; a definitive 404 is
+`not_found`; any other RomM answer is `romm_refused` with `classify_error`'s message, which the panel shows as "Couldn't
+load the versions: …" rather than blaming the connection.
 
 ## Version Switch Flow (rollback)
 
@@ -1266,7 +1268,12 @@ rollback API.
 
 - **Pre-flight `Conflict`**: switch never runs. Status: `conflict_blocked`. Local file untouched.
 - **Pre-flight non-conflict error**: switch never runs. Status: `preflight_failed`. Local file untouched.
+- **The listing after the pre-flight fails**: switch never runs. A call that could not reach RomM is
+  `server_unreachable`, a definitive 404 `not_found`, and any other RomM answer `romm_refused` with `classify_error`'s
+  message, which the panel words "Couldn't restore the save: …".
 - **Step 1 (download) fails**: state is not mutated. Status: `not_found` (or surfaced error). Local file unchanged.
+  Where this device cannot write the download (`DeviceWriteError`, a full disk among them) the status is `write_failed`,
+  its message naming the system's words for the fault, and the panel words it "Couldn't restore the save: …".
 - **Step 1 (download) succeeds, step 2 (PUT) fails**: state mutation from the download is persisted. Status:
   `put_failed`. Local file and local state both point at the target. Cross-device propagation is incomplete — other
   devices still see the original newest save. Calling `rollback_to_version` again is safe and idempotent: step 1 is
@@ -1302,7 +1309,8 @@ neither in place):
 4. A **matrix pre-flight** (`do_sync_rom_saves`) runs unconditionally on the _current_ slot, protecting its dirty local
    before the copy overwrites it: `conflict_blocked` / `preflight_failed` on a bad pre-flight (same shapes as rollback).
 5. `list_saves` with **no slot filter** (the chosen save may live in any slot) locates the save by id; a missing id is
-   `version_deleted`, a failed call is `server_unreachable`.
+   `version_deleted`. A call that could not reach RomM is `server_unreachable`, a definitive 404 `not_found`, and any
+   other RomM answer `copy_failed` with `classify_error`'s message — a 429 is RomM rate-limiting, not RomM gone.
 6. **Dedup pre-check**: if the chosen save's `content_hash` already matches a save in the _target_ slot, the copy is a
    no-op — `already_present{existing_id}` (the existing twin's id) is returned with **no** download / upload /
    make-current, so nothing churns (the frontend toasts "already in slot … as `#<id>`" and does not refresh). It fires
@@ -1310,9 +1318,10 @@ neither in place):
    server-side dedup. This is what stops a repeat-copy of already-present content from re-pointing the tracked save.
 7. `SaveCopyService._copy_save_to_slot_io` then: `confirm_slot(target)` (creates the slot if new, switches active +
    confirms) → `do_download_save` (the chosen content onto the canonical local file, quarantining the current local file
-   first, #965) → `do_upload_save(server_save=None, overwrite=False)` — a POST into the now-active target slot. A
-   **409** is `target_slot_busy` (the target has newer changes from another device — sync it first, then retry); any
-   other upload error is `copy_failed`.
+   first, #965; a local file this device cannot write is `copy_failed`) →
+   `do_upload_save(server_save=None, overwrite=False)` — a POST into the now-active target slot. A **409** is
+   `target_slot_busy` (the target has newer changes from another device — sync it first, then retry); any other upload
+   error is `copy_failed`.
 
 The status union mirrors `RollbackStatus`:
 `ok | not_configured | invalid_slot_name | rom_not_installed | version_deleted | unsupported{reason?} |
@@ -1599,8 +1608,10 @@ failure here is **classified by type**, not collapsed onto a blanket "Server off
 - Any other `RommApiError` is not caught: it propagates, and both of its readers answer it through `lib/errors.py`
   `classify_error`, so it carries its **own** `reason` + `message` — the endpoint translator for `pre_launch_sync`, the
   session lifecycle for `post_exit_sync`. A revoked token (401) surfaces `auth_failed` + "Authentication failed — check
-  your username and password", an SSL misconfig surfaces the SSL message, a 5xx surfaces the server-error message. These
-  answers **omit** the `offline` flag, so the UI never claims a reachable server is unreachable. The Play button's
+  your username and password", an SSL misconfig surfaces the SSL message, and a 5xx surfaces one of two: an error RomM
+  reports itself answers `server_error` with RomM's `detail`, any other 5xx `server_unreachable` with "Server error (N)
+  — check your RomM server logs". These answers **omit** the `offline` flag — a 5xx too, whichever reason it answers —
+  so the session-end toast never claims a server is offline on anything but a connection that failed. The Play button's
   fallback launch modal shows that backend `message` verbatim, so a user whose token expired sees "authentication
   failed" instead of being told the server is offline forever. Any exception that is not a RomM error is not caught
   either: the endpoint answers it as a transport error, the session lifecycle with its generic failure toast.

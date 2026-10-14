@@ -5631,7 +5631,7 @@ class TestASingleDownloadThatFails:
             await download
 
         assert refused.value.reason == "bios_download_failed"
-        assert "on this device" in refused.value.message
+        assert refused.value.message == "dc_boot.bin could not be downloaded: it could not be written on this device"
         assert isinstance(refused.value.__cause__, PermissionError)
         assert self._TMP not in store.files
         assert "download_firmware" not in [name for name, _args, _kwargs in fake_romm_api.call_log]

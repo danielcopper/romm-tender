@@ -25,7 +25,7 @@ from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from domain.save_backup import BACKUP_DIR_NAME, backup_name, select_backups_to_prune
 from domain.save_slot import filter_saves_to_slot
 from domain.sync_action import Conflict, Download, Skip, SyncAction, Upload
-from lib.errors import DeviceNotRegisteredError, RommApiError, RommConflictError, classify_error
+from lib.errors import DeviceNotRegisteredError, DeviceWriteError, RommApiError, RommConflictError, classify_error
 from services.saves._helpers import local_save_target
 from services.saves._messages import DEVICE_NOT_REGISTERED
 
@@ -184,7 +184,9 @@ class MatrixExecutor:
         digest is comparable to a local ``content_hash`` for zip saves too —
         otherwise the keep_local adopt-without-upload check could never match a
         zip. Returns the hash string or None on non-retryable error. Raises on
-        retryable errors so the caller can retry.
+        retryable errors so the caller can retry, and on a
+        :class:`DeviceWriteError`, which is this device's to report rather than
+        a hash the server could not give.
         """
         save_id = server_save.get("id")
         if not save_id:
@@ -196,7 +198,7 @@ class MatrixExecutor:
             return self._save_file_store.content_hash(tmp_path)
         except Exception as e:
             self._log_debug(f"Failed to hash server save {save_id}: {e}")
-            if self._retry.is_retryable(e):
+            if isinstance(e, DeviceWriteError) or self._retry.is_retryable(e):
                 raise
             return None
         finally:

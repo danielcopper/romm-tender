@@ -9,6 +9,7 @@ the upload/auth paths that carry no ladder at all) stays with that method in
 
 import http.client
 import io
+import json
 import logging
 import urllib.error
 from unittest.mock import MagicMock, patch
@@ -16,12 +17,18 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from adapters.romm.http import RommHttpAdapter
+from adapters.romm.romm_api import RommApiAdapter
 from lib.errors import (
+    DeviceWriteError,
+    RommApiError,
     RommAuthError,
+    RommClientError,
     RommConflictError,
     RommConnectionError,
     RommForbiddenError,
     RommNotFoundError,
+    RommRateLimitedError,
+    RommReportedServerError,
     RommServerError,
     RommUnprocessableEntityError,
     classify_error,
@@ -320,12 +327,14 @@ class TestKnownUnreachableFastPath:
             RommNotFoundError("Rom with id '4375' not found"),
             RommConflictError("409"),
             RommUnprocessableEntityError("422"),
-            RommServerError("rate limited", status_code=429),
+            RommRateLimitedError("rate limited"),
+            RommClientError("HTTP 413: Request Entity Too Large", status_code=413),
+            RommReportedServerError("HTTP 500: Internal Server Error", 500, detail="database is locked"),
         ],
-        ids=["401", "403", "entity-404", "409", "422", "429"],
+        ids=["401", "403", "entity-404", "409", "422", "429", "413", "romm-own-5xx"],
     )
     def test_a_server_answer_never_counts_as_unreachable(self, adapter, exc):
-        """Any 4xx means the server answered, whatever it answered.
+        """Any 4xx, and a 5xx RomM reports itself, means the server answered, whatever it answered.
 
         The 404 case is deletion authority downstream (#1570). The 409 is the
         one that bites in normal operation: every automatic save upload POSTs
@@ -406,3 +415,128 @@ class TestKnownUnreachableFastPath:
             adapter.with_retry(fn, base_delay=1)
         # Attempt 1 failed, the backoff was cut short, attempt 2 never ran.
         fn.assert_called_once()
+
+    def _next_ladder_attempts(self, adapter) -> int:
+        """How many attempts the next ladder makes: 3 while RomM counts as reachable, 1 once it does not."""
+        fn = MagicMock(side_effect=RommConnectionError("refused"))
+        with patch("time.sleep"), pytest.raises(RommConnectionError):
+            adapter.with_retry(fn, base_delay=0)
+        return fn.call_count
+
+    @pytest.mark.parametrize("fault", ["open", "write", "close"])
+    def test_a_download_this_device_cannot_write_is_tried_once_and_never_counts_as_unreachable(
+        self, adapter, tmp_path, fault
+    ):
+        if fault == "open":
+            # A folder where the file should go: open() itself fails.
+            (tmp_path / "rom.zip").mkdir()
+            dest, body = str(tmp_path / "rom.zip"), b"rom bytes"
+        elif fault == "write":
+            # The kernel's always-full device: the write fails with ENOSPC, as on a
+            # full disk. The body outgrows the write buffer, so write() itself fails.
+            dest, body = "/dev/full", b"x" * 200_000
+        else:
+            # A body the size of a save fits the write buffer, so the full disk
+            # shows only when the file is closed.
+            dest, body = "/dev/full", b"rom bytes"
+        with (
+            patch("urllib.request.urlopen", side_effect=lambda *_a, **_k: _streamed_response(body)) as urlopen,
+            patch("time.sleep"),
+            pytest.raises(DeviceWriteError),
+        ):
+            adapter.download("/api/roms/1/content/rom.zip", dest)
+
+        assert urlopen.call_count == 1
+        assert self._next_ladder_attempts(adapter) == 3
+
+    def test_a_413_on_a_save_upload_names_its_status_and_never_counts_as_unreachable(self, adapter, tmp_path):
+        """A reverse proxy refusing a save as too large is an answer, not an outage."""
+        save = tmp_path / "game.srm"
+        save.write_bytes(b"save")
+        refused = urllib.error.HTTPError(
+            "http://romm.local/api/saves", 413, "Request Entity Too Large", http.client.HTTPMessage(), None
+        )
+        api = RommApiAdapter(adapter)
+
+        with patch("urllib.request.urlopen", side_effect=refused), pytest.raises(RommApiError) as raised:
+            adapter.with_retry(lambda: api.upload_save(1, str(save), "retroarch", device_id="device-7"))
+
+        reason, message = classify_error(raised.value)
+        assert reason != ErrorCode.SERVER_UNREACHABLE.value
+        assert message == "RomM or a proxy in front of it refused the request (HTTP 413 Request Entity Too Large)"
+        assert "romm.local" not in message
+        assert "device-7" not in message
+        assert self._next_ladder_attempts(adapter) == 3
+
+    def test_a_429_is_tried_once_and_answers_rate_limiting(self, adapter):
+        limited = urllib.error.HTTPError(
+            "http://romm.local/api/roms", 429, "Too Many Requests", http.client.HTTPMessage(), None
+        )
+
+        with (
+            patch("urllib.request.urlopen", side_effect=limited) as urlopen,
+            patch("time.sleep"),
+            pytest.raises(RommRateLimitedError) as raised,
+        ):
+            adapter.request("/api/roms")
+
+        assert urlopen.call_count == 1
+        assert classify_error(raised.value) == (
+            "rate_limited",
+            "RomM is rate-limiting requests — try again in a moment",
+        )
+
+    def test_a_5xx_romm_reports_itself_answers_server_error_and_never_counts_as_unreachable(self, adapter):
+        """RomM's own JSON ``detail`` proves the server is there — the first half of an entity 404's proof."""
+        hdrs = http.client.HTTPMessage()
+        hdrs["Content-Type"] = "application/json"
+
+        def romm_reports_an_error(*_args, **_kwargs):
+            raise urllib.error.HTTPError(
+                "http://romm.local/api/roms",
+                500,
+                "Internal Server Error",
+                hdrs,
+                io.BytesIO(json.dumps({"detail": "database is locked"}).encode()),
+            )
+
+        with (
+            patch("urllib.request.urlopen", side_effect=romm_reports_an_error) as urlopen,
+            patch("time.sleep"),
+            pytest.raises(RommReportedServerError) as raised,
+        ):
+            adapter.request("/api/roms")
+
+        assert urlopen.call_count == 3
+        assert classify_error(raised.value) == (
+            "server_error",
+            "RomM reported an error (HTTP 500) — database is locked",
+        )
+        assert self._next_ladder_attempts(adapter) == 3
+
+    @pytest.mark.parametrize(
+        ("content_type", "body"),
+        [("text/html", b"<html><body>502 Bad Gateway</body></html>"), (None, None)],
+        ids=["html", "empty"],
+    )
+    def test_a_5xx_a_proxy_answers_still_counts_as_unreachable(self, adapter, content_type, body):
+        """A proxy's 502 for a stopped container carries no RomM ``detail``, so it says nothing about RomM being up."""
+        hdrs = http.client.HTTPMessage()
+        if content_type is not None:
+            hdrs["Content-Type"] = content_type
+
+        def a_proxy_answers(*_args, **_kwargs):
+            raise urllib.error.HTTPError(
+                "http://romm.local/api/roms", 502, "Bad Gateway", hdrs, io.BytesIO(body) if body is not None else None
+            )
+
+        with (
+            patch("urllib.request.urlopen", side_effect=a_proxy_answers),
+            patch("time.sleep"),
+            pytest.raises(RommServerError) as raised,
+        ):
+            adapter.request("/api/roms")
+
+        assert not isinstance(raised.value, RommReportedServerError)
+        assert classify_error(raised.value)[0] == ErrorCode.SERVER_UNREACHABLE.value
+        assert self._next_ladder_attempts(adapter) == 1

@@ -15,8 +15,10 @@ import urllib.error
 from collections.abc import Callable
 
 from lib.errors import (
+    DeviceWriteError,
     RommApiError,
     RommConnectionError,
+    RommRateLimitedError,
     RommServerError,
     RommTimeoutError,
     classify_error,
@@ -68,6 +70,12 @@ class RetryLadder:
         """Check if an exception is a transient error worth retrying."""
         # TokenHostMismatchError is intentionally absent: a wrong-origin token
         # can never become right by retrying, so with_retry re-raises it at once.
+        # Refused before the branches below would take them (a 429 is a
+        # RommServerError, a disk fault an OSError): another attempt seconds
+        # after a 429 only adds to the load the server is turning away, and a
+        # disk fault on this device does not clear within the ladder's seconds.
+        if isinstance(exc, RommRateLimitedError | DeviceWriteError):
+            return False
         if isinstance(exc, RommServerError | RommConnectionError | RommTimeoutError):
             return True
         # Backward compat for non-RomM exceptions
@@ -162,13 +170,15 @@ class RetryLadder:
         """Record that the ladder gave up because the server could not be reached.
 
         An error carrying a **4xx status code** is peeled off first: the server
-        answered, whatever it answered. ``classify_error`` cannot draw that line
-        on its own — it is a user-messaging classifier that folds every
-        unbranched ``RommApiError`` onto ``server_unreachable`` so a display
-        string always exists, which would sweep in the routine 409 that every
-        ``overwrite=false`` save upload is designed to provoke, and the 422 and
-        429 alongside it. Past the peel, ``classify_error`` stays the single
-        definition of unreachable rather than a second, coarser one here.
+        answered, whatever it answered — the routine 409 that every
+        ``overwrite=false`` save upload is designed to provoke among them.
+        ``classify_error`` gives every error carrying a 4xx a reason other than
+        ``server_unreachable`` too — its own, or ``unknown`` — but it is a
+        user-messaging classifier whose last branch folds every status-less
+        ``RommApiError`` onto that reason so a display string always exists;
+        the peel keeps the rule here from resting on its branch order.
+        Past the peel, ``classify_error`` stays the single definition of
+        unreachable rather than a second, coarser one here.
 
         A 404 that arrives as a plain ``RommApiError`` carries no status code
         and therefore still counts: nothing proved RomM answered it, which is

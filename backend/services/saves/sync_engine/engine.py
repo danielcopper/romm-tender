@@ -124,12 +124,14 @@ def _first_error_reason(errors: list[str]) -> str:
 
     Tradeoff, stated honestly: a ``<reason>`` that itself contained ``": "``
     would be truncated to its final segment. Every classified ``classify_error``
-    message (auth, forbidden, SSL, timeout, connection, server, not-found,
-    unsupported) uses an em-dash separator and never contains ``": "``, and the
-    fixed dispatch labels don't either — so the common cases are exact; only the
-    rare ``str(exc)`` fallback (UNKNOWN / generic ``RommApiError``) carrying an
-    internal ``": "`` loses its head. Falls back to the whole entry when there is
-    no ``": "`` separator. *errors* must be non-empty.
+    message (auth, forbidden, SSL, timeout, connection, rate limit, server,
+    refused request, not-found, unsupported) uses an em-dash separator or none
+    and never contains ``": "`` of its own, and the fixed dispatch labels don't
+    either — so the common cases are exact; only the ``detail`` RomM reports
+    with its own 5xx and the rare ``str(exc)`` fallback (UNKNOWN / status-less
+    ``RommApiError``) can carry an internal ``": "`` and lose their head. Falls
+    back to the whole entry when there is no ``": "`` separator. *errors* must
+    be non-empty.
     """
     _source, sep, reason = errors[0].rpartition(": ")
     return reason if sep and reason else errors[0]

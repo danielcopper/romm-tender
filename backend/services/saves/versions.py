@@ -25,7 +25,7 @@ from domain.save_answer import (
 )
 from domain.save_slot import save_in_slot, slot_query_param
 from domain.save_status import compute_multi_file_slot
-from lib.errors import RommNotFoundError
+from lib.errors import RommApiError, RommNotFoundError, classify_error, with_system_text
 from services.saves._helpers import local_save_target
 from services.saves._save_state import write_save_state
 from services.saves._settings import resolve_default_slot
@@ -151,6 +151,10 @@ class VersionsService:
           registered device id. Distinct from ``server_unreachable``: the
           server answered, so retrying is pointless and the panel says so
           instead of blaming the connection (#1570).
+        - ``{"status": "romm_refused", "message": ...}`` if that call drew any
+          other RomM answer ``classify_error`` does not call unreachable — a
+          429, a refused request, an error RomM reports itself — with its
+          message.
         """
         rom_id = int(rom_id)
         save_state, device_id = await self._loop.run_in_executor(None, self._read_inputs, rom_id)
@@ -172,6 +176,12 @@ class VersionsService:
             # retry cannot change that, so the panel must not offer one (#1570).
             self._log_debug(f"list_file_versions: server has no such entity: {e}")
             return {"status": "not_found", "message": str(e)}
+        except RommApiError as e:
+            self._log_debug(f"list_file_versions: failed to list saves: {e}")
+            reason, message = classify_error(e)
+            if reason == "server_unreachable":
+                return {"status": "server_unreachable", "message": str(e)}
+            return {"status": "romm_refused", "message": message}
         except Exception as e:
             self._log_debug(f"list_file_versions: failed to list saves: {e}")
             return {"status": "server_unreachable", "message": str(e)}
@@ -216,7 +226,8 @@ class VersionsService:
 
         1. Download id=save_id content → overwrite local file.
            ``do_download_save`` updates ``tracked_save_id`` /
-           ``last_sync_hash`` to point at the target version locally.
+           ``last_sync_hash`` to point at the target version locally. Where
+           this device cannot write it, the switch is ``write_failed``.
         2. PUT id=save_id with the same content. RomM bumps
            ``save.updated_at`` to NOW (the ``onupdate=utc_now`` hook) and
            upserts our DeviceSaveSync row (``synced_at = updated_at``), so
@@ -250,9 +261,18 @@ class VersionsService:
         target_filename = local_save_target(target_save, rom_name, known_names=info["save_answer"].synced_names)
         local_path = os.path.join(saves_dir, target_filename)
 
-        self._sync_engine.do_download_save(
-            target_save, saves_dir, target_filename, save_state, device_id, system, default_slot
-        )
+        try:
+            self._sync_engine.do_download_save(
+                target_save, saves_dir, target_filename, save_state, device_id, system, default_slot
+            )
+        except OSError as e:
+            self._logger.error(
+                "_rollback_to_version_io: save %s could not be written for rom=%s: %s",
+                save_id,
+                rom_id,
+                e,
+            )
+            return {"status": "write_failed", "message": with_system_text("it could not be written on this device", e)}
 
         try:
             self._sync_engine.do_upload_save(
@@ -336,6 +356,10 @@ class VersionsService:
           device id. Distinct from both siblings: ``version_deleted`` is one
           missing save inside a ROM the server still has, and
           ``server_unreachable`` is a connection the user can retry (#1570).
+        - ``{"status": "romm_refused", "message": ...}`` if that same call drew
+          any other RomM answer ``classify_error`` does not call unreachable —
+          a 429, a refused request, an error RomM reports itself — with its
+          message.
         - ``{"status": "conflict_blocked", "conflicts": [...]}`` if the
           pre-flight surfaced a conflict on the currently-tracked save.
           The frontend resolves it via the standard conflict modal.
@@ -347,6 +371,8 @@ class VersionsService:
           failed. Local file and state already point at the target;
           retrying is safe and idempotent. Without a successful re-PUT
           the switch will not propagate cross-device.
+        - ``{"status": "write_failed", "message": ...}`` if this device could
+          not write the chosen version.
         """
         rom_id = int(rom_id)
         save_id = int(save_id)
@@ -422,6 +448,14 @@ class VersionsService:
                 self._log_debug(f"rollback_to_version: server has no such entity: {e}")
                 await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
                 return {"status": "not_found", "message": str(e)}
+            except RommApiError as e:
+                self._log_debug(f"rollback_to_version: failed to list saves: {e}")
+                # Persist whatever the pre-flight mutated before bailing.
+                await self._loop.run_in_executor(None, write_save_state, self._uow_factory, rom_id, save_state)
+                reason, message = classify_error(e)
+                if reason == "server_unreachable":
+                    return {"status": "server_unreachable", "message": str(e)}
+                return {"status": "romm_refused", "message": message}
             except Exception as e:
                 self._log_debug(f"rollback_to_version: failed to list saves: {e}")
                 # Persist whatever the pre-flight mutated before bailing.

@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 from domain.iso_time import epoch_to_iso, parse_iso_to_epoch
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_slot import save_in_slot
-from lib.errors import NotInstalled, Refused, RommNotFoundError
+from lib.errors import NotInstalled, Refused, RommApiError, RommNotFoundError, classify_error
 from services.saves._helpers import newest_server_saves_by_target
 from services.saves._messages import (
     MIGRATION_DEVICE_NOT_REGISTERED,
@@ -98,15 +98,18 @@ class SetupWizard:
         game_state: RomSaveSyncState | None,
         default_slot: str,
         recommended_action: str,
+        message: str | None = None,
     ) -> dict[str, Any]:
         """Build the held-wizard payload for a failed server-saves query.
 
         Every failure branch holds the wizard the same way — an unproven
         server view must never auto-confirm the default slot, whatever the
         cause. Only *recommended_action* differs, so the frontend can say
-        why without claiming the server is offline.
+        why without claiming the server is offline, and ``romm_refused``
+        carries the *message* that says it.
         """
         slot_confirmed = bool(game_state.slot_confirmed) if game_state else False
+        extra = {"message": message} if message is not None else {}
         return {
             "has_local_saves": len(local_files) > 0,
             "local_files": local_file_info,
@@ -116,7 +119,29 @@ class SetupWizard:
             "active_slot": game_state.active_slot if (game_state and slot_confirmed) else None,
             "recommended_action": recommended_action,
             "server_query_failed": True,
+            **extra,
         }
+
+    def _listing_failure(self, rom_id: int, exc: Exception) -> tuple[str, str | None]:
+        """The ``recommended_action`` a failed server-saves query answers, and the message ``romm_refused`` carries."""
+        if isinstance(exc, RommNotFoundError):
+            # The server ANSWERED — it has no such ROM, or no such device id
+            # (#1560's shape: a RomM database wipe drops this device's
+            # registration). Reporting that as "unreachable" sends the user to
+            # check a connection that is plainly working, so it gets its own
+            # recommendation. The wizard still HOLDS: a 404 leaves the server's
+            # slot inventory just as unproven as an outage does, so
+            # auto-confirming the default slot could still clobber real server
+            # saves on the first post-confirmation sync.
+            self._logger.warning(f"get_save_setup_info({rom_id}): server has no such rom or device: {exc}")
+            return "not_found", None
+        self._logger.warning(f"get_save_setup_info({rom_id}): failed to list server saves: {exc}")
+        if not isinstance(exc, RommApiError):
+            return "server_unreachable", None
+        reason, message = classify_error(exc)
+        if reason == "server_unreachable":
+            return "server_unreachable", None
+        return "romm_refused", message
 
     async def get_save_setup_info(self, rom_id: int) -> dict[str, Any]:
         """Get info needed for the first-sync setup wizard.
@@ -127,8 +152,10 @@ class SetupWizard:
         ``recommended_action`` carries the failure cause when the server-saves
         query raises: ``server_unreachable`` for a transport failure,
         ``not_found`` when the server answered that it has no such ROM or
-        device id. Both hold the wizard identically — only the copy and the
-        frontend's reachability verdict differ (#1570).
+        device id, and ``romm_refused`` with ``classify_error``'s ``message``
+        for any other RomM answer it does not call unreachable. All three hold
+        the wizard identically — only the copy and the frontend's reachability
+        verdict differ (#1570).
         """
         rom_id = int(rom_id)
 
@@ -154,35 +181,15 @@ class SetupWizard:
                     lambda: self._romm_api.list_saves(rom_id, device_id=device_id),
                 ),
             )
-        except RommNotFoundError as e:
-            # The server ANSWERED — it has no such ROM, or no such device id
-            # (#1560's shape: a RomM database wipe drops this device's
-            # registration). Reporting that as "unreachable" sends the user to
-            # check a connection that is plainly working, so it gets its own
-            # recommendation. The wizard still HOLDS: a 404 leaves the server's
-            # slot inventory just as unproven as an outage does, so
-            # auto-confirming the default slot could still clobber real server
-            # saves on the first post-confirmation sync.
-            self._logger.warning(
-                f"get_save_setup_info({rom_id}): server has no such rom or device: {e}",
-            )
-            return self._setup_query_failed(
-                local_files=local_files,
-                local_file_info=local_file_info,
-                game_state=game_state,
-                default_slot=default_slot,
-                recommended_action="not_found",
-            )
         except Exception as e:
-            self._logger.warning(
-                f"get_save_setup_info({rom_id}): failed to list server saves: {e}",
-            )
+            recommended_action, message = self._listing_failure(rom_id, e)
             return self._setup_query_failed(
                 local_files=local_files,
                 local_file_info=local_file_info,
                 game_state=game_state,
                 default_slot=default_slot,
-                recommended_action="server_unreachable",
+                recommended_action=recommended_action,
+                message=message,
             )
 
         # Group server saves by slot
@@ -291,8 +298,8 @@ class SetupWizard:
 
         Before anything is confirmed, a migration refuses with
         ``device_not_registered`` or ``NotInstalled``. A RomM error before the
-        apply phase propagates, and a save on this device that cannot be read,
-        or a saves folder that cannot be created, refuses with
+        apply phase propagates, and a save on this device that cannot be read
+        or written, or a saves folder that cannot be created, refuses with
         ``migration_failed``; either way nothing is confirmed.
         """
         rom_id = int(rom_id)
@@ -437,8 +444,9 @@ class SetupWizard:
         legacy saves), ``{"status": "conflict", "conflicts": [...]}`` (a differing
         local save needs the user's decision), or ``{"status": "migrated",
         "migrated": int, "failed": int}`` (the apply phase ran). The **wholesale**
-        pre-apply failures — a ``list_saves`` or phase-1 download throw, a local
-        save that cannot be read, a saves folder that cannot be created —
+        pre-apply failures — a ``list_saves`` or phase-1 download throw (a
+        scratch file this device cannot write among them), a local save that
+        cannot be read, a saves folder that cannot be created —
         **propagate** so the caller confirms nothing: phase 1 writes only scratch
         ``.tmp`` files (never the real save files) and the ``finally`` clears
         them, so nothing durable is mutated before the apply phase begins.

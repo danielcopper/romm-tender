@@ -16,6 +16,7 @@ from lib.errors import (
     RommConnectionError,
     RommForbiddenError,
     RommNotFoundError,
+    RommReportedServerError,
     RommServerError,
     RommSSLError,
     RommSyncDisabledError,
@@ -211,6 +212,15 @@ class TestClassifyError:
         assert code == "server_unreachable"
         assert "502" in msg
 
+    def test_romm_s_own_5xx_detail_answers_its_first_line_cut_to_200_characters(self):
+        first_line = "x" * 250
+        error = RommReportedServerError("HTTP 500", 500, detail=f"{first_line}\nTraceback (most recent call last):")
+
+        code, msg = classify_error(error)
+
+        assert code == "server_error"
+        assert msg == f"RomM reported an error (HTTP 500) \u2014 {'x' * 199}\u2026"
+
     def test_not_found_error(self):
         code, msg = classify_error(RommNotFoundError("missing"))
         assert code == "not_found"
@@ -243,11 +253,13 @@ class TestClassifyError:
         assert "disabled for this device" in msg
         assert "RomM's device settings" in msg
 
-    def test_conflict_error_is_api_error(self):
-        """RommConflictError is a subclass of RommApiError, not specifically handled."""
-        code, msg = classify_error(RommConflictError("conflict"))
-        assert code == "server_unreachable"
-        assert msg == "conflict"
+    def test_a_409_reaching_the_classifier_is_a_refusal_never_unreachable(self):
+        """A 409 reaching the classifier is a refusal the server answered, never an unreachable one."""
+        error = RommConflictError("HTTP 409: Conflict (POST http://romm.local/api/saves?device_id=d1)")
+        error.phrase = "Conflict"
+        code, msg = classify_error(error)
+        assert code == "unknown"
+        assert msg == "RomM or a proxy in front of it refused the request (HTTP 409 Conflict)"
 
     def test_raw_connection_error_is_server_unreachable(self):
         """A socket failure that never passed through the adapter's translation.

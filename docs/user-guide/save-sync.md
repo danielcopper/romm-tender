@@ -217,11 +217,16 @@ shows that specific reason instead (such as "Authentication failed — check you
 server is never mislabelled as offline. That includes the case where RomM answers that it no longer _has_ something
 Tender asked about: if the game was deleted and re-added on the server (which gives it a new id), or the RomM database
 was wiped and this device's registration went with it, the server is answering perfectly well. You'll see a message
-naming what's missing rather than "RomM is offline", and the offline badge stays clear. This applies to both surfaces:
-the warning shown before launch and the "after exit" toast both name the actual cause rather than a generic "failed to
-sync" message. When more than one save file fails in the same sync, the toast shows the first file's reason followed by
-a "(+N more)" count so the message stays short. If you see an authentication message, re-enter your server URL and sign
-in again in Tender's settings.
+naming what's missing rather than "RomM is offline", and the offline badge stays clear. The same holds when RomM or a
+proxy in front of it refuses a request outright (a save too large for the proxy shows "RomM or a proxy in front of it
+refused the request (HTTP 413 Request Entity Too Large)"), when RomM is rate-limiting requests, when RomM reports an
+error of its own, and when this device cannot write a save it downloads, a full disk among them. A "not found" or a
+server error that does not come from RomM itself — the kind a proxy sends when RomM behind it is stopped — still counts
+as the server being unreachable, because it says nothing about RomM being up. This applies to both surfaces: the warning
+shown before launch and the "after exit" toast both name the actual cause rather than a generic "failed to sync"
+message. When more than one save file fails in the same sync, the toast shows the first file's reason followed by a "(+N
+more)" count so the message stays short. If you see an authentication message, re-enter your server URL and sign in
+again in Tender's settings.
 
 One more thing "Server offline" is never used for: syncs run one at a time on your Deck, so if you exit two games within
 moments of each other, the second one's sync waits for the first. If that wait runs long the second sync is skipped, and

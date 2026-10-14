@@ -335,7 +335,7 @@ _ROMM_API_ERRORS = [
     pytest.param(RommUnsupportedError("Device sync", "5.3.0"), "unsupported", id="unsupported"),
     pytest.param(TokenHostMismatchError("other host"), "config_error", id="token-host-mismatch"),
     pytest.param(RommSyncDisabledError("sync off"), "device_sync_disabled", id="sync-disabled"),
-    pytest.param(RommConflictError("409"), "server_unreachable", id="any-other-api-error"),
+    pytest.param(RommConflictError("409"), "unknown", id="a-4xx-without-a-reason-of-its-own"),
     pytest.param(PairingCodeInvalidError("bad code"), "server_unreachable", id="pairing-code"),
 ]
 
@@ -1156,7 +1156,7 @@ class TestTheSlotRefusalsOnTheWire:
         assert message["result"] == {
             "success": False,
             "reason": "migration_failed",
-            "message": "The saves could not be migrated: a save file on this device could not be read,"
+            "message": "The saves could not be migrated: a save file on this device could not be read or written,"
             " or its folder could not be created.",
         }
 
@@ -1739,9 +1739,8 @@ class TestTheCoverRepairRefusalsOnTheWire:
         assert message["result"] == {
             "success": False,
             "reason": "download_failed",
-            "message": "The cover could not be saved on this device",
+            "message": "The cover could not be saved on this device (Permission denied)",
         }
-        assert "Permission denied" not in raw
         assert "/home/someone" not in raw
 
 

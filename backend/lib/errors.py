@@ -48,6 +48,10 @@ class RommApiError(Exception):
     # a caller can branch on two responses that share a status code but differ in
     # ``detail`` without every error path paying to read the body.
     detail: Any = None
+    # The reason phrase of the HTTP answer this error translates (``Request
+    # Entity Too Large``), set by the adapter's translation; ``None`` where none
+    # was kept — an error raised in code, or an unproven 404.
+    phrase: str | None = None
 
     def __init__(self, message, url=None, method=None):
         self.url = url
@@ -95,12 +99,49 @@ class RommUnprocessableEntityError(RommApiError):
         super().__init__(message, url=url, method=method)
 
 
+class RommClientError(RommApiError):
+    """A 4xx Tender has no class of its own for: RomM, or a proxy in front of it, refused the request.
+
+    Carries the status, so a give-up never records RomM as unreachable — the
+    server answered, whatever it answered.
+    """
+
+    def __init__(self, message, status_code, url=None, method=None):
+        self.status_code = status_code
+        super().__init__(message, url=url, method=method)
+
+
 class RommServerError(RommApiError):
     """5xx server errors (500, 502, 503, etc.)."""
 
     def __init__(self, message, status_code=500, url=None, method=None):
         self.status_code = status_code
         super().__init__(message, url=url, method=method)
+
+
+class RommReportedServerError(RommServerError):
+    """A 5xx RomM answered itself: a JSON body carrying a non-blank ``detail``.
+
+    The first half of the proof that makes a 404 an entity verdict, without its
+    blocklist of FastAPI's stock ``Not Found``. Still retried, but never
+    read as RomM being unreachable — a proxy's 5xx for a stopped container has
+    no such body and stays a plain :class:`RommServerError`.
+    """
+
+    def __init__(self, message, status_code, *, detail: str, url=None, method=None):
+        self.detail = detail
+        super().__init__(message, status_code=status_code, url=url, method=method)
+
+
+class RommRateLimitedError(RommServerError):
+    """429 Too Many Requests — never retried (``RetryLadder.is_retryable`` says why).
+
+    A :class:`RommServerError` because the pairing-code exchange
+    (``RommApiAdapter.exchange_pairing_code``) catches its 429 as one.
+    """
+
+    def __init__(self, message, url=None, method=None):
+        super().__init__(message, status_code=429, url=url, method=method)
 
 
 class RommConnectionError(RommApiError):
@@ -165,6 +206,19 @@ class PairingCodeRateLimitedError(RommApiError):
     """Pairing-code exchange rejected: too many exchange attempts from this client (429)."""
 
 
+class DeviceWriteError(OSError):
+    """A download's destination on this device could not be opened, written or closed.
+
+    Raised by the RomM adapter in place of the ``OSError`` behind it, a full
+    disk among them, with its ``errno`` and ``strerror`` but not its path. Not
+    a :class:`RommApiError`, so it says nothing about RomM being reachable;
+    ``RetryLadder.is_retryable`` refuses it by name — as an ``OSError`` it would
+    otherwise be retried. A caller with an answer of its own words it as a
+    fault on this device with :func:`with_system_text`; elsewhere its text is
+    the message.
+    """
+
+
 class DeviceNotRegisteredError(Exception):
     """A save upload was attempted with no registered device id.
 
@@ -183,13 +237,55 @@ class DeviceNotRegisteredError(Exception):
     """
 
 
+def with_system_text(sentence: str, exc: OSError) -> str:
+    """*sentence* with the system's own words for *exc* appended — ``… (No space left on device)``.
+
+    Only ``strerror`` is appended, which names no path; an ``OSError`` raised
+    with a message alone has none, and *sentence* then stands alone.
+    """
+    return f"{sentence} ({exc.strerror})" if exc.strerror else sentence
+
+
+# A RomM ``detail`` goes into a one-line message; a traceback or an essay
+# would bury the status in front of it.
+_DETAIL_LIMIT = 200
+
+
+def _detail_line(detail: str) -> str:
+    """The first line of *detail*, cut to :data:`_DETAIL_LIMIT` characters."""
+    line = detail.strip().splitlines()[0]
+    return line if len(line) <= _DETAIL_LIMIT else line[: _DETAIL_LIMIT - 1] + "\u2026"
+
+
+def _reported_message(exc: RommReportedServerError) -> str:
+    """:func:`classify_error`'s message for a 5xx RomM reported itself."""
+    return f"RomM reported an error (HTTP {exc.status_code}) \u2014 {_detail_line(exc.detail)}"
+
+
+def _server_error_message(exc: RommServerError) -> str:
+    """:func:`classify_error`'s message for any other 5xx."""
+    return f"Server error ({exc.status_code or 500}) \u2014 check your RomM server logs"
+
+
+def _is_client_refusal(exc: Exception) -> bool:
+    """Whether *exc* is a RomM error carrying a 4xx status."""
+    return isinstance(exc, RommApiError) and exc.status_code is not None and 400 <= exc.status_code < 500
+
+
+def _refused_message(exc: RommApiError) -> str:
+    """:func:`classify_error`'s message for a 4xx no earlier branch answers: status and phrase, never the address."""
+    answer = f"HTTP {exc.status_code} {exc.phrase}" if exc.phrase else f"HTTP {exc.status_code}"
+    return f"RomM or a proxy in front of it refused the request ({answer})"
+
+
 def classify_error(exc):
     """Return ``(reason, user_friendly_message)`` for an exception.
 
     ``reason`` is a canonical :class:`lib.list_result.ErrorCode` slug
     (returned as its string value). Several exception types fold onto one
-    slug \u2014 connection/timeout/SSL/5xx/generic-API plus raw socket errors
-    all map to ``server_unreachable``; 401/403 map to ``auth_failed`` \u2014 but
+    slug \u2014 connection/timeout/SSL, a 5xx RomM did not report itself,
+    a status-less API error and raw socket errors all map to
+    ``server_unreachable``; 401/403 map to ``auth_failed`` \u2014 but
     each branch keeps a distinct human ``message``. In particular the 403
     branch stays distinguishable from the 401 branch: a Cloudflare
     bot-fight 403 at the tunnel edge is not a wrong-credentials failure, so
@@ -214,9 +310,12 @@ def classify_error(exc):
             ErrorCode.SERVER_UNREACHABLE.value,
             "Server unreachable \u2014 check your URL and ensure RomM is running",
         )
+    if isinstance(exc, RommRateLimitedError):
+        return "rate_limited", "RomM is rate-limiting requests \u2014 try again in a moment"
+    if isinstance(exc, RommReportedServerError):
+        return "server_error", _reported_message(exc)
     if isinstance(exc, RommServerError):
-        code = exc.status_code or 500
-        return ErrorCode.SERVER_UNREACHABLE.value, f"Server error ({code}) \u2014 check your RomM server logs"
+        return ErrorCode.SERVER_UNREACHABLE.value, _server_error_message(exc)
     if isinstance(exc, RommNotFoundError):
         return ErrorCode.NOT_FOUND.value, "Resource not found on server"
     if isinstance(exc, RommUnsupportedError):
@@ -228,6 +327,8 @@ def classify_error(exc):
             "device_sync_disabled",
             "Save sync is disabled for this device on the RomM server — enable it in RomM's device settings",
         )
+    if _is_client_refusal(exc):
+        return ErrorCode.UNKNOWN.value, _refused_message(exc)
     if isinstance(exc, RommApiError):
         return ErrorCode.SERVER_UNREACHABLE.value, str(exc)
     if isinstance(exc, (ConnectionError, TimeoutError, socket.gaierror)):

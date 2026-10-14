@@ -177,11 +177,15 @@ export interface SaveSetupInfo {
   // empty server_slots as authoritative (auto-confirming default would clobber
   // real server saves on first sync). They differ only in cause: "not_found"
   // is the server ANSWERING that it has no such ROM or device id, so it must
-  // not report the server offline (#1570). See backend `get_save_setup_info`.
-  recommended_action: "auto_confirm_default" | "show_wizard" | "server_unreachable" | "not_found";
-  // True whenever that query failed, either way — for call sites routing on a
+  // not report the server offline (#1570). "romm_refused" holds the same way
+  // for any other answer RomM gave, worded in `message`. See backend
+  // `get_save_setup_info`.
+  recommended_action: "auto_confirm_default" | "show_wizard" | "server_unreachable" | "not_found" | "romm_refused";
+  // True whenever that query failed, any way — for call sites routing on a
   // boolean rather than the enum.
   server_query_failed?: boolean;
+  // Present with "romm_refused" only: what RomM answered, worded by `classify_error`.
+  message?: string;
 }
 
 /** One legacy-vs-local collision surfaced by `confirm_slot_choice` when a
@@ -239,16 +243,22 @@ export type RollbackStatus =
   // `server_unreachable` (retryable) and `version_deleted` (one save missing
   // from a ROM it still has).
   | { status: "not_found"; message: string }
+  // Any other answer RomM gave to the save listing, worded by `classify_error`.
+  | { status: "romm_refused"; message: string }
   | { status: "conflict_blocked"; conflicts: SyncConflict[] }
   | { status: "preflight_failed"; errors: string[] }
-  | { status: "put_failed"; message: string };
+  | { status: "put_failed"; message: string }
+  // This device could not write the chosen version.
+  | { status: "write_failed"; message: string };
 
 export type ListFileVersionsResult =
   | { status: "ok"; versions: SaveVersionEntry[] }
   | { status: "multi_file_unsupported"; versions: SaveVersionEntry[] }
   | { status: "server_unreachable"; message: string }
   // See RollbackStatus — the server answered, it just has no such entry.
-  | { status: "not_found"; message: string };
+  | { status: "not_found"; message: string }
+  // Any other answer RomM gave to the listing, worded by `classify_error`.
+  | { status: "romm_refused"; message: string };
 
 /** Discriminated-status result of `copySaveToSlot` — copies one server save into
  *  a target slot, which becomes the ROM's active slot (the source is preserved).

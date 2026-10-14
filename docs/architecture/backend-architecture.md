@@ -2139,12 +2139,17 @@ its re-entrancy scope and the reachability state, and `RommHttpAdapter` holds on
 `is_retryable` to it — the two methods that make the adapter a `RetryStrategy`.
 
 `with_retry` runs up to 3 attempts with a `base_delay * 3^attempt` backoff (1s then 3s — a 3-attempt ladder has only two
-gaps) and only retries what `is_retryable` calls transient. It is reached from two levels: most of the adapter's own
-request methods wrap themselves in it, and services wrap adapter calls again through the `RetryStrategy` protocol
-(satisfied by `RommHttpAdapter` itself). **The outermost ladder wins** — a re-entrant call runs its function straight
-through, guarded by a thread-local flag on the ladder, because the blocking work runs one call per executor thread.
-Without that guard the two levels multiply into 9 HTTP attempts with both backoffs stacked, which is what made a single
-game-detail page take ~30 s to fill in against an unreachable server.
+gaps) and only retries what `is_retryable` calls transient — never a 429, and never a download's destination this device
+cannot open, write or close (`is_retryable` refuses both by name and says why). The adapter raises that one as
+`DeviceWriteError`, an `OSError` rather than a `RommApiError`, carrying the system's words without the file's path; as
+an `OSError` it would otherwise be retried, and as no `RommApiError` it leaves the reachability state below alone. Where
+a feature has an answer of its own — a firmware download, a cover refresh, the slot-setup migration, a copy into a slot,
+a restore — it words the fault as one on this device; elsewhere the system's words are the message. `with_retry` is
+reached from two levels: most of the adapter's own request methods wrap themselves in it, and services wrap adapter
+calls again through the `RetryStrategy` protocol (satisfied by `RommHttpAdapter` itself). **The outermost ladder wins**
+— a re-entrant call runs its function straight through, guarded by a thread-local flag on the ladder, because the
+blocking work runs one call per executor thread. Without that guard the two levels multiply into 9 HTTP attempts with
+both backoffs stacked, which is what made a single game-detail page take ~30 s to fill in against an unreachable server.
 
 The guard lives in `with_retry` rather than in the ~20 service call sites so that a twenty-first site cannot
 re-introduce the nesting, and because the service-level wrap is the **only** ladder for the adapter methods that
@@ -2162,15 +2167,25 @@ paths, because every request funnels through one `_urlopen` choke point; the rea
 therefore clear it for free. A new request method that opens its own connection would silently stop clearing it and
 leave Tender degraded, so `scripts/check_urlopen_choke_point.py` confines `urllib.request.urlopen` to `_urlopen`. An
 `HTTPError` deliberately does not clear it either: a 5xx answered by a proxy in front of a dead origin is one of the
-shapes that counts as unreachable in the first place.
+shapes that counts as unreachable in the first place. A 5xx RomM answered itself is told apart by the first half of the
+proof a 404 needs to be an entity verdict, without its blocklist
+([what makes a 404 an entity verdict](#rommhttpadapter-notes-what-makes-a-404-an-entity-verdict)) — a body announced as
+JSON, the only one read, whose `detail` is a non-blank string: it becomes `RommReportedServerError`, is still retried,
+and answers its own `server_error` reason with the first line of RomM's `detail`, so it never sets the state. Any other
+5xx — a proxy's 502 for a stopped container, an HTML or empty body, and every 5xx from the third-party cover CDN — stays
+`RommServerError` and `server_unreachable`.
 
-**An error carrying a 4xx status code never sets it** — the server answered, whatever it answered. That peel runs before
-`classify_error`, which cannot draw the line itself: it is a _user-messaging_ classifier that folds every unbranched
-`RommApiError` onto `server_unreachable` so a display string always exists, and reusing it raw as a _transport_ verdict
-would import that coarseness. The 409 is the case that makes this load-bearing rather than tidy — every automatic save
-upload POSTs `overwrite=false` precisely so RomM can reject a stale head with one, and that upload runs inside a ladder,
-so a routine conflict would otherwise mark the whole server unreachable. The 404 is peeled for the same reason and
-matters for a second one: it is deletion authority downstream (next section). An **unproven** 404 does still set it,
+**An error carrying a 4xx status code never sets it** — the server answered, whatever it answered. Every HTTP error RomM
+or a proxy answered carries its status, except the unproven 404 below: a 4xx Tender has no class of its own for (400,
+405, 413, …) is `RommClientError`, and `classify_error` answers it — and the 409 and 422 that reach it unhandled —
+`unknown` with "RomM or a proxy in front of it refused the request (HTTP 413 Request Entity Too Large)", the status and
+phrase of the answer and never the request's address. `classify_error` gives every error carrying a 4xx a reason other
+than `server_unreachable`, but the peel still runs before it: that is a _user-messaging_ classifier whose last branch
+folds every status-less `RommApiError` onto `server_unreachable` so a display string always exists, and the rule here
+does not rest on its branch order. The 409 is the case that makes this load-bearing rather than tidy — every automatic
+save upload POSTs `overwrite=false` precisely so RomM can reject a stale head with one, and that upload runs inside a
+ladder, so a routine conflict would otherwise mark the whole server unreachable. The 404 is peeled for the same reason
+and matters for a second one: it is deletion authority downstream (next section). An **unproven** 404 does still set it,
 because it degrades to a plain `RommApiError` carrying no status code — nothing proved RomM answered, which is the same
 fail-open reading that denies it deletion authority.
 

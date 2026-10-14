@@ -5,8 +5,9 @@ paths:
 
 # RomM HTTP error translation `[ours]`
 
-No mechanical check exists for the 404 rules below — only the tests named at the bottom, and they pin the call sites
-that exist today, not the one you are about to add. The choke-point rule at the end is the one exception: it is checked.
+No mechanical check exists for which answers count as unreachable or for the 404 rules below — only the tests each
+section names, and they pin the call sites that exist today, not the one you are about to add. The choke-point rule at
+the start is the one exception: it is checked.
 
 ## Every request goes out through `_urlopen` — checked
 
@@ -27,12 +28,34 @@ Pass `romm_origin=False` when the request does **not** go to the configured RomM
 unreachable, and reaching the CDN is no evidence that RomM came back. Its ladder is entered through
 `self._retry.enter(..., romm_origin=False)` for the same reason.
 
+## Which answers count as unreachable — tests only
+
 The bit is set only where a ladder gives up, and an error carrying a **4xx status code** never sets it — the server
-answered, whatever it answered. That peel is deliberate and load-bearing: `classify_error` is a user-messaging
-classifier that folds every unbranched `RommApiError` onto `server_unreachable` so a display string always exists, which
-would otherwise sweep in the routine 409 that every `overwrite=false` save upload is designed to provoke. A 404 that
-arrives as a plain `RommApiError` carries no status code and does still set it — nothing proved RomM answered it, the
-same fail-open reading described below.
+answered, whatever it answered. So every HTTP error RomM or a proxy answered carries its status, except the unproven 404
+below — a 4xx with no class of its own is `RommClientError` — and a new translation that drops the status would mark
+RomM unreachable on a refusal. Nothing checks that a translation keeps it. The peel is deliberate and load-bearing:
+`classify_error` gives every error carrying a 4xx a reason other than `server_unreachable`, but it is a user-messaging
+classifier whose last branch folds every status-less `RommApiError` onto `server_unreachable` so a display string always
+exists, and the routine 409 that every `overwrite=false` save upload is designed to provoke must never depend on its
+branch order. A 404 that arrives as a plain `RommApiError` carries no status code and does still set it — nothing proved
+RomM answered it, the same fail-open reading described below.
+
+A 5xx is RomM's own only on the first half of an entity 404's proof (below), without its blocklist: a body announced as
+JSON carrying a non-blank `detail` string. That one is `RommReportedServerError` — retried, but answered `server_error`
+and never setting the bit; every other 5xx, and every 5xx from the third-party cover CDN, stays `RommServerError` and
+counts as unreachable. A 429 is `RommRateLimitedError`, never retried. A download's destination this device cannot open,
+write or close is not RomM's at all: `_stream_to_file` raises `DeviceWriteError`, an `OSError`, and the download methods
+let it pass untranslated — wrapping it as a transport error would try a full disk three times and mark RomM unreachable.
+
+Pinned in `tests/adapters/romm/test_retry.py::TestKnownUnreachableFastPath`:
+`test_a_server_answer_never_counts_as_unreachable`, `test_an_unproven_404_does_count_as_unreachable`,
+`test_a_413_on_a_save_upload_names_its_status_and_never_counts_as_unreachable`,
+`test_a_429_is_tried_once_and_answers_rate_limiting`,
+`test_a_5xx_romm_reports_itself_answers_server_error_and_never_counts_as_unreachable`,
+`test_a_5xx_a_proxy_answers_still_counts_as_unreachable` and
+`test_a_download_this_device_cannot_write_is_tried_once_and_never_counts_as_unreachable`.
+
+## A 404 is an entity verdict only on proof — tests only
 
 `RommNotFoundError` does not mean "the server said 404". It means **RomM's entity layer said this entity does not
 exist**, and downstream that reading is authority: the removed-game cleanup deletes on it, the version picker marks a
