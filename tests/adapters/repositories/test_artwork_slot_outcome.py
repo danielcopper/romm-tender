@@ -89,8 +89,10 @@ class TestDeletingAGamesRows:
 
 class TestTheSchemaHoldsTheShape:
     def test_a_row_for_a_rom_that_is_not_synced_is_refused(self, uow: SqliteUnitOfWork):
+        record = _set(rom_id=99)
+
         with pytest.raises(sqlite3.IntegrityError):
-            uow.artwork_slot_outcomes.save(_set(rom_id=99))
+            uow.artwork_slot_outcomes.save(record)
 
     @pytest.mark.parametrize(
         ("outcome", "image_id", "image_sha256"),

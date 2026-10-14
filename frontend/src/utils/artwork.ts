@@ -175,7 +175,10 @@ async function fillEmptySgdbArtwork(romId: number, appId: number): Promise<numbe
   let applied = 0;
 
   // One slot at a time: each image is fetched, set and reported before the next
-  // is fetched, so only one is in the renderer at once.
+  // is fetched, so only one is in the renderer at once — the awaits are
+  // sequential by design. S9382 is raised on the lease's and the report's await
+  // lines, so their NOSONARs must stay there; prettier-ignore stops Prettier
+  // from moving them.
   for (const [slot, assetType] of FILLED_SLOTS) {
     if (superseded()) return applied;
     const answer = await getSgdbSlotArtwork(romId, appId, slot).catch((e): SgdbSlotArtwork => {
@@ -184,7 +187,8 @@ async function fillEmptySgdbArtwork(romId: number, appId: number): Promise<numbe
     });
     if (answer.status === "no_api_key") return -1;
     if (answer.status !== "image") continue;
-    const outcome = await withPruneLeases(
+    // prettier-ignore
+    const outcome = await withPruneLeases( // NOSONAR(typescript:S9382)
       [answer.prune_lease_token],
       "Artwork apply",
       (signal) => setSlotImage(appId, answer, assetType, signal, superseded),
@@ -192,7 +196,8 @@ async function fillEmptySgdbArtwork(romId: number, appId: number): Promise<numbe
       admission,
     );
     if (outcome === "set") applied++;
-    if (outcome !== null && slot !== "hero") await reportSlotOutcome(romId, slot, outcome, answer);
+    // prettier-ignore
+    if (outcome !== null && slot !== "hero") await reportSlotOutcome(romId, slot, outcome, answer); // NOSONAR(typescript:S9382)
   }
 
   if (superseded()) return applied;

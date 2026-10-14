@@ -103,16 +103,24 @@ def choose_candidate(asset_type: str, data: object) -> SgdbCandidate | None:
     candidates = _candidates(data, needs_id=named_by_image_id(asset_type))
     if not candidates:
         return None
+    preferred = None
     if asset_type == "grid":
-        for size in _WIDE_GRID_SIZES:
-            for candidate in candidates:
-                if (candidate.width, candidate.height) == size:
-                    return candidate
+        preferred = _preferred_wide_grid(candidates)
     elif asset_type == "logo":
+        preferred = _preferred_logo(candidates)
+    return preferred or candidates[0]
+
+
+def _preferred_wide_grid(candidates: list[SgdbCandidate]) -> SgdbCandidate | None:
+    for size in _WIDE_GRID_SIZES:
         for candidate in candidates:
-            if candidate.width in _LOGO_WIDTHS:
+            if (candidate.width, candidate.height) == size:
                 return candidate
-    return candidates[0]
+    return None
+
+
+def _preferred_logo(candidates: list[SgdbCandidate]) -> SgdbCandidate | None:
+    return next((candidate for candidate in candidates if candidate.width in _LOGO_WIDTHS), None)
 
 
 def _candidates(data: object, *, needs_id: bool) -> list[SgdbCandidate]:
