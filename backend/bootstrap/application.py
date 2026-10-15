@@ -14,16 +14,17 @@ import ``host/``.
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
 from domain.identity import MIN_ROMM_VERSION
+from lib.background_tasks import BackgroundTasks
 
 from .adapters import RuntimeBundle, bootstrap
 from .services import WiringConfig, wire_services
 from .startup import StartupSteps
 
 if TYPE_CHECKING:
+    import asyncio
     import logging
     from collections.abc import Callable
 
@@ -42,19 +43,13 @@ class Application:
         services: ServicesBundle,
         *,
         logger: logging.Logger,
-        loop: asyncio.AbstractEventLoop,
         user_agent: str,
     ) -> None:
         self.services = services
         self.user_agent = user_agent
         self._logger = logger
-        self._loop = loop
-        # The one-time save-directory backfill, held so the loop cannot collect it.
-        self._save_directory_backfill: asyncio.Task[None] | None = None
-        # The release check asked for as long as the backend runs, held likewise.
-        self._due_update_checks: asyncio.Task[None] | None = None
-        # The shortcut artwork job's start-up run, waiting for a panel to connect.
-        self._shortcut_artwork_at_start: asyncio.Task[None] | None = None
+        # The tasks the start-up repairs start without holding start-up up.
+        self._tasks = BackgroundTasks(logger=logger)
 
     def run_startup_repairs(self, report_failure: Callable[[str], None]) -> None:
         """Run the start-up repairs, each one reporting a failure rather than raising it.
@@ -83,14 +78,11 @@ class Application:
 
     async def shutdown(self) -> None:
         """Stop the background tasks that are still running, then shut the services down."""
-        for task in (self._save_directory_backfill, self._due_update_checks, self._shortcut_artwork_at_start):
-            if task is not None:
-                task.cancel()
-                await asyncio.gather(task, return_exceptions=True)
+        await self._tasks.shutdown()
         services = self.services
         await services.shortcut_artwork_service.shutdown()
         await services.update_install_service.shutdown()
-        services.sync_service.shutdown()
+        await services.sync_service.shutdown()
         await services.prune_service.shutdown()
         await services.download_service.shutdown()
         await services.migration_service.shutdown()
@@ -101,22 +93,17 @@ class Application:
         """Start the one-time save-directory backfill without holding up start-up.
 
         It asks the resolver once per installed ROM, which on a large library
-        takes a while; the task is kept here so the loop cannot collect it
-        mid-run and :meth:`shutdown` can cancel it.
+        takes a while.
         """
-        self._save_directory_backfill = self._loop.create_task(
-            self.services.save_sync_service.record_save_directories_once()
-        )
+        self._tasks.spawn(self.services.save_sync_service.record_save_directories_once(), "record_save_directories")
 
     def _start_due_update_checks(self) -> None:
         """Start asking the release check whenever it may be due, for as long as the backend runs."""
-        self._due_update_checks = self._loop.create_task(self.services.update_check_service.run_due_checks())
+        self._tasks.spawn(self.services.update_check_service.run_due_checks(), "run_due_update_checks")
 
     def _start_shortcut_artwork(self) -> None:
         """Run the shortcut artwork job once a panel is connected to hear what it hands over."""
-        self._shortcut_artwork_at_start = self._loop.create_task(
-            self.services.shortcut_artwork_service.run_when_a_panel_connects()
-        )
+        self._tasks.spawn(self.services.shortcut_artwork_service.run_when_a_panel_connects(), "shortcut_artwork")
 
 
 def build_application(
@@ -168,4 +155,4 @@ def build_application(
             installer_environment=installer_environment,
         )
     )
-    return Application(services, logger=logger, loop=loop, user_agent=result.user_agent)
+    return Application(services, logger=logger, user_agent=result.user_agent)

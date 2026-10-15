@@ -8,7 +8,6 @@ emission remain the service's responsibility.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 from dataclasses import dataclass
@@ -22,10 +21,12 @@ from domain.migration_paths import (
     stranded_source_candidates,
 )
 from domain.retrodeck_folders import FolderRefused, MoveRoots, moving_not_installed
+from lib.background_tasks import BackgroundTasks
 from lib.errors import NamedRefused, Refused
 from services.migration._moves import FileMover, MigrationIncomplete
 
 if TYPE_CHECKING:
+    import asyncio
     import logging
     from collections.abc import Iterator, Sequence
 
@@ -114,11 +115,7 @@ class MigrationService:
         self._uow_factory = config.uow_factory
         self._rules = config.conflict_rules
         self._mover = FileMover(file_store=config.migration_file_store, logger=config.logger)
-        # Strong refs to in-flight background tasks. ``loop.create_task``
-        # alone is not enough — without a strong ref, the loop is free to
-        # garbage-collect the task before it completes. ``add_done_callback``
-        # prunes finished entries to keep the set bounded.
-        self._background_tasks: set[asyncio.Task[Any]] = set()
+        self._background_tasks = BackgroundTasks(logger=config.logger)
         # Migration runs in flight. A run clears the pending markers in the same
         # write as the relocations, before it re-records the save directories;
         # the migration rule has to keep refusing until that has finished.
@@ -128,18 +125,6 @@ class MigrationService:
         # gone and the files have moved.
         self._status_in_flight: dict[str, Any] | None = None
 
-    def _spawn_background_task(self, coro) -> asyncio.Task[Any]:
-        """Schedule ``coro`` on the backend's event loop and track the task for shutdown.
-
-        Wraps ``loop.create_task`` so the resulting task is retained in
-        ``_background_tasks`` until completion. ``shutdown()`` cancels any
-        still-pending entries when the backend shuts down.
-        """
-        task = self._loop.create_task(coro)
-        self._background_tasks.add(task)
-        task.add_done_callback(self._background_tasks.discard)
-        return task
-
     async def shutdown(self) -> None:
         """Cancel any in-flight background tasks and await their completion.
 
@@ -147,10 +132,7 @@ class MigrationService:
         notification coroutines do not outlive the backend. No-op when no
         tasks are pending.
         """
-        for task in self._background_tasks:
-            task.cancel()
-        if self._background_tasks:
-            await asyncio.gather(*self._background_tasks, return_exceptions=True)
+        await self._background_tasks.shutdown()
 
     def detect_retrodeck_path_change(self) -> None:
         """Check if RetroDECK home path changed since last run.
@@ -209,7 +191,7 @@ class MigrationService:
             payload["cleared"] = True
         else:
             self._logger.warning(f"RetroDECK home path changed: {transition.emit_old} -> {transition.emit_new}")
-        self._spawn_background_task(self._emit("retrodeck_path_changed", payload))
+        self._background_tasks.spawn(self._emit("retrodeck_path_changed", payload), "retrodeck_path_changed")
 
     def _clear_pending_home_never_left(self, current_home: str, pending: Sequence[str]) -> None:
         """Drop any pending home that turns out to BE the live home.

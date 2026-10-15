@@ -247,6 +247,22 @@ Format: **invariant** — tier — enforced by.
   the backend half
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
+- **`create_task`, `ensure_future` and `asyncio.Task(...)` are called under `backend/` only in
+  `lib/background_tasks.py`** — check — `scripts/check_background_tasks.py`. The event loop keeps only a weak reference
+  to a task, so a task nothing else holds can be collected before it ends and its work is lost without a word; and the
+  exception of a task nobody awaits reaches asyncio's own log only when the task is collected, or is dropped by a
+  `gather(..., return_exceptions=True)`. `BackgroundTasks` holds every task it starts until the task ends. `spawn` is
+  for a task nobody awaits: it logs one that ends with an exception as a warning under the name it was started with (a
+  cancellation is not logged). `start_awaited` is for a task its starter awaits itself and whose failure the starter
+  handles there, so it logs nothing. An owner with a place in `Application.shutdown` cancels and awaits what it still
+  holds there; which owners have one, and what happens to the tasks of those that do not, is
+  [Backend Architecture](backend-architecture.md)'s shutdown paragraph. A service that needs a handle on its task keeps
+  the one the helper answers. A task `asyncio.gather` or `asyncio.shield` makes from a coroutine its caller awaits on
+  the spot is the other kind, and outside the rule. `backend/host/` is outside it too: it uses the standard library
+  only, and its call tasks end with their connection; `_vendor/` and `native/` are copies. The check is an AST call-name
+  scan with no pragma: it fails on a call named `create_task` or `ensure_future` in any shape, on `asyncio.Task(...)`,
+  and on a bare `Task(...)` in a module that imports `Task` from `asyncio`; what it does not see is listed in its
+  docstring
 - **A library-sync seam is held only by the module owning the job it belongs to: `active_core` / `disc_resolver` /
   `emulator_sources` (where a run takes its one reading of the sources) by
   `services/library/shortcut_launch_resolver.py`, `renderer_rss` / `renderer_gc` by

@@ -1205,6 +1205,50 @@ class TestWhatTheRunLogs:
         assert "shortcut(s) waiting: 2 for a logo" in caplog.text
 
 
+class TestAWriteItsRunNoLongerAwaits:
+    @staticmethod
+    def _failing_write(release: asyncio.Event) -> Any:
+        async def write() -> None:
+            await release.wait()
+            raise OSError("disk full")
+
+        return write()
+
+    @pytest.mark.asyncio
+    async def test_a_write_that_fails_after_its_run_was_cancelled_is_logged(self, caplog):
+        job = _Job(icons={}, bound={})
+        release = asyncio.Event()
+        run = asyncio.ensure_future(job.service._shielded(self._failing_write(release)))
+        await asyncio.sleep(0)
+        run.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await run
+
+        with caplog.at_level(logging.WARNING, logger="test_shortcut_artwork"):
+            release.set()
+            await asyncio.wait_for(job.service._no_write.wait(), 5)
+            await asyncio.sleep(0)
+
+        left_behind = [r for r in caplog.records if "a write its stopped run left behind failed" in r.getMessage()]
+        assert [r.getMessage() for r in left_behind] == [
+            "Shortcut artwork: a write its stopped run left behind failed: disk full"
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_write_its_run_still_awaits_is_left_to_the_run(self, caplog):
+        job = _Job(icons={}, bound={})
+        release = asyncio.Event()
+        release.set()
+
+        write = self._failing_write(release)
+        with caplog.at_level(logging.WARNING, logger="test_shortcut_artwork"):
+            with pytest.raises(OSError, match="disk full"):
+                await job.service._shielded(write)
+            await asyncio.sleep(0)
+
+        assert "left behind" not in caplog.text
+
+
 class TestTheWideGridAndTheLogo:
     @pytest.mark.asyncio
     async def test_a_missing_wide_grid_and_logo_are_handed_over_for_the_frontend_to_set(self):

@@ -17,12 +17,12 @@ from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from domain.prune import liveness_guard
+from lib.background_tasks import BackgroundTasks
 from services.prune._models import cancellation_state, shielded
 from services.prune.results import GroupOutcome
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Awaitable
 
     from domain.rom import Rom
     from models.prune import MutationOutcome, SourceClaim
@@ -68,6 +68,7 @@ class GroupFinalizer:
     def __init__(self, *, config: GroupFinalizerConfig) -> None:
         self._loop = config.loop
         self._logger = config.logger
+        self._tasks = BackgroundTasks(logger=config.logger)
         self._results = config.results
         self._liveness = config.liveness
         self._save_locks = config.save_locks
@@ -172,7 +173,7 @@ class GroupFinalizer:
                 delete_inventory=delete_inventory,
                 ledger=ledger,
             )
-            result = await self._commit_shielded(commit)
+            result = await self._commit_shielded(self._tasks.start_awaited(commit, "cleanup cascade"))
 
         await self._report_removed(run_id, index, total, rows, handle, result)
         return result
@@ -183,7 +184,7 @@ class GroupFinalizer:
         return liveness_guard(refreshed, plan.delete_ids)
 
     @staticmethod
-    async def _commit_shielded(commit: Awaitable[Any]) -> dict[str, Any]:
+    async def _commit_shielded(commit: asyncio.Future[dict[str, Any]]) -> dict[str, Any]:
         """Run the cascade to its own end, keeping its verdict if the run is cancelled."""
         try:
             return await shielded(commit)

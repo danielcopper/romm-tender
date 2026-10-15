@@ -1176,7 +1176,7 @@ class TestBackgroundTaskTracking:
     """Coverage for the background-task tracking + ``shutdown()`` lifecycle.
 
     ``finalize`` schedules the achievement refresh detached from its
-    return value via ``asyncio.create_task``. Without strong refs into
+    return value via ``BackgroundTasks.spawn``. Without strong refs into
     ``_background_tasks`` and a cancellation hook in ``shutdown()``,
     those tasks outlive the backend's shutdown. These tests pin the contract.
     """
@@ -1230,7 +1230,7 @@ class TestBackgroundTaskTracking:
         (task,) = service._background_tasks
         await task
 
-        assert service._background_tasks == set()
+        assert len(service._background_tasks) == 0
 
     @pytest.mark.asyncio
     async def test_shutdown_cancels_pending_tasks_and_empties_set(self, logger):
@@ -1258,7 +1258,7 @@ class TestBackgroundTaskTracking:
         await service.shutdown()
 
         assert task.cancelled()
-        assert service._background_tasks == set()
+        assert len(service._background_tasks) == 0
 
     @pytest.mark.asyncio
     async def test_shutdown_with_empty_set_is_noop(self, logger):
@@ -1271,12 +1271,12 @@ class TestBackgroundTaskTracking:
             logger=logger,
         )
 
-        assert service._background_tasks == set()
+        assert len(service._background_tasks) == 0
 
         # Must not raise, must not block.
         await service.shutdown()
 
-        assert service._background_tasks == set()
+        assert len(service._background_tasks) == 0
 
 
 class TestTheFinalizesRules:
@@ -1299,4 +1299,4 @@ class TestTheFinalizesRules:
 
         assert playtime_recorder.calls == []
         assert post_exit_sync.calls == []
-        assert service._background_tasks == set()
+        assert len(service._background_tasks) == 0

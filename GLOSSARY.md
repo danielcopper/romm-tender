@@ -1077,8 +1077,8 @@ non-authoritative and cannot mutate Steam.
 The one record of every claim that conflicts with a removed-game cleanup (`PruneConflicts`, `lib/prune_conflicts.py`).
 Four kinds of claim:
 
-- **Operation** — a conflicting endpoint's claim, held for the one call, or **retained** for the detached work that call
-  started (a download, a background save-status check) until that work ends.
+- **Operation** — a conflicting endpoint's claim, held for the one call, or held on (`hold_until_done`) for the detached
+  work that call started (a download, a background save-status check) until that work ends.
 - **Lease** — a token the frontend holds for Steam writes that outlive the backend call. It carries a deadline, and the
   frontend renews and releases it. Not an **action token**, which a running cleanup hands the frontend for one Steam
   action of its own.

@@ -17,6 +17,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from domain.retrodeck_folders import FolderRefused, folder_of
+from lib.background_tasks import BackgroundTasks
 from lib.errors import NamedRefused, NotInstalled, Refused
 from lib.partial_failure import PartialFailure
 from lib.path_safety import is_inside_folder
@@ -107,6 +108,7 @@ class RomRemovalService:
         self._download_queue_cleanup = config.download_queue_cleanup
         self._uow_factory = config.uow_factory
         self._rules = config.conflict_rules
+        self._tasks = BackgroundTasks(logger=config.logger)
         # Read and written only on the loop thread — every mutation brackets a
         # ``run_in_executor`` call, or runs in that call's completion callback,
         # rather than happening inside one — so both removal entry points share
@@ -232,11 +234,12 @@ class RomRemovalService:
 
     def _publish_removal_progress(self, rom_id: int, removed: int, total: int) -> None:
         """Schedule one ``uninstall_progress`` emit. Runs on the loop thread."""
-        self._loop.create_task(
+        self._tasks.spawn(
             self._emit(
                 "uninstall_progress",
                 {"rom_id": rom_id, "files_removed": removed, "files_total": total},
-            )
+            ),
+            "uninstall_progress",
         )
 
     def _elapsed(self, started: float) -> str:
@@ -435,11 +438,11 @@ class RomRemovalService:
         """Keep a cancelled call's removal claimed until *work* ends, under an operation named *label*.
 
         *on_end* gives the claim back when the thread ends. The operation is
-        retained from inside the call's ``hold(..., prune=True)`` block, so no
+        held from inside the call's ``hold(..., prune=True)`` block, so no
         cleanup starts between the call's end and the thread's.
         """
         work.add_done_callback(on_end)
-        await self._rules.retain(self._loop.create_task(asyncio.wait([work])), label)
+        await self._rules.hold_until_done(self._tasks.spawn(asyncio.wait([work]), f"{label} thread"), label)
 
     def _end_cancelled_removal(self, rom_id: int, label: str, removal: asyncio.Future[Any]) -> None:
         """Give back the claim of a removal whose call was cancelled, and log how its thread ended."""

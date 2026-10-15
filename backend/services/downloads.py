@@ -35,6 +35,7 @@ from domain.rom_files import (
     synthetic_rom_name,
 )
 from domain.sibling_supersede import supersede_siblings
+from lib.background_tasks import BackgroundTasks
 from lib.errors import NotInstalled, Refused
 from lib.path_safety import coerce_safe_component
 
@@ -158,6 +159,7 @@ class DownloadService:
         self._uow_factory = config.uow_factory
         self._rom_remover = config.rom_remover
         self._rules = config.conflict_rules
+        self._tasks = BackgroundTasks(logger=config.logger)
 
         # Owned state
         self._download_in_progress: set[int] = set()
@@ -177,14 +179,12 @@ class DownloadService:
         self._control_tokens: dict[int, _DownloadControl] = {}
 
     async def shutdown(self) -> None:
-        """Cancel in-flight per-ROM download tasks when the backend shuts down.
+        """Cancel the per-ROM download tasks and the progress frames still running, and wait until they have ended.
 
-        Per-ROM tasks are cancelled fire-and-forget; their ``finally``
-        clauses run on the event loop after this method returns, which
-        is acceptable at shutdown.
+        A download cancelled while its install is being committed waits for the
+        commit's thread before it ends, so this waits for it too.
         """
-        for task in self._download_tasks.values():
-            task.cancel()
+        await self._tasks.shutdown()
         self._download_tasks.clear()
 
     def _prune_download_queue(self):
@@ -231,7 +231,7 @@ class DownloadService:
             answer = {"candidate_path": candidate_path, "collision_choice": collision_choice}
             answer["page_saw_candidate"] = page_saw_candidate
             result = await self._begin_download(rom_id, resume=False, replace_existing=bool(replace_existing), **answer)
-            await self._retain_started_task(result, rom_id, "start_download")
+            await self._hold_until_started_task_done(result, rom_id, "start_download")
             return result
 
     async def supersede_sibling_installs(self, rom_id: int, *, adopted_path: str | None = None) -> None:
@@ -248,11 +248,10 @@ class DownloadService:
         must not nest (ADR-0006). Each superseded install is removed through the
         canonical ``RomRemovalService.remove_rom_unchecked`` (files + ``rom_installs``
         row; saves untouched per ADR-0007) rather than duplicating its deletion logic.
-        Every attempt is logged with both rom ids so a failure is attributable (S7).
-        A removal refused with :class:`NotInstalled` raced clean and is skipped; any
-        other refusal propagates so the caller aborts with it. A superseded
-        sibling's *paused* queue entry is evicted so the queue stays coherent with
-        disk (S1).
+        Every attempt is logged with both rom ids so a failure is attributable. A
+        removal refused with :class:`NotInstalled` raced clean and is skipped; any other
+        refusal propagates so the caller aborts with it. A superseded sibling's *paused*
+        queue entry is evicted so the queue stays coherent with disk.
         """
         sibling_ids = self._conflicting_sibling_install_ids(rom_id, adopted_path)
         if not sibling_ids:
@@ -424,8 +423,9 @@ class DownloadService:
         # re-download installs a fresh token, leaving the zombie's callback bound
         # to the cancelled one (#144).
         control = _DownloadControl()
-        task = self._loop.create_task(
-            self._do_download(rom_id, rom_detail, target_path, system, file_name, control, resume=resume)
+        task = self._tasks.spawn(
+            self._do_download(rom_id, rom_detail, target_path, system, file_name, control, resume=resume),
+            f"download of rom {rom_id}",
         )
 
         self._download_queue[rom_id] = {
@@ -465,7 +465,9 @@ class DownloadService:
         """Return the detached task whose lifetime owns this ROM's install write."""
         return self._download_tasks.get(int(rom_id))
 
-    async def _retain_started_task(self, result: dict[str, Any] | PartialFailure, rom_id: int, label: str) -> None:
+    async def _hold_until_started_task_done(
+        self, result: dict[str, Any] | PartialFailure, rom_id: int, label: str
+    ) -> None:
         """Hold an operation named *label* for the task a successful start or resume left running.
 
         Called inside that call's own ``hold``, so no cleanup can start between
@@ -474,7 +476,7 @@ class DownloadService:
         """
         task = self.task_for_rom(rom_id) if isinstance(result, dict) else None
         if task is not None:
-            await self._rules.retain(task, label)
+            await self._rules.hold_until_done(task, label)
 
     def _safe_local_file_name(self, rom_detail: dict[str, Any]) -> str:
         """The on-disk name for this ROM: the server's, coerced to one safe component.
@@ -711,7 +713,7 @@ class DownloadService:
                 "total_bytes": total,
             }
         )
-        self._loop.create_task(
+        self._tasks.spawn(
             self._emit(
                 "download_progress",
                 {
@@ -725,7 +727,8 @@ class DownloadService:
                     "total_bytes": total,
                     "resumable": False if extracting else entry.get("resumable", False),
                 },
-            )
+            ),
+            "download_progress",
         )
 
     async def _finalize_download_complete(self, rom_id, rom_detail, final_path, rom_name, platform_name):
@@ -815,7 +818,7 @@ class DownloadService:
                 if entry is None:
                     return
                 entry["resumable"] = range_supported
-                self._loop.create_task(
+                self._tasks.spawn(
                     self._emit(
                         "download_progress",
                         {
@@ -829,7 +832,8 @@ class DownloadService:
                             "total_bytes": entry.get("total_bytes", 0),
                             "resumable": range_supported,
                         },
-                    )
+                    ),
+                    "download_progress",
                 )
 
             self._loop.call_soon_threadsafe(_apply)
@@ -1124,8 +1128,7 @@ class DownloadService:
         bare ``target_path`` is NEVER removed: a single-file transfer writes to
         ``target_path + .tmp`` and only renames to ``target_path`` on success, so
         deleting the bare path would destroy a PRE-EXISTING install (a re-download
-        that fails mid-stream) or a just-committed one (a cancel race) — the #1049
-        data-loss bug.
+        that fails mid-stream) or a just-committed one (a cancel race).
 
         For a multi-file ROM the extract dir may have been renamed for ES-DE
         collapse after extraction. *final_path* (the resolved launch file,
@@ -1174,9 +1177,7 @@ class DownloadService:
         partial, emits the terminal ``cancelled`` frame, and evicts the entry.
 
         A **paused** download has NO task — the pause already cancelled it,
-        leaving the entry "paused" and the partial ``.tmp`` kept for resume. A
-        plain task lookup then found nothing and silently no-op'd (the
-        downloads-round finding). Handle it directly here:
+        leaving the entry "paused" and the partial ``.tmp`` kept for resume.
         ``_cancel_paused_download`` deletes the partial, emits the same terminal
         ``cancelled`` frame, and evicts the entry.
 
@@ -1207,14 +1208,14 @@ class DownloadService:
         dir), emits the same terminal ``download_progress`` ``cancelled`` frame
         the running-cancel emits (so the button resets and the store drops the
         row), then evicts the entry — a cancel is an explicit discard that leaves
-        no residue (#149 downloads-round).
+        no residue.
         """
         target_path = entry.get("_target_path")
         if target_path:
             self._remove_partial_tmp_files(target_path)
         # cancel_download runs on the loop thread; schedule the terminal frame the
-        # same way the progress callbacks do (fire-and-forget on the loop).
-        self._loop.create_task(self._emit("download_progress", cancelled_frame(rom_id, entry)))
+        # same way the progress callbacks do.
+        self._tasks.spawn(self._emit("download_progress", cancelled_frame(rom_id, entry)), "download_progress")
         self.evict(rom_id)
 
     def pause_download(self, rom_id):
@@ -1270,7 +1271,7 @@ class DownloadService:
                 raise Refused("superseded", "Another version is now active")
             replace_existing = bool(entry.get("_replace_existing"))
             result = await self._begin_download(rom_id, resume=True, replace_existing=replace_existing)
-            await self._retain_started_task(result, rom_id, "resume_download")
+            await self._hold_until_started_task_done(result, rom_id, "resume_download")
             return result
 
     def _resume_target_superseded(self, rom_id: int) -> bool:

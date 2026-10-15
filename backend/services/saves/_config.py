@@ -107,8 +107,8 @@ class SaveServiceConfig:
         post-exit sync and does not follow a save directory on this signal.
     conflict_rules:
         ``ConflictRules`` seam — the rules a save use case checks at its
-        entry under its endpoint's name, and the operation it retains for
-        detached work.
+        entry under its endpoint's name, and the operation it holds until
+        detached work ends.
     log_debug:
         ``DebugLogger`` Protocol seam — routes through the user's QAM
         log-level filter. Injected directly into each sub-service that

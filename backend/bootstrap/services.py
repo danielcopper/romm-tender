@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from domain.identity import VERSION
 from domain.shortcut_data import RETRODECK_APP_ID
+from lib.background_tasks import BackgroundTasks
 from lib.conflict_rules import ConflictRuleSet
 from lib.late_binding import LateBinding
 from lib.prune_conflicts import PruneConflicts
@@ -168,23 +169,28 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     # Retry-progress surface (#1345): the RommHttpAdapter runs its retry+backoff
     # ladder inside ``run_in_executor`` worker threads, so each retry is off the
     # event loop. Wire a listener that marshals a ``server_retry_progress`` emit
-    # back onto the loop (the same call_soon_threadsafe → create_task pattern the
+    # back onto the loop (the same call_soon_threadsafe → spawned-task pattern the
     # download-progress emits use), letting the saves surfaces show a live
     # "connecting… (attempt N/M)" indicator instead of a frozen spinner. Wired
     # here (not in ``bootstrap``) because the loop and emit only exist at
     # service-wiring time; the adapter stays service-free (plain injected callable).
+    retry_frames = BackgroundTasks(logger=cfg.runtime.logger)
+
     def _emit_server_retry(attempt: int, max_attempts: int, delay_s: float) -> None:
         payload = {"attempt": attempt, "max_attempts": max_attempts, "delay_s": delay_s}
-        loop = cfg.runtime.loop
-        loop.call_soon_threadsafe(
-            lambda: loop.create_task(cfg.runtime.emit("server_retry_progress", payload)),
+        cfg.runtime.loop.call_soon_threadsafe(
+            lambda: retry_frames.spawn(cfg.runtime.emit("server_retry_progress", payload), "server_retry_progress"),
         )
 
     cfg.adapters.http_adapter.on_retry = _emit_server_retry
 
     # The one record of every claim that conflicts with a removed-game cleanup,
     # whoever holds it. Built before every service so any of them can be handed it.
-    prune_conflicts = PruneConflicts(logger=cfg.runtime.logger, log_debug=cfg.callbacks.log_debug)
+    prune_conflicts = PruneConflicts(
+        logger=cfg.runtime.logger,
+        log_debug=cfg.callbacks.log_debug,
+        release_tasks=BackgroundTasks(logger=cfg.runtime.logger),
+    )
     # The conflict rules a use case checks at its entry, built beside the
     # prune conflicts so any service can be handed them. The update install,
     # migration and sync services that answer the other three rules are built

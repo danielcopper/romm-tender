@@ -15,6 +15,7 @@ from _factories import (
     _record_operations_at_lease,
     _refused_by_conflict_rule,
 )
+from _spawns import record_spawns
 from fakes.fake_download_queue_cleanup import FakeDownloadQueueCleanup
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
 from fakes.fake_rom_file_store import FakeRomFileStore
@@ -1537,6 +1538,46 @@ class TestRemovalProgressFrames:
         await asyncio.sleep(0)
 
         assert emitter.payloads("uninstall_progress") == []
+
+
+class TestTheRemovalsTasksAreHeld:
+    """The progress frame and the wait on a cancelled call's thread start through ``BackgroundTasks``."""
+
+    @pytest.mark.asyncio
+    async def test_the_progress_frame_starts_through_the_helper(self, service, emitter, monkeypatch):
+        spawned = record_spawns(monkeypatch)
+
+        service._publish_removal_progress(42, 1, 2)
+        await _until(lambda: emitter.payloads("uninstall_progress"))
+
+        assert spawned == ["uninstall_progress"]
+
+    @pytest.mark.asyncio
+    async def test_the_wait_on_a_cancelled_calls_thread_starts_through_the_helper(
+        self, service, uow, rom_files, monkeypatch
+    ):
+        spawned = record_spawns(monkeypatch)
+        _seed_installed_file(uow, rom_files, 42)
+        entered = threading.Event()
+        release = threading.Event()
+        original = service._delete_rom_files
+
+        def remove_once_released(*args, **kwargs):
+            entered.set()
+            assert release.wait(timeout=5)
+            return original(*args, **kwargs)
+
+        service._delete_rom_files = remove_once_released
+        removal = asyncio.ensure_future(service.remove_rom(42))
+        assert await asyncio.to_thread(entered.wait, 5)
+        removal.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await removal
+
+        release.set()
+        await _until(lambda: not service._removals_in_flight)
+
+        assert spawned[0] == "remove_rom thread"
 
 
 # ── The removal leases and the unchecked twin ─────────────────────────────────

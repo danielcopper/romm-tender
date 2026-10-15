@@ -31,6 +31,8 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _factories import _make_application, _make_services_bundle
+from _spawns import record_spawns
 from fakes.fake_source_platform_systems import FakeSourcePlatformSystems
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 
@@ -1049,7 +1051,7 @@ class TestSyncApplyDelta:
         library.sync._orchestrator._do_sync_per_unit = do_sync
 
         result = await library.sync.sync_apply_delta("test-preview-123")
-        # Drain the create_task'd dispatch.
+        # Drain the spawned dispatch.
         for _ in range(3):
             await asyncio.sleep(0)
 
@@ -3820,26 +3822,111 @@ class TestCommitUnitResults:
 
 
 class TestShutdown:
-    """Tests for shutdown().
+    """Tests for shutdown()'s first step: it flips a RUNNING sync into CANCELLING.
 
-    Graceful shutdown flips a RUNNING sync into CANCELLING so the
-    per-unit loop drops its in-flight work on the next checkpoint.
+    It then cancels the run and waits for it, which ``TestTheRunIsHeldUntilItEnds`` pins.
     """
 
-    def test_shutdown_when_running_marks_cancelling(self, library):
+    async def test_shutdown_when_running_marks_cancelling(self, library):
         library.sync._box.sync_state = SyncState.RUNNING
-        library.sync.shutdown()
+        await library.sync.shutdown()
         assert library.sync._sync_state == SyncState.CANCELLING
 
-    def test_shutdown_when_idle_is_noop(self, library):
+    async def test_shutdown_when_idle_is_noop(self, library):
         library.sync._box.sync_state = SyncState.IDLE
-        library.sync.shutdown()
+        await library.sync.shutdown()
         assert library.sync._sync_state == SyncState.IDLE
 
-    def test_shutdown_when_cancelling_is_noop(self, library):
+    async def test_shutdown_when_cancelling_is_noop(self, library):
         library.sync._box.sync_state = SyncState.CANCELLING
-        library.sync.shutdown()
+        await library.sync.shutdown()
         assert library.sync._sync_state == SyncState.CANCELLING
+
+
+class TestTheRunIsHeldUntilItEnds:
+    """The run and the error path's frame start through ``BackgroundTasks``, which the shutdown cancels and awaits."""
+
+    async def test_start_sync_starts_the_run_through_the_helper(self, library, monkeypatch):
+        spawned = record_spawns(monkeypatch)
+        library.sync._orchestrator._do_sync_per_unit = AsyncMock()
+
+        await library.sync.start_sync()
+
+        assert spawned == ["library sync run"]
+
+    async def test_apply_delta_starts_the_run_through_the_helper(self, library, monkeypatch):
+        spawned = record_spawns(monkeypatch)
+        library.sync._orchestrator._do_sync_per_unit = AsyncMock()
+        library.sync._box.stage_preview(
+            preview_id="p1",
+            created_at=library.sync._orchestrator._clock.time(),
+            answer={"success": True, "preview_id": "p1"},
+        )
+
+        await library.sync.sync_apply_delta("p1")
+
+        assert spawned == ["library sync run"]
+
+    async def test_the_error_paths_frame_starts_through_the_helper(self, library, fake_romm_api, monkeypatch):
+        spawned = record_spawns(monkeypatch)
+        _use_fake_romm(library, fake_romm_api)
+        fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
+        fake_romm_api.list_roms_side_effect = RuntimeError("boom")
+        library.settings["enabled_platforms"] = {"1": True}
+        library.sync._box.sync_state = SyncState.RUNNING
+
+        await library.sync._orchestrator._do_sync_per_unit()
+
+        assert spawned == ["sync_progress error frame"]
+        await library.sync.shutdown()
+
+    @staticmethod
+    async def _start_a_run_that_waits(library) -> asyncio.Task[Any]:
+        """Start a real run whose work-queue build waits until it is cancelled; answer its task."""
+        building = asyncio.Event()
+
+        async def build_work_queue():
+            building.set()
+            await asyncio.Event().wait()
+
+        library.sync._orchestrator._fetcher.build_work_queue = build_work_queue
+        await library.sync.start_sync()
+        await asyncio.wait_for(building.wait(), 5)
+        (run,) = tuple(library.sync._orchestrator._tasks)
+        return run
+
+    async def test_shutdown_cancels_the_running_sync_and_returns_once_it_has_ended(self, library):
+        run = await self._start_a_run_that_waits(library)
+
+        await asyncio.wait_for(library.sync.shutdown(), 5)
+
+        assert run.cancelled()
+        assert library.sync._sync_state == SyncState.IDLE
+
+    async def test_a_running_sync_has_ended_before_the_services_after_it_shut_down(self, library):
+        run = await self._start_a_run_that_waits(library)
+        run_ended_when_the_next_service_stopped: list[bool] = []
+
+        async def prune_shutdown() -> None:
+            run_ended_when_the_next_service_stopped.append(run.done())
+
+        app = _make_application(
+            _make_services_bundle(
+                sync_service=library.sync,
+                shortcut_artwork_service=MagicMock(shutdown=AsyncMock()),
+                update_install_service=MagicMock(shutdown=AsyncMock()),
+                prune_service=MagicMock(shutdown=AsyncMock(side_effect=prune_shutdown)),
+                download_service=MagicMock(shutdown=AsyncMock()),
+                migration_service=MagicMock(shutdown=AsyncMock()),
+                session_lifecycle_service=MagicMock(shutdown=AsyncMock()),
+                playtime_service=MagicMock(shutdown=AsyncMock()),
+            )
+        )
+
+        await asyncio.wait_for(app.shutdown(), 5)
+
+        assert run_ended_when_the_next_service_stopped == [True]
+        assert run.cancelled()
 
 
 class TestDoSyncPerUnitErrors:
@@ -3903,7 +3990,7 @@ class TestDoSyncPerUnitErrors:
         library.sync._box.sync_state = SyncState.RUNNING
 
         await library.sync._orchestrator._do_sync_per_unit()
-        # Drain any pending tasks scheduled by the outer handler (loop.create_task).
+        # Drain any pending tasks the outer handler spawned.
         for _ in range(3):
             await asyncio.sleep(0)
 

@@ -114,14 +114,14 @@ class ConflictRuleSet:
         if sync and self._sync_in_flight():
             raise Refused("sync_active", _SYNC_MESSAGE)
 
-    async def retain(self, task: asyncio.Task[Any], label: str) -> None:
+    async def hold_until_done(self, task: asyncio.Task[Any], label: str) -> None:
         """Hold an operation named *label* until *task* ends — detached work a use case started.
 
         Checks no rule: call it inside the ``hold(..., prune=True)`` block that
         started *task*, so the operation is registered before that block's own
         is released and no cleanup can start in between.
         """
-        await self._prune_conflicts.retain(task, label)
+        await self._prune_conflicts.hold_until_done(task, label)
 
     async def acquire_lease(self, key: str) -> str:
         """Take a lease under *key* for Steam writes the frontend makes after the call or the event; answer its token.

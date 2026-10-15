@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 import pytest
 
+from lib.background_tasks import BackgroundTasks
 from lib.conflict_rules import ConflictRuleSet
 from lib.errors import Refused
 from lib.prune_conflicts import PruneConflicts
@@ -49,7 +51,11 @@ class _Rules:
         self, *, update: bool = False, migration: bool = False, sync: bool = False, cleanup: bool = False
     ) -> None:
         self.logger = _RecordingLogger()
-        self.conflicts = PruneConflicts(logger=self.logger, log_debug=lambda _msg: None)
+        self.conflicts = PruneConflicts(
+            logger=self.logger,
+            log_debug=lambda _msg: None,
+            release_tasks=BackgroundTasks(logger=logging.getLogger("test-prune-conflicts")),
+        )
         if cleanup:
             self.conflicts.register_run("held-run")
         self.update = _Condition(holds=update)
@@ -228,12 +234,12 @@ async def test_a_block_without_the_prune_rule_holds_nothing():
         assert rules.conflicts.conflicting_operations == 0
 
 
-async def test_retain_holds_an_operation_until_the_detached_task_ends():
+async def test_hold_until_done_holds_an_operation_until_the_detached_task_ends():
     rules = _Rules()
     release = asyncio.Event()
     task = asyncio.create_task(release.wait())
 
-    await rules.rules.retain(task, "the_endpoint")
+    await rules.rules.hold_until_done(task, "the_endpoint")
     assert rules.conflicts.conflicting_operations == 1
 
     release.set()

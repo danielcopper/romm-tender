@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 import pytest
 
+from lib.background_tasks import BackgroundTasks
 from lib.conflict_rules import ConflictRuleSet
 from lib.errors import Refused
 from lib.prune_conflicts import _LEASE_SECONDS, PruneConflicts
@@ -38,7 +40,8 @@ class _LoopClock:
 def _conflicts() -> tuple[PruneConflicts, _RecordingLogger, list[str]]:
     logger = _RecordingLogger()
     debug_lines: list[str] = []
-    return PruneConflicts(logger=logger, log_debug=debug_lines.append), logger, debug_lines
+    release_tasks = BackgroundTasks(logger=logging.getLogger("test-prune-conflicts"))
+    return PruneConflicts(logger=logger, log_debug=debug_lines.append, release_tasks=release_tasks), logger, debug_lines
 
 
 class _Endpoints:
@@ -253,11 +256,11 @@ async def test_reservation_is_released_when_the_start_begins_no_run(outcome) -> 
 
 
 @pytest.mark.asyncio
-async def test_detached_task_retains_conflict_claim_for_its_full_lifetime() -> None:
+async def test_a_detached_task_holds_its_conflict_claim_for_its_full_lifetime() -> None:
     endpoints, conflicts, _logger, _debug = _endpoints()
     release = asyncio.Event()
     task = asyncio.create_task(release.wait())
-    await conflicts.retain(task, "start_download")
+    await conflicts.hold_until_done(task, "start_download")
     assert (await endpoints.start_prune())["reason"] == "operation_active"
 
     release.set()
@@ -267,15 +270,15 @@ async def test_detached_task_retains_conflict_claim_for_its_full_lifetime() -> N
 
 
 @pytest.mark.asyncio
-async def test_a_retained_claims_release_is_held_by_the_prune_conflicts_until_it_finishes() -> None:
+async def test_a_held_claims_release_is_held_by_the_prune_conflicts_until_it_finishes() -> None:
     """The loop holds a task only weakly, so an unowned release could be collected before it runs."""
     conflicts, _logger, _debug = _conflicts()
     release = asyncio.Event()
     task = asyncio.create_task(release.wait())
-    await conflicts.retain(task, "start_download")
+    await conflicts.hold_until_done(task, "start_download")
 
     release.set()
-    # The retain's done callback was added before this await's, so it has
+    # The hold's done callback was added before this await's, so it has
     # already created the release task by the time the await returns.
     await task
     pending = set(conflicts._release_tasks)
@@ -284,7 +287,7 @@ async def test_a_retained_claims_release_is_held_by_the_prune_conflicts_until_it
 
     await asyncio.gather(*pending)
     await asyncio.sleep(0)
-    assert conflicts._release_tasks == set()
+    assert len(conflicts._release_tasks) == 0
     assert conflicts.conflicting_operations == 0
 
 
@@ -389,11 +392,11 @@ async def test_expired_lease_is_reported_at_info_as_never_released(monkeypatch) 
 
 
 @pytest.mark.asyncio
-async def test_detached_retention_is_labelled_by_its_originating_endpoint() -> None:
+async def test_a_hold_for_detached_work_is_labelled_by_its_originating_endpoint() -> None:
     endpoints, conflicts, logger, _debug = _endpoints()
     release = asyncio.Event()
     task = asyncio.create_task(release.wait())
-    await conflicts.retain(task, "start_download")
+    await conflicts.hold_until_done(task, "start_download")
 
     await endpoints.start_prune()
 

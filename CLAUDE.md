@@ -488,6 +488,12 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   docstrings, shell, file names, a name built at run time, and an excepted name put to a new use for Tender
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
+- **`create_task`, `ensure_future` and `asyncio.Task(...)` are called under `backend/` only in
+  `lib/background_tasks.py`, whose `BackgroundTasks` holds each task until it ends — `spawn` for a task nobody awaits
+  (logged as a warning when it fails), `start_awaited` for one its starter awaits itself; an owner with a place in
+  `Application.shutdown` cancels and awaits its tasks there; a task `gather` or `shield` makes from a coroutine its
+  caller awaits on the spot is outside the rule, and so are `host/`, `_vendor/` and `native/`** — check —
+  `scripts/check_background_tasks.py` (AST call names, no pragma); what it does not see is listed in its docstring
 - **A library-sync seam is held only by the module owning the job it belongs to — in `services/library/`, `active_core`
   / `disc_resolver` / `emulator_sources` by `shortcut_launch_resolver.py`, `renderer_rss` / `renderer_gc` by
   `session_budget.py`, and `artwork` by `cover_preparer.py` **and** `reporter.py`, the one confinement with two owners,

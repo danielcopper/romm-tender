@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 from domain.retrodeck_folders import EveryFolderRefused, FolderRefused
+from lib.background_tasks import BackgroundTasks
 from lib.errors import NamedRefused, Refused
 from lib.url_host import romm_namespace
 from services.prune._models import (
@@ -135,6 +136,7 @@ class PruneService:
     def __init__(self, *, config: PruneServiceConfig) -> None:
         self._loop = config.loop
         self._logger = config.logger
+        self._tasks = BackgroundTasks(logger=config.logger)
         self._clock = config.clock
         self._uuid_gen = config.uuid_gen
         self._emit = config.emit
@@ -341,7 +343,7 @@ class PruneService:
                 self._run_claim.register_run(run_id)
                 self._run_preview_id = refreshed.preview_id
                 self._completed_action_tokens.clear()
-                self._task = self._loop.create_task(self._run(run_id, refreshed, options))
+                self._task = self._tasks.spawn(self._run(run_id, refreshed, options), f"cleanup run {run_id}")
                 began.append(self._task)
                 self._task.add_done_callback(self._release_stranded_claim)
         finally:

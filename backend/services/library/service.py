@@ -396,9 +396,9 @@ class LibraryService:
 
     # ── Use cases the endpoints call ─────────────────────────────
 
-    def shutdown(self) -> None:
-        """Request graceful shutdown — cancels sync if running."""
-        self._orchestrator.shutdown()
+    async def shutdown(self) -> None:
+        """Stop a running library sync: its cancel flag, then its run cancelled and awaited."""
+        await self._orchestrator.shutdown()
 
     # Platform metadata
     async def get_platforms(self):

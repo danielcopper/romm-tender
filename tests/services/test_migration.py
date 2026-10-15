@@ -221,32 +221,14 @@ async def _set_event_loop(migration):
     migration.service._loop = asyncio.get_running_loop()
 
 
-class _RecordingLoop:
-    """Drop-in loop substitute that captures and immediately closes scheduled coroutines.
-
-    Mirrors what the original tests built ad-hoc with ``MagicMock`` for
-    ``loop.create_task``: schedule receives the coroutine and stores it
-    (closing it so no pending-task warning fires), and the count is
-    inspectable via ``len(tasks)``. Use this when a test wants to assert
-    *whether* a coroutine was scheduled without actually pumping the
-    event loop.
-    """
-
-    def __init__(self) -> None:
-        self.tasks: list[object] = []
-
-    def create_task(self, coro):
-        coro.close()
-        self.tasks.append(coro)
-        return
-
-
 class TestPathChangeDetection:
-    def test_first_run_stores_path(self, migration, tmp_path):
+    def test_first_run_stores_path(self, migration, tmp_path, monkeypatch):
         """First run (empty stored path) stores current path, no event."""
 
-        loop = _RecordingLoop()
-        migration.service._loop = loop
+        spawned: list[str] = []
+        monkeypatch.setattr(
+            migration.service._background_tasks, "spawn", lambda coro, name: (coro.close(), spawned.append(name))
+        )
 
         fake_home = str(tmp_path / "retrodeck")
         os.makedirs(fake_home, exist_ok=True)
@@ -257,26 +239,28 @@ class TestPathChangeDetection:
         with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path") == fake_home
         # No event emitted on first run
-        assert loop.tasks == []
+        assert spawned == []
         assert migration.service._emit.calls == []
 
-    def test_no_change_no_notification(self, migration, tmp_path):
+    def test_no_change_no_notification(self, migration, tmp_path, monkeypatch):
         """Same path as stored — no event, no state change."""
 
         fake_home = str(tmp_path / "retrodeck")
         os.makedirs(fake_home, exist_ok=True)
         with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", fake_home)
-        loop = _RecordingLoop()
-        migration.service._loop = loop
+        spawned: list[str] = []
+        monkeypatch.setattr(
+            migration.service._background_tasks, "spawn", lambda coro, name: (coro.close(), spawned.append(name))
+        )
 
         migration.service._retrodeck_folders = FakeRetroDeckFolders(home=fake_home)
         migration.service.detect_retrodeck_path_change()
 
-        assert loop.tasks == []
+        assert spawned == []
         assert migration.service._emit.calls == []
 
-    def test_two_spellings_of_one_home_are_not_a_move(self, migration, tmp_path):
+    def test_two_spellings_of_one_home_are_not_a_move(self, migration, tmp_path, monkeypatch):
         """#1838: a marker naming the live home through a symlink is the same directory.
 
         A home stored before the roots were resolved is spelled the way
@@ -294,13 +278,15 @@ class TestPathChangeDetection:
 
         with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", stored_home)
-        loop = _RecordingLoop()
-        migration.service._loop = loop
+        spawned: list[str] = []
+        monkeypatch.setattr(
+            migration.service._background_tasks, "spawn", lambda coro, name: (coro.close(), spawned.append(name))
+        )
         migration.service._retrodeck_folders = FakeRetroDeckFolders(home=str(real_home))
 
         migration.service.detect_retrodeck_path_change()
 
-        assert loop.tasks == []
+        assert spawned == []
         assert migration.service._emit.calls == []
         with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path_previous") is None
@@ -309,7 +295,7 @@ class TestPathChangeDetection:
             # spelling it was stored with and is resolved again next startup.
             assert uow.kv_config.get("retrodeck_home_path") == stored_home
 
-    def test_a_pending_marker_naming_the_live_home_is_cleared(self, migration, tmp_path):
+    def test_a_pending_marker_naming_the_live_home_is_cleared(self, migration, tmp_path, monkeypatch):
         """A marker naming the home RetroDECK is already on is dropped.
 
         Otherwise it stands until the user migrates or dismisses, over a home
@@ -325,8 +311,10 @@ class TestPathChangeDetection:
         with migration.uow as uow:
             uow.kv_config.set("retrodeck_home_path", linked_home)
             uow.kv_config.set("retrodeck_home_path_previous", linked_home)
-        loop = _RecordingLoop()
-        migration.service._loop = loop
+        spawned: list[str] = []
+        monkeypatch.setattr(
+            migration.service._background_tasks, "spawn", lambda coro, name: (coro.close(), spawned.append(name))
+        )
         migration.service._retrodeck_folders = FakeRetroDeckFolders(home=str(real_home))
 
         migration.service.detect_retrodeck_path_change()
@@ -335,9 +323,9 @@ class TestPathChangeDetection:
             assert uow.kv_config.get("retrodeck_home_path_previous") is None
             assert uow.kv_config.get("retrodeck_home_path_hops") is None
         assert migration.service.is_retrodeck_migration_pending() is False
-        assert loop.tasks == []
+        assert spawned == []
 
-    def test_a_pending_hop_that_was_really_left_survives_the_clear(self, migration, tmp_path):
+    def test_a_pending_hop_that_was_really_left_survives_the_clear(self, migration, tmp_path, monkeypatch):
         """Only the marker naming the live home is dropped; a genuine hop stays pending."""
 
         home = str(tmp_path / "retrodeck")
@@ -346,7 +334,10 @@ class TestPathChangeDetection:
             uow.kv_config.set("retrodeck_home_path", home)
             uow.kv_config.set("retrodeck_home_path_previous", home)
             uow.kv_config.set("retrodeck_home_path_hops", json.dumps([str(tmp_path / "sd-card" / "retrodeck")]))
-        migration.service._loop = _RecordingLoop()
+        spawned: list[str] = []
+        monkeypatch.setattr(
+            migration.service._background_tasks, "spawn", lambda coro, name: (coro.close(), spawned.append(name))
+        )
         migration.service._retrodeck_folders = FakeRetroDeckFolders(home=home)
 
         migration.service.detect_retrodeck_path_change()
@@ -407,7 +398,7 @@ class TestPathChangeDetection:
         migration.service._retrodeck_folders = FakeRetroDeckFolders(home=new_home)
         migration.service.detect_retrodeck_path_change()
 
-        # ``create_task`` schedules the emit coroutine on the running loop —
+        # the spawned emit runs on the running loop —
         # yield once so the scheduled coroutine runs and the emitter records.
         await asyncio.sleep(0)
 
@@ -425,16 +416,18 @@ class TestPathChangeDetection:
         # Path-change emit does NOT carry ``cleared`` — only the auto-clear emit does.
         assert "cleared" not in payload
 
-    def test_empty_current_home_no_action(self, migration, tmp_path):
+    def test_empty_current_home_no_action(self, migration, tmp_path, monkeypatch):
         """Where RetroDECK gives the move code no folders, nothing is done."""
 
-        loop = _RecordingLoop()
-        migration.service._loop = loop
+        spawned: list[str] = []
+        monkeypatch.setattr(
+            migration.service._background_tasks, "spawn", lambda coro, name: (coro.close(), spawned.append(name))
+        )
 
         migration.service._retrodeck_folders = FakeRetroDeckFolders(home="")
         migration.service.detect_retrodeck_path_change()
 
-        assert loop.tasks == []
+        assert spawned == []
         assert migration.service._emit.calls == []
         with migration.uow as uow:
             assert uow.kv_config.get("retrodeck_home_path") is None
@@ -453,7 +446,7 @@ class TestPathChangeDetection:
         migration.service._retrodeck_folders = FakeRetroDeckFolders(home=old_home)
         migration.service.detect_retrodeck_path_change()
 
-        # ``create_task`` schedules the emit coroutine on the running loop —
+        # the spawned emit runs on the running loop —
         # yield once so the scheduled coroutine runs and the emitter records.
         await asyncio.sleep(0)
 
@@ -485,7 +478,7 @@ class TestPathChangeDetection:
         migration.service._retrodeck_folders = FakeRetroDeckFolders(home=old_home)
         migration.service.detect_retrodeck_path_change()
 
-        # ``create_task`` schedules the emit coroutine on the running loop —
+        # the spawned emit runs on the running loop —
         # yield once so the scheduled coroutine runs and the emitter records.
         await asyncio.sleep(0)
 
@@ -1773,7 +1766,7 @@ class TestBackgroundTaskTracking:
     """Coverage for the background-task tracking + ``shutdown()`` lifecycle.
 
     The path-change detection schedules a ``retrodeck_path_changed`` emit
-    via ``loop.create_task``. Without a strong ref in ``_background_tasks``
+    via ``BackgroundTasks.spawn``. Without a strong ref in ``_background_tasks``
     such a task can be collected before it runs, and without a cancellation
     hook in ``shutdown()`` it is still pending when the backend shuts down.
     These tests pin the contract.
@@ -1791,7 +1784,7 @@ class TestBackgroundTaskTracking:
             uow.kv_config.set("retrodeck_home_path", old_home)
         migration.service._retrodeck_folders = FakeRetroDeckFolders(home=new_home)
 
-        assert migration.service._background_tasks == set()
+        assert len(migration.service._background_tasks) == 0
 
         migration.service.detect_retrodeck_path_change()
 
@@ -1823,7 +1816,7 @@ class TestBackgroundTaskTracking:
         (task,) = migration.service._background_tasks
         await task
 
-        assert migration.service._background_tasks == set()
+        assert len(migration.service._background_tasks) == 0
 
     @pytest.mark.asyncio
     async def test_shutdown_cancels_pending_tasks_and_empties_set(self, migration):
@@ -1837,24 +1830,24 @@ class TestBackgroundTaskTracking:
         async def _block_forever() -> None:
             await blocker.wait()
 
-        migration.service._spawn_background_task(_block_forever())
+        migration.service._background_tasks.spawn(_block_forever(), "block_forever")
         assert len(migration.service._background_tasks) == 1
         (task,) = migration.service._background_tasks
 
         await migration.service.shutdown()
 
         assert task.cancelled()
-        assert migration.service._background_tasks == set()
+        assert len(migration.service._background_tasks) == 0
 
     @pytest.mark.asyncio
     async def test_shutdown_with_empty_set_is_noop(self, migration):
         """``shutdown()`` on an untouched service returns immediately."""
-        assert migration.service._background_tasks == set()
+        assert len(migration.service._background_tasks) == 0
 
         # Must not raise, must not block.
         await migration.service.shutdown()
 
-        assert migration.service._background_tasks == set()
+        assert len(migration.service._background_tasks) == 0
 
 
 def _read_pending(uow) -> tuple[str, list[str]]:

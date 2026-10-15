@@ -34,7 +34,7 @@ async def test_shielded_returns_the_child_result_when_nothing_is_cancelled():
     async def child():
         return "finished"
 
-    assert await shielded(child()) == "finished"
+    assert await shielded(asyncio.ensure_future(child())) == "finished"
 
 
 @pytest.mark.asyncio
@@ -43,8 +43,9 @@ async def test_shielded_propagates_a_child_fault_when_nothing_is_cancelled():
         raise OSError("child failed")
 
     pending = child()
+    child_task = asyncio.ensure_future(pending)
     with pytest.raises(OSError, match="child failed"):
-        await shielded(pending)
+        await shielded(child_task)
 
 
 @pytest.mark.asyncio
@@ -60,7 +61,7 @@ async def test_shielded_child_finishes_then_reraises_cancellation_with_fault_sta
             raise OSError("child failed after cancellation")
         return "finished"
 
-    task = asyncio.create_task(shielded(child()))
+    task = asyncio.create_task(shielded(asyncio.ensure_future(child())))
     await entered.wait()
     task.cancel()
     release.set()
@@ -95,7 +96,7 @@ async def test_shielded_cancelled_child_keeps_the_original_cancellation_state():
         cancellation_state(foreign).child_result = "state from the child's own cancellation"
         raise foreign
 
-    task = asyncio.create_task(shielded(child()))
+    task = asyncio.create_task(shielded(asyncio.ensure_future(child())))
     await entered.wait()
     task.cancel()
     release.set()
@@ -148,7 +149,7 @@ async def test_shielded_runs_on_cancel_before_awaiting_the_child():
         observed.append("on-cancel")
         release.set()
 
-    task = asyncio.create_task(shielded(child(), on_cancel=on_cancel))
+    task = asyncio.create_task(shielded(asyncio.ensure_future(child()), on_cancel=on_cancel))
     await asyncio.sleep(0)
     task.cancel()
 
@@ -171,7 +172,7 @@ async def test_shielded_without_on_cancel_still_waits_the_child_out():
         finished.append("committed")
         return "committed"
 
-    task = asyncio.create_task(shielded(child()))
+    task = asyncio.create_task(shielded(asyncio.ensure_future(child())))
     await asyncio.sleep(0)
     task.cancel()
 
@@ -206,7 +207,7 @@ async def test_shielded_lets_an_interpreter_level_exit_through():
         await release.wait()
         raise _ExitRequest
 
-    task = asyncio.create_task(shielded(child()))
+    task = asyncio.create_task(shielded(asyncio.ensure_future(child())))
     await entered.wait()
     task.cancel()
     release.set()
@@ -226,7 +227,7 @@ async def test_shielded_still_captures_an_ordinary_child_fault():
         await release.wait()
         raise OSError("child failed")
 
-    task = asyncio.create_task(shielded(child()))
+    task = asyncio.create_task(shielded(asyncio.ensure_future(child())))
     await entered.wait()
     task.cancel()
     release.set()

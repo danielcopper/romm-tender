@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _spawns import record_spawns
 from _vendor import atlas
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
 from fakes.fake_cover_art_file_store import FakeCoverArtFileStore
@@ -792,6 +793,22 @@ class TestWireServices:
             "server_retry_progress",
             {"attempt": 2, "max_attempts": 3, "delay_s": 1.0},
         )
+        loop.close()
+
+    def test_the_retry_frame_starts_through_the_helper(self, tmp_path, monkeypatch):
+        spawned = record_spawns(monkeypatch)
+        deps = self._make_deps(tmp_path)
+        wire_services(self._make_config(deps))
+        loop = deps["loop"]
+
+        deps["http_adapter"].on_retry(2, 3, 1.0)
+
+        async def _drain():
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+
+        loop.run_until_complete(_drain())
+        assert spawned == ["server_retry_progress"]
         loop.close()
 
     def test_services_share_settings_reference(self, tmp_path):

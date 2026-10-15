@@ -17,6 +17,7 @@ from _factories import (
     _record_operations_at_lease,
     _refused_by_conflict_rule,
 )
+from _spawns import record_spawns
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
@@ -311,14 +312,14 @@ class TestStartDownload:
 
         downloads.service._loop = MagicMock()
         downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
-        _create_task_calls = []
+        _spawn_calls = []
 
-        def _close_coro_task(coro):
+        def _close_coro_task(coro, _name):
             coro.close()
-            _create_task_calls.append(coro)
+            _spawn_calls.append(coro)
             return MagicMock()
 
-        downloads.service._loop.create_task = _close_coro_task
+        downloads.service._tasks.spawn = _close_coro_task
         downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
 
         result = await downloads.service.start_download(42)
@@ -328,7 +329,7 @@ class TestStartDownload:
         # The initial status is "queued" (#1053) — the task flips it to
         # "downloading" only once it acquires the concurrency semaphore.
         assert downloads.service._download_queue[42]["status"] == "queued"
-        assert len(_create_task_calls) == 1
+        assert len(_spawn_calls) == 1
         # The download's required bytes are reserved so a sibling's pre-flight
         # accounts for the outstanding claim.
         assert 42 in downloads.service._reserved_bytes
@@ -366,7 +367,7 @@ class TestStartDownload:
         }
         downloads.service._loop = MagicMock()
         downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
-        downloads.service._loop.create_task = MagicMock()
+        downloads.service._tasks.spawn = MagicMock()
 
         with pytest.raises(NoFileOnRomm) as refused:
             await downloads.service.start_download(42)
@@ -375,7 +376,7 @@ class TestStartDownload:
         assert refused.value.message.startswith("No file on RomM")
         assert 42 not in downloads.service._download_queue
         assert 42 not in downloads.service._download_in_progress
-        downloads.service._loop.create_task.assert_not_called()
+        downloads.service._tasks.spawn.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_checks_disk_space(self, downloads, tmp_path):
@@ -684,9 +685,9 @@ class TestOccupiedTargetPreFlight:
 
         downloads.service._loop = MagicMock()
         downloads.service._loop.run_in_executor = _hops_answering(detail)
-        # Close the coroutine the real create_task would have owned; leaving it
+        # Close the coroutine the real spawn would have owned; leaving it
         # unawaited makes pytest raise a RuntimeWarning at collection time.
-        downloads.service._loop.create_task = MagicMock(side_effect=lambda coro: (coro.close(), MagicMock())[1])
+        downloads.service._tasks.spawn = MagicMock(side_effect=lambda coro, _name: (coro.close(), MagicMock())[1])
         store = downloads.service._download_file_store
         store.describe_path = lambda path: (
             {
@@ -732,7 +733,7 @@ class TestOccupiedTargetPreFlight:
         assert made_dirs == []
         assert downloads.service._download_queue == {}
         assert downloads.service.active_download_rom_ids() == set()
-        downloads.service._loop.create_task.assert_not_called()
+        downloads.service._tasks.spawn.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_multi_file_checks_the_extract_directory_not_the_archive(self, downloads):
@@ -862,7 +863,7 @@ class TestOccupiedTargetPreFlight:
 
         downloads.service._loop = MagicMock()
         downloads.service._loop.run_in_executor = _hops_answering(_SINGLE_DETAIL)
-        downloads.service._loop.create_task = MagicMock(side_effect=lambda coro: (coro.close(), MagicMock())[1])
+        downloads.service._tasks.spawn = MagicMock(side_effect=lambda coro, _name: (coro.close(), MagicMock())[1])
 
         starting = downloads.service.start_download(1)
 
@@ -891,7 +892,7 @@ class TestResumingAReplaceDownload:
 
         downloads.service._loop = MagicMock()
         downloads.service._loop.run_in_executor = _hops_answering(detail)
-        downloads.service._loop.create_task = MagicMock(side_effect=lambda coro: (coro.close(), MagicMock())[1])
+        downloads.service._tasks.spawn = MagicMock(side_effect=lambda coro, _name: (coro.close(), MagicMock())[1])
         store = downloads.service._download_file_store
         store.describe_path = lambda path: (
             {
@@ -1252,14 +1253,14 @@ class TestDiskSpaceMultiFile:
         downloads.service._loop = MagicMock()
         downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
-        def _close_coro_task(coro):
-            # Consume the fire-and-forget _do_download coroutine so it isn't left
+        def _close_coro_task(coro, _name):
+            # Consume the spawned _do_download coroutine so it isn't left
             # un-awaited (RuntimeWarning); this unit only exercises the disk-space
             # gate, not the download itself.
             coro.close()
             return MagicMock()
 
-        downloads.service._loop.create_task = _close_coro_task
+        downloads.service._tasks.spawn = _close_coro_task
 
         # 700MB free: enough for single-file (600MB)
         downloads.service._download_file_store.disk_free = lambda _path: 700 * 1024 * 1024
@@ -2358,7 +2359,7 @@ class TestDoDownloadMultiFile:
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.service._do_download(55, rom_detail, target_path, "psx", "FF7.zip")
 
-        # Drain the create_task-scheduled emits marshaled onto the loop.
+        # Drain the spawned emits marshaled onto the loop.
         await asyncio.sleep(0)
         await asyncio.sleep(0)
 
@@ -2988,11 +2989,11 @@ class TestDoDownloadNestedSingleFile:
         downloads.service._loop = MagicMock()
         downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
-        def _close_coro_task(coro):
+        def _close_coro_task(coro, _name):
             coro.close()
             return MagicMock()
 
-        downloads.service._loop.create_task = _close_coro_task
+        downloads.service._tasks.spawn = _close_coro_task
 
         downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
         result = await downloads.service.start_download(7)
@@ -3027,11 +3028,11 @@ class TestDoDownloadNestedSingleFile:
         downloads.service._loop = MagicMock()
         downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
-        def _close_coro_task(coro):
+        def _close_coro_task(coro, _name):
             coro.close()
             return MagicMock()
 
-        downloads.service._loop.create_task = _close_coro_task
+        downloads.service._tasks.spawn = _close_coro_task
         downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
 
         with caplog.at_level(logging.WARNING, logger=logger.name):
@@ -3068,11 +3069,11 @@ class TestDoDownloadNestedSingleFile:
         downloads.service._loop = MagicMock()
         downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
-        def _close_coro_task(coro):
+        def _close_coro_task(coro, _name):
             coro.close()
             return MagicMock()
 
-        downloads.service._loop.create_task = _close_coro_task
+        downloads.service._tasks.spawn = _close_coro_task
         downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
 
         with caplog.at_level(logging.WARNING, logger=logger.name):
@@ -3109,11 +3110,11 @@ class TestDoDownloadNestedSingleFile:
         downloads.service._loop = MagicMock()
         downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
-        def _close_coro_task(coro):
+        def _close_coro_task(coro, _name):
             coro.close()
             return MagicMock()
 
-        downloads.service._loop.create_task = _close_coro_task
+        downloads.service._tasks.spawn = _close_coro_task
 
         downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
         result = await downloads.service.start_download(13)
@@ -3215,11 +3216,11 @@ class TestPathTraversalFsName:
         downloads.service._loop = MagicMock()
         downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
-        def _close_coro_task(coro):
+        def _close_coro_task(coro, _name):
             coro.close()
             return MagicMock()
 
-        downloads.service._loop.create_task = _close_coro_task
+        downloads.service._tasks.spawn = _close_coro_task
 
         downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
         result = await downloads.service.start_download(77)
@@ -3257,11 +3258,11 @@ class TestPathTraversalFsName:
         downloads.service._loop = MagicMock()
         downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
-        def _close_coro_task(coro):
+        def _close_coro_task(coro, _name):
             coro.close()
             return MagicMock()
 
-        downloads.service._loop.create_task = _close_coro_task
+        downloads.service._tasks.spawn = _close_coro_task
         downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
 
         result = await downloads.service.start_download(77)
@@ -3891,11 +3892,11 @@ class TestStartDownloadReDownload:
         downloads.service._loop = MagicMock()
         downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
-        def _close_coro_task(coro):
+        def _close_coro_task(coro, _name):
             coro.close()
             return MagicMock()
 
-        downloads.service._loop.create_task = _close_coro_task
+        downloads.service._tasks.spawn = _close_coro_task
 
         # Set status to completed (previous download)
         downloads.service._download_queue[42] = {"status": "completed"}
@@ -4201,11 +4202,11 @@ class TestPruneDownloadQueue:
             assert i not in downloads.service._download_queue
 
 
-class TestStartDownloadCreateTaskFailure:
-    """Tests for start_download when create_task raises."""
+class TestStartDownloadSpawnFailure:
+    """Tests for start_download when spawn raises."""
 
     @pytest.mark.asyncio
-    async def test_create_task_failure_propagates_and_releases_the_flag(self, downloads, tmp_path):
+    async def test_spawn_failure_propagates_and_releases_the_flag(self, downloads, tmp_path):
 
         downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
@@ -4227,14 +4228,14 @@ class TestStartDownloadCreateTaskFailure:
         downloads.service._loop = MagicMock()
         downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
-        def _raise_after_closing(coro):
-            # Close the fire-and-forget _do_download coroutine before raising so it
+        def _raise_after_closing(coro, _name):
+            # Close the spawned _do_download coroutine before raising so it
             # isn't left un-awaited (RuntimeWarning); the raise still drives the
-            # create_task-failure branch under test.
+            # spawn-failure branch under test.
             coro.close()
             raise RuntimeError("loop closed")
 
-        downloads.service._loop.create_task = _raise_after_closing
+        downloads.service._tasks.spawn = _raise_after_closing
 
         downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
         coro = downloads.service.start_download(42)
@@ -4250,21 +4251,99 @@ class TestShutdown:
 
     @pytest.mark.asyncio
     async def test_shutdown_cancels_active_tasks_and_clears(self, downloads):
-        task_a = MagicMock()
-        task_b = MagicMock()
+        task_a = downloads.service._tasks.spawn(asyncio.Event().wait(), "download of rom 1")
+        task_b = downloads.service._tasks.spawn(asyncio.Event().wait(), "download of rom 2")
         downloads.service._download_tasks[1] = task_a
         downloads.service._download_tasks[2] = task_b
 
         await downloads.service.shutdown()
 
-        task_a.cancel.assert_called_once_with()
-        task_b.cancel.assert_called_once_with()
+        assert task_a.cancelled()
+        assert task_b.cancelled()
         assert downloads.service._download_tasks == {}
 
     @pytest.mark.asyncio
     async def test_shutdown_no_tasks_is_noop(self, downloads):
         # No tasks registered — must not raise.
         await downloads.service.shutdown()
+        assert downloads.service._download_tasks == {}
+
+
+class TestTheProgressFramesAreHeld:
+    """Every ``download_progress`` frame starts through ``BackgroundTasks``."""
+
+    @staticmethod
+    def _live_entry(downloads) -> None:
+        downloads.service._download_queue[7] = {
+            "rom_id": 7,
+            "rom_name": "Mario",
+            "platform_name": "N64",
+            "file_name": "mario.z64",
+            "status": "downloading",
+            "progress": 0,
+            "bytes_downloaded": 0,
+            "total_bytes": 0,
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_progress_tick_starts_its_frame_through_the_helper(self, downloads, monkeypatch, emit):
+        spawned = record_spawns(monkeypatch)
+        self._live_entry(downloads)
+
+        downloads.service._apply_progress("downloading", 7, "Mario", "N64", "mario.z64", 0.5, 512, 1024)
+        await asyncio.sleep(0)
+
+        assert spawned == ["download_progress"]
+        assert [c[0][0] for c in emit.call_args_list] == ["download_progress"]
+
+    @pytest.mark.asyncio
+    async def test_the_resumability_verdict_starts_its_frame_through_the_helper(self, downloads, monkeypatch, emit):
+        spawned = record_spawns(monkeypatch)
+        self._live_entry(downloads)
+
+        downloads.service._make_on_meta(7, "Mario", "N64", "mario.z64")(True)
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+        assert spawned == ["download_progress"]
+        assert [c[0][1]["resumable"] for c in emit.call_args_list] == [True]
+
+    @pytest.mark.asyncio
+    async def test_cancelling_a_paused_download_starts_its_frame_through_the_helper(self, downloads, monkeypatch):
+        spawned = record_spawns(monkeypatch)
+        downloads.service._download_queue[42] = {
+            "rom_id": 42,
+            "rom_name": "Zelda",
+            "platform_name": "Nintendo 64",
+            "file_name": "zelda.z64",
+            "status": "paused",
+        }
+
+        downloads.service.cancel_download(42)
+        await asyncio.sleep(0)
+
+        assert spawned == ["download_progress"]
+
+
+class TestShutdownWaitsForTheDownloads:
+    @pytest.mark.asyncio
+    async def test_a_download_still_running_has_ended_when_shutdown_returns(self, downloads):
+        ended: list[str] = []
+
+        async def downloading() -> None:
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                await asyncio.sleep(0)
+                ended.append("cleaned up")
+                raise
+
+        downloads.service._download_tasks[1] = downloads.service._tasks.spawn(downloading(), "download of rom 1")
+        await asyncio.sleep(0)
+
+        await asyncio.wait_for(downloads.service.shutdown(), 5)
+
+        assert ended == ["cleaned up"]
         assert downloads.service._download_tasks == {}
 
 
@@ -4288,7 +4367,7 @@ class TestMakeProgressCallback:
 
         # Replace the event loop with a MagicMock so call_soon_threadsafe
         # is observable without actually scheduling on the real loop.
-        # Run create_task eagerly inside call_soon_threadsafe so the
+        # Run spawn eagerly inside call_soon_threadsafe so the
         # coroutine returned by emit() gets consumed (otherwise it
         # leaks as un-awaited).
         scheduled_calls: list[int] = []
@@ -4299,14 +4378,14 @@ class TestMakeProgressCallback:
 
         downloads.service._loop = MagicMock()
         downloads.service._loop.call_soon_threadsafe = _eager_call_soon_threadsafe
-        downloads.service._loop.create_task = lambda coro: coro.close() or MagicMock()
+        downloads.service._tasks.spawn = lambda coro, _name: coro.close() or MagicMock()
         emit_calls = []
 
         def _record_emit(event, payload):
             emit_calls.append((event, payload))
 
             # Return a coroutine because the real emit is awaitable —
-            # the closure passes it to create_task.
+            # the closure passes it to spawn.
             async def _noop():
                 return None
 
@@ -4351,10 +4430,10 @@ class TestMakeProgressCallback:
         downloads.service._clock = fake_clock
         # The queue mutation now happens inside the function marshaled onto the
         # loop thread via call_soon_threadsafe (#973), so run it eagerly to
-        # observe the in-place update; create_task just consumes the coroutine.
+        # observe the in-place update; spawn just consumes the coroutine.
         downloads.service._loop = MagicMock()
         downloads.service._loop.call_soon_threadsafe = lambda fn, *args, **kwargs: fn(*args, **kwargs)
-        downloads.service._loop.create_task = lambda coro: coro.close() or MagicMock()
+        downloads.service._tasks.spawn = lambda coro, _name: coro.close() or MagicMock()
         call_soon_count = [0]
         _orig_css = downloads.service._loop.call_soon_threadsafe
 
@@ -4425,7 +4504,7 @@ class TestProgressPhase:
         """Run the marshaled update synchronously; return the recorded emits."""
         downloads.service._loop = MagicMock()
         downloads.service._loop.call_soon_threadsafe = lambda fn, *a, **k: fn(*a, **k)
-        downloads.service._loop.create_task = lambda coro: coro.close() or MagicMock()
+        downloads.service._tasks.spawn = lambda coro, _name: coro.close() or MagicMock()
         emit_calls: list[tuple[str, dict[str, Any]]] = []
 
         def _record_emit(event, payload):
@@ -4739,12 +4818,12 @@ class TestProgressCallbackEvictionSafe:
 
     def _eager_loop(self, downloads):
         """Make call_soon_threadsafe run its target synchronously so the marshaled
-        ``_apply_progress`` executes in-test; create_task consumes the
+        ``_apply_progress`` executes in-test; spawn consumes the
         coroutine. Returns the recorded emit calls list.
         """
         downloads.service._loop = MagicMock()
         downloads.service._loop.call_soon_threadsafe = lambda fn, *a, **k: fn(*a, **k)
-        downloads.service._loop.create_task = lambda coro: coro.close() or MagicMock()
+        downloads.service._tasks.spawn = lambda coro, _name: coro.close() or MagicMock()
         emit_calls: list[tuple[str, dict[str, Any]]] = []
 
         def _record_emit(event, payload):
@@ -5280,11 +5359,11 @@ class TestConcurrencyReservation:
 
         downloads.service._loop = MagicMock()
 
-        def _close_coro_task(coro):
+        def _close_coro_task(coro, _name):
             coro.close()
             return MagicMock()
 
-        downloads.service._loop.create_task = _close_coro_task
+        downloads.service._tasks.spawn = _close_coro_task
         downloads.service._download_file_store.disk_free = lambda _path: 900 * 1024 * 1024
 
         # First download: fits (900 free, needs 500) → reserved.
@@ -5426,7 +5505,7 @@ class TestCooperativeCancel:
         downloads.service._clock = fake_clock
         downloads.service._loop = MagicMock()
         downloads.service._loop.call_soon_threadsafe = lambda fn, *a, **k: fn(*a, **k)
-        downloads.service._loop.create_task = lambda coro: coro.close() or MagicMock()
+        downloads.service._tasks.spawn = lambda coro, _name: coro.close() or MagicMock()
 
         def _record_emit(_event, _payload):
             async def _noop():
@@ -5550,7 +5629,7 @@ class TestCooperativeCancel:
         downloads.service._clock = fake_clock
         downloads.service._loop = MagicMock()
         downloads.service._loop.call_soon_threadsafe = lambda fn, *a, **k: fn(*a, **k)
-        downloads.service._loop.create_task = lambda coro: coro.close() or MagicMock()
+        downloads.service._tasks.spawn = lambda coro, _name: coro.close() or MagicMock()
 
         def _record_emit(_event, _payload):
             async def _noop():
@@ -5806,12 +5885,12 @@ class TestPauseResume:
         downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
         captured_coros = []
 
-        def _capture_task(coro):
+        def _capture_task(coro, _name):
             captured_coros.append(coro)
             coro.close()  # don't actually run the download
             return MagicMock()
 
-        downloads.service._loop.create_task = _capture_task
+        downloads.service._tasks.spawn = _capture_task
         downloads.service._download_file_store.disk_free = lambda _p: 500 * 1024 * 1024
 
         result = await downloads.service.resume_download(42)
@@ -5947,13 +6026,13 @@ def _stage_download_prologue(downloads, rom_id: int = 1) -> list[Any]:
     gate (ADR-0028), so a case that mocks ``_begin_download`` out is no longer
     testing the supersede at all. This stages the surroundings instead: the
     ROM-detail fetch is answered from memory and the transfer task is swallowed.
-    The returned list collects the coroutines ``create_task`` was handed, which
+    The returned list collects the coroutines ``spawn`` was handed, which
     is how "did a download actually start?" is observed.
     """
 
     started: list[Any] = []
 
-    def _close_coro_task(coro):
+    def _close_coro_task(coro, _name):
         coro.close()
         started.append(coro)
         return MagicMock()
@@ -5969,7 +6048,7 @@ def _stage_download_prologue(downloads, rom_id: int = 1) -> list[Any]:
             "platform_name": "Nintendo 64",
         }
     )
-    downloads.service._loop.create_task = _close_coro_task
+    downloads.service._tasks.spawn = _close_coro_task
     downloads.service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
     return started
 
