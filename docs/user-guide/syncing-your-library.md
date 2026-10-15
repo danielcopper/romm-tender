@@ -487,8 +487,8 @@ one you set yourself included.
 
 ## Re-Syncing
 
-Running sync again updates your library with any changes from RomM (new ROMs, removed platforms, etc.). Existing
-shortcuts are updated rather than duplicated.
+Running sync again updates your library with any changes from RomM (new ROMs, renamed games, new artwork, and so on),
+and with the platforms and collections you turned on or off. Existing shortcuts are updated rather than duplicated.
 
 When the version a shortcut is bound to is no longer available on RomM — deleted there, or hidden from your RomM user,
 which RomM answers the same way — the shortcut **stays bound to it**, installed or not, with its name, launch command,
@@ -498,13 +498,15 @@ it is gone. The game's page says the version is no longer available and what tha
 another version, choose it in the [version picker](managing-games.md#the-switch-version-control), and to remove the
 game, use [Clean Up Removed RomM Games](managing-games.md#cleaning-up-versions-removed-from-romm).
 
+A platform RomM no longer lists at all is gone from RomM rather than turned off, even while it is still on in Tender:
+its games keep their shortcuts and their place in its Steam collection, each game's page says the game is no longer
+available, and only the cleanup removes them. A game on it that came in through a collection is asked about by its id,
+as described below.
+
 One case still moves the shortcut: the same file coming back under a new id, as after a server switch or a re-import.
 Where RomM serves a version of the same game with exactly the old file name, the shortcut follows it and keeps its
 appId, artwork, collections and playtime. If the old version was downloaded, its file is already where the new one would
 land, so the new version's page offers **Use Existing Files** instead of a download.
-
-A platform RomM no longer lists at all is treated the same way: its games are gone from RomM, not turned off, so their
-shortcuts stay, each game's page says the game is no longer available, and only the cleanup removes them.
 
 What a sync still removes is a game outside what you sync: its platform is turned off and no enabled collection holds
 it. A game a collection brought in, that no collection returns any more, is asked for by its id: if RomM still has it,

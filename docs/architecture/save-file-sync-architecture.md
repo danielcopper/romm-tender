@@ -1495,10 +1495,10 @@ its own instead of opening that dialog
 in a dialog is never bounded. One wait has no limit: once an action is picked in the conflict dialog, the dialog waits
 for `resolve_sync_conflict` with its Cancel disabled ([#2176](https://github.com/danielcopper/romm-tender/issues/2176)).
 
-The romId comes from `sessionManager`'s appId → romId map, which is re-read only at start-up and when a game starts,
-while `rommAppIds` learns a shortcut as soon as a sync writes it. So an owned appId can be missing from the map: the
-watcher then refreshes the map once (`refreshAppIdMap`) and looks again, and if the romId is still missing it starts the
-game again without the gate.
+The romId comes from `sessionManager`'s appId → romId map, re-read at the moments
+[App ID to ROM ID mapping](#app-id-to-rom-id-mapping) lists, while `rommAppIds` learns a shortcut as soon as a sync
+writes it. So an owned appId can be missing from the map: the watcher then refreshes the map once (`refreshAppIdMap`)
+and looks again, and if the romId is still missing it starts the game again without the gate.
 
 Both funnels mark the appId in the gate's skip-set (`markLaunchSkipped`) immediately before their own `RunGame`, and the
 watcher consumes that mark when the start reaches it, so a start a caller has already handled is not gated a second

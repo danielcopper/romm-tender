@@ -835,16 +835,20 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   row last delivered through a collection is asked for once by its exact id (`LibraryFetcher.ask_romm_for_roms`, single
   attempt), and removed only when RomM returns the very ROM, since it left the collection — a 404 or an answer that
   establishes nothing writes nothing, so the row is asked again on every later run until it is found or unbound, and a
-  stopped run, which sorts nothing, leaves it as it was. A row last delivered through its platform is outside what the
-  sync syncs, its platform turned off, and removed unasked. A row no commit has recorded a route for since migration
-  `029` falls back to the collections' completion stamps, read once before the run's first unit rewrites any of them
-  (`do_read_collection_listed_rom_ids`): one a stamp lists is asked, any other removed. **A platform RomM no longer
-  lists is gone from RomM, not turned off**: `keep_platform_ids` rewrites `kv_config`'s `platform_ids` with every
-  platform RomM lists at the start of every run, preview included, and a row whose platform is not in that listing
-  (`do_read_listed_platform_slugs`) keeps its shortcut, with no request, unless it was last delivered through a
-  collection. Which platforms are on in Tender is keyed by RomM's platform id, which an unlisted platform no longer has,
-  so the route is what says the platform was on: a row last delivered through its platform had it on. When the listing
-  cannot be read every platform counts as listed. Force Full Sync leaves the routes in place. The preview asks the same
+  stopped run, which sorts nothing, leaves it as it was. A row last delivered through its platform is removed unasked,
+  its platform turned off — unless RomM no longer lists that platform, below. A row no commit has recorded a route for
+  since migration `029` falls back to the collections' completion stamps, read once before the run's first unit rewrites
+  any of them (`do_read_collection_listed_rom_ids`): one a stamp lists is asked, any other removed. **A platform RomM no
+  longer lists is gone from RomM, not turned off**: the fetcher records every slug RomM's platform listing names on the
+  run state (`LibrarySyncStateBox.run_listed_platform_slugs`) when it builds the work queue, preview included, and a row
+  whose platform is not among them keeps its shortcut, with no request, unless it was last delivered through a
+  collection. The kept ids under `kv_config`'s `platform_ids` are not the answer, because a game page that asks for an
+  unknown platform's system during the run writes it back there (`PlatformSystemService`). A listing that fails stops
+  the run, so a run that reaches the stale removal always has its own. Which platforms are on in Tender is keyed by
+  RomM's platform id, which an unlisted platform no longer has, so the route is what says the platform was on: a row
+  last delivered through its platform had it on. A kept row stays in its platform's Steam collection; for a platform
+  RomM no longer lists, that collection keeps the display name the last run cached (`do_read_kept_platform_names`), and
+  the preview counts the collection as kept. Force Full Sync leaves the routes in place. The preview asks the same
   question for the same rows, through the same `_settle_stale_rows`, so the removals it counts are the ones the apply
   makes.
 - **Grandfathering.** A group that already carries several bound shortcuts (a library synced before this model) keeps

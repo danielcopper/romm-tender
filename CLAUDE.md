@@ -591,19 +591,23 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   off a RomM payload only through `domain/rom_file.py::has_file_on_romm`, and the stored `Rom.has_file_on_disk` is
   written only from its answer
 - **The end-of-run stale removal removes the shortcut only of a game outside what the sync syncs: a bound row missing
-  from a platform the run read whole, or from a platform RomM no longer lists, is kept; one on a platform the run did
-  not read is asked for by its exact id when a collection last delivered it (`roms.delivered_through`), on every run
-  until it is found or unbound, kept unless RomM's answer is the ROM itself, and removed unasked when its platform last
-  delivered it; a row with no recorded route follows the collections' last completed members; the preview counts exactly
-  the removals the apply makes** — test + prompt-only — `tests/domain/test_sync_diff.py::TestSortStaleRows` for the
-  rule, `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and
-  the preview (among it the third run, the stopped run, the platform route and the fallback),
+  from a platform the run read whole is kept; on a platform the run did not read, a row a collection last delivered
+  (`roms.delivered_through`) is asked for by its exact id on every run until it is found or unbound, and kept unless
+  RomM's answer is the ROM itself, while any other row is kept when the run's own platform listing no longer names its
+  platform and removed unasked when it does; a row with no recorded route is asked only when the collections' last
+  completed members list it; a kept row stays in its platform's Steam collection; the preview counts exactly the
+  removals and the platform collections the apply makes** — test + prompt-only —
+  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule,
+  `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
+  preview (among it the third run, the stopped run, the platform route and the fallback),
   `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and `TestPlatformTurnedOffAndBackOn`
-  (with `test_a_platform_still_on_that_romm_no_longer_lists_keeps_its_shortcuts`) for the two ends, and
+  (with `test_a_platform_still_on_that_romm_no_longer_lists_keeps_its_shortcuts`,
+  `test_a_platform_romm_no_longer_lists_keeps_its_steam_collection` and
+  `test_a_platform_read_mid_run_still_counts_as_unlisted`) for the two ends, and
   `tests/services/library/test_reporter.py::TestCommitUnitResults` for the route the commit records. Prompt-only: the
-  collection records are read before the run's first unit (`do_read_collection_listed_rom_ids`), the chunk dispatcher
-  names the unit's kind on every commit, and the preview and the apply both sort through
-  `SyncOrchestrator._settle_stale_rows`
+  collection records are read before the run's first unit (`do_read_collection_listed_rom_ids`), the platform listing is
+  the run's own (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids, the chunk dispatcher names the
+  unit's kind on every commit, and the preview and the apply both sort through `SyncOrchestrator._settle_stale_rows`
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py`,
   `tests/domain/test_firmware_wants.py` and `tests/services/test_firmware.py::TestCheckPlatformBiosUnknown`;
