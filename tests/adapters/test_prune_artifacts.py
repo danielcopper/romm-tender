@@ -80,6 +80,26 @@ def test_discovers_and_removes_the_wide_grid_and_logo_named_by_their_image_id(tm
     assert all(path.exists() for path in unrelated)
 
 
+def test_discovers_and_removes_the_icon_named_by_its_image_id(tmp_path):
+    artwork = tmp_path / "artwork"
+    artwork.mkdir()
+    (tmp_path / "covers").mkdir()
+    owned = artwork / "7_icon_34.png"
+    owned.write_bytes(b"x")
+    unrelated = [artwork / "70_icon_34.png", artwork / "8_icon_34.png"]
+    for path in unrelated:
+        path.write_bytes(b"keep")
+    adapter = PruneArtifactAdapter(cache_dir=str(tmp_path))
+
+    sources = {Path(item["source_path"]) for item in adapter.recovery_artifacts([7])}
+
+    assert owned in sources
+    assert not set(unrelated) & sources
+    assert adapter.remove([7])["success"] is True
+    assert not owned.exists()
+    assert all(path.exists() for path in unrelated)
+
+
 def test_no_artwork_directory_lists_only_the_names_it_always_composes(tmp_path):
     adapter = PruneArtifactAdapter(cache_dir=str(tmp_path))
 
