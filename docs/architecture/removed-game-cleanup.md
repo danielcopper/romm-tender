@@ -127,9 +127,9 @@ replaces the stamp. The canary ids a 404 round asks first are read the same way,
 **The library sync marks what no stamp can name.** A platform reached only through RomM collections never gets a stamp,
 since only a platform unit writes one, and a platform whose stamp was cleared, by Force Full Sync or by an apply that
 did not finish, has none until it is synced whole again: while its sync is on, the next completed apply stamps it and
-the stamp names its rows, but while its sync stays off that apply never comes, and only its collection-reached rows are
-asked about. A platform RomM no longer lists keeps its stamp, which still counts its rows as returned. So the apply's
-end-of-run stale removal records on a bound row it keeps what it established
+the stamp names the rows its fetch did not return, but while its sync stays off that apply never comes, and only its
+collection-reached rows are asked about. A platform RomM no longer lists keeps its stamp, which still counts its rows as
+returned. So the apply's end-of-run stale removal records on a bound row it keeps what it established
 ([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "The stale removal keeps
 a game gone from RomM"): `roms.gone_from_romm` is `not_found` where RomM answered the exact id of a version reached
 through a collection with a proven 404, and `delisted` where the version was kept on a platform RomM no longer lists. A

@@ -512,10 +512,10 @@ What a sync still removes is a game outside what you sync: its platform is turne
 it. A game a collection brought in, that no collection returns any more, is asked for by its id: if RomM still has it,
 it left the collection and its shortcut is removed; if RomM answers that it is gone, or does not answer, the shortcut
 stays, and the next sync asks again. A game RomM answered as gone then appears under **Data Management › Gone from
-RomM**, until a sync brings it in again or the cleanup finds it back on RomM. Tender remembers whether a game last came
-in through its platform or through a collection; a game it has no such record for yet, as after the update that added
-it, is judged by the collections' last completed sync instead. A platform that holds a version gone from RomM is read in
-full on every sync while that version stays bound, so it does not skip the way an unchanged platform does.
+RomM**, until a sync or the cleanup finds it on RomM again. Tender remembers whether a game last came in through its
+platform or through a collection; a game it has no such record for yet, as after the update that added it, is judged by
+the collections' last completed sync instead. A platform that holds a version gone from RomM is read in full on every
+sync while that version stays bound, so it does not skip the way an unchanged platform does.
 
 Sync itself never purges a retained local ROM row, installed content, saves, or playtime solely because RomM stopped
 returning that id. Removing that state requires the separate confirmed
