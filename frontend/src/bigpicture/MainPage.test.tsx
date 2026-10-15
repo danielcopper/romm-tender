@@ -61,7 +61,7 @@ import { resetUpdateOutcomeStoreForTests, setUpdateOutcomeState } from "../utils
 import { resetPendingPreviewStoreForTests, adoptPreview, clearPendingPreview } from "../utils/pendingPreviewStore";
 import * as syncManager from "../utils/syncManager";
 import * as connectionState from "../utils/connectionState";
-import { firstBodyStop, pageEntryStop, placeEntryFocus } from "../utils/entryFocus";
+import { EntryPreferenceContext, firstBodyStop, pageEntryStop, placeEntryFocus } from "../utils/entryFocus";
 import {
   NOTIFICATIONS_UNAVAILABLE_NOTICE,
   resetNotificationsHealthForTests,
@@ -505,6 +505,20 @@ describe("MainPage", () => {
       expect(preferred).toHaveLength(1);
       expect(preferred[0]?.querySelector("button")?.textContent).toBe("Sync");
       expect(preferred[0]?.closest('[data-nav-entry-prefer-position="4"]')).not.toBeNull();
+    });
+
+    it("marks nothing once focus has entered the panel", async () => {
+      const { container } = render(
+        <EntryPreferenceContext.Provider value={false}>
+          <MainPage onNavigate={vi.fn()} />
+        </EntryPreferenceContext.Provider>,
+      );
+      await flushAsync();
+
+      // Left in place, the mark would pull focus back to Sync on every later
+      // entry, a closed dialog's included.
+      expect(container.querySelector('[data-preferred-focus="true"]')).toBeNull();
+      expect(container.querySelector("[data-nav-entry-prefer-position]")).toBeNull();
     });
 
     it("opens there with a notice's own button on screen, which no button-first rule could", async () => {

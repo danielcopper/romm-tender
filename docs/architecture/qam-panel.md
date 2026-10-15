@@ -516,9 +516,14 @@ open lands on the active tab rather than on a selected row. The declarations tha
 the preference that serves entry from the strip mark the same stops on Main and on a list's selected row, and nothing
 holds the two equal.
 
-**The body's preference decides every entry into it, not only the one from the strip.** On Settings and Data Management,
-Down from the Back row enters the body, and the body's search lands on the selected row — where it used to land in
-whichever column the reader last stood in.
+**The preference holds only until focus first enters the panel.** Steam's search for the marked node runs ahead of the
+child a node remembers, so a preference left in place would decide every later entry too: focus coming back from a
+closed dialog would land on the mark rather than on the button the dialog was opened from, and Down from a wide page's
+Back row on the selected row rather than where the reader last stood. So the router drops it — every
+`navEntryPreferPosition` and `preferredFocus` above — on the first focus event inside the panel's root, read off that
+node's own event rather than a document (the panel's code and its nodes live in two windows), and hands the answer down
+through `EntryPreferenceContext` (`frontend/src/utils/entryFocus.ts`). After that, Steam's remembered child decides as
+it did before. A new appearance of the panel — a remount — marks the stops again.
 
 All of this is read from Steam's code rather than seen on the device. Where Steam's Quick Access does not honour the
 preference, entry lands where Steam decides, and the panel still takes no focus as it appears.

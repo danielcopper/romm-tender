@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, FC, ReactNode } from "react";
+import { useState, useEffect, useRef, useContext, FC, ReactNode } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, Field, Focusable, ProgressBar, Spinner } from "@decky/ui";
 import { FaCheckCircle, FaTimesCircle, FaExclamationTriangle } from "react-icons/fa";
 import { cancelSync, refreshMigrationState, getSyncStatus, getEmulatorSources, logError } from "../api/backend";
-import { ENTRY_STOP_ATTR, PREFER_MARKED_CHILD } from "../utils/entryFocus";
+import { ENTRY_STOP_ATTR, EntryPreferenceContext, preferMarkedChild } from "../utils/entryFocus";
 import { formatTimeAgo } from "../utils/formatters";
 import { pluralize } from "../utils/pluralize";
 import { getSyncProgress, setSyncProgress as setStoredSyncProgress } from "../utils/syncProgress";
@@ -334,6 +334,7 @@ function seededFrame(backendProgress: SyncProgress, stored: SyncProgress): SyncP
 }
 
 export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
+  const preferEntry = useContext(EntryPreferenceContext);
   // The stats are owned by `utils/syncStatsStore.ts`: three refresh sites in
   // this file ask for them, and the store is what keeps an older answer from
   // landing last and overwriting a newer one. What stays here is the SCHEDULE —
@@ -562,9 +563,10 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   }
 
   // Entering the panel from the Quick Access strip searches this root for the
-  // node marked `preferredFocus` — the menu's Sync entry, below.
+  // node marked `preferredFocus` — the menu's Sync entry, below — until focus
+  // first enters the panel (`EntryPreferenceContext`).
   return (
-    <Focusable navEntryPreferPosition={PREFER_MARKED_CHILD}>
+    <Focusable {...preferMarkedChild(preferEntry)}>
       {settingsReset.pending && <SettingsResetBanner backedUpTo={settingsReset.backedUpTo} />}
       {playtimeScope.pending && (
         <PlaytimeScopeBanner onOpenConnections={() => onNavigate({ page: "settings", section: "connections" })} />
@@ -805,7 +807,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
               the `preferredFocus` carrier — `ButtonItem` takes no such prop. A
               container, not a stop: it holds the button. */}
           <div {...{ [ENTRY_STOP_ATTR]: "" }} style={{ display: "contents" }}>
-            <Focusable preferredFocus style={{ display: "contents" }}>
+            <Focusable preferredFocus={preferEntry} style={{ display: "contents" }}>
               <ButtonItem layout="below" bottomSeparator="none" onClick={() => onNavigate("sync")}>
                 Sync
               </ButtonItem>

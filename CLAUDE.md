@@ -996,12 +996,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **A list-and-detail page opens on the row it was opened WITH, not on its first row** — test + prompt-only —
   `ListDetail.test.tsx` and `WidePage.test.tsx`, each over a non-first row, as any test of it must be, pin the
   `ENTRY_STOP_ATTR` mark a swap places focus by, and the `preferredFocus` on the selected row and on the body that entry
-  from the Quick Access strip is meant to land by; the press itself is device-only, and so is whether Steam honours that
-  preference (on a tabbed page it lands on Steam's active tab instead). Prompt-only: `bigpicture/layout/WidePage.tsx`
-  places entry focus through `pageEntryStop` (`utils/entryFocus.ts`), never `firstBodyStop`;
-  `bigpicture/layout/ListDetail.tsx` puts the `ENTRY_STOP_ATTR` mark on the `display: contents` wrapper around the
-  selected row, never on the row; and a wide page that opens on a non-first row without `ListDetail` places the mark
-  itself, the same way, and gives that row `preferredFocus` too
+  from the Quick Access strip is meant to land by, and that both marks go once focus first enters the panel; the press
+  itself is device-only, and so is whether Steam honours that preference (on a tabbed page it lands on Steam's active
+  tab instead). Prompt-only: `bigpicture/layout/WidePage.tsx` places entry focus through `pageEntryStop`
+  (`utils/entryFocus.ts`), never `firstBodyStop`; `bigpicture/layout/ListDetail.tsx` puts the `ENTRY_STOP_ATTR` mark on
+  the `display: contents` wrapper around the selected row, never on the row; and a wide page that opens on a non-first
+  row without `ListDetail` places the mark itself, the same way, and gives that row `preferredFocus` too, only while
+  `EntryPreferenceContext` holds
 
 When a change applies a guard / sanitize / backup / grouping pattern, sweep for sibling sites of the same pattern — the
 register is what that sweep checks against.

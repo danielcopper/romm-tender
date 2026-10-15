@@ -29,7 +29,8 @@ import { ControllerGlyph, GLYPH_BUTTON_B, Tabs } from "../../utils/deckyUiIntern
 import {
   ENTRY_FOCUS_DELAY_MS,
   EntryFocusOnMountContext,
-  PREFER_MARKED_CHILD,
+  EntryPreferenceContext,
+  preferMarkedChild,
   pageEntryStop,
   placeEntryFocus,
 } from "../../utils/entryFocus";
@@ -301,6 +302,7 @@ export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, on
   const bodyRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState<BodyFit | null>(null);
   const placesEntryFocus = useContext(EntryFocusOnMountContext);
+  const preferEntry = useContext(EntryPreferenceContext);
 
   useWideQamPanel(rootRef);
 
@@ -421,8 +423,9 @@ export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, on
           Back chip above it: the body is preferred, and inside it the first
           node marked preferred — a list's selected row, or on a tabbed page
           Steam's own active tab — else Steam's default entry: the child it last
-          had focus in, the first child on a fresh node. */}
-      <Focusable preferredFocus navEntryPreferPosition={PREFER_MARKED_CHILD}>
+          had focus in, the first child on a fresh node. Only until focus first
+          enters the panel (`EntryPreferenceContext`). */}
+      <Focusable preferredFocus={preferEntry} {...preferMarkedChild(preferEntry)}>
         <div ref={bodyRef} style={bodyStyle} data-testid="wide-page-body">
           {body}
         </div>

@@ -3201,6 +3201,37 @@ describe("index.tsx — the panel appearing places no focus", () => {
     expect(screen.getByRole("button", { name: "first button" })).toBeInTheDocument();
   });
 
+  it("drops Steam's entry preference once focus first enters the panel, and a new panel marks it again", async () => {
+    const first = render(panelFactory().content);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "go to downloads" }));
+      await Promise.resolve();
+    });
+    const preferring = () => document.querySelector('[data-nav-entry-prefer-position="4"]');
+    expect(preferring()).not.toBeNull();
+
+    // Steam's search for the marked node runs ahead of the child it remembers,
+    // so a mark left in place would pull every later entry — focus back from a
+    // closed dialog — onto it.
+    act(() => {
+      fireEvent.focusIn(screen.getByText("downloads page"));
+    });
+    expect(preferring()).toBeNull();
+
+    first.unmount();
+    render(panelFactory().content);
+    expect(preferring()).not.toBeNull();
+
+    await act(async () => {
+      fireEvent(
+        screen.getByText("downloads page"),
+        new CustomEvent("decky-button-down", { detail: { button: 2 }, bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("button", { name: "first button" })).toBeInTheDocument();
+  });
+
   it("tells a page whether a swap opened it, also after the panel remounts on it", async () => {
     // The module-level page survives a remount, so a panel can appear on a page
     // other than Main — and that page must not place focus either.

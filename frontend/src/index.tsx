@@ -73,7 +73,8 @@ import { findOutermostScrollParent } from "./utils/scrollHelpers";
 import {
   ENTRY_FOCUS_DELAY_MS,
   EntryFocusOnMountContext,
-  PREFER_MARKED_CHILD,
+  EntryPreferenceContext,
+  preferMarkedChild,
   pageEntryStop,
   placeEntryFocus,
 } from "./utils/entryFocus";
@@ -146,6 +147,11 @@ const QAMPanel: FC = () => {
   // False until the first page swap: the page the panel appears with takes no
   // focus (`EntryFocusOnMountContext`).
   const [swapped, setSwapped] = useState(false);
+  // True until focus first enters the panel (`EntryPreferenceContext`). Read
+  // off the root's own focus event rather than a document: the panel's code
+  // runs in another window than the nodes it renders.
+  const [awaitsEntry, setAwaitsEntry] = useState(true);
+  const onRootFocus = awaitsEntry ? () => setAwaitsEntry(false) : undefined;
   const rootRef = useRef<HTMLDivElement>(null);
   const setPage = (p: Page, section: SettingsSection | null = null) => {
     if (p !== page) setSwapped(true);
@@ -205,7 +211,7 @@ const QAMPanel: FC = () => {
   // re-check stays mounted: what the card says may change on the next open.
   if (stranded) {
     return (
-      <div ref={rootRef}>
+      <div ref={rootRef} onFocus={onRootFocus}>
         <StrandedRecheck />
         <StrandedQuickAccess />
       </div>
@@ -247,19 +253,21 @@ const QAMPanel: FC = () => {
   // legend, which this makes true.
   //
   // The same `Focusable` is where entering a page other than Main from the Quick
-  // Access strip starts its search for the page's preferred stop; Main carries
-  // its own.
+  // Access strip starts its search for the page's preferred stop, until focus
+  // first enters the panel; Main carries its own.
   return (
-    <div ref={rootRef}>
+    <div ref={rootRef} onFocus={onRootFocus}>
       <StrandedRecheck />
       <EntryFocusOnMountContext.Provider value={swapped}>
-        {page === "main" ? (
-          content
-        ) : (
-          <Focusable navEntryPreferPosition={PREFER_MARKED_CHILD} onCancelButton={() => setPage("main")}>
-            {content}
-          </Focusable>
-        )}
+        <EntryPreferenceContext.Provider value={awaitsEntry}>
+          {page === "main" ? (
+            content
+          ) : (
+            <Focusable {...preferMarkedChild(awaitsEntry)} onCancelButton={() => setPage("main")}>
+              {content}
+            </Focusable>
+          )}
+        </EntryPreferenceContext.Provider>
       </EntryFocusOnMountContext.Provider>
     </div>
   );

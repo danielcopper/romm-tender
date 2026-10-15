@@ -581,6 +581,24 @@ describe("WidePage", () => {
     expect(preferred).not.toContainElement(screen.getByRole("button", { name: "‹ Back" }));
   });
 
+  it("marks nothing once focus has entered the panel", async () => {
+    const WidePage = await loadWidePage(StubTabs);
+    const { EntryPreferenceContext } = await import("../../utils/entryFocus");
+
+    render(
+      <EntryPreferenceContext.Provider value={false}>
+        <WidePage title="Settings" onBack={vi.fn()}>
+          <button>a page row</button>
+        </WidePage>
+      </EntryPreferenceContext.Provider>,
+    );
+
+    // Down from Back, and focus back from a closed dialog, go where Steam
+    // remembers rather than to the body's mark.
+    expect(document.querySelector('[data-preferred-focus="true"]')).toBeNull();
+    expect(document.querySelector("[data-nav-entry-prefer-position]")).toBeNull();
+  });
+
   it("wraps no region around a body whose page builds its own", async () => {
     const WidePage = await loadWidePage(StubTabs, StubScrollPanel);
 

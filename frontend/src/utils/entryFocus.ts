@@ -145,6 +145,26 @@ export const EntryFocusOnMountContext = createContext(true);
 export const PREFER_MARKED_CHILD = 4 as NavEntryPositionPreferences.PREFERRED_CHILD;
 
 /**
+ * Whether the panel still marks where entering it from the Quick Access strip
+ * lands: `true` from the panel appearing until focus first enters it, `false`
+ * after. The panel's router (`frontend/src/index.tsx`) provides it.
+ *
+ * The marks cannot stay: Steam's search for the marked node runs ahead of the
+ * child a node last had focus in, so every later entry — focus coming back from
+ * a closed dialog, Down from a page's Back row — would land on the mark rather
+ * than where the reader was (`docs/architecture/qam-panel.md`, "Pages").
+ *
+ * `true` where no router provides it: nothing outside the router says focus has
+ * entered the panel.
+ */
+export const EntryPreferenceContext = createContext(true);
+
+/** The props that make a node search for the marked one on entry, while the panel still marks it. */
+export function preferMarkedChild(prefer: boolean): { navEntryPreferPosition?: typeof PREFER_MARKED_CHILD } {
+  return prefer ? { navEntryPreferPosition: PREFER_MARKED_CHILD } : {};
+}
+
+/**
  * Long enough to land after Steam has finished mounting the page and resolving
  * its own focus pointer. The same 50 ms the scroll helpers use.
  */

@@ -1640,5 +1640,7 @@ Format: **invariant** — tier — enforced by.
   reader off the Quick Access strip — so there the same row is meant to be reached through Steam's entry preference:
   `ListDetail` gives the selected row's own `Focusable` `preferredFocus`, and the frame's body searches for it. That
   holds on an untabbed page only: on a tabbed one Steam marks its own active tab the same way, at a shallower depth, and
-  entry lands there. Nothing joins that mark to `ENTRY_STOP_ATTR` either, and whether Steam honours either is
-  device-only. Detail: `docs/architecture/qam-panel.md`, "Pages"
+  entry lands there. The mark holds only until focus first enters the panel, because Steam's search for it runs ahead of
+  the child it remembers and would otherwise pull every later entry onto the row. Nothing joins that mark to
+  `ENTRY_STOP_ATTR` either, and whether Steam honours either is device-only. Detail: `docs/architecture/qam-panel.md`,
+  "Pages"

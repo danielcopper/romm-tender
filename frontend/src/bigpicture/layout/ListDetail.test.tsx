@@ -10,7 +10,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { useState, type CSSProperties, type FC, type ReactNode } from "react";
-import { ENTRY_STOP_ATTR } from "../../utils/entryFocus";
+import { ENTRY_STOP_ATTR, EntryPreferenceContext } from "../../utils/entryFocus";
 import { regionAround } from "../../test-utils/regionAround";
 import { ListDetail, type ListDetailItem, type ListDetailProps } from "./ListDetail";
 import { FOCUS_RING_REACH } from "./ScrollRegion";
@@ -399,6 +399,22 @@ describe("ListDetail", () => {
     expect(preferred()).toHaveLength(1);
     expect(rowOf(/Nintendo 64/)).not.toBeNull();
     expect(rowOf(/PlayStation/)).toBeNull();
+  });
+
+  it("marks no row once focus has entered the panel, and keeps the declaration", () => {
+    render(
+      <EntryPreferenceContext.Provider value={false}>
+        <ListDetail
+          items={platformItems(() => {})}
+          selectedId="psx"
+          onSelect={vi.fn()}
+          renderDetail={(id) => <div>detail for {id ?? "nothing"}</div>}
+        />
+      </EntryPreferenceContext.Provider>,
+    );
+
+    expect(document.querySelector('[data-preferred-focus="true"]')).toBeNull();
+    expect(screen.getByRole("button", { name: /PlayStation/ }).closest(`[${ENTRY_STOP_ATTR}]`)).not.toBeNull();
   });
 
   it("declares nothing where nothing is selected", () => {
