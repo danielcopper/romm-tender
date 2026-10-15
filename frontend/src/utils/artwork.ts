@@ -27,6 +27,7 @@ import {
   mountPruneLeaseOwner,
   releasePruneLeasesByOwner,
   withPruneLeases,
+  type PruneLeaseAdmission,
 } from "./pruneLease";
 
 /**
@@ -131,7 +132,7 @@ async function applySgdbArtwork(romId: number, appId: number): Promise<number | 
   }
   const refusal = refusals[0];
   if (refusal) {
-    return withPruneLeases(leaseTokens, "Artwork apply", async () => refusal, leaseOwner, admission);
+    return withPruneLeases(leaseTokens, "Artwork apply", () => Promise.resolve(refusal), leaseOwner, admission);
   }
 
   return withPruneLeases(
@@ -256,17 +257,10 @@ async function fillEmptySgdbArtwork(romId: number, appId: number): Promise<numbe
   // from moving them.
   for (const [slot, assetType] of FILLED_SLOTS) {
     if (superseded()) return applied;
-    const answer = await getSgdbSlotArtwork(romId, appId, slot).catch((e): SgdbSlotArtwork => {
-      detach(debugLog(`fillEmptyArtwork: ${slot} fetch for appId ${appId} rejected: ${e}`));
-      return { status: "failed" };
-    });
-    if (isEndpointFailure(answer)) {
-      detach(debugLog(`fillEmptyArtwork: ${slot} fetch for appId ${appId} refused: ${answer.message}`));
-      continue;
-    }
-    if (answer.status === "no_api_key") return -1;
-    if (answer.status === "key_refused") return applied;
-    if (answer.status !== "image") continue;
+    const answer = await fetchSlotToFill(romId, appId, slot);
+    if (answer === "no_api_key") return -1;
+    if (answer === "key_refused") return applied;
+    if (answer === "next") continue;
     // prettier-ignore
     const outcome = await withPruneLeases( // NOSONAR(typescript:S9382)
       [answer.prune_lease_token],
@@ -280,21 +274,53 @@ async function fillEmptySgdbArtwork(romId: number, appId: number): Promise<numbe
     if (outcome !== null && slot !== "hero") await reportSlotOutcome(romId, slot, outcome, answer); // NOSONAR(typescript:S9382)
   }
 
-  if (superseded()) return applied;
-  const iconAnswer = await getSgdbArtworkBase64(romId, 4).catch(() => NO_IMAGE);
-  if (isEndpointFailure(iconAnswer)) {
-    detach(debugLog(`fillEmptyArtwork: icon fetch for appId ${appId} refused: ${iconAnswer.message}`));
+  return applied + Number(await fillIcon(romId, appId, superseded, leaseOwner, admission));
+}
+
+/** Give the first visit's fill its icon, as `applyArtwork` does, unless overtaken; answers whether it was applied. */
+async function fillIcon(
+  romId: number,
+  appId: number,
+  superseded: () => boolean,
+  leaseOwner: string,
+  admission: PruneLeaseAdmission,
+): Promise<boolean> {
+  if (superseded()) return false;
+  const answer = await getSgdbArtworkBase64(romId, 4).catch(() => NO_IMAGE);
+  if (isEndpointFailure(answer)) {
+    detach(debugLog(`fillEmptyArtwork: icon fetch for appId ${appId} refused: ${answer.message}`));
   }
-  const icon = isEndpointFailure(iconAnswer) ? NO_IMAGE : iconAnswer;
-  const iconToken = icon.prune_lease_token;
-  const iconApplied = await withPruneLeases(
-    [iconToken],
+  const icon = isEndpointFailure(answer) ? NO_IMAGE : answer;
+  return withPruneLeases(
+    [icon.prune_lease_token],
     "Artwork apply",
     async (signal) => !!icon.base64 && !superseded() && (await applyIcon(appId, icon.base64, signal)),
     leaseOwner,
     admission,
   );
-  return iconApplied ? applied + 1 : applied;
+}
+
+/**
+ * One slot's answer for the first visit's fill: the image to set, `next` for a
+ * slot with nothing to set (a rejected or refused fetch is logged), or the
+ * answer that ends the fill.
+ */
+async function fetchSlotToFill(
+  romId: number,
+  appId: number,
+  slot: SgdbArtworkSlot,
+): Promise<SlotImage | "next" | "no_api_key" | "key_refused"> {
+  const answer = await getSgdbSlotArtwork(romId, appId, slot).catch((e): SgdbSlotArtwork => {
+    detach(debugLog(`fillEmptyArtwork: ${slot} fetch for appId ${appId} rejected: ${e}`));
+    return { status: "failed" };
+  });
+  if (isEndpointFailure(answer)) {
+    detach(debugLog(`fillEmptyArtwork: ${slot} fetch for appId ${appId} refused: ${answer.message}`));
+    return "next";
+  }
+  if (answer.status === "image") return answer;
+  if (answer.status === "no_api_key" || answer.status === "key_refused") return answer.status;
+  return "next";
 }
 
 /** Set one slot's image; `null` when the write was left out because the apply was cancelled or overtaken. */
