@@ -57,14 +57,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.platform_names import decode_platform_names
 from domain.platform_sync_state import stamp_for_skip
-from domain.platform_system import PLATFORM_IDS_KEY, decode_platform_ids
 from domain.sibling_resolution import reachable_rom_ids
 from domain.sync_diff import StaleRow, select_stale_removals
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from domain.work_unit import WorkUnit
     from services.protocols import UnitOfWorkFactory
+
+_PLATFORM_NAMES_KEY = "platform_names"
 
 
 @dataclass(frozen=True)
@@ -213,17 +217,14 @@ class LocalLibraryReader:
                 rom_id for stamp in uow.collection_sync_state.iter_all() for rom_id in stamp.member_rom_ids
             )
 
-    def do_read_listed_platform_slugs(self) -> frozenset[str] | None:
-        """Every platform slug RomM's last platform listing named, or ``None`` where none is kept.
+    def do_read_kept_platform_names(self, platform_slugs: Collection[str]) -> dict[str, str]:
+        """The display name the last completed run kept for each of *platform_slugs* that has one.
 
-        The fetcher keeps every listed platform's ids at the start of a run
-        (``services/library/_platform_ids.py``), on in Tender or not, so after
-        the work queue is built this is the run's own listing. One short read
-        UoW.
+        One short read UoW.
         """
         with self._uow_factory() as uow:
-            kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
-        return None if kept is None else frozenset(kept)
+            kept = decode_platform_names(uow.kv_config.get(_PLATFORM_NAMES_KEY))
+        return {slug: kept[slug] for slug in platform_slugs if slug in kept}
 
     def do_scan_stale_roms(self, synced_rom_ids: set[int], synced_app_ids: set[int]) -> list[StaleRow]:
         """Return a :class:`StaleRow` for every bound ROM not synced this run.

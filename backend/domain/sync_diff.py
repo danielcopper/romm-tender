@@ -644,6 +644,8 @@ def compute_platform_collection_diff(
     platform_rom_ids: set[int] | None,
     last_synced_platforms: list[str],
     create_platform_groups: bool,
+    *,
+    kept_platform_names: Collection[str] = (),
 ) -> dict[str, Any]:
     """Diff future platform-group collections against last-synced platforms.
 
@@ -661,8 +663,12 @@ def compute_platform_collection_diff(
     the predicate on the entry's own ``rom_id`` would drop a fully-rebinding
     platform out of ``future_platforms`` and mis-count it as removed (#1417); the
     apply path, which reads the post-commit bound rows, never had this bug.
+
+    *kept_platform_names* name the platform collections the stale removal's
+    kept rows stay in — a version gone from RomM, fetched by nothing — which the
+    apply keeps whatever the setting.
     """
-    future_platforms: set[str] = set()
+    future_platforms: set[str] = set(kept_platform_names)
     for sd in shortcuts_data:
         rid = sd.get(BIND_ROM_ID_KEY, sd["rom_id"])
         if should_include_in_platform_collection(rid, platform_rom_ids, create_platform_groups):

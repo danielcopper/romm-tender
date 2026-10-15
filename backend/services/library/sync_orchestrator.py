@@ -371,10 +371,7 @@ class SyncOrchestrator:
             collection_listed = await self._loop.run_in_executor(
                 None, self._local_library_reader.do_read_collection_listed_rom_ids
             )
-            listed_platforms = await self._loop.run_in_executor(
-                None, self._local_library_reader.do_read_listed_platform_slugs
-            )
-            removals, _kept = await self._settle_stale_rows(
+            removals, kept = await self._settle_stale_rows(
                 (
                     StaleRow(
                         rid,
@@ -385,11 +382,13 @@ class SyncOrchestrator:
                     for rid in stale
                 ),
                 read_platform_slugs=set(slug_to_name),
-                listed_platform_slugs=listed_platforms,
+                listed_platform_slugs=box.run_listed_platform_slugs,
                 collection_listed_rom_ids=collection_listed,
             )
             removed_ids = {row.rom_id for row in removals}
             stale = [rid for rid in stale if rid in removed_ids]
+            kept_names = await self._with_kept_platform_names(kept, slug_to_name)
+            kept_platform_names = {kept_names.get(row.platform_slug, row.platform_slug) for row in kept}
             disabled_count = count_disabled_platform_removals(stale, registry, platform_name_set)
             # Cover-only work (#1386): count the bound fetched ROMs whose server
             # cover fingerprint changed, with the SAME kernel the apply-path
@@ -470,6 +469,7 @@ class SyncOrchestrator:
                         platform_rom_ids,
                         last_synced_platforms,
                         self._settings.get("collection_create_platform_groups", False),
+                        kept_platform_names=kept_platform_names,
                     ),
                 },
                 "new_names": [s["name"] for s in new[:10]],
@@ -1263,7 +1263,7 @@ class SyncOrchestrator:
         listed_platform_slugs: Collection[str] | None,
         collection_listed_rom_ids: Collection[int],
     ) -> tuple[list[StaleRow], list[StaleRow]]:
-        """``(remove, kept_on_read_platforms)`` for the stale *rows*.
+        """``(remove, kept_in_platform_collections)`` for the stale *rows*.
 
         Sorts them by :func:`sort_stale_rows`, asks RomM once about the ones it
         cannot decide, and settles those by :func:`settle_asked_rows`. The
@@ -1280,10 +1280,25 @@ class SyncOrchestrator:
         asked_remove, asked_keep = settle_asked_rows(sort.ask, answers)
         if sort.keep or asked_keep:
             self._logger.info(
-                f"Stale removal: keeping {len(sort.keep)} bound version(s) gone from RomM with their platform "
-                f"and {len(asked_keep)} reached through a collection RomM did not confirm"
+                f"Stale removal: keeping {len(sort.keep)} bound version(s) gone from RomM in their platform's "
+                f"collection and {len(asked_keep)} reached through a collection RomM did not confirm present"
             )
-        return sort.remove + asked_remove, [row for row in sort.keep if row.platform_slug in read_platform_slugs]
+        return sort.remove + asked_remove, sort.keep
+
+    async def _with_kept_platform_names(self, kept: list[StaleRow], live: dict[str, str]) -> dict[str, str]:
+        """*live*, plus the name the last run kept for each platform outside it that a *kept* row is on.
+
+        Such a platform is one RomM no longer lists: its games stay in its Steam
+        collection, which is named by display name, so without the kept name
+        the collection would be renamed to the slug and the old one removed.
+        """
+        outside = {row.platform_slug for row in kept} - live.keys()
+        if not outside:
+            return live
+        kept_names = await self._loop.run_in_executor(
+            None, self._local_library_reader.do_read_kept_platform_names, outside
+        )
+        return {**kept_names, **live}
 
     async def _finalize_per_unit(
         self,
@@ -1315,8 +1330,8 @@ class SyncOrchestrator:
         # paths) is excluded so a new rom_id reusing an old appId is never
         # wrongly removed (#1036). Of the rest, only a game outside what the
         # run syncs is removed (``sort_stale_rows``); a version gone from RomM
-        # stays bound, and one kept on a platform the run read stays in that
-        # platform's Steam collection.
+        # stays bound and in its platform's Steam collection, under the name
+        # last kept for a platform RomM no longer lists.
         stale: list[StaleRow] = []
         if not cancelled:
             candidates = await self._loop.run_in_executor(
@@ -1325,16 +1340,14 @@ class SyncOrchestrator:
                 synced_rom_ids,
                 set(self._sync_state.committed_app_ids),
             )
-            listed_platforms = await self._loop.run_in_executor(
-                None, self._local_library_reader.do_read_listed_platform_slugs
-            )
-            stale, kept_on_read_platforms = await self._settle_stale_rows(
+            stale, kept = await self._settle_stale_rows(
                 candidates,
                 read_platform_slugs=processed_platform_slugs,
-                listed_platform_slugs=listed_platforms,
+                listed_platform_slugs=self._sync_state.run_listed_platform_slugs,
                 collection_listed_rom_ids=collection_listed_rom_ids,
             )
-            platform_rom_ids.update(row.rom_id for row in kept_on_read_platforms)
+            platform_rom_ids.update(row.rom_id for row in kept)
+            platform_names = await self._with_kept_platform_names(kept, platform_names)
         remove = [{"rom_id": row.rom_id, "app_id": row.app_id} for row in stale]
         if remove:
             await self._rules.emit_under_lease(

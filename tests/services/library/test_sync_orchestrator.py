@@ -25,12 +25,16 @@ migration.
 """
 
 import asyncio
+import logging
 import os
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fakes.fake_source_platform_systems import FakeSourcePlatformSystems
+from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 
+from domain.platform_system import PLATFORM_IDS_KEY, decode_platform_ids
 from domain.sync_diff import BIND_ROM_ID_KEY
 from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
@@ -38,6 +42,7 @@ from domain.sync_state import SyncState
 from domain.work_unit import WorkUnit
 from lib.errors import Refused, RommConnectionError, RommNotFoundError, classify_error
 from lib.romm_paging import LIST_PAGE_SIZE
+from services.platform_systems import PlatformSystemService, PlatformSystemServiceConfig
 from tests.services.library._helpers import (
     _fake_wait_set_event,
     _seed_install,
@@ -5758,6 +5763,90 @@ class TestPlatformTurnedOffAndBackOn:
         assert (n64.fetch_id, n64.skip_revoked) == ("run-1", False)
         assert gba is not None
         assert gba.skip_revoked is False
+
+    @pytest.mark.asyncio
+    async def test_a_platform_romm_no_longer_lists_keeps_its_steam_collection(self, library, fake_romm_api, emit):
+        """D15 rows stay in their platform's collection under its last known name, as D1's kept rows do."""
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
+        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
+        library.settings["enabled_platforms"] = {"1": True, "2": True}
+
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_every_game(unit, event):
+            event.set()
+            return {"n64": {"1": 5001}, "gba": {"4": 5004}}.get(unit.slug, {})
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_game
+
+        async def complete_a_run(run_id):
+            box.sync_state = SyncState.RUNNING
+            box.current_sync_id = run_id
+            await library.sync._orchestrator._do_sync_per_unit()
+
+        await complete_a_run("run-1")
+
+        fake_romm_api.platforms = [p for p in fake_romm_api.platforms if p["slug"] != "n64"]
+        for run_id in ("run-2", "run-3"):
+            run_starts_at = len(emit.call_args_list)
+            await complete_a_run(run_id)
+
+            complete = [c.args[1] for c in emit.call_args_list[run_starts_at:] if c.args[0] == "sync_complete"]
+            assert [event["platform_app_ids"] for event in complete] == [{"N64": [5001], "GBA": [5004]}]
+
+        preview = await library.sync.sync_preview()
+        assert preview["summary"]["remove_count"] == 0
+        assert preview["summary"]["platform_collection_diff"]["has_changes"] is False
+
+    @pytest.mark.asyncio
+    async def test_a_platform_read_mid_run_still_counts_as_unlisted(self, library, fake_romm_api, emit):
+        """A game page asking for N64's system mid-run keeps ids for it again; the run's own listing still decides."""
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
+        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
+        library.settings["enabled_platforms"] = {"1": True, "2": True}
+        platform_systems = PlatformSystemService(
+            config=PlatformSystemServiceConfig(
+                uow_factory=FakeUnitOfWorkFactory(uow=library.uow),
+                romm_api=fake_romm_api,
+                source_platform_systems=FakeSourcePlatformSystems(),
+                logger=logging.getLogger("test_sync_orchestrator"),
+                log_debug=MagicMock(),
+            )
+        )
+
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_every_game(unit, event):
+            if unit.slug == "gba":
+                platform_systems.platform_system("n64")
+            event.set()
+            return {"n64": {"1": 5001}, "gba": {"4": 5004, "5": 5005}}.get(unit.slug, {})
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_game
+
+        async def complete_a_run(run_id):
+            box.sync_state = SyncState.RUNNING
+            box.current_sync_id = run_id
+            await library.sync._orchestrator._do_sync_per_unit()
+
+        await complete_a_run("run-1")
+
+        # RomM drops N64 from its list, and GBA gains a game, so run 2 applies GBA.
+        fake_romm_api.platforms = [p for p in fake_romm_api.platforms if p["slug"] != "n64"]
+        fake_romm_api.roms[5] = {**fake_romm_api.roms[4], "id": 5, "name": "E"}
+        fake_romm_api.platforms[0]["rom_count"] = 2
+        run_2_starts_at = len(emit.call_args_list)
+        await complete_a_run("run-2")
+
+        with library.uow as uow:
+            assert "n64" in (decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY)) or {})
+            assert uow.roms.get(1).shortcut_app_id == 5001
+        stale = [c.args[1] for c in emit.call_args_list[run_2_starts_at:] if c.args and c.args[0] == "sync_stale"]
+        assert [event["remove"] for event in stale] == [[]]
 
 
 class TestAVersionReachedOnlyThroughACollection:

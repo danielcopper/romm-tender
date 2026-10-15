@@ -154,17 +154,14 @@ class TestStaleScan:
         assert stale == [StaleRow(2, 200, "gba")]
 
 
-class TestListedPlatformSlugs:
-    """Every platform the last listing named, kept by the fetcher at the start of a run."""
+class TestKeptPlatformNames:
+    """The display names the last completed run kept, for the platforms asked about."""
 
-    def test_the_kept_listing_s_slugs(self, library):
-        from domain.platform_system import PLATFORM_IDS_KEY, encode_platform_ids, platform_ids_by_slug
-
-        listed = [{"id": 1, "slug": "n64", "name": "N64"}, {"id": 2, "slug": "gba", "name": "GBA"}]
+    def test_the_names_kept_for_the_slugs_asked(self, library):
         with library.uow as uow:
-            uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids(platform_ids_by_slug(listed)))
+            uow.kv_config.set("platform_names", '{"n64": "Nintendo 64", "gba": "Game Boy Advance"}')
 
-        assert library.sync._local_library_reader.do_read_listed_platform_slugs() == frozenset({"n64", "gba"})
+        assert library.sync._local_library_reader.do_read_kept_platform_names({"n64", "psx"}) == {"n64": "Nintendo 64"}
 
-    def test_no_kept_listing_is_none(self, library):
-        assert library.sync._local_library_reader.do_read_listed_platform_slugs() is None
+    def test_no_kept_names_answers_none(self, library):
+        assert library.sync._local_library_reader.do_read_kept_platform_names({"n64"}) == {}

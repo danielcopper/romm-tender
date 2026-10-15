@@ -22,6 +22,7 @@ from domain.collection_owner import listing_is_own
 from domain.fetch_generation import backfill_needed, bound_row_not_returned, count_rows_for_skip
 from domain.platform_prefs import materialize_enabled_platforms, resolve_sync_enabled
 from domain.platform_sync_state import stamp_for_skip
+from domain.platform_system import platform_ids_by_slug
 from domain.skip_prediction import collapsed_shortcut_count, new_shortcut_count, predict_unit_skip
 from domain.sync_state import SyncCancelled
 from domain.virtual_collection_id import virtual_types_to_list
@@ -312,6 +313,7 @@ class LibraryFetcher:
         the id of every listed platform it does not.
         """
         listed = await self._loop.run_in_executor(None, self._romm_api.list_platforms)
+        self._sync_state.run_listed_platform_slugs = frozenset(platform_ids_by_slug(listed))
         await self._loop.run_in_executor(None, keep_platform_ids, self._uow_factory, self._logger, listed)
 
         # Empty map = "all platforms enabled" (the safety floor for a user who
