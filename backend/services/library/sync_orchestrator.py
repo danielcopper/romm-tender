@@ -234,14 +234,13 @@ class SyncOrchestrator:
     def cancel_sync(self, run_id=None):
         """Request cancellation of the active sync, scoped to *run_id*.
 
-        A truthy *run_id* must match the active run's ``current_sync_id`` for
-        the cancel to take effect — a cancel click meant for run N can land
-        after run N finalized to IDLE and run N+1 started fresh, and an
-        unscoped cancel would wrongly abort run N+1 (the bug #1198 fixes,
-        mirroring the ack-path identity check ``_ack_matches_active_unit``).
-        A falsy/``None`` *run_id* cancels **unconditionally** — legacy callers
-        that pass no id, and the "no active run id yet" safety case — so cancel
-        is never made less reliable.
+        A truthy *run_id* must match the active run's ``current_sync_id`` for the
+        cancel to take effect — a cancel click meant for run N can land after run
+        N finalized to IDLE and run N+1 started fresh, and an unscoped cancel
+        would wrongly abort run N+1; the ack path's ``_ack_matches_active_unit``
+        checks the run the same way. A falsy/``None`` *run_id* cancels
+        **unconditionally** — legacy callers that pass no id, and the "no active
+        run id yet" safety case — so cancel is never made less reliable.
         """
         box = self._sync_state
         self._logger.info(
@@ -261,11 +260,7 @@ class SyncOrchestrator:
         return {"success": True}
 
     async def shutdown(self) -> None:
-        """Set the run's cancel flag, then cancel the run and wait until it has ended.
-
-        No grace wait between the two; why is docs/architecture/backend-architecture.md's, "The shutdown stops what
-        runs in a fixed order".
-        """
+        """Set the run's cancel flag, then cancel the run and wait until it has ended, with no grace wait between."""
         self._sync_state.request_cancel()
         await self._tasks.shutdown()
 
