@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import { budgetProblems, chunkPackageBytes, packageBytes, packageOf, recordLines } from "./package-budgets.mjs";
@@ -178,5 +180,41 @@ describe("recordLines", () => {
 
   it("prints nothing when there is no record", () => {
     expect(recordLines({ budgets: BUDGETS, record: null, digests: DIGESTS })).toEqual([]);
+  });
+});
+
+const PACKAGE_BUDGETS = JSON.parse(readFileSync(`${process.cwd()}/package-budgets.json`, "utf8"));
+
+// What `@decky/ui` put into each bundle when its budgets were last set; a raise
+// of those budgets sets these anew.
+const DECKY_UI_SET_FROM = { "globals.js": 4275, "index.js": 34852 };
+
+function deckyUiGrownBy(factor) {
+  const bundles = Object.keys(DECKY_UI_SET_FROM);
+  return budgetProblems({
+    budgets: Object.fromEntries(bundles.map((b) => [b, { "@decky/ui": PACKAGE_BUDGETS[b]["@decky/ui"] }])),
+    record: Object.fromEntries(
+      bundles.map((b) => [b, { sha256: b, packages: { "@decky/ui": Math.ceil(DECKY_UI_SET_FROM[b] * factor) } }]),
+    ),
+    digests: Object.fromEntries(bundles.map((b) => [b, b])),
+  });
+}
+
+describe("@decky/ui's budgets in package-budgets.json", () => {
+  it("stand in exactly the bundles grown below", () => {
+    expect(Object.keys(PACKAGE_BUDGETS).filter((bundle) => "@decky/ui" in PACKAGE_BUDGETS[bundle])).toEqual(
+      Object.keys(DECKY_UI_SET_FROM),
+    );
+  });
+
+  it("let a bump grow it by a fifth", () => {
+    expect(deckyUiGrownBy(1.2)).toEqual([]);
+  });
+
+  it("still refuse a bump that grows it by a third", () => {
+    expect(deckyUiGrownBy(4 / 3)).toEqual([
+      expect.stringMatching(/^globals\.js: @decky\/ui puts \d+ B into it, over its budget/),
+      expect.stringMatching(/^index\.js: @decky\/ui puts \d+ B into it, over its budget/),
+    ]);
   });
 });

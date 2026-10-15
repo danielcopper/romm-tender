@@ -71,6 +71,20 @@
       "automerge": false
     },
     {
+      "description": "@decky/ui minor/patch: a release of it can repair a Steam update that broke the standalone panel, and that repair reaches a user only inside a Tender release. So its PR is opened as soon as the release is old enough rather than in the next Monday window, and commits as fix(deps): an in-range bump only touches the lock, which :semanticPrefixFixDepsChoreOthers types chore, and release-please proposes no release for chore. The three-day minimum release age still applies, auto-merge comes from the npm rule, and a major keeps the default handling. Why: docs/contributing/dependency-management.md.",
+      "matchPackageNames": [
+        "@decky/ui"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "schedule": [
+        "at any time"
+      ],
+      "semanticCommitType": "fix"
+    },
+    {
       "description": "Toolchain versions (node, pnpm, python, uv, deno) are pinned and cross-file-coupled: each appears in mise.toml AND in frontend/package.json's packageManager and/or the workflow setup-* version inputs, and all copies must match (python = docs/contributing/dependency-management.md says why, uv pinned for lock reproducibility, pnpm = packageManager, node = CI). Disabled by NAME across every manager so a bot bump can't desync one copy. The setup-* action SHAs themselves stay updatable (different dep names).",
       "matchDepNames": [
         "node",
