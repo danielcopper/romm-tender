@@ -1639,4 +1639,4 @@ Format: **invariant** — tier — enforced by.
   Quick Access strip — so there the same row is reached through Steam's entry preference: `ListDetail` gives the
   selected row's own `Focusable` `preferredFocus`, and the frame's body prefers it. Nothing joins that mark to
   `ENTRY_STOP_ATTR` either, and whether Steam honours it is device-only. Detail: `docs/architecture/qam-panel.md`,
-  "Building blocks → Tabs"
+  "Pages"

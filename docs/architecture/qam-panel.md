@@ -977,13 +977,13 @@ rule, and everything below is what it costs and what it buys.
 
 **The panel opens on the menu's Sync entry**, which Main declares as its entry stop rather than letting the router's
 default land on the first row of the status block — the rows below state and do nothing, so opening on one spends the
-reader's first press. Entering from the Quick Access strip lands there through Steam's entry preference, and coming back
-to Main from another page through the declaration ("Building blocks → Tabs"). **What that costs is Steam's own
-scrolling**, and it is a real cost rather than a theoretical one: Steam scrolls the focused element into view, so on a
-Main tall enough to scroll — a notice or two, an active download — the panel opens part-way down, with the notices that
-wanted attention off the top. Main fits today with three status rows and a four-entry menu, so nothing scrolls; it is
-not defended against in code, because a rule that opened somewhere else depending on what is on screen is exactly what
-the declaration replaced. The mechanism is under "Building blocks".
+reader's first press. Entering from the Quick Access strip lands there through Steam's entry preference ("Pages"), and
+coming back to Main from another page through the declaration ("Building blocks → Tabs"). **What that costs is Steam's
+own scrolling**, and it is a real cost rather than a theoretical one: Steam scrolls the focused element into view, so on
+a Main tall enough to scroll — a notice or two, an active download — the panel opens part-way down, with the notices
+that wanted attention off the top. Main fits today with three status rows and a four-entry menu, so nothing scrolls; it
+is not defended against in code, because a rule that opened somewhere else depending on what is on screen is exactly
+what the declaration replaced. The mechanism is under "Building blocks".
 
 **The three status rows act on nothing.** Connection, Last sync and Library are `Field`s that carry no activate handler,
 and they stay `focusable` all the same — a region scrolls only by moving focus, so a row nobody can focus is a row
