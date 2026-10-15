@@ -453,10 +453,36 @@ See: `backend/adapters/steam_config.py`
 
 Steam collections are managed entirely on the frontend via `collectionStore`, not by writing the shortcut's `tags` VDF
 field. Tender owns machine-scoped collections named `RomM: <platform> (<hostname>)` for platforms and
-`RomM: [<name>] (<hostname>)` for synced RomM collections. The `sync_complete` event carries `platform_app_ids` and
-`romm_collection_app_ids` maps; `onSyncComplete` (`frontend/src/index.tsx`) creates/updates the collections for the maps
-it receives and then runs a **stale-collection cleanup** that deletes any `RomM: …` collection for this machine whose
-platform/collection name is absent from those maps.
+`RomM: [<name>] (<hostname>)` for synced RomM collections. The backend decides which collections a game belongs to, and
+the frontend writes them in two passes: game by game while the run applies its shortcuts, adding only, and the complete
+set once the run has ended.
+
+**During the run, add-only.** Each `sync_apply_unit` entry names the collections its game belongs to:
+`platform_collection` (the name `platform_app_ids` is keyed by, `null` where **Show collection games in platform
+groups** leaves the game out) and `romm_collections` (the keys `romm_collection_app_ids` uses). `RunCollections`
+(`backend/domain/entry_collections.py`) decides them: at run start it indexes the listed members of every queued
+collection unit under its key and reads the naming mode and the platform-groups setting; per unit it files each entry by
+its binding target, with the RomM keys of every collection that lists a version in the entry's sibling group. The
+platform rule is `platform_collection_name`, the same function the end-of-run map applies, so both answers agree. Right
+after a shortcut's appId resolves, `addAppToCollections` (`frontend/src/utils/collections.ts`) finds each named
+collection by its folded name — or creates it holding this game, so no collection appears empty — and adds the game
+where it is missing: one `AddApps` and one `Save` per collection the game was not in yet, nothing for one it already
+holds. It never removes a game, so a write that fails halfway cannot empty a collection. A collection this pass created
+is remembered for the run by its folded name and used when `collectionStore.userCollections` does not list it: whether
+Steam lists a new collection as soon as its first `Save()` resolves is not established, and creating the same name a
+second time overwrites the first collection and the game in it. A failure is logged per collection and never stops the
+apply.
+
+What this pass does not file, and the end does: games the run does not send (a delta-unchanged entry, a skipped platform
+or collection), the members of a foreign smart collection — its listing is its owner's view, and the run follows the
+caller's walk — and members a collection's walk finds beyond its listing. A group still carrying several bound shortcuts
+files each of them, where the end-of-run map files the one its rule picks; the complete-set rewrite takes the others out
+again.
+
+**At the end, the complete set.** The `sync_complete` event carries `platform_app_ids` and `romm_collection_app_ids`
+maps; `onSyncComplete` (`frontend/src/index.tsx`) creates/updates the collections for the maps it receives, replacing
+each one's games with the map's, and then runs a **stale-collection cleanup** that deletes any `RomM: …` collection for
+this machine whose platform/collection name is absent from those maps.
 
 The cleanup is **gated on a completed (non-cancelled) sync** (`!data.cancelled`). On a cancelled run the maps are
 **partial** — they list only the platforms the run reached before the cancel (empty if the cancel fired before the first
@@ -464,14 +490,17 @@ unit), because the backend builds `platform_app_ids` from the cross-unit accumul
 partial map as the authoritative active-set would delete the collections for unreached platforms — an early cancel would
 wipe the entire library organization. The additive create/update path stays ungated, so the platforms that did complete
 still get their collections; only the destructive deletion is skipped on cancel. Steam collections are not backed up, so
-the safe behavior on a partial/cancelled run is to delete nothing.
+the safe behavior on a partial/cancelled run is to delete nothing. What the add-only pass filed stays on a cancelled run
+and on one that ends in an error, which sends no `sync_complete` at all: a RomM collection can be left partly filled
+until the next run that completes, never holding a game it does not hold in RomM.
 
 ### Collection naming mode — `merge` vs `by_label` (#1539)
 
 The `romm_collection_app_ids` wire payload is `name → appIds` **only** — kind/virtual_type are collapsed away before the
 frontend sees them, and the frontend simply wraps each key as `RomM: [<key>] (<hostname>)`. So the Steam-collection name
-is decided **entirely by the reporter's dict key**, which `SyncReporter._resolve_collection_memberships`
-(`services/library/reporter.py`) takes from `domain/collection_label.py::steam_collection_key` under the
+is decided **entirely by the backend's key**, which `SyncReporter._resolve_collection_memberships`
+(`services/library/reporter.py`) for the end-of-run map, and `RunCollections` (`domain/entry_collections.py`) for an
+apply entry's `romm_collections`, both take from `domain/collection_label.py::steam_collection_key` under the
 `collection_naming_mode` setting:
 
 - **`merge`** (default) — the key is the bare collection display name. Same-named RomM collections of any kind union
@@ -541,9 +570,10 @@ create/find, joining more is the safe direction: what loses games is a pair Stea
 On the delete matchers, joining more means deleting more.
 
 Where the fold applies: the reporter groups both `romm_collection_app_ids` and `platform_app_ids` by the folded key,
-keeping the first-seen original casing for display (which casing wins is irrelevant — every match folds both sides); the
-preview's `collection_diff` and `platform_collection_diff` compare folded names the same way; and the frontend
-create/find (`createOrUpdateCollections` / `createOrUpdateRomMCollections`), the cleanup matchers
+keeping the first-seen original casing for display (which casing wins is irrelevant — every match folds both sides), and
+`RunCollections` spells an apply entry's RomM keys the same way; the preview's `collection_diff` and
+`platform_collection_diff` compare folded names the same way; and the frontend create/find (`createOrUpdateCollections`
+/ `createOrUpdateRomMCollections`, and `addAppToCollections` during the run), the cleanup matchers
 (`clearPlatformCollection` / `clearAllRomMCollections`) and the `onSyncComplete` stale-delete (`removeStaleCollections`,
 `frontend/src/index.tsx`) fold the whole name, the `RomM:` prefix and the host suffix included — so a case variant of
 one of this machine's names matches as that name does, while one carrying another machine's suffix does not — a hostname
@@ -869,7 +899,7 @@ the timeout above still does.
 | `frontend/src/utils/steamShortcuts.ts`                | `addShortcut()`, `removeShortcut()`, `getExistingRomMShortcuts()`, `getLiveRomMShortcutAppIds()` (raw live appId scan for the sync-start reconcile) — frontend shortcut CRUD. The existing-shortcut scan emits a sync heartbeat every 10s between batches so a large library can't stall the run past the backend's per-unit heartbeat timeout |
 | `frontend/src/utils/syncManager.ts`                   | Listens for sync events, orchestrates shortcut creation/removal, artwork application, collection management. `reconcileStaleShortcuts()` runs the sync-start reconcile of Steam-UI-deleted shortcuts. Caches the existing-shortcut scan per run (keyed by the `sync_apply_unit` `run_id`) so it scans Steam once per run, not once per unit    |
 | `backend/services/shortcut_removal.py`                | `ShortcutRemovalService` — resolves shortcut-removal sets, unbinds removed ROMs, and runs `reconcile_live_shortcuts` (the sync-start reconcile of Steam-UI-deleted bindings)                                                                                                                                                                   |
-| `frontend/src/utils/collections.ts`                   | Machine-scoped Steam collection management                                                                                                                                                                                                                                                                                                     |
+| `frontend/src/utils/collections.ts`                   | Machine-scoped Steam collection management: the add-only pass during a run and the complete-set write at its end                                                                                                                                                                                                                               |
 | `frontend/src/bigpicture/patches/gameDetailPatch.tsx` | The tree patch for Steam's game page — injects RomMPlaySection for custom game detail UI. Installed on the route component's render by `installGamePagePatch.ts` ([frontend-bundles.md](frontend-bundles.md#tenders-section-on-steams-game-page))                                                                                              |
 | `frontend/src/utils/metadataPatches.ts`               | Store patches for description, associations, categories, release date display                                                                                                                                                                                                                                                                  |
 | `backend/adapters/steam_config.py`                    | `SteamConfigAdapter` — VDF read/write, grid dir, shortcut icon write, Steam Input config                                                                                                                                                                                                                                                       |

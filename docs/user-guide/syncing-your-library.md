@@ -11,7 +11,8 @@ games appear in the Steam Library with cover art, metadata, and organized into c
 4. If you have a SteamGridDB API key configured, every game gets its icon, wide grid image and logo in the background
    after the sync, and its hero banner the first time its page is opened (see [Artwork](#artwork))
 5. Metadata (description, developer, genres, release date) is cached and displayed in Tender's custom game detail panel
-6. Steam collections are created per platform (e.g. "RomM: Game Boy Advance (steamdeck)")
+6. Steam collections are created per platform (e.g. "RomM: Game Boy Advance (steamdeck)") and per synced RomM
+   collection, and fill game by game while the sync runs (see [Collections](#collections))
 
 ## Starting a Sync
 
@@ -88,11 +89,12 @@ entry, and the buttons above sit on that page rather than on the panel's first s
 
 <!-- Screenshot: Sync in progress with progress bar -->
 
-You can tap **Cancel Sync** to stop mid-sync — from either page. Games already added will remain. A cancelled sync never
-removes any Steam collections — stale-collection cleanup only runs after a sync finishes in full, so cancelling can
-never wipe the collections for platforms the run did not reach. If the cancel request itself does not get through, the
-run is still going, so the panel keeps showing its progress with **Cancel Sync** ready to try again rather than offering
-to start a second run on top of the first.
+You can tap **Cancel Sync** to stop mid-sync — from either page. Games already added will remain, and so will the
+collections they were put in. A cancelled sync never removes any Steam collections — stale-collection cleanup only runs
+after a sync finishes in full, so cancelling can never wipe the collections for platforms the run did not reach. A
+collection the cancelled run had only started filling holds the games it reached, and gets the rest with the next sync
+that finishes. If the cancel request itself does not get through, the run is still going, so the panel keeps showing its
+progress with **Cancel Sync** ready to try again rather than offering to start a second run on top of the first.
 
 ## Time estimate and progress
 
@@ -325,7 +327,10 @@ hostname to avoid conflicts if you run Tender on multiple devices:
 - `RomM: Game Boy Advance (steamdeck)`
 - `RomM: PlayStation (htpc)`
 
-Collections appear in Steam's library sidebar and can be used to browse games by platform.
+Collections appear in Steam's library sidebar and can be used to browse games by platform. A collection appears with the
+first of its games the sync adds, and fills while the sync goes on. Games the sync does not need to touch — ones that
+have not changed since the last sync — reach a collection they are new to when the sync finishes, as do the games of
+another user's smart collection.
 
 ### Syncing RomM collections
 
