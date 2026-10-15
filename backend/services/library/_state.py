@@ -230,6 +230,11 @@ class LibrarySyncStateBox:
     # reuses an old appId (CRC32 of unchanged exe+name) can't wipe the shortcut
     # the run just bound (#1036). Reset at the start of each run.
     committed_app_ids: set[int] = field(default_factory=set)
+    # Every platform slug the run's own platform listing named, on in Tender or
+    # not; ``None`` until the run has listed. The stale removal reads this rather
+    # than the kept ids under ``platform_ids``, which a game page's read can
+    # widen mid-run (``PlatformSystemService``). Reset by ``try_begin_run``.
+    run_listed_platform_slugs: frozenset[str] | None = None
     # Count of apply chunks emitted so far this run — the session-budget gate
     # skips its very first chunk (this counter still 0) so every run/resume makes
     # at least one chunk of forward progress before it can pause, never an
@@ -304,6 +309,7 @@ class LibrarySyncStateBox:
         self.sync_state = SyncState.RUNNING
         self.current_sync_id = run_id
         self.run_kind = kind
+        self.run_listed_platform_slugs = None
         # Bounded stash lifetime: a heartbeat-timed-out chunk whose late ack
         # never arrived is dropped when the next run starts, so stale abandoned
         # data can never outlive one run (#1367).

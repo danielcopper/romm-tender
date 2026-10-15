@@ -38,14 +38,11 @@ def test_candidate_groups_keep_null_keys_as_singletons() -> None:
     assert [[row.rom_id for row in group] for group in groups] == [[1], [3, 4]]
 
 
-def test_repointed_group_delete_revalidates_and_invalidates_collection_only() -> None:
+def test_a_group_delete_revalidates_and_invalidates_collection_only() -> None:
     uow = FakeUnitOfWork()
-    app_id = 0x80000001
-    old = _rom(1, group="g", app_id=app_id)
-    target = _rom(2, group="g")
     with uow:
-        uow.roms.save(old)
-        uow.roms.save(target)
+        uow.roms.save(_rom(1, group="g"))
+        uow.roms.save(_rom(2, group="g"))
         uow.platform_sync_state.save(
             PlatformSyncState.stamp(platform_slug="gba", at="now", rom_count=2, fetch_id="fetch")
         )
@@ -59,20 +56,27 @@ def test_repointed_group_delete_revalidates_and_invalidates_collection_only() ->
                 member_rom_ids=(1, 2),
             )
         )
-    target.bind_shortcut(app_id)
-    with uow:
-        uow.roms.save(target)
 
     current = _registry(uow).reread_group(1)
-    deleted = _registry(uow).delete_rows(current, {1}, 2, app_id, False)
+    deleted = _registry(uow).delete_rows(current, {1})
 
     assert deleted is True
     assert uow.roms.get(1) is None
-    retained = uow.roms.get(2)
-    assert retained is not None
-    assert retained.shortcut_app_id == app_id
+    assert uow.roms.get(2) is not None
     assert uow.collection_sync_state.get("5", "standard") is None
     assert uow.platform_sync_state.get("gba") is not None
+
+
+def test_a_row_that_holds_a_shortcut_is_never_deleted() -> None:
+    uow = FakeUnitOfWork()
+    with uow:
+        uow.roms.save(_rom(1, group="g", app_id=0x80000001))
+        uow.roms.save(_rom(2, group="g"))
+
+    current = _registry(uow).reread_group(1)
+
+    assert _registry(uow).delete_rows(current, {1}) is False
+    assert uow.roms.get(1) is not None
 
 
 def test_fully_dead_group_delete_keeps_the_platform_completion_stamp() -> None:
@@ -85,7 +89,7 @@ def test_fully_dead_group_delete_keeps_the_platform_completion_stamp() -> None:
         )
 
     current = _registry(uow).reread_group(1)
-    deleted = _registry(uow).delete_rows(current, {1}, None, None, True)
+    deleted = _registry(uow).delete_rows(current, {1})
 
     assert deleted is True
     assert uow.roms.get(1) is None
@@ -103,7 +107,7 @@ def test_new_sibling_or_changed_binding_blocks_pre_mutation_validation() -> None
             uow.roms.save(row)
         uow.roms.save(_rom(3, group="g"))
 
-    assert _registry(uow).validate_deletion_state(expected, {1}, 2, app_id, False) is False
+    assert _registry(uow).validate_deletion_state(expected, {1}) is False
 
 
 def _stamped(uow: FakeUnitOfWork, slug: str, fetch_id: str, rom_count: int = 1) -> None:

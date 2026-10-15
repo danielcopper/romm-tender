@@ -13,8 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.prune import natural_default, selected_prune_ids
-from domain.sibling_resolution import AUTO_REGION
+from domain.prune import selected_prune_ids
 from services.prune.liveness import UNCONFIRMED_REASON
 
 if TYPE_CHECKING:
@@ -43,7 +42,6 @@ class GroupPlan:
     bound_row: Rom | None
     app_id: int | None
     delete_ids: set[int]
-    target_id: int | None
     fully_dead: bool
     whole_game_action: bool
     drifted: bool
@@ -81,10 +79,6 @@ class GroupPlannerConfig:
     liveness: LivenessProber
     active_downloads: ActiveDownloadRomIdsFn
     drift_probe: SaveDriftProbeFn
-    settings: dict[str, Any]
-
-
-_NO_LIVE_DEFAULT = -1
 
 
 def _unproven_refusal(reasons: set[str], unproven_count: int) -> tuple[str, str]:
@@ -118,28 +112,6 @@ class GroupPlanner:
         self._liveness = config.liveness
         self._active_downloads = config.active_downloads
         self._drift_probe = config.drift_probe
-        self._settings = config.settings
-
-    def _repoint_target(
-        self,
-        rows: list[Rom],
-        bound_row: Rom | None,
-        vanished_ids: set[int],
-        live_ids: set[int],
-        options: PruneOptions,
-    ) -> int | None:
-        """The live row a vanished shortcut should move onto, if it should move.
-
-        ``None`` when no repoint applies at all; ``_NO_LIVE_DEFAULT`` when one
-        does but the group's live rows cannot yield a representative, which is a
-        refusal rather than a no-op.
-        """
-        if bound_row is None or bound_row.rom_id not in vanished_ids or not live_ids:
-            return None
-        if not options.repoint_shortcuts:
-            return None
-        target_id = natural_default(rows, live_ids, self._settings.get("preferred_region", AUTO_REGION))
-        return _NO_LIVE_DEFAULT if target_id is None else target_id
 
     async def plan(
         self,
@@ -181,18 +153,17 @@ class GroupPlanner:
             remove_rows=options.remove_rows,
             remove_fully_vanished=options.remove_fully_vanished,
         )
-        target_id = self._repoint_target(rows, bound_row, proof.vanished_ids, proof.live_ids, options)
-        if target_id is _NO_LIVE_DEFAULT:
-            return self._results.group_result(rows, "skipped", "no_live_default", "No live default could be selected.")
-        if bound_row is not None and bound_row.rom_id in delete_ids and proof.live_ids and target_id is None:
-            # Deleting the row that owns the shortcut would strand a live game.
+        spared_bound = bound_row is not None and bound_row.rom_id in delete_ids and bool(proof.live_ids)
+        if spared_bound and bound_row is not None:
+            # The shortcut is the game while it still has live versions; the
+            # user moves it with the version picker, never the cleanup.
             delete_ids.remove(bound_row.rom_id)
 
         whole_game_action = proof.fully_dead and bool(delete_ids)
-        if not delete_ids and target_id is None:
-            return self._nothing_to_do(rows, proof.uncertain_ids)
+        if not delete_ids:
+            return self._nothing_to_do(rows, proof.uncertain_ids, spared_bound=spared_bound)
 
-        drifted, unsynced = await self._probe_drift(rows, bound_row, proof, target_id, whole_game_action, options)
+        drifted, unsynced = await self._probe_drift(rows, bound_row, proof, whole_game_action, options)
         if unsynced is not None:
             return unsynced
 
@@ -202,7 +173,6 @@ class GroupPlanner:
             bound_row=bound_row,
             app_id=bound_row.shortcut_app_id if bound_row is not None else None,
             delete_ids=delete_ids,
-            target_id=target_id,
             fully_dead=proof.fully_dead,
             whole_game_action=whole_game_action,
             drifted=drifted,
@@ -236,14 +206,23 @@ class GroupPlanner:
             )
         return (bound[0] if bound else None), None
 
-    def _nothing_to_do(self, rows: list[Rom], uncertain_ids: set[int]) -> dict[str, Any]:
+    def _nothing_to_do(self, rows: list[Rom], uncertain_ids: set[int], *, spared_bound: bool) -> dict[str, Any]:
         """Say why a group with nothing selected has nothing selected.
 
         Distinguish "your options excluded everything" from "RomM never
-        confirmed anything gone". Both leave nothing to do, but only the first
-        is answered by changing a toggle — reporting the second as an options
-        problem sends the user to fiddle with settings that cannot help.
+        confirmed anything gone" and from "the version the shortcut is on is
+        kept". All three leave nothing to do, but only the first is answered by
+        changing a toggle — reporting the others as an options problem sends the
+        user to fiddle with settings that cannot help.
         """
+        if spared_bound:
+            return self._results.group_result(
+                rows,
+                "skipped",
+                "shortcut_version_kept",
+                "The version this game's shortcut is on is kept while another version is on RomM; "
+                "switch versions first.",
+            )
         if uncertain_ids:
             return self._results.group_result(
                 rows,
@@ -260,14 +239,13 @@ class GroupPlanner:
         rows: list[Rom],
         bound_row: Rom | None,
         proof: _GroupLiveness,
-        target_id: int | None,
         whole_game_action: bool,
         options: PruneOptions,
     ) -> tuple[bool, dict[str, Any] | None]:
         """Ask whether the shortcut this run would change still holds unsynced saves."""
         if bound_row is None or bound_row.rom_id not in proof.vanished_ids:
             return False, None
-        if target_id is None and not whole_game_action:
+        if not whole_game_action:
             return False, None
         drifted = bool((await self._drift_probe(bound_row.rom_id)).get("drifted"))
         if drifted and not options.create_recovery_bundle:

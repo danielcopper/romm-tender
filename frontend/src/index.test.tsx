@@ -13,7 +13,7 @@
 
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { recheckStranded, toaster, type PanelDefinition } from "./api/host";
 import { emitHostEvent, hostEventListenerCount } from "./test-utils/host-event-bus";
@@ -38,7 +38,6 @@ import {
   getMetadataCachePage,
   releasePruneConflictLease,
   renewPruneConflictLease,
-  waitForPruneRelease,
   type UpdateOutcome,
 } from "./api/backend";
 import { registerGameDetailPatch } from "./bigpicture/patches/gameDetailPatch";
@@ -129,10 +128,6 @@ vi.mock("./utils/pruneActions", () => ({
   handlePruneAction: (...args: unknown[]) => handlePruneAction(...args),
   cancelPruneActions: vi.fn(),
 }));
-const publishCommittedVersionSwitch = vi.fn().mockResolvedValue(undefined);
-vi.mock("./utils/versionSwitchApplication", () => ({
-  publishCommittedVersionSwitch: (...args: unknown[]) => publishCommittedVersionSwitch(...args),
-}));
 vi.mock("./utils/syncManager", () => ({
   initUnitSyncManager: vi.fn(() => () => {}),
   resetSyncCancel: vi.fn(),
@@ -203,12 +198,19 @@ vi.mock("./bigpicture/MainPage", () => ({
     );
   },
 }));
-vi.mock("./bigpicture/DownloadQueue", () => ({
-  DownloadQueue: () => {
-    pageRenders++;
-    return createElement("div", null, "downloads page");
-  },
-}));
+// The page reports what the router told it about entry focus, which is how the
+// panel's side of that handshake is seen.
+vi.mock("./bigpicture/DownloadQueue", async () => {
+  const { useContext } = await import("react");
+  const { EntryFocusOnMountContext } = await import("./utils/entryFocus");
+  return {
+    DownloadQueue: () => {
+      pageRenders++;
+      const placesEntryFocus = useContext(EntryFocusOnMountContext);
+      return createElement("div", { "data-entry-focus-on-mount": String(placesEntryFocus) }, "downloads page");
+    },
+  };
+});
 const relocateShortcutsToLauncher = vi.fn().mockResolvedValue({ status: "relocated" });
 vi.mock("./utils/launcherRelocation", () => ({
   relocateShortcutsToLauncher: () => relocateShortcutsToLauncher(),
@@ -257,11 +259,6 @@ beforeEach(() => {
   setSyncProgress({ running: false, stage: "", current: 0, total: 0, message: "" });
   resetPruneState();
   handlePruneAction.mockClear();
-  publishCommittedVersionSwitch.mockClear();
-  vi.mocked(waitForPruneRelease).mockReset().mockResolvedValue({
-    success: true,
-    message: "Cleanup claim is released.",
-  });
   vi.mocked(releasePruneConflictLease).mockReset().mockResolvedValue({ success: true, message: "released" });
   vi.mocked(invalidateCachedGameDetail).mockClear();
   vi.mocked(getUpdateInstallState).mockResolvedValue(NOTHING_INSTALLING);
@@ -584,77 +581,7 @@ describe("index.tsx — persistent prune listeners", () => {
     });
   });
 
-  it("hands back a continuation lease the terminal frame gave it nothing to do with", async () => {
-    panelFactory();
-    beginPrunePreview("preview-nothing");
-
-    await act(async () => {
-      emitHostEvent("prune_complete", {
-        success: true,
-        partial: false,
-        run_id: "run-nothing",
-        preview_id: "preview-nothing",
-        // The lease is attached by the backend emit path; this run committed no
-        // repoint, so publishPruneSwitches is never called for it.
-        publication_required: true,
-        prune_lease_token: "orphan-lease",
-        removed_rom_ids: [7],
-        affected_app_ids: [],
-        results: [{ group_id: "group-1", rom_ids: [7], status: "removed", message: "Removed." }],
-      });
-      await Promise.resolve();
-    });
-
-    // Without this the lease refuses the next cleanup's start for its full
-    // 300s TTL.
-    await waitFor(() => expect(releasePruneConflictLease).toHaveBeenCalledWith("orphan-lease"));
-  });
-
-  it("publishes a known committed partial repoint after terminal completion", async () => {
-    panelFactory();
-    beginPrunePreview("preview-repoint");
-    let release: ((value: { success: true; message: string }) => void) | undefined;
-    vi.mocked(waitForPruneRelease).mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          release = resolve;
-        }),
-    );
-
-    act(() => {
-      emitHostEvent("prune_complete", {
-        success: false,
-        partial: true,
-        run_id: "run-repoint-partial",
-        preview_id: "preview-repoint",
-        publication_required: true,
-        prune_lease_token: "publication-lease",
-        removed_rom_ids: [],
-        affected_app_ids: [9001],
-        results: [
-          {
-            group_id: "group-1",
-            rom_ids: [7, 8],
-            status: "partial",
-            committed_action: "repoint_shortcut",
-            app_id: 9001,
-            target_rom_id: 8,
-            message: "The shortcut changed; source data was retained.",
-          },
-        ],
-      });
-    });
-    await flush();
-
-    expect(publishCommittedVersionSwitch).not.toHaveBeenCalled();
-    expect(releasePruneConflictLease).not.toHaveBeenCalledWith("publication-lease");
-    release?.({ success: true, message: "released" });
-    await flush();
-    expect(publishCommittedVersionSwitch).toHaveBeenCalledWith(9001, 8, undefined, expect.any(AbortSignal));
-    expect(releasePruneConflictLease).toHaveBeenCalledWith("publication-lease");
-  });
-
-  it("does not publish an ambiguous repoint outcome", async () => {
+  it("says when a shortcut removal's outcome is uncertain", async () => {
     panelFactory();
     beginPrunePreview("preview-ambiguous");
 
@@ -662,7 +589,7 @@ describe("index.tsx — persistent prune listeners", () => {
       emitHostEvent("prune_complete", {
         success: false,
         partial: true,
-        run_id: "run-repoint-ambiguous",
+        run_id: "run-removal-ambiguous",
         preview_id: "preview-ambiguous",
         removed_rom_ids: [],
         affected_app_ids: [9001],
@@ -671,58 +598,21 @@ describe("index.tsx — persistent prune listeners", () => {
             group_id: "group-1",
             rom_ids: [7, 8],
             status: "partial",
-            committed_action: "repoint_shortcut",
+            committed_action: "remove_shortcut",
             action_ambiguous: true,
             app_id: 9001,
-            target_rom_id: 8,
-            message: "The repoint outcome is unknown.",
+            message: "Steam removal was claimed but its outcome is unknown; source data was retained.",
           },
         ],
       });
     });
     await flush();
 
-    expect(publishCommittedVersionSwitch).not.toHaveBeenCalled();
     expect(toaster.toast).toHaveBeenCalledWith({
       title: "Tender",
-      body: "Shortcut repoint outcome is uncertain; source data was retained.",
-      subtext: "The repoint outcome is unknown.",
+      body: "Shortcut removal outcome is uncertain; source data was retained.",
+      subtext: "Steam removal was claimed but its outcome is unknown; source data was retained.",
     });
-  });
-
-  it("fails closed when a committed repoint terminal frame has no publication lease", async () => {
-    panelFactory();
-    beginPrunePreview("preview-missing-publication-lease");
-
-    act(() => {
-      emitHostEvent("prune_complete", {
-        success: true,
-        partial: false,
-        run_id: "run-missing-publication-lease",
-        preview_id: "preview-missing-publication-lease",
-        publication_required: true,
-        removed_rom_ids: [7],
-        affected_app_ids: [9001],
-        results: [
-          {
-            group_id: "group-1",
-            rom_ids: [7, 8],
-            status: "repointed",
-            committed_action: "repoint_shortcut",
-            app_id: 9001,
-            target_rom_id: 8,
-            message: "Repointed.",
-          },
-        ],
-      });
-    });
-    await flush();
-
-    expect(waitForPruneRelease).not.toHaveBeenCalledWith("run-missing-publication-lease");
-    expect(publishCommittedVersionSwitch).not.toHaveBeenCalled();
-    expect(logError).toHaveBeenCalledWith(
-      "Cleanup publication was skipped because its continuation lease was missing.",
-    );
   });
 });
 
@@ -3018,11 +2908,28 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
     mainPageDeclaresEntryStop = false;
   });
 
+  // To Downloads and back on B: Main mounted by a swap rather than with the
+  // panel, which places no focus at all.
+  async function swapAwayFromMainAndBack(): Promise<void> {
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "go to downloads" }));
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    await act(async () => {
+      fireEvent(
+        screen.getByText("downloads page"),
+        new CustomEvent("decky-button-down", { detail: { button: 2 }, bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+  }
+
   it("focuses the mounted page's first button", async () => {
     vi.useFakeTimers();
     try {
       const panel = panelFactory();
       render(panel.content);
+      await swapAwayFromMainAndBack();
 
       // Steam's gamepad nav keeps a focus pointer across page swaps and would
       // otherwise resolve it onto whatever sits at the old page's position.
@@ -3044,6 +2951,7 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
       mainPageDeclaresEntryStop = true;
       const panel = panelFactory();
       render(panel.content);
+      await swapAwayFromMainAndBack();
 
       // The router still does the placing — the page only says where. Main is
       // the one page that says anything: its status rows act on nothing, so
@@ -3108,6 +3016,7 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
       mainPageOwnsEntryFocus = true;
       const panel = panelFactory();
       render(panel.content);
+      await swapAwayFromMainAndBack();
 
       // A wide page's first button is its Back row, which sits above the tabs
       // and so outside Steam's tabbed page — landing there would hide the L1/R1
@@ -3119,6 +3028,133 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
 
       expect(btn).not.toHaveFocus();
       expect(btn).not.toHaveClass("gpfocus");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("index.tsx — the panel appearing places no focus", () => {
+  // Steam mounts the panel as soon as the Quick Access strip highlights
+  // Tender's Quick Access entry, so focus placed on that mount takes the reader
+  // off the strip on the way past. Entering is Steam's, by the stop the page
+  // marks preferred.
+  beforeEach(() => {
+    mainPageOwnsEntryFocus = false;
+    mainPageDeclaresEntryStop = true;
+  });
+
+  it("leaves focus alone on Main, its declared stop included", async () => {
+    vi.useFakeTimers();
+    try {
+      const panel = panelFactory();
+      render(panel.content);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+
+      expect(screen.getByRole("button", { name: "go to downloads" })).not.toHaveFocus();
+      expect(screen.getByRole("button", { name: "first button" })).not.toHaveFocus();
+      expect(document.querySelector(".gpfocus")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("puts Steam's entry preference on the router's Focusable around a page", async () => {
+    const panel = panelFactory();
+    render(panel.content);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "go to downloads" }));
+      await Promise.resolve();
+    });
+
+    // The search starts at the router's Focusable, which is the same one that
+    // takes B back to Main.
+    expect(screen.getByText("downloads page").closest('[data-nav-entry-prefer-position="4"]')).not.toBeNull();
+
+    await act(async () => {
+      fireEvent(
+        screen.getByText("downloads page"),
+        new CustomEvent("decky-button-down", { detail: { button: 2 }, bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("button", { name: "first button" })).toBeInTheDocument();
+  });
+
+  it("drops Steam's entry preference once focus first enters the panel, and a new panel marks it again", async () => {
+    const first = render(panelFactory().content);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "go to downloads" }));
+      await Promise.resolve();
+    });
+    const preferring = () => document.querySelector('[data-nav-entry-prefer-position="4"]');
+    expect(preferring()).not.toBeNull();
+
+    // Steam's search for the marked node runs ahead of the child it remembers,
+    // so a mark left in place would pull every later entry — focus back from a
+    // closed dialog — onto it.
+    act(() => {
+      fireEvent.focusIn(screen.getByText("downloads page"));
+    });
+    expect(preferring()).toBeNull();
+
+    first.unmount();
+    render(panelFactory().content);
+    expect(preferring()).not.toBeNull();
+
+    await act(async () => {
+      fireEvent(
+        screen.getByText("downloads page"),
+        new CustomEvent("decky-button-down", { detail: { button: 2 }, bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("button", { name: "first button" })).toBeInTheDocument();
+  });
+
+  it("tells a page whether a swap opened it, also after the panel remounts on it", async () => {
+    // The module-level page survives a remount, so a panel can appear on a page
+    // other than Main — and that page must not place focus either.
+    const first = render(panelFactory().content);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "go to downloads" }));
+      await Promise.resolve();
+    });
+    expect(screen.getByText("downloads page")).toHaveAttribute("data-entry-focus-on-mount", "true");
+
+    first.unmount();
+    render(panelFactory().content);
+    expect(screen.getByText("downloads page")).toHaveAttribute("data-entry-focus-on-mount", "false");
+
+    await act(async () => {
+      fireEvent(
+        screen.getByText("downloads page"),
+        new CustomEvent("decky-button-down", { detail: { button: 2 }, bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("button", { name: "first button" })).toBeInTheDocument();
+  });
+
+  it("leaves focus alone on the stranded card", async () => {
+    vi.useFakeTimers();
+    try {
+      setStrandedAnswer("reloads");
+      const panel = panelFactory();
+      const { container } = render(panel.content);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+
+      // The card is a stop of its own, so a placement would have found it.
+      const card = container.querySelector<HTMLElement>('[tabindex="0"]');
+      expect(card).not.toBeNull();
+      expect(card).not.toHaveFocus();
+      expect(document.querySelector(".gpfocus")).toBeNull();
     } finally {
       vi.useRealTimers();
     }

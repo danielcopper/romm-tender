@@ -43,6 +43,7 @@ from domain.sync_chunking import build_unit_chunks, wire_shortcuts
 if TYPE_CHECKING:
     import logging
 
+    from domain.rom import DeliveryRoute
     from domain.work_unit import WorkUnit
     from lib.late_binding import LateBinding
     from services.library._state import LibrarySyncStateBox
@@ -210,7 +211,7 @@ class ChunkDispatcher:
             # overprices (worst-case safe).
             creates = sum(1 for e in chunk.emitted if e["rom_id"] in new_ids)
             updates = len(chunk.emitted) - creates
-            budget_limit_kb = CLIFF_KB if box.chunks_emitted_this_run == 0 else EFFECTIVE_CEILING_KB
+            budget_limit_kb = self._budget_limit_kb(box.chunks_emitted_this_run)
             rss_kb = await self._session_budget.maybe_pause_for_budget(
                 creates=creates, updates=updates, limit_kb=budget_limit_kb
             )
@@ -308,6 +309,7 @@ class ChunkDispatcher:
                 # platforms, and re-marking a foreign platform's row would drop it
                 # from that platform's counted rows.
                 fetch_id=fetch_id,
+                delivered_through=self._delivery_route(unit),
             )
             applied_count += len(applied)
             # Only a COMMITTED chunk's items count as done (#1383): an emitted chunk
@@ -370,6 +372,16 @@ class ChunkDispatcher:
             box.stash_abandoned_chunk(chunk_rows)
             box.run_interrupted = True
             box.request_cancel()
+
+    @staticmethod
+    def _budget_limit_kb(chunks_emitted_this_run: int) -> int:
+        """The line a chunk's projected cost is measured against; why the run's first chunk differs is at the call."""
+        return CLIFF_KB if chunks_emitted_this_run == 0 else EFFECTIVE_CEILING_KB
+
+    @staticmethod
+    def _delivery_route(unit: WorkUnit) -> DeliveryRoute:
+        """The route a commit of *unit*'s rows records: through their platform, or through a collection."""
+        return "platform" if unit.type == "platform" else "collection"
 
     def _build_final_platform_stamp(
         self, unit: WorkUnit, chunk_index: int, chunk_count: int, fetch_id: str | None = None

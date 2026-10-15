@@ -164,9 +164,8 @@ class VersionSwitchService:
     """Version-picker reads (``get_version_list``) and writes (``switch_version``).
 
     The write checks its endpoint's conflict rules at its entry, under that
-    endpoint's name, and raises the rule's refusal when one holds; the
-    removed-game cleanup, which switches from inside its own run, calls
-    ``switch_version_unchecked`` instead (GLOSSARY.md → Conflict rules).
+    endpoint's name, and raises the rule's refusal when one holds
+    (GLOSSARY.md → Conflict rules).
     """
 
     def __init__(self, *, config: VersionSwitchServiceConfig) -> None:
@@ -574,23 +573,10 @@ class VersionSwitchService:
     # ── switch_version ───────────────────────────────────────────────────
 
     async def switch_version(self, app_id: int, target_rom_id: int, allow_stranded: bool) -> dict[str, Any]:
-        """Move the group's active-version binding for the ``switch_version`` endpoint.
+        """Move the group's active-version binding to ``target_rom_id``, under the endpoint's conflict rules.
 
-        :meth:`switch_version_unchecked` under the endpoint's conflict rules. A
-        switch that succeeded carries a ``version_switch`` lease in
+        A switch that succeeded carries a ``version_switch`` lease in
         ``prune_lease_token`` for the frontend's Steam write.
-        """
-        async with self._rules.hold("switch_version", update=True, migration=True, prune=True):
-            result = await self.switch_version_unchecked(app_id, target_rom_id, allow_stranded)
-            result["prune_lease_token"] = await self._rules.acquire_lease("version_switch")
-            return result
-
-    async def switch_version_unchecked(self, app_id: int, target_rom_id: int, allow_stranded: bool) -> dict[str, Any]:
-        """Move the group's active-version binding to ``target_rom_id``.
-
-        :meth:`switch_version` without its conflict rules or its lease, for the
-        removed-game cleanup's repoint, which switches from inside its own run
-        while the run claim that the prune rule refuses on is held.
 
         A pure binding move (ADR-0021 §2/§4): the target row is bound to the
         group's ``app_id`` and the repository's collision-unbind clears the old
@@ -621,9 +607,13 @@ class VersionSwitchService:
         fetch raises its ``RommApiError``. The optional local probe instead fails
         open on every non-404 outcome.
         """
-        app_id = int(app_id)
-        target_rom_id = int(target_rom_id)
-        allow_stranded = bool(allow_stranded)
+        async with self._rules.hold("switch_version", update=True, migration=True, prune=True):
+            result = await self._move_binding(int(app_id), int(target_rom_id), bool(allow_stranded))
+            result["prune_lease_token"] = await self._rules.acquire_lease("version_switch")
+            return result
+
+    async def _move_binding(self, app_id: int, target_rom_id: int, allow_stranded: bool) -> dict[str, Any]:
+        """The binding move :meth:`switch_version` makes once its conflict rules allowed it."""
 
         ctx = await self._loop.run_in_executor(None, self._read_switch_context, app_id, target_rom_id)
         if ctx is None:

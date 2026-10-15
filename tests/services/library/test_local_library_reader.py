@@ -12,8 +12,9 @@ collision exclusion in the same file's late-ack reconciliation — so the tests
 here pin the projection shapes those flows read through.
 """
 
+from domain.sync_diff import StaleRow
 from domain.work_unit import WorkUnit
-from tests.services.library._helpers import _seed_rom_row
+from tests.services.library._helpers import _seed_collection_stamp, _seed_rom_row
 
 
 class TestRegistryProjections:
@@ -123,3 +124,44 @@ class TestReachableRomIds:
             }
         assert reachable == filed
         assert reachable == {1, 3, 4, 7, 8}
+
+
+class TestCollectionListedRomIds:
+    """What the collections held at their last completed apply."""
+
+    def test_the_members_of_every_stamp_together(self, library):
+        _seed_collection_stamp(
+            library.uow, "7", "standard", updated_at="t", completed_at="t", rom_count=2, member_rom_ids=(1, 2)
+        )
+        _seed_collection_stamp(
+            library.uow, "franchise-1", "virtual", updated_at="", completed_at="t", rom_count=2, member_rom_ids=(2, 3)
+        )
+
+        assert library.sync._local_library_reader.do_read_collection_listed_rom_ids() == frozenset({1, 2, 3})
+
+    def test_no_stamp_lists_nothing(self, library):
+        assert library.sync._local_library_reader.do_read_collection_listed_rom_ids() == frozenset()
+
+
+class TestStaleScan:
+    def test_a_stale_row_carries_its_platform(self, library):
+        _seed_rom_row(library, 1, app_id=100, platform_slug="n64")
+        _seed_rom_row(library, 2, app_id=200, platform_slug="gba")
+        _seed_rom_row(library, 3, app_id=None, platform_slug="gba")
+
+        stale = library.sync._local_library_reader.do_scan_stale_roms({1}, set())
+
+        assert stale == [StaleRow(2, 200, "gba")]
+
+
+class TestKeptPlatformNames:
+    """The display names the last completed run kept, for the platforms asked about."""
+
+    def test_the_names_kept_for_the_slugs_asked(self, library):
+        with library.uow as uow:
+            uow.kv_config.set("platform_names", '{"n64": "Nintendo 64", "gba": "Game Boy Advance"}')
+
+        assert library.sync._local_library_reader.do_read_kept_platform_names({"n64", "psx"}) == {"n64": "Nintendo 64"}
+
+    def test_no_kept_names_answers_none(self, library):
+        assert library.sync._local_library_reader.do_read_kept_platform_names({"n64"}) == {}

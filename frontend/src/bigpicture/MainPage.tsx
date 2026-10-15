@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, FC, ReactNode } from "react";
+import { useState, useEffect, useRef, useContext, FC, ReactNode } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, Field, Focusable, ProgressBar, Spinner } from "@decky/ui";
 import { FaCheckCircle, FaTimesCircle, FaExclamationTriangle } from "react-icons/fa";
 import { cancelSync, refreshMigrationState, getSyncStatus, getEmulatorSources, logError } from "../api/backend";
-import { ENTRY_STOP_ATTR } from "../utils/entryFocus";
+import { ENTRY_STOP_ATTR, EntryPreferenceContext, preferMarkedChild } from "../utils/entryFocus";
 import { formatTimeAgo } from "../utils/formatters";
 import { pluralize } from "../utils/pluralize";
 import { getSyncProgress, setSyncProgress as setStoredSyncProgress } from "../utils/syncProgress";
@@ -334,6 +334,7 @@ function seededFrame(backendProgress: SyncProgress, stored: SyncProgress): SyncP
 }
 
 export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
+  const preferEntry = useContext(EntryPreferenceContext);
   // The stats are owned by `utils/syncStatsStore.ts`: three refresh sites in
   // this file ask for them, and the store is what keeps an older answer from
   // landing last and overwriting a newer one. What stays here is the SCHEDULE —
@@ -561,8 +562,11 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
     return <MigrationBlockedPage migration={migration} />;
   }
 
+  // Entering the panel from the Quick Access strip searches this root for the
+  // node marked `preferredFocus` — the menu's Sync entry, below — until focus
+  // first enters the panel (`EntryPreferenceContext`).
   return (
-    <>
+    <Focusable {...preferMarkedChild(preferEntry)}>
       {settingsReset.pending && <SettingsResetBanner backedUpTo={settingsReset.backedUpTo} />}
       {playtimeScope.pending && (
         <PlaytimeScopeBanner onOpenConnections={() => onNavigate({ page: "settings", section: "connections" })} />
@@ -787,21 +791,27 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
 
       <PanelSection>
         <PanelSectionRow>
-          {/* Where the panel opens. The three status rows above act on nothing,
-              so opening on the first of them spends the reader's first press on
-              a move to what they came for. The declaration names this area and
-              the router's own rule picks the stop inside it, so nothing here
-              decides which element takes focus.
+          {/* Where entering Main lands. The three status rows above act on
+              nothing, so landing on the first of them spends the reader's first
+              press on a move to what they came for. On a swap back to Main the
+              declaration names this area and the router's own rule picks the
+              stop inside it.
 
               A wrapper because the attribute has to sit on an element we
               render: Steam's `ButtonItem` takes its own props and nothing
               establishes that it passes an unknown one down to the DOM.
               `display: contents` keeps the wrapper out of the layout — it
-              carries the attribute and nothing else. */}
+              carries the attribute and nothing else.
+
+              Entering from the Quick Access strip is Steam's own, and lands by
+              the `preferredFocus` carrier — `ButtonItem` takes no such prop. A
+              container, not a stop: it holds the button. */}
           <div {...{ [ENTRY_STOP_ATTR]: "" }} style={{ display: "contents" }}>
-            <ButtonItem layout="below" bottomSeparator="none" onClick={() => onNavigate("sync")}>
-              Sync
-            </ButtonItem>
+            <Focusable preferredFocus={preferEntry} style={{ display: "contents" }}>
+              <ButtonItem layout="below" bottomSeparator="none" onClick={() => onNavigate("sync")}>
+                Sync
+              </ButtonItem>
+            </Focusable>
           </div>
         </PanelSectionRow>
         <PanelSectionRow>
@@ -820,6 +830,6 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
           </ButtonItem>
         </PanelSectionRow>
       </PanelSection>
-    </>
+    </Focusable>
   );
 };

@@ -20,12 +20,18 @@
  * Because focus selects, where the page OPENS decides what it opens on: entry
  * focus landing on the first row selects that row and overwrites the selection
  * the page was opened with. So the selected row declares itself the area entry
- * focus belongs in ({@link ENTRY_STOP_ATTR}) and the frame places focus there.
+ * focus belongs in ({@link ENTRY_STOP_ATTR}), and whichever placer opens the
+ * page on a swap puts focus there. On the page the panel appears with nothing
+ * places focus; until focus first enters the panel, the selected row carries
+ * Steam's `preferredFocus` instead, which entering from the Quick Access strip
+ * is meant to land on — device-only, and not on a tabbed page, where Steam's
+ * own active tab is marked above it (`docs/architecture/qam-panel.md`,
+ * "Pages").
  */
 
-import type { FC, ReactNode } from "react";
+import { useContext, type FC, type ReactNode } from "react";
 import { Focusable } from "@decky/ui";
-import { ENTRY_STOP_ATTR } from "../../utils/entryFocus";
+import { ENTRY_STOP_ATTR, EntryPreferenceContext } from "../../utils/entryFocus";
 import { Columns } from "./Columns";
 
 export interface ListDetailItem {
@@ -74,61 +80,65 @@ export const ListDetail: FC<ListDetailProps> = ({
   renderDetail,
   listHeader,
   selectOnActivate,
-}) => (
-  <Columns
-    columns={[
-      {
-        id: "list",
-        width: LIST_WIDTH,
-        content: (
-          <Focusable flow-children="vertical">
-            {listHeader}
-            {items.map((item) => (
-              // The declaration sits on a wrapper rather than on the row itself
-              // for the reason Main's does (`MainPage`, the menu's Sync entry):
-              // Steam's `Focusable` takes its own props and nothing establishes
-              // that it passes an unknown one down to the DOM. `display:
-              // contents` keeps the wrapper out of the layout — it carries the
-              // attribute and nothing else.
-              //
-              // Every row gets one, marked or not: an element that appeared
-              // around a row when it became selected would remount the row, and
-              // the row being selected is the one focus is standing on.
-              <div
-                key={item.id}
-                style={{ display: "contents" }}
-                {...(item.id === selectedId ? { [ENTRY_STOP_ATTR]: "" } : {})}
-              >
-                {/* React delivers onFocus through focusin, so this fires for focus
+}) => {
+  const preferEntry = useContext(EntryPreferenceContext);
+  return (
+    <Columns
+      columns={[
+        {
+          id: "list",
+          width: LIST_WIDTH,
+          content: (
+            <Focusable flow-children="vertical">
+              {listHeader}
+              {items.map((item) => (
+                // The declaration sits on a wrapper rather than on the row itself
+                // for the reason Main's does (`MainPage`, the menu's Sync entry):
+                // Steam's `Focusable` takes its own props and nothing establishes
+                // that it passes an unknown one down to the DOM. `display:
+                // contents` keeps the wrapper out of the layout — it carries the
+                // attribute and nothing else.
+                //
+                // Every row gets one, marked or not: an element that appeared
+                // around a row when it became selected would remount the row, and
+                // the row being selected is the one focus is standing on.
+                <div
+                  key={item.id}
+                  style={{ display: "contents" }}
+                  {...(item.id === selectedId ? { [ENTRY_STOP_ATTR]: "" } : {})}
+                >
+                  {/* React delivers onFocus through focusin, so this fires for focus
                     landing on whatever control the row itself renders — and again for
                     every move between controls inside the same row, or on the way back
                     from the detail pane. Only a real change is reported, so a page may
                     treat onSelect as an event and do work on it. */}
-                <Focusable
-                  onFocus={() => {
-                    if (item.id !== selectedId) onSelect(item.id);
-                  }}
-                  // Spread rather than a conditional value: under
-                  // `exactOptionalPropertyTypes` an explicit `undefined` is not
-                  // the same as an absent prop, and `FocusableProps` declares the
-                  // handler without it.
-                  {...((item.selectOnActivate ?? selectOnActivate) ? { onActivate: () => onSelect(item.id) } : {})}
-                >
-                  {item.render(item.id === selectedId)}
-                </Focusable>
-              </div>
-            ))}
-          </Focusable>
-        ),
-      },
-      {
-        id: "detail",
-        // Keyed on the selection so a new entry's detail opens at its own top.
-        // Focus is in the list when this changes — that is what changed the
-        // selection — so nothing focused is unmounted.
-        regionKey: selectedId ?? "",
-        content: <Focusable flow-children="vertical">{renderDetail(selectedId)}</Focusable>,
-      },
-    ]}
-  />
-);
+                  <Focusable
+                    onFocus={() => {
+                      if (item.id !== selectedId) onSelect(item.id);
+                    }}
+                    preferredFocus={preferEntry && item.id === selectedId}
+                    // Spread rather than a conditional value: under
+                    // `exactOptionalPropertyTypes` an explicit `undefined` is not
+                    // the same as an absent prop, and `FocusableProps` declares the
+                    // handler without it.
+                    {...((item.selectOnActivate ?? selectOnActivate) ? { onActivate: () => onSelect(item.id) } : {})}
+                  >
+                    {item.render(item.id === selectedId)}
+                  </Focusable>
+                </div>
+              ))}
+            </Focusable>
+          ),
+        },
+        {
+          id: "detail",
+          // Keyed on the selection so a new entry's detail opens at its own top.
+          // Focus is in the list when this changes — that is what changed the
+          // selection — so nothing focused is unmounted.
+          regionKey: selectedId ?? "",
+          content: <Focusable flow-children="vertical">{renderDetail(selectedId)}</Focusable>,
+        },
+      ]}
+    />
+  );
+};

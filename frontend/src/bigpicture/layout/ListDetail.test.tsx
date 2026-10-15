@@ -10,7 +10,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { useState, type CSSProperties, type FC, type ReactNode } from "react";
-import { ENTRY_STOP_ATTR } from "../../utils/entryFocus";
+import { ENTRY_STOP_ATTR, EntryPreferenceContext } from "../../utils/entryFocus";
 import { regionAround } from "../../test-utils/regionAround";
 import { ListDetail, type ListDetailItem, type ListDetailProps } from "./ListDetail";
 import { FOCUS_RING_REACH } from "./ScrollRegion";
@@ -366,6 +366,55 @@ describe("ListDetail", () => {
     expect(declared()).toHaveLength(1);
     expect(rowOf(/Nintendo 64/)).not.toBeNull();
     expect(rowOf(/PlayStation/)).toBeNull();
+  });
+
+  it("marks the selected row as where entering from the Quick Access strip lands", () => {
+    // On the page the panel appears with nothing places focus, so the row the
+    // page was opened with is reached through Steam's entry preference — a
+    // non-first one, for the reason the declaration's test gives.
+    const { rerender } = render(
+      <ListDetail
+        items={platformItems(() => {})}
+        selectedId="psx"
+        onSelect={vi.fn()}
+        renderDetail={(id) => <div>detail for {id ?? "nothing"}</div>}
+      />,
+    );
+    const preferred = () => document.querySelectorAll('[data-preferred-focus="true"]');
+    const rowOf = (name: RegExp) => screen.getByRole("button", { name }).closest('[data-preferred-focus="true"]');
+
+    expect(preferred()).toHaveLength(1);
+    expect(rowOf(/PlayStation/)).not.toBeNull();
+    expect(rowOf(/Nintendo 64/)).toBeNull();
+
+    rerender(
+      <ListDetail
+        items={platformItems(() => {})}
+        selectedId="n64"
+        onSelect={vi.fn()}
+        renderDetail={(id) => <div>detail for {id ?? "nothing"}</div>}
+      />,
+    );
+
+    expect(preferred()).toHaveLength(1);
+    expect(rowOf(/Nintendo 64/)).not.toBeNull();
+    expect(rowOf(/PlayStation/)).toBeNull();
+  });
+
+  it("marks no row once focus has entered the panel, and keeps the declaration", () => {
+    render(
+      <EntryPreferenceContext.Provider value={false}>
+        <ListDetail
+          items={platformItems(() => {})}
+          selectedId="psx"
+          onSelect={vi.fn()}
+          renderDetail={(id) => <div>detail for {id ?? "nothing"}</div>}
+        />
+      </EntryPreferenceContext.Provider>,
+    );
+
+    expect(document.querySelector('[data-preferred-focus="true"]')).toBeNull();
+    expect(screen.getByRole("button", { name: /PlayStation/ }).closest(`[${ENTRY_STOP_ATTR}]`)).not.toBeNull();
   });
 
   it("declares nothing where nothing is selected", () => {

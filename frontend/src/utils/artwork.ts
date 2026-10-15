@@ -12,9 +12,12 @@
 import {
   getSgdbArtworkBase64,
   getSgdbSlotArtwork,
+  isEndpointFailure,
   reportSgdbSlotArtwork,
   saveShortcutIcon,
   debugLog,
+  type EndpointFailure,
+  type SavedShortcutIcon,
   type SgdbArtworkSlot,
   type SgdbSlotArtwork,
 } from "../api/backend";
@@ -25,6 +28,7 @@ import {
   mountPruneLeaseOwner,
   releasePruneLeasesByOwner,
   withPruneLeases,
+  type PruneLeaseAdmission,
 } from "./pruneLease";
 
 /**
@@ -51,38 +55,38 @@ export function isArtworkApplyInFlight(appId: number): boolean {
 }
 
 /**
- * Apply the SGDB icon (type 4): the backend writes the PNG into Steam's grid dir
- * and returns its path; pointing the shortcut at it must go through SteamClient
- * (Steam owns shortcuts.vdf in memory and clobbers external writes). Returns
- * whether the icon was actually applied — a save failure or a missing path is not.
+ * Have the backend write the icon the artwork cache holds for *romId* into Steam's
+ * grid directory as *appId*'s. `null` when the write is refused, which is logged,
+ * or the apply was cancelled meanwhile.
  */
-async function applyIcon(appId: number, base64: string, signal: AbortSignal): Promise<boolean> {
-  if (isPruneLeaseCancelled(signal)) return false;
-  const iconResult = await saveShortcutIcon(appId, base64);
-  if (isPruneLeaseCancelled(signal)) return false;
-  if (iconResult.success && iconResult.icon_path) {
-    SteamClient.Apps.SetShortcutIcon(appId, iconResult.icon_path);
-    return true;
+async function saveIcon(romId: number, appId: number, signal: AbortSignal): Promise<SavedShortcutIcon | null> {
+  const saved = await saveShortcutIcon(appId, romId);
+  if (isEndpointFailure(saved)) {
+    detach(debugLog(`Artwork: the icon for appId ${appId} was not written: ${saved.message}`));
+    return null;
   }
-  return false;
+  return isPruneLeaseCancelled(signal) ? null : saved;
 }
 
 /** Fetch SGDB artwork (hero, logo, wide grid, icon) and apply to Steam, replacing
- *  what each slot holds. Returns count of successfully applied images, or -1
- *  when no SGDB API key is configured. */
-export async function applyArtwork(romId: number, appId: number): Promise<number> {
+ *  what each slot holds. Returns count of successfully applied images, -1
+ *  when no SGDB API key is configured, or the refusal of an image's fetch, in
+ *  which case nothing is applied. */
+export async function applyArtwork(romId: number, appId: number): Promise<number | EndpointFailure> {
   return whileInFlight(appId, () => applySgdbArtwork(romId, appId));
 }
 
 /** Give the shortcut SteamGridDB's hero, logo and wide grid where Steam's grid
- *  directory has no image for the slot, and its icon as `applyArtwork` does. A
- *  slot that already has one is left alone, whoever set it. Returns the count of
- *  images applied, or -1 when no SGDB API key is configured. */
+ *  directory has no image for the slot, and its icon where the shortcut shows
+ *  none but Tender's placeholder or logo icon. A slot that already has one is
+ *  left alone, whoever set it. Stops asking once SteamGridDB has refused the
+ *  key. Returns the count of images applied, or -1 when no SGDB API key is
+ *  configured. */
 export async function fillEmptyArtwork(romId: number, appId: number): Promise<number> {
   return whileInFlight(appId, () => fillEmptySgdbArtwork(romId, appId));
 }
 
-async function whileInFlight(appId: number, apply: () => Promise<number>): Promise<number> {
+async function whileInFlight<T>(appId: number, apply: () => Promise<T>): Promise<T> {
   artworkInFlight.set(appId, (artworkInFlight.get(appId) ?? 0) + 1);
   try {
     return await apply();
@@ -106,22 +110,40 @@ function watchGeneration(appId: number): () => boolean {
   return () => (artworkGenerations.get(appId) ?? 0) !== generation;
 }
 
-async function applySgdbArtwork(romId: number, appId: number): Promise<number> {
+async function applySgdbArtwork(romId: number, appId: number): Promise<number | EndpointFailure> {
   const leaseOwner = `artwork:${appId}`;
   mountPruneLeaseOwner(leaseOwner);
   const admission = capturePruneLeaseAdmission(leaseOwner);
   const superseded = claimGeneration(appId);
 
-  const results = await Promise.all([
-    getSgdbArtworkBase64(romId, 1).catch(() => ({ base64: null, no_api_key: false })),
-    getSgdbArtworkBase64(romId, 2).catch(() => ({ base64: null, no_api_key: false })),
-    getSgdbArtworkBase64(romId, 3).catch(() => ({ base64: null, no_api_key: false })),
-    getSgdbArtworkBase64(romId, 4).catch(() => ({ base64: null, no_api_key: false })),
+  const refusals: EndpointFailure[] = [];
+  const fetchArtwork = async (assetType: number): Promise<SgdbArtwork> => {
+    const answer = await getSgdbArtworkBase64(romId, assetType).catch(() => NO_IMAGE);
+    if (!isEndpointFailure(answer)) return answer;
+    refusals.push(answer);
+    return NO_IMAGE;
+  };
+  const fetchIcon = async (): Promise<SgdbSlotArtwork> => {
+    const answer = await getSgdbSlotArtwork(romId, appId, "icon", true).catch((e): SgdbSlotArtwork => {
+      detach(debugLog(`applyArtwork: icon fetch for appId ${appId} rejected: ${e}`));
+      return { status: "failed" };
+    });
+    if (!isEndpointFailure(answer)) return answer;
+    refusals.push(answer);
+    return { status: "failed" };
+  };
+  const [results, icon] = await Promise.all([
+    Promise.all([fetchArtwork(1), fetchArtwork(2), fetchArtwork(3)]),
+    fetchIcon(),
   ]);
 
-  const leaseTokens = results.map((result) => ("prune_lease_token" in result ? result.prune_lease_token : undefined));
-  if (results.some((r) => r.no_api_key)) {
+  const leaseTokens = [...results.map((result) => result.prune_lease_token), leaseOf(icon)];
+  if (results.some((r) => r.no_api_key) || icon.status === "no_api_key") {
     return withPruneLeases(leaseTokens, "Artwork apply", async () => -1, leaseOwner, admission);
+  }
+  const refusal = refusals[0];
+  if (refusal) {
+    return withPruneLeases(leaseTokens, "Artwork apply", () => Promise.resolve(refusal), leaseOwner, admission);
   }
 
   return withPruneLeases(
@@ -138,28 +160,29 @@ async function applySgdbArtwork(romId: number, appId: number): Promise<number> {
       };
 
       // SGDB types 1-3 (hero / logo / wide grid) map 1:1 to Steam capsule assetTypes 1-3.
-      // The wide grid and the logo are recorded as the fill path records them;
-      // the hero is not. The awaits are sequential by design, one image at a
-      // time; S9382 is raised on the slot's await line, so its NOSONAR stays
-      // there.
+      // The wide grid, the logo and the icon are recorded as the fill path
+      // records them; the hero is not. The awaits are sequential by design, one
+      // image at a time; S9382 is raised on the slot's await line, so its
+      // NOSONAR stays there.
       const customArt: Array<[answer: SgdbArtwork, assetType: number, slot: RecordedSlot | null]> = [
         [results[0], 1, null],
         [results[1], 2, "logo"],
         [results[2], 3, "grid"],
       ];
       for (const [answer, assetType, slot] of customArt) {
-        if (!answer.base64) continue;
+        const base64 = answer.base64;
+        if (!base64) continue;
         if (isPruneLeaseCancelled(signal)) return applied;
         if (superseded()) return bail();
-        await setReplacedSlot(romId, appId, answer.base64, assetType, slot, answer); // NOSONAR(typescript:S9382)
+        const write = () => SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", assetType);
+        await setReplacedSlot(romId, slot, answer, write); // NOSONAR(typescript:S9382)
         applied++;
       }
 
-      // Type 4 = icon (a distinct apply path — see applyIcon).
-      if (results[3].base64) {
+      if (icon.status === "ready") {
         if (isPruneLeaseCancelled(signal)) return applied;
         if (superseded()) return bail();
-        if (await applyIcon(appId, results[3].base64, signal)) applied++;
+        if (await setReplacedIcon(romId, appId, signal)) applied++;
       }
 
       return applied;
@@ -169,26 +192,46 @@ async function applySgdbArtwork(romId: number, appId: number): Promise<number> {
   );
 }
 
-/** What `getSgdbArtworkBase64` answers for one asset type. */
-type SgdbArtwork = Awaited<ReturnType<typeof getSgdbArtworkBase64>>;
+/** What `getSgdbArtworkBase64` answers for one asset type when it is not refused. */
+type SgdbArtwork = Exclude<Awaited<ReturnType<typeof getSgdbArtworkBase64>>, EndpointFailure>;
 
-/** The slots whose outcome the backend records. */
-type RecordedSlot = "grid" | "logo";
+/** The answer a fetch that was rejected or refused counts as. */
+const NO_IMAGE: SgdbArtwork = { base64: null, no_api_key: false };
+
+/** Write the replacing apply's icon, point the shortcut at it and record what Steam made of it; answers whether it was written. */
+async function setReplacedIcon(romId: number, appId: number, signal: AbortSignal): Promise<boolean> {
+  const saved = await saveIcon(romId, appId, signal);
+  if (!saved) return false;
+  await setReplacedSlot(romId, "icon", saved, () => SteamClient.Apps.SetShortcutIcon(appId, saved.icon_path));
+  return true;
+}
+
+/** The lease an answer of the per-slot fetch carries for its Steam write, if any. */
+function leaseOf(answer: SgdbSlotArtwork): string | undefined {
+  return answer.status === "image" || answer.status === "ready" ? answer.prune_lease_token : undefined;
+}
+
+/** The slots whose outcome the game page reports. */
+type RecordedSlot = "grid" | "logo" | "icon";
+
+/** The slots the shortcut artwork job hands the frontend to set; it sets the icons it wrote itself. */
+type JobSlot = Exclude<RecordedSlot, "icon">;
+
+/** What the backend answered with an image, passed back when what Steam made of it is reported. */
+type SlotRecord = { sgdb_id?: number | null; image_id?: number | null; sha256?: string | null };
 
 /**
- * Set one image of the replacing apply and record what Steam made of it, for a
- * slot the backend records; a refusal is recorded and then rethrown.
+ * Set one image of the replacing apply through *write* and record what Steam
+ * made of it, for a slot the backend records; a refusal is recorded and then rethrown.
  */
 async function setReplacedSlot(
   romId: number,
-  appId: number,
-  base64: string,
-  assetType: number,
   slot: RecordedSlot | null,
-  answer: SgdbArtwork,
+  answer: SlotRecord,
+  write: () => unknown,
 ): Promise<void> {
   try {
-    await SteamClient.Apps.SetCustomArtworkForApp(appId, base64, "png", assetType);
+    await write();
   } catch (e) {
     if (slot) await reportReplacedSlot(romId, slot, "refused", answer);
     throw e;
@@ -201,7 +244,7 @@ async function reportReplacedSlot(
   romId: number,
   slot: RecordedSlot,
   outcome: "set" | "refused",
-  answer: SgdbArtwork,
+  answer: SlotRecord,
 ): Promise<void> {
   try {
     await reportSgdbSlotArtwork(
@@ -217,17 +260,19 @@ async function reportReplacedSlot(
   }
 }
 
-/** The slots the game page fills only while empty, each with Steam's asset type for it. */
-const FILLED_SLOTS: ReadonlyArray<[slot: SgdbArtworkSlot, assetType: number]> = [
+/** The slots the game page fills only while empty through `SetCustomArtworkForApp`, each with Steam's asset type for it. */
+const FILLED_SLOTS: ReadonlyArray<[slot: Exclude<SgdbArtworkSlot, "icon">, assetType: number]> = [
   ["hero", 1],
   ["logo", 2],
   ["grid", 3],
 ];
 
-/** Steam's asset type for each slot the shortcut artwork job fills. */
-const JOB_SLOT_ASSET_TYPES: Readonly<Record<RecordedSlot, number>> = { logo: 2, grid: 3 };
+/** Steam's asset type for each slot the shortcut artwork job hands the frontend to set. */
+const JOB_SLOT_ASSET_TYPES: Readonly<Record<JobSlot, number>> = { logo: 2, grid: 3 };
 
 type SlotImage = Extract<SgdbSlotArtwork, { status: "image" }>;
+
+type SlotToSet = Extract<SgdbSlotArtwork, { status: "image" | "ready" }>;
 
 async function fillEmptySgdbArtwork(romId: number, appId: number): Promise<number> {
   const leaseOwner = `artwork:${appId}`;
@@ -243,12 +288,10 @@ async function fillEmptySgdbArtwork(romId: number, appId: number): Promise<numbe
   // from moving them.
   for (const [slot, assetType] of FILLED_SLOTS) {
     if (superseded()) return applied;
-    const answer = await getSgdbSlotArtwork(romId, appId, slot).catch((e): SgdbSlotArtwork => {
-      detach(debugLog(`fillEmptyArtwork: ${slot} fetch for appId ${appId} rejected: ${e}`));
-      return { status: "failed" };
-    });
-    if (answer.status === "no_api_key") return -1;
-    if (answer.status !== "image") continue;
+    const answer = await fetchSlotToFill(romId, appId, slot);
+    if (answer === "no_api_key") return -1;
+    if (answer === "key_refused") return applied;
+    if (answer === "next" || answer.status !== "image") continue;
     // prettier-ignore
     const outcome = await withPruneLeases( // NOSONAR(typescript:S9382)
       [answer.prune_lease_token],
@@ -262,17 +305,67 @@ async function fillEmptySgdbArtwork(romId: number, appId: number): Promise<numbe
     if (outcome !== null && slot !== "hero") await reportSlotOutcome(romId, slot, outcome, answer); // NOSONAR(typescript:S9382)
   }
 
-  if (superseded()) return applied;
-  const icon = await getSgdbArtworkBase64(romId, 4).catch(() => ({ base64: null, no_api_key: false }));
-  const iconToken = "prune_lease_token" in icon ? icon.prune_lease_token : undefined;
-  const iconApplied = await withPruneLeases(
-    [iconToken],
+  return applied + Number(await fillIcon(romId, appId, superseded, leaseOwner, admission));
+}
+
+/**
+ * Give the first visit's fill its icon where the shortcut shows none but
+ * Tender's stand-ins, unless overtaken, and report what Steam made of it;
+ * answers whether it was set.
+ */
+async function fillIcon(
+  romId: number,
+  appId: number,
+  superseded: () => boolean,
+  leaseOwner: string,
+  admission: PruneLeaseAdmission,
+): Promise<boolean> {
+  if (superseded()) return false;
+  const answer = await fetchSlotToFill(romId, appId, "icon");
+  if (typeof answer === "string" || answer.status !== "ready") return false;
+  return withPruneLeases(
+    [answer.prune_lease_token],
     "Artwork apply",
-    async (signal) => !!icon.base64 && !superseded() && (await applyIcon(appId, icon.base64, signal)),
+    async (signal) => {
+      if (isPruneLeaseCancelled(signal) || superseded()) return false;
+      const saved = await saveIcon(romId, appId, signal);
+      if (!saved) return false;
+      let outcome: "set" | "refused" = "set";
+      try {
+        SteamClient.Apps.SetShortcutIcon(appId, saved.icon_path);
+      } catch (e) {
+        detach(debugLog(`Artwork: Steam refused the icon for appId ${appId}: ${e}`));
+        outcome = "refused";
+      }
+      await reportSlotOutcome(romId, "icon", outcome, saved);
+      return outcome === "set";
+    },
     leaseOwner,
     admission,
   );
-  return iconApplied ? applied + 1 : applied;
+}
+
+/**
+ * One slot's answer for the first visit's fill: the image to set (or, for the
+ * icon, the answer that the cache holds it), `next` for a slot with nothing to
+ * set (a rejected or refused fetch is logged), or the answer that ends the fill.
+ */
+async function fetchSlotToFill(
+  romId: number,
+  appId: number,
+  slot: SgdbArtworkSlot,
+): Promise<SlotToSet | "next" | "no_api_key" | "key_refused"> {
+  const answer = await getSgdbSlotArtwork(romId, appId, slot).catch((e): SgdbSlotArtwork => {
+    detach(debugLog(`fillEmptyArtwork: ${slot} fetch for appId ${appId} rejected: ${e}`));
+    return { status: "failed" };
+  });
+  if (isEndpointFailure(answer)) {
+    detach(debugLog(`fillEmptyArtwork: ${slot} fetch for appId ${appId} refused: ${answer.message}`));
+    return "next";
+  }
+  if (answer.status === "image" || answer.status === "ready") return answer;
+  if (answer.status === "no_api_key" || answer.status === "key_refused") return answer.status;
+  return "next";
 }
 
 /** Set one slot's image; `null` when the write was left out because the apply was cancelled or overtaken. */
@@ -293,12 +386,15 @@ async function setSlotImage(
   }
 }
 
-/** Report what Steam made of the image for the backend to record. */
-async function reportSlotOutcome(
+/**
+ * Report what Steam made of an image for the backend to record, passing back the SteamGridDB ids and the hash the
+ * backend answered with it; a report that fails is logged.
+ */
+export async function reportSlotOutcome(
   romId: number,
   slot: RecordedSlot,
   outcome: "set" | "refused",
-  image: SlotImage,
+  image: { sgdb_id: number | null; image_id: number | null; sha256: string },
 ): Promise<void> {
   await reportSgdbSlotArtwork(romId, slot, outcome, image.sgdb_id, image.image_id, image.sha256).catch((e) => {
     detach(debugLog(`Artwork: reporting the ${slot} for rom ${romId} failed: ${e}`));
@@ -317,7 +413,7 @@ async function reportSlotOutcome(
 export async function setJobSlotArtwork(
   romId: number,
   appId: number,
-  slot: RecordedSlot,
+  slot: JobSlot,
   stopped: () => boolean,
 ): Promise<boolean> {
   const overtaken = watchGeneration(appId);
@@ -326,6 +422,10 @@ export async function setJobSlotArtwork(
     detach(debugLog(`Shortcut artwork: ${slot} fetch for appId ${appId} rejected: ${e}`));
     return { status: "failed" };
   });
+  if (isEndpointFailure(answer)) {
+    detach(debugLog(`Shortcut artwork: ${slot} fetch for appId ${appId} refused: ${answer.message}`));
+    return false;
+  }
   if (answer.status !== "image") return false;
   const outcome = await withPruneLeases([answer.prune_lease_token], "Shortcut artwork", (signal) =>
     setSlotImage(appId, answer, JOB_SLOT_ASSET_TYPES[slot], signal, left),

@@ -25,7 +25,7 @@ import {
   domListenerCount,
 } from "../test-utils/dom-event-listener-spy";
 import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
-import type { AnsweringSource, DownloadCompleteEvent, EmulatorDataReason, SaveStatus } from "../types";
+import type { AnsweringSource, DownloadCompleteEvent, EmulatorDataReason, SaveStatus, SyncProgress } from "../types";
 import { emulatorDataReasonSentence } from "../utils/emulatorSourceWording";
 import { stubAppStore } from "../test-utils/steamStubs";
 import * as cachedStore from "../utils/cachedGameDetailStore";
@@ -35,6 +35,7 @@ import * as playSectionUtils from "../utils/playSection";
 import * as saveStatusUtils from "../utils/saveStatus";
 import * as formatters from "../utils/formatters";
 import { getGameDetail } from "../utils/gameDetailStore";
+import { resetBoundAvailability } from "../utils/vanishedBinding";
 import { BIOS_MISSING_RED } from "../utils/biosColor";
 import { useVersionError } from "../utils/connectionState";
 import { useMigrationStatus } from "../utils/migrationStore";
@@ -429,6 +430,7 @@ describe("RomMPlaySection", () => {
       message: "Cover refreshed",
       cover_path: "/grid/p.png",
     });
+    vi.mocked(backend.refreshSgdbArtwork).mockResolvedValue({ success: true });
   });
 
   afterEach(() => {
@@ -574,43 +576,43 @@ describe("RomMPlaySection", () => {
       );
     });
 
-    it("fills the empty artwork slots (3 slot fetches, then the icon) on first visit when not already applied", async () => {
+    it("fills the empty artwork slots (4 slot fetches, the icon last) on first visit when not already applied", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 50,
       });
       vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "none" });
-      vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({
-        base64: null,
-        no_api_key: false,
-      });
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       expect(vi.mocked(backend.getSgdbSlotArtwork).mock.calls).toEqual([
         [50, testAppId, "hero"],
         [50, testAppId, "logo"],
         [50, testAppId, "grid"],
+        [50, testAppId, "icon"],
       ]);
-      expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls).toEqual([[50, 4]]);
+      expect(backend.getSgdbArtworkBase64).not.toHaveBeenCalled();
     });
 
     it("replaces nothing on a first visit whose slots are already filled", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: true, rom_id: 50 });
-      // The backend answers "skip" for a slot Steam's grid directory already fills.
+      // The backend answers "skip" for a slot that is filled: a file in Steam's
+      // grid directory, or, for the icon, a path in shortcuts.vdf other than
+      // Tender's stand-ins.
       vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
-      vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: "AAAA", no_api_key: false });
-      vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: false });
       const setArtwork = vi.fn().mockResolvedValue(undefined);
+      const setIcon = vi.fn();
       vi.stubGlobal("SteamClient", {
-        Apps: { SetCustomArtworkForApp: setArtwork, SetShortcutIcon: vi.fn(), OpenAppSettingsDialog: vi.fn() },
+        Apps: { SetCustomArtworkForApp: setArtwork, SetShortcutIcon: setIcon, OpenAppSettingsDialog: vi.fn() },
       });
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       await flushAsync();
-      expect(vi.mocked(backend.getSgdbSlotArtwork)).toHaveBeenCalledTimes(3);
+      expect(vi.mocked(backend.getSgdbSlotArtwork)).toHaveBeenCalledTimes(4);
       expect(setArtwork).not.toHaveBeenCalled();
-      // Only the icon, which keeps its own rules, goes through the replacing fetch.
-      expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls).toEqual([[50, 4]]);
+      // The icon follows the same rules: a skipped icon is neither written nor set.
+      expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
+      expect(setIcon).not.toHaveBeenCalled();
+      expect(backend.getSgdbArtworkBase64).not.toHaveBeenCalled();
     });
 
     it("skips metadata background fetch when 'metadata' is not in stale_fields", async () => {
@@ -658,11 +660,9 @@ describe("RomMPlaySection", () => {
         found: true,
         rom_id: 50,
       });
-      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
-      vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({
-        base64: "AAAA",
-        no_api_key: false,
-      });
+      vi.mocked(backend.getSgdbSlotArtwork).mockImplementation(async (_romId, _appId, slot) =>
+        slot === "icon" ? { status: "ready" } : { status: "skip" },
+      );
       vi.mocked(backend.saveShortcutIcon).mockRejectedValue(new Error("boom"));
       vi.stubGlobal("SteamClient", {
         Apps: {
@@ -786,6 +786,187 @@ describe("RomMPlaySection", () => {
   });
 
   // ------------------------------------------------------------------
+  // C2b. The banner for a bound version gone from RomM (#2407 D5/D6) — fed by
+  // the version picker's own answer, the one liveness read the page makes.
+  // ------------------------------------------------------------------
+
+  describe("the banner for a bound version gone from RomM", () => {
+    const version = (romId: number, overrides: Partial<backend.VersionInfo>): backend.VersionInfo => ({
+      rom_id: romId,
+      name: `Game ${romId}`,
+      label: `Game ${romId}`,
+      regions: [],
+      languages: [],
+      revision: "",
+      tags: [],
+      synced: true,
+      installed: false,
+      active: false,
+      is_default: false,
+      switchable: true,
+      vanished: false,
+      ...overrides,
+    });
+    const GONE = "This version is no longer available on RomM.";
+    const CLEANUP =
+      "To remove it from this device, use Data Management › Gone from RomM, which can keep a recovery bundle.";
+    const SWITCH_FIRST =
+      "To delete its file, switch to another version first, then use Data Management › Gone from RomM, which can keep a recovery bundle.";
+    const EFFECTS = [
+      "Its saves no longer sync, and a launch with a local save asks first.",
+      "It cannot be downloaded again.",
+      "Its saves stay on this device and do not follow a switch to another version.",
+      "Its playtime still counts here, but RomM no longer adds it to this game.",
+      "Its cover and details no longer update.",
+    ];
+
+    const renderWith = async (list: backend.VersionList, installed: boolean) => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: true, rom_id: 1, installed });
+      vi.mocked(backend.getVersionList).mockResolvedValue(list);
+      vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: null });
+      const view = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      return view;
+    };
+
+    beforeEach(() => resetBoundAvailability());
+
+    it("tells a version that is not installed to choose another version", async () => {
+      const { container } = await renderWith(
+        {
+          multi_version: true,
+          bound_vanished: true,
+          server_query_failed: false,
+          versions: [version(1, { active: true, vanished: true }), version(2, {})],
+        },
+        false,
+      );
+
+      await waitFor(() => expect(container.textContent).toContain(`${GONE} Choose another version to play.`));
+      expect(container.textContent).not.toContain("Data Management");
+      expect(container.querySelectorAll("li")).toHaveLength(0);
+    });
+
+    it("says an installed version still plays and what no longer works", async () => {
+      const { container } = await renderWith(
+        {
+          multi_version: true,
+          bound_vanished: true,
+          server_query_failed: false,
+          versions: [version(1, { active: true, vanished: true, installed: true }), version(2, {})],
+        },
+        true,
+      );
+
+      await waitFor(() => expect(container.textContent).toContain(`${GONE} Your downloaded copy still plays.`));
+      expect([...container.querySelectorAll("li")].map((item) => item.textContent)).toEqual(EFFECTS);
+      expect(container.textContent).toContain(SWITCH_FIRST);
+      expect(container.textContent).not.toContain(CLEANUP);
+    });
+
+    it.each([
+      ["not installed", false, []],
+      ["installed", true, EFFECTS.filter((effect) => !effect.includes("switch to another version"))],
+    ])("says a game whose every version is gone is gone, %s", async (_label, installed, effects) => {
+      const { container } = await renderWith(
+        {
+          multi_version: true,
+          bound_vanished: true,
+          server_query_failed: false,
+          versions: [version(1, { active: true, vanished: true, installed }), version(2, { vanished: true })],
+        },
+        installed,
+      );
+
+      await waitFor(() => expect(container.textContent).toContain("This game is no longer available on RomM."));
+      expect(container.textContent).not.toContain(GONE);
+      expect([...container.querySelectorAll("li")].map((item) => item.textContent)).toEqual(effects);
+      expect(container.textContent).toContain(CLEANUP);
+    });
+
+    it("says a single-version game is gone", async () => {
+      const { container } = await renderWith(
+        {
+          multi_version: false,
+          bound_vanished: true,
+          server_query_failed: false,
+          bound_version: version(1, { active: true, vanished: true }),
+        },
+        false,
+      );
+
+      await waitFor(() => expect(container.textContent).toContain("This game is no longer available on RomM."));
+    });
+
+    it.each([
+      ["the bound version is live", { multi_version: true, bound_vanished: false, server_query_failed: false }],
+      ["RomM could not be asked", { multi_version: false, bound_vanished: false, server_query_failed: true }],
+    ])("shows nothing while %s", async (_label, list) => {
+      const { container } = await renderWith(
+        { ...list, versions: [version(1, { active: true }), version(2, {})] } as backend.VersionList,
+        true,
+      );
+      await waitFor(() => expect(backend.getVersionList).toHaveBeenCalled());
+      await flushAsync();
+
+      expect(container.textContent).not.toContain("no longer available on RomM");
+      expect(container.textContent).not.toContain(CLEANUP);
+    });
+
+    const LIVE: backend.VersionList = {
+      multi_version: true,
+      bound_vanished: false,
+      server_query_failed: false,
+      versions: [version(1, { active: true }), version(2, {})],
+    };
+    const VANISHED: backend.VersionList = {
+      multi_version: true,
+      bound_vanished: true,
+      server_query_failed: false,
+      versions: [version(1, { active: true, vanished: true }), version(2, {})],
+    };
+    const emitFrame = (frame: Partial<SyncProgress>) =>
+      act(async () => {
+        emitHostEvent<SyncProgress>("sync_progress", frame as SyncProgress);
+        await flushAsync();
+      });
+    const runEnded = (stage: "done" | "cancelled" | "error") => emitFrame({ running: false, stage });
+
+    it.each(["done", "cancelled", "error"] as const)(
+      "appears once a sync run that found the version gone ends (%s), without reopening the page",
+      async (stage) => {
+        const { container } = await renderWith(LIVE, false);
+        await waitFor(() => expect(backend.getVersionList).toHaveBeenCalledTimes(1));
+        expect(container.textContent).not.toContain(GONE);
+
+        vi.mocked(backend.getVersionList).mockResolvedValue(VANISHED);
+        await runEnded(stage);
+
+        await waitFor(() => expect(container.textContent).toContain(`${GONE} Choose another version to play.`));
+      },
+    );
+
+    it("goes away once a sync run ends with the version back", async () => {
+      const { container } = await renderWith(VANISHED, false);
+      await waitFor(() => expect(container.textContent).toContain(GONE));
+
+      vi.mocked(backend.getVersionList).mockResolvedValue(LIVE);
+      await runEnded("done");
+
+      await waitFor(() => expect(container.textContent).not.toContain(GONE));
+    });
+
+    it("does not ask again while the run is still going", async () => {
+      await renderWith(LIVE, false);
+      await waitFor(() => expect(backend.getVersionList).toHaveBeenCalledTimes(1));
+
+      await emitFrame({ running: true, stage: "applying" });
+
+      expect(backend.getVersionList).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ------------------------------------------------------------------
   // C3. Version switch reactivity (#1298) — the play section re-reads the cached
   // detail and re-applies the tile artwork when the bound version changes.
   // ------------------------------------------------------------------
@@ -813,12 +994,21 @@ describe("RomMPlaySection", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockClear();
       vi.mocked(backend.getSgdbArtworkBase64).mockClear();
       vi.mocked(backend.getSgdbSlotArtwork).mockClear();
-      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
+      vi.mocked(backend.getSgdbSlotArtwork).mockImplementation(async (_romId, _appId, _slot, replace) =>
+        replace ? { status: "ready" } : { status: "skip" },
+      );
       vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: "NEW=", no_api_key: false });
-      vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: false });
+      vi.mocked(backend.saveShortcutIcon).mockResolvedValue({
+        success: true,
+        icon_path: "/grid/icon.png",
+        image_id: 31,
+        sha256: "sha-icon",
+        sgdb_id: 9999,
+      });
       const setArtwork = vi.fn().mockResolvedValue(undefined);
+      const setIcon = vi.fn();
       vi.stubGlobal("SteamClient", {
-        Apps: { SetCustomArtworkForApp: setArtwork, SetShortcutIcon: vi.fn(), OpenAppSettingsDialog: vi.fn() },
+        Apps: { SetCustomArtworkForApp: setArtwork, SetShortcutIcon: setIcon, OpenAppSettingsDialog: vi.fn() },
       });
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: true, rom_id: 51 });
 
@@ -831,20 +1021,21 @@ describe("RomMPlaySection", () => {
 
       // Cache re-read for the newly-bound rom_id, and the switch replaces hero,
       // logo and wide grid through the replacing fetch, as Refresh Artwork does,
-      // with the icon as before.
+      // and the icon through the per-slot fetch past its filled check and its record.
       expect(vi.mocked(cachedStore.getCachedGameDetail)).toHaveBeenCalledWith(testAppId);
       expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls).toEqual([
         [51, 1],
         [51, 2],
         [51, 3],
-        [51, 4],
       ]);
-      expect(backend.getSgdbSlotArtwork).not.toHaveBeenCalled();
+      expect(vi.mocked(backend.getSgdbSlotArtwork).mock.calls).toEqual([[51, testAppId, "icon", true]]);
       expect(setArtwork.mock.calls).toEqual([
         [testAppId, "NEW=", "png", 1],
         [testAppId, "NEW=", "png", 2],
         [testAppId, "NEW=", "png", 3],
       ]);
+      expect(backend.saveShortcutIcon).toHaveBeenCalledWith(testAppId, 51);
+      expect(setIcon).toHaveBeenCalledWith(testAppId, "/grid/icon.png");
     });
 
     it("ignores a version_switched event for a different appId", async () => {
@@ -929,12 +1120,13 @@ describe("RomMPlaySection", () => {
         rom_id: romId,
         rom_name: "Test ROM",
       });
-      // Auto-apply on mount routes through getSgdbArtworkBase64; default it
-      // to all-null so the mount path is inert and the action drives the test.
+      // Default the artwork fetches to nothing found, so the mount's apply is
+      // inert and the action drives the test.
       vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({
         base64: null,
         no_api_key: false,
       });
+      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "none" });
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       return openRomMMenuAndGetItems(testAppId);
@@ -951,7 +1143,7 @@ describe("RomMPlaySection", () => {
       });
       expect(vi.mocked(backend.getSgdbResolution)).toHaveBeenCalledWith(77);
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Set a SteamGridDB API key in settings first" }),
+        expect.objectContaining({ body: "Set a SteamGridDB API key in Settings first" }),
       );
       // No artwork apply, no picker modal.
       expect(vi.mocked(backend.getSgdbArtworkBase64)).not.toHaveBeenCalled();
@@ -965,16 +1157,22 @@ describe("RomMPlaySection", () => {
       vi.mocked(backend.getSgdbArtworkBase64)
         .mockResolvedValueOnce({ base64: "AA==", no_api_key: false })
         .mockResolvedValueOnce({ base64: "BB==", no_api_key: false })
-        .mockResolvedValueOnce({ base64: "CC==", no_api_key: false })
-        .mockResolvedValueOnce({ base64: "DD==", no_api_key: false });
-      // Icon succeeds WITH a path so it counts toward the 4/4 total — a success
-      // without a path applies nothing and is not counted (#L4).
-      vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: true, icon_path: "/grid/icon.png" });
+        .mockResolvedValueOnce({ base64: "CC==", no_api_key: false });
+      // The icon is written, so it counts toward the 4/4 total.
+      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready" });
+      vi.mocked(backend.saveShortcutIcon).mockResolvedValue({
+        success: true,
+        icon_path: "/grid/icon.png",
+        image_id: 31,
+        sha256: "sha-icon",
+        sgdb_id: 9999,
+      });
       await act(async () => {
         await items[0]!.props.onClick?.();
       });
       expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledTimes(3);
-      expect(vi.mocked(backend.saveShortcutIcon)).toHaveBeenCalledWith(testAppId, "DD==");
+      expect(vi.mocked(backend.getSgdbSlotArtwork)).toHaveBeenCalledWith(77, testAppId, "icon", true);
+      expect(vi.mocked(backend.saveShortcutIcon)).toHaveBeenCalledWith(testAppId, 77);
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
         expect.objectContaining({ body: "Artwork refreshed (4/4 images applied)" }),
       );
@@ -1008,7 +1206,7 @@ describe("RomMPlaySection", () => {
         await items[0]!.props.onClick?.();
       });
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Set a SteamGridDB API key in settings first" }),
+        expect.objectContaining({ body: "Set a SteamGridDB API key in Settings first" }),
       );
     });
 
@@ -5168,6 +5366,193 @@ describe("RomMPlaySection", () => {
       unmount();
       expect(hostEventListenerCount("download_complete")).toBe(downloadBefore);
       expect(domListenerCount("romm_rom_uninstalled")).toBe(uninstallBefore);
+    });
+  });
+
+  describe("Refresh Artwork downloads anew and says what was refused", () => {
+    const KEY_REFUSED = "SteamGridDB refused the API key — check it in Settings";
+    const RATE_LIMITED = "SteamGridDB is rate-limiting requests — try again in a moment";
+    const PRUNE_ACTIVE =
+      "A removed-game cleanup is in progress; wait for it to finish before changing local game data.";
+
+    async function openRefresh(romId = 77) {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
+        found: true,
+        rom_id: romId,
+        rom_name: "Test ROM",
+      });
+      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
+      vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false });
+      render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      const items = await openRomMMenuAndGetItems(testAppId);
+      vi.mocked(backend.getSgdbArtworkBase64).mockClear();
+      vi.mocked(showModal).mockClear();
+      vi.mocked(toaster.toast).mockClear();
+      return async () => {
+        await act(async () => {
+          await items[0]!.props.onClick?.();
+        });
+      };
+    }
+
+    const toasts = () => vi.mocked(toaster.toast).mock.calls.map(([t]) => (t as { body?: unknown }).body);
+
+    it("downloads the four images anew for the resolved id before applying them", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "resolved", sgdb_id: 42 });
+      vi.mocked(backend.refreshSgdbArtwork).mockResolvedValue({ success: true });
+      await refresh();
+      expect(vi.mocked(backend.refreshSgdbArtwork)).toHaveBeenCalledWith(77, 42);
+      const refreshed = vi.mocked(backend.refreshSgdbArtwork).mock.invocationCallOrder[0]!;
+      const served = vi.mocked(backend.getSgdbArtworkBase64).mock.invocationCallOrder[0]!;
+      expect(refreshed).toBeLessThan(served);
+      expect(toasts()).toEqual(["No artwork available for this game"]);
+    });
+
+    it.each([
+      ["auth_failed", KEY_REFUSED],
+      ["rate_limited", RATE_LIMITED],
+    ] as const)("a %s refusal of the download toasts its message and applies nothing", async (reason, message) => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "resolved", sgdb_id: 42 });
+      vi.mocked(backend.refreshSgdbArtwork).mockResolvedValue({ success: false, reason, message });
+      await refresh();
+      expect(toasts()).toEqual([message]);
+      expect(vi.mocked(backend.getSgdbArtworkBase64)).not.toHaveBeenCalled();
+      expect(vi.mocked(showModal)).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["auth_failed", KEY_REFUSED],
+      ["rate_limited", RATE_LIMITED],
+      ["prune_active", PRUNE_ACTIVE],
+    ] as const)("a %s refusal of the resolution toasts its message and opens no picker", async (reason, message) => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ success: false, reason, message });
+      await refresh();
+      expect(toasts()).toEqual([message]);
+      expect(vi.mocked(showModal)).not.toHaveBeenCalled();
+      expect(vi.mocked(backend.refreshSgdbArtwork)).not.toHaveBeenCalled();
+    });
+
+    it("a refused artwork request toasts its message, not 'No artwork available'", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "resolved", sgdb_id: 42 });
+      vi.mocked(backend.refreshSgdbArtwork).mockResolvedValue({ success: true });
+      vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({
+        success: false,
+        reason: "prune_active",
+        message: PRUNE_ACTIVE,
+      });
+      await refresh();
+      expect(toasts()).toEqual([PRUNE_ACTIVE]);
+    });
+
+    it("names a failed RomM cover refresh in the same toast as the SteamGridDB result", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
+        success: false,
+        reason: "no_cover",
+        message: "ROM has no cover artwork",
+      });
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "resolved", sgdb_id: 42 });
+      vi.mocked(backend.refreshSgdbArtwork).mockResolvedValue({ success: true });
+      vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: "AA==", no_api_key: false });
+      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready" });
+      vi.mocked(backend.saveShortcutIcon).mockResolvedValue({
+        success: true,
+        icon_path: "/grid/icon.png",
+        image_id: 31,
+        sha256: "sha-icon",
+        sgdb_id: 9999,
+      });
+      await refresh();
+      expect(toasts()).toEqual([
+        "Artwork refreshed (4/4 images applied). The RomM cover could not be updated: ROM has no cover artwork",
+      ]);
+    });
+
+    it("names a failed RomM cover refresh beside a refused key too", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.refreshCoverArtwork).mockRejectedValue(new Error("network down"));
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "resolved", sgdb_id: 42 });
+      vi.mocked(backend.refreshSgdbArtwork).mockResolvedValue({
+        success: false,
+        reason: "auth_failed",
+        message: KEY_REFUSED,
+      });
+      await refresh();
+      expect(toasts()).toEqual([`${KEY_REFUSED}. The RomM cover could not be updated: the request did not complete`]);
+    });
+
+    it("says a message the cover and SteamGridDB share once, ending in one full stop", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
+        success: false,
+        reason: "prune_active",
+        message: PRUNE_ACTIVE,
+      });
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({
+        success: false,
+        reason: "prune_active",
+        message: PRUNE_ACTIVE,
+      });
+      await refresh();
+      expect(toasts()).toEqual([PRUNE_ACTIVE]);
+    });
+
+    it("joins a SteamGridDB message that ends in a full stop to the cover failure with one", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
+        success: false,
+        reason: "no_cover",
+        message: "ROM has no cover artwork",
+      });
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({
+        success: false,
+        reason: "prune_active",
+        message: PRUNE_ACTIVE,
+      });
+      await refresh();
+      expect(toasts()).toEqual([`${PRUNE_ACTIVE} The RomM cover could not be updated: ROM has no cover artwork`]);
+    });
+
+    it("says a failed RomM cover refresh on its own when the picker opens", async () => {
+      const refresh = await openRefresh();
+      vi.mocked(backend.refreshCoverArtwork).mockResolvedValue({
+        success: false,
+        reason: "no_cover",
+        message: "ROM has no cover artwork",
+      });
+      vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "needs_pick", candidates: [] });
+      await refresh();
+      expect(toasts()).toEqual(["The RomM cover could not be updated: ROM has no cover artwork"]);
+      expect(vi.mocked(showModal)).toHaveBeenCalledTimes(1);
+    });
+
+    it("a version switch does not download anew", async () => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: true, rom_id: 50 });
+      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
+      vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false });
+      render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      vi.mocked(backend.getSgdbArtworkBase64).mockClear();
+      vi.mocked(backend.getSgdbSlotArtwork).mockClear();
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: true, rom_id: 51 });
+
+      await act(async () => {
+        globalThis.dispatchEvent(
+          new CustomEvent("romm_data_changed", { detail: { type: "version_switched", app_id: testAppId, rom_id: 51 } }),
+        );
+        await Promise.resolve();
+      });
+      await flushAsync();
+      await flushAsync();
+
+      expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls.map(([romId]) => romId)).toEqual([51, 51, 51]);
+      expect(vi.mocked(backend.getSgdbSlotArtwork).mock.calls).toEqual([[51, testAppId, "icon", true]]);
+      expect(vi.mocked(backend.refreshSgdbArtwork)).not.toHaveBeenCalled();
     });
   });
 });

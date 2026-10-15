@@ -122,7 +122,6 @@ export type WireReason =
   | "platform_system_off"
   | "prune_active"
   | "rate_limited"
-  | "release_timeout"
   | "rename_collisions"
   | "rename_failed"
   | "replace_failed"

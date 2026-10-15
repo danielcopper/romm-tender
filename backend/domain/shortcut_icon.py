@@ -1,19 +1,23 @@
-"""Which shortcuts wait for an icon from the artwork job, and the two icons that are Tender's own.
+"""When a shortcut's icon slot is filled, and the two icons that are Tender's own.
 
 With a SteamGridDB API key, a shortcut the sync mints is given
-:data:`PLACEHOLDER_ICON_PNG` at once, and the job later replaces it with
+:data:`PLACEHOLDER_ICON_PNG` at once, and the artwork job later replaces it with
 SteamGridDB's icon, or with Tender's logo icon where SteamGridDB has none; why is
-docs/architecture/steam-non-steam-shortcuts.md, "Shortcut artwork". The
-placeholder's file name is how the job tells a shortcut still waiting from one
-whose icon somebody set; the logo icon, like that icon, is left alone.
+docs/architecture/steam-non-steam-shortcuts.md, "Shortcut artwork". Both are
+stand-ins that leave the slot unfilled: whether the job asks SteamGridDB again
+is the slot's recorded outcome (:func:`domain.artwork_slot_outcome.icon_waits`),
+not which of the two the shortcut shows. Which one it shows decides only whether
+the logo icon a recorded ``none`` stands for is still to be given
+(:func:`domain.artwork_slot_outcome.logo_icon_waits`).
 """
 
 from __future__ import annotations
 
+import posixpath
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Collection
 
 PLACEHOLDER_ICON_NAME = "tender-icon-placeholder.png"
 """The placeholder's file name in Steam's grid directory."""
@@ -27,19 +31,29 @@ PLACEHOLDER_ICON_PNG = bytes.fromhex(
 )
 """A 1x1 PNG whose one pixel is fully transparent: an empty spot in the list, not a grey box."""
 
+_STAND_IN_NAMES = frozenset({"", PLACEHOLDER_ICON_NAME, LOGO_ICON_NAME})
+_NO_ICON_NAMES = frozenset({"", PLACEHOLDER_ICON_NAME})
 
-def icon_worklist(bound: Mapping[int, int], icons: Mapping[int, str]) -> list[tuple[int, int]]:
-    """The ``(rom_id, app_id)`` pairs whose shortcut still waits for an icon.
 
-    *bound* maps a bound shortcut's app id to its ROM, *icons* each shortcut's
-    icon path as ``shortcuts.vdf`` holds it. A shortcut waits while its icon is
-    empty or a file named :data:`PLACEHOLDER_ICON_NAME`, in whichever Steam
-    account's grid directory it was minted. The logo icon means SteamGridDB had none
-    and is not asked again here; any other path is an icon somebody set, left
-    alone. A shortcut the file does not hold yet is left for the next run.
+def is_icon_filled(icon: str, grid_dir: str, file_names: Collection[str] | None) -> bool:
+    """Whether *icon*, a shortcut's icon path as ``shortcuts.vdf`` holds it, fills its icon slot.
+
+    An empty path, and a file named :data:`PLACEHOLDER_ICON_NAME` or
+    :data:`LOGO_ICON_NAME` in any directory, are stand-ins and fill nothing. A
+    path in *grid_dir*, Steam's grid directory, fills the slot only while its
+    file is among *file_names*, that directory's listing; where the listing is
+    ``None`` it could not be taken, and the path is left alone as filled. Any
+    other path fills it whether its file is there or not, so an icon on a drive
+    that is not mounted is kept.
     """
-    return sorted((rom_id, app_id) for app_id, rom_id in bound.items() if app_id in icons and _waits(icons[app_id]))
+    directory, _, name = icon.rpartition("/")
+    if name in _STAND_IN_NAMES:
+        return False
+    if posixpath.normpath(directory) != posixpath.normpath(grid_dir):
+        return True
+    return file_names is None or name in file_names
 
 
-def _waits(icon: str) -> bool:
-    return icon == "" or icon.rsplit("/", 1)[-1] == PLACEHOLDER_ICON_NAME
+def shows_no_icon(icon: str) -> bool:
+    """Whether *icon*, a shortcut's icon path in ``shortcuts.vdf``, is empty or the placeholder, in any directory."""
+    return icon.rpartition("/")[2] in _NO_ICON_NAMES

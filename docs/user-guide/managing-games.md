@@ -64,13 +64,35 @@ receives the **Default** badge. If the shortcut is still active on that unavaila
 the same list to recover the game.
 
 When the version the shortcut is bound to is the one confirmed gone, the **Download** button is greyed out as well — it
-stays visible, like the version row, but downloading it could only ever fail. Pick a live version in the version list,
-or remove the local data, to get the button back.
+stays visible, like the version row, but downloading it could only ever fail. Pick a live version in the version list to
+get the button back.
 
-This availability check is fresh each time the version list loads and is not saved in Tender's database. Only a 404 for
-that exact ROM id establishes that it is gone. Timeouts, sign-in/permission errors, server errors, and malformed
-responses fail open: Tender does not disable a version merely because it could not get a trustworthy answer. A
-ROM-specific 404 also does not make the rest of Tender report that RomM is offline.
+A library sync never moves the shortcut off such a version, and never removes it because every version is gone — see
+[Re-Syncing](syncing-your-library.md#re-syncing). Instead the game page shows a banner above the Play row, which says
+**no longer available on RomM** rather than deleted, because RomM answers a ROM hidden from your user the same way:
+
+- **Not downloaded, other versions remain** — _This version is no longer available on RomM. Choose another version to
+  play._
+- **Downloaded** — _This version is no longer available on RomM. Your downloaded copy still plays._ Below it, what no
+  longer works: its saves no longer sync, and a launch with a local save asks first; it cannot be downloaded again; its
+  saves stay on this device and do not follow a switch to another version; its playtime still counts here, but RomM no
+  longer adds it to this game; its cover and details no longer update.
+- **Every version gone** — _This game is no longer available on RomM._, with the same list when the game is downloaded
+  (less the line about switching, since there is nothing to switch to).
+
+A downloaded version with another version still on RomM closes with _To delete its file, switch to another version
+first, then use Data Management › Gone from RomM, which can keep a recovery bundle._ — the cleanup keeps the version a
+shortcut is on. A game whose every version is gone closes with _To remove it from this device, use Data Management ›
+Gone from RomM, which can keep a recovery bundle._ A version that is not downloaded adds nothing to its first line. The
+trash icon in the version list opens the same cleanup. The Quick Access panel shows no banner. Starting a version that
+is gone and not downloaded from Steam's own Play stays refused, and says _This version is no longer available on RomM.
+Choose another version on its game page._ — or _This game is no longer available on RomM._ when every version is gone.
+
+This availability check is fresh each time the version list loads — when the game page opens, after a version switch,
+and when a library sync ends while the page is open, so the banner comes and goes without reopening it — and is not
+saved in Tender's database. Only a 404 for that exact ROM id establishes that it is gone. Timeouts, sign-in/permission
+errors, server errors, and malformed responses fail open: Tender does not disable a version merely because it could not
+get a trustworthy answer. A ROM-specific 404 also does not make the rest of Tender report that RomM is offline.
 
 A version RomM still lists but has **no file** for carries the label _"No file on RomM"_. That happens when its file has
 left RomM's disk — a rescan that turned `Game (USA).zip` into a folder `Game (USA)` leaves the old entry behind beside
@@ -149,10 +171,12 @@ cases are skipped and reported without deleting data.
 
 The confirmation options apply to this run only:
 
-- **Repoint vanished shortcuts** is on. It preserves the Steam shortcut and its appId, collections, artwork, and
-  playtime while switching to the group's natural live Default. This option works independently of row removal.
 - **Remove gone versions** is on. It removes the confirmed rows and their installed content in games that still have a
-  live version.
+  live version. The version the game's shortcut is bound to is kept while another version of the game is still on RomM,
+  because the cleanup never moves a shortcut onto another version: switch to another version in the version list first,
+  and the gone version is then an ordinary one this option removes. When that kept version is the only gone one in the
+  game, the game's result says _The version this game's shortcut is on is kept while another version is on RomM; switch
+  versions first._
 - **Remove fully vanished games** is on. It applies only to games where the server confirms every single version is
   gone; those are removed whole, with any Steam shortcut they have. It ships on because removing a game RomM no longer
   has is what this dialog is for, and because the default-on recovery bundle keeps the shortcut's Steam details so it
@@ -190,20 +214,20 @@ it is.
 A vanished row carries a red trash icon at its right edge in the version picker, and activating that row opens the same
 confirmation scoped to that one version. A singleton vanished binding shows the same trash action as a single button,
 without opening an otherwise empty picker. The vanished version itself remains non-switchable either way — selecting it
-can only ever start the cleanup, never rebind the shortcut to it.
+can only ever start the cleanup, never bind the shortcut to it.
 
 While a cleanup runs, the Gone from RomM pane shows a progress bar under the entry point — the game being worked on, the
-phase in words (checking with RomM, backing up, backup complete, updating or removing the Steam shortcut, removing local
-data, done) and which game of how many it is on — and the scan button stays unavailable, so you can close the dialog and
-still see what is happening. The bar itself fills with the games already finished, not the one in progress, so it
-reaches the end only when the run does: backing up a large game takes a while and reports nothing while it copies, and a
-full bar sitting over it would say the run was done when it was not. Both the dialog and that pane offer **Stop
-Cleanup**. It stops at the next safe moment: a backup still being written is abandoned and that game is left completely
-untouched, while a game whose removal has already begun finishes and reports what it changed. Backing up a large game
-can take minutes, so being able to walk away from one is the difference between stopping now and waiting it out. While
-the run winds down the button says **Stopping** so a second press is never needed. Nothing already done is undone —
-stopping is not an undo, and the report afterwards lists exactly what was committed. If a game's backup finished before
-the run stopped, the report says so and names the folder, so a recovery bundle that removed nothing is never a mystery.
+phase in words (checking with RomM, backing up, backup complete, removing the Steam shortcut, removing local data, done)
+and which game of how many it is on — and the scan button stays unavailable, so you can close the dialog and still see
+what is happening. The bar itself fills with the games already finished, not the one in progress, so it reaches the end
+only when the run does: backing up a large game takes a while and reports nothing while it copies, and a full bar
+sitting over it would say the run was done when it was not. Both the dialog and that pane offer **Stop Cleanup**. It
+stops at the next safe moment: a backup still being written is abandoned and that game is left completely untouched,
+while a game whose removal has already begun finishes and reports what it changed. Backing up a large game can take
+minutes, so being able to walk away from one is the difference between stopping now and waiting it out. While the run
+winds down the button says **Stopping** so a second press is never needed. Nothing already done is undone — stopping is
+not an undo, and the report afterwards lists exactly what was committed. If a game's backup finished before the run
+stopped, the report says so and names the folder, so a recovery bundle that removed nothing is never a mystery.
 
 A version's downloaded files are deleted only inside the ROM folder RetroDECK names for the game's system, the bound an
 [uninstall](#uninstalling-roms) keeps. Where there is none — RetroDECK not installed, or naming no ROM folder — the run
@@ -216,17 +240,17 @@ ask about its folders ([below](#downloading-roms)), **Confirm Cleanup** starts n
 that says why.
 
 If Steam changes before local cleanup can finish, the report can show a **partial** group with the concrete committed
-action and failure message. A confirmed shortcut removal is reconciled to an unbound retained row; a committed repoint
-remains bound to the new Default. If Steam removal succeeded but every completion report was lost, the result is marked
-ambiguous and source data stays retained; the same applies when Steam removal was attempted but its absence could not be
-confirmed. Retrying confirms an already-absent shortcut instead of removing it twice. Save ownership warnings are shown
-in a focusable terminal-detail region even when the group was removed successfully, and a run-level cancellation or
-failure message remains visible after earlier groups committed. At most five warnings are listed for one game; when
-there were more, the detail — and the finished run's line on **Data Management › Gone from RomM** — says how many were
-left out. Progress is tied to the preview that you confirmed, so a matching run is still shown if only the successful
-start response is delayed or lost; a matching terminal event makes the modal closable immediately. Once that terminal
-result is assembled, delayed frames for the same run cannot replace it. Frames from an older preview are ignored. These
-outcomes are intentional and retryable rather than being reported as unchanged.
+action and failure message. A confirmed shortcut removal is reconciled to an unbound retained row. If Steam removal
+succeeded but every completion report was lost, the result is marked ambiguous and source data stays retained; the same
+applies when Steam removal was attempted but its absence could not be confirmed. Retrying confirms an already-absent
+shortcut instead of removing it twice. Save ownership warnings are shown in a focusable terminal-detail region even when
+the group was removed successfully, and a run-level cancellation or failure message remains visible after earlier groups
+committed. At most five warnings are listed for one game; when there were more, the detail — and the finished run's line
+on **Data Management › Gone from RomM** — says how many were left out. Progress is tied to the preview that you
+confirmed, so a matching run is still shown if only the successful start response is delayed or lost; a matching
+terminal event makes the modal closable immediately. Once that terminal result is assembled, delayed frames for the same
+run cannot replace it. Frames from an older preview are ignored. These outcomes are intentional and retryable rather
+than being reported as unchanged.
 
 ### Region and Languages
 
@@ -642,18 +666,17 @@ see [Deleting BIOS files](bios-management.md#deleting-bios-files).
 
 ## Refreshing Artwork and Metadata
 
-Tap **Refresh Metadata** in the game detail panel to:
+Tap **Refresh Metadata** in the game detail panel to show the game's metadata (description, developer, genres, release
+date) again as Tender stored it at the last sync. It asks your RomM server nothing and changes no artwork; metadata that
+changed on the server arrives with the next sync.
 
-- Re-fetch game metadata (description, developer, genres, release date) from RomM
-- Update the native Steam display with the latest information
-
-This is useful if metadata has changed on your RomM server.
-
-Opening a game's page sets its hero banner, logo and wide grid only where the game has none yet, so an image you set
-yourself stays. Switching the game to another version replaces all three with that version's, an image you set yourself
-included. **Refresh Artwork** is the way to replace them otherwise: it applies every image again, one you set yourself
-included, and asks SteamGridDB again for a logo or wide grid it had none for — useful when artwork was missing, as
-SteamGridDB may have new images by now.
+Opening a game's page sets its hero banner, logo, wide grid and icon only where the game has none yet — an icon counts
+as none while it is the empty spot a newly added game shows, or Tender's logo — so an image you set yourself stays.
+Switching the game to another version replaces all four with that version's, an image you set yourself included; it uses
+the images Tender already downloaded for that version and downloads only the ones it has not. **Refresh Artwork** is the
+way to replace them otherwise: it downloads the hero banner, logo, wide grid and icon from SteamGridDB anew and applies
+them, an image you set yourself included, so the image SteamGridDB ranks first today reaches the game. An image whose
+new download fails keeps the one Tender had.
 
 When you tap **Refresh Artwork**, Tender asks your RomM server which SteamGridDB game the ROM maps to and applies the
 hero banner, logo, wide grid, and icon for that game. **RomM is the source of truth**: whenever your server has a
@@ -661,8 +684,21 @@ SteamGridDB id for a game, that id wins — on both sync and refresh. Where RomM
 one, is under [Game not found on SteamGridDB](troubleshooting.md#game-not-found-on-steamgriddb). If neither RomM nor
 Tender has an id, a picker opens, where you search SteamGridDB by name and choose from the results (with thumbnails). A
 name pick is applied immediately. Because a manual pick isn't stored as the resolved id, you can change it any time:
-just tap **Refresh Artwork** again and the picker reopens. A game you picked keeps the picked images on **Refresh
-Artwork**, even once RomM has an id for it, until you pick again.
+just tap **Refresh Artwork** again and the picker reopens. Once RomM has an id for a game you picked, **Refresh
+Artwork** replaces each picked image with that game's, where SteamGridDB has such an image for that game. Only **Refresh
+Artwork** does this: opening the game's page and the background artwork job keep using the images Tender already
+downloaded for the game.
+
+One exception after you update Tender: for a game Tender knows on SteamGridDB, an icon, wide grid or logo Tender
+downloaded before the update is downloaded once more the first time the game is switched to another version, or the
+first time the game gets that image because it has none yet. If you had picked the game in the picker and RomM has an id
+for it now, that image then becomes the one of the game RomM's id points to. An image the game already shows stays until
+then.
+
+When SteamGridDB refuses your API key, **Refresh Artwork** says "SteamGridDB refused the API key — check it in Settings"
+and opens no picker; when SteamGridDB is rate-limiting requests, it says that instead. Opening a game's page stays quiet
+about both. When the RomM cover could not be updated, the same message says why, after the SteamGridDB result; when the
+picker opens instead, that is a message of its own before the picker.
 
 The full set of per-game actions — refresh artwork, refresh metadata, sync save files, download BIOS, and uninstall — is
 available from the RomM Actions menu in the game detail panel.

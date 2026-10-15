@@ -1,10 +1,11 @@
-"""ArtworkSlotOutcome — what Tender last found for one ROM's wide grid or logo.
+"""ArtworkSlotOutcome — what Tender last found for one ROM's wide grid, logo or shortcut icon.
 
 ``set`` (an image was set, with SteamGridDB's image id and a hash of the bytes),
 ``none`` (SteamGridDB has no candidate) or ``refused`` (Steam's
-``SetCustomArtworkForApp`` failed on the image), the ROM's SteamGridDB id at that
-time, and when. Keyed by ``(rom_id, slot)`` — by ROM, not app id, because a
-re-created shortcut gets a new app id.
+``SetCustomArtworkForApp``, or ``SetShortcutIcon`` for the icon, failed on the
+image), the ROM's SteamGridDB id at that time, and when. Keyed by
+``(rom_id, slot)`` — by ROM, not app id, because a re-created shortcut gets a
+new app id.
 
 A thin record built whole and upserted, so it carries one constructor per
 outcome and no verb-named mutators.
@@ -17,9 +18,10 @@ from typing import TYPE_CHECKING
 
 from domain._aggregate import cosmic_aggregate
 from domain.artwork_slot import RECORDED_SLOTS, ArtworkSlot, is_slot_filled
+from domain.shortcut_icon import is_icon_filled, shows_no_icon
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Collection, Iterable
 
 # How long a ``none`` or ``refused`` outcome keeps its slot from being asked
 # again; why a week is "What was found is recorded" in
@@ -37,7 +39,7 @@ class SlotOutcome(StrEnum):
 
 @cosmic_aggregate
 class ArtworkSlotOutcome:
-    """What was last found for one ROM's wide grid or logo."""
+    """What was last found for one ROM's wide grid, logo or shortcut icon."""
 
     rom_id: int
     slot: ArtworkSlot
@@ -128,6 +130,44 @@ def slot_waits(
     """
     if is_slot_filled(file_names, app_id, slot):
         return False
+    return _not_ruled_out(recorded, sgdb_id=sgdb_id, now=now)
+
+
+def icon_waits(
+    icon: str,
+    recorded: ArtworkSlotOutcome | None,
+    *,
+    grid_dir: str,
+    file_names: Collection[str] | None,
+    sgdb_id: int | None,
+    now: float,
+) -> bool:
+    """Whether a shortcut's icon is asked for at *now*.
+
+    It is while *icon*, the shortcut's icon path in ``shortcuts.vdf``, does
+    not fill the slot (:func:`domain.shortcut_icon.is_icon_filled`, over
+    *grid_dir* and its listing *file_names*) and *recorded*, the ROM's icon
+    outcome, does not rule it out for *sgdb_id*, the ROM's SteamGridDB id now.
+    """
+    if is_icon_filled(icon, grid_dir, file_names):
+        return False
+    return _not_ruled_out(recorded, sgdb_id=sgdb_id, now=now)
+
+
+def logo_icon_waits(icon: str, recorded: ArtworkSlotOutcome | None, *, sgdb_id: int | None, now: float) -> bool:
+    """Whether the shortcut artwork job gives a shortcut Tender's logo icon at *now*, without asking SteamGridDB.
+
+    It does while *icon* shows no icon — empty or the placeholder — and
+    *recorded*, the ROM's icon outcome, is a ``none`` that still rules the slot
+    out for *sgdb_id*: the week rules out asking again, not showing the logo, so
+    a logo icon that never reached Steam is given at the next run.
+    """
+    if not shows_no_icon(icon) or recorded is None or recorded.outcome is not SlotOutcome.NONE:
+        return False
+    return recorded.rules_out(sgdb_id=sgdb_id, now=now)
+
+
+def _not_ruled_out(recorded: ArtworkSlotOutcome | None, *, sgdb_id: int | None, now: float) -> bool:
     return recorded is None or not recorded.rules_out(sgdb_id=sgdb_id, now=now)
 
 

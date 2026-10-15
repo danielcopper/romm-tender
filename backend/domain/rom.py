@@ -9,12 +9,17 @@ resolved live from RomM, not carried here.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from domain._aggregate import cosmic_aggregate
 from domain.version_metadata import VersionMetadata
 
 # The neutral "no version metadata known" value. Shared as the ``synced`` default
 # because ``VersionMetadata`` is frozen/immutable, so a single instance is safe.
 _EMPTY_VERSION_METADATA = VersionMetadata()
+
+# Which kind of sync unit last committed a ROM: its platform's, or a collection's.
+DeliveryRoute = Literal["platform", "collection"]
 
 
 @cosmic_aggregate
@@ -56,6 +61,7 @@ class Rom:
     is_main_sibling: bool = False
     fs_size_bytes: int | None = None
     has_file_on_disk: bool = True
+    delivered_through: DeliveryRoute | None = None
 
     @classmethod
     def synced(
@@ -119,6 +125,14 @@ class Rom:
         completed would drop it from that platform's count and suppress its skip.
         """
         self.last_fetch_id = fetch_id
+
+    def record_delivery(self, route: DeliveryRoute) -> None:
+        """Record that a sync unit of kind *route* committed this ROM.
+
+        What the stale removal makes of it is :func:`domain.sync_diff.sort_stale_rows`'s.
+        ``None`` is a ROM no unit has committed since the column was added.
+        """
+        self.delivered_through = route
 
     def update_cover_path(self, path: str) -> None:
         """Record the local cover-art path once artwork has been written."""

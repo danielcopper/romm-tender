@@ -86,7 +86,6 @@ async def _run_cleanup(harness, *, installed: bool) -> dict[str, Any]:
     request: dict[str, object] = {
         "preview_id": preview["preview_id"],
         "confirmed": True,
-        "repoint_shortcuts": True,
         "remove_rows": True,
         "remove_fully_vanished": True,
         # Selecting installed content requires a recovery bundle.

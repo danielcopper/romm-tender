@@ -45,7 +45,6 @@ import {
   getUpdateInstallState,
   logError,
   logInfo,
-  waitForPruneRelease,
 } from "./api/backend";
 import {
   createOrUpdateCollections,
@@ -70,7 +69,14 @@ import { attachRunUnitsMirror, seedRunUnits } from "./utils/runUnitsStore";
 import { setVersionError, setServerRetryProgress } from "./utils/connectionState";
 import { initSessionManager } from "./utils/sessionManager";
 import { findOutermostScrollParent } from "./utils/scrollHelpers";
-import { ENTRY_FOCUS_DELAY_MS, pageEntryStop, placeEntryFocus } from "./utils/entryFocus";
+import {
+  ENTRY_FOCUS_DELAY_MS,
+  EntryFocusOnMountContext,
+  EntryPreferenceContext,
+  preferMarkedChild,
+  pageEntryStop,
+  placeEntryFocus,
+} from "./utils/entryFocus";
 import { setNotificationsUnavailable } from "./utils/notificationsHealth";
 import { detach } from "./utils/detach";
 import type {
@@ -92,12 +98,7 @@ import { setLaunchOptionsConfirmed } from "./utils/steamShortcuts";
 import { removeShortcutsPaced } from "./utils/shortcutRemoval";
 import { applyShortcutArtwork } from "./utils/shortcutArtwork";
 import { batchConfirmLaunchOptions } from "./utils/launchOptionsReconcile";
-import {
-  disownStrandedPruneLeases,
-  isPruneLeaseCancelled,
-  releasePruneLease,
-  withPruneLease,
-} from "./utils/pruneLease";
+import { disownStrandedPruneLeases, isPruneLeaseCancelled, withPruneLease } from "./utils/pruneLease";
 import { withTimeout } from "./utils/withTimeout";
 import { fetchMetadataCachePages } from "./utils/metadataCache";
 import { cancelPruneActions, handlePruneAction } from "./utils/pruneActions";
@@ -105,7 +106,6 @@ import type { StoppedUpdateAttemptWire, UpdateFailure, UpdateInstallAttempt, Upd
 import type { PruneActionRequired } from "./utils/pruneActions";
 import { admitPruneFrame, setPruneComplete, setPruneProgress } from "./utils/pruneStore";
 import type { PruneComplete, PruneProgress } from "./utils/pruneStore";
-import { publishCommittedVersionSwitch } from "./utils/versionSwitchApplication";
 
 // Module-level page state survives QAM remounts (e.g. after modal close)
 let currentPage: Page = "main";
@@ -137,8 +137,17 @@ const QAMPanel: FC = () => {
   const stranded = useStrandedAnswer() !== null;
   const [page, setPageState] = useState<Page>(currentPage); // NOSONAR(typescript:S6754) — setter intentionally renamed; setPage wraps it below to provide custom navigation behavior.
   const [settingsSection, setSettingsSectionState] = useState<SettingsSection | null>(currentSection); // NOSONAR(typescript:S6754) — set through setPage, which owns both halves of a navigation.
+  // False until the first page swap: the page the panel appears with takes no
+  // focus (`EntryFocusOnMountContext`).
+  const [swapped, setSwapped] = useState(false);
+  // True until focus first enters the panel (`EntryPreferenceContext`). Read
+  // off the root's own focus event rather than a document: the panel's code
+  // runs in another window than the nodes it renders.
+  const [awaitsEntry, setAwaitsEntry] = useState(true);
+  const onRootFocus = awaitsEntry ? () => setAwaitsEntry(false) : undefined;
   const rootRef = useRef<HTMLDivElement>(null);
   const setPage = (p: Page, section: SettingsSection | null = null) => {
+    if (p !== page) setSwapped(true);
     currentPage = p;
     currentSection = section;
     setPageState(p);
@@ -178,21 +187,24 @@ const QAMPanel: FC = () => {
     // gamepad focus is within it (`chunk~2dcc5aaf7.js`, the tab row's
     // `showGlyphs`). Landing here would leave such a page with no visible way
     // to switch tabs.
+    //
+    // Only after a swap: on the page the panel appears with, entry is Steam's,
+    // by the `preferredFocus` the page marks where it marks one
+    // (`EntryFocusOnMountContext`).
     const ownsFocus = el.querySelector(`[${OWNS_ENTRY_FOCUS_ATTR}]`) !== null;
-    const focusTimer = ownsFocus
-      ? undefined
-      : setTimeout(() => placeEntryFocus(el, pageEntryStop), ENTRY_FOCUS_DELAY_MS);
+    const focusTimer =
+      ownsFocus || !swapped ? undefined : setTimeout(() => placeEntryFocus(el, pageEntryStop), ENTRY_FOCUS_DELAY_MS);
     return () => {
       cancelAnimationFrame(rafHandle);
       clearTimeout(focusTimer);
     };
-  }, [page]);
+  }, [page, swapped]);
 
   // Decided here rather than per page, so a page added later is covered too. The
   // re-check stays mounted: what the card says may change on the next open.
   if (stranded) {
     return (
-      <div ref={rootRef}>
+      <div ref={rootRef} onFocus={onRootFocus}>
         <StrandedRecheck />
         <StrandedQuickAccess />
       </div>
@@ -232,10 +244,24 @@ const QAMPanel: FC = () => {
   // never removed, it is exactly as far away as the user walked in, and the last
   // press is never swallowed. Steam already prints "B ZURÜCK" in its footer
   // legend, which this makes true.
+  //
+  // The same `Focusable` is where entering a page other than Main from the Quick
+  // Access strip starts its search for the page's preferred stop, until focus
+  // first enters the panel; Main carries its own.
   return (
-    <div ref={rootRef}>
+    <div ref={rootRef} onFocus={onRootFocus}>
       <StrandedRecheck />
-      {page === "main" ? content : <Focusable onCancelButton={() => setPage("main")}>{content}</Focusable>}
+      <EntryFocusOnMountContext.Provider value={swapped}>
+        <EntryPreferenceContext.Provider value={awaitsEntry}>
+          {page === "main" ? (
+            content
+          ) : (
+            <Focusable {...preferMarkedChild(awaitsEntry)} onCancelButton={() => setPage("main")}>
+              {content}
+            </Focusable>
+          )}
+        </EntryPreferenceContext.Provider>
+      </EntryFocusOnMountContext.Provider>
     </div>
   );
 };
@@ -344,22 +370,6 @@ async function removeStaleCollections(
   }
 }
 
-/** Publish each committed version switch in order, stopping the moment the lease is cancelled. */
-async function publishSwitchesUntilCancelled(
-  pending: Array<{ appId: number; romId: number }>,
-  signal: AbortSignal,
-): Promise<void> {
-  for (const item of pending) {
-    if (isPruneLeaseCancelled(signal)) return;
-    await publishCommittedVersionSwitch(item.appId, item.romId, undefined, signal);
-  }
-}
-
-/** Name a committed shortcut action the way the completion toast says it. */
-function shortcutActionLabel(committedAction: string | undefined): string {
-  return committedAction === "remove_shortcut" ? "Shortcut removal" : "Shortcut repoint";
-}
-
 /**
  * Say what a finished cleanup run did, leading with anything that committed a
  * Steam change without finishing: an uncertain outcome and a committed-but-
@@ -370,12 +380,10 @@ function buildPruneCompleteToast(completed: PruneComplete): { body: string; subt
   const committedPartial = completed.results.find((item) => item.status === "partial" && item.committed_action);
   const subtext = ambiguousPartial?.message ?? committedPartial?.message ?? completed.message;
   if (ambiguousPartial) {
-    const label = shortcutActionLabel(ambiguousPartial.committed_action);
-    return { body: `${label} outcome is uncertain; source data was retained.`, subtext };
+    return { body: "Shortcut removal outcome is uncertain; source data was retained.", subtext };
   }
   if (committedPartial) {
-    const label = shortcutActionLabel(committedPartial.committed_action);
-    return { body: `${label} committed; local cleanup incomplete.`, subtext };
+    return { body: "Shortcut removal committed; local cleanup incomplete.", subtext };
   }
   const removed = completed.removed_count ?? completed.removed_rom_ids.length;
   if (!removed) return { body: completed.message || "No removed RomM games were cleaned up.", subtext };
@@ -1141,39 +1149,6 @@ const tender = definePanel(() => {
   // page or the game-detail picker unmounts. The backend emits one tokenized action at a
   // time; this root handler owns every Steam API mutation and reports the exact
   // token outcome before backend filesystem/SQLite finalization can proceed.
-  const publishPruneSwitches = async (
-    runId: string,
-    pending: Array<{ appId: number; romId: number }>,
-    leaseToken: string | undefined,
-  ): Promise<void> => {
-    if (!leaseToken) {
-      logError("Cleanup publication was skipped because its continuation lease was missing.");
-      return;
-    }
-    await withPruneLease(
-      leaseToken,
-      "Cleanup repoint publication",
-      async (signal) => {
-        let lastMessage = "Cleanup claim release was not confirmed.";
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          try {
-            const released = await withTimeout(waitForPruneRelease(runId), 6000);
-            if (released.success) {
-              await publishSwitchesUntilCancelled(pending, signal);
-              return;
-            }
-            lastMessage = released.message;
-          } catch (e) {
-            lastMessage = e instanceof Error ? e.message : String(e);
-          }
-          if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 100));
-        }
-        logError(`Cleanup publication could not confirm claim release: ${lastMessage}`);
-      },
-      "root",
-    );
-  };
-
   addEventListener<PruneActionRequired>("prune_action_required", (action: PruneActionRequired) => {
     if (!admitPruneFrame(action.preview_id, action.run_id)) return;
     detach(handlePruneAction(action));
@@ -1196,25 +1171,6 @@ const tender = definePanel(() => {
       }),
     );
     cancelPruneActions();
-    const publications: Array<{ appId: number; romId: number }> = [];
-    for (const item of completed.results) {
-      if (
-        item.committed_action === "repoint_shortcut" &&
-        !item.action_ambiguous &&
-        item.app_id !== undefined &&
-        item.target_rom_id !== undefined
-      ) {
-        publications.push({ appId: item.app_id, romId: item.target_rom_id });
-      }
-    }
-    if (publications.length) {
-      detach(publishPruneSwitches(completed.run_id, publications, completed.prune_lease_token));
-    } else if (completed.prune_lease_token) {
-      // The terminal frame carried a continuation lease but committed no repoint
-      // to publish, so nothing downstream will ever release it. Handing it back
-      // now keeps it from refusing the next cleanup's start until its TTL.
-      detach(releasePruneLease(completed.prune_lease_token, "Cleanup completion with nothing to publish"));
-    }
     const { body, subtext } = buildPruneCompleteToast(completed);
     showToast(body, { subtext });
   });

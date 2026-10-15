@@ -230,7 +230,6 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "stage_prune_installed_selection",
     "release_prune_conflict_lease",
     "renew_prune_conflict_lease",
-    "wait_for_prune_release",
     # Ack for an already-started cleanup run must remain available while the
     # run waits on its exact Steam action token; gating it would deadlock the
     # cleanup run if migration state changed mid-run.
@@ -312,10 +311,12 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "report_sgdb_slot_artwork",
     "verify_sgdb_api_key",
     "save_sgdb_api_key",
+    "remove_sgdb_api_key",
     "save_shortcut_icon",
     "get_sgdb_resolution",
     "search_sgdb_games",
     "apply_sgdb_game_id",
+    "refresh_sgdb_artwork",
     # Metadata cache reads.
     "get_rom_metadata",
     "get_metadata_cache_page",

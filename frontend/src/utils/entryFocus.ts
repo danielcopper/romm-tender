@@ -1,11 +1,12 @@
 /**
- * What can hold gamepad focus, where a page's focus lands when it opens, and how
- * it is put there.
+ * What can hold gamepad focus, where a page's focus lands when a swap opens it,
+ * and how it is put there.
  *
  * Steam's gamepad navigation keeps a focus pointer across a page swap and
  * resolves it on the next input — onto whatever sits at the old page's position
- * — so a newly mounted body has to claim focus itself. Three callers do, on the
- * same delay: the wide-page frame for its own body
+ * — so a newly mounted body has to claim focus itself, while the page the panel
+ * appears with claims none ({@link EntryFocusOnMountContext}). Three callers
+ * claim it, on the same delay: the wide-page frame for its own body
  * (`frontend/src/bigpicture/layout/WidePage.tsx`), the panel's router for the
  * pages that place none of their own (`frontend/src/index.tsx`), and
  * {@link useEntryFocusOnBodySwap} for a page whose body changes under the
@@ -26,7 +27,8 @@
  * that swaps declares an area.
  */
 
-import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { createContext, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import type { NavEntryPositionPreferences } from "@decky/ui";
 
 /**
  * Every shape Steam gives a focus stop, measured in the running QAM rather than
@@ -117,6 +119,50 @@ export function firstBodyStop(root: ParentNode): HTMLElement | null {
  * opened anyway.
  */
 export const ENTRY_STOP_ATTR = "data-romm-entry-stop";
+
+/**
+ * Whether the page mounting now may place entry focus: `true` for a page opened
+ * by a swap inside the panel, `false` for the page the panel itself appears
+ * with, which places none — why, and how entering it from the Quick Access
+ * strip lands instead, is `docs/architecture/qam-panel.md`, "Pages". The
+ * panel's router (`frontend/src/index.tsx`) provides it, and the wide-page frame
+ * reads it.
+ *
+ * `true` where no router provides it: nothing outside the router says the page
+ * arrived with the panel.
+ */
+export const EntryFocusOnMountContext = createContext(true);
+
+/**
+ * Steam's `navEntryPreferPosition` value under which entering a node searches
+ * its descendants, breadth first, for the first one marked `preferredFocus`
+ * (`FindFocusableDescendant` in Steam's `sp.js`).
+ *
+ * The number rather than `@decky/ui`'s enum value: the coexistence bundle takes
+ * `@decky/ui` from Decky's `DFL`, so the value would be whatever enum the
+ * running Decky carries, and the suite's `@decky/ui` mocks define no enum.
+ */
+export const PREFER_MARKED_CHILD = 4 as NavEntryPositionPreferences.PREFERRED_CHILD;
+
+/**
+ * Whether the panel still marks where entering it from the Quick Access strip
+ * lands: `true` from the panel appearing until focus first enters it, `false`
+ * after. The panel's router (`frontend/src/index.tsx`) provides it.
+ *
+ * The marks cannot stay: Steam's search for the marked node runs ahead of the
+ * child a node last had focus in, so every later entry — focus coming back from
+ * a closed dialog, Down from a page's Back row — would land on the mark rather
+ * than where the reader was (`docs/architecture/qam-panel.md`, "Pages").
+ *
+ * `true` where no router provides it: nothing outside the router says focus has
+ * entered the panel.
+ */
+export const EntryPreferenceContext = createContext(true);
+
+/** The props that make a node search for the marked one on entry, while the panel still marks it. */
+export function preferMarkedChild(prefer: boolean): { navEntryPreferPosition?: typeof PREFER_MARKED_CHILD } {
+  return prefer ? { navEntryPreferPosition: PREFER_MARKED_CHILD } : {};
+}
 
 /**
  * Long enough to land after Steam has finished mounting the page and resolving

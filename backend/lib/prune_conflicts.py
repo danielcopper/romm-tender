@@ -42,7 +42,6 @@ _HOLDER_NAMES = {
     "sync_complete": "finishing a library sync",
     "sync_stale": "finishing a library sync",
     "download_complete": "finishing a download",
-    "prune_complete": "finishing a cleanup",
     "migration_relaunch_options": "finishing a RetroDECK move",
     "shortcut_artwork": "setting shortcut artwork",
 }

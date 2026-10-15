@@ -1495,10 +1495,10 @@ its own instead of opening that dialog
 in a dialog is never bounded. One wait has no limit: once an action is picked in the conflict dialog, the dialog waits
 for `resolve_sync_conflict` with its Cancel disabled ([#2176](https://github.com/danielcopper/romm-tender/issues/2176)).
 
-The romId comes from `sessionManager`'s appId → romId map, which is re-read only at start-up and when a game starts,
-while `rommAppIds` learns a shortcut as soon as a sync writes it. So an owned appId can be missing from the map: the
-watcher then refreshes the map once (`refreshAppIdMap`) and looks again, and if the romId is still missing it starts the
-game again without the gate.
+The romId comes from `sessionManager`'s appId → romId map, re-read at the moments
+[App ID to ROM ID mapping](#app-id-to-rom-id-mapping) lists, while `rommAppIds` learns a shortcut as soon as a sync
+writes it. So an owned appId can be missing from the map: the watcher then refreshes the map once (`refreshAppIdMap`)
+and looks again, and if the romId is still missing it starts the game again without the gate.
 
 Both funnels mark the appId in the gate's skip-set (`markLaunchSkipped`) immediately before their own `RunGame`, and the
 watcher consumes that mark when the start reaches it, so a start a caller has already handled is not gated a second
@@ -2193,6 +2193,11 @@ SQLite table, via `get_app_id_rom_id_map`). This map is refreshed:
 
 - On session manager initialization (panel load)
 - Before each game start event (in case a sync added new shortcuts)
+- When a library sync run ends — on every `sync_progress` frame that stops the run with a terminal stage, so a run that
+  completed, was cancelled or paused, or stopped with an error alike — and when a version switch has committed, since
+  each can move a shortcut's binding onto another `romId` in the running session — without it, Steam's own Play on a
+  shortcut whose binding moved would be gated, and its launch command re-confirmed, for the version it is no longer
+  bound to. A unit acknowledged only after its run ended is left to the refresh before the next start
 
 The refresh before a start waits at most 5 s (`LOCAL_CALL_LIMIT_MS`), because the start and stop notifications are
 handled one after another and a refresh without an answer would hold them all (see [Post-exit sync](#post-exit-sync)).

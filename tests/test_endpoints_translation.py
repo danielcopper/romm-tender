@@ -1274,7 +1274,6 @@ def _dispatcher_over_cleanup(uow_factory: Any, events: FakeEventSink) -> tuple[C
             active_downloads=set,
             drift_probe=MagicMock(),
             remove_installed_files=MagicMock(),
-            switch_version=MagicMock(),
             settings={},
             run_claim=prune_conflicts,
             conflict_rules=_make_conflict_rules(prune_conflicts=prune_conflicts),
@@ -1312,9 +1311,7 @@ class TestTheCleanupRefusalsOnTheWire:
         app_id = 0x80000001
         # The run's own requester, so the action is pending exactly as a run leaves it; the empty
         # database binds no shortcut to it, so the claim's binding check fails.
-        requested = asyncio.create_task(
-            service._request_action("run-1", "remove_shortcut", {"app_id": app_id}, 1, None, {1})
-        )
+        requested = asyncio.create_task(service._request_action("run-1", "remove_shortcut", {"app_id": app_id}, 1, {1}))
         async with asyncio.timeout(5):
             while not events.events:
                 await asyncio.sleep(0)
@@ -1324,7 +1321,6 @@ class TestTheCleanupRefusalsOnTheWire:
             "action_token": events.events[-1][1]["action_token"],
             "action": "remove_shortcut",
             "app_id": app_id,
-            "target_rom_id": None,
         }
 
         message = json.loads(await dispatcher.dispatch(1, "report_prune_action", [claim]))
@@ -1636,6 +1632,7 @@ class TestTheSteamGridDBRefusalsOnTheWire:
             ("get_sgdb_resolution", [42]),
             ("apply_sgdb_game_id", [42, 7]),
             ("get_sgdb_artwork_base64", [42, 1]),
+            ("refresh_sgdb_artwork", [42, 7]),
         ],
     )
     async def test_a_key_no_header_can_carry_reaches_neither_the_reply_nor_a_log_line(

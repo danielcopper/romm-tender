@@ -14,7 +14,6 @@ import logging
 from typing import Any, cast
 
 import pytest
-from _factories import _make_conflict_rules
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.rom import Rom
@@ -61,7 +60,6 @@ def _preview(rows: list[Rom], namespace: str) -> PrunePreview:
 
 def _options() -> PruneOptions:
     return PruneOptions(
-        repoint_shortcuts=False,
         remove_rows=True,
         remove_fully_vanished=True,
         create_recovery_bundle=False,
@@ -83,10 +81,6 @@ def _executor(rows: list[Rom], settings: dict[str, Any], emitted: list[tuple[str
     async def unusable_request(*_args: Any) -> ActionOutcome:
         raise AssertionError("no Steam action may be requested by these flows")
 
-    async def unusable_switch(app_id: int, target_rom_id: int, allow_stranded: bool) -> dict[str, Any]:
-        del app_id, target_rom_id, allow_stranded
-        raise AssertionError("no version switch may be requested by these flows")
-
     async def drift_probe(rom_id: int) -> dict[str, Any]:
         del rom_id
         return {"drifted": False}
@@ -104,12 +98,10 @@ def _executor(rows: list[Rom], settings: dict[str, Any], emitted: list[tuple[str
             active_downloads=set,
             drift_probe=drift_probe,
             remove_installed_files=cast("Any", _Unusable()),
-            switch_version=unusable_switch,
             settings=settings,
             recovery=cast("Any", _Unusable()),
             registry=PruneRegistry(config=PruneRegistryConfig(uow_factory=FakeUnitOfWorkFactory(uow))),
             request_action=unusable_request,
-            conflict_rules=_make_conflict_rules(),
         )
     )
 

@@ -298,10 +298,6 @@ class Endpoints:
         return await self._services.prune_service.report_prune_action(request)
 
     @route
-    async def wait_for_prune_release(self, run_id):
-        return await self._services.prune_service.wait_for_prune_release(run_id)
-
-    @route
     async def release_prune_conflict_lease(self, lease_token):
         return await self._services.prune_lease_service.release_prune_conflict_lease(lease_token)
 
@@ -742,8 +738,8 @@ class Endpoints:
         return await self._services.sgdb_service.get_sgdb_artwork_base64(rom_id, asset_type_num)
 
     @route
-    async def get_sgdb_slot_artwork(self, rom_id, app_id, slot):
-        return await self._services.sgdb_service.get_sgdb_slot_artwork(rom_id, app_id, slot)
+    async def get_sgdb_slot_artwork(self, rom_id, app_id, slot, replace=False):
+        return await self._services.sgdb_service.get_sgdb_slot_artwork(rom_id, app_id, slot, replace)
 
     @route
     async def report_sgdb_slot_artwork(self, rom_id, slot, outcome, sgdb_id, image_id, sha256):
@@ -760,8 +756,12 @@ class Endpoints:
         return self._services.sgdb_service.save_sgdb_api_key(api_key)
 
     @route
-    async def save_shortcut_icon(self, app_id, icon_base64):
-        return await self._services.sgdb_service.save_shortcut_icon(app_id, icon_base64)
+    def remove_sgdb_api_key(self):
+        return self._services.sgdb_service.remove_sgdb_api_key()
+
+    @route
+    async def save_shortcut_icon(self, app_id, rom_id):
+        return await self._services.sgdb_service.save_shortcut_icon(app_id, rom_id)
 
     @route
     async def get_sgdb_resolution(self, rom_id):
@@ -774,6 +774,10 @@ class Endpoints:
     @route
     async def apply_sgdb_game_id(self, rom_id, sgdb_id):
         return await self._services.sgdb_service.apply_sgdb_game_id(rom_id, sgdb_id)
+
+    @route
+    async def refresh_sgdb_artwork(self, rom_id, sgdb_id):
+        return await self._services.sgdb_service.refresh_sgdb_artwork(rom_id, sgdb_id)
 
     # ── Metadata delegation to MetadataService ────────────────
 

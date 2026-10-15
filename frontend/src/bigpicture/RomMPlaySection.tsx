@@ -27,10 +27,12 @@ import { FaGamepad, FaCog, FaMicrochip, FaExclamationTriangle } from "react-icon
 import { CustomPlayButton } from "./CustomPlayButton";
 import { DiscSelector } from "./DiscSelector";
 import { VersionPicker } from "./VersionPicker";
+import { VanishedVersionBanner } from "./VanishedVersionBanner";
 import { WarningCard } from "./WarningCard";
 import { SgdbGamePickerModalContent } from "./SgdbGamePickerModal";
 import { applyArtwork, cancelArtworkApply } from "../utils/artwork";
 import { useAutoArtwork } from "../utils/autoArtwork";
+import { artworkApplyMessage } from "../utils/artworkApplyMessage";
 import { hasAnySaveConflict } from "../utils/saveStatus";
 import { scrollToTop } from "../utils/scrollHelpers";
 import { getEventTarget } from "../utils/events";
@@ -39,7 +41,9 @@ import {
   probeReachability,
   getSgdbResolution,
   getRomMetadata,
+  isEndpointFailure,
   refreshCoverArtwork,
+  refreshSgdbArtwork,
   downloadAllFirmware,
   deleteLocalSaves,
   debugLog,
@@ -388,6 +392,14 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     const romId = detail.romId;
     setActionPending("artwork");
     const admission = capturePruneLeaseAdmission(`game-detail:${appId}`);
+    let coverFailure: string | null = null;
+    const say = (sgdbResult: string) => {
+      if (!coverFailure || coverFailure === sgdbResult) {
+        showToast(sgdbResult);
+        return;
+      }
+      showToast(`${sgdbResult.replace(/\.$/, "")}. The RomM cover could not be updated: ${coverFailure}`);
+    };
     try {
       // Re-download the RomM cover, rename to {app_id}p.png, and patch
       // cover_path on the registry row so the game info panel can render the
@@ -395,7 +407,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       const coverResult = await refreshCoverArtwork(romId).catch(
         (e): { success: boolean; reason?: WireReason | "exception"; message: string; cover_path?: string } => {
           detach(debugLog(`refreshCoverArtwork rejected: ${e}`));
-          return { success: false, reason: "exception", message: String(e) };
+          return { success: false, reason: "exception", message: "the request did not complete" };
         },
       );
       if (coverResult.success) {
@@ -407,6 +419,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         );
       } else {
         detach(debugLog(`refreshCoverArtwork failed: ${coverResult.reason} — ${coverResult.message}`));
+        coverFailure = coverResult.message;
       }
 
       const resolution = await getSgdbResolution(romId).catch((e): null => {
@@ -414,26 +427,29 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         return null;
       });
       if (!resolution) {
-        showToast("Failed to refresh artwork");
+        say("Failed to refresh artwork");
+        return;
+      }
+      if (isEndpointFailure(resolution)) {
+        say(resolution.message);
         return;
       }
 
       switch (resolution.decision) {
         case "no_api_key":
-          showToast("Set a SteamGridDB API key in settings first");
+          say("Set a SteamGridDB API key in Settings first");
           break;
         case "resolved": {
-          const applied = await applyArtwork(romId, appId);
-          if (applied === -1) {
-            showToast("Set a SteamGridDB API key in settings first");
-          } else if (applied > 0) {
-            showToast(`Artwork refreshed (${applied}/4 images applied)`);
-          } else {
-            showToast("No artwork available for this game");
+          const refreshed = await refreshSgdbArtwork(romId, resolution.sgdb_id);
+          if (isEndpointFailure(refreshed)) {
+            say(refreshed.message);
+            break;
           }
+          say(artworkApplyMessage(await applyArtwork(romId, appId)));
           break;
         }
         case "needs_pick":
+          if (coverFailure) showToast(`The RomM cover could not be updated: ${coverFailure}`);
           showModal(
             <SgdbGamePickerModalContent
               romId={romId}
@@ -452,7 +468,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         detach(debugLog(`handleRefreshArtwork: continuation was cancelled: ${e}`));
         return;
       }
-      showToast("Failed to refresh artwork");
+      say("Failed to refresh artwork");
     } finally {
       setActionPending(null);
     }
@@ -940,6 +956,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
           message="This game's saves are written beside the game file, so they can't be synced. The usual cause is RetroArch's 'Write Saves to Content Directory' (RetroArch › Settings › Saving); if it is on, turning it off lets save sync work again."
         />
       ) : null}
+      <VanishedVersionBanner key="vanished-version-banner" appId={appId} installed={detail.installed} />
       {playSectionRow}
     </Fragment>
   );

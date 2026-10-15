@@ -245,7 +245,6 @@ class Harness:
     drifted: set[int]
     installed_remover: FakeInstalledFilesRemover
     clock: FakeClock
-    switch_calls: list[dict[str, Any]]
     conflicts: PruneConflicts
     artwork_job: FakeShortcutArtworkJob
 
@@ -318,26 +317,9 @@ async def harness() -> Harness:
     active: set[int] = set()
     drifted: set[int] = set()
     installed_remover = FakeInstalledFilesRemover()
-    switch_calls: list[dict[str, Any]] = []
 
     async def drift(rom_id: int) -> dict[str, Any]:
         return {"drifted": rom_id in drifted}
-
-    async def switch_version(app_id: int, target_rom_id: int, allow_stranded: bool) -> dict[str, Any]:
-        switch_calls.append({"app_id": app_id, "target_rom_id": target_rom_id, "allow_stranded": allow_stranded})
-        with uow:
-            target = uow.roms.get(target_rom_id)
-            assert target is not None
-            target.bind_shortcut(app_id)
-            target.record_applied_launch_options(f"launch-{target_rom_id}")
-            uow.roms.save(target)
-        return {
-            "success": True,
-            "app_id": app_id,
-            "rom_id": target_rom_id,
-            "target_installed": False,
-            "launch_options": f"launch-{target_rom_id}",
-        }
 
     clock = FakeClock()
     conflicts = PruneConflicts(logger=logging.getLogger("test-prune-conflicts"), log_debug=lambda _msg: None)
@@ -367,7 +349,6 @@ async def harness() -> Harness:
             active_downloads=lambda: set(active),
             drift_probe=drift,
             remove_installed_files=installed_remover,
-            switch_version=switch_version,
             settings={"preferred_region": "USA"},
             run_claim=conflicts,
             conflict_rules=_make_conflict_rules(prune_conflicts=conflicts),
@@ -387,7 +368,6 @@ async def harness() -> Harness:
         drifted,
         installed_remover,
         clock,
-        switch_calls,
         conflicts,
         artwork_job,
     )
@@ -403,7 +383,6 @@ async def _start(harness: Harness, preview_id: str, **overrides):
     request = {
         "preview_id": preview_id,
         "confirmed": True,
-        "repoint_shortcuts": True,
         "remove_rows": True,
         "remove_fully_vanished": False,
         "create_recovery_bundle": False,
@@ -471,7 +450,6 @@ async def _claim_action(harness: Harness, action: dict[str, Any]) -> dict[str, A
             "action_token": action["action_token"],
             "action": action["action"],
             "app_id": action["app_id"],
-            "target_rom_id": action.get("target_rom_id"),
         }
     )
 
@@ -670,10 +648,10 @@ async def test_a_confirmed_endpoint_still_removes_a_genuine_404(harness):
 
 
 @pytest.mark.asyncio
-async def test_a_misroute_may_not_reclassify_a_repoint_group_as_fully_dead(harness):
+async def test_a_misroute_may_not_reclassify_a_partly_live_group_as_fully_dead(harness):
     """The amplifier: a misroute 404s the LIVE sibling too.
 
-    Believed, that turns "one version vanished, repoint to the other" into
+    Believed, that turns "one version vanished, the other is still there" into
     "the whole game is gone" — taking the Steam shortcut and any unselected
     installed content with it, and fully-vanished removal is on by default.
     """
@@ -692,7 +670,6 @@ async def test_a_misroute_may_not_reclassify_a_repoint_group_as_fully_dead(harne
     assert complete["removed_rom_ids"] == []
     assert complete["results"][0]["reason"] == "unconfirmed_server"
     assert harness.steam_recovery.removed == [], "no shortcut was removed"
-    assert harness.switch_calls == [], "and no repoint was attempted either"
 
 
 @pytest.mark.asyncio
@@ -732,15 +709,14 @@ async def test_without_any_control_a_404_is_never_honoured(harness):
 @pytest.mark.asyncio
 async def test_cancel_stops_the_named_run_and_reports_it_as_cancelled(harness):
     app_id = 0x80000001
-    _seed(harness.uow, _rom(1, fetch="old", group="g", app_id=app_id), _rom(2, fetch="new", group="g"))
+    _seed(harness.uow, _rom(1, fetch="old", app_id=app_id))
     harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
-    harness.romm.outcomes[2] = [{"id": 2}] * 3
     preview = await _preview(harness)
-    started = await _start(harness, preview["preview_id"])
+    started = await _start(harness, preview["preview_id"], remove_fully_vanished=True)
     task = _active_run_task(harness)
     # Park the run on its pending Steam action so the cancellation lands mid-run
     # rather than before the executor body has had a chance to start.
-    await _wait_action(harness, "repoint_shortcut")
+    await _wait_action(harness, "remove_shortcut")
 
     cancelled = await harness.service.cancel_prune(started["run_id"])
 
@@ -816,60 +792,6 @@ async def test_the_abandoned_group_is_reported_as_skipped_not_failed(harness):
     assert [result["status"] for result in complete["results"]] == ["skipped"]
     assert complete["results"][0]["reason"] == "cancelled"
     assert complete["partial"] is False, "nothing was committed, so the run is not partial"
-
-
-@pytest.mark.asyncio
-async def test_a_cancel_after_the_destructive_phase_started_does_not_abort_it(harness):
-    """The shield boundary is unchanged: once mutating, the group finishes.
-
-    Cancellation is cooperative only up to the commit point. Past it the group
-    runs to its own terminal verdict so what it changed is reported truthfully
-    rather than abandoned half-done.
-    """
-    app_id = 0x80000001
-    _seed(harness.uow, _rom(1, fetch="old", group="g", app_id=app_id), _rom(2, fetch="new", group="g"))
-    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 6
-    harness.romm.outcomes[2] = [{"id": 2}] * 6
-    preview = await _preview(harness)
-    started = await _start(harness, preview["preview_id"])
-    task = _active_run_task(harness)
-    # Parked on the Steam action, the group has already switched the binding —
-    # it is past the commit point.
-    action = await _wait_action(harness, "repoint_shortcut")
-
-    await harness.service.cancel_prune(started["run_id"])
-    # cancel_prune only requests the stop; the action token is retired by the
-    # time the run task has ended.
-    with pytest.raises(asyncio.CancelledError):
-        await task
-    claim = harness.service.report_prune_action(
-        {
-            "run_id": started["run_id"],
-            "action_token": action["action_token"],
-            "phase": "claim",
-            "action": "repoint_shortcut",
-            "app_id": app_id,
-            "target_rom_id": 2,
-        }
-    )
-    with pytest.raises(StaleAction):
-        await claim
-    complete = harness.service.report_prune_action(
-        {
-            "run_id": started["run_id"],
-            "action_token": action["action_token"],
-            "phase": "complete",
-            "success": True,
-            "message": "done",
-        }
-    )
-    with pytest.raises(StaleAction):
-        await complete
-
-    # The committed repoint is reported, not discarded as if it never happened.
-    complete = [payload for name, payload in harness.events.events if name == "prune_complete"][-1]
-    assert complete["reason"] == "cancelled"
-    assert any(result.get("committed_action") == "repoint_shortcut" for result in complete["results"])
 
 
 @pytest.mark.asyncio
@@ -1052,15 +974,11 @@ async def test_cancel_after_the_run_finished_is_refused_not_crashed(harness):
 
 @pytest.mark.asyncio
 async def test_bundle_is_named_after_the_game_it_removes(harness):
-    app_id = 0x80000001
-    _seed(harness.uow, _rom(1, fetch="old", group="g", app_id=app_id), _rom(2, fetch="new", group="g"))
+    _seed(harness.uow, _rom(1, fetch="old", group="g"), _rom(2, fetch="new", group="g"))
     harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
     harness.romm.outcomes[2] = [{"id": 2}] * 3
     preview = await _preview(harness)
     await _start(harness, preview["preview_id"], create_recovery_bundle=True)
-    action = await _wait_action(harness, "repoint_shortcut")
-    await _claim_action(harness, action)
-    await _complete_action(harness, action)
     await _finish(harness)
 
     sealed = harness.recovery.sealed[0]
@@ -1070,13 +988,12 @@ async def test_bundle_is_named_after_the_game_it_removes(harness):
     assert re.fullmatch(r"Game-1_\d{4}-\d{2}-\d{2}_[A-Za-z0-9]{8}", sealed["bundle_id"])
 
     context = sealed["readme_context"]
-    roles = {game["rom_id"]: game["role"] for game in context["games"]}
-    # Both rows are named, and each says what this run does to it.
-    assert roles[1] == "removed by this cleanup"
-    assert roles[2] == "kept — recorded for context"
-    assert {game["name"] for game in context["games"]} == {"Game 1", "Game 2"}
-    # A repoint keeps the shortcut, so no Steam state is captured and the README
-    # must not offer rebuild instructions for a shortcut that still exists.
+    # The row is named, and says what this run does to it.
+    assert [(game["rom_id"], game["name"], game["role"]) for game in context["games"]] == [
+        (1, "Game 1", "removed by this cleanup")
+    ]
+    # The game has no shortcut, so no Steam state is captured and the README
+    # offers no rebuild instructions.
     assert "steam_app_id" not in context
 
 
@@ -1104,10 +1021,10 @@ async def test_successful_run_leaves_an_audit_trail_at_info(harness, caplog):
 
     with caplog.at_level(logging.INFO, logger="test-prune"):
         preview = await _preview(harness)
-        await _start(harness, preview["preview_id"], remove_fully_vanished=True)
+        started = await _start(harness, preview["preview_id"], remove_fully_vanished=True)
         await _finish(harness)
 
-    run_id = harness.service._release_run_id
+    run_id = started["run_id"]
     assert run_id
     audit = [record.message for record in caplog.records if record.levelno == logging.INFO]
     # Every line ties back to the run id, so one grep reconstructs the run.
@@ -1290,7 +1207,7 @@ async def test_nothing_to_do_blames_liveness_not_the_options_when_romm_was_unsur
         _rom(2, fetch="new", group="g"),
     )
     # 2 is live, so the group is not "fully uncertain" — but 1 never gets a
-    # verdict, which is what leaves delete_ids empty and no repoint target.
+    # verdict, which is what leaves delete_ids empty.
     harness.romm.outcomes[1] = [RommConnectionError("offline")]
     harness.romm.outcomes[2] = [{"id": 2}] * 3
     preview = await _preview(harness)
@@ -1315,7 +1232,7 @@ async def test_nothing_to_do_still_blames_the_options_when_liveness_was_certain(
     harness.romm.outcomes[2] = [{"id": 2}] * 3
     preview = await _preview(harness)
     # Every verdict is certain; the user's own options are what excluded the row.
-    await _start(harness, preview["preview_id"], remove_rows=False, repoint_shortcuts=False)
+    await _start(harness, preview["preview_id"], remove_rows=False)
     complete = await _finish(harness)
 
     assert complete["results"][0]["reason"] == "options_excluded"
@@ -1323,12 +1240,13 @@ async def test_nothing_to_do_still_blames_the_options_when_liveness_was_certain(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("remove_fully_vanished", [False, True])
-async def test_partially_live_group_repoints_and_removes_under_every_toggle(harness, remove_fully_vanished):
-    """A group with a live member must not depend on the whole-game option.
+async def test_a_partially_live_group_keeps_the_bound_vanished_version_under_every_toggle(
+    harness, remove_fully_vanished
+):
+    """A bound version gone from RomM whose game still has a live one is kept, shortcut and row.
 
-    F6 flipped remove_fully_vanished on by default, so this combination —
-    bound vanished row + live sibling, every toggle on — became the feature's
-    ordinary path. It was previously untested (#1570 F17).
+    The shortcut is the game while one of its versions is live; only the
+    version picker moves it, and the cleanup never does.
     """
     app_id = 0x80000001
     _seed(
@@ -1339,154 +1257,20 @@ async def test_partially_live_group_repoints_and_removes_under_every_toggle(harn
     harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
     harness.romm.outcomes[2] = [{"id": 2}] * 3
     preview = await _preview(harness)
-    await _start(
-        harness,
-        preview["preview_id"],
-        remove_fully_vanished=remove_fully_vanished,
-    )
-    action = await _wait_action(harness, "repoint_shortcut")
-    await _claim_action(harness, action)
-    await _complete_action(harness, action)
+    await _start(harness, preview["preview_id"], remove_fully_vanished=remove_fully_vanished)
     complete = await _finish(harness)
 
-    assert complete["removed_rom_ids"] == [1]
-    assert harness.uow.roms.get(1) is None
-    retained = harness.uow.roms.get(2)
-    assert retained is not None
-    assert retained.shortcut_app_id == app_id
+    assert complete["removed_rom_ids"] == []
+    assert complete["results"][0]["reason"] == "shortcut_version_kept"
+    kept = harness.uow.roms.get(1)
+    assert kept is not None
+    assert kept.shortcut_app_id == app_id
+    assert harness.uow.roms.get(2).shortcut_app_id is None
+    assert [name for name, _ in harness.events.events if name == "prune_action_required"] == []
 
 
 @pytest.mark.asyncio
-async def test_bound_live_group_repoints_then_deletes_old_row(harness):
-    app_id = 0x80000001
-    _seed(
-        harness.uow,
-        _rom(1, fetch="old", group="g", app_id=app_id),
-        _rom(2, fetch="new", group="g"),
-    )
-    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
-    harness.romm.outcomes[2] = [{"id": 2}] * 3
-    preview = await _preview(harness)
-    await _start(harness, preview["preview_id"])
-    action = await _wait_action(harness, "repoint_shortcut")
-    assert action["preview_id"] == preview["preview_id"]
-    assert action["target_rom_id"] == 2
-    assert (await _claim_action(harness, action))["success"] is True
-    accepted = await _complete_action(harness, action)
-    assert accepted["success"] is True
-    duplicate = await harness.service.report_prune_action(
-        {
-            "phase": "complete",
-            "run_id": action["run_id"],
-            "action_token": action["action_token"],
-            "success": True,
-            "message": "late duplicate",
-        }
-    )
-    assert duplicate["ignored"] is True
-    complete = await _finish(harness)
-    assert complete["publication_required"] is True
-    assert complete["removed_rom_ids"] == [1]
-    assert harness.uow.roms.get(1) is None
-    assert harness.uow.roms.get(2).shortcut_app_id == app_id
-
-
-async def _run_a_repoint_to_its_end_without_its_completion(harness: Harness) -> None:
-    app_id = 0x80000001
-    _seed(
-        harness.uow,
-        _rom(1, fetch="old", group="g", app_id=app_id),
-        _rom(2, fetch="new", group="g"),
-    )
-    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
-    harness.romm.outcomes[2] = [{"id": 2}] * 3
-    preview = await _preview(harness)
-    await _start(harness, preview["preview_id"])
-    action = await _wait_action(harness, "repoint_shortcut")
-    assert (await _claim_action(harness, action))["success"] is True
-    assert (await _complete_action(harness, action))["success"] is True
-    task = harness.service._task
-    assert task is not None
-    await task
-
-
-async def _run_a_repoint_to_its_end(harness: Harness) -> dict[str, Any]:
-    await _run_a_repoint_to_its_end_without_its_completion(harness)
-    return [payload for name, payload in harness.events.events if name == "prune_complete"][-1]
-
-
-@pytest.mark.asyncio
-async def test_a_completion_that_needs_publication_is_leased_while_the_run_claim_still_holds(harness, monkeypatch):
-    """No cleanup can start between the run's claim and the lease its publication runs under."""
-    registered: set[str] = set()
-    runs_at_lease: list[tuple[str, set[str]]] = []
-    register_run = harness.conflicts.register_run
-    release_run = harness.conflicts.release_run
-    acquire = harness.conflicts.acquire_lease
-
-    def recording_register_run(run_id: str) -> None:
-        registered.add(run_id)
-        register_run(run_id)
-
-    def recording_release_run(run_id: str) -> None:
-        registered.discard(run_id)
-        release_run(run_id)
-
-    async def recording_acquire(key: str) -> str:
-        runs_at_lease.append((key, set(registered)))
-        return await acquire(key)
-
-    monkeypatch.setattr(harness.conflicts, "register_run", recording_register_run)
-    monkeypatch.setattr(harness.conflicts, "release_run", recording_release_run)
-    monkeypatch.setattr(harness.conflicts, "acquire_lease", recording_acquire)
-
-    complete = await _run_a_repoint_to_its_end(harness)
-
-    assert complete["publication_required"] is True
-    assert runs_at_lease == [("prune_complete", {complete["run_id"]})]
-    assert complete["prune_lease_token"].startswith("prune_complete:")
-    assert harness.conflicts.cleanup_running is False
-    assert harness.conflicts.conflicting_operations == 1
-    with pytest.raises(Refused) as refused:
-        await _start(harness, "no-such-preview")
-    assert refused.value.reason == "operation_active"
-    await harness.conflicts.release_lease(complete["prune_lease_token"])
-    assert harness.conflicts.conflicting_operations == 0
-    start = _start(harness, "no-such-preview")
-    with pytest.raises(Refused) as stale:
-        await start
-    assert stale.value.reason == "stale_preview"
-
-
-@pytest.mark.asyncio
-async def test_a_completion_nobody_heard_gives_its_lease_back(harness):
-    async def unheard(event: str, payload: object, /) -> bool:
-        return await harness.events(event, payload) and event != "prune_complete"
-
-    harness.service._executor._results._emit = unheard
-
-    complete = await _run_a_repoint_to_its_end(harness)
-
-    assert complete["prune_lease_token"].startswith("prune_complete:")
-    assert harness.conflicts.conflicting_operations == 0
-
-
-@pytest.mark.asyncio
-async def test_a_completion_whose_emit_raises_gives_its_lease_back(harness):
-    async def rejected(event: str, payload: object, /) -> bool:
-        if event == "prune_complete":
-            raise RuntimeError("transport rejected event")
-        return await harness.events(event, payload)
-
-    harness.service._executor._results._emit = rejected
-
-    await _run_a_repoint_to_its_end_without_its_completion(harness)
-
-    assert harness.conflicts.conflicting_operations == 0
-
-
-@pytest.mark.asyncio
-async def test_a_completion_that_needs_no_publication_carries_no_lease(harness):
+async def test_a_completion_carries_no_lease(harness):
     _seed(harness.uow, _rom(1, fetch="old"))
     harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
     preview = await _preview(harness)
@@ -1494,7 +1278,6 @@ async def test_a_completion_that_needs_no_publication_carries_no_lease(harness):
 
     complete = await _finish(harness)
 
-    assert "publication_required" not in complete
     assert "prune_lease_token" not in complete
     assert harness.conflicts.conflicting_operations == 0
 
@@ -1683,48 +1466,6 @@ async def test_preview_discloses_non_candidate_group_members(harness):
 
 
 @pytest.mark.asyncio
-async def test_repoint_option_is_independent_of_row_removal(harness):
-    app_id = 0x80000001
-    _seed(
-        harness.uow,
-        _rom(1, fetch="old", group="g", app_id=app_id),
-        _rom(2, fetch="new", group="g"),
-    )
-    harness.romm.outcomes[1] = [RommNotFoundError("gone")]
-    harness.romm.outcomes[2] = [{"id": 2}]
-    preview = await _preview(harness)
-    await _start(harness, preview["preview_id"], remove_rows=False)
-    action = await _wait_action(harness, "repoint_shortcut")
-    await _claim_action(harness, action)
-    await _complete_action(harness, action)
-    complete = await _finish(harness)
-    assert complete["results"][0]["status"] == "repointed"
-    assert harness.uow.roms.get(1) is not None
-    assert harness.uow.roms.get(2).shortcut_app_id == app_id
-
-
-@pytest.mark.asyncio
-async def test_repoint_uses_version_picker_filename_stem_ranking(harness):
-    app_id = 0x80000001
-    _seed(
-        harness.uow,
-        _rom(9, fetch="old", group="g", app_id=app_id, fs_name="Gone.gdi"),
-        _rom(1, fetch="new", group="g", fs_name="Game (Europe).zip"),
-        _rom(2, fetch="new", group="g", fs_name="Game.iso"),
-    )
-    harness.romm.outcomes[9] = [RommNotFoundError("gone")]
-    harness.romm.outcomes[1] = [{"id": 1}]
-    harness.romm.outcomes[2] = [{"id": 2}]
-    preview = await _preview(harness)
-    await _start(harness, preview["preview_id"], remove_rows=False)
-    action = await _wait_action(harness, "repoint_shortcut")
-    assert action["target_rom_id"] == 2
-    await _claim_action(harness, action)
-    await _complete_action(harness, action)
-    await _finish(harness)
-
-
-@pytest.mark.asyncio
 async def test_fully_dead_bound_group_with_drift_requires_recovery(harness):
     app_id = 0x80000001
     _seed(harness.uow, _rom(1, fetch="old", app_id=app_id))
@@ -1792,7 +1533,7 @@ async def test_group_exception_is_reported_and_unrelated_group_continues(harness
 @pytest.mark.parametrize("resume_after_claim", [False, True])
 async def test_claimed_action_result_is_attached_before_request_task_reraises_cancellation(harness, resume_after_claim):
     request_task = asyncio.create_task(
-        harness.service._request_action("run", "remove_shortcut", {"app_id": None}, None, None, {1})
+        harness.service._request_action("run", "remove_shortcut", {"app_id": None}, None, {1})
     )
     action = await _wait_action(harness, "remove_shortcut")
     assert (await _claim_action(harness, action))["success"] is True
@@ -2001,7 +1742,7 @@ async def test_post_seal_database_drift_after_shortcut_removal_is_explicit_parti
 async def test_an_action_nobody_claimed_in_time_is_recorded_as_a_timeout(harness, monkeypatch):
     monkeypatch.setattr(_ACTION_TIMEOUT_PATH, 0.01)
 
-    outcome = await harness.service._request_action("run", "remove_shortcut", {"app_id": None}, None, None, {1})
+    outcome = await harness.service._request_action("run", "remove_shortcut", {"app_id": None}, None, {1})
 
     assert outcome == ActionOutcome(
         success=False,
@@ -2013,7 +1754,7 @@ async def test_an_action_nobody_claimed_in_time_is_recorded_as_a_timeout(harness
 @pytest.mark.asyncio
 async def test_a_claimed_action_with_no_outcome_in_time_is_recorded_as_ambiguous(harness, monkeypatch):
     request_task = asyncio.create_task(
-        harness.service._request_action("run", "remove_shortcut", {"app_id": None}, None, None, {1})
+        harness.service._request_action("run", "remove_shortcut", {"app_id": None}, None, {1})
     )
     action = await _wait_action(harness, "remove_shortcut")
     assert (await _claim_action(harness, action))["success"] is True
@@ -2312,27 +2053,26 @@ async def test_shutdown_of_claimed_uncompleted_action_reports_ambiguity_and_halt
 
 
 @pytest.mark.asyncio
-async def test_action_claim_binds_discriminant_app_target_and_single_group_binding(harness):
+async def test_action_claim_binds_discriminant_app_and_single_group_binding(harness):
     app_id = 0x80000001
     _seed(
         harness.uow,
         _rom(1, fetch="old", group="g", app_id=app_id),
-        _rom(2, fetch="new", group="g"),
+        _rom(2, fetch="old", group="g"),
     )
     harness.romm.outcomes[1] = [RommNotFoundError("gone")]
-    harness.romm.outcomes[2] = [{"id": 2}]
+    harness.romm.outcomes[2] = [RommNotFoundError("gone")]
     preview = await _preview(harness)
-    await _start(harness, preview["preview_id"])
-    action = await _wait_action(harness, "repoint_shortcut")
+    await _start(harness, preview["preview_id"], remove_fully_vanished=True)
+    action = await _wait_action(harness, "remove_shortcut")
 
-    for field, value in (("action", "remove_shortcut"), ("app_id", app_id + 1), ("target_rom_id", 99)):
+    for field, value in (("action", "capture_shortcut_snapshot"), ("app_id", app_id + 1)):
         request = {
             "phase": "claim",
             "run_id": action["run_id"],
             "action_token": action["action_token"],
             "action": action["action"],
             "app_id": action["app_id"],
-            "target_rom_id": action["target_rom_id"],
         }
         request[field] = value
         mismatched = harness.service.report_prune_action(request)
@@ -2665,31 +2405,6 @@ async def test_claimed_removal_timeout_is_ambiguous_and_absent_retry_reconciles(
 
 
 @pytest.mark.asyncio
-async def test_claimed_repoint_timeout_is_an_explicit_ambiguous_partial(harness, monkeypatch):
-    app_id = 0x80000001
-    _seed(
-        harness.uow,
-        _rom(1, fetch="old", group="g", app_id=app_id),
-        _rom(2, fetch="new", group="g"),
-    )
-    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
-    harness.romm.outcomes[2] = [{"id": 2}] * 3
-    preview = await _preview(harness)
-    await _start(harness, preview["preview_id"])
-    action = await _wait_action(harness, "repoint_shortcut")
-    assert (await _claim_action(harness, action))["success"] is True
-    _expire_the_claimed_wait(monkeypatch)
-
-    complete = await _finish(harness)
-
-    result = complete["results"][0]
-    assert result["reason"] == "action_ambiguous"
-    assert result["action_ambiguous"] is True
-    assert result["committed_action"] == "repoint_shortcut"
-    assert result["target_rom_id"] == 2
-
-
-@pytest.mark.asyncio
 async def test_attempted_unconfirmed_removal_is_an_explicit_ambiguous_partial(harness):
     app_id = 0x80000001
     _seed(harness.uow, _rom(1, fetch="old", app_id=app_id))
@@ -2716,65 +2431,6 @@ async def test_attempted_unconfirmed_removal_is_an_explicit_ambiguous_partial(ha
     assert result["reason"] == "action_ambiguous"
     assert result["action_ambiguous"] is True
     assert harness.uow.roms.get(1).shortcut_app_id == app_id
-
-
-@pytest.mark.asyncio
-async def test_repoint_only_reprobes_vanished_source_after_recovery_and_action(harness):
-    app_id = 0x80000001
-    _seed(
-        harness.uow,
-        _rom(1, fetch="old", group="g", app_id=app_id),
-        _rom(2, fetch="new", group="g"),
-    )
-    harness.romm.outcomes[1] = [RommNotFoundError("gone"), RommNotFoundError("gone"), {"id": 1}]
-    harness.romm.outcomes[2] = [{"id": 2}] * 3
-    preview = await _preview(harness)
-    await _start(
-        harness,
-        preview["preview_id"],
-        remove_rows=False,
-        create_recovery_bundle=True,
-    )
-    action = await _wait_action(harness, "repoint_shortcut")
-    await _claim_action(harness, action)
-    await _complete_action(harness, action)
-
-    complete = await _finish(harness)
-
-    result = complete["results"][0]
-    assert result["status"] == "partial"
-    assert result["reason"] == "live"
-    assert result["committed_action"] == "repoint_shortcut"
-    assert result["target_rom_id"] == 2
-    assert harness.uow.roms.get(1) is not None
-
-
-@pytest.mark.asyncio
-async def test_mixed_repoint_reprobes_non_candidate_vanished_source_after_action(harness):
-    app_id = 0x80000001
-    _seed(
-        harness.uow,
-        _rom(1, fetch="new", group="g", app_id=app_id),
-        _rom(2, fetch="new", group="g"),
-        _rom(3, fetch="old", group="g"),
-    )
-    harness.romm.outcomes[1] = [RommNotFoundError("gone"), RommNotFoundError("gone"), {"id": 1}]
-    harness.romm.outcomes[2] = [{"id": 2}] * 3
-    harness.romm.outcomes[3] = [RommNotFoundError("gone")] * 3
-    preview = await _preview(harness)
-    await _start(harness, preview["preview_id"])
-    action = await _wait_action(harness, "repoint_shortcut")
-    await _claim_action(harness, action)
-    await _complete_action(harness, action)
-
-    complete = await _finish(harness)
-
-    result = complete["results"][0]
-    assert result["status"] == "partial"
-    assert result["reason"] == "live"
-    assert result["committed_action"] == "repoint_shortcut"
-    assert harness.romm.calls.count(1) == 3
-    assert harness.uow.roms.get(3) is not None
 
 
 @pytest.mark.asyncio
@@ -2851,126 +2507,6 @@ async def test_purge_without_a_steam_action_validates_sealed_sources_once_before
 
 
 @pytest.mark.asyncio
-async def test_repoint_revalidates_sealed_sources_before_any_steam_action(harness):
-    app_id = 0x80000001
-    _seed(
-        harness.uow,
-        _rom(1, fetch="old", group="g", app_id=app_id),
-        _rom(2, fetch="new", group="g"),
-    )
-    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
-    harness.romm.outcomes[2] = [{"id": 2}] * 3
-    harness.recovery.sources_valid = False
-    preview = await _preview(harness)
-    await _start(harness, preview["preview_id"], create_recovery_bundle=True)
-
-    complete = await _finish(harness)
-
-    result = complete["results"][0]
-    assert result["status"] == "skipped"
-    assert result["reason"] == "recovery_state_changed"
-    assert not any(name == "prune_action_required" for name, _payload in harness.events.events)
-    assert harness.switch_calls == []
-    assert harness.uow.roms.get(1).shortcut_app_id == app_id
-    assert harness.uow.roms.get(2).shortcut_app_id is None
-
-
-@pytest.mark.asyncio
-async def test_repoint_without_drift_never_bypasses_the_save_stranding_guard(harness):
-    app_id = 0x80000001
-    _seed(
-        harness.uow,
-        _rom(1, fetch="old", group="g", app_id=app_id),
-        _rom(2, fetch="new", group="g"),
-    )
-    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
-    harness.romm.outcomes[2] = [{"id": 2}] * 3
-    preview = await _preview(harness)
-    await _start(harness, preview["preview_id"], remove_rows=False)
-    action = await _wait_action(harness, "repoint_shortcut")
-    await _claim_action(harness, action)
-    await _complete_action(harness, action)
-
-    complete = await _finish(harness)
-
-    assert complete["results"][0]["status"] == "repointed"
-    assert harness.switch_calls == [{"app_id": app_id, "target_rom_id": 2, "allow_stranded": False}]
-
-
-@pytest.mark.asyncio
-async def test_drifted_repoint_bypasses_the_stranding_guard_only_after_the_bundle_sealed(harness):
-    app_id = 0x80000001
-    _seed(
-        harness.uow,
-        _rom(1, fetch="old", group="g", app_id=app_id),
-        _rom(2, fetch="new", group="g"),
-    )
-    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
-    harness.romm.outcomes[2] = [{"id": 2}] * 3
-    harness.drifted.add(1)
-    preview = await _preview(harness)
-    await _start(harness, preview["preview_id"], remove_rows=False, create_recovery_bundle=True)
-    action = await _wait_action(harness, "repoint_shortcut")
-    await _claim_action(harness, action)
-    await _complete_action(harness, action)
-
-    complete = await _finish(harness)
-
-    assert complete["results"][0]["status"] == "repointed"
-    assert harness.recovery.sealed
-    assert harness.switch_calls == [{"app_id": app_id, "target_rom_id": 2, "allow_stranded": True}]
-
-
-@pytest.mark.asyncio
-async def test_drifted_repoint_is_skipped_when_recovery_is_disabled(harness):
-    app_id = 0x80000001
-    _seed(
-        harness.uow,
-        _rom(1, fetch="old", group="g", app_id=app_id),
-        _rom(2, fetch="new", group="g"),
-    )
-    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
-    harness.romm.outcomes[2] = [{"id": 2}] * 3
-    harness.drifted.add(1)
-    preview = await _preview(harness)
-    await _start(harness, preview["preview_id"], remove_rows=False)
-
-    complete = await _finish(harness)
-
-    result = complete["results"][0]
-    assert result["status"] == "skipped"
-    assert result["reason"] == "unsynced_saves"
-    assert harness.switch_calls == []
-    assert harness.recovery.sealed == []
-    assert harness.uow.roms.get(1).shortcut_app_id == app_id
-
-
-@pytest.mark.asyncio
-async def test_drifted_repoint_is_skipped_when_the_recovery_bundle_fails(harness):
-    app_id = 0x80000001
-    _seed(
-        harness.uow,
-        _rom(1, fetch="old", group="g", app_id=app_id),
-        _rom(2, fetch="new", group="g"),
-    )
-    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
-    harness.romm.outcomes[2] = [{"id": 2}] * 3
-    harness.drifted.add(1)
-    harness.recovery.failure = OSError("bundle seal failed")
-    preview = await _preview(harness)
-    await _start(harness, preview["preview_id"], remove_rows=False, create_recovery_bundle=True)
-
-    complete = await _finish(harness)
-
-    result = complete["results"][0]
-    assert result["status"] == "failed"
-    assert result["reason"] == "recovery_failed"
-    assert harness.switch_calls == []
-    assert harness.recovery.sealed == []
-    assert harness.uow.roms.get(1).shortcut_app_id == app_id
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize("fully_dead", [False, True])
 async def test_unbound_group_plans_no_steam_action_and_takes_no_steam_path(harness, fully_dead):
     """No planned Steam action must mean no Steam mutation is reachable.
@@ -2979,9 +2515,9 @@ async def test_unbound_group_plans_no_steam_action_and_takes_no_steam_path(harne
     Steam action, on the grounds that nothing irreversible then happens before
     ``_finish_group``'s own pre-mutation check. That reasoning holds only while
     the skip condition and the two Steam branches stay in step, so this pins
-    the correspondence from both sides: with no bound shortcut, neither the
-    repoint branch (a live sibling to move to) nor the whole-game branch (every
-    member vanished) may reach the version switcher or raise a shortcut action.
+    the correspondence from both sides: with no bound shortcut, neither a group
+    with a live sibling nor the whole-game branch (every member vanished) may
+    raise a shortcut action.
     """
     _seed(harness.uow, _rom(1, fetch="old", group="g"), _rom(2, fetch="new", group="g"))
     harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
@@ -2992,7 +2528,6 @@ async def test_unbound_group_plans_no_steam_action_and_takes_no_steam_path(harne
     complete = await _finish(harness)
 
     assert complete["results"][0]["status"] != "failed"
-    assert harness.switch_calls == []
     assert [name for name, _ in harness.events.events if name == "prune_action_required"] == []
     assert harness.uow.roms.get(1) is None
     assert (harness.uow.roms.get(2) is None) is fully_dead
@@ -3021,73 +2556,6 @@ async def test_inline_purge_keeps_the_platform_stamp_and_still_denies_the_increm
     assert stamp.rom_count != 1
     # The retained stamp keeps bulk discovery available and claims nothing new.
     assert prune_candidate_ids(remaining, stamp) == set()
-
-
-@pytest.mark.asyncio
-async def test_release_wait_times_out_while_a_run_still_holds_the_claim(harness, monkeypatch):
-    monkeypatch.setattr("services.prune.service._RELEASE_TIMEOUT_SECONDS", 0.01)
-    _seed(harness.uow, _rom(1, fetch="old"))
-    with harness.uow:
-        harness.uow.rom_installs.save(
-            RomInstall.mark_installed(
-                rom_id=1,
-                file_path="/roms/dc/game.gdi",
-                rom_dir=None,
-                platform_slug="dc",
-                system="dc",
-                installed_at="now",
-            )
-        )
-    harness.installed_remover.installed_ids.add(1)
-    harness.installed_remover.block_ids.add(1)
-    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
-    preview = await _preview(harness)
-    started = await _start(harness, preview["preview_id"], remove_fully_vanished=True)
-    while not harness.installed_remover.entered.is_set():
-        await asyncio.sleep(0)
-
-    wait = harness.service.wait_for_prune_release(started["run_id"])
-    with pytest.raises(Refused) as refused:
-        await wait
-    assert (refused.value.reason, refused.value.message) == (
-        "release_timeout",
-        "Cleanup claim release was not observed in time.",
-    )
-
-    harness.installed_remover.release.set()
-    await _finish(harness)
-
-
-@pytest.mark.asyncio
-async def test_release_wait_returns_once_the_run_releases_the_claim(harness):
-    _seed(harness.uow, _rom(1, fetch="old"))
-    with harness.uow:
-        harness.uow.rom_installs.save(
-            RomInstall.mark_installed(
-                rom_id=1,
-                file_path="/roms/dc/game.gdi",
-                rom_dir=None,
-                platform_slug="dc",
-                system="dc",
-                installed_at="now",
-            )
-        )
-    harness.installed_remover.installed_ids.add(1)
-    harness.installed_remover.block_ids.add(1)
-    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
-    preview = await _preview(harness)
-    started = await _start(harness, preview["preview_id"], remove_fully_vanished=True)
-    while not harness.installed_remover.entered.is_set():
-        await asyncio.sleep(0)
-
-    waiter = asyncio.create_task(harness.service.wait_for_prune_release(started["run_id"]))
-    await asyncio.sleep(0)
-    assert waiter.done() is False
-
-    harness.installed_remover.release.set()
-    assert await waiter == {"success": True, "message": "Cleanup claim is released."}
-    assert harness.service.is_active() is False
-    await _finish(harness)
 
 
 @pytest.mark.asyncio
@@ -3247,7 +2715,7 @@ async def test_an_action_report_that_is_no_claim_or_completion_is_refused(harnes
 @pytest.mark.parametrize("phase", ["claim", "complete"])
 async def test_a_report_after_its_token_expired_is_stale_and_settles_nothing(harness, phase):
     request_task = asyncio.create_task(
-        harness.service._request_action("run", "remove_shortcut", {"app_id": None}, None, None, {1})
+        harness.service._request_action("run", "remove_shortcut", {"app_id": None}, None, {1})
     )
     action = await _wait_action(harness, "remove_shortcut")
     harness.clock.advance(61)
@@ -3269,7 +2737,7 @@ async def test_a_report_after_its_token_expired_is_stale_and_settles_nothing(har
 @pytest.mark.asyncio
 async def test_a_completion_before_its_claim_is_refused_and_settles_nothing(harness):
     request_task = asyncio.create_task(
-        harness.service._request_action("run", "remove_shortcut", {"app_id": None}, None, None, {1})
+        harness.service._request_action("run", "remove_shortcut", {"app_id": None}, None, {1})
     )
     action = await _wait_action(harness, "remove_shortcut")
     early = _complete_action(harness, action, message="removed")
@@ -3336,22 +2804,13 @@ _ACTION_FIELDS_MESSAGE = "Action success and message fields are required."
             "The Steam recovery snapshot was missing.",
             id="capture-without-snapshot",
         ),
-        pytest.param(
-            "repoint_shortcut",
-            {"success": True, "message": "repointed", "shortcut_absent": True},
-            "invalid_action_result",
-            "This action may not report an absent shortcut.",
-            id="repoint-reporting-absent",
-        ),
     ],
 )
 async def test_an_unreadable_completion_is_refused_and_the_action_still_awaits_its_outcome(
     harness, kind, fields, reason, message
 ):
     app_id = 0x80000001
-    request_task = asyncio.create_task(
-        harness.service._request_action("run", kind, {"app_id": app_id}, None, None, {1})
-    )
+    request_task = asyncio.create_task(harness.service._request_action("run", kind, {"app_id": app_id}, None, {1}))
     action = await _wait_action(harness, kind)
     await _claim_action(harness, action)
     report = harness.service.report_prune_action(

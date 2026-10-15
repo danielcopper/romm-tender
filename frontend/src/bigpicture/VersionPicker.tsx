@@ -41,7 +41,8 @@ import { detach } from "../utils/detach";
 import { mountPruneLeaseOwner, releasePruneLeasesByOwner } from "../utils/pruneLease";
 import { loadVersionList, fetchVersionCovers, executeVersionSwitch, isSelectable } from "../utils/versionSwitch";
 import type { RommDataChangedDetail, RommRomUninstalledDetail } from "../types/events";
-import type { DownloadCompleteEvent, DownloadFailedEvent } from "../types";
+import type { DownloadCompleteEvent, DownloadFailedEvent, SyncProgress } from "../types";
+import { isTerminalStage } from "../utils/syncProgress";
 import { openRemovedGamesCleanupModal } from "./RemovedGamesCleanup";
 
 interface VersionPickerProps {
@@ -132,8 +133,9 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
     load: (source?: "normal" | "vanished_refusal") => Promise<void>;
   } | null>(null);
 
-  // Initial load + refresh on a version switch (this or another surface). The
-  // effect owns the loader lifetime for this appId. All request sources share one
+  // Initial load + refresh on a version switch (this or another surface) and at
+  // the end of a library sync run. The effect owns the loader lifetime for this
+  // appId. All request sources share one
   // generation so only the latest completion can publish list/reachability state.
   useEffect(() => {
     mountPruneLeaseOwner(leaseOwner);
@@ -190,6 +192,12 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
     const onUninstalled = (e: Event) => onInstallChanged((e as CustomEvent<RommRomUninstalledDetail>).detail.rom_id);
     globalThis.addEventListener("romm_rom_uninstalled", onUninstalled);
 
+    // A library sync can find the bound version gone, or back, while this page
+    // is open; ask again when a run ends so the banner follows it.
+    const syncEnded = addEventListener<SyncProgress>("sync_progress", (frame) => {
+      if (!frame.running && isTerminalStage(frame.stage)) detach(load());
+    });
+
     return () => {
       cancelled = true;
       detach(releasePruneLeasesByOwner(leaseOwner));
@@ -198,6 +206,7 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
       removeEventListener("download_complete", dlComplete);
       removeEventListener("download_failed", dlFailed);
       globalThis.removeEventListener("romm_rom_uninstalled", onUninstalled);
+      removeEventListener("sync_progress", syncEnded);
     };
   }, [appId, leaseOwner]);
 

@@ -290,7 +290,7 @@ class AnsweredSaveDirectoryRepository(Protocol):
 
 
 class ArtworkSlotOutcomeRepository(Protocol):
-    """Persistence seam for the ``ArtworkSlotOutcome`` aggregate (per-ROM wide grid and logo outcomes).
+    """Persistence seam for the ``ArtworkSlotOutcome`` aggregate (per-ROM wide grid, logo and icon outcomes).
 
     Keyed by ``(rom_id, slot)``. (steamgrid.py, the one reader and writer)
     """

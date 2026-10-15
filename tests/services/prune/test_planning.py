@@ -7,7 +7,6 @@ import logging
 from typing import Any, cast
 
 import pytest
-from _factories import _make_conflict_rules
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.rom import Rom
@@ -53,7 +52,6 @@ def _rom(rom_id: int, *, group: str | None = "g", app_id: int | None = None, mai
 
 def _options(**overrides: Any) -> PruneOptions:
     values: dict[str, Any] = {
-        "repoint_shortcuts": True,
         "remove_rows": True,
         "remove_fully_vanished": True,
         "create_recovery_bundle": True,
@@ -69,7 +67,6 @@ def _planner(
     *,
     active_downloads: set[int] | None = None,
     drifted: bool = False,
-    settings: dict[str, Any] | None = None,
 ) -> tuple[GroupPlanner, _FakeLiveness]:
     uow = FakeUnitOfWork()
     with uow:
@@ -85,14 +82,11 @@ def _planner(
         config=GroupPlannerConfig(
             loop=asyncio.get_running_loop(),
             logger=logging.getLogger("test"),
-            results=PruneResultReporter(
-                config=PruneResultReporterConfig(emit=_noop_emit, conflict_rules=_make_conflict_rules())
-            ),
+            results=PruneResultReporter(config=PruneResultReporterConfig(emit=_noop_emit)),
             registry=PruneRegistry(config=PruneRegistryConfig(uow_factory=FakeUnitOfWorkFactory(uow))),
             liveness=cast("Any", liveness),
             active_downloads=lambda: active_downloads or set(),
             drift_probe=drift_probe,
-            settings=settings if settings is not None else {},
         )
     )
     return planner, liveness
@@ -174,7 +168,7 @@ class TestRefusals:
         result, _ = await _plan(
             rows,
             {1: "live", 2: "uncertain"},
-            options=_options(remove_rows=False, remove_fully_vanished=False, repoint_shortcuts=False),
+            options=_options(remove_rows=False, remove_fully_vanished=False),
         )
         assert not isinstance(result, GroupPlan)
         assert result["reason"] == "liveness_uncertain"
@@ -195,37 +189,28 @@ class TestPlans:
         assert plan.delete_ids == {1}
         assert plan.fully_dead is True
         assert plan.whole_game_action is True
-        assert plan.target_id is None
         assert plan.app_id == 0x8001
         assert plan.bound_row is not None
         assert plan.bound_row.rom_id == 1
 
-    async def test_a_vanished_bound_row_with_a_live_sibling_plans_a_repoint(self):
-        rows = [_rom(1, app_id=0x8001), _rom(2, main=True)]
-        plan, _ = await _plan(rows, {1: "vanished", 2: "live"})
-
-        assert isinstance(plan, GroupPlan)
-        assert plan.target_id == 2
-        assert plan.whole_game_action is False
-        assert plan.fully_dead is False
-
-    async def test_the_bound_row_is_kept_when_a_live_sibling_has_nowhere_to_repoint(self):
-        """Deleting the row that owns the shortcut would strand a live game."""
+    async def test_a_vanished_bound_row_with_a_live_sibling_is_kept_where_it_is(self):
+        """The shortcut is the game while it has a live version; only the user moves it."""
         rows = [_rom(1, app_id=0x8001), _rom(2, main=True), _rom(3)]
-        plan, _ = await _plan(
-            rows, {1: "vanished", 2: "live", 3: "vanished"}, options=_options(repoint_shortcuts=False)
-        )
+        plan, _ = await _plan(rows, {1: "vanished", 2: "live", 3: "vanished"})
 
         assert isinstance(plan, GroupPlan)
-        assert plan.target_id is None
         assert plan.delete_ids == {3}, "the bound row is spared, the other confirmed-gone row is not"
+        assert plan.whole_game_action is False
 
     async def test_sparing_the_bound_row_can_leave_nothing_to_do(self):
         rows = [_rom(1, app_id=0x8001), _rom(2, main=True)]
-        result, _ = await _plan(rows, {1: "vanished", 2: "live"}, options=_options(repoint_shortcuts=False))
+        result, _ = await _plan(rows, {1: "vanished", 2: "live"})
 
         assert not isinstance(result, GroupPlan)
-        assert result["reason"] == "options_excluded"
+        assert (result["reason"], result["message"]) == (
+            "shortcut_version_kept",
+            "The version this game's shortcut is on is kept while another version is on RomM; switch versions first.",
+        )
 
     async def test_drift_rides_the_plan_when_a_bundle_will_be_sealed(self):
         rows = [_rom(1, app_id=0x8001)]
@@ -246,31 +231,6 @@ class TestPlans:
         rows = [_rom(1, app_id=0x8001), _rom(2)]
         _, ledger = await _plan(rows, {1: "vanished", 2: "vanished"})
         assert sorted(row.rom_id for row in ledger.rows) == [1, 2]
-
-
-class TestNoLiveDefault:
-    async def test_a_group_whose_live_rows_yield_no_default_is_skipped(self, monkeypatch):
-        rows = [_rom(1, app_id=0x8001), _rom(2)]
-        monkeypatch.setattr("services.prune.planning.natural_default", lambda *_args, **_kwargs: None)
-
-        result, _ = await _plan(rows, {1: "vanished", 2: "live"})
-
-        assert not isinstance(result, GroupPlan)
-        assert result["reason"] == "no_live_default"
-
-    async def test_the_configured_region_preference_reaches_the_resolver(self, monkeypatch):
-        seen: list[str] = []
-
-        def _spy(_rows, _live, preferred_region):
-            seen.append(preferred_region)
-            return 2
-
-        monkeypatch.setattr("services.prune.planning.natural_default", _spy)
-        rows = [_rom(1, app_id=0x8001), _rom(2)]
-
-        await _plan(rows, {1: "vanished", 2: "live"}, settings={"preferred_region": "Europe"})
-
-        assert seen == ["Europe"]
 
 
 @pytest.mark.parametrize("status", ["live", "uncertain"])

@@ -1,29 +1,10 @@
 import { logError, reportPruneAction } from "../api/backend";
-import type {
-  CompletePruneActionRequest,
-  PruneSteamSnapshot,
-  ReportPruneActionRequest,
-  SwitchVersionSuccess,
-} from "../api/backend";
-import {
-  getAppDetails,
-  isRomMShortcutDetails,
-  removeShortcutConfirmedOutcome,
-  setLaunchOptionsConfirmed,
-} from "./steamShortcuts";
+import type { CompletePruneActionRequest, PruneSteamSnapshot, ReportPruneActionRequest } from "../api/backend";
+import { getAppDetails, isRomMShortcutDetails, removeShortcutConfirmedOutcome } from "./steamShortcuts";
 import { withTimeout } from "./withTimeout";
 
 type PruneAction =
   | { run_id: string; action_token: string; action: "capture_shortcut_snapshot"; app_id: number }
-  | {
-      run_id: string;
-      action_token: string;
-      action: "repoint_shortcut";
-      app_id: number;
-      target_rom_id: number;
-      launch_options: string;
-      target_installed: boolean;
-    }
   | {
       run_id: string;
       action_token: string;
@@ -70,17 +51,10 @@ function isPruneAction(value: unknown): value is PruneAction {
     return false;
   }
   if (item.action === "capture_shortcut_snapshot") return true;
-  if (item.action === "remove_shortcut") {
-    return (
-      item.expected_snapshot === undefined ||
-      (item.expected_snapshot !== null && typeof item.expected_snapshot === "object")
-    );
-  }
   return (
-    item.action === "repoint_shortcut" &&
-    typeof item.target_rom_id === "number" &&
-    typeof item.launch_options === "string" &&
-    typeof item.target_installed === "boolean"
+    item.action === "remove_shortcut" &&
+    (item.expected_snapshot === undefined ||
+      (item.expected_snapshot !== null && typeof item.expected_snapshot === "object"))
   );
 }
 
@@ -150,7 +124,6 @@ function claimAction(action: PruneAction): Promise<boolean> {
     action_token: action.action_token,
     action: action.action,
     app_id: action.app_id,
-    target_rom_id: action.action === "repoint_shortcut" ? action.target_rom_id : null,
   });
 }
 
@@ -193,34 +166,6 @@ async function captureSnapshotReport(action: PruneAction): Promise<CompletePrune
     if (error instanceof Error && error.message === "Steam shortcut is absent") return shortcutAbsentReport(action);
     throw error;
   }
-}
-
-async function repointShortcutReport(
-  action: Extract<PruneAction, { action: "repoint_shortcut" }>,
-  generation: number,
-  attempt: SteamMutationAttempt,
-): Promise<CompletePruneActionRequest> {
-  const details = await getAppDetails(action.app_id);
-  if (!isRomMShortcutDetails(details)) throw new Error("The live shortcut is not owned by Tender");
-  assertCurrent(generation);
-  const result: SwitchVersionSuccess = {
-    success: true,
-    app_id: action.app_id,
-    rom_id: action.target_rom_id,
-    target_installed: action.target_installed,
-    launch_options: action.launch_options,
-  };
-  attempt.issued = true;
-  if (!(await setLaunchOptionsConfirmed(result.app_id, result.launch_options))) {
-    throw new Error("Steam did not confirm the target launch command");
-  }
-  return {
-    phase: "complete",
-    run_id: action.run_id,
-    action_token: action.action_token,
-    success: true,
-    message: "Shortcut repointed and launch command confirmed.",
-  };
 }
 
 async function removeShortcutReport(
@@ -268,8 +213,6 @@ async function executePruneAction(action: PruneAction, generation: number): Prom
     assertCurrent(generation);
     if (action.action === "capture_shortcut_snapshot") {
       report = await captureSnapshotReport(action);
-    } else if (action.action === "repoint_shortcut") {
-      report = await repointShortcutReport(action, generation, attempt);
     } else {
       report = await removeShortcutReport(action, generation, attempt);
     }

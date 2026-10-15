@@ -1,29 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as backend from "../api/backend";
 import { cancelPruneActions, handlePruneAction, snapshotBytes } from "./pruneActions";
-import {
-  getAppDetails,
-  isRomMShortcutDetails,
-  removeShortcutConfirmedOutcome,
-  setLaunchOptionsConfirmed,
-} from "./steamShortcuts";
+import { getAppDetails, isRomMShortcutDetails, removeShortcutConfirmedOutcome } from "./steamShortcuts";
 
 vi.mock("./steamShortcuts", () => ({
   getAppDetails: vi.fn(),
   isRomMShortcutDetails: vi.fn(),
   removeShortcutConfirmedOutcome: vi.fn(),
-  setLaunchOptionsConfirmed: vi.fn(),
 }));
 
 describe("handlePruneAction", () => {
   beforeEach(() => {
     vi.mocked(backend.reportPruneAction).mockReset();
-    vi.mocked(backend.switchVersion).mockReset();
-    vi.mocked(backend.fetchCoverBase64).mockReset();
     vi.mocked(getAppDetails).mockReset();
     vi.mocked(isRomMShortcutDetails).mockReset();
     vi.mocked(removeShortcutConfirmedOutcome).mockReset();
-    vi.mocked(setLaunchOptionsConfirmed).mockReset();
     vi.mocked(backend.reportPruneAction).mockResolvedValue({ success: true, message: "accepted" });
     vi.mocked(isRomMShortcutDetails).mockReturnValue(true);
     vi.mocked(getAppDetails).mockResolvedValue({
@@ -190,47 +181,6 @@ describe("handlePruneAction", () => {
     ).toMatchObject({ success: false, message: expect.stringContaining("unavailable") });
   });
 
-  it("confirms the exact repoint launch command and defers writer side effects until completion", async () => {
-    vi.mocked(backend.switchVersion).mockResolvedValue({
-      success: true,
-      app_id: 9001,
-      rom_id: 8,
-      target_installed: true,
-      launch_options: "target-command",
-    });
-    vi.mocked(setLaunchOptionsConfirmed).mockResolvedValue(true);
-    vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: "cover" });
-    const setArtwork = vi.fn().mockResolvedValue(undefined);
-    vi.stubGlobal("SteamClient", { Apps: { SetCustomArtworkForApp: setArtwork } });
-    vi.mocked(getAppDetails).mockResolvedValue({ strShortcutExe: "/tender/bin/tender-rom-launcher" });
-    const changed = vi.fn();
-    globalThis.addEventListener("romm_data_changed", changed);
-
-    await handlePruneAction({
-      run_id: "run-1",
-      action_token: "token-2",
-      action: "repoint_shortcut",
-      app_id: 9001,
-      target_rom_id: 8,
-      launch_options: "target-command",
-      target_installed: true,
-    });
-
-    expect(backend.switchVersion).not.toHaveBeenCalled();
-    expect(setLaunchOptionsConfirmed).toHaveBeenCalledWith(9001, "target-command");
-    expect(setArtwork).not.toHaveBeenCalled();
-    expect(backend.fetchCoverBase64).not.toHaveBeenCalled();
-    expect(changed).not.toHaveBeenCalled();
-    expect(backend.reportPruneAction).toHaveBeenCalledWith({
-      phase: "complete",
-      run_id: "run-1",
-      action_token: "token-2",
-      success: true,
-      message: "Shortcut repointed and launch command confirmed.",
-    });
-    globalThis.removeEventListener("romm_data_changed", changed);
-  });
-
   it("reports shortcut-removal confirmation failure instead of finalizing", async () => {
     vi.mocked(removeShortcutConfirmedOutcome).mockResolvedValue({ status: "attempted_unconfirmed" });
 
@@ -391,44 +341,28 @@ describe("handlePruneAction", () => {
     );
   });
 
-  it.each(["remove_shortcut", "repoint_shortcut"] as const)(
-    "reads ownership after the %s claim resolves",
-    async (kind) => {
-      let resolveClaim: ((value: { success: true; message: string }) => void) | undefined;
-      vi.mocked(backend.reportPruneAction).mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveClaim = resolve;
-          }),
-      );
-      vi.mocked(removeShortcutConfirmedOutcome).mockResolvedValue({ status: "confirmed" });
-      vi.mocked(setLaunchOptionsConfirmed).mockResolvedValue(true);
-      const action =
-        kind === "remove_shortcut"
-          ? ({ run_id: "run-1", action_token: `token-${kind}`, action: kind, app_id: 9001 } as const)
-          : ({
-              run_id: "run-1",
-              action_token: `token-${kind}`,
-              action: kind,
-              app_id: 9001,
-              target_rom_id: 8,
-              launch_options: "target-command",
-              target_installed: true,
-            } as const);
-      const pending = handlePruneAction(action);
-      await vi.waitFor(() => expect(resolveClaim).toBeDefined());
-      vi.mocked(isRomMShortcutDetails).mockReturnValue(false);
-      resolveClaim?.({ success: true, message: "claimed" });
-      await pending;
+  it.each(["remove_shortcut"] as const)("reads ownership after the %s claim resolves", async (kind) => {
+    let resolveClaim: ((value: { success: true; message: string }) => void) | undefined;
+    vi.mocked(backend.reportPruneAction).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveClaim = resolve;
+        }),
+    );
+    vi.mocked(removeShortcutConfirmedOutcome).mockResolvedValue({ status: "confirmed" });
+    const action = { run_id: "run-1", action_token: `token-${kind}`, action: kind, app_id: 9001 } as const;
+    const pending = handlePruneAction(action);
+    await vi.waitFor(() => expect(resolveClaim).toBeDefined());
+    vi.mocked(isRomMShortcutDetails).mockReturnValue(false);
+    resolveClaim?.({ success: true, message: "claimed" });
+    await pending;
 
-      expect(getAppDetails).toHaveBeenCalledTimes(1);
-      expect(removeShortcutConfirmedOutcome).not.toHaveBeenCalled();
-      expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();
-      expect(backend.reportPruneAction).toHaveBeenLastCalledWith(
-        expect.objectContaining({ phase: "complete", success: false, message: expect.stringContaining("not owned") }),
-      );
-    },
-  );
+    expect(getAppDetails).toHaveBeenCalledTimes(1);
+    expect(removeShortcutConfirmedOutcome).not.toHaveBeenCalled();
+    expect(backend.reportPruneAction).toHaveBeenLastCalledWith(
+      expect.objectContaining({ phase: "complete", success: false, message: expect.stringContaining("not owned") }),
+    );
+  });
 
   it("reports ambiguity safely when every completion attempt is lost after Steam removal", async () => {
     vi.mocked(removeShortcutConfirmedOutcome).mockResolvedValue({ status: "confirmed" });
@@ -501,20 +435,26 @@ describe("handlePruneAction", () => {
     vi.useRealTimers();
   });
 
-  it("rejects an unknown runtime discriminant without claiming or mutating", async () => {
-    const log = vi.spyOn(backend, "logError").mockImplementation(() => {});
+  it.each(["future_destructive_action", "repoint_shortcut"])(
+    "rejects the runtime discriminant %s without claiming or mutating",
+    async (action) => {
+      const log = vi.spyOn(backend, "logError").mockImplementation(() => {});
 
-    await handlePruneAction({
-      run_id: "run-1",
-      action_token: "token-unknown",
-      action: "future_destructive_action",
-      app_id: 9001,
-    } as never);
+      await handlePruneAction({
+        run_id: "run-1",
+        action_token: `token-${action}`,
+        action,
+        app_id: 9001,
+        target_rom_id: 8,
+        launch_options: "target-command",
+        target_installed: true,
+      } as never);
 
-    expect(backend.reportPruneAction).not.toHaveBeenCalled();
-    expect(removeShortcutConfirmedOutcome).not.toHaveBeenCalled();
-    expect(log).toHaveBeenCalledWith("Ignored an invalid prune action event.");
-  });
+      expect(backend.reportPruneAction).not.toHaveBeenCalled();
+      expect(removeShortcutConfirmedOutcome).not.toHaveBeenCalled();
+      expect(log).toHaveBeenCalledWith("Ignored an invalid prune action event.");
+    },
+  );
 });
 
 describe("snapshotBytes", () => {

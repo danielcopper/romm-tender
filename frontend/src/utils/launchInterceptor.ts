@@ -31,6 +31,7 @@ import {
   probeReachability,
   preLaunchSync,
   checkLocalDrift,
+  getVersionList,
   logInfo,
   logError,
 } from "../api/backend";
@@ -58,6 +59,7 @@ import { tellStrandedPress } from "./strandedPanelStore";
 import { strandedPanelSentence } from "./strandedPanelWording";
 import { TimeoutError, boundedOr, rethrowTimeout, withTimeout } from "./withTimeout";
 import { announceSaveSync } from "./saveSyncEvents";
+import { boundAvailabilityOf, type BoundAvailability } from "./vanishedBinding";
 
 /**
  * The five decisions the funnel has to put to the user, as questions rather than
@@ -376,6 +378,26 @@ export const FIRST_CONTACT_DEADLINE_MS = 5000;
 const NOT_RESPONDING_TOAST_BODY = "Tender isn't responding — started without syncing saves.";
 
 /**
+ * Why a start of a version that is not installed is refused. A press from the
+ * library grid may come before the game page ever asked RomM about the bound
+ * version, so this asks the same question the version picker does; an answer
+ * that establishes nothing keeps the download sentence.
+ */
+async function notInstalledSentence(appId: number): Promise<string> {
+  let availability: BoundAvailability = "live";
+  try {
+    availability = boundAvailabilityOf(await withTimeout(getVersionList(appId), SERVER_CALL_LIMIT_MS));
+  } catch (e) {
+    logError(`Launch interceptor: version list for appId=${appId} unavailable: ${e}`);
+  }
+  if (availability === "game_gone") return "This game is no longer available on RomM.";
+  if (availability === "version_gone") {
+    return "This version is no longer available on RomM. Choose another version on its game page.";
+  }
+  return "ROM not downloaded. Download it from its game page first.";
+}
+
+/**
  * The ROM a cancelled start belongs to and whether it is installed, or `null`
  * for an appId the map does not know even after one refresh. Why an owned
  * appId can be missing from the map: `docs/architecture/save-file-sync-architecture.md`,
@@ -467,9 +489,9 @@ export function registerLaunchInterceptor(prompts: LaunchPrompts): void {
             }
 
             // The funnel assumes an installed ROM. Not installed → hard block
-            // (no relaunch): the ROM is gone.
+            // (no relaunch).
             if (!rom.installed) {
-              showToast("ROM not downloaded. Download it from its game page first.");
+              showToast(await notInstalledSentence(appId));
               return;
             }
 

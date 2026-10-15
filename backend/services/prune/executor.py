@@ -39,7 +39,6 @@ if TYPE_CHECKING:
     from domain.rom import Rom
     from services.protocols import (
         ActiveDownloadRomIdsFn,
-        ConflictRules,
         EventEmitter,
         InstalledRomFilesRemoverFn,
         PruneArtifactStore,
@@ -48,7 +47,6 @@ if TYPE_CHECKING:
         RommLivenessApi,
         SaveDriftProbeFn,
         SteamRecoveryStore,
-        VersionSwitcherFn,
     )
     from services.prune._models import ActionRequester, PruneOptions
     from services.prune.recovery import RecoveryCoordinator
@@ -57,11 +55,7 @@ if TYPE_CHECKING:
 
 def _steam_action_planned(plan: GroupPlan) -> bool:
     """Whether this group will ask the frontend to touch Steam at all."""
-    return (
-        plan.app_id is not None
-        and plan.bound_row is not None
-        and (plan.target_id is not None or plan.whole_game_action)
-    )
+    return plan.app_id is not None and plan.bound_row is not None and plan.whole_game_action
 
 
 @dataclass(frozen=True)
@@ -71,7 +65,6 @@ class PruneExecutorConfig:
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
     emit: EventEmitter
-    conflict_rules: ConflictRules
     romm_api: RommLivenessApi
     recovery_store: RecoveryBundleStore
     prune_artifacts: PruneArtifactStore
@@ -80,7 +73,6 @@ class PruneExecutorConfig:
     active_downloads: ActiveDownloadRomIdsFn
     drift_probe: SaveDriftProbeFn
     remove_installed_files: InstalledRomFilesRemoverFn
-    switch_version: VersionSwitcherFn
     settings: dict[str, Any]
     recovery: RecoveryCoordinator
     registry: PruneRegistry
@@ -93,9 +85,7 @@ class PruneExecutor:
     def __init__(self, *, config: PruneExecutorConfig) -> None:
         self._loop = config.loop
         self._logger = config.logger
-        self._results = PruneResultReporter(
-            config=PruneResultReporterConfig(emit=config.emit, conflict_rules=config.conflict_rules)
-        )
+        self._results = PruneResultReporter(config=PruneResultReporterConfig(emit=config.emit))
         self._recovery_store = config.recovery_store
         self._steam_recovery = config.steam_recovery
         self._active_downloads = config.active_downloads
@@ -124,7 +114,6 @@ class PruneExecutor:
                 liveness=self._liveness,
                 active_downloads=config.active_downloads,
                 drift_probe=config.drift_probe,
-                settings=config.settings,
             ),
         )
         self._steam = SteamActionRunner(
@@ -132,7 +121,6 @@ class PruneExecutor:
                 loop=config.loop,
                 results=self._results,
                 registry=config.registry,
-                switch_version=config.switch_version,
                 request_action=config.request_action,
             ),
         )
@@ -219,7 +207,7 @@ class PruneExecutor:
         """
         self._logger.info(
             f"Cleanup run {run_id} starting: {groups} group(s), {len(preview.candidate_ids)} candidate(s), "
-            f"scope={preview.scope}, repoint={options.repoint_shortcuts}, remove_rows={options.remove_rows}, "
+            f"scope={preview.scope}, remove_rows={options.remove_rows}, "
             f"remove_fully_vanished={options.remove_fully_vanished}, recovery={options.create_recovery_bundle}, "
             f"installed_content_selected={len(options.include_installed_rom_ids)}"
         )
@@ -358,9 +346,7 @@ class PruneExecutor:
         planned = await self._planner.plan(run_id, initial_rows, preview_candidate_ids, options, index, total, ledger)
         if not isinstance(planned, GroupPlan):
             return planned
-        bound_row = planned.bound_row
         app_id = planned.app_id
-        target_id = planned.target_id
 
         frontend_steam: dict[str, object] | None = None
         if planned.whole_game_action and app_id is not None and options.create_recovery_bundle:
@@ -369,9 +355,6 @@ class PruneExecutor:
                 return result
 
         recovery_ids = set(planned.delete_ids)
-        if target_id is not None and bound_row is not None:
-            recovery_ids.add(bound_row.rom_id)
-            recovery_ids.add(target_id)
         handle: RecoveryHandle | None = None
         if options.create_recovery_bundle:
             handle, result = await self._arm_recovery(
@@ -384,15 +367,11 @@ class PruneExecutor:
         if armed is not None:
             return armed
 
-        launch_options, committed_action, result = await self._mutate_steam(
+        committed_action, result = await self._remove_shortcut(
             run_id, planned, ledger, handle, frontend_steam, index, total
         )
         if result is not None:
             return result
-
-        repointed = await self._repoint_only_result(planned, ledger, handle, committed_action)
-        if repointed is not None:
-            return repointed
 
         return await self._finalizer.finish(
             run_id=run_id,
@@ -403,12 +382,10 @@ class PruneExecutor:
             recovery_ids=recovery_ids,
             index=index,
             total=total,
-            launch_options=launch_options,
             ledger=ledger,
-            vanished_source_id=bound_row.rom_id if target_id is not None and bound_row is not None else None,
         )
 
-    async def _mutate_steam(
+    async def _remove_shortcut(
         self,
         run_id: str,
         plan: GroupPlan,
@@ -417,55 +394,15 @@ class PruneExecutor:
         frontend_steam: dict[str, object] | None,
         index: int,
         total: int,
-    ) -> tuple[str | None, Literal["repoint_shortcut", "remove_shortcut"] | None, dict[str, Any] | None]:
-        """Run the one Steam mutation this group planned, if it planned one.
+    ) -> tuple[Literal["remove_shortcut"] | None, dict[str, Any] | None]:
+        """Have Steam remove the shortcut of a game whose every version is gone, if this group planned it.
 
-        Exactly one of the two is reachable: a repoint needs a live target to
-        move onto, a removal needs the whole game gone. A group with neither
-        changes nothing in Steam and falls straight through.
+        A group that removes no whole game changes nothing in Steam and falls
+        straight through.
         """
-        if plan.target_id is not None and plan.app_id is not None and plan.bound_row is not None:
-            return await self._steam.repoint(run_id, plan, ledger, handle, index, total)
         if plan.whole_game_action and plan.app_id is not None and plan.bound_row is not None:
-            committed, result = await self._steam.remove(run_id, plan, ledger, handle, frontend_steam, index, total)
-            return None, committed, result
-        return None, None, None
-
-    async def _repoint_only_result(
-        self,
-        plan: GroupPlan,
-        ledger: MutationLedger,
-        handle: RecoveryHandle | None,
-        committed_action: str | None,
-    ) -> dict[str, Any] | None:
-        """Terminal verdict for a group that moved a shortcut and removes nothing.
-
-        There is no cascade to run, so this is the last chance to notice that the
-        binding it just moved no longer holds — hence one more proof of the
-        source and the target before reporting success.
-        """
-        if plan.target_id is None or plan.delete_ids:
-            return None
-        bound_row = plan.bound_row
-        ids = {bound_row.rom_id, plan.target_id} if bound_row is not None else {plan.target_id}
-        final_proof = await self._liveness.probe_many(ids)
-        final_guard = liveness_guard(
-            final_proof, set(), plan.target_id, bound_row.rom_id if bound_row is not None else None
-        )
-        if final_guard is not None:
-            return self._results.ledger_result(ledger, final_guard[0], final_guard[1])
-        return self._results.group_result(
-            plan.rows,
-            "repointed",
-            None,
-            "Repointed the shortcut to the live Default.",
-            GroupOutcome(
-                app_id=plan.app_id,
-                bundle_path=handle.bundle_path if handle else None,
-                committed_action=committed_action,
-                target_rom_id=plan.target_id,
-            ),
-        )
+            return await self._steam.remove(run_id, plan, ledger, handle, frontend_steam, index, total)
+        return None, None
 
     async def _armed_to_mutate(
         self,
@@ -506,8 +443,6 @@ class PruneExecutor:
             recovery_ids,
             committed_action=None,
             app_id=plan.app_id,
-            target_id=plan.target_id,
-            launch_options=None,
         )
         if recovery_guard is None:
             return None
@@ -521,15 +456,8 @@ class PruneExecutor:
 
     async def _reprove_liveness(self, plan: GroupPlan) -> tuple[str, str] | None:
         """Re-probe the ids this group's plan turns on, and guard on the answers."""
-        proof_ids = set(plan.delete_ids)
-        vanished_source_id: int | None = None
-        if plan.target_id is not None:
-            proof_ids.add(plan.target_id)
-            if plan.bound_row is not None:
-                proof_ids.add(plan.bound_row.rom_id)
-                vanished_source_id = plan.bound_row.rom_id
-        refreshed = await self._liveness.probe_many(proof_ids)
-        return liveness_guard(refreshed, plan.delete_ids, plan.target_id, vanished_source_id)
+        refreshed = await self._liveness.probe_many(set(plan.delete_ids))
+        return liveness_guard(refreshed, plan.delete_ids)
 
     async def _arm_recovery(
         self,
@@ -615,8 +543,6 @@ class PruneExecutor:
         *,
         committed_action: str | None,
         app_id: int | None,
-        target_id: int | None,
-        launch_options: str | None,
     ) -> str | None:
         """Revalidate the sealed intended state before any irreversible action."""
         async with self._save_locks.stable_locks(recovery_ids) as inventory:
@@ -627,8 +553,6 @@ class PruneExecutor:
                 sorted(recovery_ids),
                 committed_action,
                 app_id,
-                target_id,
-                launch_options,
             )
             sources_match = await self._loop.run_in_executor(
                 None,

@@ -31,7 +31,7 @@ without restating it. The width mechanism's decision record is
 | `frontend/src/bigpicture/library/`                                                   | The Library tabs: `usePlatformsPage`, `PlatformsTab`, `PlatformDetail`; `useCollectionsPage`, `collectionKinds`, `CollectionsTab`, `CollectionsDetail`              |
 | `frontend/src/utils/deckyUiInternals.ts`                                             | Honest typing for `@decky/ui` values that come from a webpack probe: the frame's class names, `Tabs`, `ScrollPanel`, the controller glyph                           |
 | `frontend/src/utils/qamExpansion.ts`                                                 | The panel's width: the expand and hide messages, the injected `max-width` rule, and the four paths that clear both                                                  |
-| `frontend/src/bigpicture/layout/`                                                    | The wide-page frame: `WidePage` (the Back/title line, tabs, measured height, entry focus), `ScrollRegion`, `Columns`, `ListDetail`, `pane`                          |
+| `frontend/src/bigpicture/layout/`                                                    | The wide-page frame: `WidePage` (the Back/title line, tabs, measured height, entry focus on a swap), `ScrollRegion`, `Columns`, `ListDetail`, `pane`                |
 | `frontend/src/utils/entryFocus.ts`                                                   | Which stop a body opens on, a page's declaration when that stop is not it, the rule for a body that swaps under the reader, and the `.focus()` + `gpfocus` pair     |
 | `frontend/src/utils/syncRunView.ts`                                                  | `useSyncRunView` — the run in flight as a page renders it: stage label, coarse bar, position within the running unit, fine-detail line, estimate, and the run's end |
 | `frontend/src/utils/runUnitsStore.ts`                                                | The run's work queue, one row per unit: the plan's riders, how far the run has got, and what each unit's apply produced                                             |
@@ -493,6 +493,41 @@ first stop where it declared none, and by the frame itself for a wide one, which
 leaves it alone (see "Building blocks → Tabs"). The module-level `currentPage` survives a QAM remount, so reopening the
 QAM lands on the page that was open, and a wide page re-expands on mount.
 
+**Entry focus is placed on a page swap and never when the panel appears.** Steam mounts the panel as soon as the Quick
+Access strip highlights Tender's Quick Access entry, so focus placed on that mount would take the reader off the strip
+on the way past — Steam's own tabs and Decky's keep focus there until Right or A. So nothing places focus on the page
+the panel appears with: not the router, which would otherwise land on the stranded-panel card as well as on a page, not
+the wide-page frame's timer, and not Steam's tabbed page (`autoFocusContents` requests focus as the content mounts, so
+the frame passes it only on a swap). The router tells a page which case it is in through `EntryFocusOnMountContext`
+(`frontend/src/utils/entryFocus.ts`), `false` until the first swap. A remount of the panel is the panel appearing again
+and places nothing either.
+
+**Entering from the strip lands by Steam's own entry preference.** The router's `Focusable` around every page but Main,
+and Main's own root, carry `navEntryPreferPosition={PREFER_MARKED_CHILD}` — Steam's `PREFERRED_CHILD`, under which
+entering a node searches its descendants breadth first for the first one marked `preferredFocus`
+(`FindFocusableDescendant` in Steam's `sp.js`) and, finding none, takes Steam's default entry: the child it last had
+focus in, the first child on a fresh node. Main marks the menu's **Sync** entry, through a `Focusable` carrier around
+its `ButtonItem`, which takes no such prop; the cards Main shows instead of itself — the version error, the blocked
+migration — mark nothing. A wide page marks its body, so entry lands in the body rather than on the Back chip, and the
+body searches in turn: for the selected row on a list-and-detail page, which `ListDetail` marks, and otherwise wherever
+Steam's default entry into the body goes. **On a tabbed page — Library — the search finds Steam's own active tab
+first**: Steam marks it `preferredFocus` itself, and it sits shallower than any row of ours, so entering Library left
+open lands on the active tab rather than on a selected row. The declarations that serve a swap (`ENTRY_STOP_ATTR`) and
+the preference that serves entry from the strip mark the same stops on Main and on a list's selected row, and nothing
+holds the two equal.
+
+**The preference holds only until focus first enters the panel.** Steam's search for the marked node runs ahead of the
+child a node remembers, so a preference left in place would decide every later entry too: focus coming back from a
+closed dialog would land on the mark rather than on the button the dialog was opened from, and Down from a wide page's
+Back row on the selected row rather than where the reader last stood. So the router drops it — every
+`navEntryPreferPosition` and `preferredFocus` above — on the first focus event inside the panel's root, read off that
+node's own event rather than a document (the panel's code and its nodes live in two windows), and hands the answer down
+through `EntryPreferenceContext` (`frontend/src/utils/entryFocus.ts`). After that, Steam's remembered child decides as
+it did before. A new appearance of the panel — a remount — marks the stops again.
+
+All of this is read from Steam's code rather than seen on the device. Where Steam's Quick Access does not honour the
+preference, entry lands where Steam decides, and the panel still takes no focus as it appears.
+
 ## Building blocks
 
 ### Tabs
@@ -500,18 +535,20 @@ QAM lands on the page that was open, and a wide page re-expands on mount.
 Steam's tabbed page, switched with L1/R1, for two to four peer views of one page. Wide pages only: at 300 px the bumper
 glyphs overlap the labels, which is why the Library page's tab bar is hand-rolled today. Only Library has tabs.
 
-Entry focus lands in the content — the active tab's, so the list of a list-and-detail page — and the bumper glyphs
-follow, because Steam draws them only while gamepad focus is within the tabbed page. Back stays reachable by moving up.
+On a page opened by a swap, entry focus lands in the content — the active tab's, so the list of a list-and-detail page —
+and the bumper glyphs follow, because Steam draws them only while gamepad focus is within the tabbed page. Entering a
+tabbed page the panel appeared with lands on the active tab instead ("Pages"), which is within the tabbed page too. Back
+stays reachable by moving up.
 
-**Entry focus belongs to the frame, on every wide page.** `WidePage` marks its root as placing its own, so the panel's
-router leaves the page alone rather than placing focus of its own, which would land on the Back chip above the body.
-Where Steam's tabbed page renders, its `autoFocusContents` does the placing; everywhere else — an untabbed page, and a
-tabbed one whose `Tabs` probe missed, which the start-up check does not let a mounted panel reach (`Tabs` costs the
-panel, `frontend/src/boot/steamModules.ts`) — the frame places focus inside the body itself, by the router's own rule
-and on the same 50 ms delay: the area the body declared, or its first stop where it declared none. The delay is there
-because Steam's navigation resolves a focus pointer it retained across the page swap after the mount. Opening a page is
-the frame's moment and its only one: a page whose body changes while it stays open answers for that swap itself, by the
-same rule and under a condition of its own — the Sync page's left column is the one that does.
+**Entry focus belongs to the frame, on every wide page opened by a swap.** `WidePage` marks its root as placing its own,
+so the panel's router leaves the page alone rather than placing focus of its own, which would land on the Back chip
+above the body. Where Steam's tabbed page renders, its `autoFocusContents` does the placing; everywhere else — an
+untabbed page, and a tabbed one whose `Tabs` probe missed, which the start-up check does not let a mounted panel reach
+(`Tabs` costs the panel, `frontend/src/boot/steamModules.ts`) — the frame places focus inside the body itself, by the
+router's own rule and on the same 50 ms delay: the area the body declared, or its first stop where it declared none. The
+delay is there because Steam's navigation resolves a focus pointer it retained across the page swap after the mount.
+Opening a page is the frame's moment and its only one: a page whose body changes while it stays open answers for that
+swap itself, by the same rule and under a condition of its own — the Sync page's left column is the one that does.
 
 **The stop it picks is the first enabled focus stop in document order that contains no focus stop at all** — one rule,
 both widths. Document order rather than "the first button", because a page's first button is not its first row, and it
@@ -548,10 +585,11 @@ the first row selects the first row. Settings is opened on a named section by Ma
 declared a jump to any section but the first mounted it and then had it overwritten about 50 ms later, landing on
 Connections. A list opened with no section named loses nothing: it either selects its own first row, which is what the
 fallback would have picked, or selects nothing and so declares nothing (the Library page's platforms, which additionally
-are tabbed, so Steam places that focus and the frame places none). Library › Collections opens on its first row,
-Collections, and declares it anyway — but it is tabbed: wherever the panel mounts, Steam's tabbed page places the focus
-and the mark goes unread. The frame reads it only on its missed-`Tabs` branch, which the start-up check does not let a
-panel reach (`Tabs` costs the panel).
+are tabbed: a swap leaves the placing to Steam's tabbed page and the frame places none, and entering from the strip
+lands on Steam's active tab, "Pages"). Library › Collections opens on its first row, Collections, and declares it anyway
+— but it is tabbed: wherever a swap opens the page, Steam's tabbed page places the focus and the mark goes unread. The
+frame reads it only on its missed-`Tabs` branch, which the start-up check does not let a panel reach (`Tabs` costs the
+panel).
 
 **Downloads is unmoved** and declares nothing: it leads with its Back button, which is both the first stop and the first
 button, so the router's default already opens it there. **Data Management needs no declaration of its own** — it is a
@@ -956,13 +994,15 @@ nothing. The single exception is one conditional slot that exists only while the
 notice can carry a door too, and it comes and goes with its condition exactly as the slot does.** That is the whole
 rule, and everything below is what it costs and what it buys.
 
-**The panel opens on the menu's Sync entry**, which Main declares as its entry stop rather than letting the router's
-default land on the first row of the status block — the rows below state and do nothing, so opening on one spends the
-reader's first press. **What that costs is Steam's own scrolling**, and it is a real cost rather than a theoretical one:
-Steam scrolls the focused element into view, so on a Main tall enough to scroll — a notice or two, an active download —
-the panel opens part-way down, with the notices that wanted attention off the top. Main fits today with three status
-rows and a four-entry menu, so nothing scrolls; it is not defended against in code, because a rule that opened somewhere
-else depending on what is on screen is exactly what the declaration replaced. The mechanism is under "Building blocks".
+**Entering Main lands on the menu's Sync entry** rather than on the first row of the status block — the rows below state
+and do nothing, so landing on one spends the reader's first press. From the Quick Access strip it lands there through
+Steam's entry preference ("Pages"), and on a swap back from another page through Main's declaration of its entry stop
+("Building blocks → Tabs"). **What that costs is Steam's own scrolling**, and it is a real cost rather than a
+theoretical one: Steam scrolls the focused element into view, so on a Main tall enough to scroll — a notice or two, an
+active download — the panel opens part-way down, with the notices that wanted attention off the top. Main fits today
+with three status rows and a four-entry menu, so nothing scrolls; it is not defended against in code, because a rule
+that opened somewhere else depending on what is on screen is exactly what the declaration replaced. The mechanism is
+under "Building blocks".
 
 **The three status rows act on nothing.** Connection, Last sync and Library are `Field`s that carry no activate handler,
 and they stay `focusable` all the same — a region scrolls only by moving focus, so a row nobody can focus is a row
@@ -1340,13 +1380,11 @@ with RomM unreachable.
 
 The exclusion also means **`reachable_count` is not bounded below by `count`**: a _bound_ row the stamp's fetch did not
 return raises the shortcut count without raising the header, so a pane can read `2 on RomM · 3 in Steam` beside
-`Remove 4 shortcuts`. Two shapes reach it — a bound version deleted on RomM, in the gap before that run's stale-removal
-scan, and a collection-added row on an already-stamped platform, which commits with no generation, so the exclusion
-leaves out a row RomM still serves — and both heal at a sync that applies that platform: the second at the platform's
-commit, the first at the stale-removal scan of the run that opened it. A stopped run skips that scan, and later runs do
-not skip a platform that still holds such a bound row — they full-fetch it — so after a stop the first heals at the
-stale-removal scan of the first later run that completes. The direction is a conservative under-count, which is why it
-is recorded rather than guarded.
+`Remove 4 shortcuts`. Two shapes reach it — a bound version deleted on RomM, which the stale removal keeps bound, and a
+collection-added row on an already-stamped platform, which commits with no generation, so the exclusion leaves out a row
+RomM still serves. The second heals at the platform's next commit. The first lasts until the user switches the game to
+another version or removes the gone one with this cleanup; until then later runs full-fetch that platform rather than
+skip it. The direction is a conservative under-count, which is why it is recorded rather than guarded.
 
 **The BIOS ratio is not on the second line** — it was, and its width is what wrapped the line three times on a platform
 with a long name and a long core label. It is stated once instead, beside `BIOS FILES` eight pixels below, in the colour

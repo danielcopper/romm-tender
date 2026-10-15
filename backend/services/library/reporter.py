@@ -27,7 +27,7 @@ from domain.collection_label import steam_collection_key
 from domain.collection_name import fold_collection_name
 from domain.fetch_generation import prune_candidate_ids
 from domain.platform_names import decode_platform_names
-from domain.rom import Rom
+from domain.rom import DeliveryRoute, Rom
 from domain.rom_file import has_file_on_romm
 from domain.rom_metadata_mapping import build_rom_metadata
 from domain.sibling_resolution import reachable_rom_ids
@@ -58,9 +58,11 @@ if TYPE_CHECKING:
 
 
 # kv_config key for the offline ``platform_slug → display_name`` cache,
-# refreshed on every sync from the live work-queue. Read for the game-detail
-# page's platform name, and for the name a platform removal answers with, which
-# the frontend uses to find that platform's Steam collection.
+# refreshed on every sync from the live work-queue, plus the name already kept
+# for each platform outside it that a bound game is still on. Read for the
+# game-detail page's platform name, for the name a platform removal answers
+# with, which the frontend uses to find that platform's Steam collection, and
+# by the next sync to name the collection of a platform RomM no longer lists.
 _PLATFORM_NAMES_KEY = "platform_names"
 
 # How many of the newest sync runs ``get_sync_runs`` answers with — the run
@@ -149,9 +151,9 @@ class SyncReporter:
 
         Platform collections are grouped from the full ``roms`` table
         (every bound ROM, including ones an incremental sync skipped —
-        they remain rows), keyed by the platform's live display name
-        resolved from *platform_names* (the work-queue), falling back to
-        the slug when absent.
+        they remain rows), keyed by the platform's display name
+        resolved from *platform_names*, falling back to the slug when
+        absent.
 
         RomM collections keep the per-run membership accumulator (keyed by a
         collision-free ``(collection_kind, collection_id)`` identity, name in the
@@ -302,7 +304,9 @@ class SyncReporter:
         the row per ADR-0007 — never delete), revoke the skip of the
         platforms :meth:`finalize_per_unit_run` says to and delete the stamp of
         every collection whose member set holds an unbound ROM, (2) refresh the offline
-        ``platform_slug → display_name`` cache from the live work-queue, and
+        ``platform_slug → display_name`` cache — the live work-queue's names
+        plus each bound platform's kept name
+        (:meth:`_names_with_bound_platforms_kept`) — and
         (3) build the cross-unit collection mappings. The last-sync timestamp
         and the synced platform/collection lists live on the ``SyncRun``
         record :class:`SyncRunRecorder` writes — they are not persisted here.
@@ -326,14 +330,33 @@ class SyncReporter:
                 uow.platform_sync_state.revoke_skip(slug)
             uow.collection_sync_state.delete_intersecting(unbound_rom_ids)
 
-            uow.kv_config.set(_PLATFORM_NAMES_KEY, json.dumps(platform_names))
+            names = self._names_with_bound_platforms_kept(uow, platform_names)
+            uow.kv_config.set(_PLATFORM_NAMES_KEY, json.dumps(names))
 
             return self._build_collection_app_ids(
                 uow,
                 pending_platform_rom_ids,
                 pending_collection_memberships,
-                platform_names,
+                names,
             )
+
+    @staticmethod
+    def _names_with_bound_platforms_kept(uow: UnitOfWork, platform_names: dict[str, str]) -> dict[str, str]:
+        """*platform_names*, plus the cached name of every platform outside it that a bound row is still on.
+
+        A platform RomM no longer lists keeps its games, and its Steam collection
+        is found by this name: written over with the live map alone, the next
+        run would key that collection by the slug, and the frontend would remove
+        the old one. This runs on every finalize, a stopped run's included,
+        since each of them rewrites the cache.
+        """
+        kept = decode_platform_names(uow.kv_config.get(_PLATFORM_NAMES_KEY))
+        outside = {
+            rom.platform_slug
+            for rom in uow.roms.iter_all()
+            if rom.shortcut_app_id is not None and rom.platform_slug not in platform_names
+        }
+        return {**{slug: kept[slug] for slug in outside if slug in kept}, **platform_names}
 
     async def finalize_per_unit_run(
         self,
@@ -497,7 +520,13 @@ class SyncReporter:
     # ── Report unit results (per-unit pipeline) ──────────────────
 
     def _commit_unit_results_io(
-        self, rom_id_to_app_id, unit_roms, platform_stamp=None, collection_stamp=None, fetch_id=None
+        self,
+        rom_id_to_app_id,
+        unit_roms,
+        platform_stamp=None,
+        collection_stamp=None,
+        fetch_id=None,
+        delivered_through: DeliveryRoute | None = None,
     ):
         """Finalise artwork names, then persist EVERY fetched ROM of the chunk.
 
@@ -509,9 +538,9 @@ class SyncReporter:
         re-acked this cycle is never silently unbound.
 
         The frontend ack is **translated through any rebind** first: a rebind
-        entry is keyed by the vanished bound sibling (so the frontend reused its
-        shortcut), but the binding — and the finalised cover — move onto the
-        surviving representative named in ``bind_rom_id``.
+        entry is keyed by the bound sibling it moves off (so the frontend reused
+        its shortcut), but the binding — and the finalised cover — move onto the
+        same dump named in ``bind_rom_id``.
 
         ADR-0006 two-pass: cover-file RENAME is filesystem I/O so it runs FIRST
         (outside any UoW); the final paths are collected, then one short write
@@ -536,8 +565,8 @@ class SyncReporter:
         grid = self._steam_config.grid_dir()
         box = self._sync_state
 
-        # Translate the ack onto binding targets (rebind moves the binding off
-        # the vanished sibling onto its representative) and finalise the staged
+        # Translate the ack onto binding targets (a rebind moves the binding off
+        # the sibling it is keyed by onto the same dump) and finalise the staged
         # cover to ``{app_id}p.png``, keyed by the target rom_id.
         binding: dict[int, int] = {}
         finalized: dict[int, str] = {}
@@ -555,7 +584,9 @@ class SyncReporter:
         with self._uow_factory() as uow:
             for raw in unit_roms:
                 if "id" in raw:
-                    self._persist_synced_rom(uow, int(raw["id"]), binding, finalized, roms_by_id, fetch_id)
+                    self._persist_synced_rom(
+                        uow, int(raw["id"]), binding, finalized, roms_by_id, fetch_id, delivered_through
+                    )
             if platform_stamp is not None:
                 uow.platform_sync_state.save(platform_stamp)
             if collection_stamp is not None:
@@ -568,7 +599,9 @@ class SyncReporter:
             except Exception as e:
                 self._logger.error(f"Failed to set Steam Input config: {e}")
 
-    def _persist_synced_rom(self, uow, rom_id, binding, finalized, roms_by_id, fetch_id=None) -> None:
+    def _persist_synced_rom(
+        self, uow, rom_id, binding, finalized, roms_by_id, fetch_id=None, delivered_through=None
+    ) -> None:
         """Upsert one fetched ROM + its cached metadata into the open write UoW.
 
         Reads the built identity + version fields from ``pending_all_roms`` (the
@@ -607,6 +640,9 @@ class SyncReporter:
             return
         self._merge_locally_resolved_fields(rom, rom_id, built, finalized, existing)
         self._merge_fetch_generation(rom, fetch_id, existing)
+        route = delivered_through or (existing.delivered_through if existing is not None else None)
+        if route:
+            rom.record_delivery(route)
         uow.roms.save(rom)
 
         # Record the applied launch command for a binding TARGET this cycle (the
@@ -775,6 +811,7 @@ class SyncReporter:
         platform_stamp: PlatformSyncState | None = None,
         collection_stamp: CollectionSyncState | None = None,
         fetch_id: str | None = None,
+        delivered_through: DeliveryRoute | None = None,
     ):
         """Per-chunk commit: cover-path finalize then atomic ``roms`` + metadata upsert.
 
@@ -801,6 +838,10 @@ class SyncReporter:
         stamp records (#1504). Collection units and the late-ack path pass
         ``None``, leaving each row's existing generation untouched.
 
+        ``delivered_through`` names the kind of unit committing the chunk, which
+        each upserted row records (:meth:`Rom.record_delivery`). The late-ack
+        path passes ``None`` and leaves each row's existing route untouched.
+
         Records every bound appId in the shared box so the stale-removal scan
         excludes appIds this run committed, whichever path drove the commit —
         a new rom_id reusing an old appId must not look stale (#1036).
@@ -813,6 +854,7 @@ class SyncReporter:
             platform_stamp,
             collection_stamp,
             fetch_id,
+            delivered_through,
         )
         self._sync_state.committed_app_ids.update(int(aid) for aid in rom_id_to_app_id.values())
 

@@ -108,7 +108,6 @@ _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
             ),
             WaitReason.SAVE_SYNC,
         ),
-        "prune_complete": WaitReason.REMOVED_GAMES_CLEANUP,
         **dict.fromkeys(("migrate_retrodeck_files", "migration_relaunch_options"), WaitReason.RETRODECK_MIGRATION),
         **dict.fromkeys(
             (
@@ -180,6 +179,7 @@ READ_ONLY_CLAIMS: frozenset[str] = frozenset(
         "get_sgdb_resolution",
         "get_sgdb_slot_artwork",
         "refresh_save_status",
+        "refresh_sgdb_artwork",
         "test_connection",
     }
 )

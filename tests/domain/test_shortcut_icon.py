@@ -1,16 +1,19 @@
 """Tests for domain/shortcut_icon.py.
 
-Which shortcuts wait for an icon from the artwork job, and the two icons that are Tender's own.
+When a shortcut's icon slot is filled, and the two icons that are Tender's own.
 """
 
 from __future__ import annotations
 
+import pytest
 from _vendor import png
 
-from domain.shortcut_icon import LOGO_ICON_NAME, PLACEHOLDER_ICON_NAME, PLACEHOLDER_ICON_PNG, icon_worklist
+from domain.shortcut_icon import LOGO_ICON_NAME, PLACEHOLDER_ICON_NAME, PLACEHOLDER_ICON_PNG, is_icon_filled
 
-_PLACEHOLDER = f"/grid/{PLACEHOLDER_ICON_NAME}"
-_LOGO = f"/grid/{LOGO_ICON_NAME}"
+_GRID = "/home/deck/.steam/steam/userdata/111/config/grid"
+_OTHER_GRID = "/home/deck/.steam/steam/userdata/222/config/grid"
+_PLACEHOLDER = f"{_GRID}/{PLACEHOLDER_ICON_NAME}"
+_LOGO = f"{_GRID}/{LOGO_ICON_NAME}"
 
 
 class TestThePlaceholder:
@@ -23,31 +26,38 @@ class TestThePlaceholder:
         assert len(PLACEHOLDER_ICON_PNG) == 68
 
 
-class TestIconWorklist:
-    def test_takes_a_shortcut_with_no_icon_and_one_with_the_placeholder(self):
-        bound = {100: 1, 200: 2}
-        icons = {100: "", 200: _PLACEHOLDER}
-        assert icon_worklist(bound, icons) == [(1, 100), (2, 200)]
+class TestWhetherTheIconFillsItsSlot:
+    @pytest.mark.parametrize("icon", ["", _PLACEHOLDER, _LOGO], ids=["empty", "placeholder", "logo-icon"])
+    def test_an_empty_path_the_placeholder_and_the_logo_icon_are_stand_ins(self, icon):
+        assert not is_icon_filled(icon, _GRID, frozenset({PLACEHOLDER_ICON_NAME, LOGO_ICON_NAME}))
 
-    def test_takes_the_placeholder_another_steam_accounts_grid_directory_holds(self):
-        icons = {100: f"/home/deck/.steam/steam/userdata/222/config/grid/{PLACEHOLDER_ICON_NAME}"}
-        assert icon_worklist({100: 1}, icons) == [(1, 100)]
+    @pytest.mark.parametrize("name", [PLACEHOLDER_ICON_NAME, LOGO_ICON_NAME])
+    def test_a_stand_in_in_another_steam_accounts_grid_directory_is_one_too(self, name):
+        assert not is_icon_filled(f"/home/deck/.steam/steam/userdata/222/config/grid/{name}", _GRID, frozenset())
 
-    def test_leaves_a_file_whose_name_only_ends_like_the_placeholder(self):
-        assert icon_worklist({100: 1}, {100: f"/home/deck/my-{PLACEHOLDER_ICON_NAME}"}) == []
+    @pytest.mark.parametrize("name", [f"my-{PLACEHOLDER_ICON_NAME}", f"my-{LOGO_ICON_NAME}"])
+    def test_a_file_whose_name_only_ends_like_a_stand_in_fills_it(self, name):
+        assert is_icon_filled(f"/home/deck/{name}", _GRID, frozenset())
 
-    def test_leaves_the_logo_and_any_icon_set_by_hand(self):
-        bound = {100: 1, 200: 2}
-        icons = {100: _LOGO, 200: "/home/deck/Downloads/mine.png"}
-        assert icon_worklist(bound, icons) == []
+    def test_a_file_in_the_grid_directory_fills_it_while_it_is_there(self):
+        assert is_icon_filled(f"{_GRID}/100_icon.png", _GRID, frozenset({"100_icon.png"}))
 
-    def test_leaves_a_shortcut_the_file_does_not_hold_yet(self):
-        assert icon_worklist({100: 1}, {}) == []
+    def test_a_file_in_the_grid_directory_that_is_gone_leaves_it_empty(self):
+        assert not is_icon_filled(f"{_GRID}/100_icon.png", _GRID, frozenset({"100.png"}))
 
-    def test_leaves_a_shortcut_tender_does_not_manage(self):
-        assert icon_worklist({}, {100: ""}) == []
+    def test_the_grid_directory_is_matched_by_its_path_not_its_spelling(self):
+        assert not is_icon_filled(f"{_GRID}//./100_icon.png", f"{_GRID}/", frozenset())
 
-    def test_answers_in_rom_order(self):
-        bound = {300: 9, 100: 4, 200: 6}
-        icons = dict.fromkeys(bound, "")
-        assert icon_worklist(bound, icons) == [(4, 100), (6, 200), (9, 300)]
+    def test_a_file_in_the_grid_directory_is_left_alone_where_the_directory_could_not_be_listed(self):
+        assert is_icon_filled(f"{_GRID}/100_icon.png", _GRID, None)
+
+    def test_a_stand_in_still_waits_where_the_directory_could_not_be_listed(self):
+        assert not is_icon_filled(_PLACEHOLDER, _GRID, None)
+
+    @pytest.mark.parametrize(
+        "icon",
+        ["/home/deck/Downloads/mine.png", "/run/media/sd/icons/game.ico", f"{_OTHER_GRID}/100_icon.png"],
+        ids=["by-hand", "unmounted-drive", "another-steam-accounts-grid"],
+    )
+    def test_any_other_path_fills_it_whether_its_file_is_there_or_not(self, icon):
+        assert is_icon_filled(icon, _GRID, frozenset())

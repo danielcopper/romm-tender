@@ -578,14 +578,36 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `stamp_for_skip` — the query and the helper are each pinned alone and nothing joins them
 - **Where the library sync or the version picker's default resolves a representative, neither RomM's main-sibling leg
   nor the ranking picks a member RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the
-  sync's installed and existing-binding legs keep such a member; and a bound member without a file that is not installed
-  is rebound only in a complete view, only onto a sibling with a file, no shortcut of its own and an equal non-empty
-  `fs_name_no_ext`** — test + prompt-only — `tests/domain/test_sibling_resolution.py::TestMembersWithoutAFile`,
-  `tests/domain/test_sync_diff.py::TestCollapseMembersWithoutAFile` (the name, shortcut and partial-view cases) and
-  `tests/services/test_version_switch.py::test_a_member_without_a_file_is_marked_and_never_the_default`. Prompt-only: a
-  new caller of `resolve_group_representative` passes `fileless_rom_ids`, or ranks only members with a file as the
-  version picker's default does; the flag is read off a RomM payload only through
-  `domain/rom_file.py::has_file_on_romm`, and the stored `Rom.has_file_on_disk` is written only from its answer
+  sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is
+  rebound only in a complete view, only onto a sibling with a file, no shortcut of its own and an equal non-empty
+  `fs_name_no_ext`; and a bound member gone from RomM is rebound only by that same rule, installed or not, its stem read
+  off its stored `fs_name`, and otherwise keeps its binding** — test + prompt-only —
+  `tests/domain/test_sibling_resolution.py::TestMembersWithoutAFile`,
+  `tests/domain/test_sync_diff.py::TestCollapseMembersWithoutAFile` (the name, shortcut and partial-view cases),
+  `tests/services/test_version_switch.py::test_a_member_without_a_file_is_marked_and_never_the_default`,
+  `tests/domain/test_sync_diff.py::TestCollapseSiblingGroups` (a bound member gone from RomM) and
+  `tests/contract/test_vanished_version_same_dump.py`. Prompt-only: a new caller of `resolve_group_representative`
+  passes `fileless_rom_ids`, or ranks only members with a file as the version picker's default does; the flag is read
+  off a RomM payload only through `domain/rom_file.py::has_file_on_romm`, and the stored `Rom.has_file_on_disk` is
+  written only from its answer
+- **The end-of-run stale removal removes the shortcut only of a game outside what the sync syncs: a bound row missing
+  from a platform the run read whole is kept; on a platform the run did not read, a row a collection last delivered
+  (`roms.delivered_through`) is asked for by its exact id on every run until it is found or unbound, and kept unless
+  RomM's answer is the ROM itself, while any other row is kept when the run's own platform listing no longer names its
+  platform and removed unasked when it does; a row with no recorded route is asked only when the collections' last
+  completed members list it; a kept row stays in its platform's Steam collection; the preview counts exactly the
+  removals and the platform collections the apply makes** — test + prompt-only —
+  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule,
+  `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
+  preview (among it the third run, the stopped run, the platform route and the fallback),
+  `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and `TestPlatformTurnedOffAndBackOn`
+  (with `test_a_platform_still_on_that_romm_no_longer_lists_keeps_its_shortcuts`,
+  `test_a_platform_romm_no_longer_lists_keeps_its_steam_collection` and
+  `test_a_platform_read_mid_run_still_counts_as_unlisted`) for the two ends, and
+  `tests/services/library/test_reporter.py::TestCommitUnitResults` for the route the commit records. Prompt-only: the
+  collection records are read before the run's first unit (`do_read_collection_listed_rom_ids`), the platform listing is
+  the run's own (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids, the chunk dispatcher names the
+  unit's kind on every commit, and the preview and the apply both sort through `SyncOrchestrator._settle_stale_rows`
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py`,
   `tests/domain/test_firmware_wants.py` and `tests/services/test_firmware.py::TestCheckPlatformBiosUnknown`;
@@ -994,11 +1016,15 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `revealEdge`, whose decision `frontend/src/bigpicture/layout/ScrollRegion.test.tsx` pins), scrolling geometry and
   controller behaviour, and that a page's controls sit above its long focusable lists, not below
 - **A list-and-detail page opens on the row it was opened WITH, not on its first row** — test + prompt-only —
-  `ListDetail.test.tsx` and `WidePage.test.tsx`, each over a non-first row, as any test of it must be; the press itself
-  is device-only. Prompt-only: `bigpicture/layout/WidePage.tsx` places entry focus through `pageEntryStop`
+  `ListDetail.test.tsx` and `WidePage.test.tsx`, each over a non-first row, as any test of it must be, pin the
+  `ENTRY_STOP_ATTR` mark a swap places focus by, and the `preferredFocus` on the selected row and on the body that entry
+  from the Quick Access strip is meant to land by, and that both marks go once focus first enters the panel; the press
+  itself is device-only, and so is whether Steam honours that preference (on a tabbed page it lands on Steam's active
+  tab instead). Prompt-only: `bigpicture/layout/WidePage.tsx` places entry focus through `pageEntryStop`
   (`utils/entryFocus.ts`), never `firstBodyStop`; `bigpicture/layout/ListDetail.tsx` puts the `ENTRY_STOP_ATTR` mark on
-  the `display: contents` wrapper around the selected row, never on the row; a wide page that opens on a non-first row
-  without `ListDetail` places the mark itself, the same way
+  the `display: contents` wrapper around the selected row, never on the row; and a wide page that opens on a non-first
+  row without `ListDetail` places the mark itself, the same way, and gives that row `preferredFocus` too, only while
+  `EntryPreferenceContext` holds
 
 When a change applies a guard / sanitize / backup / grouping pattern, sweep for sibling sites of the same pattern — the
 register is what that sweep checks against.

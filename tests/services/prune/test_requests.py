@@ -43,16 +43,14 @@ def test_preview_request_defaults_and_rejects_bad_pages() -> None:
 def test_options_require_explicit_booleans_and_recovery_for_content_selection() -> None:
     parsed = parse_options(
         {
-            "repoint_shortcuts": True,
             "remove_rows": True,
             "remove_fully_vanished": False,
             "create_recovery_bundle": True,
         },
         frozenset({7}),
     )
-    assert parsed == PruneOptions(True, True, False, True, frozenset({7}))
+    assert parsed == PruneOptions(True, False, True, frozenset({7}))
     without_recovery = {
-        "repoint_shortcuts": True,
         "remove_rows": True,
         "remove_fully_vanished": False,
         "create_recovery_bundle": False,
@@ -147,7 +145,7 @@ def test_a_preview_request_is_refused_with_the_reason_of_its_first_fault(payload
     assert (caught.value.reason, caught.value.message) == (reason, message)
 
 
-_OPTION_KEYS = ("repoint_shortcuts", "remove_rows", "remove_fully_vanished", "create_recovery_bundle")
+_OPTION_KEYS = ("remove_rows", "remove_fully_vanished", "create_recovery_bundle")
 _MISSING = object()
 
 

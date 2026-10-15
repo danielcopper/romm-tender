@@ -253,7 +253,21 @@ describe("SgdbGamePickerModal", () => {
         fireEvent.click(buttonContaining(container, "Search"));
       });
       await flushAsync();
-      expect(container.textContent).toContain("Search failed");
+      expect(container.textContent).toContain("Could not reach SteamGridDB");
+    });
+
+    it.each([
+      ["no_api_key", "No SteamGridDB API key configured"],
+      ["auth_failed", "Invalid API key"],
+    ] as const)("a %s search shows the search's own message", async (reason, message) => {
+      vi.mocked(backend.searchSgdbGames).mockResolvedValue({ success: false, reason, message });
+      const { container } = renderPicker();
+      await act(async () => {
+        fireEvent.click(buttonContaining(container, "Search"));
+      });
+      await flushAsync();
+      expect(container.textContent).toContain(message);
+      expect(container.textContent).not.toContain("Search failed");
     });
   });
 
@@ -276,16 +290,15 @@ describe("SgdbGamePickerModal", () => {
       return { ...ui, onApplied, closeModal };
     }
 
-    it("applySgdbGameId failure → 'Failed to apply artwork selection', no applyArtwork, no close", async () => {
-      vi.mocked(backend.applySgdbGameId).mockResolvedValue({ success: false });
+    it("a refused applySgdbGameId toasts the refusal's message, no applyArtwork, no close", async () => {
+      const message = "A removed-game cleanup is in progress; wait for it to finish before changing local game data.";
+      vi.mocked(backend.applySgdbGameId).mockResolvedValue({ success: false, reason: "prune_active", message });
       const { container, onApplied, closeModal } = renderCandidate();
       await act(async () => {
         fireEvent.click(buttonContaining(container, "Super Mario"));
       });
       await flushAsync();
-      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Failed to apply artwork selection" }),
-      );
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body: message }));
       expect(vi.mocked(artwork.applyArtwork)).not.toHaveBeenCalled();
       expect(onApplied).not.toHaveBeenCalled();
       expect(closeModal).not.toHaveBeenCalled();
@@ -312,7 +325,7 @@ describe("SgdbGamePickerModal", () => {
       });
       await flushAsync();
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Set a SteamGridDB API key in settings first" }),
+        expect.objectContaining({ body: "Set a SteamGridDB API key in Settings first" }),
       );
     });
 

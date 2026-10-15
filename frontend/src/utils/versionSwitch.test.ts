@@ -28,8 +28,9 @@ vi.mock("./connectionState", () => ({
   reportServerReachable: vi.fn(),
 }));
 
-vi.mock("./vanishedBinding", () => ({
-  setBoundVanished: vi.fn(),
+vi.mock("./vanishedBinding", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./vanishedBinding")>()),
+  setBoundAvailability: vi.fn(),
 }));
 
 vi.mock("./versionSwitchApplication", () => ({
@@ -97,7 +98,7 @@ describe("loadVersionList", () => {
     vi.clearAllMocks();
   });
 
-  it("fetches list, reports reachability, and publishes bound vanished", async () => {
+  it("fetches list, reports reachability, and publishes the bound version's availability", async () => {
     const mockList: VersionList = {
       multi_version: true,
       server_query_failed: false,
@@ -109,7 +110,8 @@ describe("loadVersionList", () => {
     const result = await loadVersionList(100);
     expect(result).toBe(mockList);
     expect(backend.getVersionList).toHaveBeenCalledWith(100);
-    expect(vanishedBinding.setBoundVanished).toHaveBeenCalledWith(100, true);
+    // The bound version is gone and another version is not.
+    expect(vanishedBinding.setBoundAvailability).toHaveBeenCalledWith(100, "version_gone");
   });
 });
 

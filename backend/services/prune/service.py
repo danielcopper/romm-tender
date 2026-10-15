@@ -43,12 +43,10 @@ if TYPE_CHECKING:
         SteamRecoveryStore,
         UnitOfWorkFactory,
         UuidGen,
-        VersionSwitcherFn,
     )
 
 _STALE_PREVIEW_MESSAGE = "This cleanup preview is stale. Scan again before confirming."
 _ACTION_TIMEOUT_SECONDS = 60.0
-_RELEASE_TIMEOUT_SECONDS = 5.0
 
 
 class StaleAction(NamedRefused):
@@ -95,7 +93,6 @@ class PruneServiceConfig:
     active_downloads: ActiveDownloadRomIdsFn
     drift_probe: SaveDriftProbeFn
     remove_installed_files: InstalledRomFilesRemoverFn
-    switch_version: VersionSwitcherFn
     settings: dict[str, Any]
     run_claim: PruneRunClaim
     conflict_rules: ConflictRules
@@ -121,8 +118,6 @@ def _refuse_invalid_action_report(request: dict[str, Any], pending: PendingActio
     )
     if snapshot_required and snapshot is None:
         raise Refused("invalid_snapshot", "The Steam recovery snapshot was missing.")
-    if shortcut_absent and pending.kind not in {"capture_shortcut_snapshot", "remove_shortcut"}:
-        raise Refused("invalid_action_result", "This action may not report an absent shortcut.")
     if snapshot is not None and (
         pending.kind != "capture_shortcut_snapshot" or not valid_snapshot(snapshot, pending.app_id)
     ):
@@ -174,7 +169,6 @@ class PruneService:
                 loop=config.loop,
                 logger=config.logger,
                 emit=config.emit,
-                conflict_rules=config.conflict_rules,
                 romm_api=config.romm_api,
                 recovery_store=config.recovery_store,
                 prune_artifacts=config.prune_artifacts,
@@ -183,7 +177,6 @@ class PruneService:
                 active_downloads=config.active_downloads,
                 drift_probe=config.drift_probe,
                 remove_installed_files=config.remove_installed_files,
-                switch_version=config.switch_version,
                 settings=config.settings,
                 recovery=recovery,
                 registry=registry,
@@ -200,9 +193,7 @@ class PruneService:
         self._selection: InstalledSelection | None = None
         self._pending_action: PendingAction | None = None
         self._completed_action_tokens: set[str] = set()
-        self._release_run_id: str | None = None
         self._run_preview_id: str | None = None
-        self._release_event = asyncio.Event()
         self._admission_lock = asyncio.Lock()
         self._action_lock = asyncio.Lock()
 
@@ -349,8 +340,6 @@ class PruneService:
                 self._run_id = run_id
                 self._run_claim.register_run(run_id)
                 self._run_preview_id = refreshed.preview_id
-                self._release_run_id = run_id
-                self._release_event = asyncio.Event()
                 self._completed_action_tokens.clear()
                 self._task = self._loop.create_task(self._run(run_id, refreshed, options))
                 began.append(self._task)
@@ -407,18 +396,6 @@ class PruneService:
             "message": "Cleanup will stop before the next group.",
         }
 
-    async def wait_for_prune_release(self, run_id: object) -> dict[str, Any]:
-        """Boundedly acknowledge that one terminal run released its exclusive claim."""
-        if not isinstance(run_id, str) or not run_id:
-            raise Refused("invalid_run_id", "Cleanup run id must be a non-empty string.")
-        if self._release_run_id != run_id or self._release_event.is_set():
-            return {"success": True, "message": "Cleanup claim is released."}
-        try:
-            await asyncio.wait_for(self._release_event.wait(), timeout=_RELEASE_TIMEOUT_SECONDS)
-        except TimeoutError:
-            raise Refused("release_timeout", "Cleanup claim release was not observed in time.") from None
-        return {"success": True, "message": "Cleanup claim is released."}
-
     async def report_prune_action(self, request: object) -> dict[str, Any]:
         """Claim or complete the exact frontend action currently awaited by the run."""
         if not isinstance(request, dict):
@@ -448,11 +425,7 @@ class PruneService:
         be the one the run planned against — re-checked after the await, because
         the token can expire or be replaced while the validation runs.
         """
-        if (
-            request.get("action") != pending.kind
-            or request.get("app_id") != pending.app_id
-            or request.get("target_rom_id") != pending.target_rom_id
-        ):
+        if request.get("action") != pending.kind or request.get("app_id") != pending.app_id:
             raise Refused("action_mismatch", "Action claim does not match the pending Steam operation.")
         if pending.claimed:
             return {"success": True, "ignored": True, "message": "Action token was already claimed."}
@@ -460,10 +433,8 @@ class PruneService:
             valid = await self._loop.run_in_executor(
                 None,
                 self._registry.validate_action_state,
-                pending.kind,
                 pending.expected_bound_rom_id,
                 pending.app_id,
-                pending.target_rom_id,
                 pending.group_rom_ids,
             )
             if not valid:
@@ -529,7 +500,6 @@ class PruneService:
         self._pending_action = None
         self._run_id = None
         self._run_preview_id = None
-        self._release_event.set()
         self._artwork_job.resume_after_cleanup()
 
     async def _run(self, run_id: str, preview: PrunePreview, options: PruneOptions) -> None:
@@ -545,7 +515,6 @@ class PruneService:
             self._run_claim.release_run(run_id)
             self._run_id = None
             self._run_preview_id = None
-            self._release_event.set()
             self._artwork_job.resume_after_cleanup()
 
     async def _request_action(
@@ -554,7 +523,6 @@ class PruneService:
         kind: str,
         data: dict[str, object],
         expected_bound_rom_id: int | None,
-        target_rom_id: int | None,
         group_rom_ids: set[int],
     ) -> ActionOutcome:
         token = self._uuid_gen.uuid4()
@@ -568,7 +536,6 @@ class PruneService:
             kind=kind,
             app_id=app_id,
             expected_bound_rom_id=expected_bound_rom_id,
-            target_rom_id=target_rom_id,
             group_rom_ids=frozenset(group_rom_ids),
             future=future,
             claim_event=claim_event,

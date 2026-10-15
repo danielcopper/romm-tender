@@ -34,6 +34,9 @@ const helperTextStyle = { fontSize: "12px", marginBottom: "12px", color: "rgba(2
 const GENERIC_VERIFY_ERROR = "Could not verify the key. Check your connection and try again.";
 const GENERIC_SAVE_ERROR = "The key is valid, but saving it failed. Check your connection and try again.";
 
+/** What ``onSave`` throws when the backend refused the key; the dialog shows its message. */
+export class SgdbKeySaveRefused extends Error {}
+
 export const SgdbApiKeyModal: FC<SgdbApiKeyModalProps> = ({ closeModal, onVerify, onSave }) => {
   const [value, setValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -64,8 +67,8 @@ export const SgdbApiKeyModal: FC<SgdbApiKeyModalProps> = ({ closeModal, onVerify
       // failure, so it must not claim the key couldn't be verified.
       try {
         await onSave(value);
-      } catch {
-        setError(GENERIC_SAVE_ERROR);
+      } catch (e) {
+        setError(e instanceof SgdbKeySaveRefused ? e.message : GENERIC_SAVE_ERROR);
         return;
       }
       closeModal?.();

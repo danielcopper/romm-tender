@@ -83,8 +83,9 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 021_add_rom_fs_size + 022_rename_collection_kind_user_to_standard
 # + 023_add_rom_install_launchable + 024_add_answered_save_directories
 # + 025_add_platform_skip_revoked + 026_add_rom_has_file_on_disk
-# + 027_add_artwork_slot_outcomes).
-_SHIPPED_VERSION = 27
+# + 027_add_artwork_slot_outcomes + 028_widen_artwork_slot_outcomes_to_the_icon
+# + 029_add_rom_delivered_through).
+_SHIPPED_VERSION = 29
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp,
@@ -1846,6 +1847,172 @@ class Test026AddRomHasFileOnDisk:
                 conn.execute(
                     "INSERT INTO roms (rom_id, platform_slug, name, fs_name, last_synced_at, has_file_on_disk) "
                     "VALUES (1, 'saturn', 'Game', 'g.zip', '2026-10-01T10:00:00', NULL)"
+                )
+        finally:
+            conn.close()
+
+
+def _insert_slot_outcome(conn: sqlite3.Connection, rom_id: int, slot: str, outcome: str) -> None:
+    """Insert one ``artwork_slot_outcomes`` row; a ``set`` carries an image id and hash, the others none."""
+    image = (11, "ab") if outcome == "set" else (None, None)
+    conn.execute(
+        "INSERT INTO artwork_slot_outcomes VALUES (?, ?, ?, 7, 1.5, ?, ?)",
+        (rom_id, slot, outcome, *image),
+    )
+
+
+class Test028WidenArtworkSlotOutcomesToTheIcon:
+    """028 — widens artwork_slot_outcomes' slot CHECK with 'icon' via an in-place table rebuild (#2374)."""
+
+    def test_every_row_recorded_before_it_survives(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 27)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, 100)
+            _insert_slot_outcome(conn, 1, "grid", "set")
+            _insert_slot_outcome(conn, 1, "logo", "none")
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        conn = sqlite3.connect(db_path)
+        try:
+            rows = conn.execute("SELECT * FROM artwork_slot_outcomes ORDER BY slot").fetchall()
+        finally:
+            conn.close()
+        assert rows == [(1, "grid", "set", 7, 1.5, 11, "ab"), (1, "logo", "none", 7, 1.5, None, None)]
+
+    def test_the_icon_is_refused_before_it(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 27)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, 100)
+            with pytest.raises(sqlite3.IntegrityError):
+                _insert_slot_outcome(conn, 1, "icon", "none")
+        finally:
+            conn.close()
+
+    @pytest.mark.parametrize("outcome", ["set", "none", "refused"])
+    def test_the_icon_is_recorded_after_it(self, tmp_path: Path, outcome: str):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, 100)
+            _insert_slot_outcome(conn, 1, "icon", outcome)
+            recorded = conn.execute("SELECT slot, outcome FROM artwork_slot_outcomes").fetchall()
+        finally:
+            conn.close()
+        assert recorded == [("icon", outcome)]
+
+    @pytest.mark.parametrize(
+        ("slot", "outcome", "image_id", "image_sha256"),
+        [
+            ("hero", "none", None, None),
+            ("icon", "lost", None, None),
+            ("icon", "set", None, "ab"),
+            ("icon", "none", 11, None),
+        ],
+        ids=["the-hero", "an-unknown-outcome", "a-set-without-its-id", "a-none-with-an-id"],
+    )
+    def test_every_other_check_still_holds(self, tmp_path: Path, slot, outcome, image_id, image_sha256):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            _insert_rom(conn, 1, 100)
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute(
+                    "INSERT INTO artwork_slot_outcomes VALUES (1, ?, ?, 7, 1.5, ?, ?)",
+                    (slot, outcome, image_id, image_sha256),
+                )
+        finally:
+            conn.close()
+
+    def test_a_row_still_goes_with_its_rom(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute("PRAGMA foreign_keys=ON")
+            _insert_rom(conn, 1, 100)
+            _insert_slot_outcome(conn, 1, "icon", "none")
+            conn.execute("DELETE FROM roms WHERE rom_id = 1")
+            recorded = conn.execute("SELECT COUNT(*) FROM artwork_slot_outcomes").fetchone()
+        finally:
+            conn.close()
+        assert recorded == (0,)
+
+
+class Test029AddRomDeliveredThrough:
+    """029 — adds the nullable delivered_through column to roms (#2407)."""
+
+    def test_adds_delivered_through_to_roms_only(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+
+        apply_migrations(db_path)
+
+        assert "delivered_through" in _columns(db_path, "roms")
+        assert "delivered_through" not in _columns(db_path, "rom_installs")
+
+    def test_delivered_through_absent_before_029(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 28)))
+
+        assert _user_version(db_path) == 28
+        assert "delivered_through" not in _columns(db_path, "roms")
+
+    def test_an_existing_row_reads_null_across_the_migration(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 28)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO roms (rom_id, platform_slug, name, fs_name, last_synced_at) "
+                "VALUES (1, 'snes', 'Game', 'game.sfc', '2026-10-15T10:00:00')"
+            )
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        conn = sqlite3.connect(db_path)
+        try:
+            value = conn.execute("SELECT delivered_through FROM roms WHERE rom_id = 1").fetchone()[0]
+        finally:
+            conn.close()
+        assert value is None
+
+    @pytest.mark.parametrize("route", ["platform", "collection"])
+    def test_each_route_round_trips(self, tmp_path: Path, route: str):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO roms (rom_id, platform_slug, name, fs_name, last_synced_at, delivered_through) "
+                "VALUES (1, 'snes', 'Game', 'game.sfc', '2026-10-15T10:00:00', ?)",
+                (route,),
+            )
+            stored = conn.execute("SELECT delivered_through FROM roms WHERE rom_id = 1").fetchone()[0]
+        finally:
+            conn.close()
+        assert stored == route
+
+    def test_any_other_route_is_refused(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute(
+                    "INSERT INTO roms (rom_id, platform_slug, name, fs_name, last_synced_at, delivered_through) "
+                    "VALUES (1, 'snes', 'Game', 'game.sfc', '2026-10-15T10:00:00', 'both')"
                 )
         finally:
             conn.close()

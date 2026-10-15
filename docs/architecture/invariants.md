@@ -417,39 +417,84 @@ Format: **invariant** — tier — enforced by.
   offer "Resume Sync" on the strength of stamps that save the next run nothing. A raw reader moved behind the helper
   blinds removed-game discovery, the canaries a 404 round asks first, or the reachable count on every platform a removal
   touched, and for a platform whose sync stays off it stays blind, since no new complete fetch comes. A stale removal
-  that revoked on a processed platform would take the skip from the stamp that same run just wrote whenever it unbinds a
-  game RomM dropped, costing that platform one extra full fetch on the next run each time; one that skipped an
-  unprocessed platform brings the turned-off-and-back-on gap back. **What nothing checks**: a new skip-side reader
-  calling `platform_sync_state.get` raw passes every test above, because each test pins one existing call site; the
-  recovery snapshot's raw read has no test, so moving it behind the helper would drop a revoked stamp from a sealed
-  bundle unnoticed; and `has_any`'s `WHERE skip_revoked = 0` and `stamp_for_skip` state the one rule twice — each is
-  pinned alone and nothing holds them equal
+  that revoked on a processed platform would take the skip from the stamp that same run just wrote; it unbinds nothing
+  there today — a skipped platform rebuilds every bound row and a row missing from a platform the run read is kept — so
+  the cost would land with the first rule that does; one that skipped an unprocessed platform brings the
+  turned-off-and-back-on gap back. **What nothing checks**: a new skip-side reader calling `platform_sync_state.get` raw
+  passes every test above, because each test pins one existing call site; the recovery snapshot's raw read has no test,
+  so moving it behind the helper would drop a revoked stamp from a sealed bundle unnoticed; and `has_any`'s
+  `WHERE skip_revoked = 0` and `stamp_for_skip` state the one rule twice — each is pinned alone and nothing holds them
+  equal
 - **Where the library sync or the version picker's default resolves a representative, neither RomM's main-sibling leg
   nor the ranking picks a member RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the
-  sync's installed and existing-binding legs keep such a member; and a bound member without a file that is not installed
-  is rebound only in a complete view, only onto a sibling with a file, no shortcut of its own and an equal non-empty
-  `fs_name_no_ext`** — test + prompt-only — `tests/domain/test_sibling_resolution.py::TestMembersWithoutAFile` for the
-  chain's legs, `tests/domain/test_sync_diff.py::TestCollapseMembersWithoutAFile` for the sync's collapse (the name,
-  shortcut and partial-view cases among it) and
+  sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is
+  rebound only in a complete view, only onto a sibling with a file, no shortcut of its own and an equal non-empty
+  `fs_name_no_ext`; and a bound member gone from RomM is rebound only by that same rule, installed or not, its stem read
+  off its stored `fs_name`, and otherwise keeps its binding** — test + prompt-only —
+  `tests/domain/test_sibling_resolution.py::TestMembersWithoutAFile` for the chain's legs,
+  `tests/domain/test_sync_diff.py::TestCollapseMembersWithoutAFile` for the sync's collapse (the name, shortcut and
+  partial-view cases among it) and
   `tests/services/test_version_switch.py::test_a_member_without_a_file_is_marked_and_never_the_default` for the version
-  picker's Default badge. Why such a member stays in some legs and is left out of others, and why a rebind needs an
-  equal `fs_name_no_ext`, are in
+  picker's Default badge; `tests/domain/test_sync_diff.py::TestCollapseSiblingGroups` holds the bound member gone from
+  RomM (kept beside siblings under other names, moved onto the same dump whether or not it is installed), and
+  `tests/contract/test_vanished_version_same_dump.py` the move end to end. Why such a member stays in some legs and is
+  left out of others, and why a rebind needs an equal `fs_name_no_ext`, are in
   [Steam Non-Steam Shortcuts](steam-non-steam-shortcuts.md#a-bound-rom-romm-holds-no-file-for) and
   [Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Group-aware sync"; do
   not restate them here. The rule lives in three places: `domain/sibling_resolution.py::resolve_group_representative`
   applies it to the legs through `fileless_rom_ids`; `domain/sync_diff.py::collapse_sibling_groups` passes it and
   rebinds through `_same_dump_with_file`; and `services/version_switch.py::_resolve_default` passes none and ranks only
-  the versions with a file, so where none has one it marks no Default. Today the removed-game cleanup's repoint target
-  (`domain/prune.py::natural_default`, called from `services/prune/planning.py::_repoint_target`) passes none and leaves
-  no member without a file out, since the cleanup is outside #2196's scope, so a vanished shortcut can be repointed onto
-  a member without a file;
-  `tests/domain/test_prune.py::test_the_cleanup_s_default_target_does_not_read_whether_romm_has_a_file` pins that state.
-  **What breaks without the rule:** a chain that ranks a member without a file like any other binds a new shortcut, and
-  the Default badge, to a row whose download is a 404 — after a rescan turns a `.zip` into a folder the two rows tie and
-  the older one wins on `rom_id` — and a new caller that forgets `fileless_rom_ids` brings that back silently. Nothing
-  mechanical sees it. A RomM payload's flag is read only by `domain/rom_file.py::has_file_on_romm`, which reads only an
-  explicit `false` as no file; the stored `Rom.has_file_on_disk` is written only from its answer, and is read directly
-  by the version picker, the game-detail payload and the rows a skipped unit rebuilds from the database
+  the versions with a file, so where none has one it marks no Default. The removed-game cleanup picks no representative
+  at all: it never moves a shortcut onto another version. **What breaks without the rule:** a chain that ranks a member
+  without a file like any other binds a new shortcut, and the Default badge, to a row whose download is a 404 — after a
+  rescan turns a `.zip` into a folder the two rows tie and the older one wins on `rom_id` — and a new caller that
+  forgets `fileless_rom_ids` brings that back silently. Nothing mechanical sees it. A RomM payload's flag is read only
+  by `domain/rom_file.py::has_file_on_romm`, which reads only an explicit `false` as no file; the stored
+  `Rom.has_file_on_disk` is written only from its answer, and is read directly by the version picker, the game-detail
+  payload and the rows a skipped unit rebuilds from the database. A bound member gone from RomM moves only onto the same
+  dump because any other sibling is a version the user did not choose — another region, language or revision — and a
+  sync that moved it there would say nothing; the game page says the version is gone instead, and the version picker is
+  the way to switch. **What breaks without it:** a sync moves a shortcut onto another version, and a downloaded copy of
+  the old one is left unbound beside it, still playable and no longer started by anything
+- **The end-of-run stale removal removes the shortcut only of a game outside what the sync syncs: a bound row missing
+  from a platform the run read whole is kept; on a platform the run did not read, a row a collection last delivered
+  (`roms.delivered_through`) is asked for by its exact id on every run until it is found or unbound, and kept unless
+  RomM's answer is the ROM itself, while any other row is kept when the run's own platform listing no longer names its
+  platform and removed unasked when it does; a row with no recorded route is asked only when the collections' last
+  completed members list it; a kept row stays in its platform's Steam collection; the preview counts exactly the
+  removals and the platform collections the apply makes** — test + prompt-only —
+  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule (`sort_stale_rows`, `settle_asked_rows`),
+  `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
+  preview (a 404 keeps, a found ROM removes, an answer that establishes nothing keeps; a 404 is asked again on the third
+  run, a stopped run leaves the row asked at the next, a row its platform last delivered is removed unasked, and a row
+  with no recorded route is asked only when a collection record lists it),
+  `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and `TestPlatformTurnedOffAndBackOn`
+  for the two ends — a game gone from RomM keeps its shortcut, a platform turned off loses its games, and
+  `test_a_platform_still_on_that_romm_no_longer_lists_keeps_its_shortcuts` holds a platform gone from RomM's list apart
+  from one turned off, `test_a_platform_romm_no_longer_lists_keeps_its_steam_collection` keeps its games in its Steam
+  collection under its last name with the preview agreeing, and `test_a_platform_read_mid_run_still_counts_as_unlisted`
+  judges it by the run's own listing after a game page's read wrote it back into the kept ids — and
+  `tests/services/library/test_reporter.py::TestCommitUnitResults` for the route a commit records. A skipped platform
+  rebuilds every bound row, so only a fetched one can leave a bound row out, and RomM is then the only thing that
+  dropped it. A platform the run did not read says nothing about RomM; the route the row's last commit recorded tells a
+  game reached through a collection from one reached through its platform. A collection's completion stamp cannot carry
+  that, because every collection apply rewrites its members from RomM's current membership: a game the collection
+  dropped is off the stamp after the run that asked about it, and a route recorded only at a unit's commit is untouched
+  by the question, so a 404 is asked again on every later run. A row with no recorded route falls back to the collection
+  records, read before the run's first unit rewrites any of them
+  (`LocalLibraryReader.do_read_collection_listed_rom_ids`). A platform RomM no longer lists is read off the run's own
+  platform listing (`LibrarySyncStateBox.run_listed_platform_slugs`), never off the kept ids under `platform_ids`, which
+  a game page's read can widen during the run; which platforms are on in Tender is keyed by a RomM id such a platform no
+  longer has, so the route stands in for it. Only a 404 is evidence of absence, so every other answer keeps the
+  shortcut. The rule spans the domain sort, the reader, the reporter's commit, the chunk dispatcher, the fetcher's
+  exact-id question (`LibraryFetcher.ask_romm_for_roms`) and the orchestrator, and the preview and the apply each read
+  it — through `SyncOrchestrator._settle_stale_rows`, which is prompt-only, as is that the chunk dispatcher names the
+  unit's kind on every commit, and that the listing comes off the run state. **What breaks without it:** a kept row the
+  preview counts as a removal offers Apply on every preview; a removal on a platform read whole takes a game gone from
+  RomM out of Steam with its playtime and collections; a rule read off the collection stamps alone removes a game gone
+  from RomM at the second run after its collection dropped it; a platform RomM stopped listing loses every shortcut as
+  if it had been turned off; and a kept row left out of the platform's collection drops out of it, or keeps its game
+  under a collection renamed to the slug
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py` pins the adapter's degradation (a
   raising resolver, a missing installation, an answer with no root all come back with `resolved` clear, never as an
@@ -1622,16 +1667,25 @@ Format: **invariant** — tier — enforced by.
 - **A list-and-detail page opens on the row it was opened WITH, not on its first row — because on that layout focus
   selects, so entry focus landing anywhere selects what it lands on** — test + prompt-only — `ListDetail.test.tsx` pins
   the mark and that it moves with the selection, `WidePage.test.tsx` pins that the frame asks for the declared stop, and
-  both use a **non-first** row deliberately. **The rule spans three modules and nothing joins them**:
+  both use a **non-first** row deliberately. **The rule spans four modules and nothing joins them**:
   `utils/entryFocus.ts` owns `ENTRY_STOP_ATTR` and `pageEntryStop`, `bigpicture/layout/WidePage.tsx` places entry focus
-  through it rather than through `firstBodyStop`, and `bigpicture/layout/ListDetail.tsx` marks its selected row — plus
-  whatever page passes a starting selection at all, `SettingsPage` today. A fourth wide page that opens on a non-first
-  row and forgets the mark selects its first row instead, and every test still passes. **The end to end is unreachable
-  here**: happy-dom performs no layout and does not reproduce Steam's focus resolution, so what the suite pins is the
-  declaration and the finder, never the press. Only a controller confirms it. **What hid this for a whole review round
-  is the shape of the failure, not its size**: Main's notices name sections, and the one naming the FIRST section keeps
-  working, so a reader checking Open Connections sees the feature working while a jump into any later section lands on
-  Connections. A check that exercises the first row proves nothing about the rule. The mark sits on a
-  `display: contents` wrapper AROUND each row rather than on the row, and that is load-bearing rather than stylistic:
-  `pageEntryStop` calls `firstBodyStop(declared)`, which searches DESCENDANTS — a mark on the row itself finds no
-  candidate inside it, falls back to the first row, and ships the defect under a comment saying it does not
+  through it rather than through `firstBodyStop`, `bigpicture/layout/ListDetail.tsx` marks its selected row, and
+  `index.tsx` tells the frame whether a swap opened the page (`EntryFocusOnMountContext`) — plus whatever page passes a
+  starting selection at all, `SettingsPage` today. A fourth wide page that opens on a non-first row and forgets the mark
+  selects its first row instead, and every test still passes. **The end to end is unreachable here**: happy-dom performs
+  no layout and does not reproduce Steam's focus resolution, so what the suite pins is the declaration and the finder,
+  never the press. Only a controller confirms it. **What hid this for a whole review round is the shape of the failure,
+  not its size**: Main's notices name sections, and the one naming the FIRST section keeps working, so a reader checking
+  Open Connections sees the feature working while a jump into any later section lands on Connections. A check that
+  exercises the first row proves nothing about the rule. The mark sits on a `display: contents` wrapper AROUND each row
+  rather than on the row, and that is load-bearing rather than stylistic: `pageEntryStop` calls
+  `firstBodyStop(declared)`, which searches DESCENDANTS — a mark on the row itself finds no candidate inside it, falls
+  back to the first row, and ships the defect under a comment saying it does not. **The page the panel appears with is
+  opened by neither placer** — not the router and not the frame, because focus placed as the panel mounts would take the
+  reader off the Quick Access strip — so there the same row is meant to be reached through Steam's entry preference:
+  `ListDetail` gives the selected row's own `Focusable` `preferredFocus`, and the frame's body searches for it. That
+  holds on an untabbed page only: on a tabbed one Steam marks its own active tab the same way, at a shallower depth, and
+  entry lands there. The mark holds only until focus first enters the panel, because Steam's search for it runs ahead of
+  the child it remembers and would otherwise pull every later entry onto the row. Nothing joins that mark to
+  `ENTRY_STOP_ATTR` either, and whether Steam honours either is device-only. Detail: `docs/architecture/qam-panel.md`,
+  "Pages"

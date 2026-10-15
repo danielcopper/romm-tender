@@ -7,13 +7,17 @@ import pytest
 from domain.sync_diff import (
     BIND_ROM_ID_KEY,
     ClassificationResult,
+    StaleRow,
+    StaleSort,
     classify_roms,
     collapse_sibling_groups,
     compute_collection_diff,
     compute_platform_collection_diff,
     platform_breakdown,
     select_stale_removals,
+    settle_asked_rows,
     should_include_in_platform_collection,
+    sort_stale_rows,
 )
 
 
@@ -801,10 +805,11 @@ class TestCollapseSiblingGroups:
         result = classify_roms(emitted, registry, {"N64"})
         assert result.stale == [1]
 
-    def test_vanished_bound_sibling_rebinds_to_representative(self):
+    def test_a_vanished_bound_sibling_keeps_its_binding_beside_live_siblings_under_other_names(self):
         # rom 1 is the group's bound sibling but vanished from the server; roms 2/3
-        # survive. Collapse emits ONE rebind entry keyed to rom 1 (frontend reuses
-        # its shortcut) carrying bind_rom_id → the surviving representative.
+        # survive under other names. Nothing moves the shortcut onto them: the
+        # collapse emits nothing for the group, and the stale removal keeps the
+        # binding, the appId and the launch command where they are.
         members = [
             _gsd(
                 2,
@@ -818,26 +823,29 @@ class TestCollapseSiblingGroups:
         ]
         registry = {"1": _greg(1, app_id=1001, name="Game (USA)", fs_name="game_usa.z64")}
         emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
-        assert len(emitted) == 1
-        entry = emitted[0]
-        # Keyed to the vanished bound sibling (sticky identity) so the frontend
-        # reuses its shortcut and the preview reads it as unchanged.
-        assert entry["rom_id"] == 1
-        assert entry["name"] == "Game (USA)"
-        # The binding moves onto the representative (rom 2 = the RomM default), and
-        # the representative's launch bake rides along.
-        assert entry[BIND_ROM_ID_KEY] == 2
-        assert entry["launch_options"] == "run /jp.z64"
-        result = classify_roms(emitted, registry, {"N64"})
-        # The rebind carries the representative's launch bake, which differs from
-        # the vanished sibling's recorded applied state (""), so the shortcut must
-        # be re-touched to move the binding — classify reads it as changed, not
-        # unchanged (#1383). The apply path force-keeps rebinds regardless, so a
-        # rebind is never skipped even when classify would call it unchanged.
-        assert result.unchanged_ids == []
-        assert [e["rom_id"] for e in result.changed] == [1]
-        assert result.stale == []
-        assert result.new == []
+        assert emitted == []
+
+    def test_an_installed_vanished_version_moves_onto_the_same_dump_under_a_new_id(self):
+        # D14: the same dump under a reissued id takes the binding, installed or not.
+        members = [
+            _gsd(2, name="Game (USA)", fs_name="game_usa.z64", fs_name_no_ext="game_usa", launch_options=""),
+            _gsd(3, name="Game (JP)", fs_name="game_jp.z64", fs_name_no_ext="game_jp", is_main_sibling=True),
+        ]
+        registry = {"1": _greg(1, app_id=1001, name="Game (USA)", fs_name="game_usa.z64")}
+        emitted = collapse_sibling_groups(members, registry, installed_rom_ids={1}, complete_group_view=True)
+        assert [(e["rom_id"], e[BIND_ROM_ID_KEY]) for e in emitted] == [(1, 2)]
+
+    def test_a_vanished_bound_sibling_beside_a_surviving_one_moves_onto_its_same_dump(self):
+        members = [
+            _gsd(2, name="Game (JP)", fs_name="game_jp.z64", fs_name_no_ext="game_jp"),
+            _gsd(3, name="Game (USA)", fs_name="game_usa.z64", fs_name_no_ext="game_usa"),
+        ]
+        registry = {
+            "1": _greg(1, app_id=1001, name="Game (USA)", fs_name="game_usa.z64"),
+            "2": _greg(2, app_id=1002, name="Game (JP)", fs_name="game_jp.z64"),
+        }
+        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
+        assert sorted((e["rom_id"], e.get(BIND_ROM_ID_KEY)) for e in emitted) == [(1, 3), (2, None)]
 
     def test_server_reimport_fresh_rom_id_rides_rebind_lane_not_a_duplicate(self):
         # The #1366 clean re-import: a server switch / re-import reissues the
@@ -871,20 +879,22 @@ class TestCollapseSiblingGroups:
         # it just re-bound.
         assert select_stale_removals([(1, 1001)], {1001}) == []
 
-    def test_rebind_keeps_smallest_rom_id_binding_others_stale(self):
-        # A group with TWO bound siblings (grandfathered), both vanished. One appId
-        # is kept (smallest rom_id) and rebound; the other goes stale.
+    def test_two_vanished_bound_siblings_both_keep_their_bindings(self):
+        # A group with TWO bound siblings (grandfathered), both vanished, and a
+        # survivor under another name: neither moves.
         members = [_gsd(5, name="Game (EU)", fs_name_no_ext="game_eu")]
         registry = {
             "1": _greg(1, app_id=1001, name="Game (USA)"),
             "2": _greg(2, app_id=1002, name="Game (JP)"),
         }
         emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
-        assert len(emitted) == 1
-        assert emitted[0]["rom_id"] == 1
-        assert emitted[0][BIND_ROM_ID_KEY] == 5
-        result = classify_roms(emitted, registry, {"N64"})
-        assert result.stale == [2]
+        assert emitted == []
+
+    def test_of_two_vanished_bound_siblings_of_one_dump_the_first_takes_it(self):
+        members = [_gsd(5, fs_name_no_ext="game")]
+        registry = {"1": _greg(1, app_id=1001), "2": _greg(2, app_id=1002)}
+        emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
+        assert [(e["rom_id"], e[BIND_ROM_ID_KEY]) for e in emitted] == [(1, 5)]
 
     def test_legacy_null_key_bound_row_grandfathered_via_fetched_key(self):
         # A bound row whose stored sibling_group_key is still NULL (pre-capture) is
@@ -968,7 +978,7 @@ class TestCollapseSiblingGroupsCanonicalNaming:
         assert result.unchanged_ids == [1]
         assert result.changed == []
 
-    def test_rebind_entry_keeps_persisted_name_not_canonical(self):
+    def test_a_same_dump_rebind_keeps_the_persisted_name_not_the_canonical_one(self):
         # A rebinding group is already bound → sticky: the rebind entry carries the
         # vanished sibling's PERSISTED name, never the region-canonical name, so the
         # live shortcut is not renamed.
@@ -976,13 +986,11 @@ class TestCollapseSiblingGroupsCanonicalNaming:
             _gsd(2, name="USA Name", fs_name_no_ext="game_usa", regions=["USA"]),
             _gsd(3, name="Euro Name", fs_name_no_ext="game_eu", regions=["Europe"]),
         ]
-        registry = {"1": _greg(1, app_id=1001, name="Original Bound Name", fs_name="game_x.z64")}
+        registry = {"1": _greg(1, app_id=1001, name="Original Bound Name", fs_name="game_usa.z64")}
         emitted = collapse_sibling_groups(members, registry, installed_rom_ids=set(), complete_group_view=True)
         assert len(emitted) == 1
         assert emitted[0]["rom_id"] == 1
         assert emitted[0]["name"] == "Original Bound Name"
-        # The binding still moves onto the region representative (USA outranks
-        # Europe in the build-time order → rom 2).
         assert emitted[0][BIND_ROM_ID_KEY] == 2
 
 
@@ -1001,12 +1009,13 @@ class TestCollapseSiblingGroupsPartialView:
         # a platform this collection unit never fetched; the collection fetches
         # only the UNBOUND sibling rom 2. A partial view must leave the binding
         # untouched — emit nothing, never a rebind entry onto the uninstalled rom 2.
-        members = [_gsd(2, name="Game (JP)", fs_name="game_jp.z64", fs_name_no_ext="game_jp")]
+        members = [_gsd(2, name="Game (USA)", fs_name="game_usa.z64", fs_name_no_ext="game_usa")]
         registry = {"1": _greg(1, app_id=1001, name="Game (USA)", fs_name="game_usa.z64")}
         emitted = collapse_sibling_groups(members, registry, installed_rom_ids={1}, complete_group_view=False)
         assert emitted == []
-        # And the contrast: the SAME inputs under a complete view DO rebind — the
-        # only thing separating "grandfather" from "rebind" is view-completeness.
+        # And the contrast: the SAME inputs under a complete view DO rebind onto
+        # the same dump — the only thing separating "grandfather" from "rebind"
+        # is view-completeness.
         rebound = collapse_sibling_groups(members, registry, installed_rom_ids={1}, complete_group_view=True)
         assert len(rebound) == 1
         assert rebound[0]["rom_id"] == 1
@@ -1380,3 +1389,67 @@ class TestClassifyCountsARebindAsChanged:
         result = classify_roms(emitted, registry, {"N64"})
         assert [e["rom_id"] for e in result.changed] == [1]
         assert result.unchanged_ids == []
+
+
+class TestSortStaleRows:
+    """``sort_stale_rows`` / ``settle_asked_rows`` — which stale shortcut goes (D4, D11)."""
+
+    def test_each_row_lands_by_what_the_run_knows(self):
+        read = StaleRow(1, 1001, "n64", "platform")
+        via_collection = StaleRow(2, 1002, "gba", "collection")
+        via_platform_turned_off = StaleRow(3, 1003, "gba", "platform")
+        via_platform_gone_from_romm = StaleRow(4, 1004, "psx", "platform")
+        unrecorded_listed = StaleRow(5, 1005, "gba")
+        unrecorded_unlisted = StaleRow(6, 1006, "gba")
+        unrecorded_platform_gone = StaleRow(7, 1007, "psx")
+
+        sort = sort_stale_rows(
+            [
+                read,
+                via_collection,
+                via_platform_turned_off,
+                via_platform_gone_from_romm,
+                unrecorded_listed,
+                unrecorded_unlisted,
+                unrecorded_platform_gone,
+            ],
+            read_platform_slugs={"n64"},
+            listed_platform_slugs={"n64", "gba"},
+            collection_listed_rom_ids={5},
+        )
+
+        assert sort == StaleSort(
+            remove=[via_platform_turned_off, unrecorded_unlisted],
+            keep=[read, via_platform_gone_from_romm, unrecorded_platform_gone],
+            ask=[via_collection, unrecorded_listed],
+        )
+
+    def test_a_collection_route_is_asked_even_on_a_platform_romm_no_longer_lists(self):
+        row = StaleRow(1, 1001, "psx", "collection")
+
+        sort = sort_stale_rows(
+            [row], read_platform_slugs=set(), listed_platform_slugs=set(), collection_listed_rom_ids=()
+        )
+
+        assert sort.ask == [row]
+
+    def test_an_unknown_listing_reads_as_every_platform_listed(self):
+        row = StaleRow(1, 1001, "psx", "platform")
+
+        sort = sort_stale_rows(
+            [row], read_platform_slugs=set(), listed_platform_slugs=None, collection_listed_rom_ids=()
+        )
+
+        assert sort.remove == [row]
+
+    def test_nothing_stale_sorts_into_nothing(self):
+        assert sort_stale_rows(
+            [], read_platform_slugs=set(), listed_platform_slugs=set(), collection_listed_rom_ids=set()
+        ) == StaleSort([], [], [])
+
+    def test_only_a_rom_romm_returned_is_removed(self):
+        gone, present, unknown, unasked = (StaleRow(rid, 1000 + rid, "gba") for rid in (1, 2, 3, 4))
+
+        remove, keep = settle_asked_rows([gone, present, unknown, unasked], {1: "gone", 2: "present", 3: "unknown"})
+
+        assert (remove, keep) == ([present], [gone, unknown, unasked])

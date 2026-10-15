@@ -742,7 +742,6 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             active_downloads=download_service.active_download_rom_ids,
             drift_probe=save_sync_service.check_local_drift,
             remove_installed_files=rom_removal_service.delete_rom_files,
-            switch_version=version_switch_service.switch_version_unchecked,
             settings=cfg.stores.settings,
             run_claim=prune_conflicts,
             conflict_rules=conflict_rules,

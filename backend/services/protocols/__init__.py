@@ -72,7 +72,6 @@ from services.protocols.cross_service import (
     SiblingSupersedeFn,
     SiblingSupersedeProvider,
     UpdateInProgressFn,
-    VersionSwitcherFn,
     WorkInFlightFn,
 )
 from services.protocols.determinism import Clock, Sleeper, UuidGen
@@ -307,6 +306,5 @@ __all__ = [
     "UpdateInProgressFn",
     "UpdateStagingStore",
     "UuidGen",
-    "VersionSwitcherFn",
     "WorkInFlightFn",
 ]

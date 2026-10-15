@@ -673,11 +673,24 @@ class TestSgdbEndpointDelegation:
         services.sgdb_service.save_sgdb_api_key.assert_called_once_with("abc")
         assert result == {"ok": True}
 
+    def test_remove_sgdb_api_key_delegates(self, endpoints, services):
+        services.sgdb_service.remove_sgdb_api_key.return_value = {"ok": True}
+        result = endpoints.remove_sgdb_api_key()
+        services.sgdb_service.remove_sgdb_api_key.assert_called_once_with()
+        assert result == {"ok": True}
+
+    @pytest.mark.asyncio
+    async def test_refresh_sgdb_artwork_delegates(self, endpoints, services):
+        services.sgdb_service.refresh_sgdb_artwork = AsyncMock(return_value={"success": True})
+        result = await endpoints.refresh_sgdb_artwork(42, 7)
+        services.sgdb_service.refresh_sgdb_artwork.assert_awaited_once_with(42, 7)
+        assert result == {"success": True}
+
     @pytest.mark.asyncio
     async def test_save_shortcut_icon_delegates(self, endpoints, services):
         services.sgdb_service.save_shortcut_icon = AsyncMock(return_value={"ok": True})
-        result = await endpoints.save_shortcut_icon(123, "data")
-        services.sgdb_service.save_shortcut_icon.assert_awaited_once_with(123, "data")
+        result = await endpoints.save_shortcut_icon(123, 41)
+        services.sgdb_service.save_shortcut_icon.assert_awaited_once_with(123, 41)
         assert result == {"ok": True}
 
 

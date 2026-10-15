@@ -12,6 +12,7 @@ type AnyProps = Record<string, unknown> & { children?: unknown };
 vi.mock("@decky/ui", () => ({
   PanelSection: (p: AnyProps) => createElement("section", {}, p.children as never),
   PanelSectionRow: (p: AnyProps) => createElement("div", {}, p.children as never),
+  Focusable: (p: AnyProps) => createElement("div", {}, p.children as never),
   Field: (p: AnyProps & { label?: unknown; description?: unknown }) =>
     createElement(
       "div",
@@ -44,6 +45,7 @@ function defaultProps(overrides: Partial<React.ComponentProps<typeof SteamGridDB
     sgdbApiKey: "",
     onVerifyKey: vi.fn(async () => ({ success: true, message: "" })),
     onSaveKey: vi.fn(async () => {}),
+    onRemoveKey: vi.fn(async () => {}),
     ...overrides,
   };
 }
@@ -86,6 +88,24 @@ describe("SteamGridDBSection", () => {
     it("does not open a modal until Edit is clicked", () => {
       render(<SteamGridDBSection {...defaultProps({ sgdbApiKey: "stored" })} />);
       expect(vi.mocked(showModal)).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Remove", () => {
+    it("is offered beside Edit while a key is set, and calls onRemoveKey without asking", () => {
+      const onRemoveKey = vi.fn(async () => {});
+      const { getByText } = render(<SteamGridDBSection {...defaultProps({ sgdbApiKey: "stored", onRemoveKey })} />);
+      fireEvent.click(getByText("Remove"));
+      expect(onRemoveKey).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(showModal)).not.toHaveBeenCalled();
+    });
+
+    it("is not offered while no key is set", () => {
+      const { queryByText } = render(
+        <SteamGridDBSection {...defaultProps({ sgdbApiKey: "", onRemoveKey: vi.fn(async () => {}) })} />,
+      );
+      expect(queryByText("Remove")).toBeNull();
+      expect(queryByText("Edit")).not.toBeNull();
     });
   });
 

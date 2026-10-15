@@ -517,25 +517,27 @@ export const cleanupOrphanedGridImages = endpoint<
   }
 >("cleanup_orphaned_grid_images");
 /**
- * One SteamGridDB image for a ROM, from the artwork cache first. A wide grid or
- * logo also carries SteamGridDB's image id, the hash of its bytes and the ROM's
- * SteamGridDB id, which `reportSgdbSlotArtwork` records once Steam has taken it
- * or refused it.
+ * One SteamGridDB hero, logo or wide grid for a ROM, from the artwork cache
+ * first. A wide grid or logo also carries SteamGridDB's image id, the hash of
+ * its bytes and the ROM's SteamGridDB id, which `reportSgdbSlotArtwork` records
+ * once Steam has taken it or refused it. The icon (asset type 4) is refused:
+ * it is fetched through `getSgdbSlotArtwork` and written by `saveShortcutIcon`.
  */
 export const getSgdbArtworkBase64 = endpoint<
   [number, number],
-  {
-    base64: string | null;
-    no_api_key?: boolean;
-    prune_lease_token?: string;
-    image_id?: number;
-    sha256?: string;
-    sgdb_id?: number | null;
-  }
+  | {
+      base64: string | null;
+      no_api_key?: boolean;
+      prune_lease_token?: string;
+      image_id?: number;
+      sha256?: string;
+      sgdb_id?: number | null;
+    }
+  | EndpointFailure
 >("get_sgdb_artwork_base64");
 
-/** An artwork slot the game page fills only while it is empty: the wide grid, the logo or the hero. */
-export type SgdbArtworkSlot = "grid" | "logo" | "hero";
+/** An artwork slot the game page fills only while it is empty: the wide grid, the logo, the hero or the icon. */
+export type SgdbArtworkSlot = "grid" | "logo" | "hero" | "icon";
 
 /** What the backend answers for one empty slot: the image to set, or why there is none to set. */
 export type SgdbSlotArtwork =
@@ -545,17 +547,30 @@ export type SgdbSlotArtwork =
       /** SteamGridDB's image id; `null` for the hero, whose outcome is not recorded. */
       image_id: number | null;
       sha256: string;
-      sgdb_id: number;
+      /** The ROM's SteamGridDB id; `null` for an image a manual pick left in the cache of a ROM with none stored. */
+      sgdb_id: number | null;
       prune_lease_token?: string;
     }
-  | { status: "skip" | "none" | "failed" | "no_api_key" };
+  /** The icon: the artwork cache holds it, for `saveShortcutIcon` to write. */
+  | { status: "ready"; prune_lease_token?: string }
+  | { status: "skip" | "none" | "failed" | "key_refused" | "rate_limited" | "no_api_key" };
 
-/** Serve SteamGridDB's image for one slot of a shortcut, only while Steam's grid directory has no file for it. */
-export const getSgdbSlotArtwork = endpoint<[number, number, SgdbArtworkSlot], SgdbSlotArtwork>("get_sgdb_slot_artwork");
+/**
+ * Serve SteamGridDB's image for one slot of a shortcut, only while the slot is not filled — Steam's grid directory has
+ * no file for it, or, for the icon, `shortcuts.vdf` points at none but Tender's stand-ins — and its record does not rule
+ * it out. With `replace` neither is checked: the slot is served whatever it holds and whatever its record says.
+ */
+export const getSgdbSlotArtwork = endpoint<
+  [number, number, SgdbArtworkSlot, boolean?],
+  SgdbSlotArtwork | EndpointFailure
+>("get_sgdb_slot_artwork");
 
-/** Report what `SetCustomArtworkForApp` made of a wide grid or logo the fetch served, passing its answer back. */
+/**
+ * Report what Steam made of a wide grid or logo the fetch served (`SetCustomArtworkForApp`), or of an icon the
+ * backend wrote (`SetShortcutIcon`), passing what the backend answered back.
+ */
 export const reportSgdbSlotArtwork = endpoint<
-  [number, "grid" | "logo", "set" | "refused", number | null, number | null, string | null],
+  [number, "grid" | "logo" | "icon", "set" | "refused", number | null, number | null, string | null],
   { success: boolean }
 >("report_sgdb_slot_artwork");
 
@@ -576,9 +591,16 @@ export type SgdbResolution =
 /** Result of a manual SGDB name search. */
 export type SgdbSearchResult = { success: true; games: SgdbCandidate[] } | EndpointFailure;
 
-export const getSgdbResolution = endpoint<[number], SgdbResolution>("get_sgdb_resolution");
+export const getSgdbResolution = endpoint<[number], SgdbResolution | EndpointFailure>("get_sgdb_resolution");
 export const searchSgdbGames = endpoint<[string], SgdbSearchResult>("search_sgdb_games");
-export const applySgdbGameId = endpoint<[number, number], { success: boolean }>("apply_sgdb_game_id");
+export const applySgdbGameId = endpoint<[number, number], { success: true } | EndpointFailure>("apply_sgdb_game_id");
+/**
+ * Download a ROM's hero, logo, wide grid and icon anew from SteamGridDB game
+ * `sgdb_id`; a cached image is replaced only by a download that succeeded.
+ */
+export const refreshSgdbArtwork = endpoint<[number, number], { success: true } | EndpointFailure>(
+  "refresh_sgdb_artwork",
+);
 export const reportUnitResults = endpoint<
   [Record<string, number>, string, number | string, number],
   { success: boolean; count: number; ignored?: boolean }
@@ -620,6 +642,7 @@ export const uninstallAllRoms = endpoint<
   }
 >("uninstall_all_roms");
 export const saveSgdbApiKey = endpoint<[string], { success: boolean; message: string }>("save_sgdb_api_key");
+export const removeSgdbApiKey = endpoint<[], { success: boolean; message: string }>("remove_sgdb_api_key");
 export const verifySgdbApiKey = endpoint<[string], { success: boolean; message: string }>("verify_sgdb_api_key");
 export const saveSteamInputSetting = endpoint<[string], { success: boolean }>("save_steam_input_setting");
 export const applySteamInputSetting = endpoint<[], { success: boolean; message: string }>("apply_steam_input_setting");
@@ -944,7 +967,6 @@ export interface PrunePreviewResult {
 export interface StartPruneRequest {
   preview_id: string;
   confirmed: boolean;
-  repoint_shortcuts: boolean;
   remove_rows: boolean;
   remove_fully_vanished: boolean;
   create_recovery_bundle: boolean;
@@ -982,9 +1004,8 @@ export interface ClaimPruneActionRequest {
   phase: "claim";
   run_id: string;
   action_token: string;
-  action: "capture_shortcut_snapshot" | "repoint_shortcut" | "remove_shortcut";
+  action: "capture_shortcut_snapshot" | "remove_shortcut";
   app_id: number;
-  target_rom_id: number | null;
 }
 
 export interface CompletePruneActionRequest {
@@ -1023,9 +1044,6 @@ export const reportPruneAction = endpoint<
   [ReportPruneActionRequest],
   { success: boolean; ignored?: boolean; reason?: WireReason; message: string }
 >("report_prune_action");
-export const waitForPruneRelease = endpoint<[string], { success: boolean; reason?: WireReason; message: string }>(
-  "wait_for_prune_release",
-);
 
 export const saveLogLevel = endpoint<[string], { success: boolean }>("save_log_level");
 // Preferred sibling-group region (ADR-0021 §3). "auto" = build-time default
@@ -1066,11 +1084,21 @@ export const getInstalledRelaunchOptions = endpoint<[], InstalledRelaunchOptions
   "get_installed_relaunch_options",
 );
 
-// Icon support — writes the icon PNG into Steam's grid dir and returns its
-// path; the caller points the shortcut at it via SteamClient.Apps.SetShortcutIcon.
-export const saveShortcutIcon = endpoint<[number, string], { success: boolean; icon_path?: string }>(
-  "save_shortcut_icon",
-);
+/** The icon `saveShortcutIcon` wrote: its path, and what `reportSgdbSlotArtwork` records for it. */
+export interface SavedShortcutIcon {
+  success: true;
+  icon_path: string;
+  image_id: number;
+  sha256: string;
+  sgdb_id: number | null;
+}
+
+/**
+ * Write a ROM's cached SteamGridDB icon, downscaled, into Steam's grid directory as an app's icon, after
+ * `getSgdbSlotArtwork` answered it `ready`. The caller points the shortcut at the path through
+ * `SteamClient.Apps.SetShortcutIcon`.
+ */
+export const saveShortcutIcon = endpoint<[number, number], SavedShortcutIcon | EndpointFailure>("save_shortcut_icon");
 
 // Save sync endpoints
 export const ensureDeviceRegistered = endpoint<

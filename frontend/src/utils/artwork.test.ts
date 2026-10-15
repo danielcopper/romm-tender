@@ -8,6 +8,22 @@ import {
   setJobSlotArtwork,
 } from "./artwork";
 
+/** What `saveShortcutIcon` answers for an icon it wrote. */
+const SAVED_ICON: backend.SavedShortcutIcon = {
+  success: true,
+  icon_path: "/grid/5000_icon.png",
+  image_id: 31,
+  sha256: "sha-icon",
+  sgdb_id: 9999,
+};
+
+/** What `saveShortcutIcon` answers when it cannot write the icon. */
+const ICON_NOT_WRITTEN: backend.EndpointFailure = {
+  success: false,
+  reason: "icon_write_failed",
+  message: "Failed to write icon to Steam grid directory",
+};
+
 describe("applyArtwork", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -17,7 +33,8 @@ describe("applyArtwork", () => {
         SetShortcutIcon: vi.fn(),
       },
     });
-    vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: true });
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "none" });
+    vi.mocked(backend.saveShortcutIcon).mockResolvedValue(SAVED_ICON);
   });
 
   it("requests all four SGDB asset types for the rom id", async () => {
@@ -26,33 +43,32 @@ describe("applyArtwork", () => {
     expect(vi.mocked(backend.getSgdbArtworkBase64)).toHaveBeenCalledWith(42, 1);
     expect(vi.mocked(backend.getSgdbArtworkBase64)).toHaveBeenCalledWith(42, 2);
     expect(vi.mocked(backend.getSgdbArtworkBase64)).toHaveBeenCalledWith(42, 3);
-    expect(vi.mocked(backend.getSgdbArtworkBase64)).toHaveBeenCalledWith(42, 4);
+    expect(vi.mocked(backend.getSgdbSlotArtwork)).toHaveBeenCalledWith(42, 5000, "icon", true);
   });
 
   it("returns -1 when any asset reports no_api_key", async () => {
     vi.mocked(backend.getSgdbArtworkBase64)
       .mockResolvedValueOnce({ base64: null, no_api_key: false })
       .mockResolvedValueOnce({ base64: null, no_api_key: true })
-      .mockResolvedValueOnce({ base64: null, no_api_key: false })
       .mockResolvedValueOnce({ base64: null, no_api_key: false });
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready" });
     await expect(applyArtwork(42, 5000)).resolves.toBe(-1);
     // Short-circuits before writing any artwork.
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
     expect(vi.mocked(backend.saveShortcutIcon)).not.toHaveBeenCalled();
   });
 
-  it("maps types 1-3 to SetCustomArtworkForApp and type 4 to saveShortcutIcon, returns count", async () => {
+  it("maps types 1-3 to SetCustomArtworkForApp and writes the icon through saveShortcutIcon, returns count", async () => {
     vi.mocked(backend.getSgdbArtworkBase64)
       .mockResolvedValueOnce({ base64: "AA==", no_api_key: false })
       .mockResolvedValueOnce({ base64: "BB==", no_api_key: false })
-      .mockResolvedValueOnce({ base64: "CC==", no_api_key: false })
-      .mockResolvedValueOnce({ base64: "DD==", no_api_key: false });
-    vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: true, icon_path: "/grid/5000_icon.png" });
+      .mockResolvedValueOnce({ base64: "CC==", no_api_key: false });
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready" });
     await expect(applyArtwork(42, 5000)).resolves.toBe(4);
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledWith(5000, "AA==", "png", 1);
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledWith(5000, "BB==", "png", 2);
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledWith(5000, "CC==", "png", 3);
-    expect(vi.mocked(backend.saveShortcutIcon)).toHaveBeenCalledWith(5000, "DD==");
+    expect(vi.mocked(backend.saveShortcutIcon)).toHaveBeenCalledWith(5000, 42);
     // The returned grid path is applied to the shortcut live via SteamClient.
     expect(vi.mocked(SteamClient.Apps.SetShortcutIcon)).toHaveBeenCalledWith(5000, "/grid/5000_icon.png");
   });
@@ -62,8 +78,9 @@ describe("applyArtwork", () => {
     vi.mocked(backend.getSgdbArtworkBase64)
       .mockResolvedValueOnce({ base64: "AA==", no_api_key: false, prune_lease_token: "lease-1" })
       .mockResolvedValueOnce({ base64: null, no_api_key: false, prune_lease_token: "lease-2" })
-      .mockResolvedValueOnce({ base64: null, no_api_key: false, prune_lease_token: "lease-3" })
-      .mockResolvedValueOnce({ base64: null, no_api_key: false, prune_lease_token: "lease-4" });
+      .mockResolvedValueOnce({ base64: null, no_api_key: false, prune_lease_token: "lease-3" });
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready", prune_lease_token: "lease-4" });
+    vi.mocked(backend.saveShortcutIcon).mockResolvedValue(ICON_NOT_WRITTEN);
     vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
     vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mockImplementationOnce(() => write.promise);
 
@@ -105,29 +122,21 @@ describe("applyArtwork", () => {
   });
 
   it("does not call SetShortcutIcon when saveShortcutIcon reports failure", async () => {
-    vi.mocked(backend.getSgdbArtworkBase64)
-      .mockResolvedValueOnce({ base64: null, no_api_key: false })
-      .mockResolvedValueOnce({ base64: null, no_api_key: false })
-      .mockResolvedValueOnce({ base64: null, no_api_key: false })
-      .mockResolvedValueOnce({ base64: "DD==", no_api_key: false });
-    vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: false });
-    // Only the icon asset had base64, and it failed → count is 0 (the failed icon
-    // is NOT counted). Before the L4 fix `applied++` ran regardless and returned 1.
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false });
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready" });
+    vi.mocked(backend.saveShortcutIcon).mockResolvedValue(ICON_NOT_WRITTEN);
+    // Only the icon was there to set, and its write failed → count is 0 (the
+    // failed icon is NOT counted).
     await expect(applyArtwork(42, 5000)).resolves.toBe(0);
-    expect(vi.mocked(backend.saveShortcutIcon)).toHaveBeenCalledWith(5000, "DD==");
+    expect(vi.mocked(backend.saveShortcutIcon)).toHaveBeenCalledWith(5000, 42);
     expect(vi.mocked(SteamClient.Apps.SetShortcutIcon)).not.toHaveBeenCalled();
   });
 
-  it("does not call SetShortcutIcon when saveShortcutIcon returns no icon_path", async () => {
-    vi.mocked(backend.getSgdbArtworkBase64)
-      .mockResolvedValueOnce({ base64: null, no_api_key: false })
-      .mockResolvedValueOnce({ base64: null, no_api_key: false })
-      .mockResolvedValueOnce({ base64: null, no_api_key: false })
-      .mockResolvedValueOnce({ base64: "DD==", no_api_key: false });
-    vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: true });
-    // Icon succeeded but returned no path → not applied, so not counted → 0 (#L4).
+  it("does not write the icon when its fetch failed", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false });
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "failed" });
     await expect(applyArtwork(42, 5000)).resolves.toBe(0);
-    expect(vi.mocked(backend.saveShortcutIcon)).toHaveBeenCalledWith(5000, "DD==");
+    expect(vi.mocked(backend.saveShortcutIcon)).not.toHaveBeenCalled();
     expect(vi.mocked(SteamClient.Apps.SetShortcutIcon)).not.toHaveBeenCalled();
   });
 
@@ -135,9 +144,9 @@ describe("applyArtwork", () => {
     vi.mocked(backend.getSgdbArtworkBase64)
       .mockResolvedValueOnce({ base64: "AA==", no_api_key: false }) // hero → applied
       .mockResolvedValueOnce({ base64: null, no_api_key: false })
-      .mockResolvedValueOnce({ base64: null, no_api_key: false })
-      .mockResolvedValueOnce({ base64: "DD==", no_api_key: false }); // icon → fails
-    vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: false });
+      .mockResolvedValueOnce({ base64: null, no_api_key: false });
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready" }); // icon → its write fails
+    vi.mocked(backend.saveShortcutIcon).mockResolvedValue(ICON_NOT_WRITTEN);
     // Hero counts (1), the failed icon does not → 1, not 2.
     await expect(applyArtwork(42, 5000)).resolves.toBe(1);
     expect(vi.mocked(SteamClient.Apps.SetShortcutIcon)).not.toHaveBeenCalled();
@@ -154,8 +163,7 @@ describe("applyArtwork", () => {
     vi.mocked(backend.getSgdbArtworkBase64)
       .mockResolvedValueOnce({ base64: "AA==", no_api_key: false })
       .mockResolvedValueOnce({ base64: null, no_api_key: false })
-      .mockResolvedValueOnce({ base64: "CC==", no_api_key: false })
-      .mockResolvedValueOnce({ base64: null, no_api_key: false });
+      .mockResolvedValueOnce({ base64: "CC==", no_api_key: false });
     await expect(applyArtwork(42, 5000)).resolves.toBe(2);
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledTimes(2);
     expect(vi.mocked(backend.saveShortcutIcon)).not.toHaveBeenCalled();
@@ -163,8 +171,10 @@ describe("applyArtwork", () => {
 
   it("per-asset fetch rejection is swallowed → treated as null (returns 0)", async () => {
     vi.mocked(backend.getSgdbArtworkBase64).mockRejectedValue(new Error("net"));
+    vi.mocked(backend.getSgdbSlotArtwork).mockRejectedValue(new Error("net"));
     await expect(applyArtwork(42, 5000)).resolves.toBe(0);
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).not.toHaveBeenCalled();
+    expect(vi.mocked(backend.saveShortcutIcon)).not.toHaveBeenCalled();
   });
 });
 
@@ -187,9 +197,10 @@ describe("applyArtwork — newest-apply-wins race guard", () => {
         SetShortcutIcon: vi.fn(),
       },
     });
-    // Icon succeeds WITH a path so it counts toward the applied total (these tests
-    // exercise all four assets applying) — a success without a path is not counted (#L4).
-    vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: true, icon_path: "/grid/icon.png" });
+    // The icon is written, so it counts toward the applied total (these tests
+    // exercise all four assets applying).
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready" });
+    vi.mocked(backend.saveShortcutIcon).mockResolvedValue(SAVED_ICON);
   });
 
   it("a superseded in-flight apply writes nothing — only the newer apply's art lands for that appId", async () => {
@@ -221,8 +232,8 @@ describe("applyArtwork — newest-apply-wins race guard", () => {
     expect(write.mock.calls.some((c) => c[1] === "AA==")).toBe(false);
     // Exactly one hero (assetType 1) write, and it is B's.
     expect(write.mock.calls.filter((c) => c[3] === 1)).toEqual([[appId, "BB==", "png", 1]]);
-    // The icon path (saveShortcutIcon) only ever received B's art, never A's.
-    expect(vi.mocked(backend.saveShortcutIcon).mock.calls.some((c) => c[1] === "AA==")).toBe(false);
+    // The icon (saveShortcutIcon) was only ever written for B's rom, never A's.
+    expect(vi.mocked(backend.saveShortcutIcon).mock.calls.some((c) => c[1] === 42)).toBe(false);
     // A resolved to the count it managed to write (0) rather than throwing.
     await expect(aPromise).resolves.toBe(0);
   });
@@ -274,6 +285,7 @@ describe("isArtworkApplyInFlight", () => {
         SetShortcutIcon: vi.fn(),
       },
     });
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "none" });
   });
 
   it("answers yes for an appId while its apply runs, and no for any other", async () => {
@@ -356,7 +368,7 @@ describe("fillEmptyArtwork", () => {
     vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
   });
 
-  it("asks for the hero, the logo and the wide grid of the shortcut, then the icon as before", async () => {
+  it("asks for the hero, the logo, the wide grid and the icon of the shortcut", async () => {
     answerSlots({});
 
     await fillEmptyArtwork(42, 5000);
@@ -365,8 +377,9 @@ describe("fillEmptyArtwork", () => {
       [42, 5000, "hero"],
       [42, 5000, "logo"],
       [42, 5000, "grid"],
+      [42, 5000, "icon"],
     ]);
-    expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls).toEqual([[42, 4]]);
+    expect(backend.getSgdbArtworkBase64).not.toHaveBeenCalled();
   });
 
   it("sets only the slots the backend serves an image for, each under its Steam asset type", async () => {
@@ -427,6 +440,7 @@ describe("fillEmptyArtwork", () => {
       "hero",
       "logo",
       "grid",
+      "icon",
     ]);
   });
 
@@ -450,14 +464,16 @@ describe("fillEmptyArtwork", () => {
     await expect(fillEmptyArtwork(42, 5000)).resolves.toBe(-1);
 
     expect(SteamClient.Apps.SetCustomArtworkForApp).not.toHaveBeenCalled();
-    expect(backend.getSgdbArtworkBase64).not.toHaveBeenCalled();
+    expect(vi.mocked(backend.getSgdbSlotArtwork).mock.calls.map(([, , slot]) => slot)).not.toContain("icon");
+    expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
   });
 
   it("treats a fetch that rejects as nothing to set and asks for the next slot", async () => {
     vi.mocked(backend.getSgdbSlotArtwork)
       .mockRejectedValueOnce(new Error("net"))
       .mockResolvedValueOnce(image("LL==", 5))
-      .mockResolvedValueOnce({ status: "none" });
+      .mockResolvedValueOnce({ status: "none" })
+      .mockResolvedValueOnce({ status: "skip" });
 
     await expect(fillEmptyArtwork(42, 5000)).resolves.toBe(1);
 
@@ -477,14 +493,13 @@ describe("fillEmptyArtwork", () => {
     expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp).mock.calls.some((c) => c[1] === "OLD=")).toBe(false);
   });
 
-  it("gives the icon as applyArtwork does", async () => {
-    answerSlots({});
-    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: "DD==", no_api_key: false });
-    vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: true, icon_path: "/grid/5000_icon.png" });
+  it("gives the icon the backend answers ready, through the same write as applyArtwork", async () => {
+    answerSlots({ icon: { status: "ready" } });
+    vi.mocked(backend.saveShortcutIcon).mockResolvedValue(SAVED_ICON);
 
     await expect(fillEmptyArtwork(42, 5000)).resolves.toBe(1);
 
-    expect(backend.saveShortcutIcon).toHaveBeenCalledWith(5000, "DD==");
+    expect(backend.saveShortcutIcon).toHaveBeenCalledWith(5000, 42);
     expect(SteamClient.Apps.SetShortcutIcon).toHaveBeenCalledWith(5000, "/grid/5000_icon.png");
   });
 
@@ -521,8 +536,8 @@ describe("applyArtwork records the wide grid and the logo it set", () => {
     vi.mocked(backend.getSgdbArtworkBase64)
       .mockResolvedValueOnce({ base64: "HH==", no_api_key: false })
       .mockResolvedValueOnce(replaced("LL==", 5))
-      .mockResolvedValueOnce(replaced("GG==", 12))
-      .mockResolvedValueOnce({ base64: null, no_api_key: false });
+      .mockResolvedValueOnce(replaced("GG==", 12));
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "none" });
   });
 
   it("reports each as set under the ROM it was applied for, with its image id and hash, and no hero", async () => {
@@ -636,5 +651,269 @@ describe("setJobSlotArtwork", () => {
     write.resolve(undefined);
     await setting;
     expect(backend.releasePruneConflictLease).toHaveBeenCalledWith("grid-lease");
+  });
+});
+
+describe("a refused artwork fetch", () => {
+  const refusal: backend.EndpointFailure = {
+    success: false,
+    reason: "prune_active",
+    message: "A removed-game cleanup is in progress; wait for it to finish before changing local game data.",
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubGlobal("SteamClient", {
+      Apps: {
+        SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined),
+        SetShortcutIcon: vi.fn(),
+      },
+    });
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "none" });
+    vi.mocked(backend.saveShortcutIcon).mockResolvedValue(SAVED_ICON);
+    vi.mocked(backend.reportSgdbSlotArtwork).mockResolvedValue({ success: true });
+    vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
+    vi.mocked(backend.debugLog).mockResolvedValue(undefined);
+  });
+
+  it("makes applyArtwork answer the refusal, apply nothing and give every lease back", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64)
+      .mockResolvedValueOnce({ base64: "AA==", no_api_key: false, prune_lease_token: "lease-1" })
+      .mockResolvedValueOnce(refusal)
+      .mockResolvedValueOnce({ base64: "CC==", no_api_key: false, prune_lease_token: "lease-3" });
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready", prune_lease_token: "lease-4" });
+
+    await expect(applyArtwork(42, 5000)).resolves.toEqual(refusal);
+
+    expect(SteamClient.Apps.SetCustomArtworkForApp).not.toHaveBeenCalled();
+    expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
+    expect(
+      vi
+        .mocked(backend.releasePruneConflictLease)
+        .mock.calls.map(([token]) => token)
+        .sort(),
+    ).toEqual(["lease-1", "lease-3", "lease-4"]);
+  });
+
+  it("is logged by the first visit's fill, which goes on to the next slot", async () => {
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false });
+    vi.mocked(backend.getSgdbSlotArtwork).mockImplementation(async (_romId, _appId, slot) =>
+      slot === "hero" ? refusal : { status: "skip" },
+    );
+
+    await expect(fillEmptyArtwork(42, 5000)).resolves.toBe(0);
+
+    expect(vi.mocked(backend.getSgdbSlotArtwork).mock.calls.map(([, , slot]) => slot)).toEqual([
+      "hero",
+      "logo",
+      "grid",
+      "icon",
+    ]);
+    expect(backend.debugLog).toHaveBeenCalledWith(
+      expect.stringContaining(`hero fetch for appId 5000 refused: ${refusal.message}`),
+    );
+  });
+
+  it("is logged for the first visit's icon, which is then not applied", async () => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockImplementation(async (_romId, _appId, slot) =>
+      slot === "icon" ? refusal : { status: "skip" },
+    );
+
+    await expect(fillEmptyArtwork(42, 5000)).resolves.toBe(0);
+
+    expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
+    expect(backend.debugLog).toHaveBeenCalledWith(
+      expect.stringContaining(`icon fetch for appId 5000 refused: ${refusal.message}`),
+    );
+  });
+
+  it("stops the first visit's fill at a refused key, asking for no further slot or icon", async () => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "key_refused" });
+
+    await expect(fillEmptyArtwork(42, 5000)).resolves.toBe(0);
+
+    expect(vi.mocked(backend.getSgdbSlotArtwork).mock.calls.map(([, , slot]) => slot)).toEqual(["hero"]);
+    expect(backend.getSgdbSlotArtwork).not.toHaveBeenCalledWith(42, 5000, "icon");
+    expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
+  });
+
+  it("makes the shortcut artwork job's slot write nothing, and is logged", async () => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue(refusal);
+
+    await expect(setJobSlotArtwork(42, 5000, "logo", () => false)).resolves.toBe(false);
+
+    expect(SteamClient.Apps.SetCustomArtworkForApp).not.toHaveBeenCalled();
+    expect(backend.debugLog).toHaveBeenCalledWith(
+      expect.stringContaining(`logo fetch for appId 5000 refused: ${refusal.message}`),
+    );
+  });
+});
+
+describe("the icon through the per-slot fetch", () => {
+  /** Answer the icon's fetch with *icon*, and every other slot `skip`. */
+  const answerIcon = (icon: backend.SgdbSlotArtwork | backend.EndpointFailure) => {
+    vi.mocked(backend.getSgdbSlotArtwork).mockImplementation(async (_romId, _appId, slot) =>
+      slot === "icon" ? icon : { status: "skip" },
+    );
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubGlobal("SteamClient", {
+      Apps: {
+        SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined),
+        SetShortcutIcon: vi.fn(),
+      },
+    });
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: null, no_api_key: false });
+    vi.mocked(backend.saveShortcutIcon).mockResolvedValue(SAVED_ICON);
+    vi.mocked(backend.reportSgdbSlotArtwork).mockResolvedValue({ success: true });
+    vi.mocked(backend.releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
+    vi.mocked(backend.debugLog).mockResolvedValue(undefined);
+  });
+
+  it("keeps an icon the backend skips on a first visit, so an icon somebody set stays", async () => {
+    answerIcon({ status: "skip" });
+
+    await expect(fillEmptyArtwork(42, 5000)).resolves.toBe(0);
+
+    expect(backend.getSgdbSlotArtwork).toHaveBeenCalledWith(42, 5000, "icon");
+    expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
+    expect(SteamClient.Apps.SetShortcutIcon).not.toHaveBeenCalled();
+    expect(backend.reportSgdbSlotArtwork).not.toHaveBeenCalled();
+  });
+
+  it("writes, sets and records the icon the backend answers ready on a first visit", async () => {
+    answerIcon({ status: "ready" });
+
+    await expect(fillEmptyArtwork(42, 5000)).resolves.toBe(1);
+
+    expect(backend.saveShortcutIcon).toHaveBeenCalledWith(5000, 42);
+    expect(SteamClient.Apps.SetShortcutIcon).toHaveBeenCalledWith(5000, "/grid/5000_icon.png");
+    expect(vi.mocked(backend.reportSgdbSlotArtwork).mock.calls).toEqual([[42, "icon", "set", 9999, 31, "sha-icon"]]);
+  });
+
+  it("records an icon Steam refuses on a first visit as refused, and goes on", async () => {
+    answerIcon({ status: "ready" });
+    vi.mocked(SteamClient.Apps.SetShortcutIcon).mockImplementation(() => {
+      throw new Error("no such app");
+    });
+
+    await expect(fillEmptyArtwork(42, 5000)).resolves.toBe(0);
+
+    expect(vi.mocked(backend.reportSgdbSlotArtwork).mock.calls).toEqual([
+      [42, "icon", "refused", 9999, 31, "sha-icon"],
+    ]);
+  });
+
+  it("sets and records nothing when the icon's write is refused", async () => {
+    answerIcon({ status: "ready" });
+    vi.mocked(backend.saveShortcutIcon).mockResolvedValue(ICON_NOT_WRITTEN);
+
+    await expect(fillEmptyArtwork(42, 5000)).resolves.toBe(0);
+
+    expect(SteamClient.Apps.SetShortcutIcon).not.toHaveBeenCalled();
+    expect(backend.reportSgdbSlotArtwork).not.toHaveBeenCalled();
+    expect(backend.debugLog).toHaveBeenCalledWith(expect.stringContaining(ICON_NOT_WRITTEN.message));
+  });
+
+  it("holds the icon's lease through its write", async () => {
+    const write = deferred<backend.SavedShortcutIcon>();
+    answerIcon({ status: "ready", prune_lease_token: "icon-lease" });
+    vi.mocked(backend.saveShortcutIcon).mockReturnValue(write.promise);
+
+    const filling = fillEmptyArtwork(42, 5000);
+    await vi.waitFor(() => expect(backend.saveShortcutIcon).toHaveBeenCalled());
+    expect(backend.releasePruneConflictLease).not.toHaveBeenCalled();
+
+    write.resolve(SAVED_ICON);
+    await filling;
+    expect(backend.releasePruneConflictLease).toHaveBeenCalledWith("icon-lease");
+  });
+
+  it("writes no icon once a newer apply for the shortcut has started", async () => {
+    const slow = deferred<backend.SgdbSlotArtwork>();
+    vi.mocked(backend.getSgdbSlotArtwork).mockImplementation(async (_romId, _appId, slot, replace) =>
+      slot === "icon" && !replace ? slow.promise : { status: "skip" },
+    );
+
+    const filling = fillEmptyArtwork(42, 5000);
+    await vi.waitFor(() => expect(backend.getSgdbSlotArtwork).toHaveBeenCalledWith(42, 5000, "icon"));
+    await applyArtwork(42, 5000);
+    slow.resolve({ status: "ready" });
+
+    await expect(filling).resolves.toBe(0);
+    expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
+  });
+
+  it("asks for the icon past the filled check and its record on the replacing apply, and records it", async () => {
+    answerIcon({ status: "ready" });
+
+    await expect(applyArtwork(42, 5000)).resolves.toBe(1);
+
+    expect(backend.getSgdbSlotArtwork).toHaveBeenCalledWith(42, 5000, "icon", true);
+    expect(backend.saveShortcutIcon).toHaveBeenCalledWith(5000, 42);
+    expect(SteamClient.Apps.SetShortcutIcon).toHaveBeenCalledWith(5000, "/grid/5000_icon.png");
+    expect(vi.mocked(backend.reportSgdbSlotArtwork).mock.calls).toEqual([[42, "icon", "set", 9999, 31, "sha-icon"]]);
+  });
+
+  it("writes no icon on a replacing apply a newer one has overtaken", async () => {
+    const slow = deferred<{ base64: null; no_api_key: boolean }>();
+    vi.mocked(backend.getSgdbArtworkBase64).mockImplementation(async (romId) =>
+      romId === 42 ? slow.promise : { base64: null, no_api_key: false },
+    );
+    answerIcon({ status: "ready" });
+
+    const older = applyArtwork(42, 5000);
+    await applyArtwork(99, 5000);
+    slow.resolve({ base64: null, no_api_key: false });
+
+    await expect(older).resolves.toBe(0);
+    expect(vi.mocked(backend.saveShortcutIcon).mock.calls).toEqual([[5000, 99]]);
+  });
+
+  it("records an icon Steam refuses on the replacing apply as refused, and fails the apply as the other slots do", async () => {
+    answerIcon({ status: "ready" });
+    vi.mocked(SteamClient.Apps.SetShortcutIcon).mockImplementation(() => {
+      throw new Error("no such app");
+    });
+
+    await expect(applyArtwork(42, 5000)).rejects.toThrow("no such app");
+
+    expect(vi.mocked(backend.reportSgdbSlotArtwork).mock.calls).toEqual([
+      [42, "icon", "refused", 9999, 31, "sha-icon"],
+    ]);
+  });
+
+  it("makes the replacing apply answer -1 when the icon's fetch finds no API key", async () => {
+    answerIcon({ status: "no_api_key" });
+
+    await expect(applyArtwork(42, 5000)).resolves.toBe(-1);
+
+    expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
+  });
+
+  it("makes the replacing apply answer a refused icon fetch and apply nothing", async () => {
+    const refusal: backend.EndpointFailure = {
+      success: false,
+      reason: "prune_active",
+      message: "A removed-game cleanup is in progress; wait for it to finish before changing local game data.",
+    };
+    vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: "AA==", no_api_key: false });
+    answerIcon(refusal);
+
+    await expect(applyArtwork(42, 5000)).resolves.toEqual(refusal);
+
+    expect(SteamClient.Apps.SetCustomArtworkForApp).not.toHaveBeenCalled();
+    expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
+  });
+
+  it("fetches no image through asset type 4 on a first visit or a replacing apply", async () => {
+    answerIcon({ status: "ready" });
+
+    await fillEmptyArtwork(42, 5000);
+    await applyArtwork(42, 5000);
+
+    expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls.map(([, assetType]) => assetType)).toEqual([1, 2, 3]);
   });
 });

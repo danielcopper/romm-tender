@@ -1,9 +1,10 @@
 """The artwork slots Tender fills from SteamGridDB, and when Steam's grid directory already fills one.
 
 Owns the slot vocabulary the per-slot fetch and its record share, and the rule
-that decides a slot is taken: a slot that already has an image is left alone,
-whoever set it (docs/architecture/steam-non-steam-shortcuts.md, "Game page
-artwork").
+that decides a wide grid, logo or hero is taken: a slot that already has an
+image is left alone, whoever set it (docs/architecture/steam-non-steam-shortcuts.md,
+"Game page artwork"). The icon's rule reads ``shortcuts.vdf`` instead, and is
+:func:`domain.shortcut_icon.is_icon_filled`.
 """
 
 from __future__ import annotations
@@ -21,11 +22,12 @@ class ArtworkSlot(StrEnum):
     WIDE_GRID = "grid"
     LOGO = "logo"
     HERO = "hero"
+    ICON = "icon"
 
 
 # The slots whose outcome is recorded: no background job fetches the hero, so
 # nothing would read its record ("Game page artwork" in the doc above).
-RECORDED_SLOTS: frozenset[ArtworkSlot] = frozenset({ArtworkSlot.WIDE_GRID, ArtworkSlot.LOGO})
+RECORDED_SLOTS: frozenset[ArtworkSlot] = frozenset({ArtworkSlot.WIDE_GRID, ArtworkSlot.LOGO, ArtworkSlot.ICON})
 
 # The extension Steam keeps the logo's position under, beside the logo itself.
 _NOT_AN_IMAGE_EXTENSION = "json"

@@ -10,7 +10,7 @@ from lib.list_result import ErrorCode
 
 if TYPE_CHECKING:
     from domain.rom import Rom
-    from services.protocols import ConflictRules, EventEmitter
+    from services.protocols import EventEmitter
     from services.prune._models import RecoveryHandle
 
 # One group's result travels whole in one completion chunk, so these keep a group
@@ -33,7 +33,6 @@ class MutationLedger:
 
     rows: list[Rom]
     app_id: int | None = None
-    target_rom_id: int | None = None
     bundle_path: str | None = None
     committed_action: str | None = None
     action_ambiguous: bool = False
@@ -66,7 +65,6 @@ class GroupOutcome:
     ambiguous_mutations: list[str] | None = None
     warnings: list[str] | None = None
     action_ambiguous: bool = False
-    target_rom_id: int | None = None
 
 
 _NOTHING_COMMITTED = GroupOutcome()
@@ -96,22 +94,11 @@ def _is_partial(results: list[dict[str, Any]], removed_count: int, *, failed: bo
     return committed and failed
 
 
-def _needs_publication(result: dict[str, Any]) -> bool:
-    """Whether a group's confirmed repoint leaves Steam needing a publish."""
-    return (
-        result.get("committed_action") == "repoint_shortcut"
-        and not result.get("action_ambiguous")
-        and type(result.get("app_id")) is int
-        and type(result.get("target_rom_id")) is int
-    )
-
-
 @dataclass(frozen=True)
 class PruneResultReporterConfig:
-    """The emit one cleanup run's frames go out through, and the rules its final frame is leased through."""
+    """The emit one cleanup run's frames go out through."""
 
     emit: EventEmitter
-    conflict_rules: ConflictRules
 
 
 class PruneResultReporter:
@@ -119,7 +106,6 @@ class PruneResultReporter:
 
     def __init__(self, *, config: PruneResultReporterConfig) -> None:
         self._emit = config.emit
-        self._rules = config.conflict_rules
         self._run_preview_id: str | None = None
 
     def bind_run(self, preview_id: str) -> None:
@@ -167,7 +153,6 @@ class PruneResultReporter:
         failures = [result for result in results if result["status"] in {"failed", "skipped", "partial"}]
         removed_count = _removed_count(results)
         partial = _is_partial(results, removed_count, failed=bool(failures) or cancelled or reason is not None)
-        publication_required = any(_needs_publication(result) for result in results)
         chunks: list[list[dict[str, Any]]] = []
         current: list[dict[str, Any]] = []
         for result in results:
@@ -183,7 +168,6 @@ class PruneResultReporter:
                 problem_count=len(failures),
                 reason=reason,
                 message=message,
-                publication_required=publication_required,
             )
             if current and len(json.dumps(probe, ensure_ascii=True).encode("utf-8")) > _COMPLETION_BUDGET_BYTES:
                 chunks.append(current)
@@ -204,25 +188,8 @@ class PruneResultReporter:
                 problem_count=len(failures),
                 reason=reason,
                 message=message,
-                publication_required=publication_required,
             )
-            if final and publication_required:
-                await self._emit_leased_completion(payload)
-            else:
-                await self._emit("prune_complete", payload)
-
-    async def _emit_leased_completion(self, payload: dict[str, Any]) -> None:
-        """Emit the final completion frame under a ``prune_complete`` lease.
-
-        The frontend publishes the repointed shortcuts after the run has let go
-        of its claim, so the lease holds off the next cleanup until it has.
-        Emitted before the run releases its claim, while the prune service
-        still refuses a second start.
-        """
-        await self._rules.emit_under_lease(
-            "prune_complete",
-            lambda token: self._emit("prune_complete", {**payload, "prune_lease_token": token}),
-        )
+            await self._emit("prune_complete", payload)
 
     def _completion_payload(
         self,
@@ -237,7 +204,6 @@ class PruneResultReporter:
         problem_count: int,
         reason: str | None,
         message: str | None,
-        publication_required: bool,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "success": success,
@@ -257,8 +223,6 @@ class PruneResultReporter:
             ),
             "results": chunk,
         }
-        if publication_required:
-            payload["publication_required"] = True
         if reason is not None:
             payload["reason"] = reason
         if message is not None:
@@ -288,7 +252,6 @@ class PruneResultReporter:
                 ambiguous_mutations=ledger.ambiguous_mutations,
                 warnings=warnings,
                 action_ambiguous=ledger.action_ambiguous,
-                target_rom_id=ledger.target_rom_id,
             ),
         )
 
@@ -373,6 +336,4 @@ class PruneResultReporter:
             result["warnings_omitted"] = len(warnings) > len(shown_warnings)
         if outcome.action_ambiguous:
             result["action_ambiguous"] = True
-        if outcome.target_rom_id is not None:
-            result["target_rom_id"] = outcome.target_rom_id
         return result

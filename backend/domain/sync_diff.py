@@ -12,19 +12,22 @@ slices as primitive parameters and returns primitives or NamedTuple results.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 from domain.collection_name import fold_collection_name
 from domain.rom_file import has_file_on_romm
-from domain.sibling_resolution import AUTO_REGION, canonical_group_name, resolve_group_representative
+from domain.sibling_resolution import AUTO_REGION, canonical_group_name, fs_name_stem, resolve_group_representative
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Collection, Iterable, Mapping
+
+    from domain.rom import DeliveryRoute
 
 # Marker key a rebind entry carries so the per-unit commit moves the DB binding
-# from the vanished bound sibling (the entry's ``rom_id``, kept so the frontend
-# reuses its existing shortcut) onto the surviving representative. Absent on
-# normal / grandfathered entries. See :func:`collapse_sibling_groups`.
+# from the bound sibling it is keyed by (the entry's ``rom_id``, kept so the
+# frontend reuses its existing shortcut) onto the same dump under the sibling it
+# names. Absent on normal / grandfathered entries. See
+# :func:`collapse_sibling_groups`.
 BIND_ROM_ID_KEY = "bind_rom_id"
 
 
@@ -50,8 +53,9 @@ def classify_roms(
     fs_name — differs, OR, for an entry outside *skipped_rom_ids*, either the
     target ``launch_options`` differs from the recorded
     ``applied_launch_options`` or the entry is a rebind — it carries
-    ``bind_rom_id`` — whose shortcut keeps its name and launch command while its
-    binding moves, which is work the apply does and the preview has to offer),
+    ``bind_rom_id`` — whose shortcut keeps its name while its binding and launch
+    command move to the target, which is work the apply does and the preview has
+    to offer),
     unchanged_ids (otherwise), stale (in registry but not in the current
     fetch), and the count of stale ROMs whose stored platform no longer appears
     in fetched_platform_names.
@@ -116,10 +120,15 @@ def classify_roms(
 
     current_ids = {sd["rom_id"] for sd in shortcuts_data}
     stale = [int(rid) for rid in registry if int(rid) not in current_ids]
-    disabled_count = sum(
-        1 for rid in stale if registry.get(str(rid), {}).get("platform_name") not in fetched_platform_names
-    )
+    disabled_count = count_disabled_platform_removals(stale, registry, fetched_platform_names)
     return ClassificationResult(new, changed, unchanged_ids, stale, disabled_count)
+
+
+def count_disabled_platform_removals(
+    stale: Iterable[int], registry: dict[str, Any], fetched_platform_names: set[str]
+) -> int:
+    """How many of the *stale* rom ids sit on a platform whose name is not in *fetched_platform_names*."""
+    return sum(1 for rid in stale if registry.get(str(rid), {}).get("platform_name") not in fetched_platform_names)
 
 
 def _identity_differs(reg: dict[str, Any], sd: dict[str, Any]) -> bool:
@@ -264,25 +273,25 @@ def collapse_sibling_groups(
     Returns the subset of entries to actually emit as shortcuts, one lane per
     group:
 
-    * **Grandfathered** — the group has ≥1 bound sibling still fetched: every
-      surviving bound sibling keeps its own entry (ADR-0021 §5). No new shortcut
-      is minted; an unbound fetched sibling becomes a tracked row with no
-      shortcut, and (complete view only) a vanished bound sibling is torn down by
-      the stale path.
-    * **Rebind** (complete view only) — every bound sibling vanished from the
-      server but the group still has fetched members: one synthetic entry (see
-      :func:`_rebind_entry`) keeps the vanished sibling's shortcut and moves its
-      binding to the surviving representative.
-    * **Rebind off a member without a file** (complete view only) — inside the
-      grandfathered lane, a surviving bound sibling RomM holds no file for and
-      that is not installed is rebound the same way onto a sibling that has a
-      file and the same ``fs_name_no_ext``: the same dump in a new shape, as
-      when a rescan turns ``Game (USA).zip`` into a folder ``Game (USA)``. The
-      sibling must hold no shortcut, its own or one rebound to it earlier in
-      this group. A sibling whose name differs at all is another version the
-      user did not choose — RomM does not send every dimension it parses, so
-      comparing the dimensions would cross versions — and the shortcut then
-      stays grandfathered, its play button saying there is no file.
+    * **Grandfathered** — the group holds a binding: every surviving bound
+      sibling keeps its own entry (ADR-0021 §5). No new shortcut is minted, and
+      an unbound fetched sibling becomes a tracked row with no shortcut. A bound
+      sibling that vanished from the server emits nothing here and keeps its
+      shortcut and its binding: the stale removal keeps it too, and the game page
+      says the version is gone.
+    * **Rebind onto the same dump** (complete view only) — a bound sibling moves
+      its binding onto a fetched sibling that has a file, holds no shortcut
+      (its own, or one rebound to it earlier in this group) and carries the same
+      ``fs_name_no_ext``. One synthetic entry (see :func:`_rebind_entry`) keeps
+      the shortcut. Two bound siblings qualify: one that vanished, whether
+      installed or not, whose stem is read off its stored ``fs_name`` — the
+      server reissued its id, as a re-import or a server switch does; and a
+      surviving one RomM holds no file for and that is not installed — the same
+      dump in a new shape, as when a rescan turns ``Game (USA).zip`` into a
+      folder ``Game (USA)``. A sibling whose name differs at all is another
+      version the user did not choose — RomM does not send every dimension it
+      parses, so comparing the dimensions would cross versions — and the
+      binding then stays where it is.
     * **New** — no binding anywhere in the group: emit the single representative
       chosen by :func:`resolve_group_representative`, but with its display
       ``name`` replaced by :func:`canonical_group_name` — the region-preferred
@@ -329,20 +338,8 @@ def collapse_sibling_groups(
     for group_key, members in by_group.items():
         fetched_ids = {m["rom_id"] for m in members}
         fileless = {m["rom_id"] for m in members if not has_file_on_romm(m)}
-        bound_here = bound_by_group.get(group_key, [])
-        surviving_ids = {rid for rid, _ in bound_here if rid in fetched_ids}
-        if surviving_ids:
-            # ≥1 bound sibling still fetched → grandfather every surviving one,
-            # unless it has no file and a complete view can move its binding.
-            emitted.extend(
-                _grandfather_or_rebind(
-                    members,
-                    sorted(item for item in bound_here if item[0] in surviving_ids),
-                    _GroupChain(installed_rom_ids, bound_rom_ids, fileless, preferred_region),
-                    complete_group_view=complete_group_view,
-                )
-            )
-        elif not bound_here:
+        bound_here = sorted(bound_by_group.get(group_key, []), key=lambda item: item[0])
+        if not bound_here:
             # No binding anywhere in the group → mint the single representative,
             # named after the region-preferred (canonical) member. The bind
             # target stays the representative's rom_id + launch bake; only the
@@ -353,23 +350,18 @@ def collapse_sibling_groups(
                 members, installed_rom_ids, bound_rom_ids, preferred_region, fileless_rom_ids=fileless
             )
             emitted.append({**_member_by_id(members, rep_id), "name": canonical_group_name(members, preferred_region)})
-        elif complete_group_view:
-            # Complete view: every bound sibling truly vanished from the server →
-            # rebind the shortcut onto the surviving representative (ADR-0021 §2,
-            # never remove). The rebind entry keeps the vanished sibling's
-            # persisted name (sticky) — canonical naming is mint-only.
-            rep = _member_by_id(
+            continue
+        # A partial view (collection unit) may not read a bound sibling's absence
+        # as absence from the server: the group's platform unit owns it.
+        emitted.extend(
+            _bound_sibling_entries(
                 members,
-                resolve_group_representative(
-                    members, installed_rom_ids, bound_rom_ids, preferred_region, fileless_rom_ids=fileless
-                ),
+                surviving=[item for item in bound_here if item[0] in fetched_ids],
+                vanished=[item for item in bound_here if item[0] not in fetched_ids] if complete_group_view else [],
+                chain=_GroupChain(installed_rom_ids, bound_rom_ids, fileless, preferred_region),
+                complete_group_view=complete_group_view,
             )
-            kept_rom_id, kept_reg = min(bound_here, key=lambda item: item[0])
-            emitted.append(_rebind_entry(rep, kept_rom_id, kept_reg))
-        # else: partial view (collection unit) — the group holds a binding not in
-        # THIS fetch, so its absence here is not absence from the server.
-        # Grandfather it untouched (no rebind, no new shortcut); its real
-        # representative is owned by the group's platform unit in the same run.
+        )
     return emitted
 
 
@@ -382,19 +374,21 @@ class _GroupChain(NamedTuple):
     preferred_region: str
 
 
-def _grandfather_or_rebind(
+def _bound_sibling_entries(
     members: list[dict[str, Any]],
-    surviving: list[tuple[int, dict[str, Any]]],
-    chain: _GroupChain,
     *,
+    surviving: list[tuple[int, dict[str, Any]]],
+    vanished: list[tuple[int, dict[str, Any]]],
+    chain: _GroupChain,
     complete_group_view: bool,
 ) -> list[dict[str, Any]]:
-    """The grandfathered lane's entries: each surviving bound sibling, kept or rebound.
+    """A bound group's entries: each surviving bound sibling kept or rebound, each vanished one rebound or nothing.
 
-    *surviving* are the group's bound ``(rom_id, registry row)`` pairs still in
-    *members*, in ``rom_id`` order so two siblings that would move onto the same
-    target resolve the same way every run: the first takes it, and the second
-    stays where it is, since a ROM carries one shortcut.
+    *surviving* and *vanished* are the group's bound ``(rom_id, registry row)``
+    pairs in and out of *members*, each in ``rom_id`` order, so two siblings that
+    would move onto the same target resolve the same way every run: the first
+    takes it, and the second stays where it is, since a ROM carries one shortcut.
+    *vanished* is empty for a partial view.
     """
     taken = set(chain.bound_rom_ids)
     entries: list[dict[str, Any]] = []
@@ -402,25 +396,29 @@ def _grandfather_or_rebind(
         own = _member_by_id(members, rom_id)
         target = None
         if complete_group_view and rom_id in chain.fileless_rom_ids and rom_id not in chain.installed_rom_ids:
-            target = _same_dump_with_file(own, members, chain, taken)
+            target = _same_dump_with_file(own.get("fs_name_no_ext"), members, chain, taken)
         if target is None:
             entries.append(own)
             continue
         taken.add(target["rom_id"])
         entries.append(_rebind_entry(target, rom_id, reg))
+    for rom_id, reg in vanished:
+        target = _same_dump_with_file(fs_name_stem(reg.get("fs_name") or ""), members, chain, taken)
+        if target is not None:
+            taken.add(target["rom_id"])
+            entries.append(_rebind_entry(target, rom_id, reg))
     return entries
 
 
 def _same_dump_with_file(
-    own: dict[str, Any], members: list[dict[str, Any]], chain: _GroupChain, taken: set[int]
+    stem: str | None, members: list[dict[str, Any]], chain: _GroupChain, taken: set[int]
 ) -> dict[str, Any] | None:
-    """The sibling *own*'s shortcut may move to, or ``None``.
+    """The sibling a shortcut on the dump named *stem* may move to, or ``None``.
 
-    One with a file, no shortcut, and *own*'s ``fs_name_no_ext``; of several,
-    the one the chain ranks first. An empty stem names no file, so it matches
-    nothing.
+    One with a file, no shortcut, and *stem* as its ``fs_name_no_ext``; of
+    several, the one the chain ranks first. An empty stem names no file, so it
+    matches nothing.
     """
-    stem = own.get("fs_name_no_ext")
     if not stem:
         return None
     same_dump = [
@@ -443,20 +441,20 @@ def _rebind_entry(rep: dict[str, Any], kept_rom_id: int, kept_reg: dict[str, Any
     """Synthesize the emitted entry for a rebinding group (ADR-0021 §2).
 
     The bound sibling it is keyed by has vanished from RomM, or is still listed
-    with no file; the commit treats both alike, because the binding moves by
-    ``bind_rom_id`` and the old row is only ever unbound, never removed.
+    with no file, and *rep* is the same dump under another id; the commit treats
+    both alike, because the binding moves by ``bind_rom_id`` and the old row is
+    only ever unbound, never removed.
 
     Keyed by the bound sibling (*kept_rom_id*) so the frontend REUSES that
     sibling's existing Steam shortcut (its appId is already in the rom_id→appId
     map); outside a unit the run skipped, :func:`classify_roms` counts it as
     changed, because the binding moves even where the name and launch command
-    stay. The entry carries the representative's launch bake (its installed
-    path, or the empty placeholder when the representative is uninstalled) plus
-    a ``bind_rom_id`` marker so the per-unit commit moves the DB binding onto
-    the representative — the shortcut's appId, artwork, collections and playtime
-    all survive; only the active version changes. Identity fields stay the bound
-    sibling's (sticky name — never rename automatically, which would change the
-    appId).
+    stay. The entry carries *rep*'s launch bake (its installed path, or the
+    empty placeholder when it is uninstalled) plus a ``bind_rom_id`` marker so
+    the per-unit commit moves the DB binding onto *rep* — the shortcut's appId,
+    artwork, collections and playtime all survive; only the active version
+    changes. Identity fields stay the bound sibling's (sticky name — never
+    rename automatically, which would change the appId).
     """
     return {
         **rep,
@@ -481,12 +479,97 @@ def select_stale_removals(
     so reuse never comes from re-hashing. It comes from the REBIND lane
     (:func:`collapse_sibling_groups`): on a server switch / re-import, an
     unchanged game's ``rom_id`` is reissued, and the rebind moves the vanished
-    sibling's still-live appId onto the new representative in the SAME run. The
+    sibling's still-live appId onto the same dump's new id in the SAME run. The
     old ``rom_id`` then reads stale while its appId lives on under the new
     binding, so emitting it for removal would wipe the shortcut the run just
     re-bound (#1036).
     """
     return [(rid, aid) for rid, aid in candidate_stale if aid not in synced_app_ids]
+
+
+class StaleRow(NamedTuple):
+    """A bound row no unit of the run returned: its id, its shortcut's appId, its platform, and how it last arrived."""
+
+    rom_id: int
+    app_id: int
+    platform_slug: str
+    delivered_through: DeliveryRoute | None = None
+
+
+# What one exact-id question to RomM established about a ROM: a proven 404
+# (``gone``), the very ROM (``present``), or nothing (``unknown``).
+RomAnswer = Literal["gone", "present", "unknown"]
+
+
+class StaleSort(NamedTuple):
+    """The stale rows split by what the run knows about each."""
+
+    remove: list[StaleRow]
+    keep: list[StaleRow]
+    ask: list[StaleRow]
+
+
+def sort_stale_rows(
+    rows: Iterable[StaleRow],
+    *,
+    read_platform_slugs: Collection[str],
+    listed_platform_slugs: Collection[str] | None,
+    collection_listed_rom_ids: Collection[int],
+) -> StaleSort:
+    """Split the stale rows into the ones to remove, to keep, and to ask RomM about.
+
+    *read_platform_slugs* are the platforms the run read whole, skipped or
+    fetched; *listed_platform_slugs* every platform RomM's listing named this
+    run, on in Tender or not (``None`` where that is not known, which reads as
+    every platform listed); *collection_listed_rom_ids* the members every
+    collection held at its last completed apply, read before the run rewrote
+    any of them.
+
+    * **keep** — the row's platform was read whole and did not return it, so it
+      is gone from RomM. A skipped platform rebuilds every bound row, so only a
+      fetched one can leave one out. Also kept: a row last delivered through
+      its platform, or never delivered since the route was recorded, whose
+      platform RomM no longer lists — that platform was on, and RomM's listing
+      is a complete answer, so the game is gone from RomM rather than turned
+      off.
+    * **ask** — the run did not read the row's platform, and the row was last
+      delivered through a collection, or, with no route recorded, a
+      collection's last completed apply listed it. Only RomM's answer to its
+      exact id tells "gone" from "left the collection".
+    * **remove** — the rest: the row's platform is listed and turned off in
+      Tender, and no collection reached it.
+    """
+    listed = None if listed_platform_slugs is None else set(listed_platform_slugs)
+    sort = StaleSort(remove=[], keep=[], ask=[])
+    for row in rows:
+        unlisted = listed is not None and row.platform_slug not in listed
+        if row.platform_slug in read_platform_slugs:
+            sort.keep.append(row)
+        elif row.delivered_through == "collection" or (
+            row.delivered_through is None and row.rom_id in collection_listed_rom_ids
+        ):
+            sort.ask.append(row)
+        elif unlisted:
+            sort.keep.append(row)
+        else:
+            sort.remove.append(row)
+    return sort
+
+
+def settle_asked_rows(
+    asked: Iterable[StaleRow], answers: Mapping[int, RomAnswer]
+) -> tuple[list[StaleRow], list[StaleRow]]:
+    """``(remove, keep)`` for the rows :func:`sort_stale_rows` asked about.
+
+    Only the ROM RomM returned is removed: it left the collection that reached
+    it. A proven 404 keeps the shortcut, gone from RomM, and so does an answer
+    that established nothing, for this run, because only a 404 is evidence of
+    absence.
+    """
+    rows = list(asked)
+    remove = [row for row in rows if answers.get(row.rom_id) == "present"]
+    keep = [row for row in rows if answers.get(row.rom_id) != "present"]
+    return remove, keep
 
 
 def compute_collection_diff(
@@ -560,6 +643,8 @@ def compute_platform_collection_diff(
     platform_rom_ids: set[int] | None,
     last_synced_platforms: list[str],
     create_platform_groups: bool,
+    *,
+    kept_platform_names: Collection[str] = (),
 ) -> dict[str, Any]:
     """Diff future platform-group collections against last-synced platforms.
 
@@ -572,13 +657,17 @@ def compute_platform_collection_diff(
     A rebind entry (see :func:`_rebind_entry`) is keyed to the vanished bound
     ``rom_id`` so the frontend reuses its existing shortcut, but that id is never
     in ``platform_rom_ids`` (which carries the fetched server ids). Its platform
-    membership follows the surviving representative it rebinds ONTO — the
+    membership follows the same dump it rebinds ONTO — the
     ``bind_rom_id`` target, a fetched id present in ``platform_rom_ids``. Keying
     the predicate on the entry's own ``rom_id`` would drop a fully-rebinding
     platform out of ``future_platforms`` and mis-count it as removed (#1417); the
     apply path, which reads the post-commit bound rows, never had this bug.
+
+    *kept_platform_names* name the platform collections the stale removal's
+    kept rows stay in — a version gone from RomM, fetched by nothing — which the
+    apply keeps whatever the setting.
     """
-    future_platforms: set[str] = set()
+    future_platforms: set[str] = set(kept_platform_names)
     for sd in shortcuts_data:
         rid = sd.get(BIND_ROM_ID_KEY, sd["rom_id"])
         if should_include_in_platform_collection(rid, platform_rom_ids, create_platform_groups):

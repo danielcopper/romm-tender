@@ -17,7 +17,7 @@ import {
   type SwitchVersionUnsyncedSaves,
 } from "../api/backend";
 import { reportServerReachable } from "./connectionState";
-import { setBoundVanished } from "./vanishedBinding";
+import { boundAvailabilityOf, setBoundAvailability } from "./vanishedBinding";
 import { applyCommittedVersionSwitch } from "./versionSwitchApplication";
 import { capturePruneLeaseAdmission, isPruneLeaseAdmissionCurrent, isPruneLeaseCancellation } from "./pruneLease";
 import { showToast } from "./toast";
@@ -80,11 +80,11 @@ export async function loadVersionList(appId: number, isCurrent?: () => boolean):
   const result = await getVersionList(appId);
   if (isCurrent && !isCurrent()) return null;
   reportVersionListReachability(result);
-  // Publish the bound-id verdict for the play button, which sits beside the
-  // picker and cannot see its state. Only a positive `bound_vanished` is
+  // Publish the bound-id verdict for the play button and the banner, which
+  // cannot see the picker's state. Only a positive `bound_vanished` is
   // knowledge — a failed query reports false, so an offline session never
   // disables the download (#1570 F20).
-  setBoundVanished(appId, result.bound_vanished);
+  setBoundAvailability(appId, boundAvailabilityOf(result));
   return result;
 }
 

@@ -75,19 +75,14 @@ class PruneRegistry:
         self,
         expected_rows: list[Rom],
         delete_ids: set[int],
-        target_id: int | None,
-        app_id: int | None,
-        fully_dead: bool,
     ) -> bool:
         with self._uow_factory() as uow:
-            return self._deletion_state_matches(uow, expected_rows, delete_ids, target_id, app_id, fully_dead)
+            return self._deletion_state_matches(uow, expected_rows, delete_ids)
 
     def validate_action_state(
         self,
-        kind: str,
         expected_bound_rom_id: int,
         app_id: int,
-        target_id: int | None,
         group_rom_ids: frozenset[int],
     ) -> bool:
         """Require the exact action binding and one-binding group immediately before claim."""
@@ -108,8 +103,7 @@ class PruneRegistry:
             bound = uow.roms.get_by_app_id(app_id)
             if bound is None:
                 return False
-            expected_id = target_id if kind == "repoint_shortcut" else expected_bound_rom_id
-            return bound.rom_id == expected_id
+            return bound.rom_id == expected_bound_rom_id
 
     def reconcile_removed_shortcut(self, expected_bound_rom_id: int, app_id: int) -> bool:
         """Persist Steam's confirmed shortcut absence without deleting source data."""
@@ -125,12 +119,9 @@ class PruneRegistry:
         self,
         expected_rows: list[Rom],
         delete_ids: set[int],
-        target_id: int | None,
-        app_id: int | None,
-        fully_dead: bool,
     ) -> bool:
         with self._uow_factory() as uow:
-            if not self._deletion_state_matches(uow, expected_rows, delete_ids, target_id, app_id, fully_dead):
+            if not self._deletion_state_matches(uow, expected_rows, delete_ids):
                 return False
             uow.collection_sync_state.delete_intersecting(delete_ids)
             for rom_id in delete_ids:
@@ -142,9 +133,6 @@ class PruneRegistry:
         uow: UnitOfWork,
         expected_rows: list[Rom],
         delete_ids: set[int],
-        target_id: int | None,
-        app_id: int | None,
-        fully_dead: bool,
     ) -> bool:
         if not expected_rows:
             return False
@@ -159,13 +147,7 @@ class PruneRegistry:
         current_rows = PruneRegistry._unchanged_rows(uow, delete_ids, expected)
         if current_rows is None:
             return False
-        bound_app_ids = {row.shortcut_app_id for row in current_rows if row.shortcut_app_id is not None}
-        if target_id is not None:
-            target = uow.roms.get(target_id)
-            return target is not None and target.shortcut_app_id == app_id and not bound_app_ids
-        if fully_dead:
-            return bound_app_ids == ({app_id} if app_id is not None else set())
-        return not bound_app_ids
+        return all(row.shortcut_app_id is None for row in current_rows)
 
     @staticmethod
     def _current_group(uow: UnitOfWork, anchor: Rom) -> list[Rom] | None:

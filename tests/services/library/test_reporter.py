@@ -756,6 +756,34 @@ class TestCommitUnitResults:
         assert rom is not None
         assert rom.last_fetch_id == "run-new"
 
+    @pytest.mark.parametrize("route", ["platform", "collection"])
+    def test_commit_records_the_route_on_every_upserted_row(self, library, route):
+        for rom_id in (10, 11):
+            _stage(
+                library.sync._box,
+                rom_id,
+                {"name": f"G{rom_id}", "fs_name": f"g{rom_id}.z64", "platform_slug": "n64", "cover_path": ""},
+            )
+
+        library.sync._reporter._commit_unit_results_io({"10": 9001}, [{"id": 10}, {"id": 11}], None, None, None, route)
+
+        with library.uow as uow:
+            assert [uow.roms.get(rom_id).delivered_through for rom_id in (10, 11)] == [route, route]
+
+    def test_a_commit_naming_no_route_keeps_the_rows_route(self, library):
+        """The late-ack path names no route, so a row keeps the one it had."""
+        _stage(
+            library.sync._box,
+            42,
+            {"name": "Game", "fs_name": "game.z64", "platform_slug": "n64", "cover_path": ""},
+        )
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}], None, None, None, "collection")
+
+        library.sync._reporter._commit_unit_results_io({"42": 100001}, [{"id": 42}])
+
+        with library.uow as uow:
+            assert uow.roms.get(42).delivered_through == "collection"
+
     def test_commit_persists_collection_stamp_atomically(self, library):
         """A passed ``collection_stamp`` lands in the SAME committed UoW as the rom
         upsert — the per-collection completion stamp is atomic with the chunk (#742)."""
@@ -1150,7 +1178,7 @@ class TestGroupAwareCommit:
         with uow:
             rep = uow.roms.get(2)
             old = uow.roms.get(1)
-        # The binding moved onto the representative, which keeps its own real name.
+        # The binding moved onto the same dump under its new id, which keeps its own real name.
         assert rep is not None
         assert rep.shortcut_app_id == 5000
         assert rep.name == "Game (JP)"

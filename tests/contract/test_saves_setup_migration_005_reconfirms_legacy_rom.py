@@ -71,6 +71,8 @@ def _rewind_to_v4(db_path: str) -> None:
         conn.execute("ALTER TABLE roms DROP COLUMN fs_size_bytes")
         # Reverse 026 so its ADD COLUMN re-applies instead of duplicating.
         conn.execute("ALTER TABLE roms DROP COLUMN has_file_on_disk")
+        # Reverse 029 so its ADD COLUMN re-applies instead of duplicating.
+        conn.execute("ALTER TABLE roms DROP COLUMN delivered_through")
         # Reverse 023 so its ADD COLUMN re-applies instead of duplicating.
         conn.execute("ALTER TABLE rom_installs DROP COLUMN launchable")
         # Reverse 024 so its CREATE TABLE re-applies instead of duplicating.
