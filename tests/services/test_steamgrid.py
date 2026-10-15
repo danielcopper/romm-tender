@@ -2057,6 +2057,80 @@ class TestTheGamePagesIconSlot:
         assert (result["status"], result["image_id"]) == ("image", 12)
 
 
+class TestAPickWithoutAStoredId:
+    """A ROM with no SteamGridDB id stored: the per-slot fetch serves what a pick put into the cache."""
+
+    @pytest.mark.asyncio
+    async def test_the_picked_icon_is_served_to_the_replacing_fetch_and_written(
+        self, steamgrid, uow, home, sgdb_artwork_cache, fake_steamgrid_db_api, tmp_path
+    ):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        _seed_rom(uow, 42, app_id=_APP_ID, sgdb_id=None)
+        _grid_dir(home)
+        written = _record_icon_writes(steamgrid, tmp_path)
+        _seed_all_artwork(fake_steamgrid_db_api, 7777)
+
+        await steamgrid.service.apply_sgdb_game_id(42, 7777)
+        answer = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "icon", True)
+        await steamgrid.prune_conflicts.release_lease(answer.pop("prune_lease_token"))
+        saved = await steamgrid.service.save_shortcut_icon(_APP_ID, 42)
+
+        assert answer == {"status": "ready"}
+        assert written[saved["icon_path"]] == b"icon bytes"
+        assert saved["image_id"] == _PICKED_IMAGE_IDS["icon"]
+        assert _outcome(uow, ArtworkSlot.ICON) is None
+
+    @pytest.mark.asyncio
+    async def test_a_picked_wide_grid_is_served_from_the_cache(
+        self, steamgrid, uow, home, sgdb_artwork_cache, fake_steamgrid_db_api
+    ):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        _seed_rom(uow, 42, app_id=_APP_ID, sgdb_id=None)
+        _grid_dir(home)
+        _seed_all_artwork(fake_steamgrid_db_api, 7777)
+        await steamgrid.service.apply_sgdb_game_id(42, 7777)
+        requested = len(fake_steamgrid_db_api.requested_paths)
+
+        answer = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "grid")
+
+        await steamgrid.prune_conflicts.release_lease(answer.pop("prune_lease_token"))
+        assert (answer["status"], answer["image_id"], answer["sgdb_id"]) == ("image", _PICKED_IMAGE_IDS["grid"], None)
+        assert base64.b64decode(answer["base64"]) == b"grid bytes"
+        assert len(fake_steamgrid_db_api.requested_paths) == requested
+
+    @pytest.mark.asyncio
+    async def test_a_first_visit_still_keeps_an_icon_somebody_set(
+        self, steamgrid, uow, home, sgdb_artwork_cache, fake_steamgrid_db_api
+    ):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        _seed_rom(uow, 42, app_id=_APP_ID, sgdb_id=None)
+        grid = _grid_dir(home)
+        _write_shortcut_icon_paths(grid, {_APP_ID: "/home/deck/Pictures/mine.png"})
+        _cache_icon(sgdb_artwork_cache, 42, b"picked", image_id=804)
+
+        answer = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "icon")
+
+        assert answer == {"status": "skip"}
+
+    @pytest.mark.asyncio
+    async def test_a_cache_that_cannot_be_listed_answers_failed_and_records_nothing(
+        self, steamgrid, uow, home, sgdb_artwork_cache, monkeypatch
+    ):
+        steamgrid.settings["steamgriddb_api_key"] = "some-key"
+        _seed_rom(uow, 42, app_id=_APP_ID, sgdb_id=None)
+        _grid_dir(home)
+
+        def unreadable() -> str:
+            raise PermissionError("Permission denied: '/cache/sgdb'")
+
+        monkeypatch.setattr(sgdb_artwork_cache, "cache_dir", unreadable)
+
+        answer = await steamgrid.service.get_sgdb_slot_artwork(42, _APP_ID, "icon", True)
+
+        assert answer == {"status": "failed"}
+        assert uow.artwork_slot_outcomes.save_count == 0
+
+
 class TestASlotSteamGridDbHasNothingFor:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("slot", [ArtworkSlot.WIDE_GRID, ArtworkSlot.LOGO])

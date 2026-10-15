@@ -648,7 +648,10 @@ class SteamGridService:
             held = self._held_slot_io(rom_id, app_id, slot, sgdb_id, now)
             if held is not None:
                 return {"status": held}
-        found = self._download_or_answer_io(rom_id, slot.value, sgdb_id) if sgdb_id is not None else _NoArtwork.NONE
+        if sgdb_id is not None:
+            found = self._download_or_answer_io(rom_id, slot.value, sgdb_id)
+        else:
+            found = self._cached_without_an_id_io(rom_id, slot.value)
         if found is _NoArtwork.NONE:
             if slot in RECORDED_SLOTS:
                 self._record_none(rom_id, slot, sgdb_id, now)
@@ -671,6 +674,20 @@ class SteamGridService:
             "sha256": hashlib.sha256(data).hexdigest(),
             "sgdb_id": sgdb_id,
         }
+
+    def _cached_without_an_id_io(self, rom_id: int, asset_type: str) -> _CachedArtwork | _NoArtwork:
+        """What the artwork cache holds for *rom_id*'s *asset_type* where the ROM has no SteamGridDB id stored.
+
+        A manual pick fills the cache and stores no id (:meth:`apply_sgdb_game_id`),
+        so its images are served from there; ``NONE`` when the cache holds none,
+        since nothing can be downloaded without an id.
+        """
+        try:
+            cached = self._cached_artwork(rom_id, asset_type)
+        except Exception as e:
+            self._logger.warning(f"SGDB {asset_type} cache lookup failed for rom_id={rom_id}: {e}")
+            return _NoArtwork.FAILED
+        return cached if cached is not None else _NoArtwork.NONE
 
     def _held_slot_io(self, rom_id: int, app_id: int, slot: ArtworkSlot, sgdb_id: int | None, now: float) -> str | None:
         """The status that leaves *slot* alone — ``skip``, or ``failed`` for an icon nothing tells — or ``None``."""

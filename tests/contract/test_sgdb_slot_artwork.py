@@ -178,6 +178,21 @@ async def test_an_icon_somebody_set_is_kept(harness, grid):
     assert harness.sgdb.requested_paths == []
 
 
+async def test_a_replacing_fetch_serves_an_icon_somebody_set(harness, grid):
+    url = "https://cdn.example/31.png"
+    harness.sgdb.seed_raw_response(
+        "/icons/game/9999", {"success": True, "data": [{"id": 31, "url": url, "width": 512, "height": 512}]}
+    )
+    harness.sgdb.seed_image_bytes(url, _PNG)
+    shortcuts = {"0": {"appid": _ROM_ID, "AppName": "Game", "icon": "/home/deck/Pictures/mine.png"}}
+    (grid.parent / "shortcuts.vdf").write_bytes(vdf.binary_dumps({"shortcuts": shortcuts}))
+
+    answer = await harness.endpoints.get_sgdb_slot_artwork(_ROM_ID, _ROM_ID, "icon", True)
+    await harness.endpoints.release_prune_conflict_lease(answer.pop("prune_lease_token"))
+
+    assert answer == {"status": "ready"}
+
+
 async def test_the_icon_asset_type_answers_the_failure_shape(harness, grid):
     answer = await harness.endpoints.get_sgdb_artwork_base64(_ROM_ID, 4)
 
