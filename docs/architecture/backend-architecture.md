@@ -113,10 +113,11 @@ an `EventEmitter` — one `emit(name, payload)` that answers **whether anybody h
 no panel attached is dropped with a log line, because every event this backend sends is a statement about _now_ and
 "sync finished" delivered three hours later lands in a session that never started one.
 
-The answer is what a prune claim on an event needs. Four events carry one, because their Steam-side work outlives the
+The answer is what a prune claim on an event needs. Five events carry one, because their Steam-side work outlives the
 backend's, and the service that emits each takes it when it emits, through `ConflictRules.emit_under_lease`: the library
-service for `sync_complete` and `sync_stale`, the download service for a bound ROM's `download_complete`, and the
-migration service for a non-empty `migration_relaunch_options`. What the frontend does under the two library-sync claims
+service for `sync_complete` and `sync_stale`, the download service for a bound ROM's `download_complete`, the migration
+service for a non-empty `migration_relaunch_options`, and the shortcut artwork service for each `shortcut_artwork`
+batch. What the frontend does under the two library-sync claims
 is
 [Steam Non-Steam Shortcuts — Explicit cleanup of vanished versions](steam-non-steam-shortcuts.md#explicit-cleanup-of-vanished-versions).
 A service's `EventEmitter` is the sink's own `emit`, so it answers whether anybody heard too. A claim handed to a panel
