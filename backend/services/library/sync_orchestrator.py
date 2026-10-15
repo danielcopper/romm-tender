@@ -42,6 +42,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.collection_label import steam_collection_key
 from domain.cover_refresh import count_cover_refreshes
+from domain.entry_collections import RunCollections
 from domain.session_budget import post_run_advisory, session_memory_delta
 from domain.shortcut_data import build_shortcuts_data
 from domain.sibling_group import compute_component_group_keys
@@ -779,6 +780,12 @@ class SyncOrchestrator:
             # threaded into finalize so collections key on display names and
             # the offline name cache stays current as of this sync.
             platform_names = {u.slug: u.name for u in work_queue if u.type == "platform" and u.slug}
+            run_collections = RunCollections.at_run_start(
+                work_queue,
+                platform_names=platform_names,
+                naming_mode=self._settings.get("collection_naming_mode", "merge"),
+                create_platform_groups=self._settings.get("collection_create_platform_groups", False),
+            )
             processed_platform_slugs = frozenset(u.slug for u in work_queue if u.type == "platform" and u.slug)
             # The run's denominator for the paused banner's "X of Y games done" — the
             # same planned total the ``sync_plan`` event carries (#1383).
@@ -833,6 +840,7 @@ class SyncOrchestrator:
                         synced_rom_ids=synced_rom_ids,
                         collection_memberships=collection_memberships,
                         platform_rom_ids=platform_rom_ids,
+                        run_collections=run_collections,
                     )
                     total_games_applied += applied
 
@@ -985,6 +993,7 @@ class SyncOrchestrator:
         synced_rom_ids: set[int],
         collection_memberships: dict[tuple[str, str], CollectionMembership],
         platform_rom_ids: set[int],
+        run_collections: RunCollections,
     ) -> int:
         """Process one work unit start-to-finish; return its processed-ROM count.
 
@@ -1187,6 +1196,10 @@ class SyncOrchestrator:
         if unit.type == "collection":
             membership = collection_memberships.get(_collection_membership_key(unit))
             collection_member_ids = membership.rom_ids if membership is not None else None
+
+        # Each entry names the collections it belongs to, so the frontend files the
+        # game the moment its shortcut exists rather than when the run ends.
+        apply_emitted = run_collections.file_entries(apply_emitted, shortcuts_data, platform_rom_ids)
 
         applied_count = await self._chunk_dispatcher.apply_unit_in_chunks(
             unit,

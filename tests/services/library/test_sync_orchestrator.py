@@ -36,6 +36,7 @@ from _spawns import record_spawns
 from fakes.fake_source_platform_systems import FakeSourcePlatformSystems
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 
+from domain.entry_collections import RunCollections
 from domain.platform_system import PLATFORM_IDS_KEY, decode_platform_ids
 from domain.sync_diff import BIND_ROM_ID_KEY
 from domain.sync_run_kind import SyncRunKind
@@ -52,6 +53,9 @@ from tests.services.library._helpers import (
     _seed_rom_row,
     _use_fake_romm,
 )
+
+# A unit driven alone files its entries into no collection.
+_NO_COLLECTIONS = RunCollections.at_run_start([], platform_names={}, naming_mode="merge", create_platform_groups=False)
 
 # ── Test helpers ─────────────────────────────────────────────────
 
@@ -4352,6 +4356,7 @@ class TestSyncOneUnitCollectionAndCancel:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
         assert applied == 0
 
@@ -4386,6 +4391,7 @@ class TestSyncOneUnitCollectionAndCancel:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
         assert applied == 0
 
@@ -4427,6 +4433,7 @@ class TestSyncOneUnitCollectionAndCancel:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
         assert processed == 1, "the delta-skipped ROM is processed; the cancelled apply is not"
 
@@ -4464,6 +4471,7 @@ class TestSyncOneUnitCollectionAndCancel:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
         assert processed == 1, "the delta-skipped ROM is processed even on a pre-apply cancel"
 
@@ -4506,6 +4514,7 @@ class TestSyncOneUnitCollectionAndCancel:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
         assert applied == 0
         # User cancel: pending_sync cleared, unit event dropped, state CANCELLING.
@@ -4554,6 +4563,7 @@ class TestSyncOneUnitCollectionAndCancel:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
         assert applied == 0
         box = library.sync._box
@@ -4619,6 +4629,7 @@ class TestPerUnitMetadataStamping:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         # commit_unit_results received the acked ROM dict (carrying metadatum).
@@ -4667,6 +4678,7 @@ class TestPerUnitMetadataStamping:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         commit_mock.assert_not_called()
@@ -4721,6 +4733,7 @@ class TestPerUnitMetadataStamping:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         assert len(commit_calls) == 1
@@ -4772,6 +4785,7 @@ class TestPlatformCompletionStamp:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         with library.uow as uow:
@@ -4819,6 +4833,7 @@ class TestPlatformCompletionStamp:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         # 5 singletons at chunk size 2 → 3 chunks; only the last carries the stamp.
@@ -4868,6 +4883,7 @@ class TestPlatformCompletionStamp:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         with library.uow as uow:
@@ -4904,6 +4920,7 @@ class TestPlatformCompletionStamp:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         with library.uow as uow:
@@ -4950,6 +4967,7 @@ class TestPlatformCompletionStamp:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         # The collection committed (non-vacuous) but never carried a platform stamp.
@@ -5002,6 +5020,7 @@ class TestPlatformCompletionStamp:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         assert len(seen) == 3  # 5 singletons at chunk size 2
@@ -5057,6 +5076,7 @@ class TestPlatformCompletionStamp:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         # Non-vacuous: the collection did commit, and no commit carried a generation.
@@ -5111,6 +5131,7 @@ class TestPlatformCompletionStamp:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         with library.uow as uow:
@@ -5149,6 +5170,7 @@ class TestPlatformCompletionStamp:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         with library.uow as uow:
@@ -5187,6 +5209,7 @@ class TestPlatformCompletionStamp:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         with library.uow as uow:
@@ -5219,6 +5242,7 @@ class TestPlatformCompletionStamp:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
         # Non-vacuous: the unit actually skipped (its ROM count flows back) rather than
         # applying — the commit was never driven.
@@ -5257,6 +5281,7 @@ class TestPlatformCompletionStamp:
                 synced_rom_ids=synced_rom_ids,
                 collection_memberships={},
                 platform_rom_ids=platform_rom_ids,
+                run_collections=_NO_COLLECTIONS,
             )
 
         with library.uow as uow:
@@ -7263,3 +7288,102 @@ class TestTheShortcutArtworkJobAfterARun:
         await library.sync.sync_preview()
 
         assert library.artwork_job.requests == [False]
+
+
+class TestEachAppliedShortcutNamesItsCollections:
+    """Every ``sync_apply_unit`` entry carries the collections the end of the run files it in (#2416)."""
+
+    @staticmethod
+    def _seed(library, fake_romm_api, *, create_platform_groups):
+        """N64 is synced as a platform; GBA only through the Favorites collection."""
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="Nintendo 64",
+            slug="n64",
+            roms=[
+                {"id": 1, "name": "Zelda", "fs_name": "zelda.z64"},
+                {"id": 2, "name": "Mario", "fs_name": "mario.z64"},
+            ],
+        )
+        _seed_platform(
+            fake_romm_api,
+            platform_id=2,
+            name="Game Boy Advance",
+            slug="gba",
+            roms=[{"id": 30, "name": "Metroid", "fs_name": "metroid.gba"}],
+        )
+        _seed_collection(fake_romm_api, collection_id=7, name="Favorites", rom_ids=[1, 30])
+        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["enabled_collections"] = {"standard": {"7": True}, "smart": {}, "virtual": {}}
+        library.settings["collection_create_platform_groups"] = create_platform_groups
+
+    @staticmethod
+    async def _run_acking_every_entry(library, emit):
+        """Run the sync, acking each entry with appId ``9000 + rom_id``; answer its entries and ``sync_complete``."""
+        box = library.sync._box
+
+        async def ack_every_entry(_unit, event):
+            event.set()
+            return {str(rom_id): 9000 + rom_id for rom_id in box.pending_sync}
+
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.sync._chunk_dispatcher._wait_for_unit_complete = ack_every_entry
+        box.sync_state = SyncState.RUNNING
+        box.current_sync_id = "run-filed"
+
+        await library.sync._orchestrator._do_sync_per_unit()
+
+        entries = {
+            e["rom_id"]: e
+            for c in emit.call_args_list
+            if c.args[0] == "sync_apply_unit"
+            for e in c.args[1]["shortcuts"]
+        }
+        complete = next(c.args[1] for c in emit.call_args_list if c.args[0] == "sync_complete")
+        return entries, complete
+
+    @pytest.mark.asyncio
+    async def test_with_platform_groups_off_a_collection_only_game_names_no_platform_collection(
+        self, library, fake_romm_api, emit
+    ):
+        self._seed(library, fake_romm_api, create_platform_groups=False)
+
+        entries, _complete = await self._run_acking_every_entry(library, emit)
+
+        filed = {rid: (e["platform_collection"], e["romm_collections"]) for rid, e in entries.items()}
+        assert filed == {
+            1: ("Nintendo 64", ["Favorites"]),
+            2: ("Nintendo 64", []),
+            30: (None, ["Favorites"]),
+        }
+
+    @pytest.mark.asyncio
+    async def test_with_platform_groups_on_a_collection_only_game_names_its_platform_collection(
+        self, library, fake_romm_api, emit
+    ):
+        self._seed(library, fake_romm_api, create_platform_groups=True)
+
+        entries, _complete = await self._run_acking_every_entry(library, emit)
+
+        assert entries[30]["platform_collection"] == "gba"
+        assert entries[1]["platform_collection"] == "Nintendo 64"
+
+    @pytest.mark.parametrize("create_platform_groups", [False, True])
+    @pytest.mark.asyncio
+    async def test_every_collection_an_entry_names_holds_it_in_the_end_of_run_maps(
+        self, library, fake_romm_api, emit, create_platform_groups
+    ):
+        self._seed(library, fake_romm_api, create_platform_groups=create_platform_groups)
+
+        entries, complete = await self._run_acking_every_entry(library, emit)
+
+        for rom_id, entry in entries.items():
+            app_id = 9000 + rom_id
+            if entry["platform_collection"] is not None:
+                assert app_id in complete["platform_app_ids"][entry["platform_collection"]]
+            for key in entry["romm_collections"]:
+                assert app_id in complete["romm_collection_app_ids"][key]
+        assert {e["platform_collection"] for e in entries.values()} - {None} == set(complete["platform_app_ids"])
+        assert {k for e in entries.values() for k in e["romm_collections"]} == set(complete["romm_collection_app_ids"])

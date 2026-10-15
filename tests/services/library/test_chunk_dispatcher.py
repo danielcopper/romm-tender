@@ -26,9 +26,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from domain.entry_collections import RunCollections
 from domain.sync_state import SyncState
 from domain.work_unit import WorkUnit
 from tests.services.library._helpers import _fake_wait_set_event, _seed_platform, _seed_rom_row, _use_fake_romm
+
+# A unit driven alone files its entries into no collection.
+_NO_COLLECTIONS = RunCollections.at_run_start([], platform_names={}, naming_mode="merge", create_platform_groups=False)
 
 
 class TestApplyChunking:
@@ -82,6 +86,7 @@ class TestApplyChunking:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
@@ -124,6 +129,7 @@ class TestApplyChunking:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
@@ -183,6 +189,7 @@ class TestApplyChunking:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         # Only chunk 0 committed; the cancel discarded chunk 1 onward.
@@ -243,6 +250,7 @@ class TestApplyChunking:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         # Chunk 1 is never emitted — the loop stopped at its top before any emit —
@@ -300,6 +308,7 @@ class TestApplyChunking:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         assert box.abandoned_chunk is not None
@@ -427,6 +436,7 @@ class TestWholeUnitStaging:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
         assert len(staged) == 1
@@ -751,6 +761,7 @@ class TestThePlaceholderIcon:
             synced_rom_ids=set(),
             collection_memberships={},
             platform_rom_ids=set(),
+            run_collections=_NO_COLLECTIONS,
         )
 
     @pytest.mark.asyncio
