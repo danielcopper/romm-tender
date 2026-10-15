@@ -22,6 +22,16 @@ export async function getHostname(): Promise<string> {
   return _hostname;
 }
 
+/** The Steam name of a platform's collection on this machine. */
+export function platformCollectionName(platformName: string, hostname: string): string {
+  return `RomM: ${platformName} (${hostname})`;
+}
+
+/** The Steam name of a RomM collection's collection on this machine, from its backend key. */
+export function rommCollectionName(key: string, hostname: string): string {
+  return `RomM: [${key}] (${hostname})`;
+}
+
 function getOverviews(appIds: number[]): AppStoreOverview[] {
   const overviews: AppStoreOverview[] = [];
   for (const appId of appIds) {
@@ -146,7 +156,7 @@ export async function createOrUpdateCollections(
     await saveCollectionFamily(
       Object.entries(platformAppIds),
       "collection",
-      (platformName) => `RomM: ${platformName} (${hostname})`,
+      (platformName) => platformCollectionName(platformName, hostname),
       onProgress,
       signal,
     );
@@ -173,12 +183,74 @@ export async function createOrUpdateRomMCollections(
     await saveCollectionFamily(
       Object.entries(collectionAppIds),
       "RomM collection",
-      (collName) => `RomM: [${collName}] (${hostname})`,
+      (collName) => rommCollectionName(collName, hostname),
       onProgress,
       signal,
     );
   } catch (e) {
     logError(`Failed to update RomM collections: ${e}`);
+  }
+}
+
+/**
+ * The collections {@link addAppToCollections} created in one run, by folded
+ * name. Consulted when `collectionStore.userCollections` does not list a name:
+ * whether Steam lists a collection there as soon as its first `Save()`
+ * resolves is not established, and creating the same name a second time
+ * overwrites the first collection and the game in it. Keyed by `run_id`, so a
+ * new run starts empty.
+ */
+let _createdThisRun: { runId: string; byFold: Map<string, SteamCollection> } | null = null;
+
+function collectionsCreatedIn(runId: string): Map<string, SteamCollection> {
+  if (_createdThisRun?.runId !== runId) _createdThisRun = { runId, byFold: new Map() };
+  return _createdThisRun.byFold;
+}
+
+async function addAppToCollection(appId: number, collectionName: string, runId: string): Promise<void> {
+  const target = foldCollectionName(collectionName);
+  const created = collectionsCreatedIn(runId);
+  const existing =
+    collectionStore.userCollections.find((c) => foldCollectionName(c.displayName) === target) ?? created.get(target);
+  if (existing?.apps.has(appId)) return;
+  const overviews = getOverviews([appId]);
+  if (existing) {
+    existing.AsDragDropCollection().AddApps(overviews);
+    await existing.Save();
+    return;
+  }
+  const collection = collectionStore.NewUnsavedCollection(collectionName, undefined, []);
+  collection.AsDragDropCollection().AddApps(overviews);
+  await collection.Save();
+  created.set(target, collection);
+  logInfo(`Created collection "${collectionName}" with its first game`);
+}
+
+/**
+ * File one shortcut into the collections the backend named for it, while a sync
+ * runs. Only adds: a collection that is missing is created holding this game,
+ * and nothing is ever removed — the complete set of each collection is written
+ * once the run completes. A failure on one collection is logged and the others
+ * still run; nothing here throws.
+ */
+export async function addAppToCollections(
+  appId: number,
+  platformCollection: string | null,
+  rommCollections: string[],
+  runId: string,
+): Promise<void> {
+  if (typeof collectionStore === "undefined") return;
+  const hostname = await getHostname();
+  const names = [
+    ...(platformCollection === null ? [] : [platformCollectionName(platformCollection, hostname)]),
+    ...rommCollections.map((key) => rommCollectionName(key, hostname)),
+  ];
+  for (const name of names) {
+    try {
+      await addAppToCollection(appId, name, runId);
+    } catch (e) {
+      logError(`Failed to add appId ${appId} to collection "${name}": ${e}`);
+    }
   }
 }
 
@@ -190,7 +262,7 @@ export async function clearPlatformCollection(platformName: string, signal?: Abo
     }
     const hostname = await getHostname();
     if (signal?.aborted) return;
-    const scopedName = `RomM: ${platformName} (${hostname})`;
+    const scopedName = platformCollectionName(platformName, hostname);
     const legacyName = `RomM: ${platformName}`;
 
     // A case variant of this platform's collection is the SAME Steam

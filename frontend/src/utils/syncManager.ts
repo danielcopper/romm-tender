@@ -22,6 +22,7 @@ import { recordUnitCreated, recordUnitUpdated } from "./runUnitsStore";
 import { observeUnitTotal } from "./syncEta";
 import { registerRomMAppId } from "./rommAppIds";
 import { pacedForEach } from "./pacedOps";
+import { addAppToCollections } from "./collections";
 
 let _cancelRequested = false;
 let _isUnitRunning = false;
@@ -336,6 +337,10 @@ async function processCoverRefreshes(data: SyncApplyUnitData): Promise<void> {
  * chunk's ``cover_refreshes`` list and is re-applied by
  * {@link processCoverRefreshes} (#1386). A cover failure is fail-soft and never
  * fails the item/chunk.
+ *
+ * Every shortcut with an appId is then filed into the collections its entry
+ * names ({@link addAppToCollections}), so a collection appears with its first
+ * game and fills while the run goes on.
  */
 async function processUnitShortcuts(
   data: SyncApplyUnitData,
@@ -392,6 +397,7 @@ async function processUnitShortcuts(
             await applyCoverArtwork(appId, item.rom_id);
             if (!adopted && data.icon_placeholder_path) applyPlaceholderIcon(appId, data.icon_placeholder_path);
           }
+          await addAppToCollections(appId, item.platform_collection, item.romm_collections, data.run_id);
         }
       } catch (e) {
         logError(`Per-unit: failed to process shortcut for rom ${item.rom_id}: ${e}`);

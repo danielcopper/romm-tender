@@ -22,6 +22,7 @@ import { resetSyncDelta, getSyncDelta } from "./syncDeltaStore";
 import { getSyncProgress, onSyncProgressChange, setSyncProgress } from "./syncProgress";
 import * as syncProgress from "./syncProgress";
 import type { SyncApplyUnitData, SyncProgress } from "../types";
+import { stubLiveCollectionStore } from "../test-utils/steamStubs";
 
 const setLaunchOptionsConfirmed = vi.fn().mockResolvedValue(true);
 const addShortcut = vi.fn();
@@ -63,6 +64,8 @@ function unit(launchOptions: string, runId = "run-1"): SyncApplyUnitData {
         start_dir: "/home/deck",
         launch_options: launchOptions,
         platform_name: "PSX",
+        platform_collection: null,
+        romm_collections: [],
       },
     ],
   };
@@ -136,6 +139,8 @@ describe("syncManager — group-aware emit: one Steam shortcut per game (ADR-002
       start_dir: "/home/deck",
       launch_options: "",
       platform_name: "N64",
+      platform_collection: null,
+      romm_collections: [],
       ...overrides,
     };
   }
@@ -252,6 +257,8 @@ describe("syncManager — registers resolved appIds as RomM-owned at ack time (#
       start_dir: "/home/deck",
       launch_options: "",
       platform_name: "PSX",
+      platform_collection: null,
+      romm_collections: [],
       ...overrides,
     };
   }
@@ -559,6 +566,8 @@ describe("syncManager — chunked apply (#1025)", () => {
       start_dir: "/home/deck",
       launch_options: "",
       platform_name: "PSX",
+      platform_collection: null,
+      romm_collections: [],
     };
   }
 
@@ -813,6 +822,8 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
       start_dir: "/home/deck",
       launch_options: "",
       platform_name: "PSX",
+      platform_collection: null,
+      romm_collections: [],
     };
   }
 
@@ -1251,6 +1262,8 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
       start_dir: "/home/deck",
       launch_options: "",
       platform_name: "PSX",
+      platform_collection: null,
+      romm_collections: [],
       ...overrides,
     };
   }
@@ -1536,5 +1549,152 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
 
     // Two distinct runs → two scans (one per run), not one shared across runs.
     expect(getLiveRomMShortcutAppIds).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("syncManager — files each game into its collections while the run applies it", () => {
+  const EXE = "/home/deck/.local/bin/tender-rom-launcher";
+
+  beforeEach(() => {
+    setLaunchOptionsConfirmed.mockClear();
+    setLaunchOptionsConfirmed.mockResolvedValue(true);
+    addShortcut.mockReset();
+    getExistingRomMShortcuts.mockReset();
+    getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>());
+    vi.mocked(backend.reportUnitResults).mockClear();
+    vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: null });
+    resetSyncDelta();
+    resetSyncCancel();
+    vi.stubGlobal("SteamClient", {
+      Apps: {
+        AddShortcut: vi.fn(),
+        SetShortcutName: vi.fn(),
+        SetShortcutExe: vi.fn(),
+        SetShortcutStartDir: vi.fn(),
+        SetAppLaunchOptions: vi.fn(),
+        SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined),
+        SetShortcutIcon: vi.fn(),
+        RemoveShortcut: vi.fn(),
+      },
+    });
+  });
+
+  function filedItem(
+    romId: number,
+    platformCollection: string | null,
+    rommCollections: string[] = [],
+  ): SyncApplyUnitData["shortcuts"][number] {
+    return {
+      rom_id: romId,
+      name: `Game ${romId}`,
+      exe: EXE,
+      start_dir: "/home/deck",
+      launch_options: "",
+      platform_name: "PlayStation",
+      platform_collection: platformCollection,
+      romm_collections: rommCollections,
+    };
+  }
+
+  function chunk(runId: string, shortcuts: SyncApplyUnitData["shortcuts"]): SyncApplyUnitData {
+    return {
+      run_id: runId,
+      unit_type: "platform",
+      unit_id: 1,
+      unit_name: "PlayStation",
+      unit_index: 0,
+      total_units: 1,
+      chunk_index: 0,
+      chunk_count: 1,
+      chunk_offset: 0,
+      unit_total: shortcuts.length,
+      icon_placeholder_path: null,
+      shortcuts,
+    };
+  }
+
+  it("a new platform's collection exists and holds its games while the run is still applying them", async () => {
+    const store = stubLiveCollectionStore();
+    let releaseThird!: (appId: number) => void;
+    addShortcut
+      .mockResolvedValueOnce(6000)
+      .mockResolvedValueOnce(6001)
+      .mockReturnValueOnce(
+        new Promise<number>((resolve) => {
+          releaseThird = resolve;
+        }),
+      );
+
+    const applyUnit = initUnitSyncManager();
+    let applying!: Promise<unknown>;
+    await act(async () => {
+      applying = Promise.resolve(
+        applyUnit(
+          chunk("run-fills", [filedItem(1, "PlayStation"), filedItem(2, "PlayStation"), filedItem(3, "PlayStation")]),
+        ),
+      );
+      await vi.waitFor(() => expect(addShortcut).toHaveBeenCalledTimes(3));
+    });
+
+    // The third game's shortcut is still being created: the run is applying.
+    const collection = store.named("RomM: PlayStation (test)");
+    expect([...(collection?.apps ?? [])]).toEqual([6000, 6001]);
+    expect(store.NewUnsavedCollection).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(backend.reportUnitResults)).not.toHaveBeenCalled();
+
+    await act(async () => {
+      releaseThird(6002);
+      await applying;
+    });
+    expect([...(collection?.apps ?? [])]).toEqual([6000, 6001, 6002]);
+  });
+
+  it("puts a game into the RomM collections named for it, and into no platform collection when none is named", async () => {
+    const store = stubLiveCollectionStore();
+    addShortcut.mockResolvedValueOnce(7000);
+
+    const applyUnit = initUnitSyncManager();
+    await act(async () => {
+      await applyUnit(chunk("run-romm", [filedItem(5, null, ["Favs", "Kids"])]));
+    });
+
+    expect(store.userCollections.map((c) => [c.displayName, [...c.apps]])).toEqual([
+      ["RomM: [Favs] (test)", [7000]],
+      ["RomM: [Kids] (test)", [7000]],
+    ]);
+  });
+
+  it("files an updated shortcut it finds outside its collection, and never removes another game", async () => {
+    const store = stubLiveCollectionStore();
+    const existing = store.make("RomM: PlayStation (test)", [4000]);
+    store.userCollections.push(existing);
+    getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>([[8, 5000]]));
+
+    const applyUnit = initUnitSyncManager();
+    await act(async () => {
+      await applyUnit(chunk("run-update", [filedItem(8, "PlayStation")]));
+    });
+
+    expect([...existing.apps]).toEqual([4000, 5000]);
+    expect(existing.dnd.RemoveApps).not.toHaveBeenCalled();
+  });
+
+  it("a cancelled run keeps the games it filed and removes nothing", async () => {
+    const store = stubLiveCollectionStore();
+    addShortcut.mockImplementation(async (item: { rom_id: number }) => {
+      if (item.rom_id === 1) requestSyncCancel();
+      return 6000 + item.rom_id;
+    });
+
+    const applyUnit = initUnitSyncManager();
+    await act(async () => {
+      await applyUnit(chunk("run-cancel", [filedItem(1, "PlayStation"), filedItem(2, "PlayStation")]));
+    });
+
+    const collection = store.named("RomM: PlayStation (test)");
+    expect([...(collection?.apps ?? [])]).toEqual([6001]);
+    expect(collection?.dnd.RemoveApps).not.toHaveBeenCalled();
+    expect(collection?.Delete).not.toHaveBeenCalled();
+    expect(vi.mocked(backend.reportUnitResults)).not.toHaveBeenCalled();
   });
 });

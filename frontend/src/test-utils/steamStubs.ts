@@ -43,3 +43,65 @@ export function stubAppStore(overviews: Record<number, OverviewLike>): void {
     allApps: [],
   });
 }
+
+interface LiveDragDrop {
+  AddApps: ReturnType<typeof vi.fn>;
+  RemoveApps: ReturnType<typeof vi.fn>;
+}
+
+export interface LiveCollection {
+  id: string;
+  displayName: string;
+  apps: Set<number>;
+  allApps: unknown[];
+  AsDragDropCollection: () => LiveDragDrop;
+  Save: ReturnType<typeof vi.fn>;
+  Delete: ReturnType<typeof vi.fn>;
+  dnd: LiveDragDrop;
+}
+
+/**
+ * A `collectionStore` whose collections hold the appIds their `AddApps` /
+ * `RemoveApps` leave them with, and whose `Save` lists a new collection in
+ * `userCollections` — unless `listsOnSave` is off, which stands for Steam not
+ * listing a just-saved collection yet.
+ */
+export function stubLiveCollectionStore(options: { listsOnSave?: boolean } = {}) {
+  const listsOnSave = options.listsOnSave ?? true;
+  const userCollections: LiveCollection[] = [];
+  const make = (displayName: string, appIds: number[] = []): LiveCollection => {
+    const apps = new Set(appIds);
+    const dnd: LiveDragDrop = {
+      AddApps: vi.fn((overviews: { appid: number }[]) => {
+        for (const o of overviews) apps.add(o.appid);
+      }),
+      RemoveApps: vi.fn((overviews: { appid: number }[]) => {
+        for (const o of overviews) apps.delete(o.appid);
+      }),
+    };
+    const collection: LiveCollection = {
+      id: `id-${displayName}`,
+      displayName,
+      apps,
+      allApps: [],
+      AsDragDropCollection: () => dnd,
+      Save: vi.fn(() => {
+        if (listsOnSave && !userCollections.includes(collection)) userCollections.push(collection);
+        return Promise.resolve();
+      }),
+      Delete: vi.fn().mockResolvedValue(undefined),
+      dnd,
+    };
+    return collection;
+  };
+  const created: LiveCollection[] = [];
+  const NewUnsavedCollection = vi.fn((name: string) => {
+    const collection = make(name);
+    created.push(collection);
+    return collection;
+  });
+  vi.stubGlobal("collectionStore", { userCollections, NewUnsavedCollection });
+  const named = (displayName: string): LiveCollection | undefined =>
+    userCollections.find((c) => c.displayName === displayName);
+  return { userCollections, created, NewUnsavedCollection, make, named };
+}

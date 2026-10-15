@@ -1,10 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
+  addAppToCollections,
   createOrUpdateRomMCollections,
   createOrUpdateCollections,
   clearPlatformCollection,
   clearAllRomMCollections,
 } from "./collections";
+import { logError } from "../api/backend";
+import { stubLiveCollectionStore } from "../test-utils/steamStubs";
+
+vi.mock("../api/backend", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../api/backend")>()),
+  logError: vi.fn(),
+  logInfo: vi.fn(),
+  logWarn: vi.fn(),
+}));
 
 // Steam's collection identity is case-insensitive, so a collection whose
 // displayName differs only by case from the one we're syncing is the SAME Steam
@@ -168,5 +178,108 @@ describe("clearAllRomMCollections — case-insensitive identity (#1569)", () => 
     expect(shouted.Delete).toHaveBeenCalledTimes(1);
     expect(theirs.Delete).not.toHaveBeenCalled();
     expect(mine.Delete).not.toHaveBeenCalled();
+  });
+});
+
+describe("addAppToCollections — the add-only path a sync files each game through", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("creates a missing platform collection holding its first game", async () => {
+    const store = stubLiveCollectionStore();
+
+    await addAppToCollections(101, "PlayStation", [], "run-create");
+
+    expect(store.NewUnsavedCollection).toHaveBeenCalledTimes(1);
+    expect(store.NewUnsavedCollection).toHaveBeenCalledWith("RomM: PlayStation (test)", undefined, []);
+    expect([...(store.named("RomM: PlayStation (test)")?.apps ?? [])]).toEqual([101]);
+  });
+
+  it("adds a second game to the collection the first one created, even before the store lists it", async () => {
+    const store = stubLiveCollectionStore({ listsOnSave: false });
+
+    await addAppToCollections(101, "PlayStation", [], "run-unlisted");
+    await addAppToCollections(102, "PlayStation", [], "run-unlisted");
+
+    expect(store.created.map((c) => [...c.apps])).toEqual([[101, 102]]);
+  });
+
+  it("forgets the collections it created when a new run starts", async () => {
+    const store = stubLiveCollectionStore({ listsOnSave: false });
+
+    await addAppToCollections(101, "PlayStation", [], "run-a");
+    await addAppToCollections(102, "PlayStation", [], "run-b");
+
+    expect(store.NewUnsavedCollection).toHaveBeenCalledTimes(2);
+  });
+
+  it("adds to an existing collection without removing what it holds", async () => {
+    const store = stubLiveCollectionStore();
+    const existing = store.make("RomM: PlayStation (test)", [1, 2]);
+    store.userCollections.push(existing);
+
+    await addAppToCollections(3, "PlayStation", [], "run-add");
+
+    expect(existing.dnd.RemoveApps).not.toHaveBeenCalled();
+    expect([...existing.apps]).toEqual([1, 2, 3]);
+    expect(existing.Save).toHaveBeenCalledTimes(1);
+    expect(store.NewUnsavedCollection).not.toHaveBeenCalled();
+  });
+
+  it("finds an existing collection whose name differs only by case", async () => {
+    const store = stubLiveCollectionStore();
+    const existing = store.make("RomM: [Favs] (TEST)", [1]);
+    store.userCollections.push(existing);
+
+    await addAppToCollections(2, null, ["favs"], "run-fold");
+
+    expect(store.NewUnsavedCollection).not.toHaveBeenCalled();
+    expect([...existing.apps]).toEqual([1, 2]);
+  });
+
+  it("writes nothing for a game the collection already holds", async () => {
+    const store = stubLiveCollectionStore();
+    const existing = store.make("RomM: PlayStation (test)", [7]);
+    store.userCollections.push(existing);
+
+    await addAppToCollections(7, "PlayStation", [], "run-member");
+
+    expect(existing.dnd.AddApps).not.toHaveBeenCalled();
+    expect(existing.Save).not.toHaveBeenCalled();
+  });
+
+  it("files a game into exactly the RomM collections named and no platform collection when none is named", async () => {
+    const store = stubLiveCollectionStore();
+
+    await addAppToCollections(55, null, ["Favs", "RPGs (Smart)"], "run-romm");
+
+    expect(store.userCollections.map((c) => c.displayName)).toEqual([
+      "RomM: [Favs] (test)",
+      "RomM: [RPGs (Smart)] (test)",
+    ]);
+    expect(store.userCollections.every((c) => c.apps.has(55))).toBe(true);
+  });
+
+  it("logs a collection that fails and still files the game into the next one", async () => {
+    const store = stubLiveCollectionStore();
+    const broken = store.make("RomM: PlayStation (test)");
+    broken.Save.mockRejectedValueOnce(new Error("cloud write failed"));
+    store.userCollections.push(broken);
+
+    await addAppToCollections(9, "PlayStation", ["Favs"], "run-fail");
+
+    expect(vi.mocked(logError)).toHaveBeenCalledWith(
+      'Failed to add appId 9 to collection "RomM: PlayStation (test)": Error: cloud write failed',
+    );
+    expect(store.named("RomM: [Favs] (test)")?.apps.has(9)).toBe(true);
+  });
+
+  it("does nothing when Steam's collection store is not there", async () => {
+    vi.stubGlobal("collectionStore", undefined);
+
+    await addAppToCollections(1, "PlayStation", ["Favs"], "run-none");
+
+    expect(vi.mocked(logError)).not.toHaveBeenCalled();
   });
 });

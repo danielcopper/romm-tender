@@ -289,6 +289,14 @@ export interface SyncAddItem {
   start_dir: string;
   launch_options: string;
   platform_name: string;
+  /**
+   * The platform collection this game is filed in — the name `platform_app_ids`
+   * is keyed by at the end of the run — or `null` where the platform-groups
+   * setting leaves it out.
+   */
+  platform_collection: string | null;
+  /** The RomM collections this game is filed in, by the keys `romm_collection_app_ids` uses. */
+  romm_collections: string[];
 }
 
 /**
