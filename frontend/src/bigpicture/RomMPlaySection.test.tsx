@@ -25,7 +25,7 @@ import {
   domListenerCount,
 } from "../test-utils/dom-event-listener-spy";
 import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
-import type { AnsweringSource, DownloadCompleteEvent, EmulatorDataReason, SaveStatus } from "../types";
+import type { AnsweringSource, DownloadCompleteEvent, EmulatorDataReason, SaveStatus, SyncProgress } from "../types";
 import { emulatorDataReasonSentence } from "../utils/emulatorSourceWording";
 import { stubAppStore } from "../test-utils/steamStubs";
 import * as cachedStore from "../utils/cachedGameDetailStore";
@@ -801,9 +801,10 @@ describe("RomMPlaySection", () => {
       ...overrides,
     });
     const GONE = "This version is no longer available on RomM.";
-    const CLEANUP = "To remove it from this device, with a recovery bundle, use Data Management › Gone from RomM.";
+    const CLEANUP =
+      "To remove it from this device, use Data Management › Gone from RomM, which can keep a recovery bundle.";
     const SWITCH_FIRST =
-      "Choose another version first; Data Management › Gone from RomM then removes this one, with a recovery bundle.";
+      "To delete its file, switch to another version first, then use Data Management › Gone from RomM, which can keep a recovery bundle.";
     const EFFECTS = [
       "Its saves no longer sync, and a launch with a local save asks first.",
       "It cannot be downloaded again.",
@@ -835,8 +836,7 @@ describe("RomMPlaySection", () => {
       );
 
       await waitFor(() => expect(container.textContent).toContain(`${GONE} Choose another version to play.`));
-      expect(container.textContent).toContain(SWITCH_FIRST);
-      expect(container.textContent).not.toContain(CLEANUP);
+      expect(container.textContent).not.toContain("Data Management");
       expect(container.querySelectorAll("li")).toHaveLength(0);
     });
 
@@ -904,6 +904,58 @@ describe("RomMPlaySection", () => {
 
       expect(container.textContent).not.toContain("no longer available on RomM");
       expect(container.textContent).not.toContain(CLEANUP);
+    });
+
+    const LIVE: backend.VersionList = {
+      multi_version: true,
+      bound_vanished: false,
+      server_query_failed: false,
+      versions: [version(1, { active: true }), version(2, {})],
+    };
+    const VANISHED: backend.VersionList = {
+      multi_version: true,
+      bound_vanished: true,
+      server_query_failed: false,
+      versions: [version(1, { active: true, vanished: true }), version(2, {})],
+    };
+    const emitFrame = (frame: Partial<SyncProgress>) =>
+      act(async () => {
+        emitHostEvent<SyncProgress>("sync_progress", frame as SyncProgress);
+        await flushAsync();
+      });
+    const runEnded = (stage: "done" | "cancelled" | "error") => emitFrame({ running: false, stage });
+
+    it.each(["done", "cancelled", "error"] as const)(
+      "appears once a sync run that found the version gone ends (%s), without reopening the page",
+      async (stage) => {
+        const { container } = await renderWith(LIVE, false);
+        await waitFor(() => expect(backend.getVersionList).toHaveBeenCalledTimes(1));
+        expect(container.textContent).not.toContain(GONE);
+
+        vi.mocked(backend.getVersionList).mockResolvedValue(VANISHED);
+        await runEnded(stage);
+
+        await waitFor(() => expect(container.textContent).toContain(`${GONE} Choose another version to play.`));
+      },
+    );
+
+    it("goes away once a sync run ends with the version back", async () => {
+      const { container } = await renderWith(VANISHED, false);
+      await waitFor(() => expect(container.textContent).toContain(GONE));
+
+      vi.mocked(backend.getVersionList).mockResolvedValue(LIVE);
+      await runEnded("done");
+
+      await waitFor(() => expect(container.textContent).not.toContain(GONE));
+    });
+
+    it("does not ask again while the run is still going", async () => {
+      await renderWith(LIVE, false);
+      await waitFor(() => expect(backend.getVersionList).toHaveBeenCalledTimes(1));
+
+      await emitFrame({ running: true, stage: "applying" });
+
+      expect(backend.getVersionList).toHaveBeenCalledTimes(1);
     });
   });
 

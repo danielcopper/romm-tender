@@ -234,7 +234,9 @@ ADR-0007 keeps a `roms` row after RomM stops returning that id because the row c
 and an installed ROM. Retention does not imply that RomM still offers the row as a playable version. The Game Page's
 lazy `get_version_list` load therefore recomputes availability every time; there is no liveness column, migration,
 cache, or persisted verdict. (The `no_file` marker below is a different thing: a fact the last sync stored, not a
-liveness verdict.)
+liveness verdict.) The version picker loads it when the page opens, after a version switch, after a group member's
+download or uninstall, and on every `sync_progress` frame that ends a library sync run, so the page's banner follows a
+sync without the page being reopened.
 
 The bound id's own read (`get_rom_simple`, `GET /api/roms/{id}/simple`) supplies its own answer and RomM's current
 direct `sibling_roms` view. The bound id and every local id positively present in that view are live. A local group

@@ -16,14 +16,15 @@ const SWITCH_EFFECT = INSTALLED_EFFECTS[2];
 
 /** The cleanup keeps the version a shortcut is on while another version is on RomM. */
 const SWITCH_FIRST_SENTENCE =
-  "Choose another version first; Data Management › Gone from RomM then removes this one, with a recovery bundle.";
-const CLEANUP_SENTENCE = "To remove it from this device, with a recovery bundle, use Data Management › Gone from RomM.";
+  "To delete its file, switch to another version first, then use Data Management › Gone from RomM, which can keep a recovery bundle.";
+const CLEANUP_SENTENCE =
+  "To remove it from this device, use Data Management › Gone from RomM, which can keep a recovery bundle.";
 
 /** What the banner says for one state of the bound version, or `null` while nothing says it is gone. */
 export function vanishedVersionNotice(
   availability: BoundAvailability,
   installed: boolean,
-): { title: string; effects: readonly string[]; closing: string } | null {
+): { title: string; effects: readonly string[]; closing?: string } | null {
   if (availability === "live") return null;
   if (availability === "game_gone") {
     return {
@@ -39,11 +40,7 @@ export function vanishedVersionNotice(
       closing: SWITCH_FIRST_SENTENCE,
     };
   }
-  return {
-    title: "This version is no longer available on RomM. Choose another version to play.",
-    effects: [],
-    closing: SWITCH_FIRST_SENTENCE,
-  };
+  return { title: "This version is no longer available on RomM. Choose another version to play.", effects: [] };
 }
 
 /**
@@ -57,7 +54,7 @@ export const VanishedVersionBanner: FC<{ appId: number; installed: boolean }> = 
   const notice = vanishedVersionNotice(availability, installed);
   if (!notice) return null;
   return (
-    <WarningCard compact title={notice.title} message={notice.closing}>
+    <WarningCard compact title={notice.title} {...(notice.closing ? { message: notice.closing } : {})}>
       {notice.effects.length > 0 ? (
         <ul style={{ margin: 0, paddingLeft: "20px", textAlign: "left" }}>
           {notice.effects.map((effect) => (

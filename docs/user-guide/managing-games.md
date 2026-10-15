@@ -79,17 +79,19 @@ A library sync never moves the shortcut off such a version, and never removes it
 - **Every version gone** — _This game is no longer available on RomM._, with the same list when the game is downloaded
   (less the line about switching, since there is nothing to switch to).
 
-While another version is on RomM, the banner closes with _Choose another version first; Data Management › Gone from RomM
-then removes this one, with a recovery bundle._ — the cleanup keeps the version a shortcut is on. When every version is
-gone it closes with _To remove it from this device, with a recovery bundle, use Data Management › Gone from RomM._ The
+A downloaded version with another version still on RomM closes with _To delete its file, switch to another version
+first, then use Data Management › Gone from RomM, which can keep a recovery bundle._ — the cleanup keeps the version a
+shortcut is on. A game whose every version is gone closes with _To remove it from this device, use Data Management ›
+Gone from RomM, which can keep a recovery bundle._ A version that is not downloaded adds nothing to its first line. The
 trash icon in the version list opens the same cleanup. The Quick Access panel shows no banner. Starting a version that
 is gone and not downloaded from Steam's own Play stays refused, and says _This version is no longer available on RomM.
 Choose another version on its game page._ — or _This game is no longer available on RomM._ when every version is gone.
 
-This availability check is fresh each time the version list loads and is not saved in Tender's database. Only a 404 for
-that exact ROM id establishes that it is gone. Timeouts, sign-in/permission errors, server errors, and malformed
-responses fail open: Tender does not disable a version merely because it could not get a trustworthy answer. A
-ROM-specific 404 also does not make the rest of Tender report that RomM is offline.
+This availability check is fresh each time the version list loads — when the game page opens, after a version switch,
+and when a library sync ends while the page is open, so the banner comes and goes without reopening it — and is not
+saved in Tender's database. Only a 404 for that exact ROM id establishes that it is gone. Timeouts, sign-in/permission
+errors, server errors, and malformed responses fail open: Tender does not disable a version merely because it could not
+get a trustworthy answer. A ROM-specific 404 also does not make the rest of Tender report that RomM is offline.
 
 A version RomM still lists but has **no file** for carries the label _"No file on RomM"_. That happens when its file has
 left RomM's disk — a rescan that turned `Game (USA).zip` into a folder `Game (USA)` leaves the old entry behind beside
