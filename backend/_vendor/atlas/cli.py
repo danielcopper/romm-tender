@@ -55,7 +55,7 @@ from .detect import detect
 from .every_installation import EveryInstallation
 from .installations import EmuDeck, Installation, RetroDeck
 from .machine import Machine
-from .placement import checked_cwd
+from .placement import checked_appendconfig, checked_cwd
 
 # A question is asked of one handle or of the aggregate, and the two surfaces
 # are the same on purpose (EveryInstallation mirrors the Installation protocol
@@ -70,13 +70,17 @@ _QUESTIONS: dict[str, tuple[_Ask, _Serialize]] = {
     "health": (lambda target, _args: target.health(), health_contract),
     "savefile-location": (
         lambda target, args: target.savefile_location(
-            content_path=args.content, core_so=args.core, system=args.system, cwd=args.cwd
+            content_path=args.content,
+            core_so=args.core,
+            system=args.system,
+            cwd=args.cwd,
+            appendconfig=args.appendconfig,
         ),
         savefile_answer_contract,
     ),
     "savestate-location": (
         lambda target, args: target.savestate_location(
-            content_path=args.content, core_so=args.core, cwd=args.cwd
+            content_path=args.content, core_so=args.core, cwd=args.cwd, appendconfig=args.appendconfig
         ),
         savestate_answer_contract,
     ),
@@ -169,6 +173,28 @@ def _absolute_argument(value: str) -> str:
     return value
 
 
+def _appendconfig_argument(value: str) -> str:
+    """One ``--appendconfig`` value held to the library's own rule — a relative path is a usage error (exit 2)."""
+    try:
+        checked_appendconfig((value,))
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from None
+    return value
+
+
+def _add_appendconfig(question: argparse.ArgumentParser) -> None:
+    question.add_argument(
+        "--appendconfig",
+        action="append",
+        default=[],
+        type=_appendconfig_argument,
+        metavar="PATH",
+        help="absolute path of a config file the RetroArch launch appends; repeat it or join "
+        "paths with '|' as RetroArch does, all taken in order (RetroArch itself keeps only "
+        "the last --appendconfig flag it is given)",
+    )
+
+
 def _add_cwd(question: argparse.ArgumentParser) -> None:
     question.add_argument(
         "--cwd",
@@ -213,7 +239,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     def content_core(
-        name: str, help_text: str, *, system: bool = False, cwd: bool = False
+        name: str, help_text: str, *, system: bool = False, cwd: bool = False, appendconfig: bool = False
     ) -> None:
         question = commands.add_parser(name, parents=[common, selecting], help=help_text)
         question.add_argument("--content", help="path of the content file being asked about")
@@ -222,11 +248,19 @@ def build_parser() -> argparse.ArgumentParser:
             question.add_argument("--system", help="system the content is filed under")
         if cwd:
             _add_cwd(question)
+        if appendconfig:
+            _add_appendconfig(question)
 
     content_core(
-        "savefile-location", "where this content's save file lands", system=True, cwd=True
+        "savefile-location",
+        "where this content's save file lands",
+        system=True,
+        cwd=True,
+        appendconfig=True,
     )
-    content_core("savestate-location", "where this content's savestates land", cwd=True)
+    content_core(
+        "savestate-location", "where this content's savestates land", cwd=True, appendconfig=True
+    )
     content_core("screenshot-location", "where this content's screenshots land")
     content_core("texture-pack-location", "where this core reads texture packs from")
     content_core("mod-location", "where this core reads mods from")

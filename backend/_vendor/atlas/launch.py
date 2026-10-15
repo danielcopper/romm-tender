@@ -12,7 +12,8 @@ ES-DE resolves a launch command in two steps before it starts anything
    - ``systempath`` searches the directories of the process's ``PATH`` in
      order for ``<dir>/<entry>`` (``getPathToBinary``,
      ``es-core/src/utils/FileSystemUtil.cpp:353-370`` — the non-Flatpak
-     branch; the RetroDECK build is not ``FLATPAK_BUILD``).
+     branch; the RetroDECK build is not ``FLATPAK_BUILD``, and neither is the
+     AppImage EmuDeck deploys, which is unforked ES-DE v3.4.1 itself).
    - ``staticpath`` splits a replacement command off at ``|``, expands ``~``
      against ES-DE's own home (:func:`atlas.esde.expand_home_path`), then
      ``%ESPATH%`` and ``%ROMPATH%``; a ``*`` takes the first match a directory
@@ -28,13 +29,25 @@ ES-DE resolves a launch command in two steps before it starts anything
    ``corepath`` directory holding that name — file or symlink, the same test —
    is the core; none refuses the launch (``:1145-1161``, ``:1466-1568``).
 
+A command with no ``%EMULATOR_X%`` token takes ES-DE's second method instead
+of step 1 (``:2595-2649``): its first word — up to a space, or between quotes —
+is the program, taken as a file where it names one and otherwise searched on
+``PATH`` (:func:`_second_method`); a word without a leading ``/`` is a path
+relative to the frontend's working directory.
+
 What this module never does is touch the machine. Every probe goes through a
 :class:`LaunchView`, which is the frontend's own view of the filesystem — for
-RetroDECK the inside of its sandbox — and which answers *could not tell* where
-that view cannot be established. A probe that cannot tell stops the walk,
+RetroDECK the inside of its sandbox, for EmuDeck the host's own — and which
+answers *could not tell* where that view cannot be established. A probe that cannot tell stops the walk,
 because the entry after it might be the one ES-DE would take: the verdict is
 then ``unestablished`` with the path that stopped it, never a guessed hit or
 miss.
+
+Where the view's ``PATH`` and working directory are assumed rather than read —
+a frontend on the host takes them from whatever started it — every answer whose
+search went through either says so (``launch-path-assumed``), and a caller can
+hang its own note on a token's answers (EmuDeck's
+``find-rules-rewritten-at-start``).
 
 The cost is ``stat``, ``lstat`` and directory listings here, over find rules
 the caller hands in already parsed: no core is probed, nothing is hashed.
@@ -44,6 +57,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from collections.abc import Mapping
 from typing import Literal, Protocol
 
 from .esde import expand_home_path
@@ -56,12 +70,15 @@ from .find_rules import (
     CAVEAT_EMULATOR_NOT_FOUND,
     CAVEAT_EMULATOR_RULES_MISSING,
     CAVEAT_FIND_RULES_UNREADABLE,
+    CAVEAT_LAUNCH_PATH_ASSUMED,
     CAVEAT_LAUNCH_PATH_UNESTABLISHED,
     CAVEAT_LAUNCH_RESOLUTION_UNSUPPORTED,
     CAVEAT_RUN_GAME_DIFFERS,
     LAUNCH_RULES,
     LAYER_BUNDLED,
     LAYER_CUSTOM,
+    CAVEAT_PROGRAM_NOT_FOUND,
+    RULE_COMMAND,
     RULE_STATICPATH,
     RULE_SYSTEMPATH,
     Availability,
@@ -83,6 +100,12 @@ _CORE_OPENER = "%CORE_"
 _ESPATH = "%ESPATH%"
 _ROMPATH = "%ROMPATH%"
 _EMUPATH = "%EMUPATH%"
+RUNINBACKGROUND = "%RUNINBACKGROUND%"
+ENABLESHORTCUTS = "%ENABLESHORTCUTS%"
+_QUOTED_CORE = '"' + _CORE_OPENER
+# ``std::isspace``: what ES-DE trims off the front of a command after it
+# removed a flag (``FileData.cpp:1063-1065``).
+ISSPACE = " \t\n\v\f\r"
 
 
 class LaunchView(Protocol):
@@ -113,6 +136,14 @@ class LaunchView(Protocol):
         """``%ESPATH%``: the directory of the ES-DE binary (``getExePath``)."""
         ...
 
+    @property
+    def working_directory(self) -> str | None:
+        """The directory ES-DE runs in, which a relative path is tested against — ``None`` where it is written
+        nowhere. ES-DE never changes it (``chdir`` is called nowhere in ``es-app`` or ``es-core`` @ v3.4.1), so it is
+        the directory whatever started the frontend left it in.
+        """
+        ...
+
     def rom_directory(self) -> str | None:
         """``%ROMPATH%``: ``getROMDirectory()``, trailing separator on — ``None`` where it cannot be told."""
         ...
@@ -129,10 +160,18 @@ class LaunchView(Protocol):
         """run_game.sh's ``[ -x ]`` on *path*, read as "a file once links are followed" (no mode bits)."""
         ...
 
+    def regular_file(self, path: str) -> Probe:
+        """A regular file at *path* once every link is followed — what opening it finds, so a dead link, a
+        directory and nothing at all are misses. Neither the read nor the executable bit is checked.
+        """
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class Launcher:
-    """What ES-DE substitutes for an entry's ``%EMULATOR_X%`` token, and the rule entry that found it."""
+    """What ES-DE substitutes for an entry's ``%EMULATOR_X%`` token, and the rule entry that found it — or, for a
+    command without one, the program its first word names.
+    """
 
     path: str
     """The file the rule found, in the frontend's own spelling — for RetroDECK a path inside its sandbox, such as
@@ -142,7 +181,10 @@ class Launcher:
     The path ES-DE checked, normalized the way it normalizes one (doubled
     separators collapsed, a trailing one dropped) and never shell-escaped:
     ES-DE escapes it for its own command line, a client running it does not.
-    For a ``systempath`` hit it is the ``PATH`` directory joined to the entry.
+    For a ``systempath`` hit it is the ``PATH`` directory joined to the entry,
+    and for a ``command`` hit the first word as found: itself where it names
+    a file, the working directory joined to it where it is relative, or the
+    ``PATH`` directory joined to it.
     """
     replacement_command: str | None
     """The command ES-DE runs instead of ``path`` when the rule entry carries one after a ``|``, as written there;
@@ -156,10 +198,12 @@ class Launcher:
     frontend that runs on the host, where the path is the host's own.
     """
     rule: LaunchRule
-    """Which rule type found it: ``systempath`` (a search of the frontend's ``PATH``) or ``staticpath`` (a path)."""
+    """Which rule type found it: ``systempath`` (a search of the frontend's ``PATH``), ``staticpath`` (a path), or
+    ``command`` (no rule: the command's own first word, as a file or on ``PATH``).
+    """
     entry: str
     """The rule entry that matched, exactly as the find rules write it — before ``~``, ``%ESPATH%`` or a wildcard was
-    expanded.
+    expanded; for a ``command`` hit the command's first word as the command writes it, expanded no further.
     """
 
     def __post_init__(self) -> None:
@@ -278,7 +322,7 @@ def escaped_path(path: str) -> str:
     return escaped
 
 
-def _matching_files(pattern: str, view: LaunchView) -> tuple[str, ...] | None:
+def _matching_files(pattern: str, view: LaunchView, base: str | None = None) -> tuple[str, ...] | None:
     """ES-DE's ``getMatchingFiles`` (``FileSystemUtil.cpp:112-155``), ``None`` where the listing cannot be told.
 
     The wildcard is honored only in the last path component: a ``*`` at or
@@ -295,12 +339,17 @@ def _matching_files(pattern: str, view: LaunchView) -> tuple[str, ...] | None:
     be read the same way by both. No file name a find rule targets carries
     those separators, and no entry of the shipped Linux rules at v3.4.1 or of
     RetroDECK's build carries a ``{``.
+
+    A relative *pattern* is listed under *base*, the directory the frontend
+    runs in: ``getDirContent`` iterates the relative parent the way the
+    process's working directory resolves it, and spells each entry relative
+    as the pattern is, so the match stays relative too.
     """
     star = pattern.find("*")
     parent = parent_path(pattern)
     if star <= len(parent):
         return ()
-    names = view.listing(parent)
+    names = view.listing(parent if base is None else f"{base}/{parent}")
     if names is None:
         return None
     expression = pattern.replace("*", ".*")
@@ -321,11 +370,21 @@ class Found:
     ``substituted`` is the text as it went into the command: a ``systempath``
     hit's path as joined, unescaped (``FileData.cpp:2536-2541``); a
     ``staticpath`` hit's path through ``getEscapedPath``; or a ``|`` entry's
-    replacement command, as written (``:2581-2590``).
+    replacement command, as written (``:2581-2590``). The second method puts
+    nothing in place of a token, and ``substituted`` is then what it hands
+    back, which the rest of the launch reads its ``%EMUDIR%`` off: the word
+    through ``getEscapedPath``, or the escaped ``PATH`` directory joined to
+    the word (``:2634-2642``).
+
+    ``replaced`` is the one edit the second method makes to the command
+    besides ``%ESPATH%``: a first word holding a ``*`` is replaced, wherever
+    it stands, with its first match (``:2610-2616``) — the word as ES-DE read
+    it, then the match. ``None`` where nothing was replaced.
     """
 
     launcher: Launcher
     substituted: str
+    replaced: tuple[str, str] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -395,6 +454,141 @@ def _static_entry(entry: str, view: LaunchView) -> Found | _Stopped | None:
     command = replacement or None
     launcher = Launcher(generic_path(path), command, view.app_id, RULE_STATICPATH, entry)
     return Found(launcher, command if command is not None else escaped_path(path))
+
+
+def _before_lookup(command: str) -> str:
+    """The edits ``launchGame`` makes before it looks anything up that move a first word: each flag removed with the
+    blanks it leaves in front (``FileData.cpp:1057-1093``), and the quote before ``%CORE_`` dropped (``:1145-1151``).
+    """
+    for flag in (RUNINBACKGROUND, ENABLESHORTCUTS):
+        if flag in command:
+            command = es_replace(command, flag, "").lstrip(ISSPACE)
+    return es_replace(command, _QUOTED_CORE, _CORE_OPENER)
+
+
+def _split_first(command: str) -> tuple[str, str]:
+    """The second method's program and what follows it: up to the first space, or between quotes where the command
+    opens with one.
+
+    ``FileData.cpp:2600-2608`` @ v3.4.1; a quote that is never closed takes
+    the rest of the command.
+    """
+    if command.startswith('"'):
+        rest = command[1:]
+        end = rest.find('"')
+        return (rest, "") if end == -1 else (rest[:end], rest[end + 1 :])
+    end = command.find(" ")
+    return (command, "") if end == -1 else (command[:end], command[end:])
+
+
+def first_word(command: str) -> str:
+    """The second method's program: up to the first space, or between quotes where the command opens with one."""
+    return _split_first(command)[0]
+
+
+def program_word(command: str) -> str:
+    """The first word of *command* as the catalogue writes it — the flags ES-DE removes first removed, nothing
+    expanded: what a ``command`` launcher's ``entry`` and ``program-not-found``'s ``program`` state.
+    """
+    return first_word(_before_lookup(command))
+
+
+def word_after_program(command: str) -> str | None:
+    """The word after :func:`program_word` in that same reading, split at blanks — ``None`` where none follows.
+
+    What the program is handed first: for a ``/bin/bash <script>`` command,
+    the script.
+    """
+    words = _split_first(_before_lookup(command))[1].split()
+    return words[0] if words else None
+
+
+@dataclass(frozen=True, slots=True)
+class _ProgramSearch:
+    """What the second method made of one command: the outcome, the word as written, and where it looked.
+
+    ``searched`` holds the directories the word was joined to, in order — the
+    working directory for a relative word, then the ``PATH`` directories —
+    and ``assumed`` says the search passed through what the view may have
+    assumed: any of them was probed.
+    """
+
+    outcome: Found | _Stopped | None
+    program: str
+    searched: tuple[str, ...] = ()
+    assumed: bool = False
+
+
+def _second_method(command: str, view: LaunchView) -> _ProgramSearch:
+    """ES-DE's second method over a command naming no emulator token (``FileData.cpp:2595-2649`` @ v3.4.1).
+
+    The command is the one ``launchGame`` hands ``findEmulator``: its flags
+    removed and every ``~`` replaced with ES-DE's home (``:1164``). Then
+    ``%ESPATH%`` is expanded across it, the first word read, and a ``*`` in
+    that word replaced with the first match a listing yields
+    (:func:`_matching_files`, ``FileSystemUtil.cpp:62-155``) — for a relative
+    word, a listing under the working directory, which is then assumed too;
+    without one stated the search stops at the word. The word is tested as a
+    file — against the working directory where it is relative — and, where
+    that misses, joined to each ``PATH`` directory in turn
+    (``getPathToBinary``, ``FileSystemUtil.cpp:353-370``, which joins even a
+    word holding a ``/``). The test is ES-DE's hit test either way, so a miss
+    always went on to the ``PATH``. A probe that cannot tell stops the search,
+    as a rule's does.
+    """
+    program = program_word(command)
+    expanded = es_replace(expand_home_path(_before_lookup(command), view.home), _ESPATH, view.es_path)
+    word = first_word(expanded)
+    replaced: tuple[str, str] | None = None
+    if "*" in word:
+        relative = _relative(word, view)
+        base = view.working_directory if relative else None
+        if relative and base is None:
+            return _ProgramSearch(_Stopped(word), program)
+        files = _matching_files(word, view, base)
+        if files is None:
+            parent = parent_path(word)
+            return _ProgramSearch(_Stopped(parent if base is None else f"{base}/{parent}"), program, assumed=relative)
+        if files:
+            replaced = (word, files[0])
+            word = files[0]
+    return _locate(word, program, replaced, view)
+
+
+def _relative(word: str, view: LaunchView) -> bool:
+    """Whether ES-DE resolves *word* against its working directory: a path with no leading ``/`` (and not under
+    ``%ESPATH%``, which the view expands to an absolute directory or keeps as the image's mount).
+    """
+    return bool(word) and not word.startswith(("/", view.es_path))
+
+
+def _locate(word: str, program: str, replaced: tuple[str, str] | None, view: LaunchView) -> _ProgramSearch:
+    """The word as a file, then on ``PATH`` (``FileData.cpp:2634-2643``): the first hit, or every place tried."""
+    searched: list[str] = []
+    candidate = word
+    if _relative(word, view):
+        directory = view.working_directory
+        if directory is None:
+            return _ProgramSearch(_Stopped(word), program)
+        searched.append(directory)
+        candidate = f"{directory}/{word}"
+    probe = view.found(candidate)
+    if probe == PROBE_UNKNOWN:
+        return _ProgramSearch(_Stopped(candidate), program, tuple(searched), bool(searched))
+    if probe == PROBE_HIT:
+        launcher = Launcher(generic_path(candidate), None, view.app_id, RULE_COMMAND, program)
+        return _ProgramSearch(Found(launcher, escaped_path(word), replaced), program, tuple(searched), bool(searched))
+    for directory in view.search_path:
+        searched.append(directory)
+        candidate = f"{directory}/{word}"
+        probe = view.found(candidate)
+        if probe == PROBE_UNKNOWN:
+            return _ProgramSearch(_Stopped(candidate), program, tuple(searched), assumed=True)
+        if probe == PROBE_HIT:
+            launcher = Launcher(generic_path(candidate), None, view.app_id, RULE_COMMAND, program)
+            found = Found(launcher, f"{escaped_path(directory)}/{word}", replaced)
+            return _ProgramSearch(found, program, tuple(searched), assumed=True)
+    return _ProgramSearch(None, program, tuple(searched), assumed=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -525,6 +719,21 @@ def _not_found(emulator_token: str, rules: EmulatorRules) -> LaunchResolution:
     )
 
 
+def _program_not_found(search: _ProgramSearch) -> LaunchResolution:
+    return LaunchResolution(
+        AVAILABILITY_NOT_INSTALLED,
+        caveats=(
+            Caveat(
+                CAVEAT_PROGRAM_NOT_FOUND,
+                f"the command names no emulator token, and its first word {search.program} is neither a file the "
+                "frontend can see nor a program on its PATH — ES-DE refuses the launch (\"COULDN'T FIND EMULATOR\", "
+                "FileData.cpp:1354-1356)",
+                {"program": search.program, "searched": search.searched},
+            ),
+        ),
+    )
+
+
 def _emulator_rules(token: str, rules: LayeredFindRules) -> EmulatorRules | LaunchResolution:
     """The rules ES-DE holds for *token*, or the answer that says why there are none to search."""
     if not rules.bundled_read and token not in rules.custom_names:
@@ -556,18 +765,39 @@ class LaunchLookup:
     name it: a system's libretro rows all launch RetroArch, and its search is
     made once and shared (as is run_game.sh's reading of it). Built per answer
     and discarded with it, so a second answer reads the machine again.
+
+    *path_assumed* says the view's ``search_path`` and ``working_directory``
+    are assumed rather than read: every answer whose search went through
+    either then carries ``launch-path-assumed`` beside its verdict.
+    *token_notes* are notes the caller holds about one emulator token's
+    rules, each riding beside every answer for a command naming that token.
     """
 
-    def __init__(self, rules: LayeredFindRules, view: LaunchView) -> None:
+    def __init__(
+        self,
+        rules: LayeredFindRules,
+        view: LaunchView,
+        *,
+        path_assumed: bool = False,
+        token_notes: Mapping[str, Caveat] | None = None,
+    ) -> None:
         self._rules = rules
         self._view = view
+        self._path_assumed = path_assumed
+        self._token_notes: Mapping[str, Caveat] = token_notes or {}
         self._found: dict[str, Found | LaunchResolution] = {}
         self._notes: dict[str, Caveat | None] = {}
+        self._programs: dict[str, _ProgramSearch] = {}
 
     def _find(self, token: str) -> Found | LaunchResolution:
         if token not in self._found:
             self._found[token] = _find(token, self._rules, self._view)
         return self._found[token]
+
+    def _program(self, command: str) -> _ProgramSearch:
+        if command not in self._programs:
+            self._programs[command] = _second_method(command, self._view)
+        return self._programs[command]
 
     def _run_game_note(self, token: str, launcher: Launcher) -> Caveat | None:
         if token not in self._notes:
@@ -580,13 +810,25 @@ class LaunchLookup:
         *loads_core* says the entry is a libretro one, whose verdict needs the
         core found too: a libretro command naming its core by a path rather
         than through ``%CORE_X%`` is one ES-DE never checks, so it is not
-        evaluated either (``launch-resolution-unsupported``). A command
-        without an ``%EMULATOR_X%`` token goes through ES-DE's second method —
-        its first word, taken as a path or searched on ``PATH``
-        (``FileData.cpp:2595-2649``) — and taking a command apart is not this
-        evaluation's, so it answers ``launch-resolution-unsupported``. So does
-        a command carrying ``%EMUPATH%`` (checked against the emulator's
+        evaluated either (``launch-resolution-unsupported``). So is a
+        command carrying ``%EMUPATH%`` (checked against the emulator's
         directory, ``:1399-1464``) or a malformed ``%CORE_X%``.
+
+        A command without an ``%EMULATOR_X%`` token goes through ES-DE's
+        second method (``FileData.cpp:2595-2649``, :func:`_second_method`):
+        its first word, taken as a file or searched on ``PATH``. A hit is
+        ``startable`` with a ``command`` launcher, a miss ``not-installed``
+        with ``program-not-found``, and a relative word the view has no
+        working directory for ``launch-path-unestablished``. Such a command
+        that also carries a ``%PRECOMMAND_X%`` is not evaluated: ES-DE puts
+        the pre-command's path in first, and the word it then reads is that
+        path, which this does not follow. RetroDECK's ``run_game.sh`` hands
+        such a command to ``eval`` (``libexec/run_game.sh:164``) with no
+        lookup of its own, so no ``run-game-differs`` is stated for it. That
+        start would differ only where the first word holds ``%ESPATH%``,
+        which run_game.sh never expands, or a ``*``, which the shell expands
+        to every match where ES-DE takes the first; RetroDECK's deployed
+        catalogue holds no command without a token at all.
 
         ES-DE looks for the core of any command naming a ``%CORE_X%``,
         whatever the entry is (``:1145-1161``, ``:1466-1568``), so a standalone
@@ -610,7 +852,12 @@ class LaunchLookup:
         ``emulator_token`` then names the pre-command (``WINE``), not the
         emulator the entry launches.
         """
-        return _with_custom_note(self._resolve(command, loads_core=loads_core), self._rules)
+        answer = self._resolve(command, loads_core=loads_core)
+        notes = self._command_notes(command)
+        custom = _custom_note(self._rules)
+        if custom is not None:
+            notes.append(custom)
+        return _with_notes(answer, notes)
 
     def command_parts(self, command: str, *, loads_core: bool) -> CommandParts | None:
         """What ES-DE substitutes into *command* — ``None`` where :meth:`resolve` answers anything but startable.
@@ -624,13 +871,43 @@ class LaunchLookup:
     def _resolve(self, command: str, *, loads_core: bool) -> LaunchResolution:
         return self._evaluate(command, loads_core=loads_core)[0]
 
-    def _evaluate(self, command: str, *, loads_core: bool) -> tuple[LaunchResolution, CommandParts | None]:
+    def _command_notes(self, command: str) -> list[Caveat]:
+        """The notes the caller asked for beside *command*'s answer: what was assumed, then the token's."""
+        notes: list[Caveat] = []
         token = _token(command, _EMULATOR_OPENER)
         if token is None:
-            reason = "the command names no %EMULATOR_…% token, and taking it apart is a later step"
-            return command_unsupported(reason), None
+            if self._path_assumed and _takes_second_method(command) and self._program(command).assumed:
+                notes.append(_path_assumed(self._view))
+            return notes
+        if self._path_assumed and any(self._through_path(name) for name in self._searched(command, token)):
+            notes.append(_path_assumed(self._view))
+        token_note = self._token_notes.get(token)
+        if token_note is not None:
+            notes.append(token_note)
+        return notes
+
+    def _searched(self, command: str, token: str) -> list[str]:
+        """The tokens :meth:`_evaluate` searched for *command*, in its order: a refused pre-command stops it there."""
+        if _EMUPATH in command:
+            return []
+        precommand = _token(command, _PRECOMMAND_OPENER)
+        if precommand is None:
+            return [token]
+        if isinstance(self._find(precommand), LaunchResolution):
+            return [precommand]
+        return [precommand, token]
+
+    def _through_path(self, token: str) -> bool:
+        """Whether *token*'s search ran over ``search_path``: it has ``systempath`` entries, which are tried first."""
+        rules = _emulator_rules(token, self._rules)
+        return isinstance(rules, EmulatorRules) and bool(rules.system_paths)
+
+    def _evaluate(self, command: str, *, loads_core: bool) -> tuple[LaunchResolution, CommandParts | None]:
         if _EMUPATH in command:
             return command_unsupported("the command uses %EMUPATH%, which this evaluation does not follow"), None
+        token = _token(command, _EMULATOR_OPENER)
+        if token is None:
+            return self._evaluate_program(command, loads_core=loads_core)
         precommand = _token(command, _PRECOMMAND_OPENER)
         before: Found | None = None
         if precommand is not None:
@@ -641,6 +918,27 @@ class LaunchLookup:
         found = self._find(token)
         if isinstance(found, LaunchResolution):
             return found, None
+        return self._with_core(command, found, before, loads_core=loads_core, token=token)
+
+    def _evaluate_program(self, command: str, *, loads_core: bool) -> tuple[LaunchResolution, CommandParts | None]:
+        """A command without an emulator token: ES-DE's second method, then the core it names."""
+        if not _takes_second_method(command):
+            reason = (
+                "the command names a %PRECOMMAND_…% and no %EMULATOR_…% token, so the first word ES-DE reads is the "
+                "pre-command's path, which this evaluation does not follow"
+            )
+            return command_unsupported(reason), None
+        search = self._program(command)
+        if search.outcome is None:
+            return _program_not_found(search), None
+        if isinstance(search.outcome, _Stopped):
+            return _path_unestablished(search.outcome.path), None
+        return self._with_core(command, search.outcome, None, loads_core=loads_core, token=None)
+
+    def _with_core(
+        self, command: str, found: Found, before: Found | None, *, loads_core: bool, token: str | None
+    ) -> tuple[LaunchResolution, CommandParts | None]:
+        """The verdict once the program is found: the core the command names, then run_game.sh's reading of *token*."""
         reference = _core_reference(command)
         if reference is None and loads_core:
             reason = "the core is named by a path rather than through %CORE_…%, which ES-DE never checks"
@@ -652,10 +950,17 @@ class LaunchLookup:
                 return core, None
             core_file = core
         core_path = generic_path(core_file) if loads_core and core_file is not None else None
-        note = self._run_game_note(token, found.launcher)
+        note = None if token is None else self._run_game_note(token, found.launcher)
         notes = () if note is None else (note,)
         resolution = LaunchResolution(AVAILABILITY_STARTABLE, found.launcher, core_path, notes)
         return resolution, CommandParts(found, before, core_file)
+
+
+def _takes_second_method(command: str) -> bool:
+    """Whether a command without an emulator token is one the second method is followed for: no ``%EMUPATH%``,
+    no pre-command.
+    """
+    return _EMUPATH not in command and _PRECOMMAND_OPENER not in command
 
 
 def _find_core(
@@ -693,17 +998,45 @@ def _find_core(
     )
 
 
-def _with_custom_note(answer: LaunchResolution, rules: LayeredFindRules) -> LaunchResolution:
-    """*answer* with the skipped custom layer stated beside it, where one was skipped."""
+def _custom_note(rules: LayeredFindRules) -> Caveat | None:
+    """The skipped custom layer, stated beside the answer where one was skipped — ``None`` where none was."""
     if rules.custom_unreadable is None:
-        return answer
-    note = Caveat(
+        return None
+    return Caveat(
         CAVEAT_FIND_RULES_UNREADABLE,
         f"the custom find rules at {rules.custom_unreadable} exist and could not be read or parsed — "
         "ES-DE skips such a file and reads the bundled one, and so does this answer",
         {"layer": LAYER_CUSTOM},
     )
-    return LaunchResolution(answer.availability, answer.launcher, answer.core_path, (*answer.caveats, note))
+
+
+def _path_assumed(view: LaunchView) -> Caveat:
+    """What the search assumed about the frontend's process: its ``PATH``, and the directory it runs in — both
+    written nowhere on disk.
+
+    A view that states no working directory gives the note ``search_path``
+    alone: a caveat's data carries no ``null``. No frontend does so today —
+    EmuDeck's states one, and RetroDECK's ``PATH`` is read, so it never gets
+    the note.
+    """
+    message = (
+        "the search ran over an assumed PATH or working directory — the frontend process's own are written "
+        "nowhere on disk, so a frontend started with others may find another program, or none"
+    )
+    if view.working_directory is None:
+        return Caveat(CAVEAT_LAUNCH_PATH_ASSUMED, message, {"search_path": view.search_path})
+    return Caveat(
+        CAVEAT_LAUNCH_PATH_ASSUMED,
+        message,
+        {"search_path": view.search_path, "working_directory": view.working_directory},
+    )
+
+
+def _with_notes(answer: LaunchResolution, notes: list[Caveat]) -> LaunchResolution:
+    """*answer* with *notes* stated after its own caveats."""
+    if not notes:
+        return answer
+    return LaunchResolution(answer.availability, answer.launcher, answer.core_path, (*answer.caveats, *notes))
 
 
 # run_game.sh's own token pattern (``libexec/run_game.sh:232``): only these

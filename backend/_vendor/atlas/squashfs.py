@@ -3,9 +3,11 @@
 An AppImage (type 2) is an ELF runtime with a squashfs 4.0 image appended;
 the image begins where the ELF's section headers end (offset ``e_shoff +
 e_shentsize * e_shnum``), which is how the runtime itself locates it. This
-module reads exactly one entry out of that image by path — enough to open the
-catalogue a frontend ships sealed inside its AppImage (issue #65) — and
-nothing more: no listing API, no extraction tree, no write path.
+module reads exactly one entry out of that image by path — enough to open
+what a frontend ships sealed inside its AppImage: its catalogue (issue #65),
+its find rules and the binary that states its build (#84) — or, for one
+link, the target it names (the image's ``AppRun``) — and nothing more: no
+listing API, no extraction tree, no write path.
 
 The format facts below are squashfs 4.0 as mksquashfs writes it and the
 kernel reads it (little endian throughout):
@@ -44,6 +46,8 @@ from __future__ import annotations
 import struct
 import zlib
 import importlib
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any, BinaryIO, Callable, NamedTuple
 
 _SUPERBLOCK = struct.Struct("<4sIIIIHHHHHHQQQQQQQQ")
@@ -462,8 +466,8 @@ def _child_inode(image: _Image, node: dict[str, Any], components: list[str], ind
     return image.inode(ref)
 
 
-def _resolve(image: _Image, inner_path: str) -> bytes:
-    """Walk *inner_path* from the root, following in-image symlinks, and read it."""
+def _walk(image: _Image, inner_path: str, *, follow_last: bool = True) -> dict[str, Any]:
+    """The inode *inner_path* names, every in-image symlink on the way followed — the last one only on request."""
     components = [part for part in inner_path.split("/") if part]
     if not components:
         raise EntryNotFound("an empty entry path names nothing")
@@ -472,7 +476,7 @@ def _resolve(image: _Image, inner_path: str) -> bytes:
     index = 0
     while index < len(components):
         child = _child_inode(image, node, components, index)
-        if child["kind"] == _SYMLINK:
+        if child["kind"] == _SYMLINK and (follow_last or index < len(components) - 1):
             followed += 1
             if followed > _MAX_SYMLINK_DEPTH:
                 raise SquashfsError("symlink chain deeper than the reader follows")
@@ -483,9 +487,28 @@ def _resolve(image: _Image, inner_path: str) -> bytes:
             continue
         node = child
         index += 1
+    return node
+
+
+def _resolve(image: _Image, inner_path: str) -> bytes:
+    """Walk *inner_path* from the root, following in-image symlinks, and read it."""
+    node = _walk(image, inner_path)
     if node["kind"] != _FILE:
         raise EntryNotFound(f"{inner_path!r} is not a regular file in the image")
     return image.file_bytes(node)
+
+
+@contextmanager
+def _opened_image(path: str) -> Iterator[_Image]:
+    """The squashfs image the AppImage at *path* carries, open for the walk — the file closed on leaving.
+
+    The failures are the opening's own: ``OSError`` from the filesystem and
+    :class:`SquashfsError` where the file is no AppImage this reader can place.
+    """
+    with open(path, "rb") as handle:
+        offset = _appimage_offset(handle)
+        handle.seek(0)
+        yield _Image(handle, offset)
 
 
 def read_appimage_entry(path: str, inner_path: str) -> bytes:
@@ -498,8 +521,22 @@ def read_appimage_entry(path: str, inner_path: str) -> bytes:
     and :class:`EntryNotFound` when the image is fine and the entry is not
     in it.
     """
-    with open(path, "rb") as handle:
-        offset = _appimage_offset(handle)
-        handle.seek(0)
-        image = _Image(handle, offset)
+    with _opened_image(path) as image:
         return _resolve(image, inner_path)
+
+
+def read_appimage_link(path: str, inner_path: str) -> str | None:
+    """The target the symlink at *inner_path* inside the AppImage at *path* names, as the link spells it.
+
+    ``None`` where the entry is no link — a file or a directory. Links on the
+    way to it are followed, the entry itself is not. The refusals are
+    :func:`read_appimage_entry`'s, a missing entry included
+    (:class:`EntryNotFound`): a caller asking what an entry points at has
+    the same failures to tell apart as one reading it, so they are raised
+    rather than folded into ``None``.
+    """
+    with _opened_image(path) as image:
+        node = _walk(image, inner_path, follow_last=False)
+    if node["kind"] != _SYMLINK:
+        return None
+    return bytes(node["target"]).decode("utf-8", errors="replace")
