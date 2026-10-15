@@ -2,19 +2,21 @@
 
 Owns the read-only I/O for ``es_find_rules.xml``, the file ES-DE resolves a
 ``%EMULATOR_<NAME>%`` token through. The catalogue is the vendored resolver's to
-read (:mod:`adapters.atlas_catalogue`); this file answers the two questions the
-resolver does not, and they are two different kinds of question:
+read (:mod:`adapters.atlas_catalogue`); this file answers two questions Tender
+does not take from the resolver, and they are two different kinds of question:
 
-- **Is a standalone emulator installed at all?** A fact about the machine, which
-  atlas does not answer because it states the token a command names, not the
-  host path that token resolves to (emu-atlas#84). A command ES-DE lists may
+- **Is a standalone emulator installed at all?** A fact about the machine. The
+  resolver answers it too, as each catalogue entry's ``availability``
+  (``startable``, ``not-installed``, ``unestablished``), which Tender does not
+  read. A command ES-DE lists may
   name an emulator RetroDECK ships no binary for; baking it produces a Steam
   shortcut that dies in ~0.4 s, so the option is downgraded to ``needs_setup``
   before it can become the system default (ADR-0020).
 - **Which path does the folder-boot bake exec inside the sandbox?** A question
   about Tender's own launcher: a game that boots from a directory cannot go
   through RetroDECK's ``run_game.sh`` at all, so the bake needs the emulator's
-  own component launcher (ADR-0019). Nothing but Tender asks it.
+  own component launcher (ADR-0019). The resolver answers it too, as a
+  catalogue entry's ``launcher`` path, which Tender does not read.
 
 Both probes prefer ``linux/`` over ``unix/`` within a root, which is ES-DE's own
 per-flavor layout. Which root comes first is

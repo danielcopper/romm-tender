@@ -2638,22 +2638,23 @@ it — Beetle PSX's three region images, or the one image SwanStation's search f
 answered for. The adapter carries each group as `FirmwareGroup` on `FirmwareCatalogue.groups`, keyed on the emulator
 stating it, together with the regions that entry names as unchecked or as booting nothing — which caveats those are, and
 which one is not, is `adapters/atlas_firmware.py::_UNCHECKED_REGION_CODES`'s. A region whose every name the resolver
-refused arrives with neither an option nor such a caveat, so a group can read `met` over it; emu-atlas#556 asks for it.
-Every option's file is a placement like any other, and an option's `need` never reaches the row's `required`
-(`adapters/atlas_firmware.py::_wants`) — the group is the requirement, so marking each option required would report
-every option but the one in place as a missing prerequisite over a launch that needs one. `domain/firmware_groups.py`
-judges a group into `met` / `partial` / `unmet` / `unknown` over its covered, missing and unchecked regions; the
-launching emulator's verdicts ride the payload as `one_of_groups`, each row's membership as `one_of` (and on every
-declaring emulator's `cores` entry), and the counts take each group once — `required_downloaded` only where it is `met`,
-`required_partial` for a partly covered one, `required_withheld` for an `unknown` one. An `unmet` group lands the level
-on `missing` like an `absent` system image, and a `partial` one keeps it at `partial`. The game page narrows the groups
-to the ROM's own console regions (`console_regions_of` over `Rom.regions`) and keeps the platform's verdict where none
-maps. The play row's badge subtracts `required_partial` as it subtracts `required_withheld`, so a group partly covered
-for a game whose region is unknown raises nothing. Its token (`compute_bios_label`) is `Missing` for an `unmet` group
-whatever the plain files say, and otherwise counts the plain required files alone, never a group — stated as a ratio
-beside a group even with none of them in place, because an image is (`_counted_label`); beside an `unknown` group it is
-`Unknown` unless a plain file is shown missing (`_declined_label`). Nothing in the module knows which console it is
-judging.
+refused arrives with neither an option nor such a caveat, so a group can read `met` over it: the resolver names that
+region only under `unstated` on the group's `core-mode-unestablished` caveat, which Tender does not read; reading it is
+#2190's (D11). Every option's file is a placement like any other, and an option's `need` never reaches the row's
+`required` (`adapters/atlas_firmware.py::_wants`) — the group is the requirement, so marking each option required would
+report every option but the one in place as a missing prerequisite over a launch that needs one.
+`domain/firmware_groups.py` judges a group into `met` / `partial` / `unmet` / `unknown` over its covered, missing and
+unchecked regions; the launching emulator's verdicts ride the payload as `one_of_groups`, each row's membership as
+`one_of` (and on every declaring emulator's `cores` entry), and the counts take each group once — `required_downloaded`
+only where it is `met`, `required_partial` for a partly covered one, `required_withheld` for an `unknown` one. An
+`unmet` group lands the level on `missing` like an `absent` system image, and a `partial` one keeps it at `partial`. The
+game page narrows the groups to the ROM's own console regions (`console_regions_of` over `Rom.regions`) and keeps the
+platform's verdict where none maps. The play row's badge subtracts `required_partial` as it subtracts
+`required_withheld`, so a group partly covered for a game whose region is unknown raises nothing. Its token
+(`compute_bios_label`) is `Missing` for an `unmet` group whatever the plain files say, and otherwise counts the plain
+required files alone, never a group — stated as a ratio beside a group even with none of them in place, because an image
+is (`_counted_label`); beside an `unknown` group it is `Unknown` unless a plain file is shown missing
+(`_declined_label`). Nothing in the module knows which console it is judging.
 
 **The console's own firmware demand is a third axis — beside the launching core's required-file counts and the library's
 own held/offered ratio — and it is a value rather than a count, for a core that states no one-of group.** A libretro
@@ -2672,19 +2673,20 @@ launching emulator states a group, the group IS that demand, said precisely, and
   the file list either — only the images the launching core declares can answer the demand, and the rows beside them
   cannot.
 - **Whether an image is held is read off the rows, and `requirements_met` is not consulted at all.** The demand comes
-  from the system table, the presence from the file rows, and nothing weighs one against the other — which is the shape
-  upstream intends for a consumer here. Reading that field as a second opinion would be the misreading it exists to
-  prevent: at the resolver ignorance is always `null`, so a `false` is a demonstrated statement rather than a
-  disagreement to resolve. It has exactly two causes — a **different** required file is absent, or one that is present
-  has the wrong bytes — and each of them leaves one of this platform's own required rows unmet, so the ordinary counts
-  already report it, by name, which this axis never could. The second cause needs a content check to arise at all, and
-  the whole-machine inventory is asked unverified (the entry below), so on this path it cannot occur: on the reference
-  device `checked == "mismatch"` appears on no requirement of any core, and `hash_checked` on that answer is `false`.
-  The combination the removed branch was written for does not arise either — of the three cores there in the
-  `cannot-run-without-firmware` state, none has a single row the resolver reports present. What a row's `satisfied`
-  resolves to — presence, and the two shapes where it is `null` — is written out at `classify_system_image`, where the
-  alternative is built. It is stated once, there, because an outside reader took the field for the resolver's usability
-  answer and drew a false finding from it.
+  from the system table, the presence from the file rows, and nothing weighs one against the other. The resolver also
+  states this console-level verdict itself, as `system_firmware_met`, which Tender does not read; reading it is #2190's
+  (D20). Reading `requirements_met` as a second opinion would be the misreading it exists to prevent: at the resolver
+  ignorance is always `null`, so a `false` is a demonstrated statement rather than a disagreement to resolve. It has
+  exactly two causes — a **different** required file is absent, or one that is present has the wrong bytes — and each of
+  them leaves one of this platform's own required rows unmet, so the ordinary counts already report it, by name, which
+  this axis never could. The second cause needs a content check to arise at all, and the whole-machine inventory is
+  asked unverified (the entry below), so on this path it cannot occur: on the reference device `checked == "mismatch"`
+  appears on no requirement of any core, and `hash_checked` on that answer is `false`. The combination the removed
+  branch was written for does not arise either — of the three cores there in the `cannot-run-without-firmware` state,
+  none has a single row the resolver reports present. What a row's `satisfied` resolves to — presence, and the two
+  shapes where it is `null` — is written out at `classify_system_image`, where the alternative is built. It is stated
+  once, there, because an outside reader took the field for the resolver's usability answer and drew a false finding
+  from it.
 - **It only ever makes the verdict less green.** `absent` lands on `missing`, tested ahead of the declines so that a
   demonstration outranks a platform nothing could be established for. Only one of the three declines can reach that
   comparison, so the order is a rule about that one and a guard for the rest: `absent` needs every row the launching

@@ -1212,45 +1212,46 @@ Format: **invariant** — tier — enforced by.
   `False` is therefore a demonstrated statement rather than a disagreement. Its two causes (a DIFFERENT required file
   absent, or one present with the wrong bytes) each leave one of our own required rows unmet, so the counts already
   report them by name; the second needs a content check to arise, and the inventory is asked **unverified** (the entry
-  below), so it cannot occur here. What the presence half actually resolves to — a row's `satisfied` is presence, `null`
-  in two shapes, and both read as not held — is written once, at `classify_system_image`, because an outside reader took
-  that field for the resolver's usability answer and drew a false finding from it. And on the frontend,
-  `system_image: "unsettled"` joins `required_withheld` on the side `PlatformDetail`'s `nothingEstablished` excludes:
-  its rows were answered, so the pane has a file list to point at rather than only a place to put files by hand. Since
-  #1821 that flag decides WORDING alone — the download affordances are built off the fetchable set and read the verdict
-  nowhere, because what the resolver could establish is the emulator's demand and what is fetchable is what the library
-  holds; the two further inputs they do read (`fetch_for_required`, and the library's own finished ratio) are demand and
-  inventory, not readiness gates. **A fourth frontend reader is the play row's BIOS badge**
-  (`frontend/src/utils/playSection.ts::extractBiosInfo`), where `"absent"` is a second established absence beside the
-  required count. Whether the count sees the same thing is the core author's choice, which is why the badge may not be
-  left to it: a core marking every image optional leaves `required_count` at 0 and the comparison beside it vacuously
-  false, while `"absent"` is the same whatever the core marked. `"unsettled"` deliberately raises no badge, the same
-  reading a withheld required row gets: the badge claims a file is NOT THERE, and nothing established that. **Where BOTH
-  ignorances hold** — a console needing an image whose required folder row could not be judged, the LRPS2 shape and a
-  reachable one — `biosSummary` names the withheld ROW rather than the console. They are not two gaps over two different
-  file sets: a `required_by_active` row always carries the launching emulator, so it is always one of the rows the
-  disjunction is read over. It is always one of the unjudged rows that verdict is read over rather than a finding beside
-  it — the decline needs at least one such row, and this is one — and need not be the only one, since another image the
-  core declares can be unjudged too; it is the only half of the pair that can name a file, and naming it points at the
-  file list, where its caveat explains itself. **`"absent"` is tested BEFORE the level's decline**, and the pair never
-  arrives at all today because the backend lands `absent` on `missing`. Since #1863 that order lives ONCE, in
-  `biosSummary`, which is what every wording surface reads — `PlatformsTab.tsx`'s row tooltip last, since it kept a copy
-  of the order and an older spelling of the states for a cut longer and described one platform in two vocabularies a
-  keypress apart. **The module's own drift lock is a test that reads components as SOURCE** (`biosSummary.test.ts`, over
-  the phrase list the module builds its answers from, with the ratio's twin in `biosHeldRatio.test.ts`) — and since
-  #1866 it SWEEPS the set it searches rather than naming it (`frontend/src/test-utils/componentSources.ts`, every
-  non-test `.tsx` under `frontend/src/bigpicture` or `frontend/src/shared`), because the naming is what failed: both
-  locks listed two components while three rendered these states, and a surface missing from such a list carries no lock
-  at all and cannot be told from one that never drifted. Deriving the set from who IMPORTS the module would be worse
-  than the list — a surface wording a state for itself is exactly one that does not import it. **What neither lock can
-  catch is a component inventing a NEW wording for one of these states**: only a copied phrase is searchable, so a green
-  run there is evidence about copied sentences and about nothing else. Two limits of the sweep, both deliberate: it is
-  `.tsx` only, so a wording helper extracted into a `.ts` beside its component is unsearched
-  (`frontend/src/bigpicture/panelState.ts` is such a file and quotes BIOS prose today), and `frontend/src/utils` is out
-  of scope because that is where the phrases legitimately live **Where the launching emulator states a one-of group,
-  this axis is silent** (`classify_system_image(..., groups=...)` answers `not_demanded`): the group IS the console's
-  demand, said region by region, and it is judged as the next entry sets out. A second, coarser reading of the same
-  demand beside it would be one requirement stated twice
+  below), so it cannot occur here. The resolver also states the console-level verdict itself, as `system_firmware_met`,
+  which Tender does not read; reading it is #2190's (D20). What the presence half actually resolves to — a row's
+  `satisfied` is presence, `null` in two shapes, and both read as not held — is written once, at
+  `classify_system_image`, because an outside reader took that field for the resolver's usability answer and drew a
+  false finding from it. And on the frontend, `system_image: "unsettled"` joins `required_withheld` on the side
+  `PlatformDetail`'s `nothingEstablished` excludes: its rows were answered, so the pane has a file list to point at
+  rather than only a place to put files by hand. Since #1821 that flag decides WORDING alone — the download affordances
+  are built off the fetchable set and read the verdict nowhere, because what the resolver could establish is the
+  emulator's demand and what is fetchable is what the library holds; the two further inputs they do read
+  (`fetch_for_required`, and the library's own finished ratio) are demand and inventory, not readiness gates. **A fourth
+  frontend reader is the play row's BIOS badge** (`frontend/src/utils/playSection.ts::extractBiosInfo`), where
+  `"absent"` is a second established absence beside the required count. Whether the count sees the same thing is the
+  core author's choice, which is why the badge may not be left to it: a core marking every image optional leaves
+  `required_count` at 0 and the comparison beside it vacuously false, while `"absent"` is the same whatever the core
+  marked. `"unsettled"` deliberately raises no badge, the same reading a withheld required row gets: the badge claims a
+  file is NOT THERE, and nothing established that. **Where BOTH ignorances hold** — a console needing an image whose
+  required folder row could not be judged, the LRPS2 shape and a reachable one — `biosSummary` names the withheld ROW
+  rather than the console. They are not two gaps over two different file sets: a `required_by_active` row always carries
+  the launching emulator, so it is always one of the rows the disjunction is read over. It is always one of the unjudged
+  rows that verdict is read over rather than a finding beside it — the decline needs at least one such row, and this is
+  one — and need not be the only one, since another image the core declares can be unjudged too; it is the only half of
+  the pair that can name a file, and naming it points at the file list, where its caveat explains itself. **`"absent"`
+  is tested BEFORE the level's decline**, and the pair never arrives at all today because the backend lands `absent` on
+  `missing`. Since #1863 that order lives ONCE, in `biosSummary`, which is what every wording surface reads —
+  `PlatformsTab.tsx`'s row tooltip last, since it kept a copy of the order and an older spelling of the states for a cut
+  longer and described one platform in two vocabularies a keypress apart. **The module's own drift lock is a test that
+  reads components as SOURCE** (`biosSummary.test.ts`, over the phrase list the module builds its answers from, with the
+  ratio's twin in `biosHeldRatio.test.ts`) — and since #1866 it SWEEPS the set it searches rather than naming it
+  (`frontend/src/test-utils/componentSources.ts`, every non-test `.tsx` under `frontend/src/bigpicture` or
+  `frontend/src/shared`), because the naming is what failed: both locks listed two components while three rendered these
+  states, and a surface missing from such a list carries no lock at all and cannot be told from one that never drifted.
+  Deriving the set from who IMPORTS the module would be worse than the list — a surface wording a state for itself is
+  exactly one that does not import it. **What neither lock can catch is a component inventing a NEW wording for one of
+  these states**: only a copied phrase is searchable, so a green run there is evidence about copied sentences and about
+  nothing else. Two limits of the sweep, both deliberate: it is `.tsx` only, so a wording helper extracted into a `.ts`
+  beside its component is unsearched (`frontend/src/bigpicture/panelState.ts` is such a file and quotes BIOS prose
+  today), and `frontend/src/utils` is out of scope because that is where the phrases legitimately live **Where the
+  launching emulator states a one-of group, this axis is silent** (`classify_system_image(..., groups=...)` answers
+  `not_demanded`): the group IS the console's demand, said region by region, and it is judged as the next entry sets
+  out. A second, coarser reading of the same demand beside it would be one requirement stated twice
 - **A one-of group is ONE requirement, judged by the regions its options serve — and an option never makes its row
   required** — test + prompt-only — `tests/domain/test_firmware_groups.py` pins the verdict (every state, a region
   nobody checked keeping a covered group off `met`, a stated uncovered region staying missing beside an unchecked one,
@@ -1279,7 +1280,8 @@ Format: **invariant** — tier — enforced by.
   region sets the verdict reads beside the options come from the entry's own caveats, and which ones — and which one
   must never be read as unchecked — is `adapters/atlas_firmware.py::_UNCHECKED_REGION_CODES`'s. **Unseen by every
   test**: a region whose every name the resolver refused arrives with neither an option nor such a caveat, so a group
-  can read `met` over it; emu-atlas#556 asks for it
+  can read `met` over it — the resolver names it only under `unstated` on the group's `core-mode-unestablished` caveat,
+  which Tender does not read; reading it is #2190's (D11)
 - **Which emulator a set of answers is about is ONE pick per scope — a platform's, and a ROM's — and every answer in
   that scope is a projection of it** — test + prompt-only —
   `tests/services/test_firmware.py::TestOnePlatformOneEmulator` asserts the two surfaces AGREE across every way a
