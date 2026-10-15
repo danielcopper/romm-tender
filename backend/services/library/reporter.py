@@ -58,11 +58,11 @@ if TYPE_CHECKING:
 
 
 # kv_config key for the offline ``platform_slug → display_name`` cache,
-# refreshed on every sync from the live work-queue, plus the name kept for a
-# platform RomM no longer lists whose games stay in its Steam collection. Read
-# for the game-detail page's platform name, for the name a platform removal
-# answers with, which the frontend uses to find that platform's Steam
-# collection, and by the next sync to name such a platform's collection again.
+# refreshed on every sync from the live work-queue, plus the name already kept
+# for each platform outside it that a bound game is still on. Read for the
+# game-detail page's platform name, for the name a platform removal answers
+# with, which the frontend uses to find that platform's Steam collection, and
+# by the next sync to name the collection of a platform RomM no longer lists.
 _PLATFORM_NAMES_KEY = "platform_names"
 
 # How many of the newest sync runs ``get_sync_runs`` answers with — the run
@@ -328,14 +328,33 @@ class SyncReporter:
                 uow.platform_sync_state.revoke_skip(slug)
             uow.collection_sync_state.delete_intersecting(unbound_rom_ids)
 
-            uow.kv_config.set(_PLATFORM_NAMES_KEY, json.dumps(platform_names))
+            names = self._names_with_bound_platforms_kept(uow, platform_names)
+            uow.kv_config.set(_PLATFORM_NAMES_KEY, json.dumps(names))
 
             return self._build_collection_app_ids(
                 uow,
                 pending_platform_rom_ids,
                 pending_collection_memberships,
-                platform_names,
+                names,
             )
+
+    @staticmethod
+    def _names_with_bound_platforms_kept(uow: UnitOfWork, platform_names: dict[str, str]) -> dict[str, str]:
+        """*platform_names*, plus the cached name of every platform outside it that a bound row is still on.
+
+        A platform RomM no longer lists keeps its games, and its Steam collection
+        is found by this name: written over with the live map alone, the next
+        run would key that collection by the slug, and the frontend would remove
+        the old one. This runs on every finalize, a stopped run's included,
+        since each of them rewrites the cache.
+        """
+        kept = decode_platform_names(uow.kv_config.get(_PLATFORM_NAMES_KEY))
+        outside = {
+            rom.platform_slug
+            for rom in uow.roms.iter_all()
+            if rom.shortcut_app_id is not None and rom.platform_slug not in platform_names
+        }
+        return {**{slug: kept[slug] for slug in outside if slug in kept}, **platform_names}
 
     async def finalize_per_unit_run(
         self,

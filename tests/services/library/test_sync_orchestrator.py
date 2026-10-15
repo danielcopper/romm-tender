@@ -5801,6 +5801,52 @@ class TestPlatformTurnedOffAndBackOn:
         assert preview["summary"]["platform_collection_diff"]["has_changes"] is False
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("stop", ["cancelled", "paused", "interrupted"])
+    async def test_a_stopped_run_in_between_keeps_the_collection_s_name(self, library, fake_romm_api, emit, stop):
+        """A stopped run still writes the names cache; the delisted platform's name has to survive it."""
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
+        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
+        library.settings["enabled_platforms"] = {"1": True, "2": True}
+
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_every_game(unit, event):
+            event.set()
+            return {"n64": {"1": 5001}, "gba": {"4": 5004}}.get(unit.slug, {})
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_every_game
+
+        async def complete_a_run(run_id):
+            box.sync_state = SyncState.RUNNING
+            box.current_sync_id = run_id
+            await library.sync._orchestrator._do_sync_per_unit()
+
+        await complete_a_run("run-1")
+        fake_romm_api.platforms = [p for p in fake_romm_api.platforms if p["slug"] != "n64"]
+
+        # Run 2 stops right after its work queue is built.
+        build_work_queue = library.sync._fetcher.build_work_queue
+
+        async def build_then_stop():
+            queue = await build_work_queue()
+            box.run_paused = stop == "paused"
+            box.run_interrupted = stop == "interrupted"
+            box.request_cancel()
+            return queue
+
+        library.sync._fetcher.build_work_queue = build_then_stop
+        await complete_a_run("run-2")
+        library.sync._fetcher.build_work_queue = build_work_queue
+
+        run_3_starts_at = len(emit.call_args_list)
+        await complete_a_run("run-3")
+
+        complete = [c.args[1] for c in emit.call_args_list[run_3_starts_at:] if c.args[0] == "sync_complete"]
+        assert [event["platform_app_ids"] for event in complete] == [{"N64": [5001], "GBA": [5004]}]
+
+    @pytest.mark.asyncio
     async def test_a_platform_read_mid_run_still_counts_as_unlisted(self, library, fake_romm_api, emit):
         """A game page asking for N64's system mid-run keeps ids for it again; the run's own listing still decides."""
         _use_fake_romm(library, fake_romm_api)

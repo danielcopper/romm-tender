@@ -1286,11 +1286,12 @@ class SyncOrchestrator:
         return sort.remove + asked_remove, sort.keep
 
     async def _with_kept_platform_names(self, kept: list[StaleRow], live: dict[str, str]) -> dict[str, str]:
-        """*live*, plus the name the last run kept for each platform outside it that a *kept* row is on.
+        """*live*, plus the cached name of each platform outside it that a *kept* row is on, for the preview.
 
-        Such a platform is one RomM no longer lists: its games stay in its Steam
-        collection, which is named by display name, so without the kept name
-        the collection would be renamed to the slug and the old one removed.
+        Such a platform is one RomM no longer lists, and its Steam collection
+        keeps that name: the apply's finalize carries it forward
+        (``SyncReporter._names_with_bound_platforms_kept``), so the preview
+        counts the collection under the same name.
         """
         outside = {row.platform_slug for row in kept} - live.keys()
         if not outside:
@@ -1330,8 +1331,7 @@ class SyncOrchestrator:
         # paths) is excluded so a new rom_id reusing an old appId is never
         # wrongly removed (#1036). Of the rest, only a game outside what the
         # run syncs is removed (``sort_stale_rows``); a version gone from RomM
-        # stays bound and in its platform's Steam collection, under the name
-        # last kept for a platform RomM no longer lists.
+        # stays bound and in its platform's Steam collection.
         stale: list[StaleRow] = []
         if not cancelled:
             candidates = await self._loop.run_in_executor(
@@ -1347,7 +1347,6 @@ class SyncOrchestrator:
                 collection_listed_rom_ids=collection_listed_rom_ids,
             )
             platform_rom_ids.update(row.rom_id for row in kept)
-            platform_names = await self._with_kept_platform_names(kept, platform_names)
         remove = [{"rom_id": row.rom_id, "app_id": row.app_id} for row in stale]
         if remove:
             await self._rules.emit_under_lease(
