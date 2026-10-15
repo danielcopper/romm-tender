@@ -21,7 +21,7 @@ from domain.sibling_resolution import AUTO_REGION, canonical_group_name, fs_name
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping
 
-    from domain.rom import DeliveryRoute
+    from domain.rom import DeliveryRoute, GoneEvidence
 
 # Marker key a rebind entry carries so the per-unit commit moves the DB binding
 # from the bound sibling it is keyed by (the entry's ``rom_id``, kept so the
@@ -507,6 +507,32 @@ class StaleSort(NamedTuple):
     remove: list[StaleRow]
     keep: list[StaleRow]
     ask: list[StaleRow]
+
+    def gone_from_romm_marks(
+        self, answers: Mapping[int, RomAnswer], read_platform_slugs: Collection[str]
+    ) -> dict[int, GoneEvidence | None]:
+        """What an apply records on each stale row about RomM still serving it: a mark, ``None`` to clear one.
+
+        *answers* are RomM's to the exact ids of :attr:`ask`, and
+        *read_platform_slugs* the platforms :func:`sort_stale_rows` was given as
+        read whole. A kept row whose platform the run did not read is on a
+        platform RomM no longer lists, and is marked ``delisted``. An asked row
+        is marked ``not_found`` on a proven 404 and has its mark cleared when
+        RomM returned the very ROM; an answer that established nothing is
+        absent, so nothing is written for it. A row kept on a platform the run
+        read whole is absent too: its platform's stamp already says the fetch
+        did not return it.
+        """
+        marks: dict[int, GoneEvidence | None] = {
+            row.rom_id: "delisted" for row in self.keep if row.platform_slug not in read_platform_slugs
+        }
+        for row in self.ask:
+            answer = answers.get(row.rom_id)
+            if answer == "gone":
+                marks[row.rom_id] = "not_found"
+            elif answer == "present":
+                marks[row.rom_id] = None
+        return marks
 
 
 def sort_stale_rows(

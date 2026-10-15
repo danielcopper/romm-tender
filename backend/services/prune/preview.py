@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
-from domain.fetch_generation import prune_candidate_ids
+from domain.fetch_generation import gone_from_romm_ids
 from domain.retrodeck_folders import FolderRefused, folder_of
 from domain.sibling_resolution import group_rows
 from lib.url_host import romm_namespace
@@ -35,13 +35,13 @@ def _explicit_candidate(uow: UnitOfWork, explicit_rom_id: int | None) -> set[int
 
 
 def _discovered_candidates(uow: UnitOfWork, rows: list[Rom]) -> set[int]:
-    """Every row absent from its own platform's last completed fetch."""
+    """Every row absent from its own platform's last completed fetch, or the sync marked gone from RomM."""
     platform_rows: dict[str, list[Rom]] = {}
     for row in rows:
         platform_rows.setdefault(row.platform_slug, []).append(row)
     candidate_ids: set[int] = set()
     for slug, candidates in platform_rows.items():
-        candidate_ids.update(prune_candidate_ids(candidates, uow.platform_sync_state.get(slug)))
+        candidate_ids.update(gone_from_romm_ids(candidates, uow.platform_sync_state.get(slug)))
     return candidate_ids
 
 

@@ -355,3 +355,27 @@ class TestUserFallbackTier:
 
         assert (await prober.probe_many({7}))[7]["status"] == "vanished"
         assert reader.user_calls == 0
+
+
+class TestLiveRomIds:
+    """What the run's present-clear reads: every id RomM answered with that very ROM (#2431)."""
+
+    async def test_collects_the_live_answers_of_every_round_and_its_controls(self):
+        answers = {1: {"id": 1}, 2: RommNotFoundError("gone"), 3: {"id": 4}, 99: {"id": 99}}
+        prober, _ = _prober(answers, controls=[99])
+        prober.bind_run("run", romm_namespace(_NAMESPACE_SETTINGS))
+
+        await prober.probe_many({1})
+        await prober.probe_many({2, 3})
+
+        assert prober.live_rom_ids() == frozenset({1, 99})
+
+    async def test_a_new_run_starts_with_none(self):
+        prober, _ = _prober({1: {"id": 1}})
+        prober.bind_run("run-1", romm_namespace(_NAMESPACE_SETTINGS))
+        await prober.probe_many({1})
+
+        prober.end_run()
+        assert prober.live_rom_ids() == frozenset()
+        prober.bind_run("run-2", romm_namespace(_NAMESPACE_SETTINGS))
+        assert prober.live_rom_ids() == frozenset()

@@ -4,6 +4,8 @@ The generation marker's read side: given a platform's ``roms`` rows and the
 generation its completion stamp recorded, answer which rows that fetch returned
 and which it did not. Anything that decides whether to skip belongs to the
 fetcher, and anything that writes a generation belongs to the reporter.
+:func:`gone_from_romm_ids` adds to that answer the rows the library sync marked
+gone from RomM, which no stamp can name.
 """
 
 from __future__ import annotations
@@ -94,6 +96,19 @@ def prune_candidate_ids(rows: Sequence[Rom], stamp: PlatformSyncState | None) ->
     if stamp is None or not stamp.fetch_id or stamp.rom_count <= 0:
         return set()
     return {row.rom_id for row in rows if row.last_fetch_id != stamp.fetch_id}
+
+
+def gone_from_romm_ids(rows: Sequence[Rom], stamp: PlatformSyncState | None) -> set[int]:
+    """Return the rows of one platform there is local evidence RomM no longer serves.
+
+    :func:`prune_candidate_ids` over *stamp*, plus every row the library sync
+    marked gone from RomM (``Rom.gone_from_romm``). The mark covers what no
+    stamp can: a row reached only through a collection, whose platform carries
+    no stamp, and a row on a platform RomM no longer lists, whose stamp still
+    counts it as returned. Discovery only, never deletion authority, like the
+    candidates it extends.
+    """
+    return prune_candidate_ids(rows, stamp) | {row.rom_id for row in rows if row.gone_from_romm is not None}
 
 
 def current_generation_ids(rows: Sequence[Rom], stamp: PlatformSyncState | None) -> set[int]:

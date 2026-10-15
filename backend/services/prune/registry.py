@@ -52,7 +52,10 @@ class PruneRegistry:
         cheapest available test of whether the ROM endpoint is still answering
         for ids that exist. Deterministic (ascending) so the audit trail names
         the same subject a re-run would pick, and capped by *limit* because this
-        is a control, not a survey.
+        is a control, not a survey. A row the sync marked gone from RomM is no
+        such id even where it carries its platform's generation: a platform RomM
+        no longer lists keeps its stamp, so its rows would otherwise be picked,
+        404, and leave the round with no proof.
         """
         with self._uow_factory() as uow:
             rows = list(uow.roms.iter_all())
@@ -60,7 +63,8 @@ class PruneRegistry:
             for slug in sorted({row.platform_slug for row in rows}):
                 platform_rows = [row for row in rows if row.platform_slug == slug]
                 served |= current_generation_ids(platform_rows, uow.platform_sync_state.get(slug))
-        return sorted(served - exclude)[:limit]
+        marked = {row.rom_id for row in rows if row.gone_from_romm is not None}
+        return sorted(served - marked - exclude)[:limit]
 
     def reread_group(self, rom_id: int) -> list[Rom]:
         with self._uow_factory() as uow:
@@ -104,6 +108,18 @@ class PruneRegistry:
             if bound is None:
                 return False
             return bound.rom_id == expected_bound_rom_id
+
+    def clear_gone_marks(self, rom_ids: frozenset[int]) -> None:
+        """Drop the sync's gone-from-RomM mark from each of *rom_ids* RomM answered with the ROM itself."""
+        if not rom_ids:
+            return
+        with self._uow_factory() as uow:
+            for rom_id in sorted(rom_ids):
+                row = uow.roms.get(rom_id)
+                if row is None or row.gone_from_romm is None:
+                    continue
+                row.clear_gone_from_romm()
+                uow.roms.save(row)
 
     def reconcile_removed_shortcut(self, expected_bound_rom_id: int, app_id: int) -> bool:
         """Persist Steam's confirmed shortcut absence without deleting source data."""

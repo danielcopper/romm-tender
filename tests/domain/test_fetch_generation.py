@@ -9,6 +9,7 @@ from domain.fetch_generation import (
     bound_row_not_returned,
     count_rows_for_skip,
     current_generation_ids,
+    gone_from_romm_ids,
     prune_candidate_ids,
 )
 from domain.platform_sync_state import PlatformSyncState
@@ -91,6 +92,22 @@ class TestPruneCandidateIds:
             )
             == set()
         )
+
+
+class TestGoneFromRommIds:
+    def test_the_stamp_s_candidates_and_every_marked_row(self):
+        stamp = PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="new")
+        returned_but_marked = _row(1, "new")
+        returned_but_marked.mark_gone_from_romm("delisted")
+
+        assert gone_from_romm_ids([returned_but_marked, _row(2, "old"), _row(3, "new")], stamp) == {1, 2}
+
+    @pytest.mark.parametrize("evidence", ["not_found", "delisted"])
+    def test_a_marked_row_is_named_without_a_stamp(self, evidence):
+        marked = _row(1, None)
+        marked.mark_gone_from_romm(evidence)
+
+        assert gone_from_romm_ids([marked, _row(2, None)], None) == {1}
 
 
 def _keyed_row(rom_id: int, fetch_id: str | None, group_key: str | None) -> Rom:

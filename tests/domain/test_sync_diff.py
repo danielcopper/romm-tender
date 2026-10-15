@@ -1453,3 +1453,35 @@ class TestSortStaleRows:
         remove, keep = settle_asked_rows([gone, present, unknown, unasked], {1: "gone", 2: "present", 3: "unknown"})
 
         assert (remove, keep) == ([present], [gone, unknown, unasked])
+
+
+class TestGoneFromRommMarks:
+    """``StaleSort.gone_from_romm_marks`` — what an apply records about RomM still serving a stale row (#2431)."""
+
+    def test_a_404_marks_a_found_rom_clears_and_an_unknown_answer_writes_nothing(self):
+        gone, present, unknown, unanswered = (StaleRow(rid, 1000 + rid, "gba", "collection") for rid in (1, 2, 3, 4))
+        sort = StaleSort(remove=[], keep=[], ask=[gone, present, unknown, unanswered])
+
+        marks = sort.gone_from_romm_marks({1: "gone", 2: "present", 3: "unknown"}, set())
+
+        assert marks == {1: "not_found", 2: None}
+
+    def test_a_row_kept_on_a_platform_romm_no_longer_lists_is_marked_delisted(self):
+        read_whole = StaleRow(1, 1001, "n64", "platform")
+        delisted = StaleRow(2, 1002, "psx", "platform")
+        sort = sort_stale_rows(
+            [read_whole, delisted],
+            read_platform_slugs={"n64"},
+            listed_platform_slugs={"n64"},
+            collection_listed_rom_ids=(),
+        )
+
+        assert sort.gone_from_romm_marks({}, {"n64"}) == {2: "delisted"}
+
+    def test_a_row_the_run_removes_unasked_writes_nothing(self):
+        turned_off = StaleRow(1, 1001, "gba", "platform")
+        sort = sort_stale_rows(
+            [turned_off], read_platform_slugs=set(), listed_platform_slugs={"gba"}, collection_listed_rom_ids=()
+        )
+
+        assert sort.gone_from_romm_marks({}, set()) == {}

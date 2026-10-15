@@ -71,6 +71,7 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Iterable
 
     from domain.emulator_sources import SourcesReading
+    from domain.rom import GoneEvidence
     from domain.work_unit import WorkUnit
     from lib.late_binding import LateBinding
     from services.library._state import LibrarySyncStateBox
@@ -373,7 +374,9 @@ class SyncOrchestrator:
             collection_listed = await self._loop.run_in_executor(
                 None, self._local_library_reader.do_read_collection_listed_rom_ids
             )
-            removals, kept = await self._settle_stale_rows(
+            # The preview asks what its apply will ask and records none of the
+            # answers: only the apply's finalize marks a row gone from RomM.
+            removals, kept, _marks = await self._settle_stale_rows(
                 (
                     StaleRow(
                         rid,
@@ -1264,13 +1267,13 @@ class SyncOrchestrator:
         read_platform_slugs: Collection[str],
         listed_platform_slugs: Collection[str] | None,
         collection_listed_rom_ids: Collection[int],
-    ) -> tuple[list[StaleRow], list[StaleRow]]:
-        """``(remove, kept_in_platform_collections)`` for the stale *rows*.
+    ) -> tuple[list[StaleRow], list[StaleRow], dict[int, GoneEvidence | None]]:
+        """``(remove, kept_in_platform_collections, gone_marks)`` for the stale *rows*.
 
         Sorts them by :func:`sort_stale_rows`, asks RomM once about the ones it
-        cannot decide, and settles those by :func:`settle_asked_rows`. The
-        preview and the apply both answer through here, so the removals a
-        preview promises are the ones its apply makes.
+        cannot decide, settles those by :func:`settle_asked_rows`, and marks by
+        :meth:`StaleSort.gone_from_romm_marks`. The preview and the apply both answer
+        through here, so the removals a preview promises are the ones its apply makes.
         """
         sort = sort_stale_rows(
             rows,
@@ -1285,7 +1288,7 @@ class SyncOrchestrator:
                 f"Stale removal: keeping {len(sort.keep)} bound version(s) gone from RomM in their platform's "
                 f"collection and {len(asked_keep)} reached through a collection RomM did not confirm present"
             )
-        return sort.remove + asked_remove, sort.keep
+        return sort.remove + asked_remove, sort.keep, sort.gone_from_romm_marks(answers, read_platform_slugs)
 
     async def _with_kept_platform_names(self, kept: list[StaleRow], live: dict[str, str]) -> dict[str, str]:
         """*live*, plus the cached name of each platform outside it that a *kept* row is on, for the preview.
@@ -1334,7 +1337,7 @@ class SyncOrchestrator:
         # wrongly removed (#1036). Of the rest, only a game outside what the
         # run syncs is removed (``sort_stale_rows``); a version gone from RomM
         # stays bound and in its platform's Steam collection.
-        stale: list[StaleRow] = []
+        candidates: list[StaleRow] = []
         if not cancelled:
             candidates = await self._loop.run_in_executor(
                 None,
@@ -1342,13 +1345,13 @@ class SyncOrchestrator:
                 synced_rom_ids,
                 set(self._sync_state.committed_app_ids),
             )
-            stale, kept = await self._settle_stale_rows(
-                candidates,
-                read_platform_slugs=processed_platform_slugs,
-                listed_platform_slugs=self._sync_state.run_listed_platform_slugs,
-                collection_listed_rom_ids=collection_listed_rom_ids,
-            )
-            platform_rom_ids.update(row.rom_id for row in kept)
+        stale, kept, gone_marks = await self._settle_stale_rows(
+            candidates,
+            read_platform_slugs=processed_platform_slugs,
+            listed_platform_slugs=self._sync_state.run_listed_platform_slugs,
+            collection_listed_rom_ids=collection_listed_rom_ids,
+        )
+        platform_rom_ids.update(row.rom_id for row in kept)
         remove = [{"rom_id": row.rom_id, "app_id": row.app_id} for row in stale]
         if remove:
             await self._rules.emit_under_lease(
@@ -1390,6 +1393,7 @@ class SyncOrchestrator:
             platform_names=platform_names,
             processed_platform_slugs=processed_platform_slugs,
             stale_rom_ids=[row.rom_id for row in stale],
+            gone_marks=gone_marks,
         )
         return FinalizeOutcome(
             platform_app_ids=platform_app_ids,
