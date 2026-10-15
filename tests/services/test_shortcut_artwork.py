@@ -1229,7 +1229,10 @@ class TestAWriteItsRunNoLongerAwaits:
             await asyncio.wait_for(job.service._no_write.wait(), 5)
             await asyncio.sleep(0)
 
-        assert "a write its stopped run left behind failed: disk full" in caplog.text
+        left_behind = [r for r in caplog.records if "a write its stopped run left behind failed" in r.getMessage()]
+        assert [r.getMessage() for r in left_behind] == [
+            "Shortcut artwork: a write its stopped run left behind failed: disk full"
+        ]
 
     @pytest.mark.asyncio
     async def test_a_write_its_run_still_awaits_is_left_to_the_run(self, caplog):
