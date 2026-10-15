@@ -2192,6 +2192,9 @@ SQLite table, via `get_app_id_rom_id_map`). This map is refreshed:
 
 - On session manager initialization (panel load)
 - Before each game start event (in case a sync added new shortcuts)
+- When a library sync completes (`sync_complete`) and when a version switch has committed, since each can move a
+  shortcut's binding onto another `romId` in the running session — without it, Steam's own Play on a shortcut whose
+  binding moved would be gated, and its launch command re-confirmed, for the version it is no longer bound to
 
 The refresh before a start waits at most 5 s (`LOCAL_CALL_LIMIT_MS`), because the start and stop notifications are
 handled one after another and a refresh without an answer would hold them all (see [Post-exit sync](#post-exit-sync)).

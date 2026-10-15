@@ -162,18 +162,22 @@ creation (the `CRC32(exe + name)` derivation is disproven — see [App IDs and A
 never re-derives an id to "find" the old shortcut. It keeps a game's shortcut alive across the `rom_id` churn through
 three lanes:
 
-- **Stable sibling-group keys → the rebind lane.** An unchanged game whose `sibling_group_key` is the same after the
-  re-import (same IGDB/… identity) rides `collapse_sibling_groups`'s **rebind lane**: the group's only fetched member is
-  the fresh `rom_id`, the old bound `rom_id` has vanished, so collapse emits one entry keyed to the vanished sibling —
-  the frontend reuses its existing shortcut by `rom_id` — carrying `bind_rom_id` → the fresh representative. The
-  shortcut, its artwork, its collection membership, and its playtime all survive; only the DB binding moves onto the new
-  `rom_id`, and no duplicate is minted. _(The domain behavior is unit-pinned in `tests/domain/test_sync_diff.py`;
-  on-device confirmation of the end-to-end path is still pending.)_
-- **Changed / absent group keys → delete + create.** If the re-import changes or drops the `sibling_group_key` (the game
-  rematches to a different metadata entry, or its identity is lost), the group no longer resolves to the old bound
-  sibling, so the fresh `rom_id` takes the **new** lane: a fresh `AddShortcut` with a **new** appId, and the old
-  shortcut is torn down by the stale path. Artwork and collection membership are re-established for the new shortcut.
-  This is honest degradation — the identity link the rebind lane needs is gone, so the shortcut cannot be preserved.
+- **Stable sibling-group keys and the same dump → the rebind lane.** An unchanged game whose `sibling_group_key` is the
+  same after the re-import (same IGDB/… identity) rides `collapse_sibling_groups`'s **rebind lane**: the old bound
+  `rom_id` has vanished, and a fetched member of the group carries the same non-empty `fs_name_no_ext` as the old row's
+  stored `fs_name` without its extension, has a file on RomM and holds no shortcut, so collapse emits one entry keyed to
+  the vanished sibling — the frontend reuses its existing shortcut by `rom_id` — carrying `bind_rom_id` → that member,
+  whether or not the old version is installed. The shortcut, its artwork, its collection membership, and its playtime
+  all survive; only the DB binding moves onto the new `rom_id`, and no duplicate is minted. A vanished bound sibling
+  with no such member keeps its binding and its shortcut (ADR-0021 §2's amendment): another version of the game is one
+  the user did not choose, and the game page says the bound one is gone. _(The domain behavior is unit-pinned in
+  `tests/domain/test_sync_diff.py`; on-device confirmation of the end-to-end path is still pending.)_
+- **Changed / absent group keys → a second shortcut.** If the re-import changes or drops the `sibling_group_key` (the
+  game rematches to a different metadata entry, or its identity is lost), the group no longer resolves to the old bound
+  sibling, so the fresh `rom_id` takes the **new** lane: a fresh `AddShortcut` with a **new** appId. The old shortcut
+  stays bound to its vanished row, since the stale removal keeps a row missing from a platform it read whole, and the
+  removed-game cleanup is what takes it out. This is honest degradation — the identity link the rebind lane needs is
+  gone, so the shortcut cannot be carried over.
 - **Untracked orphans → adoption at create time.** A live RomM-owned shortcut (exe ends `/bin/tender-rom-launcher`) that
   carries **no** DB binding — a crashed run's uncommitted in-flight shortcut, or a zombie left after a DB reset — is
   invisible to both the rebind lane (no `roms` row) and the stale path (nothing to unbind), so a naive create would
@@ -193,7 +197,9 @@ Two guards keep a re-import from wiping a freshly-bound shortcut (`#1036`):
   per-`rom_id` UPSERT, and migration `003`'s partial unique index on `shortcut_app_id` enforces it (see
   [Database Design](database-design.md)). A re-import never leaves two bound rows sharing one appId.
 - **Stale-removal excludes appIds bound this run.** The finalize stale pass flags bound rows whose `rom_id` wasn't
-  synced this run — which includes the old `rom_id` the rebind lane just superseded.
+  synced this run — which includes the old `rom_id` the rebind lane just superseded — and removes only a game outside
+  what the sync syncs
+  ([Backend Architecture — group-aware sync](backend-architecture.md#libraryservice-decomposition-serviceslibrary)).
   `domain/sync_diff.py:select_stale_removals` removes any candidate whose appId is in the run's `committed_app_ids`
   (every appId bound this run, across both the happy-path and the heartbeat-timeout late-ack commit paths), so the appId
   the run just re-bound onto the new `rom_id` is never emitted for removal. The `get_by_app_id` reverse lookup orders
@@ -280,16 +286,9 @@ carries a trash affordance, the menu row being the focusable unit) or as a focus
 vanished binding. Candidate discovery is not deletion authority: the backend freshly probes each exact RomM id, and only
 typed 404s can proceed.
 
-For a vanished bound version with a live sibling, the default-on repoint action reuses the version switch independently
-of the row-removal option — through `switch_version_unchecked`, which checks no conflict rule and takes no lease, since
-the cleanup switches from inside its own run — then the frontend confirm-writes the returned exact launch options.
-Cover/cache publication and the `version_switched` event are deferred until terminal prune completion. Before emitting a
-terminal result that needs repoint publication, the backend acquires a continuation lease while the old run is still
-active; the frontend registers that token immediately and holds it across both release acknowledgement and the final
-artwork write. Another prune therefore cannot enter between the old claim and publication. Publication uses the same
-path as VersionPicker. Repoint changes neither shortcut name nor exe and never calls `AddShortcut`, so the assigned
-appId, collections, and Steam playtime remain attached. Unsynced-save stranding can be overridden only after enabled
-recovery has sealed.
+The cleanup never moves a shortcut onto another version. A vanished bound version whose game still has a live sibling is
+kept with its shortcut and row; the version picker is the way to switch, and once the user has, the vanished version is
+an unbound row the cleanup removes like any other.
 
 For a fully vanished bound game, whole-game cleanup is its own confirmation option, default-on and paired with the
 default-on recovery bundle that keeps the shortcut rebuildable. With recovery enabled, the root frontend handler

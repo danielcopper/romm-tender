@@ -426,30 +426,54 @@ Format: **invariant** — tier — enforced by.
   pinned alone and nothing holds them equal
 - **Where the library sync or the version picker's default resolves a representative, neither RomM's main-sibling leg
   nor the ranking picks a member RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the
-  sync's installed and existing-binding legs keep such a member; and a bound member without a file that is not installed
-  is rebound only in a complete view, only onto a sibling with a file, no shortcut of its own and an equal non-empty
-  `fs_name_no_ext`** — test + prompt-only — `tests/domain/test_sibling_resolution.py::TestMembersWithoutAFile` for the
-  chain's legs, `tests/domain/test_sync_diff.py::TestCollapseMembersWithoutAFile` for the sync's collapse (the name,
-  shortcut and partial-view cases among it) and
+  sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is
+  rebound only in a complete view, only onto a sibling with a file, no shortcut of its own and an equal non-empty
+  `fs_name_no_ext`; and a bound member gone from RomM is rebound only by that same rule, installed or not, its stem read
+  off its stored `fs_name`, and otherwise keeps its binding** — test + prompt-only —
+  `tests/domain/test_sibling_resolution.py::TestMembersWithoutAFile` for the chain's legs,
+  `tests/domain/test_sync_diff.py::TestCollapseMembersWithoutAFile` for the sync's collapse (the name, shortcut and
+  partial-view cases among it) and
   `tests/services/test_version_switch.py::test_a_member_without_a_file_is_marked_and_never_the_default` for the version
-  picker's Default badge. Why such a member stays in some legs and is left out of others, and why a rebind needs an
-  equal `fs_name_no_ext`, are in
+  picker's Default badge; `tests/domain/test_sync_diff.py::TestCollapseSiblingGroups` holds the bound member gone from
+  RomM (kept beside siblings under other names, moved onto the same dump whether or not it is installed), and
+  `tests/contract/test_vanished_version_same_dump.py` the move end to end. Why such a member stays in some legs and is
+  left out of others, and why a rebind needs an equal `fs_name_no_ext`, are in
   [Steam Non-Steam Shortcuts](steam-non-steam-shortcuts.md#a-bound-rom-romm-holds-no-file-for) and
   [Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Group-aware sync"; do
   not restate them here. The rule lives in three places: `domain/sibling_resolution.py::resolve_group_representative`
   applies it to the legs through `fileless_rom_ids`; `domain/sync_diff.py::collapse_sibling_groups` passes it and
   rebinds through `_same_dump_with_file`; and `services/version_switch.py::_resolve_default` passes none and ranks only
-  the versions with a file, so where none has one it marks no Default. Today the removed-game cleanup's repoint target
-  (`domain/prune.py::natural_default`, called from `services/prune/planning.py::_repoint_target`) passes none and leaves
-  no member without a file out, since the cleanup is outside #2196's scope, so a vanished shortcut can be repointed onto
-  a member without a file;
-  `tests/domain/test_prune.py::test_the_cleanup_s_default_target_does_not_read_whether_romm_has_a_file` pins that state.
-  **What breaks without the rule:** a chain that ranks a member without a file like any other binds a new shortcut, and
-  the Default badge, to a row whose download is a 404 — after a rescan turns a `.zip` into a folder the two rows tie and
-  the older one wins on `rom_id` — and a new caller that forgets `fileless_rom_ids` brings that back silently. Nothing
-  mechanical sees it. A RomM payload's flag is read only by `domain/rom_file.py::has_file_on_romm`, which reads only an
-  explicit `false` as no file; the stored `Rom.has_file_on_disk` is written only from its answer, and is read directly
-  by the version picker, the game-detail payload and the rows a skipped unit rebuilds from the database
+  the versions with a file, so where none has one it marks no Default. The removed-game cleanup picks no representative
+  at all: it never moves a shortcut onto another version. **What breaks without the rule:** a chain that ranks a member
+  without a file like any other binds a new shortcut, and the Default badge, to a row whose download is a 404 — after a
+  rescan turns a `.zip` into a folder the two rows tie and the older one wins on `rom_id` — and a new caller that
+  forgets `fileless_rom_ids` brings that back silently. Nothing mechanical sees it. A RomM payload's flag is read only
+  by `domain/rom_file.py::has_file_on_romm`, which reads only an explicit `false` as no file; the stored
+  `Rom.has_file_on_disk` is written only from its answer, and is read directly by the version picker, the game-detail
+  payload and the rows a skipped unit rebuilds from the database. A bound member gone from RomM moves only onto the same
+  dump because any other sibling is a version the user did not choose — another region, language or revision — and the
+  move happened without a word; the game page says the version is gone instead, and the version picker is the way to
+  switch. **What breaks without it:** a sync moves a shortcut onto another version, and a downloaded copy of the old one
+  is left unbound beside it, still playable and no longer started by anything
+- **The end-of-run stale removal removes the shortcut only of a game outside what the sync syncs: a bound row missing
+  from a platform the run read whole is kept; one on a platform the run did not read is kept when a collection's last
+  completed apply listed it and RomM's one exact-id answer is not the ROM itself, and removed otherwise; the preview
+  counts exactly the removals the apply makes** — test + prompt-only —
+  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule (`sort_stale_rows`, `settle_asked_rows`),
+  `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
+  preview (a 404 keeps, a found ROM removes, an answer that establishes nothing keeps, and with no collection record the
+  row is removed unasked), and `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and
+  `TestPlatformTurnedOffAndBackOn` for the two ends: a game gone from RomM keeps its shortcut, and a platform turned off
+  loses its games. A skipped platform rebuilds every bound row, so only a fetched one can leave a bound row out, and
+  RomM is then the only thing that dropped it. A platform the run did not read says nothing about RomM; the collection
+  records, read before the run's first unit rewrites any of them
+  (`LocalLibraryReader.do_read_collection_listed_rom_ids`), tell a game reached through a collection from one reached
+  through its platform. Only a 404 is evidence of absence, so every other answer keeps the shortcut for that run. The
+  rule spans the domain sort, the reader, the fetcher's exact-id question (`LibraryFetcher.ask_romm_for_roms`) and the
+  orchestrator, and the preview and the apply each read it — through `SyncOrchestrator._settle_stale_rows`, which is
+  prompt-only. **What breaks without it:** a kept row the preview counts as a removal offers Apply on every preview; a
+  removal on a platform read whole takes a game gone from RomM out of Steam with its playtime and collections; and
+  records read after the run rewrote them miss the game the collection just dropped
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py` pins the adapter's degradation (a
   raising resolver, a missing installation, an answer with no root all come back with `resolved` clear, never as an

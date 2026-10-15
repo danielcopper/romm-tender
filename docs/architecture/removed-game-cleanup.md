@@ -49,8 +49,8 @@ A 404 is only evidence that a ROM is gone if the thing answering is RomM and the
 FastAPI, so a reverse proxy with a wrong path prefix makes **RomM itself** answer a clean JSON 404
 (`{"detail": "Not Found"}`) for every id — including ids that plainly exist. No body-shape check distinguishes that
 route-404 from an entity-404, and one request at a time neither can a human. Believed, it is also amplified: the run
-probes a group's **live** siblings too, so a misroute turns "one version vanished, repoint to the other" into "the whole
-game is gone", taking the Steam shortcut and any unselected installed content with it.
+probes a group's **live** siblings too, so a misroute turns "one version vanished, the other is still there" into "the
+whole game is gone", taking the Steam shortcut and any unselected installed content with it.
 
 So no 404 is honoured unless the same round holds positive proof, recorded as the tier that supplied it:
 
@@ -62,7 +62,7 @@ So no 404 is honoured unless the same round holds positive proof, recorded as th
 | `none`        | Nothing vouched — every 404 in the round is unconfirmed and nothing is removed |
 
 **`still_there` is free.** Any 200-carrying-the-right-id came from the very route whose 404s are in question, so groups
-with a live member — every repoint case — pay nothing.
+with a live member pay nothing.
 
 **`canary_rom` is the dedicated check**, and it deliberately rides the same route family rather than a health or version
 endpoint, which a path misroute leaves working. Its subjects are ids the last complete fetch is recorded as returning:
@@ -157,20 +157,19 @@ there. The conflict rules a use case checks at its entry (GLOSSARY.md → Confli
 there, retain one for detached work it starts — a background save-status check, a download, the outbox flush a play
 session's start begins — and take and release the leases the use case hands the frontend: a shortcut removal's, an
 uninstall's, a core, disc or version change's, an adoption's, an artwork fetch's, the pre-launch re-confirm's and the
-start-up reconcile's, and the ones `sync_complete`, `sync_stale`, `download_complete`, `prune_complete`,
-`migration_relaunch_options` and the shortcut artwork job's `shortcut_artwork` batches carry. The lease service
-(`services/prune_leases.py`) renews and releases a lease by its token, and disowns the ones a gone frontend left behind;
-`Endpoints` reads none of it. The prune service takes the start's reservation through the rules' `hold_start`, before it
-asks the update, migration and sync rules. Before that it stops the shortcut artwork job (`stop_for_cleanup`), waiting
-for an icon being written or a batch being handed over, so nothing it writes into the grid directory or hands over lands
-once the start has reserved; no run of the job starts until a start that begins no run, or the run's end, resumes it
-(`resume_after_cleanup`). The job's batch lease is held by the frontend while it sets the batch's icons, wide grids and
-logos, so a start pressed then is refused, naming "setting shortcut artwork"
-([Shortcut artwork](steam-non-steam-shortcuts.md#shortcut-artwork)). The reservation lasts from the moment `hold_start`
-takes it until the start returns; the run claim, from the moment the revalidated preview becomes a run until that run
-ends — in the run's own `finally`, or, for a run task cancelled before it first ran, in the task's done callback. The
-run is registered before the reservation is given back, so the two overlap and a conflicting endpoint finds no gap
-between them.
+start-up reconcile's, and the ones `sync_complete`, `sync_stale`, `download_complete`, `migration_relaunch_options` and
+the shortcut artwork job's `shortcut_artwork` batches carry. The lease service (`services/prune_leases.py`) renews and
+releases a lease by its token, and disowns the ones a gone frontend left behind; `Endpoints` reads none of it. The prune
+service takes the start's reservation through the rules' `hold_start`, before it asks the update, migration and sync
+rules. Before that it stops the shortcut artwork job (`stop_for_cleanup`), waiting for an icon being written or a batch
+being handed over, so nothing it writes into the grid directory or hands over lands once the start has reserved; no run
+of the job starts until a start that begins no run, or the run's end, resumes it (`resume_after_cleanup`). The job's
+batch lease is held by the frontend while it sets the batch's icons, wide grids and logos, so a start pressed then is
+refused, naming "setting shortcut artwork" ([Shortcut artwork](steam-non-steam-shortcuts.md#shortcut-artwork)). The
+reservation lasts from the moment `hold_start` takes it until the start returns; the run claim, from the moment the
+revalidated preview becomes a run until that run ends — in the run's own `finally`, or, for a run task cancelled before
+it first ran, in the task's done callback. The run is registered before the reservation is given back, so the two
+overlap and a conflicting endpoint finds no gap between them.
 
 The start is atomic in the part that matters: `hold_start` takes the prune conflicts' lock, refuses if any operation or
 lease is held, and takes the reservation — all in one lock hold, so no claim can slip between the check and the
@@ -191,13 +190,13 @@ The count of live operations and leases is derived from the holder registry rath
 that can drift from the registry leaves a refusal with no holder to name.
 
 Frontend-owned Steam work spans many calls, so it holds a globally registered, bounded, tokenized lease that it
-heartbeats through every sibling continuation's final write — including each paced `sync_stale` removal and the terminal
-repoint publication. Every continuation re-checks its abort signal before each later Steam mutation. Failed event
-delivery releases an unreachable token. A continuation with an owner captures that owner's generation once, when it
-starts, and carries it through every backend wait, and the owner's teardown tombstones it so a late lease-bearing
-response is released without doing work; only a genuine remount opens a new generation. The continuations with no owner
-— the ones `index.tsx` registers and Steam's launch watcher — have no teardown to tombstone them. An owner's teardown
-stops renewal and blocks future writes but defers the explicit release until already-started Steam promises settle.
+heartbeats through every sibling continuation's final write — including each paced `sync_stale` removal. Every
+continuation re-checks its abort signal before each later Steam mutation. Failed event delivery releases an unreachable
+token. A continuation with an owner captures that owner's generation once, when it starts, and carries it through every
+backend wait, and the owner's teardown tombstones it so a late lease-bearing response is released without doing work;
+only a genuine remount opens a new generation. The continuations with no owner — the ones `index.tsx` registers and
+Steam's launch watcher — have no teardown to tombstone them. An owner's teardown stops renewal and blocks future writes
+but defers the explicit release until already-started Steam promises settle.
 
 A frontend that has just mounted disowns every lease outstanding at that moment, once, before anything else can acquire
 one. A continuation whose JS context is torn down mid-call never reaches its release and never renews either, so its
@@ -207,9 +206,7 @@ and operations are untouched, because only the frontend's own leases are the fro
 this way is logged at INFO, since it means a leak happened.
 
 A lease is the frontend's to release, so every path that receives one must give it back — including the paths that do no
-work. A terminal completion frame carries a publication lease whenever the run committed a repoint; when the frame turns
-out to have nothing to publish, the listener releases it immediately rather than letting it hold off every cleanup until
-its TTL. The TTL remains the backstop for the one case the frontend cannot cover: a response lost in transit carries a
+work. The TTL remains the backstop for the one case the frontend cannot cover: a response lost in transit carries a
 token the frontend never learned, and the expiry log is what makes that visible.
 
 ## Actions and frames
@@ -420,14 +417,16 @@ Unknown or unsafe-to-resolve save locations are recorded, left untouched, and do
 Save **states** are entirely untouched and remain unsupported. Extending save-state support must extend this recovery
 contract before purge is allowed to remove state files.
 
-A bound vanished row with unsynced saves may bypass the normal save-stranding guard only after its recovery bundle
-sealed successfully. With recovery disabled or failed, the group is skipped instead.
+A whole game whose bound version has unsynced saves is removed only once its recovery bundle sealed. With recovery
+disabled or failed, the group is skipped instead.
 
 ## Steam-side outcomes
 
-Repointing a bound vanished shortcut preserves the shortcut's appId, collections, Steam-side playtime, and identity, and
-confirm-writes the exact new launch command. The replacement chosen is exactly the version picker's natural live
-Default. A group with multiple bound shortcuts is skipped unchanged.
+The cleanup never moves a shortcut onto another version: a shortcut is the game, and the version picker is the way to
+switch it. A bound vanished version whose game still has a live version is kept with its shortcut and its row, whatever
+the options, and a group whose only confirmed-gone row is that one has nothing to do. Once the user has switched away
+from it, it is an unbound gone version, removed like any other. A group with multiple bound shortcuts is skipped
+unchanged.
 
 Removing a fully vanished game's shortcut requires a claimed action and live Steam confirmation. An attempted but
 unconfirmed removal is reported as ambiguous and its local rows are retained for reconciliation. A fully vanished

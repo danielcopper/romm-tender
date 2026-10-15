@@ -79,6 +79,25 @@ version flips only the baked `launch_options` (appId-safe, hardware-validated in
 target row; artwork, collections, playtime and the Steam appId all survive. Renaming is what would change the appId
 (delete + recreate churn), so it never happens implicitly.
 
+> **Amendment (a version gone from RomM stays the shortcut's version,
+> [#2407](https://github.com/danielcopper/romm-tender/issues/2407)).** The sync no longer moves a binding off a bound
+> sibling that disappeared, and no longer removes the shortcut of a group gone from the server. Both moves happened
+> without a word: the shortcut started another region, language or revision, or vanished with its playtime and
+> collections, while a downloaded copy of the old version still played.
+>
+> - **A bound sibling that disappeared stays bound**, installed or not, with its appId, name, launch command and
+>   artwork. A shortcut is the game, whichever version is active, and the version picker is the way to switch. The game
+>   page says the version is no longer available on RomM, and what that means for a downloaded copy.
+> - **One move is kept: the same dump under a new id.** In a complete view the binding moves onto a sibling in the same
+>   group that has a file on RomM, no shortcut of its own and the same non-empty `fs_name_no_ext` — the rule §3's
+>   amendment for a member without a file set — whether or not the old version is installed. A server switch or a
+>   re-import that reissues every id then leaves no game behind a banner.
+> - **A group gone from the server keeps its shortcut too.** Only the removed-game cleanup removes it.
+> - **What the sync still removes is a game outside what it syncs**: its platform is turned off and no enabled
+>   collection holds it. A bound sibling missing from a platform the run read whole is gone from RomM and stays. One
+>   reached only through collections, that a collection's last completed apply listed and none returns now, is asked for
+>   once by its exact id: only a ROM RomM still returns is removed, since only a 404 is evidence of absence.
+
 ### 3. Version resolution chain: installed > existing binding > RomM default > 1G1R ranking; the choice stays local
 
 Wherever one version must be chosen (shortcut representative, picker preselect), the chain is: an installed sibling

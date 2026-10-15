@@ -578,14 +578,26 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `stamp_for_skip` — the query and the helper are each pinned alone and nothing joins them
 - **Where the library sync or the version picker's default resolves a representative, neither RomM's main-sibling leg
   nor the ranking picks a member RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the
-  sync's installed and existing-binding legs keep such a member; and a bound member without a file that is not installed
-  is rebound only in a complete view, only onto a sibling with a file, no shortcut of its own and an equal non-empty
-  `fs_name_no_ext`** — test + prompt-only — `tests/domain/test_sibling_resolution.py::TestMembersWithoutAFile`,
+  sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is
+  rebound only in a complete view, only onto a sibling with a file, no shortcut of its own and an equal non-empty
+  `fs_name_no_ext`; and a bound member gone from RomM is rebound only by that same rule, installed or not, its stem read
+  off its stored `fs_name`, and otherwise keeps its binding** — test + prompt-only —
+  `tests/domain/test_sibling_resolution.py::TestMembersWithoutAFile`,
   `tests/domain/test_sync_diff.py::TestCollapseMembersWithoutAFile` (the name, shortcut and partial-view cases) and
   `tests/services/test_version_switch.py::test_a_member_without_a_file_is_marked_and_never_the_default`. Prompt-only: a
   new caller of `resolve_group_representative` passes `fileless_rom_ids`, or ranks only members with a file as the
   version picker's default does; the flag is read off a RomM payload only through
   `domain/rom_file.py::has_file_on_romm`, and the stored `Rom.has_file_on_disk` is written only from its answer
+- **The end-of-run stale removal removes the shortcut only of a game outside what the sync syncs: a bound row missing
+  from a platform the run read whole is kept; one on a platform the run did not read is kept when a collection's last
+  completed apply listed it and RomM's one exact-id answer is not the ROM itself, and removed otherwise; the preview
+  counts exactly the removals the apply makes** — test + prompt-only —
+  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule,
+  `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
+  preview, and `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and
+  `TestPlatformTurnedOffAndBackOn` for the two ends. Prompt-only: the collection records are read before the run's first
+  unit (`do_read_collection_listed_rom_ids`), and the preview and the apply both sort through
+  `SyncOrchestrator._settle_stale_rows`
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py`,
   `tests/domain/test_firmware_wants.py` and `tests/services/test_firmware.py::TestCheckPlatformBiosUnknown`;

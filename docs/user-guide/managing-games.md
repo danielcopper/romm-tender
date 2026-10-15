@@ -66,6 +66,24 @@ When the version the shortcut is bound to is the one confirmed gone, the **Downl
 stays visible, like the version row, but downloading it could only ever fail. Pick a live version in the version list,
 or remove the local data, to get the button back.
 
+A library sync never moves the shortcut off such a version, and never removes it because every version is gone — see
+[Re-Syncing](syncing-your-library.md#re-syncing). Instead the game page shows a banner above the Play row, which says
+**no longer available on RomM** rather than deleted, because RomM answers a ROM hidden from your user the same way:
+
+- **Not downloaded, other versions remain** — _This version is no longer available on RomM. Choose another version to
+  play._
+- **Downloaded** — _This version is no longer available on RomM. Your downloaded copy still plays._ Below it, what no
+  longer works: its saves no longer sync, and a launch with a local save asks first; it cannot be downloaded again; its
+  saves stay on this device and do not follow a switch to another version; its playtime still counts on this device but
+  no longer reaches RomM; its cover and details no longer update.
+- **Every version gone** — _This game is no longer available on RomM._, with the same list when the game is downloaded
+  (less the line about switching, since there is nothing to switch to).
+
+Each closes by naming **Data Management › Gone from RomM** as where the game is removed, with a recovery bundle; the
+trash icon in the version list opens the same cleanup. The Quick Access panel shows no banner. Starting a version that
+is gone and not downloaded from Steam's own Play stays refused, and says _This version is no longer available on RomM.
+Choose another version on its game page._ — or _This game is no longer available on RomM._ when every version is gone.
+
 This availability check is fresh each time the version list loads and is not saved in Tender's database. Only a 404 for
 that exact ROM id establishes that it is gone. Timeouts, sign-in/permission errors, server errors, and malformed
 responses fail open: Tender does not disable a version merely because it could not get a trustworthy answer. A
@@ -148,10 +166,10 @@ cases are skipped and reported without deleting data.
 
 The confirmation options apply to this run only:
 
-- **Repoint vanished shortcuts** is on. It preserves the Steam shortcut and its appId, collections, artwork, and
-  playtime while switching to the group's natural live Default. This option works independently of row removal.
 - **Remove gone versions** is on. It removes the confirmed rows and their installed content in games that still have a
-  live version.
+  live version. The version the game's shortcut is bound to is kept while another version of the game is still on RomM:
+  the cleanup never moves a shortcut onto another version. Switch to another version in the version list first; the gone
+  version is then an ordinary one this option removes.
 - **Remove fully vanished games** is on. It applies only to games where the server confirms every single version is
   gone; those are removed whole, with any Steam shortcut they have. It ships on because removing a game RomM no longer
   has is what this dialog is for, and because the default-on recovery bundle keeps the shortcut's Steam details so it
@@ -189,20 +207,20 @@ it is.
 A vanished row carries a red trash icon at its right edge in the version picker, and activating that row opens the same
 confirmation scoped to that one version. A singleton vanished binding shows the same trash action as a single button,
 without opening an otherwise empty picker. The vanished version itself remains non-switchable either way — selecting it
-can only ever start the cleanup, never rebind the shortcut to it.
+can only ever start the cleanup, never bind the shortcut to it.
 
 While a cleanup runs, the Gone from RomM pane shows a progress bar under the entry point — the game being worked on, the
-phase in words (checking with RomM, backing up, backup complete, updating or removing the Steam shortcut, removing local
-data, done) and which game of how many it is on — and the scan button stays unavailable, so you can close the dialog and
-still see what is happening. The bar itself fills with the games already finished, not the one in progress, so it
-reaches the end only when the run does: backing up a large game takes a while and reports nothing while it copies, and a
-full bar sitting over it would say the run was done when it was not. Both the dialog and that pane offer **Stop
-Cleanup**. It stops at the next safe moment: a backup still being written is abandoned and that game is left completely
-untouched, while a game whose removal has already begun finishes and reports what it changed. Backing up a large game
-can take minutes, so being able to walk away from one is the difference between stopping now and waiting it out. While
-the run winds down the button says **Stopping** so a second press is never needed. Nothing already done is undone —
-stopping is not an undo, and the report afterwards lists exactly what was committed. If a game's backup finished before
-the run stopped, the report says so and names the folder, so a recovery bundle that removed nothing is never a mystery.
+phase in words (checking with RomM, backing up, backup complete, removing the Steam shortcut, removing local data, done)
+and which game of how many it is on — and the scan button stays unavailable, so you can close the dialog and still see
+what is happening. The bar itself fills with the games already finished, not the one in progress, so it reaches the end
+only when the run does: backing up a large game takes a while and reports nothing while it copies, and a full bar
+sitting over it would say the run was done when it was not. Both the dialog and that pane offer **Stop Cleanup**. It
+stops at the next safe moment: a backup still being written is abandoned and that game is left completely untouched,
+while a game whose removal has already begun finishes and reports what it changed. Backing up a large game can take
+minutes, so being able to walk away from one is the difference between stopping now and waiting it out. While the run
+winds down the button says **Stopping** so a second press is never needed. Nothing already done is undone — stopping is
+not an undo, and the report afterwards lists exactly what was committed. If a game's backup finished before the run
+stopped, the report says so and names the folder, so a recovery bundle that removed nothing is never a mystery.
 
 A version's downloaded files are deleted only inside the ROM folder RetroDECK names for the game's system, the bound an
 [uninstall](#uninstalling-roms) keeps. Where there is none — RetroDECK not installed, or naming no ROM folder — the run
@@ -215,17 +233,17 @@ ask about its folders ([below](#downloading-roms)), **Confirm Cleanup** starts n
 that says why.
 
 If Steam changes before local cleanup can finish, the report can show a **partial** group with the concrete committed
-action and failure message. A confirmed shortcut removal is reconciled to an unbound retained row; a committed repoint
-remains bound to the new Default. If Steam removal succeeded but every completion report was lost, the result is marked
-ambiguous and source data stays retained; the same applies when Steam removal was attempted but its absence could not be
-confirmed. Retrying confirms an already-absent shortcut instead of removing it twice. Save ownership warnings are shown
-in a focusable terminal-detail region even when the group was removed successfully, and a run-level cancellation or
-failure message remains visible after earlier groups committed. At most five warnings are listed for one game; when
-there were more, the detail — and the finished run's line on **Data Management › Gone from RomM** — says how many were
-left out. Progress is tied to the preview that you confirmed, so a matching run is still shown if only the successful
-start response is delayed or lost; a matching terminal event makes the modal closable immediately. Once that terminal
-result is assembled, delayed frames for the same run cannot replace it. Frames from an older preview are ignored. These
-outcomes are intentional and retryable rather than being reported as unchanged.
+action and failure message. A confirmed shortcut removal is reconciled to an unbound retained row. If Steam removal
+succeeded but every completion report was lost, the result is marked ambiguous and source data stays retained; the same
+applies when Steam removal was attempted but its absence could not be confirmed. Retrying confirms an already-absent
+shortcut instead of removing it twice. Save ownership warnings are shown in a focusable terminal-detail region even when
+the group was removed successfully, and a run-level cancellation or failure message remains visible after earlier groups
+committed. At most five warnings are listed for one game; when there were more, the detail — and the finished run's line
+on **Data Management › Gone from RomM** — says how many were left out. Progress is tied to the preview that you
+confirmed, so a matching run is still shown if only the successful start response is delayed or lost; a matching
+terminal event makes the modal closable immediately. Once that terminal result is assembled, delayed frames for the same
+run cannot replace it. Frames from an older preview are ignored. These outcomes are intentional and retryable rather
+than being reported as unchanged.
 
 ### Region and Languages
 
