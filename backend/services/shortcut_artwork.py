@@ -630,12 +630,22 @@ class ShortcutArtworkService:
         self._no_write.clear()
         task = self._tasks.start_awaited(work, "shortcut artwork write")
         task.add_done_callback(self._write_done)
-        return await asyncio.shield(task)
+        try:
+            return await asyncio.shield(task)
+        except asyncio.CancelledError:
+            # The run that awaited it is gone, so nobody else will see how the write ends.
+            task.add_done_callback(self._log_an_orphaned_failure)
+            raise
 
     def _write_done(self, _task: asyncio.Task[Any]) -> None:
         self._writing -= 1
         if not self._writing:
             self._no_write.set()
+
+    def _log_an_orphaned_failure(self, task: asyncio.Task[Any]) -> None:
+        failure = None if task.cancelled() else task.exception()
+        if failure is not None:
+            self._logger.warning(f"Shortcut artwork: a write its stopped run left behind failed: {failure}")
 
     def _yields_now(self) -> bool:
         """Whether the run must stop here; what it wrote and has not handed over waits for the next run.

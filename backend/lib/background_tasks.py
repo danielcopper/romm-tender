@@ -48,7 +48,9 @@ class BackgroundTasks:
         """Start *coroutine* as a task named *name* that its starter awaits itself, and hold it until it ends.
 
         The starter handles the task's failure where it awaits it, so nothing
-        is logged here. Called on the loop's own thread.
+        is logged here — including where it stops awaiting before the task
+        ends, as one awaiting through ``asyncio.shield`` can when it is
+        cancelled. Called on the loop's own thread.
         """
         return self._start(coroutine, name)
 
