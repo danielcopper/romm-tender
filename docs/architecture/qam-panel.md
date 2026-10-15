@@ -1359,11 +1359,13 @@ right is what our own rows say — so ROMs added on RomM since the last sync wid
 outstanding as of the last sync" rather than a fresh server-side proof. And **a version RomM no longer serves is
 reachable but not counted**: nothing deletes such a row — ADR-0007 keeps it as an identity anchor and only the
 removed-game cleanup removes one — and its group's shortcut still reaches it (GLOSSARY.md → Reachable), but the right
-half does not count a version RomM has stopped serving as in Steam. `reachable_count` is the reachable rows less those
-the fetch its completion stamp records did not return, which `domain/fetch_generation.py::prune_candidate_ids` already
-answers for the cleanup's own discovery: every row not carrying the fetch generation the platform's completion stamp
-recorded, a row carrying none included. Where no usable stamp exists — none, one with no generation, or one recording an
-empty fetch — it names nothing and every row counts, so the exclusion's worst case is the number printed before it.
+half does not count a version RomM has stopped serving as in Steam. `reachable_count` is the reachable rows less the
+ones the cleanup's own discovery lists, which `domain/fetch_generation.py::gone_from_romm_ids` answers for both, so the
+count and the Gone from RomM list agree: every row not carrying the fetch generation the platform's completion stamp
+recorded, a row carrying none included, and every row the library sync marked gone from RomM (`roms.gone_from_romm`,
+[Removed-game cleanup](removed-game-cleanup.md#discovery)). Where no usable stamp exists — none, one with no generation,
+or one recording an empty fetch — the stamp names nothing and only the marked rows are left out, so the exclusion's
+worst case is the number printed before it.
 
 **That leaves one window in which the line can read right > left.** A ROM deleted on RomM drops out of the left number
 at once, while its row, where its group holds a binding, still carries the generation the stamp recorded and so still
