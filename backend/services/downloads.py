@@ -248,11 +248,10 @@ class DownloadService:
         must not nest (ADR-0006). Each superseded install is removed through the
         canonical ``RomRemovalService.remove_rom_unchecked`` (files + ``rom_installs``
         row; saves untouched per ADR-0007) rather than duplicating its deletion logic.
-        Every attempt is logged with both rom ids so a failure is attributable (S7).
-        A removal refused with :class:`NotInstalled` raced clean and is skipped; any
-        other refusal propagates so the caller aborts with it. A superseded
-        sibling's *paused* queue entry is evicted so the queue stays coherent with
-        disk (S1).
+        Every attempt is logged with both rom ids so a failure is attributable. A
+        removal refused with :class:`NotInstalled` raced clean and is skipped; any other
+        refusal propagates so the caller aborts with it. A superseded sibling's *paused*
+        queue entry is evicted so the queue stays coherent with disk.
         """
         sibling_ids = self._conflicting_sibling_install_ids(rom_id, adopted_path)
         if not sibling_ids:
@@ -1202,13 +1201,14 @@ class DownloadService:
     def _cancel_paused_download(self, rom_id: int, entry: dict[str, Any]) -> None:
         """Cancel a paused (task-less) download: delete its partial, notify, evict.
 
-        Does the cleanup the running-cancel terminal branch would have, minus the task:
-        removes the partial ``.tmp``/``.zip.tmp`` (via the ``_target_path`` recorded
-        when the entry paused — skipped if absent, the startup sweep still reaps it; a
-        paused transfer is mid-download so it owns no extract dir), emits the same
-        terminal ``download_progress`` ``cancelled`` frame the running-cancel emits (so
-        the button resets and the store drops the row), then evicts the entry — a cancel
-        is an explicit discard that leaves no residue.
+        Does the cleanup the running-cancel terminal branch would have, minus the
+        task: removes the partial ``.tmp``/``.zip.tmp`` (via the ``_target_path``
+        recorded when the entry paused — skipped if absent, the startup sweep
+        still reaps it; a paused transfer is mid-download so it owns no extract
+        dir), emits the same terminal ``download_progress`` ``cancelled`` frame
+        the running-cancel emits (so the button resets and the store drops the
+        row), then evicts the entry — a cancel is an explicit discard that leaves
+        no residue.
         """
         target_path = entry.get("_target_path")
         if target_path:

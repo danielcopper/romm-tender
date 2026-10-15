@@ -1224,7 +1224,6 @@ class TestTheAttemptRecord:
 async def _judged(rig: _Rig) -> list[dict[str, Any]]:
     """Wait for the judgement a start began to end, and answer what it pushed."""
     task = next(t for t in rig.service._tasks if t.get_name() == "judge the last update attempt")
-    assert task is not None
     await asyncio.wait_for(task, 2)
     return [payload for name, payload in rig.events.events if name == "update_attempt_stopped"]
 
@@ -1811,7 +1810,6 @@ class TestAnInstallerStillRunningAtTheNextStart:
         rig = await _built(rigs, tmp_path, unit_states=[True])
         rig.service.note_start()
         task = next(t for t in rig.service._tasks if t.get_name() == "judge the last update attempt")
-        assert task is not None
 
         await rig.service.shutdown()
 

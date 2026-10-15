@@ -216,7 +216,6 @@ async def test_a_stopped_attempt_judged_once_the_installer_ended_reaches_the_run
     service.note_start()
     assert harness.endpoints.get_stopped_update_attempt() is None
     judging = next(t for t in service._tasks if t.get_name() == "judge the last update attempt")
-    assert judging is not None
     await asyncio.wait_for(judging, 2)
 
     stopped = {
