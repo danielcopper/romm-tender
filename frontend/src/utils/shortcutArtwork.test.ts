@@ -47,6 +47,7 @@ describe("applyShortcutArtwork", () => {
         finish = resolve;
       }),
     );
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "none" });
     const applying = applyArtwork(42, 200);
 
     await expect(applyShortcutArtwork(batch)).resolves.toBe(1);
@@ -165,7 +166,9 @@ describe("applyShortcutArtwork — wide grids and logos", () => {
 
     await applyShortcutArtwork(batch);
 
-    expect(vi.mocked(backend.getSgdbSlotArtwork).mock.calls).toEqual([[1, 100, "grid"]]);
+    // The game page's own replacing icon fetch is left out: only the job's fetches are asserted.
+    const jobFetches = vi.mocked(backend.getSgdbSlotArtwork).mock.calls.filter(([, , , replace]) => !replace);
+    expect(jobFetches).toEqual([[1, 100, "grid"]]);
     finish({ base64: null, no_api_key: false });
     await applying;
   });
@@ -227,6 +230,7 @@ describe("applyShortcutArtwork — what Steam made of a SteamGridDB icon", () =>
         finish = resolve;
       }),
     );
+    vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "none" });
     const applying = applyArtwork(42, 100);
 
     await applyShortcutArtwork(batch);

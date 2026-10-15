@@ -742,8 +742,8 @@ class Endpoints:
         return await self._services.sgdb_service.get_sgdb_artwork_base64(rom_id, asset_type_num)
 
     @route
-    async def get_sgdb_slot_artwork(self, rom_id, app_id, slot):
-        return await self._services.sgdb_service.get_sgdb_slot_artwork(rom_id, app_id, slot)
+    async def get_sgdb_slot_artwork(self, rom_id, app_id, slot, replace=False):
+        return await self._services.sgdb_service.get_sgdb_slot_artwork(rom_id, app_id, slot, replace)
 
     @route
     async def report_sgdb_slot_artwork(self, rom_id, slot, outcome, sgdb_id, image_id, sha256):
@@ -764,8 +764,8 @@ class Endpoints:
         return self._services.sgdb_service.remove_sgdb_api_key()
 
     @route
-    async def save_shortcut_icon(self, app_id, icon_base64):
-        return await self._services.sgdb_service.save_shortcut_icon(app_id, icon_base64)
+    async def save_shortcut_icon(self, app_id, rom_id):
+        return await self._services.sgdb_service.save_shortcut_icon(app_id, rom_id)
 
     @route
     async def get_sgdb_resolution(self, rom_id):

@@ -517,10 +517,11 @@ export const cleanupOrphanedGridImages = endpoint<
   }
 >("cleanup_orphaned_grid_images");
 /**
- * One SteamGridDB image for a ROM, from the artwork cache first. A wide grid, logo
- * or icon also carries SteamGridDB's image id, the hash of its bytes and the ROM's
- * SteamGridDB id; for a wide grid or logo, `reportSgdbSlotArtwork` records them
- * once Steam has taken it or refused it.
+ * One SteamGridDB hero, logo or wide grid for a ROM, from the artwork cache
+ * first. A wide grid or logo also carries SteamGridDB's image id, the hash of
+ * its bytes and the ROM's SteamGridDB id, which `reportSgdbSlotArtwork` records
+ * once Steam has taken it or refused it. The icon (asset type 4) is refused:
+ * it is fetched through `getSgdbSlotArtwork` and written by `saveShortcutIcon`.
  */
 export const getSgdbArtworkBase64 = endpoint<
   [number, number],
@@ -535,8 +536,8 @@ export const getSgdbArtworkBase64 = endpoint<
   | EndpointFailure
 >("get_sgdb_artwork_base64");
 
-/** An artwork slot the game page fills only while it is empty: the wide grid, the logo or the hero. */
-export type SgdbArtworkSlot = "grid" | "logo" | "hero";
+/** An artwork slot the game page fills only while it is empty: the wide grid, the logo, the hero or the icon. */
+export type SgdbArtworkSlot = "grid" | "logo" | "hero" | "icon";
 
 /** What the backend answers for one empty slot: the image to set, or why there is none to set. */
 export type SgdbSlotArtwork =
@@ -549,16 +550,23 @@ export type SgdbSlotArtwork =
       sgdb_id: number;
       prune_lease_token?: string;
     }
+  /** The icon: the artwork cache holds it, for `saveShortcutIcon` to write. */
+  | { status: "ready"; prune_lease_token?: string }
   | { status: "skip" | "none" | "failed" | "key_refused" | "rate_limited" | "no_api_key" };
 
-/** Serve SteamGridDB's image for one slot of a shortcut, only while Steam's grid directory has no file for it. */
-export const getSgdbSlotArtwork = endpoint<[number, number, SgdbArtworkSlot], SgdbSlotArtwork | EndpointFailure>(
-  "get_sgdb_slot_artwork",
-);
+/**
+ * Serve SteamGridDB's image for one slot of a shortcut, only while the slot is empty: Steam's grid directory has no
+ * file for it, or, for the icon, `shortcuts.vdf` points at none but Tender's stand-ins. With `replace` the slot is
+ * served whatever it holds.
+ */
+export const getSgdbSlotArtwork = endpoint<
+  [number, number, SgdbArtworkSlot, boolean?],
+  SgdbSlotArtwork | EndpointFailure
+>("get_sgdb_slot_artwork");
 
 /**
  * Report what Steam made of a wide grid or logo the fetch served (`SetCustomArtworkForApp`), or of an icon the
- * shortcut artwork job wrote (`SetShortcutIcon`), passing what the backend answered back.
+ * backend wrote (`SetShortcutIcon`), passing what the backend answered back.
  */
 export const reportSgdbSlotArtwork = endpoint<
   [number, "grid" | "logo" | "icon", "set" | "refused", number | null, number | null, string | null],
@@ -1080,11 +1088,21 @@ export const getInstalledRelaunchOptions = endpoint<[], InstalledRelaunchOptions
   "get_installed_relaunch_options",
 );
 
-// Icon support — writes the icon PNG into Steam's grid dir and returns its
-// path; the caller points the shortcut at it via SteamClient.Apps.SetShortcutIcon.
-export const saveShortcutIcon = endpoint<[number, string], { success: boolean; icon_path?: string }>(
-  "save_shortcut_icon",
-);
+/** The icon `saveShortcutIcon` wrote: its path, and what `reportSgdbSlotArtwork` records for it. */
+export interface SavedShortcutIcon {
+  success: true;
+  icon_path: string;
+  image_id: number;
+  sha256: string;
+  sgdb_id: number | null;
+}
+
+/**
+ * Write a ROM's cached SteamGridDB icon, downscaled, into Steam's grid directory as an app's icon, after
+ * `getSgdbSlotArtwork` answered it `ready`. The caller points the shortcut at the path through
+ * `SteamClient.Apps.SetShortcutIcon`.
+ */
+export const saveShortcutIcon = endpoint<[number, number], SavedShortcutIcon | EndpointFailure>("save_shortcut_icon");
 
 // Save sync endpoints
 export const ensureDeviceRegistered = endpoint<

@@ -689,8 +689,8 @@ class TestSgdbEndpointDelegation:
     @pytest.mark.asyncio
     async def test_save_shortcut_icon_delegates(self, endpoints, services):
         services.sgdb_service.save_shortcut_icon = AsyncMock(return_value={"ok": True})
-        result = await endpoints.save_shortcut_icon(123, "data")
-        services.sgdb_service.save_shortcut_icon.assert_awaited_once_with(123, "data")
+        result = await endpoints.save_shortcut_icon(123, 41)
+        services.sgdb_service.save_shortcut_icon.assert_awaited_once_with(123, 41)
         assert result == {"ok": True}
 
 

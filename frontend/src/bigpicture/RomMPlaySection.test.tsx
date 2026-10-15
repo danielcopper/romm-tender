@@ -568,43 +568,42 @@ describe("RomMPlaySection", () => {
       );
     });
 
-    it("fills the empty artwork slots (3 slot fetches, then the icon) on first visit when not already applied", async () => {
+    it("fills the empty artwork slots (4 slot fetches, the icon last) on first visit when not already applied", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 50,
       });
       vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "none" });
-      vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({
-        base64: null,
-        no_api_key: false,
-      });
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       expect(vi.mocked(backend.getSgdbSlotArtwork).mock.calls).toEqual([
         [50, testAppId, "hero"],
         [50, testAppId, "logo"],
         [50, testAppId, "grid"],
+        [50, testAppId, "icon"],
       ]);
-      expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls).toEqual([[50, 4]]);
+      expect(backend.getSgdbArtworkBase64).not.toHaveBeenCalled();
     });
 
     it("replaces nothing on a first visit whose slots are already filled", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: true, rom_id: 50 });
-      // The backend answers "skip" for a slot Steam's grid directory already fills.
+      // The backend answers "skip" for a slot that is filled: a file in Steam's
+      // grid directory, or, for the icon, a path in shortcuts.vdf.
       vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
-      vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: "AAAA", no_api_key: false });
-      vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: false });
       const setArtwork = vi.fn().mockResolvedValue(undefined);
+      const setIcon = vi.fn();
       vi.stubGlobal("SteamClient", {
-        Apps: { SetCustomArtworkForApp: setArtwork, SetShortcutIcon: vi.fn(), OpenAppSettingsDialog: vi.fn() },
+        Apps: { SetCustomArtworkForApp: setArtwork, SetShortcutIcon: setIcon, OpenAppSettingsDialog: vi.fn() },
       });
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       await flushAsync();
-      expect(vi.mocked(backend.getSgdbSlotArtwork)).toHaveBeenCalledTimes(3);
+      expect(vi.mocked(backend.getSgdbSlotArtwork)).toHaveBeenCalledTimes(4);
       expect(setArtwork).not.toHaveBeenCalled();
-      // Only the icon, which keeps its own rules, goes through the replacing fetch.
-      expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls).toEqual([[50, 4]]);
+      // The icon follows the same rules: a skipped icon is neither written nor set.
+      expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
+      expect(setIcon).not.toHaveBeenCalled();
+      expect(backend.getSgdbArtworkBase64).not.toHaveBeenCalled();
     });
 
     it("skips metadata background fetch when 'metadata' is not in stale_fields", async () => {
@@ -652,11 +651,9 @@ describe("RomMPlaySection", () => {
         found: true,
         rom_id: 50,
       });
-      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
-      vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({
-        base64: "AAAA",
-        no_api_key: false,
-      });
+      vi.mocked(backend.getSgdbSlotArtwork).mockImplementation(async (_romId, _appId, slot) =>
+        slot === "icon" ? { status: "ready" } : { status: "skip" },
+      );
       vi.mocked(backend.saveShortcutIcon).mockRejectedValue(new Error("boom"));
       vi.stubGlobal("SteamClient", {
         Apps: {
@@ -807,12 +804,21 @@ describe("RomMPlaySection", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockClear();
       vi.mocked(backend.getSgdbArtworkBase64).mockClear();
       vi.mocked(backend.getSgdbSlotArtwork).mockClear();
-      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
+      vi.mocked(backend.getSgdbSlotArtwork).mockImplementation(async (_romId, _appId, _slot, replace) =>
+        replace ? { status: "ready" } : { status: "skip" },
+      );
       vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: "NEW=", no_api_key: false });
-      vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: false });
+      vi.mocked(backend.saveShortcutIcon).mockResolvedValue({
+        success: true,
+        icon_path: "/grid/icon.png",
+        image_id: 31,
+        sha256: "sha-icon",
+        sgdb_id: 9999,
+      });
       const setArtwork = vi.fn().mockResolvedValue(undefined);
+      const setIcon = vi.fn();
       vi.stubGlobal("SteamClient", {
-        Apps: { SetCustomArtworkForApp: setArtwork, SetShortcutIcon: vi.fn(), OpenAppSettingsDialog: vi.fn() },
+        Apps: { SetCustomArtworkForApp: setArtwork, SetShortcutIcon: setIcon, OpenAppSettingsDialog: vi.fn() },
       });
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: true, rom_id: 51 });
 
@@ -825,20 +831,21 @@ describe("RomMPlaySection", () => {
 
       // Cache re-read for the newly-bound rom_id, and the switch replaces hero,
       // logo and wide grid through the replacing fetch, as Refresh Artwork does,
-      // with the icon as before.
+      // and the icon through the per-slot fetch past its filled check.
       expect(vi.mocked(cachedStore.getCachedGameDetail)).toHaveBeenCalledWith(testAppId);
       expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls).toEqual([
         [51, 1],
         [51, 2],
         [51, 3],
-        [51, 4],
       ]);
-      expect(backend.getSgdbSlotArtwork).not.toHaveBeenCalled();
+      expect(vi.mocked(backend.getSgdbSlotArtwork).mock.calls).toEqual([[51, testAppId, "icon", true]]);
       expect(setArtwork.mock.calls).toEqual([
         [testAppId, "NEW=", "png", 1],
         [testAppId, "NEW=", "png", 2],
         [testAppId, "NEW=", "png", 3],
       ]);
+      expect(backend.saveShortcutIcon).toHaveBeenCalledWith(testAppId, 51);
+      expect(setIcon).toHaveBeenCalledWith(testAppId, "/grid/icon.png");
     });
 
     it("ignores a version_switched event for a different appId", async () => {
@@ -923,12 +930,13 @@ describe("RomMPlaySection", () => {
         rom_id: romId,
         rom_name: "Test ROM",
       });
-      // Auto-apply on mount routes through getSgdbArtworkBase64; default it
-      // to all-null so the mount path is inert and the action drives the test.
+      // Default the artwork fetches to nothing found, so the mount's apply is
+      // inert and the action drives the test.
       vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({
         base64: null,
         no_api_key: false,
       });
+      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "none" });
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       return openRomMMenuAndGetItems(testAppId);
@@ -959,16 +967,22 @@ describe("RomMPlaySection", () => {
       vi.mocked(backend.getSgdbArtworkBase64)
         .mockResolvedValueOnce({ base64: "AA==", no_api_key: false })
         .mockResolvedValueOnce({ base64: "BB==", no_api_key: false })
-        .mockResolvedValueOnce({ base64: "CC==", no_api_key: false })
-        .mockResolvedValueOnce({ base64: "DD==", no_api_key: false });
-      // Icon succeeds WITH a path so it counts toward the 4/4 total — a success
-      // without a path applies nothing and is not counted (#L4).
-      vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: true, icon_path: "/grid/icon.png" });
+        .mockResolvedValueOnce({ base64: "CC==", no_api_key: false });
+      // The icon is written, so it counts toward the 4/4 total.
+      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready" });
+      vi.mocked(backend.saveShortcutIcon).mockResolvedValue({
+        success: true,
+        icon_path: "/grid/icon.png",
+        image_id: 31,
+        sha256: "sha-icon",
+        sgdb_id: 9999,
+      });
       await act(async () => {
         await items[0]!.props.onClick?.();
       });
       expect(vi.mocked(SteamClient.Apps.SetCustomArtworkForApp)).toHaveBeenCalledTimes(3);
-      expect(vi.mocked(backend.saveShortcutIcon)).toHaveBeenCalledWith(testAppId, "DD==");
+      expect(vi.mocked(backend.getSgdbSlotArtwork)).toHaveBeenCalledWith(77, testAppId, "icon", true);
+      expect(vi.mocked(backend.saveShortcutIcon)).toHaveBeenCalledWith(testAppId, 77);
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
         expect.objectContaining({ body: "Artwork refreshed (4/4 images applied)" }),
       );
@@ -5264,7 +5278,14 @@ describe("RomMPlaySection", () => {
       vi.mocked(backend.getSgdbResolution).mockResolvedValue({ decision: "resolved", sgdb_id: 42 });
       vi.mocked(backend.refreshSgdbArtwork).mockResolvedValue({ success: true });
       vi.mocked(backend.getSgdbArtworkBase64).mockResolvedValue({ base64: "AA==", no_api_key: false });
-      vi.mocked(backend.saveShortcutIcon).mockResolvedValue({ success: true, icon_path: "/grid/icon.png" });
+      vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "ready" });
+      vi.mocked(backend.saveShortcutIcon).mockResolvedValue({
+        success: true,
+        icon_path: "/grid/icon.png",
+        image_id: 31,
+        sha256: "sha-icon",
+        sgdb_id: 9999,
+      });
       await refresh();
       expect(toasts()).toEqual([
         "Artwork refreshed (4/4 images applied). The RomM cover could not be updated: ROM has no cover artwork",
@@ -5336,6 +5357,7 @@ describe("RomMPlaySection", () => {
       render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
       vi.mocked(backend.getSgdbArtworkBase64).mockClear();
+      vi.mocked(backend.getSgdbSlotArtwork).mockClear();
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: true, rom_id: 51 });
 
       await act(async () => {
@@ -5347,7 +5369,8 @@ describe("RomMPlaySection", () => {
       await flushAsync();
       await flushAsync();
 
-      expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls.map(([romId]) => romId)).toEqual([51, 51, 51, 51]);
+      expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls.map(([romId]) => romId)).toEqual([51, 51, 51]);
+      expect(vi.mocked(backend.getSgdbSlotArtwork).mock.calls).toEqual([[51, testAppId, "icon", true]]);
       expect(vi.mocked(backend.refreshSgdbArtwork)).not.toHaveBeenCalled();
     });
   });

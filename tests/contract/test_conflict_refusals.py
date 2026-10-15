@@ -127,7 +127,7 @@ _ARGS: dict[str, tuple[Any, ...]] = {
     "save_custom_headers": ([],),
     "save_platform_sync": (7, True),
     "save_server_url": ("https://server.example", False),
-    "save_shortcut_icon": (_APP_ID, ""),
+    "save_shortcut_icon": (_APP_ID, 41),
     "saves_rollback_to_version": (41, "default", 7),
     "select_disc": (41, None),
     "set_all_platforms_sync": (True,),

@@ -142,7 +142,7 @@ def icon_waits(
     sgdb_id: int | None,
     now: float,
 ) -> bool:
-    """Whether the shortcut artwork job asks for a shortcut's icon at *now*.
+    """Whether the shortcut artwork job, or the game page's first visit, asks for a shortcut's icon at *now*.
 
     It does while *icon*, the shortcut's icon path in ``shortcuts.vdf``, does
     not fill the slot (:func:`domain.shortcut_icon.is_icon_filled`, over
