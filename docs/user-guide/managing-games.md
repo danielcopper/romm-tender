@@ -63,8 +63,8 @@ receives the **Default** badge. If the shortcut is still active on that unavaila
 the same list to recover the game.
 
 When the version the shortcut is bound to is the one confirmed gone, the **Download** button is greyed out as well — it
-stays visible, like the version row, but downloading it could only ever fail. Pick a live version in the version list,
-or remove the local data, to get the button back.
+stays visible, like the version row, but downloading it could only ever fail. Pick a live version in the version list to
+get the button back.
 
 A library sync never moves the shortcut off such a version, and never removes it because every version is gone — see
 [Re-Syncing](syncing-your-library.md#re-syncing). Instead the game page shows a banner above the Play row, which says
@@ -74,12 +74,14 @@ A library sync never moves the shortcut off such a version, and never removes it
   play._
 - **Downloaded** — _This version is no longer available on RomM. Your downloaded copy still plays._ Below it, what no
   longer works: its saves no longer sync, and a launch with a local save asks first; it cannot be downloaded again; its
-  saves stay on this device and do not follow a switch to another version; its playtime still counts on this device but
-  no longer reaches RomM; its cover and details no longer update.
+  saves stay on this device and do not follow a switch to another version; its playtime still counts here, but RomM no
+  longer adds it to this game; its cover and details no longer update.
 - **Every version gone** — _This game is no longer available on RomM._, with the same list when the game is downloaded
   (less the line about switching, since there is nothing to switch to).
 
-Each closes by naming **Data Management › Gone from RomM** as where the game is removed, with a recovery bundle; the
+While another version is on RomM, the banner closes with _Choose another version first; Data Management › Gone from RomM
+then removes this one, with a recovery bundle._ — the cleanup keeps the version a shortcut is on. When every version is
+gone it closes with _To remove it from this device, with a recovery bundle, use Data Management › Gone from RomM._ The
 trash icon in the version list opens the same cleanup. The Quick Access panel shows no banner. Starting a version that
 is gone and not downloaded from Steam's own Play stays refused, and says _This version is no longer available on RomM.
 Choose another version on its game page._ — or _This game is no longer available on RomM._ when every version is gone.
@@ -167,9 +169,10 @@ cases are skipped and reported without deleting data.
 The confirmation options apply to this run only:
 
 - **Remove gone versions** is on. It removes the confirmed rows and their installed content in games that still have a
-  live version. The version the game's shortcut is bound to is kept while another version of the game is still on RomM:
-  the cleanup never moves a shortcut onto another version. Switch to another version in the version list first; the gone
-  version is then an ordinary one this option removes.
+  live version. The version the game's shortcut is bound to is kept while another version of the game is still on RomM,
+  because the cleanup never moves a shortcut onto another version; a run that keeps it says _The version this game's
+  shortcut is on is kept while another version is on RomM; switch versions first._ Switch to another version in the
+  version list first; the gone version is then an ordinary one this option removes.
 - **Remove fully vanished games** is on. It applies only to games where the server confirms every single version is
   gone; those are removed whole, with any Steam shortcut they have. It ships on because removing a game RomM no longer
   has is what this dialog is for, and because the default-on recovery bundle keeps the shortcut's Steam details so it
