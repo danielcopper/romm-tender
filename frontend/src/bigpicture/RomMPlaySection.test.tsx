@@ -5,7 +5,7 @@
 // catches (no state change, no log call) are exempt — and even then, prefer
 // dropping the test over keeping one with zero expects.
 //
-// The module-scope `artworkApplied` map in RomMPlaySection.tsx and the
+// The module-scope `artworkApplied` map in utils/autoArtwork.ts and the
 // per-appId entries in utils/gameDetailStore.ts both persist across tests
 // within this file. To avoid that state bleeding between tests we use a unique
 // `testAppId` per test (incremented in `beforeEach`) — Option A in the playbook.
