@@ -97,8 +97,9 @@ target row; artwork, collections, playtime and the Steam appId all survive. Rena
 >   collection holds it. A bound sibling missing from a platform the run read whole is gone from RomM and stays. Each
 >   row records whether a platform or a collection last delivered it; one a collection last delivered and none returns
 >   now is asked for once by its exact id on every run until it is found or unbound: only a ROM RomM still returns is
->   removed, since only a 404 is evidence of absence. Any other is removed unasked, its platform turned off — unless
->   RomM's platform list no longer names that platform, which makes it gone from RomM, and it stays.
+>   removed, since only a 404 is evidence of absence (a row with no record yet counts as collection-delivered when a
+>   collection's last completed apply listed it). Any other is removed unasked, its platform turned off — unless RomM's
+>   platform list no longer names that platform, which makes it gone from RomM, and it stays.
 
 ### 3. Version resolution chain: installed > existing binding > RomM default > 1G1R ranking; the choice stays local
 
