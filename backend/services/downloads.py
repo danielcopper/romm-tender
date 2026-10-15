@@ -179,11 +179,7 @@ class DownloadService:
         self._control_tokens: dict[int, _DownloadControl] = {}
 
     async def shutdown(self) -> None:
-        """Cancel the per-ROM download tasks and the progress frames still running, and wait until they have ended.
-
-        A download cancelled while its install is being committed waits for the
-        commit's thread before it ends, so this waits for it too.
-        """
+        """Cancel the per-ROM download tasks and the progress frames still running, and wait until they have ended."""
         await self._tasks.shutdown()
         self._download_tasks.clear()
 
@@ -471,9 +467,8 @@ class DownloadService:
     ) -> None:
         """Hold an operation named *label* for the task a successful start or resume left running.
 
-        Called inside that call's own ``hold``, so no cleanup can start between
-        the two operations; the task's ``download_complete`` lease is taken
-        while this one still holds.
+        Called inside that call's own ``hold``, so no cleanup can start between the two operations; the task's
+        ``download_complete`` lease is taken while this one still holds.
         """
         task = self.task_for_rom(rom_id) if isinstance(result, dict) else None
         if task is not None:
