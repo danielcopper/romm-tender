@@ -12,7 +12,7 @@ games appear in the Steam Library with cover art, metadata, and organized into c
    after the sync, and its hero banner the first time its page is opened (see [Artwork](#artwork))
 5. Metadata (description, developer, genres, release date) is cached and displayed in Tender's custom game detail panel
 6. Steam collections are created per platform (e.g. "RomM: Game Boy Advance (steamdeck)") and per synced RomM
-   collection, and fill game by game while the sync runs (see [Collections](#collections))
+   collection, and fill in small groups while the sync runs (see [Collections](#collections))
 
 ## Starting a Sync
 
@@ -328,8 +328,9 @@ hostname to avoid conflicts if you run Tender on multiple devices:
 - `RomM: PlayStation (htpc)`
 
 Collections appear in Steam's library sidebar and can be used to browse games by platform. A collection appears with the
-first of its games the sync adds, and fills while the sync goes on. Games the sync does not need to touch — ones that
-have not changed since the last sync — reach a collection they are new to when the sync finishes.
+first of its games the sync adds, and fills in small groups, every couple of seconds, while the sync goes on. Games the
+sync does not need to touch — ones that have not changed since the last sync — reach a collection they are new to when
+the sync finishes.
 
 ### Syncing RomM collections
 

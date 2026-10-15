@@ -454,8 +454,8 @@ See: `backend/adapters/steam_config.py`
 Steam collections are managed entirely on the frontend via `collectionStore`, not by writing the shortcut's `tags` VDF
 field. Tender owns machine-scoped collections named `RomM: <platform> (<hostname>)` for platforms and
 `RomM: [<name>] (<hostname>)` for synced RomM collections. The backend decides which collections a game belongs to, and
-the frontend writes them in two passes: game by game while the run applies its shortcuts, adding only, and the complete
-set once the run has ended.
+the frontend writes them in two passes: in small groups while the run applies its shortcuts, adding only, and the
+complete set once the run has ended.
 
 **During the run, add-only.** Each `sync_apply_unit` entry names the collections its game belongs to:
 `platform_collection` (the name `platform_app_ids` is keyed by, `null` where **Show collection games in platform
@@ -467,13 +467,18 @@ is named by the name cached for it from an earlier run, as the end-of-run map na
 files each entry by its binding target, with the RomM keys of every collection that lists a version in the entry's
 sibling group, as far as the unit's own built set shows that group. The platform rule is `platform_collection_name`, the
 same function the end-of-run map applies, so both answers agree. Once a shortcut's appId resolves — after its cover, for
-a new one — `addAppToCollections` (`frontend/src/utils/collections.ts`) finds each named collection by its folded name,
-or creates it holding this game so no collection appears empty, and adds the game where it is missing: one `AddApps` and
-one `Save` per collection the game was not in yet, nothing for one it already holds. It never removes a game, so a write
-that fails halfway cannot empty a collection. A collection this pass created is remembered for the run by its folded
-name and used when `collectionStore.userCollections` does not list it: whether Steam lists a new collection as soon as
-its first `Save()` resolves is not established, and creating the same name a second time overwrites the first collection
-and the game in it. A failure is logged per collection and never stops the apply.
+a new one — `addAppToCollections` (`frontend/src/utils/collections.ts`) gathers the game for each named collection. It
+writes what it has gathered when `COLLECTION_WRITE_INTERVAL_MS` (2 s) has passed since its last write, at once for a
+run's first game, and `flushCollections` writes the rest at the end of each chunk, before the chunk's acknowledgement,
+and before the end-of-run write, so nothing gathered is lost to a cancel. A write finds each collection by its folded
+name, or creates it holding its gathered games so no collection appears empty, and adds the games it does not hold yet:
+one `AddApps` and one `Save` per collection, nothing for one that already holds them all. Written per game, those two
+calls cost about 0.4 s for every new game, and the renderer's memory grew about 2.5 times as much over a sync of 329 new
+games on the reference device (246 s against 120 s without the pass); a game already filed costs nothing. It never
+removes a game, so a write that fails halfway cannot empty a collection. A collection this pass created is remembered
+for the run by its folded name and used when `collectionStore.userCollections` does not list it: whether Steam lists a
+new collection as soon as its first `Save()` resolves is not established, and creating the same name a second time
+overwrites the first collection and the game in it. A failure is logged per collection and never stops the apply.
 
 What this pass does not file, and a completed run's end does: games the run does not send (a delta-unchanged entry, a
 skipped platform or collection), the members of a foreign smart collection — its listing is its owner's view, and the
