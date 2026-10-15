@@ -7,9 +7,8 @@ and on mount disowns every lease an earlier frontend context left behind.
 
 None of the three checks a conflict rule: they change no local game data, only
 the record of claims, and the prune rule would refuse them while a cleanup
-runs — when the frontend may still renew or release the lease a run's final
-``prune_complete`` carries, or disown what an earlier context held after a
-remount.
+runs — when the frontend may still renew or release a lease it took before the
+run started, or disown what an earlier context held after a remount.
 """
 
 from __future__ import annotations
