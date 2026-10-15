@@ -179,7 +179,11 @@ class DownloadService:
         self._control_tokens: dict[int, _DownloadControl] = {}
 
     async def shutdown(self) -> None:
-        """Cancel the per-ROM download tasks and the progress frames still running, and wait until they have ended."""
+        """Cancel the per-ROM download tasks and the progress frames still running, and wait until they have ended.
+
+        A download cancelled while its install is being committed waits for the
+        commit's thread before it ends, so this waits for it too.
+        """
         await self._tasks.shutdown()
         self._download_tasks.clear()
 
@@ -467,8 +471,9 @@ class DownloadService:
     ) -> None:
         """Hold an operation named *label* for the task a successful start or resume left running.
 
-        Called inside that call's own ``hold``, so no cleanup can start between the two operations; the task's
-        ``download_complete`` lease is taken while this one still holds.
+        Called inside that call's own ``hold``, so no cleanup can start between
+        the two operations; the task's ``download_complete`` lease is taken
+        while this one still holds.
         """
         task = self.task_for_rom(rom_id) if isinstance(result, dict) else None
         if task is not None:
@@ -1124,8 +1129,7 @@ class DownloadService:
         bare ``target_path`` is NEVER removed: a single-file transfer writes to
         ``target_path + .tmp`` and only renames to ``target_path`` on success, so
         deleting the bare path would destroy a PRE-EXISTING install (a re-download
-        that fails mid-stream) or a just-committed one (a cancel race) — the #1049
-        data-loss bug.
+        that fails mid-stream) or a just-committed one (a cancel race).
 
         For a multi-file ROM the extract dir may have been renamed for ES-DE
         collapse after extraction. *final_path* (the resolved launch file,
@@ -1174,9 +1178,7 @@ class DownloadService:
         partial, emits the terminal ``cancelled`` frame, and evicts the entry.
 
         A **paused** download has NO task — the pause already cancelled it,
-        leaving the entry "paused" and the partial ``.tmp`` kept for resume. A
-        plain task lookup then found nothing and silently no-op'd (the
-        downloads-round finding). Handle it directly here:
+        leaving the entry "paused" and the partial ``.tmp`` kept for resume.
         ``_cancel_paused_download`` deletes the partial, emits the same terminal
         ``cancelled`` frame, and evicts the entry.
 
@@ -1200,14 +1202,13 @@ class DownloadService:
     def _cancel_paused_download(self, rom_id: int, entry: dict[str, Any]) -> None:
         """Cancel a paused (task-less) download: delete its partial, notify, evict.
 
-        Does the cleanup the running-cancel terminal branch would have, minus the
-        task: removes the partial ``.tmp``/``.zip.tmp`` (via the ``_target_path``
-        recorded when the entry paused — skipped if absent, the startup sweep
-        still reaps it; a paused transfer is mid-download so it owns no extract
-        dir), emits the same terminal ``download_progress`` ``cancelled`` frame
-        the running-cancel emits (so the button resets and the store drops the
-        row), then evicts the entry — a cancel is an explicit discard that leaves
-        no residue (#149 downloads-round).
+        Does the cleanup the running-cancel terminal branch would have, minus the task:
+        removes the partial ``.tmp``/``.zip.tmp`` (via the ``_target_path`` recorded
+        when the entry paused — skipped if absent, the startup sweep still reaps it; a
+        paused transfer is mid-download so it owns no extract dir), emits the same
+        terminal ``download_progress`` ``cancelled`` frame the running-cancel emits (so
+        the button resets and the store drops the row), then evicts the entry — a cancel
+        is an explicit discard that leaves no residue.
         """
         target_path = entry.get("_target_path")
         if target_path:
