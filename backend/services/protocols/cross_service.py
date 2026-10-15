@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from domain.update_release import LatestRelease
     from lib.partial_failure import PartialFailure
     from models.prune import InstalledContentRemoval, SaveQuarantine, SourceClaim
-    from models.shortcut_artwork import JobIcon, SlotAnswer
+    from models.shortcut_artwork import SlotAnswer, WrittenIcon
     from models.state import ShortcutRegistryEntry
     from models.sync import ClientSaveState
 
@@ -776,7 +776,7 @@ class ShortcutArtworkSource(Protocol):
         """How many icons the game page has saved for *app_id* in this process."""
         ...
 
-    async def write_job_icon(self, app_id: int, rom_id: int, generation: int) -> JobIcon | None:
+    async def write_job_icon(self, app_id: int, rom_id: int, generation: int) -> WrittenIcon | None:
         """Write *rom_id*'s cached icon, downscaled, for *app_id*, unless the game page saved one since *generation*.
 
         Answers what was written; ``None`` when the page saved an icon since,

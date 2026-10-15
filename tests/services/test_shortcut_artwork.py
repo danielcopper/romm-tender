@@ -20,7 +20,7 @@ from domain.artwork_slot_outcome import RULED_OUT_SECONDS, ArtworkSlotOutcome
 from domain.rom import Rom
 from domain.shortcut_icon import LOGO_ICON_NAME, PLACEHOLDER_ICON_NAME, PLACEHOLDER_ICON_PNG
 from lib.errors import SteamGridDirMissingError
-from models.shortcut_artwork import JobIcon, SlotAnswer
+from models.shortcut_artwork import SlotAnswer, WrittenIcon
 from services import shortcut_artwork
 from services.shortcut_artwork import ShortcutArtworkService, ShortcutArtworkServiceConfig
 
@@ -128,7 +128,7 @@ class _FakeArtworkSource:
             self.on_slot_none(rom_id, slot)
         return answer
 
-    async def write_job_icon(self, app_id: int, rom_id: int, generation: int) -> JobIcon | None:
+    async def write_job_icon(self, app_id: int, rom_id: int, generation: int) -> WrittenIcon | None:
         if self.write_gate is not None:
             await self.write_gate.wait()
         if self.icon_generation(app_id) != generation:
@@ -141,8 +141,8 @@ class _FakeArtworkSource:
 _ICON_BYTES = b"icon"
 
 
-def _job_icon(app_id: int, rom_id: int) -> JobIcon:
-    return JobIcon(path=f"/grid/{app_id}_icon.png", image_id=500 + rom_id, sha256=f"sha-{rom_id}", sgdb_id=None)
+def _job_icon(app_id: int, rom_id: int) -> WrittenIcon:
+    return WrittenIcon(path=f"/grid/{app_id}_icon.png", image_id=500 + rom_id, sha256=f"sha-{rom_id}", sgdb_id=None)
 
 
 def _icon_entry(app_id: int, rom_id: int) -> dict[str, Any]:
@@ -785,7 +785,7 @@ class TestMoreThatStopsARun:
         job = _Job(icons={100: ""}, bound={100: 1})
         write = job.source.write_job_icon
 
-        async def write_then_a_cleanup_starts(app_id: int, rom_id: int, generation: int) -> JobIcon | None:
+        async def write_then_a_cleanup_starts(app_id: int, rom_id: int, generation: int) -> WrittenIcon | None:
             written = await write(app_id, rom_id, generation)
             job.prune_conflicts.register_run("cleanup")
             return written
@@ -1073,7 +1073,7 @@ class TestASync:
         job = _Job(icons={100: ""}, bound={100: 1})
         write = job.source.write_job_icon
 
-        async def write_then_a_sync_starts(app_id: int, rom_id: int, generation: int) -> JobIcon | None:
+        async def write_then_a_sync_starts(app_id: int, rom_id: int, generation: int) -> WrittenIcon | None:
             written = await write(app_id, rom_id, generation)
             job.sync_running = True
             return written

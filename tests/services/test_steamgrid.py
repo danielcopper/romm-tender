@@ -35,7 +35,7 @@ from domain.artwork_slot_outcome import RULED_OUT_SECONDS, ArtworkSlotOutcome, S
 from domain.rom import Rom
 from lib.errors import Refused, SgdbApiError, SgdbRateLimitedError, SteamGridDirMissingError
 from lib.prune_conflicts import PruneConflicts
-from models.shortcut_artwork import JobIcon, SlotAnswer
+from models.shortcut_artwork import SlotAnswer, WrittenIcon
 from services.library import LibraryService, LibraryServiceConfig
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
 
@@ -1628,7 +1628,7 @@ class TestTheJobsIcon:
 
         icon = await steamgrid.service.write_job_icon(_APP_ID, 42, 0)
 
-        assert icon == JobIcon(
+        assert icon == WrittenIcon(
             path=os.path.join(str(tmp_path), f"{_APP_ID}_icon.png"),
             image_id=31,
             sha256=hashlib.sha256(b"small:big").hexdigest(),

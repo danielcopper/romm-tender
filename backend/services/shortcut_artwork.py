@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
     from domain.artwork_slot_outcome import ArtworkSlotOutcome
     from domain.rom import Rom
-    from models.shortcut_artwork import JobIcon
+    from models.shortcut_artwork import WrittenIcon
     from services.protocols import (
         Clock,
         ConflictRules,
@@ -166,7 +166,7 @@ class _Finished:
     rom_id: int
     icon_path: str
     generation: int
-    written: JobIcon | None
+    written: WrittenIcon | None
 
 
 @dataclass(frozen=True)

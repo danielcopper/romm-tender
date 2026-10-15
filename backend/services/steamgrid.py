@@ -41,7 +41,7 @@ from lib.errors import (
     SgdbRateLimitedError,
     SteamGridDirMissingError,
 )
-from models.shortcut_artwork import JobIcon, SlotAnswer
+from models.shortcut_artwork import SlotAnswer, WrittenIcon
 
 if TYPE_CHECKING:
     import logging
@@ -910,7 +910,7 @@ class SteamGridService:
         """
         return self._icon_generations.get(int(app_id), 0)
 
-    async def write_job_icon(self, app_id: int, rom_id: int, generation: int) -> JobIcon | None:
+    async def write_job_icon(self, app_id: int, rom_id: int, generation: int) -> WrittenIcon | None:
         """Implements ``services.protocols.ShortcutArtworkSource.write_job_icon``.
 
         Takes turns with the page's save under one lock per app id, so the
@@ -922,14 +922,14 @@ class SteamGridService:
                 return None
             return await self._loop.run_in_executor(None, self._write_icon_io, app_id, int(rom_id))
 
-    def _write_icon_io(self, app_id: int, rom_id: int) -> JobIcon | None:
+    def _write_icon_io(self, app_id: int, rom_id: int) -> WrittenIcon | None:
         try:
             return self._write_cached_icon_io(app_id, rom_id)
         except Exception as e:
             self._logger.warning(f"SGDB icon for rom_id={rom_id} could not be read or written: {e}")
             return None
 
-    def _write_cached_icon_io(self, app_id: int, rom_id: int) -> JobIcon | None:
+    def _write_cached_icon_io(self, app_id: int, rom_id: int) -> WrittenIcon | None:
         cached = self._cached_artwork(rom_id, ArtworkSlot.ICON.value)
         if cached is None or cached.image_id is None:
             self._log_debug(f"SGDB icon for rom_id={rom_id} is no longer cached; it is asked for again")
@@ -943,7 +943,7 @@ class SteamGridService:
         if path is None:
             return None
         sgdb_id = self._resolve_sgdb_id_state_only(rom_id)
-        return JobIcon(
+        return WrittenIcon(
             path=path,
             image_id=cached.image_id,
             sha256=hashlib.sha256(icon).hexdigest(),

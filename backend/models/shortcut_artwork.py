@@ -1,4 +1,4 @@
-"""What one SteamGridDB fetch for a ROM's wide grid, logo or icon answered, and the icon the artwork job wrote."""
+"""What one SteamGridDB fetch for a ROM's wide grid, logo or icon answered, and an icon Tender wrote for a shortcut."""
 
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ class SlotAnswer(StrEnum):
 
 
 @dataclass(frozen=True)
-class JobIcon:
-    """An icon the artwork job wrote into Steam's grid directory, and what its ``set`` record is to carry.
+class WrittenIcon:
+    """An icon the artwork job or the game page wrote into Steam's grid directory, and what its ``set`` record carries.
 
     *sha256* is the hash of the bytes written, which are the downscaled ones;
     *sgdb_id* is the ROM's SteamGridDB id when the icon was written.
