@@ -1769,7 +1769,6 @@ describe("RemovedGamesCleanup", () => {
     "checking",
     "creating_recovery",
     "recovery_sealed",
-    "repointing",
     "removing_shortcut",
     "removing",
     "removed",

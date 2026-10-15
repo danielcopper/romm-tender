@@ -42,7 +42,6 @@ class GroupPlan:
     bound_row: Rom | None
     app_id: int | None
     delete_ids: set[int]
-    target_id: int | None
     fully_dead: bool
     whole_game_action: bool
     drifted: bool
@@ -163,7 +162,7 @@ class GroupPlanner:
         if not delete_ids:
             return self._nothing_to_do(rows, proof.uncertain_ids)
 
-        drifted, unsynced = await self._probe_drift(rows, bound_row, proof, None, whole_game_action, options)
+        drifted, unsynced = await self._probe_drift(rows, bound_row, proof, whole_game_action, options)
         if unsynced is not None:
             return unsynced
 
@@ -173,7 +172,6 @@ class GroupPlanner:
             bound_row=bound_row,
             app_id=bound_row.shortcut_app_id if bound_row is not None else None,
             delete_ids=delete_ids,
-            target_id=None,
             fully_dead=proof.fully_dead,
             whole_game_action=whole_game_action,
             drifted=drifted,
@@ -231,14 +229,13 @@ class GroupPlanner:
         rows: list[Rom],
         bound_row: Rom | None,
         proof: _GroupLiveness,
-        target_id: int | None,
         whole_game_action: bool,
         options: PruneOptions,
     ) -> tuple[bool, dict[str, Any] | None]:
         """Ask whether the shortcut this run would change still holds unsynced saves."""
         if bound_row is None or bound_row.rom_id not in proof.vanished_ids:
             return False, None
-        if target_id is None and not whole_game_action:
+        if not whole_game_action:
             return False, None
         drifted = bool((await self._drift_probe(bound_row.rom_id)).get("drifted"))
         if drifted and not options.create_recovery_bundle:

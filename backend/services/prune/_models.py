@@ -29,8 +29,8 @@ class ActionOutcome:
 
 
 # One frontend Steam action request: run id, kind, payload, expected bound rom,
-# repoint target, and the group the claim must still match.
-ActionRequester = Callable[[str, str, dict[str, object], int | None, int | None, set[int]], Awaitable[ActionOutcome]]
+# and the group the claim must still match.
+ActionRequester = Callable[[str, str, dict[str, object], int | None, set[int]], Awaitable[ActionOutcome]]
 
 # Rom ids the last complete fetch returned, excluding a set and capped: the
 # control subjects a liveness round falls back on when nothing answered live.
@@ -70,7 +70,6 @@ class PendingAction:
     kind: str
     app_id: int | None
     expected_bound_rom_id: int | None
-    target_rom_id: int | None
     group_rom_ids: frozenset[int]
     future: object
     claimed: bool = False

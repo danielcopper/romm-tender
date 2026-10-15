@@ -45,7 +45,6 @@ import {
   getUpdateInstallState,
   logError,
   logInfo,
-  waitForPruneRelease,
 } from "./api/backend";
 import {
   createOrUpdateCollections,
@@ -99,12 +98,7 @@ import { setLaunchOptionsConfirmed } from "./utils/steamShortcuts";
 import { removeShortcutsPaced } from "./utils/shortcutRemoval";
 import { applyShortcutArtwork } from "./utils/shortcutArtwork";
 import { batchConfirmLaunchOptions } from "./utils/launchOptionsReconcile";
-import {
-  disownStrandedPruneLeases,
-  isPruneLeaseCancelled,
-  releasePruneLease,
-  withPruneLease,
-} from "./utils/pruneLease";
+import { disownStrandedPruneLeases, isPruneLeaseCancelled, withPruneLease } from "./utils/pruneLease";
 import { withTimeout } from "./utils/withTimeout";
 import { fetchMetadataCachePages } from "./utils/metadataCache";
 import { cancelPruneActions, handlePruneAction } from "./utils/pruneActions";
@@ -112,7 +106,6 @@ import type { StoppedUpdateAttemptWire, UpdateFailure, UpdateInstallAttempt, Upd
 import type { PruneActionRequired } from "./utils/pruneActions";
 import { admitPruneFrame, setPruneComplete, setPruneProgress } from "./utils/pruneStore";
 import type { PruneComplete, PruneProgress } from "./utils/pruneStore";
-import { publishCommittedVersionSwitch } from "./utils/versionSwitchApplication";
 
 // Module-level page state survives QAM remounts (e.g. after modal close)
 let currentPage: Page = "main";
@@ -377,22 +370,6 @@ async function removeStaleCollections(
   }
 }
 
-/** Publish each committed version switch in order, stopping the moment the lease is cancelled. */
-async function publishSwitchesUntilCancelled(
-  pending: Array<{ appId: number; romId: number }>,
-  signal: AbortSignal,
-): Promise<void> {
-  for (const item of pending) {
-    if (isPruneLeaseCancelled(signal)) return;
-    await publishCommittedVersionSwitch(item.appId, item.romId, undefined, signal);
-  }
-}
-
-/** Name a committed shortcut action the way the completion toast says it. */
-function shortcutActionLabel(committedAction: string | undefined): string {
-  return committedAction === "remove_shortcut" ? "Shortcut removal" : "Shortcut repoint";
-}
-
 /**
  * Say what a finished cleanup run did, leading with anything that committed a
  * Steam change without finishing: an uncertain outcome and a committed-but-
@@ -403,12 +380,10 @@ function buildPruneCompleteToast(completed: PruneComplete): { body: string; subt
   const committedPartial = completed.results.find((item) => item.status === "partial" && item.committed_action);
   const subtext = ambiguousPartial?.message ?? committedPartial?.message ?? completed.message;
   if (ambiguousPartial) {
-    const label = shortcutActionLabel(ambiguousPartial.committed_action);
-    return { body: `${label} outcome is uncertain; source data was retained.`, subtext };
+    return { body: "Shortcut removal outcome is uncertain; source data was retained.", subtext };
   }
   if (committedPartial) {
-    const label = shortcutActionLabel(committedPartial.committed_action);
-    return { body: `${label} committed; local cleanup incomplete.`, subtext };
+    return { body: "Shortcut removal committed; local cleanup incomplete.", subtext };
   }
   const removed = completed.removed_count ?? completed.removed_rom_ids.length;
   if (!removed) return { body: completed.message || "No removed RomM games were cleaned up.", subtext };
@@ -1174,39 +1149,6 @@ const tender = definePanel(() => {
   // page or the game-detail picker unmounts. The backend emits one tokenized action at a
   // time; this root handler owns every Steam API mutation and reports the exact
   // token outcome before backend filesystem/SQLite finalization can proceed.
-  const publishPruneSwitches = async (
-    runId: string,
-    pending: Array<{ appId: number; romId: number }>,
-    leaseToken: string | undefined,
-  ): Promise<void> => {
-    if (!leaseToken) {
-      logError("Cleanup publication was skipped because its continuation lease was missing.");
-      return;
-    }
-    await withPruneLease(
-      leaseToken,
-      "Cleanup repoint publication",
-      async (signal) => {
-        let lastMessage = "Cleanup claim release was not confirmed.";
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          try {
-            const released = await withTimeout(waitForPruneRelease(runId), 6000);
-            if (released.success) {
-              await publishSwitchesUntilCancelled(pending, signal);
-              return;
-            }
-            lastMessage = released.message;
-          } catch (e) {
-            lastMessage = e instanceof Error ? e.message : String(e);
-          }
-          if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 100));
-        }
-        logError(`Cleanup publication could not confirm claim release: ${lastMessage}`);
-      },
-      "root",
-    );
-  };
-
   addEventListener<PruneActionRequired>("prune_action_required", (action: PruneActionRequired) => {
     if (!admitPruneFrame(action.preview_id, action.run_id)) return;
     detach(handlePruneAction(action));
@@ -1229,25 +1171,6 @@ const tender = definePanel(() => {
       }),
     );
     cancelPruneActions();
-    const publications: Array<{ appId: number; romId: number }> = [];
-    for (const item of completed.results) {
-      if (
-        item.committed_action === "repoint_shortcut" &&
-        !item.action_ambiguous &&
-        item.app_id !== undefined &&
-        item.target_rom_id !== undefined
-      ) {
-        publications.push({ appId: item.app_id, romId: item.target_rom_id });
-      }
-    }
-    if (publications.length) {
-      detach(publishPruneSwitches(completed.run_id, publications, completed.prune_lease_token));
-    } else if (completed.prune_lease_token) {
-      // The terminal frame carried a continuation lease but committed no repoint
-      // to publish, so nothing downstream will ever release it. Handing it back
-      // now keeps it from refusing the next cleanup's start until its TTL.
-      detach(releasePruneLease(completed.prune_lease_token, "Cleanup completion with nothing to publish"));
-    }
     const { body, subtext } = buildPruneCompleteToast(completed);
     showToast(body, { subtext });
   });

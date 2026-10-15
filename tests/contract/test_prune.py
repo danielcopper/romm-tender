@@ -626,21 +626,6 @@ async def test_conflict_lease_renewal_extends_a_live_lease_and_denies_a_released
     }
 
 
-async def test_release_wait_rejects_an_empty_run_id(harness):
-    assert await harness.endpoints.wait_for_prune_release("") == {
-        "success": False,
-        "reason": "invalid_run_id",
-        "message": "Cleanup run id must be a non-empty string.",
-    }
-
-
-async def test_release_wait_returns_immediately_for_an_unknown_run(harness):
-    assert await harness.endpoints.wait_for_prune_release("no-such-run") == {
-        "success": True,
-        "message": "Cleanup claim is released.",
-    }
-
-
 async def test_full_purge_leaves_save_states_completely_untouched(harness):
     _seed_bulk_candidate(harness)
     rom_path = Path(harness.roms_root) / "gba" / "Removed Game.gba"

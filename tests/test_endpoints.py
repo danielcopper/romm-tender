@@ -230,7 +230,6 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "stage_prune_installed_selection",
     "release_prune_conflict_lease",
     "renew_prune_conflict_lease",
-    "wait_for_prune_release",
     # Ack for an already-started cleanup run must remain available while the
     # run waits on its exact Steam action token; gating it would deadlock the
     # cleanup run if migration state changed mid-run.

@@ -97,8 +97,6 @@ class RecoveryCoordinator:
         rom_ids: list[int],
         committed_action: str | None = None,
         app_id: int | None = None,
-        target_id: int | None = None,
-        launch_options: str | None = None,
     ) -> bool:
         """Compare all database state represented by a sealed recovery snapshot."""
         current = self.snapshot_state(rom_ids, None)
@@ -114,33 +112,20 @@ class RecoveryCoordinator:
         projected = {key: expected.get(key) for key in keys}
         raw_roms = projected.get("roms")
         if isinstance(raw_roms, list) and committed_action is not None and app_id is not None:
-            projected["roms"] = self._project_committed_rows(
-                raw_roms, committed_action, app_id, target_id, launch_options
-            )
+            projected["roms"] = self._project_committed_rows(raw_roms, app_id)
         return all(current.get(key) == projected.get(key) for key in keys)
 
     @staticmethod
-    def _project_committed_rows(
-        raw_roms: list[Any],
-        committed_action: str,
-        app_id: int,
-        target_id: int | None,
-        launch_options: str | None,
-    ) -> list[Any]:
-        """Replay an already-committed Steam action onto the sealed rows.
+    def _project_committed_rows(raw_roms: list[Any], app_id: int) -> list[Any]:
+        """Replay an already-committed shortcut removal onto the sealed rows.
 
         The database has moved on by exactly that action, so comparing against
         the sealed rows verbatim would report drift the run itself caused.
         """
         roms = [dict(row) if isinstance(row, dict) else row for row in raw_roms]
         for row in roms:
-            if not isinstance(row, dict):
-                continue
-            if row.get("shortcut_app_id") == app_id:
+            if isinstance(row, dict) and row.get("shortcut_app_id") == app_id:
                 row["shortcut_app_id"] = None
-            if committed_action == "repoint_shortcut" and row.get("rom_id") == target_id:
-                row["shortcut_app_id"] = app_id
-                row["applied_launch_options"] = launch_options
         return roms
 
     def seal(

@@ -91,15 +91,12 @@ class GroupFinalizer:
         recovery_ids: set[int],
         index: int,
         total: int,
-        launch_options: str | None,
         ledger: MutationLedger,
-        vanished_source_id: int | None,
     ) -> dict[str, Any]:
         """Revalidate everything the cascade depends on, then commit or retain."""
         delete_ids = plan.delete_ids
-        target_id = plan.target_id
         app_id = plan.app_id
-        guard = await self._refreshed_liveness_guard(plan, vanished_source_id)
+        guard = await self._refreshed_liveness_guard(plan)
         if guard is not None:
             return self._results.ledger_or_guard_result(ledger, initial_rows, guard, handle, app_id)
         if self._active_downloads() & delete_ids:
@@ -128,15 +125,11 @@ class GroupFinalizer:
         async with self._save_locks.stable_locks(recovery_ids) as recovery_inventory:
             rows = await self._loop.run_in_executor(None, self._registry.reread_group, initial_rows[0].rom_id)
             ledger.rows = rows or initial_rows
-            expected_app_id = app_id if target_id is not None else None
             if not rows or not await self._loop.run_in_executor(
                 None,
                 self._registry.validate_deletion_state,
                 rows,
                 delete_ids,
-                target_id,
-                expected_app_id,
-                plan.fully_dead,
             ):
                 return self._results.ledger_or_guard_result(
                     ledger,
@@ -146,7 +139,7 @@ class GroupFinalizer:
                     app_id,
                 )
             if handle is not None and not await self._recovery_still_matches(
-                handle, recovery_inventory, recovery_ids, plan, committed_action, launch_options
+                handle, recovery_inventory, recovery_ids, plan, committed_action
             ):
                 return self._results.ledger_or_guard_result(
                     ledger,
@@ -176,7 +169,6 @@ class GroupFinalizer:
                 plan=plan,
                 committed_action=committed_action,
                 handle=handle,
-                expected_app_id=expected_app_id,
                 delete_inventory=delete_inventory,
                 ledger=ledger,
             )
@@ -185,17 +177,10 @@ class GroupFinalizer:
         await self._report_removed(run_id, index, total, rows, handle, result)
         return result
 
-    async def _refreshed_liveness_guard(
-        self, plan: GroupPlan, vanished_source_id: int | None
-    ) -> tuple[str, str] | None:
+    async def _refreshed_liveness_guard(self, plan: GroupPlan) -> tuple[str, str] | None:
         """Re-prove every id the cascade turns on, immediately before it may run."""
-        target_id = plan.target_id
-        refreshed = await self._liveness.probe_many(
-            plan.delete_ids
-            | ({target_id} if target_id is not None else set())
-            | ({vanished_source_id} if vanished_source_id is not None else set())
-        )
-        return liveness_guard(refreshed, plan.delete_ids, target_id, vanished_source_id)
+        refreshed = await self._liveness.probe_many(plan.delete_ids)
+        return liveness_guard(refreshed, plan.delete_ids)
 
     @staticmethod
     async def _commit_shielded(commit: Awaitable[Any]) -> dict[str, Any]:
@@ -235,7 +220,6 @@ class GroupFinalizer:
         recovery_ids: set[int],
         plan: GroupPlan,
         committed_action: str | None,
-        launch_options: str | None,
     ) -> bool:
         """Whether every sealed thing still matches what is on disk right now.
 
@@ -250,8 +234,6 @@ class GroupFinalizer:
             sorted(recovery_ids),
             committed_action,
             plan.app_id,
-            plan.target_id,
-            launch_options,
         )
         sources_match = await self._loop.run_in_executor(
             None,
@@ -271,7 +253,6 @@ class GroupFinalizer:
         plan: GroupPlan,
         committed_action: str | None,
         handle: RecoveryHandle | None,
-        expected_app_id: int | None,
         delete_inventory: dict[str, Any],
         ledger: MutationLedger,
     ) -> dict[str, Any]:
@@ -313,7 +294,7 @@ class GroupFinalizer:
         if failure is not None:
             return retained(failure)
 
-        deleted = await self._delete_rows(rows, plan, expected_app_id, ledger)
+        deleted = await self._delete_rows(rows, plan, ledger)
         if not deleted:
             return retained(
                 ("local_state_changed", "Final local revalidation failed after filesystem cleanup."),
@@ -333,7 +314,6 @@ class GroupFinalizer:
                 mutations=ledger.mutations,
                 ambiguous_mutations=ledger.ambiguous_mutations,
                 warnings=warnings,
-                target_rom_id=plan.target_id,
             ),
         )
 
@@ -432,7 +412,6 @@ class GroupFinalizer:
         self,
         rows: list[Rom],
         plan: GroupPlan,
-        expected_app_id: int | None,
         ledger: MutationLedger,
     ) -> bool:
         """Remove the aggregate rows, marking the ledger ambiguous if that raises."""
@@ -442,9 +421,6 @@ class GroupFinalizer:
                 self._registry.delete_rows,
                 rows,
                 plan.delete_ids,
-                plan.target_id,
-                expected_app_id,
-                plan.fully_dead,
             )
         except Exception:
             ledger.mutations.append("database_rows_ambiguous")
@@ -486,7 +462,6 @@ class GroupFinalizer:
                 mutations=ledger.mutations,
                 ambiguous_mutations=ledger.ambiguous_mutations,
                 warnings=warnings,
-                target_rom_id=plan.target_id,
             ),
         )
 

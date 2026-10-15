@@ -9,7 +9,6 @@ from dataclasses import replace
 from typing import Any, cast
 
 import pytest
-from _factories import _make_conflict_rules
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.rom import Rom
@@ -153,9 +152,7 @@ class Fixture:
             config=GroupFinalizerConfig(
                 loop=loop,
                 logger=logging.getLogger("test"),
-                results=PruneResultReporter(
-                    config=PruneResultReporterConfig(emit=_noop_emit, conflict_rules=_make_conflict_rules())
-                ),
+                results=PruneResultReporter(config=PruneResultReporterConfig(emit=_noop_emit)),
                 liveness=cast("Any", _FakeLiveness(statuses)),
                 save_locks=SaveLockCoordinator(
                     config=SaveLockCoordinatorConfig(loop=loop, save_coordinator=cast("Any", self.saves))
@@ -180,7 +177,6 @@ def _plan(rows: list[Rom], *, whole_game: bool = True) -> GroupPlan:
         bound_row=bound,
         app_id=bound.shortcut_app_id if bound is not None else None,
         delete_ids={row.rom_id for row in rows},
-        target_id=None,
         fully_dead=whole_game,
         whole_game_action=whole_game,
         drifted=False,
@@ -198,9 +194,7 @@ async def _finish(fixture: Fixture, rows: list[Rom], **overrides: Any) -> dict[s
         "recovery_ids": set(plan.delete_ids),
         "index": 1,
         "total": 1,
-        "launch_options": None,
         "ledger": MutationLedger(rows),
-        "vanished_source_id": None,
     }
     kwargs.update(overrides)
     return await fixture.finalizer.finish(**kwargs)

@@ -6,14 +6,11 @@ import asyncio
 from typing import Any
 
 import pytest
-from _factories import _make_conflict_rules
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
-from domain.retrodeck_folders import no_rom_root
 from domain.rom import Rom
 from domain.version_metadata import VersionMetadata
-from lib.errors import Refused, RommConnectionError
-from services.prune._models import ActionOutcome, RecoveryHandle, cancellation_state
+from services.prune._models import ActionOutcome
 from services.prune.planning import GroupPlan
 from services.prune.registry import PruneRegistry, PruneRegistryConfig
 from services.prune.results import MutationLedger, PruneResultReporter, PruneResultReporterConfig
@@ -34,7 +31,7 @@ def _rom(rom_id: int, *, app_id: int | None = None) -> Rom:
     )
 
 
-def _plan(*, rows: list[Rom], target_id: int | None = None, whole_game: bool = False) -> GroupPlan:
+def _plan(*, rows: list[Rom], whole_game: bool = False) -> GroupPlan:
     bound = next((row for row in rows if row.shortcut_app_id is not None), None)
     return GroupPlan(
         rows=rows,
@@ -42,7 +39,6 @@ def _plan(*, rows: list[Rom], target_id: int | None = None, whole_game: bool = F
         bound_row=bound,
         app_id=bound.shortcut_app_id if bound is not None else None,
         delete_ids={rows[0].rom_id},
-        target_id=target_id,
         fully_dead=whole_game,
         whole_game_action=whole_game,
         drifted=False,
@@ -57,8 +53,6 @@ def _runner(
     rows: list[Rom],
     *,
     action_result: ActionOutcome | None = None,
-    switch_result: dict[str, Any] | None = None,
-    switch_raises: Exception | None = None,
 ) -> tuple[SteamActionRunner, FakeUnitOfWork, list[str]]:
     uow = FakeUnitOfWork()
     with uow:
@@ -66,33 +60,15 @@ def _runner(
             uow.roms.save(row)
     requested: list[str] = []
 
-    async def request_action(_run_id, kind, _data, _bound, _target, _group):
+    async def request_action(_run_id, kind, _data, _bound, _group):
         requested.append(kind)
         return action_result or ActionOutcome(success=True, message="ok")
-
-    async def switch_version(app_id: int, target_rom_id: int, allow_stranded: bool) -> dict[str, Any]:
-        del allow_stranded
-        if switch_raises is not None:
-            raise switch_raises
-        return dict(
-            switch_result
-            or {
-                "success": True,
-                "app_id": app_id,
-                "rom_id": target_rom_id,
-                "launch_options": "cmd",
-                "target_installed": False,
-            }
-        )
 
     runner = SteamActionRunner(
         config=SteamActionRunnerConfig(
             loop=asyncio.get_running_loop(),
-            results=PruneResultReporter(
-                config=PruneResultReporterConfig(emit=_noop_emit, conflict_rules=_make_conflict_rules())
-            ),
+            results=PruneResultReporter(config=PruneResultReporterConfig(emit=_noop_emit)),
             registry=PruneRegistry(config=PruneRegistryConfig(uow_factory=FakeUnitOfWorkFactory(uow))),
-            switch_version=switch_version,
             request_action=request_action,
         )
     )
@@ -154,162 +130,6 @@ class TestCaptureSnapshot:
         assert row.shortcut_app_id is None
 
 
-class TestRepoint:
-    async def test_a_confirmed_repoint_reports_the_committed_action(self):
-        rows = [_rom(1, app_id=APP_ID), _rom(2)]
-        runner, _, requested = _runner(rows)
-        ledger = MutationLedger(rows)
-
-        launch_options, committed, result = await runner.repoint(
-            "run-1", _plan(rows=rows, target_id=2), ledger, None, 1, 1
-        )
-
-        assert (launch_options, committed, result) == ("cmd", "repoint_shortcut", None)
-        assert ledger.action_ambiguous is False
-        assert ledger.target_rom_id == 2
-        assert requested == ["repoint_shortcut"]
-
-    async def test_a_failed_switch_clears_the_provisional_commit(self):
-        """Nothing changed, so the ledger must not claim an ambiguous mutation."""
-        rows = [_rom(1, app_id=APP_ID), _rom(2)]
-        runner, _, requested = _runner(rows, switch_raises=Refused("boom", "no"))
-        ledger = MutationLedger(rows)
-
-        _, _, result = await runner.repoint("run-1", _plan(rows=rows, target_id=2), ledger, None, 1, 1)
-
-        assert result is not None
-        assert (result["status"], result["reason"], result["message"]) == ("failed", "boom", "no")
-        assert ledger.committed_action is None
-        assert ledger.action_ambiguous is False
-        assert requested == [], "Steam is never asked once the switch itself failed"
-
-    async def test_a_domain_refusal_from_the_switch_fails_the_group_with_its_reason(self):
-        rows = [_rom(1, app_id=APP_ID), _rom(2)]
-        runner, _, requested = _runner(rows, switch_raises=no_rom_root())
-        ledger = MutationLedger(rows)
-
-        _, _, result = await runner.repoint("run-1", _plan(rows=rows, target_id=2), ledger, None, 1, 1)
-
-        assert result is not None
-        assert (result["status"], result["reason"], result["message"]) == (
-            "failed",
-            no_rom_root().reason,
-            no_rom_root().message,
-        )
-        assert ledger.committed_action is None
-        assert ledger.action_ambiguous is False
-        assert requested == []
-
-    async def test_a_romm_error_from_the_switch_fails_the_group_with_its_classified_reason(self):
-        rows = [_rom(1, app_id=APP_ID), _rom(2)]
-        runner, _, requested = _runner(rows, switch_raises=RommConnectionError("down"))
-        ledger = MutationLedger(rows)
-
-        _, _, result = await runner.repoint("run-1", _plan(rows=rows, target_id=2), ledger, None, 1, 1)
-
-        assert result is not None
-        assert (result["status"], result["reason"], result["message"]) == (
-            "failed",
-            "server_unreachable",
-            "Server unreachable — check your URL and ensure RomM is running",
-        )
-        assert ledger.committed_action is None
-        assert ledger.action_ambiguous is False
-        assert requested == []
-
-    async def test_a_refused_switch_keeps_the_recovery_bundle_on_the_failed_group(self):
-        rows = [_rom(1, app_id=APP_ID), _rom(2)]
-        runner, _, _ = _runner(rows, switch_raises=Refused("boom", "no"))
-        handle = RecoveryHandle("/b", {}, {}, None, {}, "digest")
-
-        _, _, result = await runner.repoint("run-1", _plan(rows=rows, target_id=2), MutationLedger(rows), handle, 1, 1)
-
-        assert result is not None
-        assert (result["status"], result["bundle_path"]) == ("failed", "/b")
-
-    @pytest.mark.parametrize(
-        ("raised", "reason", "message"),
-        [
-            (Refused("boom", "no"), "boom", "no"),
-            (
-                RommConnectionError("down"),
-                "server_unreachable",
-                "Server unreachable — check your URL and ensure RomM is running",
-            ),
-        ],
-        ids=["refusal", "romm-error"],
-    )
-    async def test_a_switch_that_raises_while_the_repoint_is_cancelled_fails_the_group(self, raised, reason, message):
-        """The fault is answered here, so the run does not report it as a change that may have happened."""
-        rows = [_rom(1, app_id=APP_ID), _rom(2)]
-        runner, _, requested = _runner(rows)
-        entered = asyncio.Event()
-        release = asyncio.Event()
-
-        async def refusing_switch(app_id: int, target_rom_id: int, allow_stranded: bool) -> dict[str, Any]:
-            del app_id, target_rom_id, allow_stranded
-            entered.set()
-            await release.wait()
-            raise raised
-
-        runner._switch_version = refusing_switch
-        ledger = MutationLedger(rows)
-        task = asyncio.create_task(runner.repoint("run-1", _plan(rows=rows, target_id=2), ledger, None, 1, 1))
-        await entered.wait()
-        task.cancel()
-        release.set()
-
-        with pytest.raises(asyncio.CancelledError) as caught:
-            await task
-
-        state = cancellation_state(caught.value)
-        assert state.child_fault is None
-        assert state.group_result is not None
-        assert (state.group_result["status"], state.group_result["reason"], state.group_result["message"]) == (
-            "failed",
-            reason,
-            message,
-        )
-        assert ledger.committed_action is None
-        assert ledger.action_ambiguous is False
-        assert requested == []
-
-    async def test_an_inconsistent_switch_result_is_partial_not_success(self):
-        rows = [_rom(1, app_id=APP_ID), _rom(2)]
-        runner, _, _ = _runner(
-            rows, switch_result={"success": True, "app_id": APP_ID, "rom_id": 99, "launch_options": "cmd"}
-        )
-
-        _, _, result = await runner.repoint("run-1", _plan(rows=rows, target_id=2), MutationLedger(rows), None, 1, 1)
-
-        assert result is not None
-        assert result["status"] == "partial"
-        assert result["reason"] == "repoint_result_invalid"
-
-    async def test_an_attempted_but_unconfirmed_steam_action_is_ambiguous(self):
-        rows = [_rom(1, app_id=APP_ID), _rom(2)]
-        runner, _, _ = _runner(
-            rows, action_result=ActionOutcome(success=False, message="lost", mutation_attempted=True)
-        )
-        ledger = MutationLedger(rows)
-
-        _, _, result = await runner.repoint("run-1", _plan(rows=rows, target_id=2), ledger, None, 1, 1)
-
-        assert result is not None
-        assert result["reason"] == "action_ambiguous"
-        assert result["action_ambiguous"] is True
-        assert ledger.action_ambiguous is True
-
-    async def test_a_cleanly_refused_steam_action_is_a_failure_not_an_ambiguity(self):
-        rows = [_rom(1, app_id=APP_ID), _rom(2)]
-        runner, _, _ = _runner(rows, action_result=ActionOutcome(success=False, message="refused"))
-
-        _, _, result = await runner.repoint("run-1", _plan(rows=rows, target_id=2), MutationLedger(rows), None, 1, 1)
-
-        assert result is not None
-        assert result["reason"] == "steam_action_failed"
-
-
 class TestRemove:
     async def test_a_confirmed_removal_reconciles_the_binding(self):
         rows = [_rom(1, app_id=APP_ID)]
@@ -362,7 +182,7 @@ class TestRemove:
 
 @pytest.mark.parametrize(
     "call",
-    ["capture_snapshot", "repoint", "remove"],
+    ["capture_snapshot", "remove"],
 )
 async def test_every_action_refuses_a_plan_without_a_bound_shortcut(call):
     rows = [_rom(1)]
@@ -372,8 +192,6 @@ async def test_every_action_refuses_a_plan_without_a_bound_shortcut(call):
 
     if call == "capture_snapshot":
         pending = runner.capture_snapshot("run-1", plan, ledger)
-    elif call == "repoint":
-        pending = runner.repoint("run-1", plan, ledger, None, 1, 1)
     else:
         pending = runner.remove("run-1", plan, ledger, None, None, 1, 1)
     with pytest.raises(RuntimeError):

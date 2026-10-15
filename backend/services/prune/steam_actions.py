@@ -14,14 +14,11 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
-from domain.refusal import DomainRefused
-from lib.errors import Refused, RommApiError, classify_error
 from services.prune._models import cancellation_state, shielded
 from services.prune.results import GroupOutcome
 
 if TYPE_CHECKING:
     from domain.rom import Rom
-    from services.protocols import VersionSwitcherFn
     from services.prune._models import ActionOutcome, ActionRequester, RecoveryHandle
     from services.prune.planning import GroupPlan
     from services.prune.registry import PruneRegistry
@@ -35,7 +32,6 @@ class SteamActionRunnerConfig:
     loop: asyncio.AbstractEventLoop
     results: PruneResultReporter
     registry: PruneRegistry
-    switch_version: VersionSwitcherFn
     request_action: ActionRequester
 
 
@@ -46,7 +42,6 @@ class SteamActionRunner:
         self._loop = config.loop
         self._results = config.results
         self._registry = config.registry
-        self._switch_version = config.switch_version
         self._request_action = config.request_action
 
     async def capture_snapshot(
@@ -66,7 +61,6 @@ class SteamActionRunner:
                 "capture_shortcut_snapshot",
                 {"app_id": app_id},
                 bound_row.rom_id,
-                None,
                 plan.group_ids,
             )
         except asyncio.CancelledError as exc:
@@ -77,96 +71,6 @@ class SteamActionRunner:
                 )
             raise
         return await self._snapshot_outcome(capture, plan.rows, ledger, bound_row.rom_id, app_id)
-
-    async def repoint(
-        self,
-        run_id: str,
-        plan: GroupPlan,
-        ledger: MutationLedger,
-        handle: RecoveryHandle | None,
-        index: int,
-        total: int,
-    ) -> tuple[str | None, Literal["repoint_shortcut"] | None, dict[str, Any] | None]:
-        """Move the shortcut onto the live default and have Steam confirm it."""
-        app_id = plan.app_id
-        bound_row = plan.bound_row
-        target_id = plan.target_id
-        if bound_row is None or app_id is None or target_id is None:
-            raise RuntimeError("Repoint was requested without a bound shortcut and a live target")
-        rows = plan.rows
-        ledger.app_id = app_id
-        ledger.committed_action = "repoint_shortcut"
-        ledger.action_ambiguous = True
-        try:
-            switch = await shielded(self._switch_version(app_id, target_id, plan.drifted and handle is not None))
-        except asyncio.CancelledError as exc:
-            self._record_switch_cancellation(exc, rows, ledger, target_id, app_id, handle)
-            raise
-        except (Refused, DomainRefused, RommApiError) as exc:
-            return None, None, self._switch_failed(exc, rows, ledger, handle)
-        launch_options, result = self._switch_outcome(switch, ledger, target_id, app_id)
-        if result is not None:
-            return None, None, result
-        if launch_options is None:
-            raise RuntimeError("Successful version switch did not produce launch options")
-        await shielded(
-            self._results.emit_progress(
-                run_id, index, total, "repointing", rows, bundle_path=handle.bundle_path if handle else None
-            )
-        )
-        try:
-            action = await self._request_action(
-                run_id,
-                "repoint_shortcut",
-                {
-                    "app_id": app_id,
-                    "target_rom_id": target_id,
-                    "launch_options": launch_options,
-                    "target_installed": bool(switch.get("target_installed")),
-                },
-                bound_row.rom_id,
-                target_id,
-                plan.group_ids,
-            )
-        except asyncio.CancelledError as exc:
-            self._record_repoint_cancellation(exc, ledger)
-            raise
-        return launch_options, "repoint_shortcut", self._repoint_action_outcome(action, ledger)
-
-    def _record_switch_cancellation(
-        self,
-        exc: asyncio.CancelledError,
-        rows: list[Rom],
-        ledger: MutationLedger,
-        target_id: int,
-        app_id: int,
-        handle: RecoveryHandle | None,
-    ) -> None:
-        """Keep a version switch that finished, refused, or failed on a RomM error as the cancelled run's outcome."""
-        state = cancellation_state(exc)
-        if isinstance(state.child_fault, (Refused, DomainRefused, RommApiError)):
-            state.group_result = self._switch_failed(state.child_fault, rows, ledger, handle)
-            state.child_fault = None
-        elif state.child_completed and isinstance(state.child_result, dict):
-            _, state.group_result = self._switch_outcome(state.child_result, ledger, target_id, app_id)
-            if state.group_result is None:
-                state.group_result = self._results.ledger_result(
-                    ledger,
-                    "cancelled",
-                    "Cleanup was cancelled after the version binding changed; later groups were not started.",
-                )
-
-    def _record_repoint_cancellation(self, exc: asyncio.CancelledError, ledger: MutationLedger) -> None:
-        """Keep a repoint Steam confirmed as the cancelled run's outcome."""
-        state = cancellation_state(exc)
-        if state.action_result is not None:
-            state.group_result = self._repoint_action_outcome(state.action_result, ledger)
-            if state.group_result is None:
-                state.group_result = self._results.ledger_result(
-                    ledger,
-                    "cancelled",
-                    "Cleanup was cancelled after Steam confirmed the repoint; later groups were not started.",
-                )
 
     async def remove(
         self,
@@ -201,7 +105,6 @@ class SteamActionRunner:
                     **({"expected_snapshot": frontend_steam} if isinstance(frontend_steam, dict) else {}),
                 },
                 bound_row.rom_id,
-                None,
                 plan.group_ids,
             )
         except asyncio.CancelledError as exc:
@@ -259,57 +162,6 @@ class SteamActionRunner:
             ),
             removed_app_id=app_id if reconciled else None,
         )
-
-    def _switch_failed(
-        self,
-        exc: Refused | DomainRefused | RommApiError,
-        rows: list[Rom],
-        ledger: MutationLedger,
-        handle: RecoveryHandle | None,
-    ) -> dict[str, Any]:
-        """A switch that refused or failed on a RomM error changed no binding, so the provisional commit
-        is taken back.
-        """
-        reason, message = (
-            (exc.reason, exc.message) if isinstance(exc, (Refused, DomainRefused)) else classify_error(exc)
-        )
-        ledger.committed_action = None
-        ledger.action_ambiguous = False
-        return self._results.group_result(
-            rows,
-            "failed",
-            reason,
-            message,
-            GroupOutcome(bundle_path=handle.bundle_path if handle else None),
-        )
-
-    def _switch_outcome(
-        self,
-        switch: dict[str, Any],
-        ledger: MutationLedger,
-        target_id: int,
-        app_id: int,
-    ) -> tuple[str | None, dict[str, Any] | None]:
-        launch_options = switch.get("launch_options")
-        if switch.get("rom_id") != target_id or switch.get("app_id") != app_id or not isinstance(launch_options, str):
-            return None, self._results.ledger_result(
-                ledger,
-                "repoint_result_invalid",
-                "The binding changed but the switch result was incomplete.",
-            )
-        ledger.target_rom_id = target_id
-        ledger.action_ambiguous = False
-        if "shortcut_binding" not in ledger.mutations:
-            ledger.mutations.append("shortcut_binding")
-        return launch_options, None
-
-    def _repoint_action_outcome(self, action: ActionOutcome, ledger: MutationLedger) -> dict[str, Any] | None:
-        if action.success:
-            return None
-        if action.mutation_attempted or action.reason == "action_ambiguous":
-            ledger.action_ambiguous = True
-            return self._results.ledger_result(ledger, "action_ambiguous", action.message)
-        return self._results.ledger_result(ledger, "steam_action_failed", action.message)
 
     async def _remove_action_outcome(
         self,

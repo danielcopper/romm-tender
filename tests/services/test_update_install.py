@@ -461,7 +461,6 @@ class TestWaitReasons:
             ("download_complete", "rom_downloads"),
             ("sync_complete", "library_sync"),
             ("migrate_retrodeck_files", "retrodeck_migration"),
-            ("prune_complete", "removed_games_cleanup"),
             ("remove_all_shortcuts", "other_work"),
             ("launch_reconfirm", "other_work"),
         ],

@@ -7,7 +7,6 @@ import logging
 from typing import Any, cast
 
 import pytest
-from _factories import _make_conflict_rules
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.rom import Rom
@@ -83,9 +82,7 @@ def _planner(
         config=GroupPlannerConfig(
             loop=asyncio.get_running_loop(),
             logger=logging.getLogger("test"),
-            results=PruneResultReporter(
-                config=PruneResultReporterConfig(emit=_noop_emit, conflict_rules=_make_conflict_rules())
-            ),
+            results=PruneResultReporter(config=PruneResultReporterConfig(emit=_noop_emit)),
             registry=PruneRegistry(config=PruneRegistryConfig(uow_factory=FakeUnitOfWorkFactory(uow))),
             liveness=cast("Any", liveness),
             active_downloads=lambda: active_downloads or set(),
@@ -192,7 +189,6 @@ class TestPlans:
         assert plan.delete_ids == {1}
         assert plan.fully_dead is True
         assert plan.whole_game_action is True
-        assert plan.target_id is None
         assert plan.app_id == 0x8001
         assert plan.bound_row is not None
         assert plan.bound_row.rom_id == 1
@@ -203,7 +199,6 @@ class TestPlans:
         plan, _ = await _plan(rows, {1: "vanished", 2: "live", 3: "vanished"})
 
         assert isinstance(plan, GroupPlan)
-        assert plan.target_id is None
         assert plan.delete_ids == {3}, "the bound row is spared, the other confirmed-gone row is not"
         assert plan.whole_game_action is False
 

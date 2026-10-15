@@ -1385,35 +1385,6 @@ class TestTheVersionSwitchLease:
         assert prune_conflicts.conflicting_operations == 0
 
 
-class TestSwitchVersionUnchecked:
-    """The removed-game cleanup switches through the twin, from inside its own run, which no rule refuses."""
-
-    def test_it_switches_while_every_rule_of_the_endpoint_holds(
-        self, event_loop, service, uow, relaunch_resolver, prune_conflicts
-    ):
-        _seed_active_install(uow, relaunch_resolver)
-        prune_conflicts.register_run("held-run")
-        service._rules = _make_conflict_rules(prune_conflicts=prune_conflicts, migration_pending=True)
-
-        result = _run(event_loop, service.switch_version_unchecked(_APP_ID, 1, False))
-
-        assert result == {
-            "success": True,
-            "rom_id": 1,
-            "target_installed": True,
-            "launch_options": "cmd",
-            "app_id": _APP_ID,
-        }
-
-    def test_it_takes_no_lease(self, event_loop, service, uow, relaunch_resolver, prune_conflicts):
-        _seed_active_install(uow, relaunch_resolver)
-
-        result = _run(event_loop, service.switch_version_unchecked(_APP_ID, 1, False))
-
-        assert "prune_lease_token" not in result
-        assert prune_conflicts.conflicting_operations == 0
-
-
 class TestTheNamedRefusals:
     """The two reasons the panel branches on each have a class of their own, which carries the reason."""
 

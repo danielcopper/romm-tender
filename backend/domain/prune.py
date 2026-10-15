@@ -210,29 +210,16 @@ def selected_prune_ids(
     return candidate_ids & vanished_ids
 
 
-def liveness_guard(
-    verdicts: Mapping[int, Mapping[str, str]],
-    delete_ids: set[int],
-    target_id: int | None,
-    vanished_source_id: int | None,
-) -> tuple[str, str] | None:
+def liveness_guard(verdicts: Mapping[int, Mapping[str, str]], delete_ids: set[int]) -> tuple[str, str] | None:
     """Refuse the group unless every fresh verdict still supports what it plans.
 
     Reads a set of exact-ID verdicts and returns the ``(reason, message)`` the
     group is skipped with, or ``None`` when all of them hold. Each row the run
-    would delete must still be ``vanished``, a repoint target must still be
-    ``live``, and the vanished source a repoint moves the shortcut off must
-    still be ``vanished`` — anything else (a resurrection, a disappearance, or
+    would delete must still be ``vanished`` — anything else (a resurrection, or
     an unproven answer) retains local data.
     """
     for rom_id in sorted(delete_ids):
         verdict = verdicts[rom_id]
         if verdict["status"] != "vanished":
             return verdict["reason"], f"ROM {rom_id}: {verdict['message']} Nothing else in this group was removed."
-    if target_id is not None and verdicts[target_id]["status"] != "live":
-        verdict = verdicts[target_id]
-        return verdict["reason"], f"Default target {target_id}: {verdict['message']}"
-    if vanished_source_id is not None and verdicts[vanished_source_id]["status"] != "vanished":
-        verdict = verdicts[vanished_source_id]
-        return verdict["reason"], f"Vanished source {vanished_source_id}: {verdict['message']}"
     return None

@@ -16,7 +16,7 @@ export interface PruneGroupResult {
   name?: string;
   rom_ids: number[];
   rom_count?: number;
-  status: "removed" | "repointed" | "partial" | "failed" | "skipped";
+  status: "removed" | "partial" | "failed" | "skipped";
   reason?: string;
   message: string;
   removed_rom_ids?: number[];
@@ -24,14 +24,13 @@ export interface PruneGroupResult {
   app_id?: number;
   removed_app_id?: number;
   bundle_path?: string;
-  committed_action?: "repoint_shortcut" | "remove_shortcut";
+  committed_action?: "remove_shortcut";
   action_ambiguous?: boolean;
   mutations?: string[];
   ambiguous_mutations?: string[];
   warnings?: string[];
   warning_count?: number;
   warnings_omitted?: boolean;
-  target_rom_id?: number;
 }
 
 export interface PruneComplete {
@@ -43,8 +42,6 @@ export interface PruneComplete {
   final?: boolean;
   removed_count?: number;
   problem_count?: number;
-  publication_required?: boolean;
-  prune_lease_token?: string;
   removed_rom_ids: number[];
   affected_app_ids: number[];
   removed_app_ids?: number[];

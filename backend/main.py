@@ -298,10 +298,6 @@ class Endpoints:
         return await self._services.prune_service.report_prune_action(request)
 
     @route
-    async def wait_for_prune_release(self, run_id):
-        return await self._services.prune_service.wait_for_prune_release(run_id)
-
-    @route
     async def release_prune_conflict_lease(self, lease_token):
         return await self._services.prune_lease_service.release_prune_conflict_lease(lease_token)
 

@@ -13,7 +13,7 @@
 
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { recheckStranded, toaster, type PanelDefinition } from "./api/host";
 import { emitHostEvent, hostEventListenerCount } from "./test-utils/host-event-bus";
@@ -38,7 +38,6 @@ import {
   getMetadataCachePage,
   releasePruneConflictLease,
   renewPruneConflictLease,
-  waitForPruneRelease,
   type UpdateOutcome,
 } from "./api/backend";
 import { registerGameDetailPatch } from "./bigpicture/patches/gameDetailPatch";
@@ -128,10 +127,6 @@ const handlePruneAction = vi.fn().mockResolvedValue(undefined);
 vi.mock("./utils/pruneActions", () => ({
   handlePruneAction: (...args: unknown[]) => handlePruneAction(...args),
   cancelPruneActions: vi.fn(),
-}));
-const publishCommittedVersionSwitch = vi.fn().mockResolvedValue(undefined);
-vi.mock("./utils/versionSwitchApplication", () => ({
-  publishCommittedVersionSwitch: (...args: unknown[]) => publishCommittedVersionSwitch(...args),
 }));
 vi.mock("./utils/syncManager", () => ({
   initUnitSyncManager: vi.fn(() => () => {}),
@@ -264,11 +259,6 @@ beforeEach(() => {
   setSyncProgress({ running: false, stage: "", current: 0, total: 0, message: "" });
   resetPruneState();
   handlePruneAction.mockClear();
-  publishCommittedVersionSwitch.mockClear();
-  vi.mocked(waitForPruneRelease).mockReset().mockResolvedValue({
-    success: true,
-    message: "Cleanup claim is released.",
-  });
   vi.mocked(releasePruneConflictLease).mockReset().mockResolvedValue({ success: true, message: "released" });
   vi.mocked(invalidateCachedGameDetail).mockClear();
   vi.mocked(getUpdateInstallState).mockResolvedValue(NOTHING_INSTALLING);
@@ -591,77 +581,7 @@ describe("index.tsx — persistent prune listeners", () => {
     });
   });
 
-  it("hands back a continuation lease the terminal frame gave it nothing to do with", async () => {
-    panelFactory();
-    beginPrunePreview("preview-nothing");
-
-    await act(async () => {
-      emitHostEvent("prune_complete", {
-        success: true,
-        partial: false,
-        run_id: "run-nothing",
-        preview_id: "preview-nothing",
-        // The lease is attached by the backend emit path; this run committed no
-        // repoint, so publishPruneSwitches is never called for it.
-        publication_required: true,
-        prune_lease_token: "orphan-lease",
-        removed_rom_ids: [7],
-        affected_app_ids: [],
-        results: [{ group_id: "group-1", rom_ids: [7], status: "removed", message: "Removed." }],
-      });
-      await Promise.resolve();
-    });
-
-    // Without this the lease refuses the next cleanup's start for its full
-    // 300s TTL.
-    await waitFor(() => expect(releasePruneConflictLease).toHaveBeenCalledWith("orphan-lease"));
-  });
-
-  it("publishes a known committed partial repoint after terminal completion", async () => {
-    panelFactory();
-    beginPrunePreview("preview-repoint");
-    let release: ((value: { success: true; message: string }) => void) | undefined;
-    vi.mocked(waitForPruneRelease).mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          release = resolve;
-        }),
-    );
-
-    act(() => {
-      emitHostEvent("prune_complete", {
-        success: false,
-        partial: true,
-        run_id: "run-repoint-partial",
-        preview_id: "preview-repoint",
-        publication_required: true,
-        prune_lease_token: "publication-lease",
-        removed_rom_ids: [],
-        affected_app_ids: [9001],
-        results: [
-          {
-            group_id: "group-1",
-            rom_ids: [7, 8],
-            status: "partial",
-            committed_action: "repoint_shortcut",
-            app_id: 9001,
-            target_rom_id: 8,
-            message: "The shortcut changed; source data was retained.",
-          },
-        ],
-      });
-    });
-    await flush();
-
-    expect(publishCommittedVersionSwitch).not.toHaveBeenCalled();
-    expect(releasePruneConflictLease).not.toHaveBeenCalledWith("publication-lease");
-    release?.({ success: true, message: "released" });
-    await flush();
-    expect(publishCommittedVersionSwitch).toHaveBeenCalledWith(9001, 8, undefined, expect.any(AbortSignal));
-    expect(releasePruneConflictLease).toHaveBeenCalledWith("publication-lease");
-  });
-
-  it("does not publish an ambiguous repoint outcome", async () => {
+  it("says when a shortcut removal's outcome is uncertain", async () => {
     panelFactory();
     beginPrunePreview("preview-ambiguous");
 
@@ -669,7 +589,7 @@ describe("index.tsx — persistent prune listeners", () => {
       emitHostEvent("prune_complete", {
         success: false,
         partial: true,
-        run_id: "run-repoint-ambiguous",
+        run_id: "run-removal-ambiguous",
         preview_id: "preview-ambiguous",
         removed_rom_ids: [],
         affected_app_ids: [9001],
@@ -678,58 +598,21 @@ describe("index.tsx — persistent prune listeners", () => {
             group_id: "group-1",
             rom_ids: [7, 8],
             status: "partial",
-            committed_action: "repoint_shortcut",
+            committed_action: "remove_shortcut",
             action_ambiguous: true,
             app_id: 9001,
-            target_rom_id: 8,
-            message: "The repoint outcome is unknown.",
+            message: "Steam removal was claimed but its outcome is unknown; source data was retained.",
           },
         ],
       });
     });
     await flush();
 
-    expect(publishCommittedVersionSwitch).not.toHaveBeenCalled();
     expect(toaster.toast).toHaveBeenCalledWith({
       title: "Tender",
-      body: "Shortcut repoint outcome is uncertain; source data was retained.",
-      subtext: "The repoint outcome is unknown.",
+      body: "Shortcut removal outcome is uncertain; source data was retained.",
+      subtext: "Steam removal was claimed but its outcome is unknown; source data was retained.",
     });
-  });
-
-  it("fails closed when a committed repoint terminal frame has no publication lease", async () => {
-    panelFactory();
-    beginPrunePreview("preview-missing-publication-lease");
-
-    act(() => {
-      emitHostEvent("prune_complete", {
-        success: true,
-        partial: false,
-        run_id: "run-missing-publication-lease",
-        preview_id: "preview-missing-publication-lease",
-        publication_required: true,
-        removed_rom_ids: [7],
-        affected_app_ids: [9001],
-        results: [
-          {
-            group_id: "group-1",
-            rom_ids: [7, 8],
-            status: "repointed",
-            committed_action: "repoint_shortcut",
-            app_id: 9001,
-            target_rom_id: 8,
-            message: "Repointed.",
-          },
-        ],
-      });
-    });
-    await flush();
-
-    expect(waitForPruneRelease).not.toHaveBeenCalledWith("run-missing-publication-lease");
-    expect(publishCommittedVersionSwitch).not.toHaveBeenCalled();
-    expect(logError).toHaveBeenCalledWith(
-      "Cleanup publication was skipped because its continuation lease was missing.",
-    );
   });
 });
 
