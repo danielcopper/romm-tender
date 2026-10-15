@@ -36,7 +36,7 @@ from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncState
 from domain.work_unit import WorkUnit
-from lib.errors import Refused, RommConnectionError, classify_error
+from lib.errors import Refused, RommConnectionError, RommNotFoundError, classify_error
 from lib.romm_paging import LIST_PAGE_SIZE
 from tests.services.library._helpers import (
     _fake_wait_set_event,
@@ -2702,14 +2702,13 @@ class TestDoSyncPerUnit:
         summary = result["summary"]
         assert (summary["new_count"], summary["changed_count"], summary["remove_count"]) == (0, 1, 0)
 
-    @pytest.mark.asyncio
-    async def test_vanished_bound_sibling_rebinds_without_stale_removal(self, library, fake_romm_api, emit):
-        """A bound sibling that disappears while its group survives rebinds to a
-        surviving sibling — the appId is preserved (no sync_stale removal), and the
-        binding moves onto the representative (ADR-0021 §2)."""
+    @staticmethod
+    def _seed_zelda_whose_bound_usa_dump_is_gone(library, fake_romm_api, *, server_usa_id=None):
+        """Rom 1, the bound USA dump (app 5000), is gone from RomM; the JP and EU dumps remain.
 
+        With *server_usa_id*, RomM also serves the USA dump again under that id.
+        """
         _use_fake_romm(library, fake_romm_api)
-        # rom 1 was the bound USA dump (app 5000); it is GONE from the server now.
         _seed_rom_row(
             library,
             1,
@@ -2718,59 +2717,81 @@ class TestDoSyncPerUnit:
             name="Zelda (USA)",
             fs_name="zelda_usa.z64",
             sibling_group_key="igdb:100:1",
+            applied_launch_options="run /zelda_usa.z64",
         )
-        # The server still serves the JP + EU dumps of the same game.
-        _seed_platform(
-            fake_romm_api,
-            platform_id=1,
-            name="N64",
-            slug="n64",
-            roms=[
-                {
-                    "id": 2,
-                    "name": "Zelda (JP)",
-                    "igdb_id": 100,
-                    "fs_name_no_ext": "zelda_jp",
-                    "rom_user": {"is_main_sibling": True},
-                },
-                {"id": 3, "name": "Zelda (EU)", "igdb_id": 100, "fs_name_no_ext": "zelda_eu"},
-            ],
-        )
+        served = [
+            {"id": 2, "name": "Zelda (JP)", "igdb_id": 100, "fs_name_no_ext": "zelda_jp"},
+            {"id": 3, "name": "Zelda (EU)", "igdb_id": 100, "fs_name_no_ext": "zelda_eu"},
+        ]
+        if server_usa_id is not None:
+            served.append({"id": server_usa_id, "name": "Zelda (USA)", "igdb_id": 100, "fs_name_no_ext": "zelda_usa"})
+        _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=served)
         library.settings["enabled_platforms"] = {"1": True}
         library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
 
         async def ack_reuse(_unit, event):
             event.set()
-            # The frontend reuses the vanished sibling's shortcut (app 5000) under
-            # its rom_id — the emitted rebind entry is keyed to rom 1.
             return {str(rid): 5000 for rid in library.sync._box.pending_sync}
 
         library.sync._chunk_dispatcher._wait_for_unit_complete = ack_reuse
         library.sync._box.sync_state = SyncState.RUNNING
 
+    @pytest.mark.asyncio
+    async def test_a_vanished_bound_version_keeps_its_binding_beside_live_siblings_under_other_names(
+        self, library, fake_romm_api, emit
+    ):
+        """The binding, the appId and the launch command stay; no shortcut is removed (D1)."""
+        self._seed_zelda_whose_bound_usa_dump_is_gone(library, fake_romm_api)
+
         await library.sync._orchestrator._do_sync_per_unit()
 
-        # ONE shortcut emitted, keyed to the vanished sibling (rom 1) for reuse,
-        # rebinding to the RomM default (rom 2).
         unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
-        assert len(unit_events) == 1
-        emitted = unit_events[0]["shortcuts"]
-        assert len(emitted) == 1
-        assert emitted[0]["rom_id"] == 1
-        # The rebind target is backend-internal — it drives the commit below via
-        # pending_sync, and is stripped from the wire (the frontend reuses the
-        # shortcut by rom_id). The binding move is verified by the roms rows below.
-        assert BIND_ROM_ID_KEY not in emitted[0]
-
-        # No stale removal — the appId is preserved, not wiped.
+        assert [e["rom_id"] for event in unit_events for e in event["shortcuts"]] == []
         stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         assert stale_events == [{"remove": []}]
-
-        # The binding moved onto the surviving representative (rom 2); the vanished
-        # sibling row is unbound (kept per ADR-0007).
         with library.uow as uow:
-            assert uow.roms.get(2).shortcut_app_id == 5000
+            assert uow.roms.get(1).shortcut_app_id == 5000
+            assert uow.roms.get(1).applied_launch_options == "run /zelda_usa.z64"
+            assert uow.roms.get(2).shortcut_app_id is None
+            assert uow.roms.get(3).shortcut_app_id is None
+
+    @pytest.mark.asyncio
+    async def test_a_vanished_bound_version_moves_onto_the_same_dump_under_a_new_id(self, library, fake_romm_api, emit):
+        """A re-import reissued the USA dump's id: the shortcut follows it (D2)."""
+        self._seed_zelda_whose_bound_usa_dump_is_gone(library, fake_romm_api, server_usa_id=4)
+
+        await library.sync._orchestrator._do_sync_per_unit()
+
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        assert [e["rom_id"] for event in unit_events for e in event["shortcuts"]] == [1]
+        stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
+        assert stale_events == [{"remove": []}]
+        with library.uow as uow:
+            assert uow.roms.get(4).shortcut_app_id == 5000
             assert uow.roms.get(1).shortcut_app_id is None
+
+    @pytest.mark.asyncio
+    async def test_a_game_whose_every_version_is_gone_keeps_its_shortcut(self, library, fake_romm_api, emit):
+        """D3: the platform was read whole, and none of the game's versions came back."""
+        _use_fake_romm(library, fake_romm_api)
+        _seed_rom_row(library, 1, app_id=5000, platform_slug="n64", name="Zelda (USA)", sibling_group_key="igdb:100:1")
+        _seed_rom_row(library, 9, app_id=5009, platform_slug="n64", name="Mario", sibling_group_key="igdb:200:1")
+        _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 9, "name": "Mario"}])
+        library.settings["enabled_platforms"] = {"1": True}
+        library.settings["collection_create_platform_groups"] = False
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.sync._box.sync_state = SyncState.RUNNING
+
+        await library.sync._orchestrator._do_sync_per_unit()
+
+        stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
+        assert stale_events == [{"remove": []}]
+        with library.uow as uow:
+            assert uow.roms.get(1).shortcut_app_id == 5000
+        # The kept shortcut stays in its platform's Steam collection.
+        (collections,) = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_collections"]
+        assert sorted(collections["platform_app_ids"]["N64"]) == [5000, 5009]
 
     @pytest.mark.asyncio
     async def test_skipped_platform_collection_unbound_sibling_never_rebinds(self, library, fake_romm_api, emit):
@@ -5469,13 +5490,14 @@ class TestPlatformListingThatIsNotAList:
 
 
 class TestStoppedRunLeavesNoHiddenStaleRow:
-    """A version deleted on RomM loses its shortcut at the next completed run (#2084).
+    """A platform holding a bound version its stamping fetch did not return is fetched whole (#2084).
 
     A run that commits a platform writes its completion stamp with the platform's
-    new count and generation, but the stale-removal scan runs only for a run that
-    was not stopped. A bound version the stamping fetch did not return therefore
-    survives a stopped run. The next run must full-fetch that platform instead of
-    rebuilding the version from the bound rows as if RomM had returned it.
+    new count and generation. A bound version the stamping fetch did not return
+    stays bound — the stale removal keeps a version gone from a platform it read
+    whole — so the next run must full-fetch that platform instead of rebuilding
+    the version from the bound rows as if RomM had returned it. That full fetch is
+    what lets the same dump under a reissued id take the binding.
     """
 
     @staticmethod
@@ -5519,7 +5541,9 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
         assert (stamp.rom_count, stamp.fetch_id) == (2, "run-1")
 
     @pytest.mark.asyncio
-    async def test_next_completed_run_removes_a_version_a_stopped_run_left_bound(self, library, fake_romm_api, emit):
+    async def test_next_completed_run_fetches_the_platform_whole_and_keeps_the_vanished_version(
+        self, library, fake_romm_api, emit
+    ):
         await self._stop_after_applying_n64(library, fake_romm_api)
         box = library.sync._box
 
@@ -5534,15 +5558,16 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
         applied_units = {c.args[1]["unit_name"] for c in run_2 if c.args and c.args[0] == "sync_apply_unit"}
         assert "N64" in applied_units
         stale_events = [c.args[1] for c in run_2 if c.args and c.args[0] == "sync_stale"]
-        assert [event["remove"] for event in stale_events] == [[{"rom_id": 3, "app_id": 5003}]]
+        assert [event["remove"] for event in stale_events] == [[]]
         with library.uow as uow:
-            assert uow.roms.get(3).shortcut_app_id is None
+            assert uow.roms.get(3).shortcut_app_id == 5003
             assert uow.roms.get(1).shortcut_app_id == 5001
 
     @pytest.mark.asyncio
-    async def test_preview_after_the_stop_lists_the_version_as_a_removal(self, library, fake_romm_api):
-        """The preview full-fetches N64 too, so the change table offers the removal
-        and the apply that heals the platform is not blocked on "no changes"."""
+    async def test_preview_after_the_stop_fetches_the_platform_whole_and_counts_no_removal(
+        self, library, fake_romm_api
+    ):
+        """The preview full-fetches N64 too, and a version gone from it is no removal."""
         await self._stop_after_applying_n64(library, fake_romm_api)
         fake_romm_api.call_log.clear()
 
@@ -5550,9 +5575,8 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
 
         assert result["success"] is True
         assert ("list_roms", (1,)) in [(name, args) for name, args, _kwargs in fake_romm_api.call_log]
-        assert result["summary"]["remove_count"] == 1
-        n64_row = next(row for row in result["summary"]["platform_breakdown"] if row["slug"] == "n64")
-        assert n64_row["remove_count"] == 1
+        assert result["summary"]["remove_count"] == 0
+        assert all(row["remove_count"] == 0 for row in result["summary"]["platform_breakdown"])
 
 
 class TestPlatformTurnedOffAndBackOn:
@@ -5651,13 +5675,14 @@ class TestPlatformTurnedOffAndBackOn:
 
         await complete_a_run("run-1")
 
-        # RomM drops game 2; N64 stays on, so the run fetches it and the stale scan unbinds the row.
+        # RomM drops game 2; N64 stays on, so the run fetches it, and the stale
+        # removal keeps the version gone from RomM bound.
         del fake_romm_api.roms[2]
         fake_romm_api.platforms[0]["rom_count"] = 1
         await complete_a_run("run-2")
 
         with library.uow as uow:
-            assert uow.roms.get(2).shortcut_app_id is None
+            assert uow.roms.get(2).shortcut_app_id == 5002
             stamp = uow.platform_sync_state.get("n64")
         assert stamp is not None
         assert (stamp.fetch_id, stamp.skip_revoked) == ("run-2", False)
@@ -5697,6 +5722,108 @@ class TestPlatformTurnedOffAndBackOn:
         assert (n64.fetch_id, n64.skip_revoked) == ("run-1", True)
         assert gba is not None
         assert gba.skip_revoked is False
+
+
+class TestAVersionReachedOnlyThroughACollection:
+    """A version a collection held, missing from every collection now, is asked for once (D4, D11, D12).
+
+    GBA's sync is off; the Faves collection reached games 20 and 21 there and
+    left a completion stamp listing both. Then 21 leaves Faves.
+    """
+
+    @staticmethod
+    async def _bind_both_then_drop_21(library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=2,
+            name="GBA",
+            slug="gba",
+            roms=[{"id": 20, "name": "A"}, {"id": 21, "name": "B"}],
+        )
+        _seed_collection(fake_romm_api, collection_id=7, name="Faves", rom_ids=[20, 21])
+        fake_romm_api.collections[0]["updated_at"] = "2025-01-01T00:00:00"
+        library.settings["enabled_platforms"] = {"2": False}
+        library.settings["enabled_collections"] = {"standard": {"7": True}}
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        box = library.sync._box
+
+        async def bind_what_the_collection_holds(unit, event):
+            event.set()
+            return {str(rid): 6000 + rid for rid in box.pending_sync}
+
+        library.sync._chunk_dispatcher._wait_for_unit_complete = bind_what_the_collection_holds
+        box.sync_state = SyncState.RUNNING
+        box.current_sync_id = "run-1"
+        await library.sync._orchestrator._do_sync_per_unit()
+        with library.uow as uow:
+            assert (uow.roms.get(20).shortcut_app_id, uow.roms.get(21).shortcut_app_id) == (6020, 6021)
+            assert {rid for stamp in uow.collection_sync_state.iter_all() for rid in stamp.member_rom_ids} == {20, 21}
+
+        faves = fake_romm_api.collections[0]
+        faves["rom_ids"] = [20]
+        faves["rom_count"] = 1
+        faves["updated_at"] = "2030-01-01T00:00:00"
+        fake_romm_api.roms[21]["collection_ids"] = []
+
+    @staticmethod
+    async def _complete_run_2(library, emit):
+        box = library.sync._box
+        box.sync_state = SyncState.RUNNING
+        box.current_sync_id = "run-2"
+        run_2_starts_at = len(emit.call_args_list)
+        await library.sync._orchestrator._do_sync_per_unit()
+        stale = [c.args[1] for c in emit.call_args_list[run_2_starts_at:] if c.args and c.args[0] == "sync_stale"]
+        with library.uow as uow:
+            binding = uow.roms.get(21).shortcut_app_id
+        return [event["remove"] for event in stale], binding
+
+    @pytest.mark.asyncio
+    async def test_a_404_keeps_the_shortcut(self, library, fake_romm_api, emit):
+        await self._bind_both_then_drop_21(library, fake_romm_api)
+        fake_romm_api.get_rom_once_side_effect_by_id[21] = RommNotFoundError("Rom with id 21 not found")
+
+        assert await self._complete_run_2(library, emit) == ([[]], 6021)
+        assert ("get_rom_once", (21,)) in [(name, args) for name, args, _kwargs in fake_romm_api.call_log]
+
+    @pytest.mark.asyncio
+    async def test_a_rom_romm_still_returns_is_removed(self, library, fake_romm_api, emit):
+        await self._bind_both_then_drop_21(library, fake_romm_api)
+
+        assert await self._complete_run_2(library, emit) == ([[{"rom_id": 21, "app_id": 6021}]], None)
+
+    @pytest.mark.asyncio
+    async def test_an_answer_that_establishes_nothing_keeps_the_shortcut(self, library, fake_romm_api, emit):
+        await self._bind_both_then_drop_21(library, fake_romm_api)
+        fake_romm_api.get_rom_once_side_effect_by_id[21] = RommConnectionError("connection refused")
+
+        assert await self._complete_run_2(library, emit) == ([[]], 6021)
+
+    @pytest.mark.asyncio
+    async def test_where_no_collection_record_lists_it_it_is_removed_unasked(self, library, fake_romm_api, emit):
+        await self._bind_both_then_drop_21(library, fake_romm_api)
+        fake_romm_api.get_rom_once_side_effect_by_id[21] = RommNotFoundError("Rom with id 21 not found")
+        with library.uow as uow:
+            uow.collection_sync_state.clear()
+        fake_romm_api.call_log.clear()
+
+        assert await self._complete_run_2(library, emit) == ([[{"rom_id": 21, "app_id": 6021}]], None)
+        assert ("get_rom_once", (21,)) not in [(name, args) for name, args, _kwargs in fake_romm_api.call_log]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("answer", "remove_count"),
+        [(RommNotFoundError("Rom with id 21 not found"), 0), (None, 1), (RommConnectionError("refused"), 0)],
+    )
+    async def test_the_preview_gives_the_same_answers(self, library, fake_romm_api, answer, remove_count):
+        await self._bind_both_then_drop_21(library, fake_romm_api)
+        if answer is not None:
+            fake_romm_api.get_rom_once_side_effect_by_id[21] = answer
+
+        result = await library.sync.sync_preview()
+
+        assert result["summary"]["remove_count"] == remove_count
+        assert result["summary"]["disabled_platform_remove_count"] == remove_count
 
 
 class TestRegression738CacheCorruption:

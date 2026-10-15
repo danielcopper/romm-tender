@@ -9,8 +9,9 @@ separately, so a method that would have to ask the server does not belong here
 however well it fits the sentence below.
 
 What the local side knows is the ``Rom`` rows this device keeps and their Steam
-shortcut bindings, the per-platform completion stamps its runs left behind, the
-sibling group keys it persisted, and the last run that finished — shaped here
+shortcut bindings, the per-platform and per-collection completion stamps its
+runs left behind, the sibling group keys it persisted, and the last run that
+finished — shaped here
 into the projections a run's decisions are made against, and into the reachable
 set the collections listing counts against. The decisions themselves live in
 ``domain/`` and the moves in
@@ -58,7 +59,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.platform_sync_state import stamp_for_skip
 from domain.sibling_resolution import reachable_rom_ids
-from domain.sync_diff import select_stale_removals
+from domain.sync_diff import StaleRow, select_stale_removals
 
 if TYPE_CHECKING:
     from domain.work_unit import WorkUnit
@@ -197,8 +198,21 @@ class LocalLibraryReader:
         with self._uow_factory() as uow:
             return reachable_rom_ids(list(uow.roms.iter_all()))
 
-    def do_scan_stale_roms(self, synced_rom_ids: set[int], synced_app_ids: set[int]) -> list[tuple[int, int]]:
-        """Return ``(rom_id, app_id)`` for bound ROMs not synced this run.
+    def do_read_collection_listed_rom_ids(self) -> frozenset[int]:
+        """Every ``rom_id`` a collection held at its last completed apply.
+
+        The union of every ``CollectionSyncState`` stamp's ``member_rom_ids``. A
+        collection unit rewrites its stamp at its last chunk, so a run reads this
+        before its first unit to learn what the collections held before it. One
+        short read UoW.
+        """
+        with self._uow_factory() as uow:
+            return frozenset(
+                rom_id for stamp in uow.collection_sync_state.iter_all() for rom_id in stamp.member_rom_ids
+            )
+
+    def do_scan_stale_roms(self, synced_rom_ids: set[int], synced_app_ids: set[int]) -> list[StaleRow]:
+        """Return a :class:`StaleRow` for every bound ROM not synced this run.
 
         Unbound (stale) rows are skipped — they were already cleared on a
         prior run and carry no Steam shortcut to remove. The ``app_id`` is
@@ -215,9 +229,12 @@ class LocalLibraryReader:
         the shortcut the run just created/updated (#1036).
         """
         with self._uow_factory() as uow:
-            candidate_stale = [
-                (rom.rom_id, rom.shortcut_app_id)
+            candidates = {
+                rom.rom_id: (rom.shortcut_app_id, rom.platform_slug)
                 for rom in uow.roms.iter_all()
                 if rom.shortcut_app_id is not None and rom.rom_id not in synced_rom_ids
-            ]
-        return select_stale_removals(candidate_stale, synced_app_ids)
+            }
+        kept = select_stale_removals(
+            [(rom_id, app_id) for rom_id, (app_id, _slug) in candidates.items()], synced_app_ids
+        )
+        return [StaleRow(rom_id, app_id, candidates[rom_id][1]) for rom_id, app_id in kept]

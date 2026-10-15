@@ -13,6 +13,7 @@ elsewhere (per applied unit) so a fetch never mutates the cache.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, NamedTuple
 
@@ -25,16 +26,16 @@ from domain.skip_prediction import collapsed_shortcut_count, new_shortcut_count,
 from domain.sync_state import SyncCancelled
 from domain.virtual_collection_id import virtual_types_to_list
 from domain.work_unit import WorkUnit, collection_units
-from lib.errors import Refused
+from lib.errors import Refused, RommNotFoundError
 from lib.romm_paging import LIST_PAGE_SIZE
 from services.library._fetch_pages import emit_fetch_page_progress, raise_if_cancelling
 from services.library._platform_ids import keep_platform_ids
 
 if TYPE_CHECKING:
-    import asyncio
     import logging
-    from collections.abc import Callable
+    from collections.abc import Callable, Collection
 
+    from domain.sync_diff import RomAnswer
     from services.library._fetch_pages import EmitProgressFn
     from services.library._state import LibrarySyncStateBox
     from services.library.local_library_reader import LocalLibraryReader
@@ -936,3 +937,30 @@ class LibraryFetcher:
             offset += limit
 
         return unit_roms, False
+
+    async def ask_romm_for_roms(self, rom_ids: Collection[int]) -> dict[int, RomAnswer]:
+        """Ask RomM once for each of *rom_ids* by its exact id, all at once.
+
+        ``gone`` only for a ``RommNotFoundError``, RomM's entity answer;
+        ``present`` only for an answer carrying that very id; ``unknown`` for
+        anything else, a transport failure included, which is logged.
+        """
+        ordered = sorted(set(rom_ids))
+        answers = await asyncio.gather(
+            *(self._loop.run_in_executor(None, self._ask_once, rom_id) for rom_id in ordered)
+        )
+        return dict(zip(ordered, answers, strict=True))
+
+    def _ask_once(self, rom_id: int) -> RomAnswer:
+        try:
+            payload: Any = self._romm_api.get_rom_once(rom_id)
+        except RommNotFoundError:
+            return "gone"
+        except Exception as e:
+            self._logger.warning(f"Exact-id question for rom {rom_id} got no answer: {e}")
+            return "unknown"
+        payload_id = payload.get("id") if isinstance(payload, dict) else None
+        if type(payload_id) is int and payload_id == rom_id:
+            return "present"
+        self._logger.warning(f"Exact-id question for rom {rom_id} got an answer for another id: {payload_id!r}")
+        return "unknown"

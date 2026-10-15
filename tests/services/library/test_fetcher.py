@@ -2126,3 +2126,32 @@ class TestPredictionNeverFeedsSkipGate:
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
         assert result is None
+
+
+class TestAskRommForRoms:
+    """``ask_romm_for_roms`` — one exact-id question per ROM, read only as far as it proves."""
+
+    @pytest.mark.asyncio
+    async def test_each_answer_is_what_its_question_proved(self, library, fake_romm_api):
+        _wire_fake(library, fake_romm_api)
+        fake_romm_api.roms[1] = {"id": 1, "name": "Still here"}
+        fake_romm_api.get_rom_once_side_effect_by_id[2] = RommNotFoundError("Rom with id 2 not found")
+        fake_romm_api.get_rom_once_side_effect_by_id[3] = RommApiError("HTTP 404: Not Found")
+        fake_romm_api.roms[4] = {"id": 40}
+
+        answers = await library.sync._fetcher.ask_romm_for_roms([4, 3, 2, 1, 1])
+
+        assert answers == {1: "present", 2: "gone", 3: "unknown", 4: "unknown"}
+        assert sorted(args for name, args, _kwargs in fake_romm_api.call_log if name == "get_rom_once") == [
+            (1,),
+            (2,),
+            (3,),
+            (4,),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_asking_about_nothing_sends_nothing(self, library, fake_romm_api):
+        _wire_fake(library, fake_romm_api)
+
+        assert await library.sync._fetcher.ask_romm_for_roms([]) == {}
+        assert fake_romm_api.call_log == []
