@@ -597,9 +597,9 @@ never touched) and whose appId belongs to no live shortcut in the frontend's ful
 
 `ArtworkService` (cover staging/finalisation, renaming the staged cover to `{app_id}p.png`) and `SteamGridService` (SGDB
 hero/logo/grid/icon) own the artwork flow. The icon is a two-step write: `SteamGridService.save_shortcut_icon` writes
-the icon PNG into the grid dir via `SteamConfigAdapter.write_shortcut_icon` and returns its `icon_path`; the frontend
-then points the live shortcut at it with `SteamClient.Apps.SetShortcutIcon(appId, icon_path)`. The backend no longer
-edits the `shortcuts.vdf` `icon` field — Steam is memory-authoritative and clobbered that write, so pointing the
+the ROM's cached icon into the grid dir via `SteamConfigAdapter.write_shortcut_icon` and returns its `icon_path`; the
+frontend then points the live shortcut at it with `SteamClient.Apps.SetShortcutIcon(appId, icon_path)`. The backend no
+longer edits the `shortcuts.vdf` `icon` field — Steam is memory-authoritative and clobbered that write, so pointing the
 shortcut must go through `SteamClient` (see
 [shortcuts.vdf is memory-authoritative](#shortcutsvdf-is-memory-authoritative)).
 
@@ -632,32 +632,32 @@ the next client restart.
 
 The hero, the logo and the wide grid come from SteamGridDB, and Steam has to be handed them in-session through
 `SteamClient.Apps.SetCustomArtworkForApp`: a file written into the grid directory shows only after Steam restarts. The
-first visit to a game's page in a session sets each of the three **only where the slot is empty** (`fillEmptyArtwork` in
+icon comes from SteamGridDB too, and is pointed at with `SteamClient.Apps.SetShortcutIcon`. The first visit to a game's
+page in a session sets each of the four **only where the slot is not filled** (`fillEmptyArtwork` in
 `utils/artwork.ts`). **Refresh Artwork** and the SteamGridDB game picker are an explicit request and still replace every
 slot (`applyArtwork`), and so does a version switch: once artwork was applied for one ROM of an app id, the newly bound
 ROM's is applied in the replacing mode, an image set by hand included. The replacing mode records the wide grid and the
-logo it set, or Steam refused, under the ROM now bound, as the fill does below: `get_sgdb_artwork_base64` answers a wide
-grid, logo or icon with its image id, the hash of its bytes and the ROM's SteamGridDB id; the wide grid's and the logo's
-go to the report. The shortcut artwork job fills the wide grid and the logo in the background by the same rules
-([Shortcut artwork](#shortcut-artwork)), so a first visit usually finds them filled; the hero is the game page's alone.
-The job fetches and records the icon by these rules too, with a filled check of its own
-([Shortcut artwork](#shortcut-artwork)); the game page still sets the icon through its own apply (`applyIcon`,
-`save_shortcut_icon`), which neither reads nor writes the record and replaces whatever icon the shortcut shows.
+logo and icon it set, or Steam refused, under the ROM now bound, as the fill does below: `get_sgdb_artwork_base64`
+answers a wide grid or logo with its image id, the hash of its bytes and the ROM's SteamGridDB id, which go to the
+report, and the icon's come from its write. The shortcut artwork job fills the icon, the wide grid and the logo in the
+background by the same rules ([Shortcut artwork](#shortcut-artwork)), so a first visit usually finds them filled; the
+hero is the game page's alone. The icon has one fetch path, the per-slot one below, on the game page and in the job
+alike: `get_sgdb_artwork_base64` refuses its asset type (4) with `invalid_payload`.
 
-**Downloading anew.** `applyArtwork` serves each image from the artwork cache first (`get_sgdb_artwork_base64`), so a
-version switch downloads only what the new ROM's cache lacks. Refresh Artwork and the picker download past the cache:
-once `get_sgdb_resolution` answers `resolved`, the frontend asks `refresh_sgdb_artwork(rom_id, sgdb_id)`, and a pick
-asks `apply_sgdb_game_id`. Both download all four images and replace a cached file only with a download that succeeded,
-before `applyArtwork` serves them; a pick then drops the previous pick's file of each image it did not download. A
-SteamGridDB id RomM now provides therefore replaces an image a manual pick left in the cache, where SteamGridDB has such
-an image for that game. A 401 or 403 from SteamGridDB on either, or on the resolution's name search, refuses
-`auth_failed` with `_KEY_REFUSED` (`services/steamgrid.py`), and a 429 refuses `rate_limited`; the frontend shows that
-message instead of opening the picker. Only the key dialog's check (`verify_sgdb_api_key`) answers a 401 or 403 with
-"Invalid API key", as does every use case for a key no header can carry. On Refresh Artwork and in the picker, a refusal
-of an artwork endpoint is shown as its own message rather than read as "no image"; the first visit only logs it, and
-stops asking once a slot answers `key_refused`. Refresh Artwork's one toast also names a failed RomM cover refresh after
-the SteamGridDB result, once where both say the same; when the picker opens instead, the cover failure is a toast of its
-own before it.
+**Downloading anew.** `applyArtwork` serves each image from the artwork cache first (`get_sgdb_artwork_base64`, and
+`get_sgdb_slot_artwork` with `replace` for the icon), so a version switch downloads only what the new ROM's cache lacks.
+Refresh Artwork and the picker download past the cache: once `get_sgdb_resolution` answers `resolved`, the frontend asks
+`refresh_sgdb_artwork(rom_id, sgdb_id)`, and a pick asks `apply_sgdb_game_id`. Both download all four images and replace
+a cached file only with a download that succeeded, before `applyArtwork` serves them; a pick then drops the previous
+pick's file of each image it did not download. A SteamGridDB id RomM now provides therefore replaces an image a manual
+pick left in the cache, where SteamGridDB has such an image for that game. A 401 or 403 from SteamGridDB on either, or
+on the resolution's name search, refuses `auth_failed` with `_KEY_REFUSED` (`services/steamgrid.py`), and a 429 refuses
+`rate_limited`; the frontend shows that message instead of opening the picker. Only the key dialog's check
+(`verify_sgdb_api_key`) answers a 401 or 403 with "Invalid API key", as does every use case for a key no header can
+carry. On Refresh Artwork and in the picker, a refusal of an artwork endpoint is shown as its own message rather than
+read as "no image"; the first visit only logs it, and stops asking once a slot answers `key_refused`. Refresh Artwork's
+one toast also names a failed RomM cover refresh after the SteamGridDB result, once where both say the same; when the
+picker opens instead, the cover failure is a toast of its own before it.
 
 **When a slot is filled** (`domain/artwork_slot.py`, `is_slot_filled`). A slot already holding an image is left alone,
 whoever set it — an image set by hand is never replaced. It is filled when Steam's grid directory holds a regular file,
@@ -676,17 +676,27 @@ image id, the SHA-256 of its bytes, the ROM's SteamGridDB id and an `sgdb_artwor
 under that lease, waits for it, and only then asks for the next slot, so one image at a time is in the renderer. For the
 wide grid and the logo it then reports what Steam made of it through `report_sgdb_slot_artwork` — `set`, or `refused`
 when `SetCustomArtworkForApp` failed — passing the fetch's answer back; the backend cannot see Steam's answer itself.
+The replacing mode asks for the icon with `replace`, which drops the two `skip` checks and nothing else.
+
+**The icon on the game page** is judged by the job's own rule (`domain/artwork_slot_outcome.py`, `icon_waits`): the
+backend reads the shortcut's `icon` path in `shortcuts.vdf`, the grid directory's listing and the icon's record, so a
+first visit keeps an icon somebody set and replaces an empty path, the placeholder or the logo icon (the filled check is
+under Worklist in [Shortcut artwork](#shortcut-artwork)). A `shortcuts.vdf` that cannot be read, or does not hold the
+shortcut yet, answers `failed`: nothing is replaced on a guess. Where the icon is to be set the answer is `ready`,
+carrying the lease and no bytes; the frontend then asks `save_shortcut_icon(app_id, rom_id)`, which writes the cached
+icon as the job does ("Writing the icon", below) and answers its path, its image id, the hash of the bytes written and
+the ROM's SteamGridDB id. The frontend points the shortcut at the path with `SetShortcutIcon` and reports `set`, or
+`refused` when that throws, passing the save's answer back.
 
 **What was found is recorded** per ROM and slot, for the wide grid, the logo and the icon, in `artwork_slot_outcomes`
 ([database design](database-design.md)): `set` with the image id and the hash, `none`, or `refused`, the ROM's
 SteamGridDB id at that time, and when. A `none` or `refused` row keeps the slot from being asked again for 7 days
 (`RULED_OUT_SECONDS` in `domain/artwork_slot_outcome.py`): SteamGridDB may have an image tomorrow, and a week costs one
-request per slot instead of one at every run of the shortcut artwork job, which starts after each sync, and, for the
-wide grid and the logo, at every first visit in a session; the game page's icon apply does not read the record. The row
-stops counting at once when the ROM's SteamGridDB id changes, and **Refresh Artwork** deletes the game's rows (in
-`get_sgdb_resolution`, before it resolves the id). A `set` row never rules a slot out: a slot whose file is gone is
-asked again. Rows are keyed by ROM rather than app id, because a re-created shortcut gets a new app id. The hero is not
-recorded.
+request per slot instead of one at every run of the shortcut artwork job, which starts after each sync, and at every
+first visit in a session. The row stops counting at once when the ROM's SteamGridDB id changes, and **Refresh Artwork**
+deletes the game's rows (in `get_sgdb_resolution`, before it resolves the id). A `set` row never rules a slot out: a
+slot whose file is gone is asked again. Rows are keyed by ROM rather than app id, because a re-created shortcut gets a
+new app id. The hero is not recorded.
 
 **Which image** (`domain/sgdb_artwork.py`, `choose_candidate`), in the one download path the game page, Refresh Artwork,
 the picker and the shortcut artwork job's icons, wide grids and logos share (`SteamGridService._fetch_sgdb_artwork_io`,
@@ -705,8 +715,7 @@ one game against the website by the maintainer). A slot never stays empty for wa
 `{rom_id}_logo_{image_id}.png` / `{rom_id}_icon_{image_id}.png`: the cache is re-derivable and may vanish at any time,
 so which image it holds lives and dies with the file rather than in the database. One of the three named without an id,
 such as `{rom_id}_icon.png`, is not counted as cached; it is downloaded again under the rule above and replaced, once
-per slot, and the orphan prune and the removed-game cleanup match both names. The game page's own icon fetch reads the
-same cache. The hero keeps `{rom_id}_hero.png`.
+per slot, and the orphan prune and the removed-game cleanup match both names. The hero keeps `{rom_id}_hero.png`.
 
 ### Shortcut artwork
 
@@ -773,20 +782,20 @@ the game page.
 - **Writing the icon:** `SteamGridService.write_job_icon` reads the cached icon, downscales it and writes it as
   `{app_id}_icon.png`, answering SteamGridDB's image id and the SHA-256 of the bytes written, the downscaled ones, for
   its `set` record. A file the downscale cannot read — a page in place of an image, a truncated PNG — is not written and
-  leaves the artwork cache, so the next run downloads it again; the game page writes such a file as it came, with a
-  warning.
+  leaves the artwork cache, so the next run downloads it again. The game page's write, `save_shortcut_icon`, is the same
+  write.
 - **No icon:** a game SteamGridDB has no icon for, one with no SteamGridDB id stored, or one whose id SteamGridDB does
   not know, gets Tender's logo — `tender-icon.png`, shipped in `defaults/` and copied into the grid directory — and
   nothing is recorded beyond the `none`. The logo icon is a stand-in, so the record alone decides when the job asks
   again: at once when the ROM's SteamGridDB id changes — a RomM scan adds one, and the next sync stores it — and
   otherwise after a week. A shortcut showing the logo icon with no record is asked on the next run, and recorded then.
-  **Refresh Artwork** asks at once, and so does the game page's passive artwork apply the first time the page is opened
-  in a session, for a game whose SteamGridDB id is known. The week rules out asking SteamGridDB again, not showing the
-  logo: a shortcut still showing no icon — empty or the placeholder — while its `none` rules the slot out is given the
-  logo icon at the next run without a request (`domain/artwork_slot_outcome.py`, `logo_icon_waits`), so a logo icon lost
-  on its way to Steam — a batch not handed over, or a logo that could not be read, which is logged — does not leave the
-  placeholder in its place for a week. A shortcut already showing the logo icon needs nothing. A timeout, an answer that
-  says it failed, or any other failure is not "no icon": nothing is recorded and the next run asks again.
+  **Refresh Artwork** asks at once; the first visit to the game page in a session asks by the same rule as the job. The
+  week rules out asking SteamGridDB again, not showing the logo: a shortcut still showing no icon — empty or the
+  placeholder — while its `none` rules the slot out is given the logo icon at the next run without a request
+  (`domain/artwork_slot_outcome.py`, `logo_icon_waits`), so a logo icon lost on its way to Steam — a batch not handed
+  over, or a logo that could not be read, which is logged — does not leave the placeholder in its place for a week. A
+  shortcut already showing the logo icon needs nothing. A timeout, an answer that says it failed, or any other failure
+  is not "no icon": nothing is recorded and the next run asks again.
 - **Pace:** four shortcuts at a time. A 429 from SteamGridDB's API or its image CDN (`SgdbRateLimitedError`) pauses
   every worker: 30 s, twice as long at each 429 in a row, at most 15 minutes, then on, with only what the 429 met asked
   again; every run starts the pause over. A 401 or 403 from the API — a key SteamGridDB does not accept — ends the run

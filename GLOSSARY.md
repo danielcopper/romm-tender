@@ -1163,10 +1163,9 @@ icon, which Tender takes from SteamGridDB (`domain/artwork_slot.py`, `ArtworkSlo
 slot is **filled** when Steam's grid directory holds an image file for it, whoever put it there — the icon's when the
 shortcut's icon path is neither empty, the **placeholder icon** nor the **logo icon**, and, in the grid directory, its
 file is there — and a filled slot is left alone except by **Refresh Artwork**, the SteamGridDB picker and a version
-switch — and, for the icon, by the game page's first visit in a session, which still replaces it. A **slot outcome** is
-what was last found for a ROM's wide grid, logo or icon — `set`, `none` or `refused` (`ArtworkSlotOutcome`). Detail:
-[Game page artwork](docs/architecture/steam-non-steam-shortcuts.md#game-page-artwork). _Avoid_: plain "slot", which
-means a **Save-sync slot** or a **Conditional slot**.
+switch. A **slot outcome** is what was last found for a ROM's wide grid, logo or icon — `set`, `none` or `refused`
+(`ArtworkSlotOutcome`). Detail: [Game page artwork](docs/architecture/steam-non-steam-shortcuts.md#game-page-artwork).
+_Avoid_: plain "slot", which means a **Save-sync slot** or a **Conditional slot**.
 
 ### Shortcut artwork job / placeholder icon / logo icon
 

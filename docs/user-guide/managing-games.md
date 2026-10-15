@@ -645,12 +645,13 @@ Tap **Refresh Metadata** in the game detail panel to show the game's metadata (d
 date) again as Tender stored it at the last sync. It asks your RomM server nothing and changes no artwork; metadata that
 changed on the server arrives with the next sync.
 
-Opening a game's page sets its hero banner, logo and wide grid only where the game has none yet, so an image you set
-yourself stays. Switching the game to another version replaces all three with that version's, an image you set yourself
-included; it uses the images Tender already downloaded for that version and downloads only the ones it has not.
-**Refresh Artwork** is the way to replace them otherwise: it downloads the hero banner, logo, wide grid and icon from
-SteamGridDB anew and applies them, an image you set yourself included, so the image SteamGridDB ranks first today
-reaches the game. An image whose new download fails keeps the one Tender had.
+Opening a game's page sets its hero banner, logo, wide grid and icon only where the game has none yet — an icon counts
+as none while it is Tender's placeholder or Tender's logo — so an image you set yourself stays. Switching the game to
+another version replaces all four with that version's, an image you set yourself included; it uses the images Tender
+already downloaded for that version and downloads only the ones it has not. **Refresh Artwork** is the way to replace
+them otherwise: it downloads the hero banner, logo, wide grid and icon from SteamGridDB anew and applies them, an image
+you set yourself included, so the image SteamGridDB ranks first today reaches the game. An image whose new download
+fails keeps the one Tender had.
 
 When you tap **Refresh Artwork**, Tender asks your RomM server which SteamGridDB game the ROM maps to and applies the
 hero banner, logo, wide grid, and icon for that game. **RomM is the source of truth**: whenever your server has a
@@ -664,9 +665,9 @@ Artwork** does this: opening the game's page and the background artwork job keep
 downloaded for the game.
 
 One exception after you update Tender: for a game Tender knows on SteamGridDB, an icon Tender downloaded before the
-update is downloaded once more, the first time the game's page is opened or the game is switched to another version. If
-you had picked the game in the picker and RomM has an id for it now, its icon then becomes the icon of the game RomM's
-id points to. The background artwork job does not do this.
+update is downloaded once more the first time the game is switched to another version. If you had picked the game in the
+picker and RomM has an id for it now, its icon then becomes the icon of the game RomM's id points to. Opening the game's
+page and the background artwork job do not do this.
 
 When SteamGridDB refuses your API key, **Refresh Artwork** says "SteamGridDB refused the API key — check it in Settings"
 and opens no picker; when SteamGridDB is rate-limiting requests, it says that instead. Opening a game's page stays quiet

@@ -595,8 +595,8 @@ wide grid and logo where it has none yet, and its SteamGridDB icon in place of T
 game's page is opened. To have them at once, tap **Refresh Artwork** on the game's page: it asks RomM for the id,
 downloads that game's hero banner, logo, wide grid and icon anew and applies them, replacing an image you picked in the
 picker below too, where SteamGridDB has such an image for that game. Opening the game's page for the first time in a
-session, once a sync has brought the id over from RomM, sets the hero banner, logo and wide grid only where the game has
-none yet, so a picked image stays there until you tap **Refresh Artwork**.
+session, once a sync has brought the id over from RomM, sets the hero banner, logo, wide grid and icon only where the
+game has none yet, so a picked image stays there until you tap **Refresh Artwork**.
 
 For a game SteamGridDB lists under another name, or not at all, a scan may find nothing. **Refresh Artwork** then opens
 a picker where you search SteamGridDB by name and apply a match. If a game genuinely has no artwork uploaded to
