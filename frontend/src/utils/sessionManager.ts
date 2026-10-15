@@ -29,6 +29,8 @@ import { readRunningApps, readRunningOrStartingApps, type RunningAppsReading } f
 import { delay } from "./pacedOps";
 import { LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "./launchGate";
 import { withTimeout } from "./withTimeout";
+import { isTerminalStage } from "./syncProgress";
+import type { SyncProgress } from "../types";
 import { announceSaveSync } from "./saveSyncEvents";
 
 // Active session tracking — ONE ENTRY PER RUNNING APP (#1624). Two RomM games at
@@ -53,10 +55,10 @@ const activeSessions = new Map<number, ActiveSession>();
 // Serialization chain — ensures lifecycle events don't interleave
 let lifecycleChain: Promise<void> = Promise.resolve();
 
-// Cached app ID -> rom ID map, refreshed on init, when an app starts, after a
-// library sync completes and after a version switch — both can move a binding —
-// and by the launch watcher once for an appId Tender owns that the map does not
-// hold.
+// Cached app ID -> rom ID map, refreshed on init, when an app starts, at the end
+// of every library sync run and after a version switch — both can move a
+// binding — and by the launch watcher once for an appId Tender owns that the map
+// does not hold.
 let appIdToRomId: Record<string, number> = {};
 
 function getRomIdForApp(appId: number): number | null {
@@ -577,7 +579,11 @@ async function adoptOrphanedSessions(): Promise<void> {
 export async function initSessionManager(): Promise<void> {
   // Load initial app ID map
   await refreshAppIdMap();
-  addEventListener("sync_complete", () => detach(refreshAppIdMap()));
+  // Every run ends with a terminal frame, a failed one included, and each unit
+  // it committed before that may have moved a binding.
+  addEventListener<SyncProgress>("sync_progress", (frame) => {
+    if (!frame.running && isTerminalStage(frame.stage)) detach(refreshAppIdMap());
+  });
 
   // Game lifecycle notifications
   SteamClient.GameSessions.RegisterForAppLifetimeNotifications((update) => {

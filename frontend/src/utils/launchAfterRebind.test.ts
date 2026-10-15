@@ -80,11 +80,16 @@ const installRecord = (romId: number) => ({
 
 const flush = () => new Promise<void>((r) => setTimeout(r, 0));
 
-/** The two ways a binding moves in the running session (D10), each as the panel learns of it. */
+/** A library sync run's terminal frame, which every run ends with. */
+const syncRunEnded = (stage: "done" | "cancelled" | "error") => async () => {
+  emitHostEvent("sync_progress", { running: false, stage, current: 0, total: 0, message: "" });
+};
+
+/** The ways a binding moves in the running session (D10), each as the panel learns of it. */
 const BINDING_MOVES = {
-  "a library sync": async () => {
-    emitHostEvent("sync_complete", { platform_app_ids: {}, total_games: 1 });
-  },
+  "a library sync that completed": syncRunEnded("done"),
+  "a library sync that was cancelled or paused": syncRunEnded("cancelled"),
+  "a library sync that stopped with an error": syncRunEnded("error"),
   "a version switch": async () => {
     await applyCommittedVersionSwitch({
       success: true,
