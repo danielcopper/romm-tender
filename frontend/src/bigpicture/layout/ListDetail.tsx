@@ -20,10 +20,12 @@
  * Because focus selects, where the page OPENS decides what it opens on: entry
  * focus landing on the first row selects that row and overwrites the selection
  * the page was opened with. So the selected row declares itself the area entry
- * focus belongs in ({@link ENTRY_STOP_ATTR}) and the frame places focus there —
- * on a page opened by a swap. On the page the panel appears with, nothing places
- * focus, and entering from the Quick Access strip lands on the row carrying
- * Steam's `preferredFocus`, which is the selected one.
+ * focus belongs in ({@link ENTRY_STOP_ATTR}), and whichever placer opens the
+ * page on a swap puts focus there. On the page the panel appears with nothing
+ * places focus; the selected row carries Steam's `preferredFocus` instead, which
+ * entering from the Quick Access strip is meant to land on — device-only, and
+ * not on a tabbed page, where Steam's own active tab is marked above it
+ * (`docs/architecture/qam-panel.md`, "Pages").
  */
 
 import type { FC, ReactNode } from "react";

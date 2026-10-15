@@ -250,10 +250,10 @@ vi.mock("@decky/ui", () => {
     // nav node at all — focusable or not (`docs/architecture/qam-panel.md`). It gets
     // an attribute of its own, so a test pins the DECLARATION rather than the
     // tabindex Steam would write for it.
-    // preferredFocus and navEntryPreferPosition are Steam's entry preference —
-    // where entering a node from outside lands — and get attributes of their
-    // own for the same reason: they have no DOM effect, so the declaration is
-    // all a test can pin.
+    // preferredFocus and navEntryPreferPosition are Steam's entry preference,
+    // read off the nav node and never written to the DOM, so happy-dom has
+    // nothing to show of them: each gets an attribute of its own, and a test
+    // pins the declaration.
     Focusable: ({
       children,
       className,

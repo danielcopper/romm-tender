@@ -1622,21 +1622,23 @@ Format: **invariant** — tier — enforced by.
 - **A list-and-detail page opens on the row it was opened WITH, not on its first row — because on that layout focus
   selects, so entry focus landing anywhere selects what it lands on** — test + prompt-only — `ListDetail.test.tsx` pins
   the mark and that it moves with the selection, `WidePage.test.tsx` pins that the frame asks for the declared stop, and
-  both use a **non-first** row deliberately. **The rule spans three modules and nothing joins them**:
+  both use a **non-first** row deliberately. **The rule spans four modules and nothing joins them**:
   `utils/entryFocus.ts` owns `ENTRY_STOP_ATTR` and `pageEntryStop`, `bigpicture/layout/WidePage.tsx` places entry focus
-  through it rather than through `firstBodyStop`, and `bigpicture/layout/ListDetail.tsx` marks its selected row — plus
-  whatever page passes a starting selection at all, `SettingsPage` today. A fourth wide page that opens on a non-first
-  row and forgets the mark selects its first row instead, and every test still passes. **The end to end is unreachable
-  here**: happy-dom performs no layout and does not reproduce Steam's focus resolution, so what the suite pins is the
-  declaration and the finder, never the press. Only a controller confirms it. **What hid this for a whole review round
-  is the shape of the failure, not its size**: Main's notices name sections, and the one naming the FIRST section keeps
-  working, so a reader checking Open Connections sees the feature working while a jump into any later section lands on
-  Connections. A check that exercises the first row proves nothing about the rule. The mark sits on a
-  `display: contents` wrapper AROUND each row rather than on the row, and that is load-bearing rather than stylistic:
-  `pageEntryStop` calls `firstBodyStop(declared)`, which searches DESCENDANTS — a mark on the row itself finds no
-  candidate inside it, falls back to the first row, and ships the defect under a comment saying it does not. **The page
-  the panel appears with is opened by neither placer** — focus placed as the panel mounts would take the reader off the
-  Quick Access strip — so there the same row is reached through Steam's entry preference: `ListDetail` gives the
-  selected row's own `Focusable` `preferredFocus`, and the frame's body prefers it. Nothing joins that mark to
-  `ENTRY_STOP_ATTR` either, and whether Steam honours it is device-only. Detail: `docs/architecture/qam-panel.md`,
-  "Pages"
+  through it rather than through `firstBodyStop`, `bigpicture/layout/ListDetail.tsx` marks its selected row, and
+  `index.tsx` tells the frame whether a swap opened the page (`EntryFocusOnMountContext`) — plus whatever page passes a
+  starting selection at all, `SettingsPage` today. A fourth wide page that opens on a non-first row and forgets the mark
+  selects its first row instead, and every test still passes. **The end to end is unreachable here**: happy-dom performs
+  no layout and does not reproduce Steam's focus resolution, so what the suite pins is the declaration and the finder,
+  never the press. Only a controller confirms it. **What hid this for a whole review round is the shape of the failure,
+  not its size**: Main's notices name sections, and the one naming the FIRST section keeps working, so a reader checking
+  Open Connections sees the feature working while a jump into any later section lands on Connections. A check that
+  exercises the first row proves nothing about the rule. The mark sits on a `display: contents` wrapper AROUND each row
+  rather than on the row, and that is load-bearing rather than stylistic: `pageEntryStop` calls
+  `firstBodyStop(declared)`, which searches DESCENDANTS — a mark on the row itself finds no candidate inside it, falls
+  back to the first row, and ships the defect under a comment saying it does not. **The page the panel appears with is
+  opened by neither placer** — not the router and not the frame, because focus placed as the panel mounts would take the
+  reader off the Quick Access strip — so there the same row is meant to be reached through Steam's entry preference:
+  `ListDetail` gives the selected row's own `Focusable` `preferredFocus`, and the frame's body searches for it. That
+  holds on an untabbed page only: on a tabbed one Steam marks its own active tab the same way, at a shallower depth, and
+  entry lands there. Nothing joins that mark to `ENTRY_STOP_ATTR` either, and whether Steam honours either is
+  device-only. Detail: `docs/architecture/qam-panel.md`, "Pages"

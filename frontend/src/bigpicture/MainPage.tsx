@@ -789,11 +789,11 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
 
       <PanelSection>
         <PanelSectionRow>
-          {/* Where the panel opens. The three status rows above act on nothing,
-              so opening on the first of them spends the reader's first press on
-              a move to what they came for. The declaration names this area and
-              the router's own rule picks the stop inside it, so nothing here
-              decides which element takes focus.
+          {/* Where entering Main lands. The three status rows above act on
+              nothing, so landing on the first of them spends the reader's first
+              press on a move to what they came for. On a swap back to Main the
+              declaration names this area and the router's own rule picks the
+              stop inside it.
 
               A wrapper because the attribute has to sit on an element we
               render: Steam's `ButtonItem` takes its own props and nothing
@@ -801,10 +801,9 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
               `display: contents` keeps the wrapper out of the layout — it
               carries the attribute and nothing else.
 
-              The declaration serves a swap back to Main; entering from the
-              Quick Access strip is Steam's own, and the `preferredFocus`
-              carrier is what that entry lands by — `ButtonItem` takes no such
-              prop. A container, not a stop: it holds the button. */}
+              Entering from the Quick Access strip is Steam's own, and lands by
+              the `preferredFocus` carrier — `ButtonItem` takes no such prop. A
+              container, not a stop: it holds the button. */}
           <div {...{ [ENTRY_STOP_ATTR]: "" }} style={{ display: "contents" }}>
             <Focusable preferredFocus style={{ display: "contents" }}>
               <ButtonItem layout="below" bottomSeparator="none" onClick={() => onNavigate("sync")}>

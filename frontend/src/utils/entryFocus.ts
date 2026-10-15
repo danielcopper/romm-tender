@@ -1,11 +1,12 @@
 /**
- * What can hold gamepad focus, where a page's focus lands when it opens, and how
- * it is put there.
+ * What can hold gamepad focus, where a page's focus lands when a swap opens it,
+ * and how it is put there.
  *
  * Steam's gamepad navigation keeps a focus pointer across a page swap and
  * resolves it on the next input — onto whatever sits at the old page's position
- * — so a newly mounted body has to claim focus itself. Three callers do, on the
- * same delay: the wide-page frame for its own body
+ * — so a newly mounted body has to claim focus itself, while the page the panel
+ * appears with claims none ({@link EntryFocusOnMountContext}). Three callers
+ * claim it, on the same delay: the wide-page frame for its own body
  * (`frontend/src/bigpicture/layout/WidePage.tsx`), the panel's router for the
  * pages that place none of their own (`frontend/src/index.tsx`), and
  * {@link useEntryFocusOnBodySwap} for a page whose body changes under the
@@ -122,16 +123,10 @@ export const ENTRY_STOP_ATTR = "data-romm-entry-stop";
 /**
  * Whether the page mounting now may place entry focus: `true` for a page opened
  * by a swap inside the panel, `false` for the page the panel itself appears
- * with. The panel's router (`frontend/src/index.tsx`) provides it, and the
- * wide-page frame reads it.
- *
- * **The panel appearing is not a page being opened.** Steam mounts the panel as
- * soon as the Quick Access strip highlights Tender's icon, and focus placed then
- * leaves the strip under the reader's feet; Steam's own panels take no focus
- * until Right or A enters them, and where that entry lands is Steam's entry
- * preference (`preferredFocus` under `navEntryPreferPosition`), which the
- * panel declares instead. A swap has no such alternative: Steam resolves a
- * pointer retained from the old page, so the new page claims focus itself.
+ * with, which places none — why, and how entering it from the Quick Access
+ * strip lands instead, is `docs/architecture/qam-panel.md`, "Pages". The
+ * panel's router (`frontend/src/index.tsx`) provides it, and the wide-page frame
+ * reads it.
  *
  * `true` where no router provides it: nothing outside the router says the page
  * arrived with the panel.

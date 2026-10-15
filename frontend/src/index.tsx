@@ -190,7 +190,8 @@ const QAMPanel: FC = () => {
     // to switch tabs.
     //
     // Only after a swap: on the page the panel appears with, entry is Steam's,
-    // by the `preferredFocus` the page marks (`EntryFocusOnMountContext`).
+    // by the `preferredFocus` the page marks where it marks one
+    // (`EntryFocusOnMountContext`).
     const ownsFocus = el.querySelector(`[${OWNS_ENTRY_FOCUS_ATTR}]`) !== null;
     const focusTimer =
       ownsFocus || !swapped ? undefined : setTimeout(() => placeEntryFocus(el, pageEntryStop), ENTRY_FOCUS_DELAY_MS);
@@ -245,8 +246,9 @@ const QAMPanel: FC = () => {
   // press is never swallowed. Steam already prints "B ZURÜCK" in its footer
   // legend, which this makes true.
   //
-  // The same `Focusable` is where entering a sub-page from the Quick Access strip
-  // starts its search for the page's preferred stop; Main carries its own.
+  // The same `Focusable` is where entering a page other than Main from the Quick
+  // Access strip starts its search for the page's preferred stop; Main carries
+  // its own.
   return (
     <div ref={rootRef}>
       <StrandedRecheck />

@@ -15,8 +15,10 @@
  * path.
  *
  * The page's own content is `children`, or — when the page has tabs — the
- * `content` of each tab, which Steam's `Tabs` renders itself. Either way the
- * frame opens the page with focus inside that body rather than on the Back row.
+ * `content` of each tab, which Steam's `Tabs` renders itself. Either way entry
+ * lands inside that body rather than on the Back row: on a page opened by a swap
+ * the frame places it there, and on the page the panel appears with Steam's
+ * entry preference takes it there (`docs/architecture/qam-panel.md`, "Pages").
  *
  * Structure and vocabulary: `docs/architecture/qam-panel.md`.
  */
@@ -415,10 +417,11 @@ export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, on
         </DialogButton>
         <span style={{ fontSize: "16px", fontWeight: 600, color: "#dcdedf" }}>{title}</span>
       </Focusable>
-      {/* What entering the panel from the Quick Access strip lands in, rather
-          than the Back chip above it: the body is preferred, and inside it
-          whatever the page marks preferred — a list's selected row — else its
-          first stop. */}
+      {/* What entering from the Quick Access strip lands in, rather than the
+          Back chip above it: the body is preferred, and inside it the first
+          node marked preferred — a list's selected row, or on a tabbed page
+          Steam's own active tab — else Steam's default entry: the child it last
+          had focus in, the first child on a fresh node. */}
       <Focusable preferredFocus navEntryPreferPosition={PREFER_MARKED_CHILD}>
         <div ref={bodyRef} style={bodyStyle} data-testid="wide-page-body">
           {body}
