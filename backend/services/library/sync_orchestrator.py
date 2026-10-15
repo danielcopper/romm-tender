@@ -781,9 +781,16 @@ class SyncOrchestrator:
             # collections key on display names and the offline name cache stays
             # current as of this sync.
             platform_names = {u.slug: u.name for u in work_queue if u.type == "platform" and u.slug}
+            # A platform outside the queue keeps its cached name in the end-of-run
+            # map (``SyncReporter._names_with_bound_platforms_kept``), and the
+            # cache is written only at finalize, so naming entries from it here
+            # gives them the same name.
+            cached_names = await self._loop.run_in_executor(
+                None, self._local_library_reader.do_read_cached_platform_names
+            )
             run_collections = RunCollections.at_run_start(
                 work_queue,
-                platform_names=platform_names,
+                platform_names={**cached_names, **platform_names},
                 naming_mode=self._settings.get("collection_naming_mode", "merge"),
                 create_platform_groups=self._settings.get("collection_create_platform_groups", False),
             )

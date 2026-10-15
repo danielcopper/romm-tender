@@ -462,17 +462,18 @@ set once the run has ended.
 groups** leaves the game out) and `romm_collections` (the keys `romm_collection_app_ids` uses). `RunCollections`
 (`backend/domain/entry_collections.py`) decides them. At run start it indexes the listed members of every queued
 collection unit but a foreign smart one under that collection's key, and holds the naming mode and the platform-groups
-setting as they are then; the end-of-run maps are built with those same two values. Per unit it files each entry by its
-binding target, with the RomM keys of every collection that lists a version in the entry's sibling group, as far as the
-unit's own built set shows that group. The platform rule is `platform_collection_name`, the same function the end-of-run
-map applies, so both answers agree. Once a shortcut's appId resolves — after its cover, for a new one —
-`addAppToCollections` (`frontend/src/utils/collections.ts`) finds each named collection by its folded name, or creates
-it holding this game so no collection appears empty, and adds the game where it is missing: one `AddApps` and one `Save`
-per collection the game was not in yet, nothing for one it already holds. It never removes a game, so a write that fails
-halfway cannot empty a collection. A collection this pass created is remembered for the run by its folded name and used
-when `collectionStore.userCollections` does not list it: whether Steam lists a new collection as soon as its first
-`Save()` resolves is not established, and creating the same name a second time overwrites the first collection and the
-game in it. A failure is logged per collection and never stops the apply.
+setting as they are then; the end-of-run maps are built with those same two values. A platform with no unit in the run
+is named by the name cached for it from an earlier run, as the end-of-run map names it, else by its slug. Per unit it
+files each entry by its binding target, with the RomM keys of every collection that lists a version in the entry's
+sibling group, as far as the unit's own built set shows that group. The platform rule is `platform_collection_name`, the
+same function the end-of-run map applies, so both answers agree. Once a shortcut's appId resolves — after its cover, for
+a new one — `addAppToCollections` (`frontend/src/utils/collections.ts`) finds each named collection by its folded name,
+or creates it holding this game so no collection appears empty, and adds the game where it is missing: one `AddApps` and
+one `Save` per collection the game was not in yet, nothing for one it already holds. It never removes a game, so a write
+that fails halfway cannot empty a collection. A collection this pass created is remembered for the run by its folded
+name and used when `collectionStore.userCollections` does not list it: whether Steam lists a new collection as soon as
+its first `Save()` resolves is not established, and creating the same name a second time overwrites the first collection
+and the game in it. A failure is logged per collection and never stops the apply.
 
 What this pass does not file, and a completed run's end does: games the run does not send (a delta-unchanged entry, a
 skipped platform or collection), the members of a foreign smart collection — its listing is its owner's view, and the

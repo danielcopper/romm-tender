@@ -25,6 +25,7 @@ migration.
 """
 
 import asyncio
+import json
 import logging
 import os
 from typing import Any
@@ -7381,6 +7382,19 @@ class TestEachAppliedShortcutNamesItsCollections:
 
         assert entries[30]["platform_collection"] == "gba"
         assert entries[1]["platform_collection"] == "Nintendo 64"
+
+    @pytest.mark.asyncio
+    async def test_a_platform_outside_the_run_is_named_by_its_cached_name_as_the_end_of_run_map_names_it(
+        self, library, fake_romm_api, emit
+    ):
+        self._seed(library, fake_romm_api, create_platform_groups=True)
+        with library.uow as uow:
+            uow.kv_config.set("platform_names", json.dumps({"gba": "Game Boy Advance"}))
+
+        entries, complete = await self._run_acking_every_entry(library, emit)
+
+        assert entries[30]["platform_collection"] == "Game Boy Advance"
+        assert 9030 in complete["platform_app_ids"]["Game Boy Advance"]
 
     @pytest.mark.asyncio
     async def test_a_setting_changed_during_the_run_leaves_the_end_of_run_maps_on_the_run_start_value(

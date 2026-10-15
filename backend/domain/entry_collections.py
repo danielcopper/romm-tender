@@ -35,8 +35,8 @@ def platform_collection_name(
     """The platform collection *rom_id* is filed in, or ``None`` where it is filed in none.
 
     ``None`` where :func:`should_include_in_platform_collection` leaves the ROM
-    out. Otherwise the run's display name for *platform_slug*, falling back to
-    the slug for a platform with no unit in the run.
+    out. Otherwise the name *platform_names* holds for *platform_slug*, falling
+    back to the slug where it holds none.
     """
     if not should_include_in_platform_collection(rom_id, platform_rom_ids, create_platform_groups):
         return None

@@ -221,6 +221,11 @@ class LocalLibraryReader:
                 rom_id for stamp in uow.collection_sync_state.iter_all() for rom_id in stamp.member_rom_ids
             )
 
+    def do_read_cached_platform_names(self) -> dict[str, str]:
+        """Every display name the names cache holds, by platform slug. One short read UoW."""
+        with self._uow_factory() as uow:
+            return decode_platform_names(uow.kv_config.get(_PLATFORM_NAMES_KEY))
+
     def do_read_kept_platform_names(self, platform_slugs: Collection[str]) -> dict[str, str]:
         """The display name the names cache holds for each of *platform_slugs* that has one.
 

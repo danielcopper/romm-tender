@@ -167,3 +167,19 @@ class TestKeptPlatformNames:
 
     def test_no_kept_names_answers_none(self, library):
         assert library.sync._local_library_reader.do_read_kept_platform_names({"n64"}) == {}
+
+
+class TestCachedPlatformNames:
+    """Every display name the names cache holds."""
+
+    def test_every_cached_name(self, library):
+        with library.uow as uow:
+            uow.kv_config.set("platform_names", '{"n64": "Nintendo 64", "gba": "Game Boy Advance"}')
+
+        assert library.sync._local_library_reader.do_read_cached_platform_names() == {
+            "n64": "Nintendo 64",
+            "gba": "Game Boy Advance",
+        }
+
+    def test_no_cache_answers_none(self, library):
+        assert library.sync._local_library_reader.do_read_cached_platform_names() == {}
