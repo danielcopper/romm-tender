@@ -802,11 +802,13 @@ describe("RomMPlaySection", () => {
     });
     const GONE = "This version is no longer available on RomM.";
     const CLEANUP = "To remove it from this device, with a recovery bundle, use Data Management › Gone from RomM.";
+    const SWITCH_FIRST =
+      "Choose another version first; Data Management › Gone from RomM then removes this one, with a recovery bundle.";
     const EFFECTS = [
       "Its saves no longer sync, and a launch with a local save asks first.",
       "It cannot be downloaded again.",
       "Its saves stay on this device and do not follow a switch to another version.",
-      "Its playtime still counts here but no longer reaches RomM.",
+      "Its playtime still counts here, but RomM no longer adds it to this game.",
       "Its cover and details no longer update.",
     ];
 
@@ -833,7 +835,8 @@ describe("RomMPlaySection", () => {
       );
 
       await waitFor(() => expect(container.textContent).toContain(`${GONE} Choose another version to play.`));
-      expect(container.textContent).toContain(CLEANUP);
+      expect(container.textContent).toContain(SWITCH_FIRST);
+      expect(container.textContent).not.toContain(CLEANUP);
       expect(container.querySelectorAll("li")).toHaveLength(0);
     });
 
@@ -850,7 +853,8 @@ describe("RomMPlaySection", () => {
 
       await waitFor(() => expect(container.textContent).toContain(`${GONE} Your downloaded copy still plays.`));
       expect([...container.querySelectorAll("li")].map((item) => item.textContent)).toEqual(EFFECTS);
-      expect(container.textContent).toContain(CLEANUP);
+      expect(container.textContent).toContain(SWITCH_FIRST);
+      expect(container.textContent).not.toContain(CLEANUP);
     });
 
     it.each([
