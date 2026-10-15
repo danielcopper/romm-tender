@@ -48,13 +48,15 @@ from lib.romm_paging import LIST_PAGE_SIZE
 from services.platform_systems import PlatformSystemService, PlatformSystemServiceConfig
 from tests.services.library._helpers import (
     _fake_wait_set_event,
+    _run_collections,
     _seed_install,
     _seed_platform,
     _seed_rom_row,
     _use_fake_romm,
 )
 
-# A unit driven alone files its entries into no collection.
+# A unit driven alone: no entry names a RomM collection, and a platform unit's
+# entries name their platform collection by its slug.
 _NO_COLLECTIONS = RunCollections.at_run_start([], platform_names={}, naming_mode="merge", create_platform_groups=False)
 
 # ── Test helpers ─────────────────────────────────────────────────
@@ -6743,6 +6745,7 @@ class TestSessionBudgetGate:
             platform_names={},
             processed_platform_slugs=frozenset(),
             cancelled=False,
+            run_collections=_run_collections(),
         )
 
         assert box.last_run_delta_kb == 800_000
@@ -6764,6 +6767,7 @@ class TestSessionBudgetGate:
             platform_names={},
             processed_platform_slugs=frozenset(),
             cancelled=False,
+            run_collections=_run_collections(),
         )
 
         assert box.last_run_delta_kb is None
@@ -6790,7 +6794,8 @@ class TestSessionBudgetGate:
             platform_rom_ids=set(),
             platform_names={},
             processed_platform_slugs=frozenset(),
-            cancelled=True,  # a stopped (paused) run
+            cancelled=True,  # a stopped (paused) run,
+            run_collections=_run_collections(),
         )
 
         # 2_100_000 - 500_000 = 1_600_000 — this paused run's own growth, overwriting 700_000.
@@ -7291,7 +7296,10 @@ class TestTheShortcutArtworkJobAfterARun:
 
 
 class TestEachAppliedShortcutNamesItsCollections:
-    """Every ``sync_apply_unit`` entry carries the collections the end of the run files it in (#2416)."""
+    """The collections each entry names are ones the end-of-run maps file it in.
+
+    Together they are the maps' whole key set.
+    """
 
     @staticmethod
     def _seed(library, fake_romm_api, *, create_platform_groups):
@@ -7320,11 +7328,15 @@ class TestEachAppliedShortcutNamesItsCollections:
         library.settings["collection_create_platform_groups"] = create_platform_groups
 
     @staticmethod
-    async def _run_acking_every_entry(library, emit):
-        """Run the sync, acking each entry with appId ``9000 + rom_id``; answer its entries and ``sync_complete``."""
+    async def _run_acking_every_entry(library, emit, *, settings_during_the_run=None):
+        """Run the sync, acking each entry with appId ``9000 + rom_id``; answer its entries and ``sync_complete``.
+
+        *settings_during_the_run* is written into the settings at the first ack.
+        """
         box = library.sync._box
 
         async def ack_every_entry(_unit, event):
+            library.settings.update(settings_during_the_run or {})
             event.set()
             return {str(rom_id): 9000 + rom_id for rom_id in box.pending_sync}
 
@@ -7369,6 +7381,19 @@ class TestEachAppliedShortcutNamesItsCollections:
 
         assert entries[30]["platform_collection"] == "gba"
         assert entries[1]["platform_collection"] == "Nintendo 64"
+
+    @pytest.mark.asyncio
+    async def test_a_setting_changed_during_the_run_leaves_the_end_of_run_maps_on_the_run_start_value(
+        self, library, fake_romm_api, emit
+    ):
+        self._seed(library, fake_romm_api, create_platform_groups=False)
+
+        entries, complete = await self._run_acking_every_entry(
+            library, emit, settings_during_the_run={"collection_create_platform_groups": True}
+        )
+
+        assert entries[30]["platform_collection"] is None
+        assert set(complete["platform_app_ids"]) == {"Nintendo 64"}
 
     @pytest.mark.parametrize("create_platform_groups", [False, True])
     @pytest.mark.asyncio

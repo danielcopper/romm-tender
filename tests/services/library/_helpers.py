@@ -13,7 +13,19 @@ drive their end-to-end runs through.
 
 from unittest.mock import AsyncMock, MagicMock
 
+from domain.entry_collections import RunCollections
 from services.library.fetcher import _SUPPORTED_VIRTUAL_TYPES
+
+
+def _run_collections(*, naming_mode: str = "merge", create_platform_groups: bool = False) -> RunCollections:
+    """A run's collections over an empty queue, read under the two given settings.
+
+    What a finalize driven alone builds its end-of-run maps under; the defaults
+    are the shipped settings'.
+    """
+    return RunCollections.at_run_start(
+        [], platform_names={}, naming_mode=naming_mode, create_platform_groups=create_platform_groups
+    )
 
 
 def rebind_loop(library_service, loop):

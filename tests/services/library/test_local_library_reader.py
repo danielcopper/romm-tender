@@ -14,7 +14,7 @@ here pin the projection shapes those flows read through.
 
 from domain.sync_diff import StaleRow
 from domain.work_unit import WorkUnit
-from tests.services.library._helpers import _seed_collection_stamp, _seed_rom_row
+from tests.services.library._helpers import _run_collections, _seed_collection_stamp, _seed_rom_row
 
 
 class TestRegistryProjections:
@@ -116,7 +116,9 @@ class TestReachableRomIds:
 
         reporter = library.sync._reporter
         with library.uow as uow:
-            _platform_app_ids, group_bound = reporter._scan_bound_rows(uow, None, {})
+            _platform_app_ids, group_bound = reporter._scan_bound_rows(
+                uow, None, {}, run_collections=_run_collections()
+            )
             filed = {
                 rid
                 for rid in (1, 2, 3, 4, 5, 6, 7, 8, missing)

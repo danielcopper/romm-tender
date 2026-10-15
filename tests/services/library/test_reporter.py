@@ -10,6 +10,7 @@ from domain.collection_name import fold_collection_name
 from domain.rom import Rom
 from domain.sync_diff import BIND_ROM_ID_KEY
 from services.library._state import CollectionMembership
+from tests.services.library._helpers import _run_collections
 
 
 def _seed_rom(
@@ -1737,13 +1738,13 @@ class TestFinalizePerUnitRun:
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
-        library.settings["collection_create_platform_groups"] = True
 
         await library.sync._reporter.finalize_per_unit_run(
             pending_collection_memberships={},
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
             processed_platform_slugs={"n64", "snes"},
+            run_collections=_run_collections(create_platform_groups=True),
         )
 
         collections_events = [c for c in emit.call_args_list if c[0][0] == "sync_collections"]
@@ -1772,6 +1773,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
             processed_platform_slugs={"n64"},
+            run_collections=_run_collections(),
         )
 
         collections_events = [c for c in emit.call_args_list if c[0][0] == "sync_collections"]
@@ -1797,6 +1799,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
             processed_platform_slugs={"n64"},
+            run_collections=_run_collections(),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -1820,6 +1823,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
             processed_platform_slugs={"n64"},
+            run_collections=_run_collections(),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -1847,6 +1851,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
             processed_platform_slugs={"n64", "snes"},
+            run_collections=_run_collections(),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -1869,6 +1874,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
             processed_platform_slugs={"n64", "snes"},
+            run_collections=_run_collections(),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -1896,6 +1902,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
             processed_platform_slugs={"n64", "snes"},
+            run_collections=_run_collections(),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -1908,8 +1915,6 @@ class TestFinalizePerUnitRun:
         The key becomes ``"<name> (<Label>)"`` so the frontend builds
         ``RomM: [<name> (Label)]``. Default ``merge`` would key by the bare name.
         """
-
-        library.settings["collection_naming_mode"] = "by_label"
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
 
@@ -1922,6 +1927,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
             processed_platform_slugs={"n64"},
+            run_collections=_run_collections(naming_mode="by_label"),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -1935,8 +1941,6 @@ class TestFinalizePerUnitRun:
         the IGDB collection gets its label, so the two keys differ → two distinct
         Steam collections, not a union (which is what ``merge`` does).
         """
-
-        library.settings["collection_naming_mode"] = "by_label"
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -1951,6 +1955,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
             processed_platform_slugs={"n64", "snes"},
+            run_collections=_run_collections(naming_mode="by_label"),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -1962,8 +1967,6 @@ class TestFinalizePerUnitRun:
     @pytest.mark.asyncio
     async def test_by_label_franchise_vs_igdb_collection_same_name_two_keys(self, library, emit):
         """Two virtual collections of the same name but different virtual_type split apart."""
-
-        library.settings["collection_naming_mode"] = "by_label"
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -1980,6 +1983,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
             processed_platform_slugs={"n64", "snes"},
+            run_collections=_run_collections(naming_mode="by_label"),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -1995,8 +1999,6 @@ class TestFinalizePerUnitRun:
         Same-name-within-one-kind is accepted as merged (two standard "Faves"),
         so the bare key ``"Faves"`` unions both member sets.
         """
-
-        library.settings["collection_naming_mode"] = "by_label"
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -2009,6 +2011,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
             processed_platform_slugs={"n64", "snes"},
+            run_collections=_run_collections(naming_mode="by_label"),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2017,8 +2020,6 @@ class TestFinalizePerUnitRun:
     @pytest.mark.asyncio
     async def test_by_label_gives_a_smart_collection_its_label_and_a_standard_one_none(self, library, emit):
         """A same-named standard and smart collection: the standard key is bare, the smart one ``(Smart)``."""
-
-        library.settings["collection_naming_mode"] = "by_label"
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -2031,6 +2032,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
             processed_platform_slugs={"n64", "snes"},
+            run_collections=_run_collections(naming_mode="by_label"),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2045,8 +2047,6 @@ class TestFinalizePerUnitRun:
         and the two land in one Steam collection. It takes a name that spells out
         another kind's label to get there.
         """
-
-        library.settings["collection_naming_mode"] = "by_label"
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -2059,6 +2059,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
             processed_platform_slugs={"n64", "snes"},
+            run_collections=_run_collections(naming_mode="by_label"),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2071,8 +2072,6 @@ class TestFinalizePerUnitRun:
         The complement to ``test_by_label_keeps_same_name_different_label_separate``:
         with the default mode the exact same input collapses onto one bare-name key.
         """
-
-        library.settings["collection_naming_mode"] = "merge"
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -2087,6 +2086,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
             processed_platform_slugs={"n64", "snes"},
+            run_collections=_run_collections(naming_mode="merge"),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2101,8 +2101,6 @@ class TestFinalizePerUnitRun:
         BOTH member sets — otherwise the second Steam create overwrites the first
         and its games are lost. First-seen casing wins for display.
         """
-
-        library.settings["collection_naming_mode"] = "merge"
         uow = library.uow
         # collection A ("7 up") → 2 apps; collection B ("7 Up") → 5 apps.
         for rid, aid in [(1, 1001), (2, 1002), (3, 1003), (4, 1004), (5, 1005), (6, 1006), (7, 1007)]:
@@ -2118,6 +2116,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids=set(range(1, 8)),
             platform_names={"n64": "Nintendo 64"},
             processed_platform_slugs={"n64"},
+            run_collections=_run_collections(naming_mode="merge"),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2127,8 +2126,6 @@ class TestFinalizePerUnitRun:
     @pytest.mark.asyncio
     async def test_merge_unions_names_joined_only_through_upper_case(self, library, emit):
         """Names the frontend's fold joins union here too: a dotless i and ``I`` are one key."""
-
-        library.settings["collection_naming_mode"] = "merge"
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="n64", name="B")
@@ -2141,6 +2138,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64"},
             processed_platform_slugs={"n64"},
+            run_collections=_run_collections(naming_mode="merge"),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2149,8 +2147,6 @@ class TestFinalizePerUnitRun:
     @pytest.mark.asyncio
     async def test_by_label_merges_same_type_case_variants(self, library, emit):
         """Under by_label, same-TYPE case variants merge (both bare standard names → folded keys match)."""
-
-        library.settings["collection_naming_mode"] = "by_label"
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -2163,6 +2159,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
             processed_platform_slugs={"n64", "snes"},
+            run_collections=_run_collections(naming_mode="by_label"),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2172,8 +2169,6 @@ class TestFinalizePerUnitRun:
     @pytest.mark.asyncio
     async def test_by_label_keeps_different_type_case_variants_separate(self, library, emit):
         """Under by_label, a standard and an IGDB-collection case variant stay separate (only one is labelled)."""
-
-        library.settings["collection_naming_mode"] = "by_label"
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -2188,6 +2183,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1, 2},
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
             processed_platform_slugs={"n64", "snes"},
+            run_collections=_run_collections(naming_mode="by_label"),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2210,6 +2206,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1, 2},
             platform_names={"a": "Retro", "b": "retro"},
             processed_platform_slugs={"a", "b"},
+            run_collections=_run_collections(),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2233,6 +2230,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1, 2},
             platform_names={"a": "\u0131x", "b": "Ix"},
             processed_platform_slugs={"a", "b"},
+            run_collections=_run_collections(),
         )
 
         payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
@@ -2410,6 +2408,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids=set(),
             platform_names={},
             processed_platform_slugs=set(),
+            run_collections=_run_collections(),
         )
 
         assert library.sync._sync_state == SyncState.RUNNING
@@ -2430,6 +2429,7 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64"},
             processed_platform_slugs={"n64"},
             stale_rom_ids=[2, 3],
+            run_collections=_run_collections(),
         )
 
         assert uow.committed is True
@@ -2443,8 +2443,6 @@ class TestFinalizePerUnitRun:
     @pytest.mark.asyncio
     async def test_stale_unbind_excludes_them_from_collections(self, library, emit):
         """Collections built from uow.roms must skip NULL-app_id (just-unbound) rows."""
-
-        library.settings["collection_create_platform_groups"] = True
         uow = library.uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -2455,6 +2453,7 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
             processed_platform_slugs={"n64", "snes"},
             stale_rom_ids=[2],
+            run_collections=_run_collections(create_platform_groups=True),
         )
 
         collections_events = [c for c in emit.call_args_list if c[0][0] == "sync_collections"]
@@ -2476,7 +2475,8 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
             processed_platform_slugs={"n64"},
-            stale_rom_ids=[2, 5, 99],  # 2 bound, 5 already unbound, 99 missing
+            stale_rom_ids=[2, 5, 99],  # 2 bound, 5 already unbound, 99 missing,
+            run_collections=_run_collections(),
         )
 
         assert uow.committed is True
@@ -2502,6 +2502,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1, 2},
             platform_names={},
             processed_platform_slugs=set(),
+            run_collections=_run_collections(),
         )
 
         with uow:
@@ -2522,6 +2523,7 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64"},
             processed_platform_slugs={"n64"},
             stale_rom_ids=[2],
+            run_collections=_run_collections(),
         )
 
         with uow:
@@ -2547,6 +2549,7 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64"},
             processed_platform_slugs={"n64"},
             stale_rom_ids=[2],
+            run_collections=_run_collections(),
         )
 
         with uow:
@@ -2571,6 +2574,7 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64"},
             processed_platform_slugs={"n64"},
             stale_rom_ids=[5],
+            run_collections=_run_collections(),
         )
 
         with uow:
@@ -2597,6 +2601,7 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
             processed_platform_slugs={"n64"},
             stale_rom_ids=[2],
+            run_collections=_run_collections(),
         )
 
         with uow:
@@ -2618,6 +2623,7 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64"},
             processed_platform_slugs={"n64"},
             stale_rom_ids=[2],
+            run_collections=_run_collections(),
         )
 
         with uow:
@@ -2639,6 +2645,7 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64"},
             processed_platform_slugs={"n64"},
             stale_rom_ids=[2, 5],
+            run_collections=_run_collections(),
         )
 
         with uow:
@@ -2667,6 +2674,7 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64"},
             processed_platform_slugs={"n64"},
             stale_rom_ids=[2, 3],
+            run_collections=_run_collections(),
         )
 
         stats = library.sync.get_sync_stats()

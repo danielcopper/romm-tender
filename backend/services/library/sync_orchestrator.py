@@ -777,8 +777,9 @@ class SyncOrchestrator:
             total_estimated_items = sum(u.estimated_items() for u in work_queue)
             platforms_planned = sum(1 for u in work_queue if u.type == "platform")
             # Live ``platform_slug → display_name`` map from the work-queue;
-            # threaded into finalize so collections key on display names and
-            # the offline name cache stays current as of this sync.
+            # threaded into the run's collection naming and into finalize so
+            # collections key on display names and the offline name cache stays
+            # current as of this sync.
             platform_names = {u.slug: u.name for u in work_queue if u.type == "platform" and u.slug}
             run_collections = RunCollections.at_run_start(
                 work_queue,
@@ -879,6 +880,7 @@ class SyncOrchestrator:
                 platform_names=platform_names,
                 processed_platform_slugs=processed_platform_slugs,
                 collection_listed_rom_ids=collection_listed,
+                run_collections=run_collections,
                 cancelled=cancelled,
             )
 
@@ -1197,8 +1199,6 @@ class SyncOrchestrator:
             membership = collection_memberships.get(_collection_membership_key(unit))
             collection_member_ids = membership.rom_ids if membership is not None else None
 
-        # Each entry names the collections it belongs to, so the frontend files the
-        # game the moment its shortcut exists rather than when the run ends.
         apply_emitted = run_collections.file_entries(apply_emitted, shortcuts_data, platform_rom_ids)
 
         applied_count = await self._chunk_dispatcher.apply_unit_in_chunks(
@@ -1324,6 +1324,7 @@ class SyncOrchestrator:
         platform_rom_ids: set[int],
         platform_names: dict[str, str],
         processed_platform_slugs: frozenset[str],
+        run_collections: RunCollections,
         cancelled: bool,
         collection_listed_rom_ids: frozenset[int] = frozenset(),
     ) -> FinalizeOutcome:
@@ -1403,6 +1404,7 @@ class SyncOrchestrator:
             platform_names=platform_names,
             processed_platform_slugs=processed_platform_slugs,
             stale_rom_ids=[row.rom_id for row in stale],
+            run_collections=run_collections,
         )
         return FinalizeOutcome(
             platform_app_ids=platform_app_ids,

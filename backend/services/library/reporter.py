@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Collection
 
     from domain.collection_sync_state import CollectionSyncState
+    from domain.entry_collections import RunCollections
     from domain.platform_sync_state import PlatformSyncState
     from domain.sync_run import SyncRun
     from services.library._state import CollectionMembership, LibrarySyncStateBox
@@ -147,8 +148,13 @@ class SyncReporter:
         pending_platform_rom_ids: set[int] | None,
         pending_collection_memberships: dict[tuple[str, str], CollectionMembership],
         platform_names: dict[str, str],
+        *,
+        run_collections: RunCollections,
     ) -> tuple[dict[str, list[int]], dict[str, list[int]]]:
         """Build platform_app_ids and romm_collection_app_ids from ``uow.roms``.
+
+        The naming mode and the platform-groups setting are *run_collections*'s,
+        the values the run's apply entries were filed under.
 
         Platform collections are grouped from the full ``roms`` table
         (every bound ROM, including ones an incremental sync skipped —
@@ -170,9 +176,11 @@ class SyncReporter:
         :meth:`_resolve_collection_memberships`). The platform loop still excludes
         rows whose ``shortcut_app_id`` is ``None``.
         """
-        platform_app_ids, group_bound_app_id = self._scan_bound_rows(uow, pending_platform_rom_ids, platform_names)
+        platform_app_ids, group_bound_app_id = self._scan_bound_rows(
+            uow, pending_platform_rom_ids, platform_names, run_collections=run_collections
+        )
         romm_collection_app_ids = self._resolve_collection_memberships(
-            uow, pending_collection_memberships, group_bound_app_id
+            uow, pending_collection_memberships, group_bound_app_id, run_collections=run_collections
         )
         return platform_app_ids, romm_collection_app_ids
 
@@ -181,6 +189,8 @@ class SyncReporter:
         uow: UnitOfWork,
         pending_platform_rom_ids: set[int] | None,
         platform_names: dict[str, str],
+        *,
+        run_collections: RunCollections,
     ) -> tuple[dict[str, list[int]], dict[str, int]]:
         """One pass over the bound rows: platform buckets + each group's bound appId.
 
@@ -196,7 +206,7 @@ class SyncReporter:
         it lossless and matches the collection-map rule
         (:meth:`_resolve_collection_memberships`).
         """
-        create_groups = self._settings.get("collection_create_platform_groups", False)
+        create_groups = run_collections.create_platform_groups
         display_by_fold: dict[str, str] = {}
         platform_app_ids_by_fold: dict[str, list[int]] = {}
         group_bound: dict[str, tuple[int, int]] = {}
@@ -229,6 +239,8 @@ class SyncReporter:
         uow: UnitOfWork,
         pending_collection_memberships: dict[tuple[str, str], CollectionMembership],
         group_bound_app_id: dict[str, int],
+        *,
+        run_collections: RunCollections,
     ) -> dict[str, list[int]]:
         """Resolve each collection's member rom_ids to de-duplicated appIds, UNION by key.
 
@@ -239,9 +251,8 @@ class SyncReporter:
         ACROSS collections (each collection's own resolution already dedups
         within). Names that resolve to no appId are omitted.
 
-        The key is the Steam-collection name-part built from the
-        ``collection_naming_mode`` setting
-        (:func:`domain.collection_label.steam_collection_key`): under
+        The key is the Steam-collection name-part built under *run_collections*'
+        naming mode (:func:`domain.collection_label.steam_collection_key`): under
         ``merge`` (default) it is the bare display name, so same-named
         collections of any kind union into one ``RomM: [<name>]`` collection
         (#1503) — byte-for-byte the pre-mode output. Under ``by_label`` every
@@ -260,7 +271,7 @@ class SyncReporter:
         one key, and keeps apart variants whose labels differ (the folded keys
         differ).
         """
-        naming_mode = self._settings.get("collection_naming_mode", "merge")
+        naming_mode = run_collections.naming_mode
         display_key_by_fold: dict[str, str] = {}
         app_ids_by_fold: dict[str, list[int]] = {}
         seen_by_fold: dict[str, set[int]] = {}
@@ -298,6 +309,7 @@ class SyncReporter:
         platform_names: dict[str, str],
         stale_rom_ids: list[int] | None,
         processed_platform_slugs: frozenset[str],
+        run_collections: RunCollections,
     ) -> tuple[dict[str, list[int]], dict[str, list[int]]]:
         """Unbind stale ROMs, refresh the name cache, and build collection maps.
 
@@ -341,6 +353,7 @@ class SyncReporter:
                 pending_platform_rom_ids,
                 pending_collection_memberships,
                 names,
+                run_collections=run_collections,
             )
 
     @staticmethod
@@ -369,6 +382,7 @@ class SyncReporter:
         stale_rom_ids: list[int] | None = None,
         *,
         processed_platform_slugs: Collection[str],
+        run_collections: RunCollections,
     ):
         """Unbind stale ROMs, rebuild Steam-collection maps, and emit ``sync_collections``.
 
@@ -390,6 +404,10 @@ class SyncReporter:
         stamp itself stays, is in docs/architecture/backend-architecture.md,
         "Incremental skip".
 
+        ``run_collections`` is the run's, built at its start: the maps are built
+        under its naming mode and platform-groups setting, the ones the run's
+        apply entries were filed under, whatever the settings say by now.
+
         Returns the ``(platform_app_ids, romm_collection_app_ids)`` maps the caller
         needs for the completed-run ``SyncRun`` write and the terminal emit. The
         terminal ``sync_complete`` + progress frame is deliberately NOT emitted here
@@ -407,6 +425,7 @@ class SyncReporter:
             names,
             stale_rom_ids,
             frozenset(processed_platform_slugs),
+            run_collections,
         )
 
         await self._emit(

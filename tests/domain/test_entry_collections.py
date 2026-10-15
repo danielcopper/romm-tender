@@ -52,7 +52,7 @@ class TestPlatformCollectionName:
     def test_a_rom_a_platform_unit_fetched_is_filed_under_the_runs_display_name(self):
         assert platform_collection_name(1, "n64", {1}, {"n64": "Nintendo 64"}, False) == "Nintendo 64"
 
-    def test_a_rom_no_platform_unit_fetched_is_filed_nowhere_with_platform_groups_off(self):
+    def test_a_rom_no_platform_unit_fetched_is_in_no_platform_collection_with_platform_groups_off(self):
         assert platform_collection_name(30, "gba", {1}, {"n64": "Nintendo 64"}, False) is None
 
     def test_with_platform_groups_on_it_is_filed_under_the_slug_where_the_run_has_no_name(self):
@@ -100,6 +100,16 @@ class TestAtRunStart:
         run = _run([_collection("5", "Mario", (1,), kind="smart"), _collection("7", "Mario", (1, 2))])
 
         assert dict(run.romm_keys_by_rom) == {1: ("Mario",), 2: ("Mario",)}
+
+    def test_a_foreign_smart_collection_still_sets_the_spelling_of_a_key_it_shares(self):
+        run = _run(
+            [
+                _collection("5", "7 Up", (1,), kind="smart", is_own=False),
+                _collection("7", "7 up", (2,)),
+            ]
+        )
+
+        assert dict(run.romm_keys_by_rom) == {2: ("7 Up",)}
 
     def test_keys_that_fold_together_take_the_spelling_first_in_queue_order(self):
         run = _run([_collection("7", "7 Up", (1,)), _collection("8", "7 up", (2,))])

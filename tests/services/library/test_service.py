@@ -15,6 +15,7 @@ from tests.services.library._helpers import (
     _make_collections_loop,
     _make_loop_raising,
     _make_registry_entry,
+    _run_collections,
     _seed_rom_row,
     rebind_loop,
 )
@@ -1062,7 +1063,6 @@ class TestCollectionSyncEdgeCases:
         excluded when the toggle is OFF.
         """
         svc = library.sync
-        svc._settings["collection_create_platform_groups"] = False
         svc._settings["enabled_collections"] = {"standard": {"3": True}, "smart": {}, "virtual": {}}
 
         # roms: ROM 1 from platform, ROM 2 from collection only
@@ -1077,6 +1077,7 @@ class TestCollectionSyncEdgeCases:
                 platform_rom_ids,
                 {("standard", "3"): CollectionMembership(name="Favorites", rom_ids=[1, 2], kind="standard")},
                 names,
+                run_collections=_run_collections(create_platform_groups=False),
             )
 
         assert "Game Boy Advance" in platform_app_ids
@@ -1086,7 +1087,6 @@ class TestCollectionSyncEdgeCases:
     def test_sc6c_build_collection_app_ids_includes_all_when_toggle_on(self, library):
         """Same as sc5c but with toggle ON — PSX should be included."""
         svc = library.sync
-        svc._settings["collection_create_platform_groups"] = True
 
         _seed_rom(library.uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
         _seed_rom(library.uow, 2, app_id=1002, platform_slug="psx", name="ROM B")
@@ -1094,7 +1094,9 @@ class TestCollectionSyncEdgeCases:
         platform_rom_ids = {1}
 
         with library.uow as uow:
-            platform_app_ids, _ = svc._reporter._build_collection_app_ids(uow, platform_rom_ids, {}, names)
+            platform_app_ids, _ = svc._reporter._build_collection_app_ids(
+                uow, platform_rom_ids, {}, names, run_collections=_run_collections(create_platform_groups=True)
+            )
 
         assert "Game Boy Advance" in platform_app_ids
         assert "PlayStation" in platform_app_ids, "PSX should be included (toggle ON)"
@@ -1108,7 +1110,6 @@ class TestCollectionSyncEdgeCases:
         platform_app_ids and romm_collection_app_ids when built via
         _build_collection_app_ids."""
         svc = library.sync
-        svc._settings["collection_create_platform_groups"] = False
 
         _seed_rom(library.uow, 1, app_id=1001, platform_slug="gba", name="ROM A")
         names = {"gba": "Game Boy Advance"}
@@ -1119,7 +1120,11 @@ class TestCollectionSyncEdgeCases:
 
         with library.uow as uow:
             platform_app_ids, romm_collection_app_ids = svc._reporter._build_collection_app_ids(
-                uow, platform_rom_ids, collection_memberships, names
+                uow,
+                platform_rom_ids,
+                collection_memberships,
+                names,
+                run_collections=_run_collections(create_platform_groups=False),
             )
 
         # Platform group for GBA exists (ROM A is a platform ROM)
@@ -1165,7 +1170,11 @@ class TestCollectionSyncEdgeCases:
 
         with library.uow as uow:
             _platform_app_ids, romm_collection_app_ids = svc._reporter._build_collection_app_ids(
-                uow, {1}, {}, {"gba": "GBA"}
+                uow,
+                {1},
+                {},
+                {"gba": "GBA"},
+                run_collections=_run_collections(),
             )
 
         assert romm_collection_app_ids == {}
@@ -1183,6 +1192,7 @@ class TestCollectionSyncEdgeCases:
                 {1},
                 {("standard", "3"): CollectionMembership(name="Favorites", rom_ids=[1, 99], kind="standard")},
                 {"gba": "GBA"},
+                run_collections=_run_collections(),
             )
 
         assert "Favorites" in romm_collection_app_ids

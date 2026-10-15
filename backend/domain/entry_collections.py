@@ -4,8 +4,8 @@ Two answers come from here. The platform collection's name for one ROM is the
 rule the end-of-run complete set and the per-shortcut answer both apply, so the
 two agree. The per-shortcut answer is what each entry of a ``sync_apply_unit``
 frame carries, so the frontend can put a game into its collections the moment its
-shortcut exists, reading no setting and applying no membership rule itself. Why
-the answer is per shortcut, and what it does not cover until the run ends:
+shortcut exists, reading no setting and applying no membership rule itself. What
+the answer covers, and what reaches its collection only when the run ends:
 ``docs/architecture/steam-non-steam-shortcuts.md`` § Collection management.
 No I/O, no state.
 """
@@ -47,14 +47,16 @@ def platform_collection_name(
 class RunCollections:
     """What a run knows at its start about the Steam collections its shortcuts belong to.
 
+    ``naming_mode`` and ``create_platform_groups`` are the two settings as the
+    run read them at its start; the end-of-run maps are built with them too.
     ``romm_keys_by_rom`` maps each ROM a queued collection lists to the keys of
     those collections — the names ``romm_collection_app_ids`` is keyed by. A
-    foreign smart collection is not in it: its listing is its owner's view, not
-    the caller's walk.
+    foreign smart collection's members are not in it.
     """
 
     romm_keys_by_rom: Mapping[int, tuple[str, ...]]
     platform_names: Mapping[str, str]
+    naming_mode: str
     create_platform_groups: bool
 
     @classmethod
@@ -68,18 +70,19 @@ class RunCollections:
     ) -> RunCollections:
         """Index the queued collection units' listed members under their Steam keys.
 
-        Keys that fold to one Steam collection are spelled the way the first of
-        them in queue order spells it, as the end-of-run map spells them.
+        Keys that fold to one Steam collection are spelled the way the first
+        collection unit in queue order spells it, a foreign smart one included,
+        as the end-of-run map spells them.
         """
         spelling_by_fold: dict[str, str] = {}
         keys_by_rom: dict[int, list[str]] = {}
         for unit in work_queue:
             if unit.type != "collection" or unit.collection_kind is None:
                 continue
-            if unit.collection_kind == "smart" and not unit.is_own:
-                continue
             key = steam_collection_key(unit.name, unit.collection_kind, unit.virtual_type, naming_mode)
             key = spelling_by_fold.setdefault(fold_collection_name(key), key)
+            if unit.collection_kind == "smart" and not unit.is_own:
+                continue
             for rom_id in unit.member_rom_ids:
                 keys = keys_by_rom.setdefault(rom_id, [])
                 if key not in keys:
@@ -87,6 +90,7 @@ class RunCollections:
         return cls(
             romm_keys_by_rom={rom_id: tuple(keys) for rom_id, keys in keys_by_rom.items()},
             platform_names=dict(platform_names),
+            naming_mode=naming_mode,
             create_platform_groups=create_platform_groups,
         )
 

@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from tests.services.library._helpers import _seed_rom_row
+from tests.services.library._helpers import _run_collections, _seed_rom_row
 
 
 async def _emit_sync_complete(library) -> None:
@@ -34,6 +34,7 @@ async def _finalize(library, *, synced_rom_ids: set[int]) -> None:
         platform_names={},
         processed_platform_slugs=frozenset(),
         cancelled=False,
+        run_collections=_run_collections(),
     )
 
 

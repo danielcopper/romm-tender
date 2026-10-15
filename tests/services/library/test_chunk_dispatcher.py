@@ -31,7 +31,8 @@ from domain.sync_state import SyncState
 from domain.work_unit import WorkUnit
 from tests.services.library._helpers import _fake_wait_set_event, _seed_platform, _seed_rom_row, _use_fake_romm
 
-# A unit driven alone files its entries into no collection.
+# A unit driven alone: no entry names a RomM collection, and a platform unit's
+# entries name their platform collection by its slug.
 _NO_COLLECTIONS = RunCollections.at_run_start([], platform_names={}, naming_mode="merge", create_platform_groups=False)
 
 
