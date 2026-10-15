@@ -870,13 +870,14 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   outside the live work queue a bound row is still on (`SyncReporter._names_with_bound_platforms_kept`), so a cancelled
   or paused run in between does not rename the collection to the slug. The preview reads the same name
   (`do_read_kept_platform_names`) and counts the collection as kept. Force Full Sync leaves the routes in place. The
-  preview asks the same question for the same rows, through the same `_settle_stale_rows`, so the removals it counts are
-  the ones the apply makes. **Only the apply records what it established** (`StaleSort.gone_from_romm_marks`, written in
-  the finalize's write UoW by `SyncReporter.finalize_per_unit_run`): an asked row RomM answered with a proven 404 is
-  marked `roms.gone_from_romm = 'not_found'`, one RomM returned has its mark cleared, and an answer that establishes
-  nothing writes nothing; a row kept on a platform RomM no longer lists is marked `delisted`. A row kept on a platform
-  the run read whole is not marked, since that platform's stamp already names it. Any commit of a row clears its mark,
-  because the column rides the sync UPSERT with no merge. The mark is what lets the removed-game cleanup list such a row
+  preview asks the same question for the same rows, through the same
+  `services/library/_stale_rows.py::settle_stale_rows`, so the removals it counts are the ones the apply makes. **Only
+  the apply records what it established** (`StaleSort.gone_from_romm_marks`, written in the finalize's write UoW by
+  `SyncReporter.finalize_per_unit_run`): an asked row RomM answered with a proven 404 is marked
+  `roms.gone_from_romm = 'not_found'`, one RomM returned has its mark cleared, and an answer that establishes nothing
+  writes nothing; a row kept on a platform RomM no longer lists is marked `delisted`. A row kept on a platform the run
+  read whole is not marked, since that platform's stamp already names it. Any commit of a row clears its mark, because
+  the column rides the sync UPSERT with no merge. The mark is what lets the removed-game cleanup list such a row
   ([Removed-game cleanup](removed-game-cleanup.md#discovery)); Force Full Sync leaves it in place.
 - **Grandfathering.** A group that already carries several bound shortcuts (a library synced before this model) keeps
   them all — each surviving bound sibling stays its own tracked shortcut; no new shortcut is minted for a group with a

@@ -602,18 +602,21 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   RomM's answer is the ROM itself, while any other row is kept when the run's own platform listing no longer names its
   platform and removed unasked when it does; a row with no recorded route is asked only when the collections' last
   completed members list it; a kept row stays in its platform's Steam collection; the preview counts exactly the
-  removals and the platform collections the apply makes** — test + prompt-only —
-  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule,
-  `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
-  preview (among it the third run, the stopped run, the platform route and the fallback),
+  removals and the platform collections the apply makes; and only the apply records what it established on the row
+  (`roms.gone_from_romm`): a 404 or a keep on a platform RomM no longer lists marks it, the ROM itself clears the mark,
+  and any other answer writes nothing** — test + prompt-only — `tests/domain/test_sync_diff.py::TestSortStaleRows` for
+  the rule, `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply
+  and the preview (among it the third run, the stopped run, the platform route and the fallback),
   `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and `TestPlatformTurnedOffAndBackOn`
   (with `test_a_platform_still_on_that_romm_no_longer_lists_keeps_its_shortcuts`,
   `test_a_platform_romm_no_longer_lists_keeps_its_steam_collection` and
   `test_a_platform_read_mid_run_still_counts_as_unlisted`) for the two ends, and
-  `tests/services/library/test_reporter.py::TestCommitUnitResults` for the route the commit records. Prompt-only: the
-  collection records are read before the run's first unit (`do_read_collection_listed_rom_ids`), the platform listing is
-  the run's own (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids, the chunk dispatcher names the
-  unit's kind on every commit, and the preview and the apply both sort through `SyncOrchestrator._settle_stale_rows`
+  `tests/services/library/test_reporter.py::TestCommitUnitResults` for the route the commit records;
+  `tests/domain/test_sync_diff.py::TestGoneFromRommMarks` and `tests/contract/test_gone_from_romm_mark.py` for the mark.
+  Prompt-only: the collection records are read before the run's first unit (`do_read_collection_listed_rom_ids`), the
+  platform listing is the run's own (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids, the chunk
+  dispatcher names the unit's kind on every commit, and the preview and the apply both sort through
+  `services/library/_stale_rows.py::settle_stale_rows`
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py`,
   `tests/domain/test_firmware_wants.py` and `tests/services/test_firmware.py::TestCheckPlatformBiosUnknown`;
