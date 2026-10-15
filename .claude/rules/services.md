@@ -25,6 +25,9 @@ utilities) / `models/` (data shapes). `import-linter` enforces direction. `[CP]`
 - `[CP]` No clocks or randomness — inject `Clock` / `UuidGen` / `Sleeper`. `time.time()` / `time.monotonic()` /
   `datetime.now()` / `uuid.uuid4()` / `asyncio.sleep()` / `random.*` are banned at the call site.
 - `[CP]` No service-to-service concrete imports — services are independent; cross-service deps are Protocol-typed.
+- `[ours]` A task is started only through a `BackgroundTasks` (`lib/background_tasks.py`) the service builds with its
+  logger; a service with a place in `Application.shutdown` awaits that helper's `shutdown()` in its own.
+  `scripts/check_background_tasks.py` fails on any other `create_task` / `ensure_future` / `asyncio.Task(...)`.
 - `[ours]` Module functions from `domain/` are still a coupling — if tests need `patch("services.X.module_name.fn")`,
   wrap the module behind a Protocol and inject it.
 - `[ours]` **Constructor shape: every service takes a single `config: XxxServiceConfig` keyword argument.** Frozen
