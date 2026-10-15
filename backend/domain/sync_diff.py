@@ -566,10 +566,9 @@ def settle_asked_rows(
     that established nothing, for this run, because only a 404 is evidence of
     absence.
     """
-    remove: list[StaleRow] = []
-    keep: list[StaleRow] = []
-    for row in asked:
-        (remove if answers.get(row.rom_id) == "present" else keep).append(row)
+    rows = list(asked)
+    remove = [row for row in rows if answers.get(row.rom_id) == "present"]
+    keep = [row for row in rows if answers.get(row.rom_id) != "present"]
     return remove, keep
 
 
