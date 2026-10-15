@@ -9,6 +9,7 @@
  * for the log line at a reported start, never to identify a launching app.
  */
 
+import { addEventListener } from "../api/host";
 import { showToast } from "./toast";
 import {
   recordSessionStart,
@@ -52,8 +53,10 @@ const activeSessions = new Map<number, ActiveSession>();
 // Serialization chain — ensures lifecycle events don't interleave
 let lifecycleChain: Promise<void> = Promise.resolve();
 
-// Cached app ID -> rom ID map, refreshed on init, when an app starts, and by the
-// launch watcher once for an appId Tender owns that the map does not hold.
+// Cached app ID -> rom ID map, refreshed on init, when an app starts, after a
+// library sync completes and after a version switch — both can move a binding —
+// and by the launch watcher once for an appId Tender owns that the map does not
+// hold.
 let appIdToRomId: Record<string, number> = {};
 
 function getRomIdForApp(appId: number): number | null {
@@ -574,6 +577,7 @@ async function adoptOrphanedSessions(): Promise<void> {
 export async function initSessionManager(): Promise<void> {
   // Load initial app ID map
   await refreshAppIdMap();
+  addEventListener("sync_complete", () => detach(refreshAppIdMap()));
 
   // Game lifecycle notifications
   SteamClient.GameSessions.RegisterForAppLifetimeNotifications((update) => {

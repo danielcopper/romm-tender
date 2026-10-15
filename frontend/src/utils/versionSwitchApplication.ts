@@ -7,12 +7,17 @@ import {
 } from "../api/backend";
 import { setLaunchOptionsConfirmed } from "./steamShortcuts";
 import { isPruneLeaseCancelled, withPruneLease, type PruneLeaseAdmission } from "./pruneLease";
+import { refreshAppIdMap } from "./sessionManager";
+import { detach } from "./detach";
 
 export async function applyCommittedVersionSwitch(
   result: SwitchVersionSuccess,
   onCover?: (romId: number, cover: string) => void,
   admission?: PruneLeaseAdmission,
 ): Promise<boolean> {
+  // The binding moved when the backend answered; Steam's Play must not wait on
+  // the Steam writes below to be judged by it.
+  detach(refreshAppIdMap());
   return withPruneLease(
     result.prune_lease_token,
     "Version switch",
