@@ -24,6 +24,7 @@ vi.mock("../api/backend", () => ({
   probeReachability: vi.fn(),
   preLaunchSync: vi.fn(),
   checkLocalDrift: vi.fn(),
+  getVersionList: vi.fn(),
   // The shared reconcile helper (real module) pulls the single-ROM command here
   // before each watcher relaunch (#1152).
   getRomRelaunchOptions: vi.fn(),
@@ -170,6 +171,8 @@ describe("launchInterceptor — full funnel watcher", () => {
     });
     // Default: the source games start through is switched on.
     vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: null });
+    // Default: RomM still serves the bound version.
+    vi.mocked(backend.getVersionList).mockResolvedValue({ multi_version: false, bound_vanished: false });
     // Skip-set empty by default — a marked appId is set per-test.
     vi.mocked(sessionManager.getAppIdRomIdMapSnapshot).mockReturnValue({ [String(APP_ID)]: 42 });
     vi.mocked(sessionManager.refreshAppIdMap).mockResolvedValue(undefined);
@@ -838,6 +841,59 @@ describe("launchInterceptor — full funnel watcher", () => {
         body: "ROM not downloaded. Download it from its game page first.",
       });
       expect(launchGate.runLaunchGate).not.toHaveBeenCalled();
+      expect(runGameMock()).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [
+        "a version gone from RomM",
+        {
+          multi_version: true,
+          bound_vanished: true,
+          versions: [{ active: true, vanished: true }, { vanished: false }],
+        },
+        "This version is no longer available on RomM. Choose another version on its game page.",
+      ],
+      [
+        "a game whose every version is gone",
+        { multi_version: true, bound_vanished: true, versions: [{ active: true, vanished: true }, { vanished: true }] },
+        "This game is no longer available on RomM.",
+      ],
+      [
+        "a single-version game that is gone",
+        { multi_version: false, bound_vanished: true },
+        "This game is no longer available on RomM.",
+      ],
+      [
+        "a version RomM still serves",
+        { multi_version: true, bound_vanished: false, versions: [{ active: true }, {}] },
+        "ROM not downloaded. Download it from its game page first.",
+      ],
+    ])("stays cancelled and says why for %s", async (_label, list, body) => {
+      vi.mocked(backend.getInstalledRom).mockResolvedValue(null);
+      vi.mocked(backend.getVersionList).mockResolvedValue(list as never);
+      register();
+      captureHandler()(77, GAME_ID, "LaunchApp", PLAY_SOURCE);
+      await flush();
+
+      expect(backend.getVersionList).toHaveBeenCalledWith(APP_ID);
+      expect(toaster.toast).toHaveBeenCalledWith({ title: "Tender", body });
+      expect(launchGate.runLaunchGate).not.toHaveBeenCalled();
+      expect(runGameMock()).not.toHaveBeenCalled();
+    });
+
+    it("keeps the download sentence when RomM cannot be asked about the version", async () => {
+      vi.mocked(backend.getInstalledRom).mockResolvedValue(null);
+      vi.mocked(backend.getVersionList).mockRejectedValue(new Error("offline"));
+      register();
+      captureHandler()(77, GAME_ID, "LaunchApp", PLAY_SOURCE);
+      await flush();
+
+      expect(toaster.toast).toHaveBeenCalledWith({
+        title: "Tender",
+        body: "ROM not downloaded. Download it from its game page first.",
+      });
+      expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("version list for appId"));
       expect(runGameMock()).not.toHaveBeenCalled();
     });
 

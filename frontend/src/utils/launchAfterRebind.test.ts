@@ -28,6 +28,7 @@ vi.mock("../api/backend", () => ({
   preLaunchSync: vi.fn(),
   checkLocalDrift: vi.fn(),
   getRomRelaunchOptions: vi.fn(),
+  getVersionList: vi.fn(),
   fetchCoverBase64: vi.fn(),
   invalidateCachedGameDetail: vi.fn(),
   releaseOrphanedPruneLeases: vi.fn(() => Promise.resolve({ success: true, released: 0 })),
