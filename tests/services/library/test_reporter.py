@@ -1178,7 +1178,7 @@ class TestGroupAwareCommit:
         with uow:
             rep = uow.roms.get(2)
             old = uow.roms.get(1)
-        # The binding moved onto the representative, which keeps its own real name.
+        # The binding moved onto the same dump under its new id, which keeps its own real name.
         assert rep is not None
         assert rep.shortcut_app_id == 5000
         assert rep.name == "Game (JP)"

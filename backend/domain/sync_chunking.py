@@ -168,10 +168,10 @@ def _index_emitted_groups(
     Returns ``(key_to_chunk, romid_to_chunk)``: non-``None`` keys route by key,
     keyless entries route by their **binding target** — ``bind_rom_id`` when
     present (a rebind entry: its own ``rom_id`` is the vanished sibling, absent
-    from ``shortcuts_data``, while the target is the surviving representative
+    from ``shortcuts_data``, while the target is the same dump under its new id,
     whose row must commit in this chunk), else their own ``rom_id`` (a plain
     keyless entry). Routing a keyless rebind by its own ``rom_id`` would strand
-    the representative's row in chunk 0's leftover while the entry sits in a later
+    the target's row in chunk 0's leftover while the entry sits in a later
     chunk, so the binding is never persisted and the rebind re-fires every sync.
     ``setdefault`` keeps the first chunk to carry a key as its owner, so the
     group-clustered contract yields one chunk per group.

@@ -1,7 +1,7 @@
 /**
  * What RomM has positively confirmed about the version each appId is bound to.
  *
- * The version picker publishes what the server said about a bound id
+ * The version picker learns what the server said about a bound id
  * (`get_version_list`), and it sits beside the play button and below the game
  * page's banner rather than above them — none can see another's state. This is
  * the seam between them: the picker publishes what it learned, the play button

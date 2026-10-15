@@ -658,7 +658,7 @@ def compute_platform_collection_diff(
     A rebind entry (see :func:`_rebind_entry`) is keyed to the vanished bound
     ``rom_id`` so the frontend reuses its existing shortcut, but that id is never
     in ``platform_rom_ids`` (which carries the fetched server ids). Its platform
-    membership follows the surviving representative it rebinds ONTO — the
+    membership follows the same dump it rebinds ONTO — the
     ``bind_rom_id`` target, a fetched id present in ``platform_rom_ids``. Keying
     the predicate on the entry's own ``rom_id`` would drop a fully-rebinding
     platform out of ``future_platforms`` and mis-count it as removed (#1417); the

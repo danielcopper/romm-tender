@@ -1103,7 +1103,7 @@ class SyncOrchestrator:
         # groups' rows to chunk 0's leftover (sync_chunking), so DB work is never
         # dropped and the platform stamp still rides the final chunk. A rebind
         # entry is never unchanged — classify counts it as changed, because it
-        # must move its binding onto the representative. ``new_ids`` prices each
+        # must move its binding onto the same dump. ``new_ids`` prices each
         # chunk create-vs-update for the budget gate. Covers ride only the delta
         # (covers are creates-only, #1391).
         new, changed, unchanged_ids, _stale, _disabled = classify_roms(emitted, registry, set())

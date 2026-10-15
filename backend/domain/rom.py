@@ -129,11 +129,8 @@ class Rom:
     def record_delivery(self, route: DeliveryRoute) -> None:
         """Record that a sync unit of kind *route* committed this ROM.
 
-        The stale removal reads it for a bound ROM a run did not return on a
-        platform it did not read: one last delivered through a collection is
-        asked about by its id, one last delivered through its platform is gone
-        with that platform's toggle. ``None`` is a ROM no unit has committed
-        since the column was added.
+        What the stale removal makes of it is :func:`domain.sync_diff.sort_stale_rows`'s.
+        ``None`` is a ROM no unit has committed since the column was added.
         """
         self.delivered_through = route
 
