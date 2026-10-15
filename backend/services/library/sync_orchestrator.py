@@ -55,23 +55,20 @@ from domain.sync_diff import (
     compute_platform_collection_diff,
     count_disabled_platform_removals,
     platform_breakdown,
-    settle_asked_rows,
-    sort_stale_rows,
 )
 from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
 from lib.background_tasks import BackgroundTasks
 from lib.errors import Refused, classify_error
+from services.library._stale_rows import settle_stale_rows
 from services.library._state import CollectionMembership
 from services.library.session_budget import SYNC_PAUSED_BUDGET, SessionBudgetMonitor
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Collection, Iterable
 
     from domain.emulator_sources import SourcesReading
-    from domain.rom import GoneEvidence
     from domain.work_unit import WorkUnit
     from lib.late_binding import LateBinding
     from services.library._state import LibrarySyncStateBox
@@ -376,7 +373,7 @@ class SyncOrchestrator:
             )
             # The preview asks what its apply will ask and records none of the
             # answers: only the apply's finalize marks a row gone from RomM.
-            removals, kept, _marks = await self._settle_stale_rows(
+            removals, kept, _marks = await settle_stale_rows(
                 (
                     StaleRow(
                         rid,
@@ -386,6 +383,8 @@ class SyncOrchestrator:
                     )
                     for rid in stale
                 ),
+                ask_romm=self._fetcher.ask_romm_for_roms,
+                logger=self._logger,
                 read_platform_slugs=set(slug_to_name),
                 listed_platform_slugs=box.run_listed_platform_slugs,
                 collection_listed_rom_ids=collection_listed,
@@ -1260,36 +1259,6 @@ class SyncOrchestrator:
             )
         return unit_roms, skipped
 
-    async def _settle_stale_rows(
-        self,
-        rows: Iterable[StaleRow],
-        *,
-        read_platform_slugs: Collection[str],
-        listed_platform_slugs: Collection[str] | None,
-        collection_listed_rom_ids: Collection[int],
-    ) -> tuple[list[StaleRow], list[StaleRow], dict[int, GoneEvidence | None]]:
-        """``(remove, kept_in_platform_collections, gone_marks)`` for the stale *rows*.
-
-        Sorts them by :func:`sort_stale_rows`, asks RomM once about the ones it
-        cannot decide, settles those by :func:`settle_asked_rows`, and marks by
-        :meth:`StaleSort.gone_from_romm_marks`. The preview and the apply both answer
-        through here, so the removals a preview promises are the ones its apply makes.
-        """
-        sort = sort_stale_rows(
-            rows,
-            read_platform_slugs=read_platform_slugs,
-            listed_platform_slugs=listed_platform_slugs,
-            collection_listed_rom_ids=collection_listed_rom_ids,
-        )
-        answers = await self._fetcher.ask_romm_for_roms([row.rom_id for row in sort.ask]) if sort.ask else {}
-        asked_remove, asked_keep = settle_asked_rows(sort.ask, answers)
-        if sort.keep or asked_keep:
-            self._logger.info(
-                f"Stale removal: keeping {len(sort.keep)} bound version(s) gone from RomM in their platform's "
-                f"collection and {len(asked_keep)} reached through a collection RomM did not confirm present"
-            )
-        return sort.remove + asked_remove, sort.keep, sort.gone_from_romm_marks(answers, read_platform_slugs)
-
     async def _with_kept_platform_names(self, kept: list[StaleRow], live: dict[str, str]) -> dict[str, str]:
         """*live*, plus the cached name of each platform outside it that a *kept* row is on, for the preview.
 
@@ -1345,8 +1314,10 @@ class SyncOrchestrator:
                 synced_rom_ids,
                 set(self._sync_state.committed_app_ids),
             )
-        stale, kept, gone_marks = await self._settle_stale_rows(
+        stale, kept, gone_marks = await settle_stale_rows(
             candidates,
+            ask_romm=self._fetcher.ask_romm_for_roms,
+            logger=self._logger,
             read_platform_slugs=processed_platform_slugs,
             listed_platform_slugs=self._sync_state.run_listed_platform_slugs,
             collection_listed_rom_ids=collection_listed_rom_ids,
