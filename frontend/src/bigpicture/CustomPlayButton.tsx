@@ -49,7 +49,7 @@ import {
   stopRunningGame,
 } from "../api/backend";
 import { getRommConnectionState, onRommConnectionChange, reportServerReachable } from "../utils/connectionState";
-import { isBoundVanished, onBoundVanishedChange } from "../utils/vanishedBinding";
+import { isBoundVanished, onBoundAvailabilityChange } from "../utils/vanishedBinding";
 import { scrollToTop } from "../utils/scrollHelpers";
 import { getEventTarget } from "../utils/events";
 import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "../utils/saveSetup";
@@ -555,7 +555,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     // recovery probe reconnects, so Download/Play re-enable without a page
     // re-entry (the device symptom of Download staying blocked after reconnect).
     const unsubscribeConnection = onRommConnectionChange((s) => setIsOffline(s === "offline"));
-    const unsubscribeVanished = onBoundVanishedChange(() => setBoundVanished(isBoundVanished(appId)));
+    const unsubscribeVanished = onBoundAvailabilityChange(() => setBoundVanished(isBoundVanished(appId)));
 
     // Session start/stop (#1313) — flip the running overlay so the button shows
     // Resume for the live session and returns to Play when it ends. Matches on

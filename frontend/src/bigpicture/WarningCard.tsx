@@ -1,4 +1,4 @@
-import { FC } from "react";
+import { FC, ReactNode } from "react";
 import { FaExclamationTriangle } from "react-icons/fa";
 
 interface WarningCardProps {
@@ -13,6 +13,8 @@ interface WarningCardProps {
   /** Smaller type and less padding than `compact`, for a fact that stands beside
    *  the warning cards on the narrow page without competing with them. */
   minor?: boolean;
+  /** Drawn between the title and the message, in the message's type. */
+  children?: ReactNode;
 }
 
 const SPACIOUS = { padding: "40px 32px", titleSize: "19px", titleWeight: 600, iconSize: "42px", messageSize: "14px" };
@@ -27,6 +29,7 @@ export const WarningCard: FC<WarningCardProps> = ({
   compact = false,
   showIcon = true,
   minor = false,
+  children,
 }) => {
   let size = compact ? COMPACT : SPACIOUS;
   if (minor) size = MINOR;
@@ -56,6 +59,18 @@ export const WarningCard: FC<WarningCardProps> = ({
       >
         {title}
       </div>
+      {children ? (
+        <div
+          style={{
+            fontSize: size.messageSize,
+            color: "rgba(255, 255, 255, 0.75)",
+            maxWidth: compact ? "100%" : "680px",
+            lineHeight: 1.5,
+          }}
+        >
+          {children}
+        </div>
+      ) : null}
       {message && (
         <div
           style={{

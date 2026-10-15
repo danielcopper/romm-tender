@@ -160,7 +160,7 @@ import { showAdoptCandidateModal } from "../bigpicture/AdoptCandidateModal";
 import { showAdoptCollisionModal } from "../bigpicture/AdoptCollisionModal";
 import { showAdoptUnusableModal } from "../bigpicture/AdoptUnusableModal";
 import { showAdoptVanishedModal } from "../bigpicture/AdoptVanishedModal";
-import { resetBoundVanished, setBoundVanished } from "../utils/vanishedBinding";
+import { resetBoundAvailability, setBoundAvailability } from "../utils/vanishedBinding";
 import type { SyncConflict, SaveStatus } from "../types";
 
 function mockCachedDetail(overrides: Partial<CachedGameDetail> = {}): void {
@@ -208,7 +208,7 @@ async function openUninstallMenu(container: HTMLElement, flushes: number): Promi
 // otherwise: the stub's empty answer would read as one nothing could check.
 beforeEach(() => {
   setRommConnectionState("connected");
-  resetBoundVanished();
+  resetBoundAvailability();
   vi.mocked(backend.checkStartSource).mockResolvedValue({ switched_off: null });
 });
 
@@ -227,7 +227,7 @@ describe("CustomPlayButton — vanished bound ROM (#1570 F20)", () => {
     await findByText("Download");
     expect(downloadButton(container).disabled).toBe(false);
 
-    act(() => setBoundVanished(100, true));
+    act(() => setBoundAvailability(100, "version_gone"));
 
     // The download can only ever come back not_found, so stop offering it.
     expect(downloadButton(container).disabled).toBe(true);
@@ -237,7 +237,7 @@ describe("CustomPlayButton — vanished bound ROM (#1570 F20)", () => {
     mockCachedDetail({ rom_id: 42, installed: false });
     const { findByText, container } = render(<CustomPlayButton appId={100} />);
     await findByText("Download");
-    act(() => setBoundVanished(100, true));
+    act(() => setBoundAvailability(100, "version_gone"));
 
     downloadButton(container).click();
     await act(async () => Promise.resolve());
@@ -252,7 +252,7 @@ describe("CustomPlayButton — vanished bound ROM (#1570 F20)", () => {
 
     // A failed query reports bound_vanished:false — uncertainty must never
     // disable the download. Fail-open is the whole feature's rule.
-    act(() => setBoundVanished(100, false));
+    act(() => setBoundAvailability(100, "live"));
 
     expect(downloadButton(container).disabled).toBe(false);
   });
@@ -262,7 +262,7 @@ describe("CustomPlayButton — vanished bound ROM (#1570 F20)", () => {
     const { findByText, container } = render(<CustomPlayButton appId={100} />);
     await findByText("Download");
 
-    act(() => setBoundVanished(999, true));
+    act(() => setBoundAvailability(999, "version_gone"));
 
     expect(downloadButton(container).disabled).toBe(false);
   });

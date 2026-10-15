@@ -27,6 +27,7 @@ import { FaGamepad, FaCog, FaMicrochip, FaExclamationTriangle } from "react-icon
 import { CustomPlayButton } from "./CustomPlayButton";
 import { DiscSelector } from "./DiscSelector";
 import { VersionPicker } from "./VersionPicker";
+import { VanishedVersionBanner } from "./VanishedVersionBanner";
 import { WarningCard } from "./WarningCard";
 import { SgdbGamePickerModalContent } from "./SgdbGamePickerModal";
 import { applyArtwork, cancelArtworkApply, fillEmptyArtwork } from "../utils/artwork";
@@ -1162,6 +1163,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
           message="This game's saves are written beside the game file, so they can't be synced. The usual cause is RetroArch's 'Write Saves to Content Directory' (RetroArch › Settings › Saving); if it is on, turning it off lets save sync work again."
         />
       ) : null}
+      <VanishedVersionBanner key="vanished-version-banner" appId={appId} installed={detail.installed} />
       {playSectionRow}
     </Fragment>
   );

@@ -35,6 +35,7 @@ import * as playSectionUtils from "../utils/playSection";
 import * as saveStatusUtils from "../utils/saveStatus";
 import * as formatters from "../utils/formatters";
 import { getGameDetail } from "../utils/gameDetailStore";
+import { resetBoundAvailability } from "../utils/vanishedBinding";
 import { BIOS_MISSING_RED } from "../utils/biosColor";
 import { useVersionError } from "../utils/connectionState";
 import { useMigrationStatus } from "../utils/migrationStore";
@@ -774,6 +775,131 @@ describe("RomMPlaySection", () => {
       await flushAsync();
 
       expect(container.querySelector('[title="Version"]')).toBeNull();
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // C2b. The banner for a bound version gone from RomM (#2407 D5/D6) — fed by
+  // the version picker's own answer, the one liveness read the page makes.
+  // ------------------------------------------------------------------
+
+  describe("the banner for a bound version gone from RomM", () => {
+    const version = (romId: number, overrides: Partial<backend.VersionInfo>): backend.VersionInfo => ({
+      rom_id: romId,
+      name: `Game ${romId}`,
+      label: `Game ${romId}`,
+      regions: [],
+      languages: [],
+      revision: "",
+      tags: [],
+      synced: true,
+      installed: false,
+      active: false,
+      is_default: false,
+      switchable: true,
+      vanished: false,
+      ...overrides,
+    });
+    const GONE = "This version is no longer available on RomM.";
+    const CLEANUP = "To remove it from this device, with a recovery bundle, use Data Management › Gone from RomM.";
+    const EFFECTS = [
+      "Its saves no longer sync, and a launch with a local save asks first.",
+      "It cannot be downloaded again.",
+      "Its saves stay on this device and do not follow a switch to another version.",
+      "Its playtime still counts here but no longer reaches RomM.",
+      "Its cover and details no longer update.",
+    ];
+
+    const renderWith = async (list: backend.VersionList, installed: boolean) => {
+      vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: true, rom_id: 1, installed });
+      vi.mocked(backend.getVersionList).mockResolvedValue(list);
+      vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: null });
+      const view = render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      return view;
+    };
+
+    beforeEach(() => resetBoundAvailability());
+
+    it("tells a version that is not installed to choose another version", async () => {
+      const { container } = await renderWith(
+        {
+          multi_version: true,
+          bound_vanished: true,
+          server_query_failed: false,
+          versions: [version(1, { active: true, vanished: true }), version(2, {})],
+        },
+        false,
+      );
+
+      await waitFor(() => expect(container.textContent).toContain(`${GONE} Choose another version to play.`));
+      expect(container.textContent).toContain(CLEANUP);
+      expect(container.querySelectorAll("li")).toHaveLength(0);
+    });
+
+    it("says an installed version still plays and what no longer works", async () => {
+      const { container } = await renderWith(
+        {
+          multi_version: true,
+          bound_vanished: true,
+          server_query_failed: false,
+          versions: [version(1, { active: true, vanished: true, installed: true }), version(2, {})],
+        },
+        true,
+      );
+
+      await waitFor(() => expect(container.textContent).toContain(`${GONE} Your downloaded copy still plays.`));
+      expect([...container.querySelectorAll("li")].map((item) => item.textContent)).toEqual(EFFECTS);
+      expect(container.textContent).toContain(CLEANUP);
+    });
+
+    it.each([
+      ["not installed", false, []],
+      ["installed", true, EFFECTS.filter((effect) => !effect.includes("switch to another version"))],
+    ])("says a game whose every version is gone is gone, %s", async (_label, installed, effects) => {
+      const { container } = await renderWith(
+        {
+          multi_version: true,
+          bound_vanished: true,
+          server_query_failed: false,
+          versions: [version(1, { active: true, vanished: true, installed }), version(2, { vanished: true })],
+        },
+        installed,
+      );
+
+      await waitFor(() => expect(container.textContent).toContain("This game is no longer available on RomM."));
+      expect(container.textContent).not.toContain(GONE);
+      expect([...container.querySelectorAll("li")].map((item) => item.textContent)).toEqual(effects);
+      expect(container.textContent).toContain(CLEANUP);
+    });
+
+    it("says a single-version game is gone", async () => {
+      const { container } = await renderWith(
+        {
+          multi_version: false,
+          bound_vanished: true,
+          server_query_failed: false,
+          bound_version: version(1, { active: true, vanished: true }),
+        },
+        false,
+      );
+
+      await waitFor(() => expect(container.textContent).toContain("This game is no longer available on RomM."));
+    });
+
+    it.each([
+      ["the bound version is live", { multi_version: true, bound_vanished: false, server_query_failed: false }],
+      ["RomM could not be asked", { multi_version: false, bound_vanished: false, server_query_failed: true }],
+    ])("shows nothing while %s", async (_label, list) => {
+      const { container } = await renderWith(
+        { ...list, versions: [version(1, { active: true }), version(2, {})] } as backend.VersionList,
+        true,
+      );
+      await waitFor(() => expect(backend.getVersionList).toHaveBeenCalled());
+      await flushAsync();
+
+      expect(container.textContent).not.toContain("no longer available on RomM");
+      expect(container.textContent).not.toContain(CLEANUP);
     });
   });
 
