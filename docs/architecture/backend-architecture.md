@@ -870,7 +870,8 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   a bound row is still on (`SyncReporter._names_with_bound_platforms_kept`), so a cancelled or paused run in between
   does not rename the collection to the slug. The preview reads the same name (`do_read_kept_platform_names`) and counts
   the collection as kept. Force Full Sync leaves the routes in place. The preview asks the same question for the same
-  rows, through the same `_settle_stale_rows`, so the removals it counts are the ones the apply makes.
+  rows, through the same `StaleSettler.settle` (`services/library/stale_settler.py`), so the removals it counts are the
+  ones the apply makes.
 - **Grandfathering.** A group that already carries several bound shortcuts (a library synced before this model) keeps
   them all — each surviving bound sibling stays its own tracked shortcut; no new shortcut is minted for a group with a
   binding. Convergence to one-shortcut-per-group happens naturally as the user uninstalls duplicates.

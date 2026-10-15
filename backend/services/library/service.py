@@ -13,7 +13,8 @@ finalisation and the ``roms``-derived queries,
 :class:`ShortcutLaunchResolver` for each ROM's launch facts,
 :class:`ChunkDispatcher` for one unit's emit → ack → commit round-trips,
 :class:`CoverPreparer` for a unit's covers, :class:`SyncRunRecorder` for the
-run's own ``SyncRun`` row, :class:`LocalLibraryReader` for what
+run's own ``SyncRun`` row, :class:`StaleSettler` for which stale rows a run
+removes, :class:`LocalLibraryReader` for what
 this device already recorded about the library. The façade itself only wires the
 pieces together, checks each use case's conflict rules and delegates — anything
 that touches RomM or mutates in-flight sync state belongs in a sub-service.
@@ -34,6 +35,7 @@ from services.library.local_library_reader import LocalLibraryReader, LocalLibra
 from services.library.reporter import SyncReporter, SyncReporterConfig
 from services.library.session_budget import SessionBudgetMonitor, SessionBudgetMonitorConfig
 from services.library.shortcut_launch_resolver import ShortcutLaunchResolver, ShortcutLaunchResolverConfig
+from services.library.stale_settler import StaleSettler, StaleSettlerConfig
 from services.library.sync_orchestrator import SyncOrchestrator, SyncOrchestratorConfig
 from services.library.sync_run_recorder import SyncRunRecorder, SyncRunRecorderConfig
 
@@ -123,7 +125,8 @@ class LibraryService:
     and committed a chunk at a time), :class:`CoverPreparer` (a unit's covers,
     refreshed and downloaded before its shortcuts are emitted),
     :class:`SyncRunRecorder` (the run's ``SyncRun`` row, opened at its plan and
-    closed at its outcome), and
+    closed at its outcome), :class:`StaleSettler` (which stale rows the preview
+    and the apply remove), and
     :class:`LocalLibraryReader` (this device's own record of the library, read
     back out of SQLite) over a single shared :class:`LibrarySyncStateBox`. The
     façade itself owns the box and exposes the use cases the endpoints call;
@@ -255,6 +258,18 @@ class LibraryService:
             )
         )
 
+        # Sub-service: stale settler — which bound rows the run did not deliver
+        # are removed. Constructed before the orchestrator, whose preview and
+        # apply both settle their stale rows through it.
+        self._stale_settler = StaleSettler(
+            config=StaleSettlerConfig(
+                loop=config.loop,
+                logger=config.logger,
+                fetcher=self._fetcher,
+                local_library_reader=self._local_library_reader,
+            )
+        )
+
         self._orchestrator = SyncOrchestrator(
             config=SyncOrchestratorConfig(
                 settings=config.settings,
@@ -275,6 +290,7 @@ class LibraryService:
                 chunk_dispatcher=self._chunk_dispatcher,
                 cover_preparer=self._cover_preparer,
                 sync_run_recorder=self._sync_run_recorder,
+                stale_settler=self._stale_settler,
                 conflict_rules=config.conflict_rules,
                 artwork_job=config.artwork_job,
             )

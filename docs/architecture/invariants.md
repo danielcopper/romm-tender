@@ -503,14 +503,14 @@ Format: **invariant** — tier — enforced by.
   a game page's read can widen during the run; which platforms are on in Tender is keyed by a RomM id such a platform no
   longer has, so the route stands in for it. Only a 404 is evidence of absence, so every other answer keeps the
   shortcut. The rule spans the domain sort, the reader, the reporter's commit, the chunk dispatcher, the fetcher's
-  exact-id question (`LibraryFetcher.ask_romm_for_roms`) and the orchestrator, and the preview and the apply each read
-  it — through `SyncOrchestrator._settle_stale_rows`, which is prompt-only, as is that the chunk dispatcher names the
-  unit's kind on every commit, and that the listing comes off the run state. **What breaks without it:** a kept row the
-  preview counts as a removal offers Apply on every preview; a removal on a platform read whole takes a game gone from
-  RomM out of Steam with its playtime and collections; a rule read off the collection stamps alone removes a game gone
-  from RomM at the second run after its collection dropped it; a platform RomM stopped listing loses every shortcut as
-  if it had been turned off; and a kept row left out of the platform's collection drops out of it, or keeps its game
-  under a collection renamed to the slug
+  exact-id question (`LibraryFetcher.ask_romm_for_roms`), the stale settler and the orchestrator, and the preview and
+  the apply each read it — through `StaleSettler.settle` (`services/library/stale_settler.py`), which is prompt-only, as
+  is that the chunk dispatcher names the unit's kind on every commit, and that the listing comes off the run state.
+  **What breaks without it:** a kept row the preview counts as a removal offers Apply on every preview; a removal on a
+  platform read whole takes a game gone from RomM out of Steam with its playtime and collections; a rule read off the
+  collection stamps alone removes a game gone from RomM at the second run after its collection dropped it; a platform
+  RomM stopped listing loses every shortcut as if it had been turned off; and a kept row left out of the platform's
+  collection drops out of it, or keeps its game under a collection renamed to the slug
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py` pins the adapter's degradation (a
   raising resolver, a missing installation, an answer with no root all come back with `resolved` clear, never as an

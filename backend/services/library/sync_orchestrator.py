@@ -56,8 +56,6 @@ from domain.sync_diff import (
     compute_platform_collection_diff,
     count_disabled_platform_removals,
     platform_breakdown,
-    settle_asked_rows,
-    sort_stale_rows,
 )
 from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
@@ -69,7 +67,6 @@ from services.library.session_budget import SYNC_PAUSED_BUDGET, SessionBudgetMon
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Collection, Iterable
 
     from domain.emulator_sources import SourcesReading
     from domain.work_unit import WorkUnit
@@ -82,6 +79,7 @@ if TYPE_CHECKING:
     from services.library.local_library_reader import LocalLibraryReader
     from services.library.reporter import SyncReporter
     from services.library.shortcut_launch_resolver import ShortcutLaunchResolver
+    from services.library.stale_settler import StaleSettler
     from services.library.sync_run_recorder import SyncRunRecorder
     from services.protocols import (
         Clock,
@@ -150,7 +148,8 @@ class SyncOrchestratorConfig:
     finalisation — between them, no ``ArtworkManager`` is owed here. The
     ``sync_run_recorder`` peer writes the run's ``SyncRun`` row: this module
     decides which terminal status a stopped run earns, and hands that decision
-    over as a method call. The ``conflict_rules`` are what a ``sync_stale``
+    over as a method call. The ``stale_settler`` peer decides which stale rows
+    the preview and the apply remove. The ``conflict_rules`` are what a ``sync_stale``
     event that removes shortcuts takes its lease through. The ``artwork_job`` is
     asked for a run at every run's end: it stops while a run is in flight.
     """
@@ -173,6 +172,7 @@ class SyncOrchestratorConfig:
     chunk_dispatcher: ChunkDispatcher
     cover_preparer: CoverPreparer
     sync_run_recorder: SyncRunRecorder
+    stale_settler: StaleSettler
     conflict_rules: ConflictRules
     artwork_job: ShortcutArtworkJob
 
@@ -217,6 +217,7 @@ class SyncOrchestrator:
         self._chunk_dispatcher = config.chunk_dispatcher
         self._cover_preparer = config.cover_preparer
         self._sync_run_recorder = config.sync_run_recorder
+        self._stale_settler = config.stale_settler
         self._rules = config.conflict_rules
         self._artwork_job = config.artwork_job
         self._tasks = BackgroundTasks(logger=config.logger)
@@ -374,7 +375,7 @@ class SyncOrchestrator:
             collection_listed = await self._loop.run_in_executor(
                 None, self._local_library_reader.do_read_collection_listed_rom_ids
             )
-            removals, kept = await self._settle_stale_rows(
+            removals, kept = await self._stale_settler.settle(
                 (
                     StaleRow(
                         rid,
@@ -390,7 +391,7 @@ class SyncOrchestrator:
             )
             removed_ids = {row.rom_id for row in removals}
             stale = [rid for rid in stale if rid in removed_ids]
-            kept_names = await self._with_kept_platform_names(kept, slug_to_name)
+            kept_names = await self._stale_settler.with_kept_platform_names(kept, slug_to_name)
             kept_platform_names = {kept_names.get(row.platform_slug, row.platform_slug) for row in kept}
             disabled_count = count_disabled_platform_removals(stale, registry, platform_name_set)
             # Cover-only work (#1386): count the bound fetched ROMs whose server
@@ -1277,52 +1278,6 @@ class SyncOrchestrator:
             )
         return unit_roms, skipped
 
-    async def _settle_stale_rows(
-        self,
-        rows: Iterable[StaleRow],
-        *,
-        read_platform_slugs: Collection[str],
-        listed_platform_slugs: Collection[str] | None,
-        collection_listed_rom_ids: Collection[int],
-    ) -> tuple[list[StaleRow], list[StaleRow]]:
-        """``(remove, kept_in_platform_collections)`` for the stale *rows*.
-
-        Sorts them by :func:`sort_stale_rows`, asks RomM once about the ones it
-        cannot decide, and settles those by :func:`settle_asked_rows`. The
-        preview and the apply both answer through here, so the removals a
-        preview promises are the ones its apply makes.
-        """
-        sort = sort_stale_rows(
-            rows,
-            read_platform_slugs=read_platform_slugs,
-            listed_platform_slugs=listed_platform_slugs,
-            collection_listed_rom_ids=collection_listed_rom_ids,
-        )
-        answers = await self._fetcher.ask_romm_for_roms([row.rom_id for row in sort.ask]) if sort.ask else {}
-        asked_remove, asked_keep = settle_asked_rows(sort.ask, answers)
-        if sort.keep or asked_keep:
-            self._logger.info(
-                f"Stale removal: keeping {len(sort.keep)} bound version(s) gone from RomM in their platform's "
-                f"collection and {len(asked_keep)} reached through a collection RomM did not confirm present"
-            )
-        return sort.remove + asked_remove, sort.keep
-
-    async def _with_kept_platform_names(self, kept: list[StaleRow], live: dict[str, str]) -> dict[str, str]:
-        """*live*, plus the cached name of each platform outside it that a *kept* row is on, for the preview.
-
-        Such a platform is one RomM no longer lists, and its Steam collection
-        keeps that name: the apply's finalize carries it forward
-        (``SyncReporter._names_with_bound_platforms_kept``), so the preview
-        counts the collection under the same name.
-        """
-        outside = {row.platform_slug for row in kept} - live.keys()
-        if not outside:
-            return live
-        kept_names = await self._loop.run_in_executor(
-            None, self._local_library_reader.do_read_kept_platform_names, outside
-        )
-        return {**kept_names, **live}
-
     async def _finalize_per_unit(
         self,
         *,
@@ -1363,7 +1318,7 @@ class SyncOrchestrator:
                 synced_rom_ids,
                 set(self._sync_state.committed_app_ids),
             )
-            stale, kept = await self._settle_stale_rows(
+            stale, kept = await self._stale_settler.settle(
                 candidates,
                 read_platform_slugs=processed_platform_slugs,
                 listed_platform_slugs=self._sync_state.run_listed_platform_slugs,
