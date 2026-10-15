@@ -663,6 +663,11 @@ Artwork** replaces each picked image with that game's, where SteamGridDB has suc
 Artwork** does this: opening the game's page and the background artwork job keep using the images Tender already
 downloaded for the game.
 
+One exception after you update Tender: for a game Tender knows on SteamGridDB, an icon Tender downloaded before the
+update is downloaded once more, the first time the game's page is opened or the game is switched to another version. If
+you had picked the game in the picker and RomM has an id for it now, its icon then becomes the icon of the game RomM's
+id points to. The background artwork job does not do this.
+
 When SteamGridDB refuses your API key, **Refresh Artwork** says "SteamGridDB refused the API key — check it in Settings"
 and opens no picker; when SteamGridDB is rate-limiting requests, it says that instead. Opening a game's page stays quiet
 about both. When the RomM cover could not be updated, the same message says why, after the SteamGridDB result; when the
