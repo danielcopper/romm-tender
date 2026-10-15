@@ -31,9 +31,9 @@ def _run_collections(*, naming_mode: str = "merge", create_platform_groups: bool
 def rebind_loop(library_service, loop):
     """Rebind the event loop on every LibraryService sub-service.
 
-    Five of the façade's sub-services (fetcher, collection fetcher,
-    orchestrator, reporter, session-budget monitor) hold their own ctor-bound
-    ``_loop``. Tests that swap in a mock loop must propagate it to all five so
+    Six of the façade's sub-services (fetcher, collection fetcher,
+    orchestrator, reporter, session-budget monitor, stale settler) hold their own
+    ctor-bound ``_loop``. Tests that swap in a mock loop must propagate it to all six so
     async calls land on the override. ``ShortcutLaunchResolver``, ``LocalLibraryReader`` and
     ``ChunkDispatcher`` hold none — the first two are synchronous workers their
     holders offload through *their* loops (the orchestrator's, and the fetcher's
@@ -44,6 +44,7 @@ def rebind_loop(library_service, loop):
     library_service._orchestrator._loop = loop
     library_service._reporter._loop = loop
     library_service._session_budget._loop = loop
+    library_service._stale_settler._loop = loop
 
 
 def _make_loop_raising(exc):

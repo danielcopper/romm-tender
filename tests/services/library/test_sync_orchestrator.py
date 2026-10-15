@@ -6795,7 +6795,7 @@ class TestSessionBudgetGate:
             platform_rom_ids=set(),
             platform_names={},
             processed_platform_slugs=frozenset(),
-            cancelled=True,  # a stopped (paused) run,
+            cancelled=True,  # a stopped (paused) run
             run_collections=_run_collections(),
         )
 

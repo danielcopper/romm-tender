@@ -495,20 +495,20 @@ remove-then-add replace, which empties the collection where it fails between the
 heartbeat timeout, all of which reach `onSyncComplete` with `cancelled` set — the maps are **partial**: they list only
 what the run reached before it stopped (empty if it stopped before the first unit), and they lack the games of the chunk
 in flight, which the add-only pass has filed but whose bindings were never committed. So `addToCollections` adds each
-map's games to its collection through the same add path, and nothing is replaced or removed. The stale cleanup does not
-run either: treating a partial map as the authoritative active set would delete the collections for unreached platforms
-— an early cancel would wipe the entire library organization — and Steam collections are not backed up, so the safe
-behavior on a partial run is to delete nothing. A run that ends in an error sends no `sync_complete` at all and keeps
-what the add-only pass filed. Either way a RomM collection can be left partly filled until a later run completes; every
-game in it is one its RomM collection holds.
+map's games to its collection through the same add path, the run's remembered collections included, and nothing is
+replaced or removed. The stale cleanup does not run either: treating a partial map as the authoritative active set would
+delete the collections for unreached platforms — an early cancel would wipe the entire library organization — and Steam
+collections are not backed up, so the safe behavior on a partial run is to delete nothing. A run that ends in an error
+sends no `sync_complete` at all and keeps what the add-only pass filed. Either way a RomM collection can be left partly
+filled until a later run completes; every game the run added to it is one its RomM collection holds.
 
 ### Collection naming mode — `merge` vs `by_label` (#1539)
 
 The `romm_collection_app_ids` wire payload is `name → appIds` **only** — kind/virtual_type are collapsed away before the
 frontend sees them, and the frontend simply wraps each key as `RomM: [<key>] (<hostname>)`. So the Steam-collection name
-is decided **entirely by the backend's key**, which `SyncReporter._resolve_collection_memberships`
+is decided **entirely by the backend's key**. Two places build it: `SyncReporter._resolve_collection_memberships`
 (`services/library/reporter.py`) for the end-of-run map, and `RunCollections` (`domain/entry_collections.py`) for an
-apply entry's `romm_collections`, both take from `domain/collection_label.py::steam_collection_key` under the
+apply entry's `romm_collections`. Both take it from `domain/collection_label.py::steam_collection_key` under the
 `collection_naming_mode` setting as the run read it at its start:
 
 - **`merge`** (default) — the key is the bare collection display name. Same-named RomM collections of any kind union

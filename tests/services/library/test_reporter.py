@@ -2475,7 +2475,7 @@ class TestFinalizePerUnitRun:
             pending_platform_rom_ids={1},
             platform_names={"n64": "Nintendo 64"},
             processed_platform_slugs={"n64"},
-            stale_rom_ids=[2, 5, 99],  # 2 bound, 5 already unbound, 99 missing,
+            stale_rom_ids=[2, 5, 99],  # 2 bound, 5 already unbound, 99 missing
             run_collections=_run_collections(),
         )
 
