@@ -1117,6 +1117,7 @@ class TestARefusedKey:
         bound = {100 * n: n for n in range(1, 7)}
         job = _Job(icons=dict.fromkeys(bound, ""), bound=bound)
         job.source.answer(1, SlotAnswer.KEY_REFUSED)
+        waited_out: list[int] = []
 
         def refuse_once_another_fetch_is_in_flight_and_answer_that_one_after(rom_id: int) -> None:
             # Rom 1's refusal waits for rom 2's fetch to start: a fetch that
@@ -1132,11 +1133,13 @@ class TestARefusedKey:
                 if ready():
                     return
                 time.sleep(0.001)
+            waited_out.append(rom_id)
 
         job.source.on_fetch = refuse_once_another_fetch_is_in_flight_and_answer_that_one_after
 
         await job.run()
 
+        assert 1 not in waited_out, "ROM 2's fetch never began: the second worker took no ROM"
         assert sorted(job.source.fetched) == [1, 2]
 
 
