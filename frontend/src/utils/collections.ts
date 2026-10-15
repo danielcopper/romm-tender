@@ -196,9 +196,15 @@ export async function createOrUpdateRomMCollections(
  * The collections {@link addAppToCollections} created in one run, by folded
  * name, consulted where `collectionStore.userCollections` does not list one —
  * why is docs/architecture/steam-non-steam-shortcuts.md, "Collection
- * management". Keyed by `run_id`, so a new run starts empty.
+ * management". Emptied when a run starts ({@link startCollectionsRun}), and
+ * keyed by `run_id` besides.
  */
 let _createdThisRun: { runId: string; byFold: Map<string, SteamCollection> } | null = null;
+
+/** Begin *runId*'s record of the collections it creates, forgetting any earlier run's. */
+export function startCollectionsRun(runId: string): void {
+  _createdThisRun = { runId, byFold: new Map() };
+}
 
 function collectionsCreatedIn(runId: string): Map<string, SteamCollection> {
   if (_createdThisRun?.runId !== runId) _createdThisRun = { runId, byFold: new Map() };
@@ -266,8 +272,10 @@ export async function addAppToCollections(
 /**
  * Add the games of a cancelled run's maps to their collections, removing none:
  * such a run's maps hold only what it reached, so they are not each collection's
- * complete set. A failure on one collection is logged and the rest still run;
- * an abort stops the run.
+ * complete set. The collections the run created are consulted as during the
+ * run: `sync_complete` names no run, and no other run starts before it. A
+ * failure on one collection is logged and the rest still run; an abort stops
+ * the run.
  */
 export async function addToCollections(
   platformAppIds: Record<string, number[]>,
@@ -289,7 +297,7 @@ export async function addToCollections(
   for (const [name, appIds] of entries) {
     if (signal?.aborted) return;
     try {
-      await addAppsToCollection(appIds, name, null);
+      await addAppsToCollection(appIds, name, _createdThisRun?.byFold ?? null);
     } catch (e) {
       logError(`Failed to add ${appIds.length} apps to collection "${name}": ${e}`);
     }

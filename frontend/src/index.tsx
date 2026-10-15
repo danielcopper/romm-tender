@@ -48,6 +48,7 @@ import {
 } from "./api/backend";
 import {
   addToCollections,
+  startCollectionsRun,
   createOrUpdateCollections,
   createOrUpdateRomMCollections,
   clearPlatformCollection,
@@ -891,6 +892,7 @@ const tender = definePanel(() => {
     // skip-only run, where no unit handler ever fires (#1198). Run identity for
     // a Cancel click comes from the backend-fed sync_progress store now (#1202).
     resetSyncCancel();
+    startCollectionsRun(data.run_id);
     // Seed the applying-phase estimate on the walk-cost model (the same
     // constants the preview row uses), priced per unit by COMPOSITION rather
     // than as one blended item count (#1511). The plan is skip-aware (#1382):

@@ -141,8 +141,10 @@ const createOrUpdateCollections = vi.fn().mockResolvedValue(undefined);
 const createOrUpdateRomMCollections = vi.fn().mockResolvedValue(undefined);
 const clearPlatformCollection = vi.fn().mockResolvedValue(undefined);
 const addToCollections = vi.fn().mockResolvedValue(undefined);
+const startCollectionsRun = vi.fn();
 vi.mock("./utils/collections", () => ({
   addToCollections: (...args: unknown[]) => addToCollections(...args),
+  startCollectionsRun: (...args: unknown[]) => startCollectionsRun(...args),
   createOrUpdateCollections: (...args: unknown[]) => createOrUpdateCollections(...args),
   createOrUpdateRomMCollections: (...args: unknown[]) => createOrUpdateRomMCollections(...args),
   clearPlatformCollection: (...args: unknown[]) => clearPlatformCollection(...args),
@@ -2177,6 +2179,17 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     // — reliable even on a skip-only run where no per-unit handler fires. Run
     // identity for a Cancel click now comes from the sync_progress store (#1202).
     expect(vi.mocked(resetSyncCancel)).toHaveBeenCalled();
+  });
+
+  it("sync_plan starts the run's record of the collections it creates", async () => {
+    panelFactory();
+    startCollectionsRun.mockClear();
+
+    act(() => {
+      emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-xyz", units: [], total_units: 1, total_roms: 1 });
+    });
+
+    expect(startCollectionsRun).toHaveBeenCalledWith("run-xyz");
   });
 
   it("drives terminal teardown from sync_complete even if no stage:done frame follows", async () => {

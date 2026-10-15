@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   addAppToCollections,
   addToCollections,
+  startCollectionsRun,
   createOrUpdateRomMCollections,
   createOrUpdateCollections,
   clearPlatformCollection,
@@ -185,6 +186,7 @@ describe("clearAllRomMCollections — case-insensitive identity (#1569)", () => 
 describe("addAppToCollections — the add-only path a sync files each game through", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    startCollectionsRun("run-isolated");
   });
 
   it("creates a missing platform collection holding its first game", async () => {
@@ -288,6 +290,17 @@ describe("addAppToCollections — the add-only path a sync files each game throu
 describe("addToCollections — a cancelled run's maps, added without removing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    startCollectionsRun("run-isolated");
+  });
+
+  it("a new run does not use the previous run's created collection", async () => {
+    const store = stubLiveCollectionStore({ listsOnSave: false });
+    await addAppToCollections(6000, "Nintendo 64", [], "run-before");
+
+    startCollectionsRun("run-after");
+    await addToCollections({ "Nintendo 64": [5000] }, {});
+
+    expect(store.created.map((c) => [...c.apps])).toEqual([[6000], [5000]]);
   });
 
   it("adds each map's games to its collection, creating a missing one, and removes none", async () => {
@@ -300,6 +313,15 @@ describe("addToCollections — a cancelled run's maps, added without removing", 
     expect([...platform.apps]).toEqual([6000, 5000]);
     expect(platform.dnd.RemoveApps).not.toHaveBeenCalled();
     expect([...(store.named("RomM: [Favs] (test)")?.apps ?? [])]).toEqual([5000]);
+  });
+
+  it("adds to a collection the run created that the store does not list yet, creating it no second time", async () => {
+    const store = stubLiveCollectionStore({ listsOnSave: false });
+    await addAppToCollections(6000, "Nintendo 64", [], "run-unlisted-end");
+
+    await addToCollections({ "Nintendo 64": [5000] }, {});
+
+    expect(store.created.map((c) => [...c.apps])).toEqual([[6000, 5000]]);
   });
 
   it("writes no further collection once the signal aborts", async () => {
