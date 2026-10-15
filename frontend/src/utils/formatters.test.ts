@@ -111,13 +111,15 @@ describe("formatTimeAgo", () => {
 const realToLocaleDateString = Date.prototype.toLocaleDateString;
 
 /** Format dates as a Steam client in *locale* would: the code under test asks
- *  for the context's own language (`undefined`), which a test cannot set. */
+ *  for the context's own language (`undefined`), which a test cannot set, and
+ *  a call that names a language fails the test. */
 function formatDatesIn(locale: string): void {
   vi.spyOn(Date.prototype, "toLocaleDateString").mockImplementation(function (
     this: Date,
-    _locales?: Intl.LocalesArgument,
+    locales?: Intl.LocalesArgument,
     options?: Intl.DateTimeFormatOptions,
   ) {
+    if (locales !== undefined) throw new Error(`asked for ${String(locales)}, not the client's own language`);
     return realToLocaleDateString.call(this, locale, options);
   });
 }
@@ -165,6 +167,12 @@ describe("formatLastPlayed", () => {
     expect(formatLastPlayed(tenthOfApril)).toBe("Apr 10");
     formatDatesIn("de-DE");
     expect(formatLastPlayed(tenthOfApril)).toBe("10. Apr.");
+  });
+
+  it("writes a single-digit day without a leading zero", () => {
+    formatDatesIn("en-GB");
+    expect(formatLastPlayed(seconds(new Date(2025, 3, 5, 12)))).toBe("5 Apr");
+    expect(formatLastPlayed(seconds(new Date(2024, 7, 5, 12)))).toBe("5 Aug 2024");
   });
 
   it("adds the year for another year's dates", () => {
@@ -269,6 +277,12 @@ describe("formatReleaseDate", () => {
     expect(formatReleaseDate(releaseDay)).toBe("22 Apr 2004");
     formatDatesIn("en-US");
     expect(formatReleaseDate(releaseDay)).toBe("Apr 22, 2004");
+    vi.restoreAllMocks();
+  });
+
+  it("writes a single-digit day without a leading zero", () => {
+    formatDatesIn("en-GB");
+    expect(formatReleaseDate(seconds(new Date(2004, 3, 5, 12)))).toBe("5 Apr 2004");
     vi.restoreAllMocks();
   });
 });
