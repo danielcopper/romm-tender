@@ -685,7 +685,8 @@ class SteamGridService:
 
         A manual pick fills the cache and stores no id (:meth:`apply_sgdb_game_id`),
         so its images are served from there; ``NONE`` when the cache holds none,
-        since nothing can be downloaded without an id.
+        since nothing can be downloaded without an id, and ``FAILED`` when the
+        cache cannot be looked up, which is logged.
         """
         try:
             cached = self._cached_artwork(rom_id, asset_type)
