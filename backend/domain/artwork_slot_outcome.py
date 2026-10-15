@@ -142,9 +142,9 @@ def icon_waits(
     sgdb_id: int | None,
     now: float,
 ) -> bool:
-    """Whether the shortcut artwork job, or the game page's first visit, asks for a shortcut's icon at *now*.
+    """Whether a shortcut's icon is asked for at *now*.
 
-    It does while *icon*, the shortcut's icon path in ``shortcuts.vdf``, does
+    It is while *icon*, the shortcut's icon path in ``shortcuts.vdf``, does
     not fill the slot (:func:`domain.shortcut_icon.is_icon_filled`, over
     *grid_dir* and its listing *file_names*) and *recorded*, the ROM's icon
     outcome, does not rule it out for *sgdb_id*, the ROM's SteamGridDB id now.

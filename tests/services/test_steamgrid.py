@@ -921,7 +921,7 @@ class TestApplySgdbGameId:
 
 
 class TestIconSupport:
-    """Tests for SGDB icon download support (asset type 4)."""
+    """The icon's SteamGridDB endpoint, and that asset type 4 serves no icon."""
 
     @pytest.mark.asyncio
     async def test_icon_type_maps_to_icons_endpoint(self, steamgrid):

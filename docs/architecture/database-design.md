@@ -730,10 +730,10 @@ rather than app id, because a re-created shortcut gets a new app id, and the row
 (`ON DELETE CASCADE`). Created empty.
 
 `028_widen_artwork_slot_outcomes_to_the_icon.sql` (`user_version = 28`) widens the table's slot `CHECK` with `icon`, so
-the shortcut artwork job records the shortcut icon by the rule the wide grid and the logo follow. SQLite cannot alter a
-`CHECK`, so the table is rebuilt in place — the widened twin created, every row copied unchanged, the old table dropped,
-the twin renamed — with its other `CHECK`s and its cascade as they were. Nothing is recorded for an icon until a run
-after the migration asks for it.
+the shortcut icon is recorded by the rule the wide grid and the logo follow, by the shortcut artwork job and the game
+page alike. SQLite cannot alter a `CHECK`, so the table is rebuilt in place — the widened twin created, every row copied
+unchanged, the old table dropped, the twin renamed — with its other `CHECK`s and its cascade as they were. Nothing is
+recorded for an icon until it is asked for after the migration.
 
 ## The runtime Unit of Work
 

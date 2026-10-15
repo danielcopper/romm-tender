@@ -56,9 +56,8 @@ export function isArtworkApplyInFlight(appId: number): boolean {
 
 /**
  * Have the backend write the icon the artwork cache holds for *romId* into Steam's
- * grid directory as *appId*'s; pointing the shortcut at it must go through
- * SteamClient (Steam owns shortcuts.vdf in memory and clobbers external writes).
- * `null` when the write is refused, which is logged, or the apply was cancelled meanwhile.
+ * grid directory as *appId*'s. `null` when the write is refused, which is logged,
+ * or the apply was cancelled meanwhile.
  */
 async function saveIcon(romId: number, appId: number, signal: AbortSignal): Promise<SavedShortcutIcon | null> {
   const saved = await saveShortcutIcon(appId, romId);

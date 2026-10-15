@@ -476,10 +476,10 @@ that had no icon at all before shows its first one after Steam restarts, which s
 Mode does.
 
 The hero banner is set the first time a game's page is opened in a session, and so are an icon, a logo and a wide grid
-the background job has not set yet; each only where the game has none: an image you set yourself, in Steam's own artwork
-options or with another tool, stays, until you switch the game to another version, which replaces all four. When
-SteamGridDB has no logo or wide grid for a game, or Steam does not accept the image, neither the background job nor
-opening the page asks again for a week, or until the game's SteamGridDB match changes.
+the background job has not set yet; each only where the game has none (Tender's logo counts as no icon): an image you
+set yourself, in Steam's own artwork options or with another tool, stays, until you switch the game to another version,
+which replaces all four. When SteamGridDB has no logo or wide grid for a game, or Steam does not accept the image,
+neither the background job nor opening the page asks again for a week, or until the game's SteamGridDB match changes.
 
 You can refresh artwork for any individual game from its
 [game detail page](managing-games.md#refreshing-artwork-and-metadata); that downloads every image anew and replaces it,

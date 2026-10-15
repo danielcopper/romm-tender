@@ -846,7 +846,7 @@ describe("the icon through the per-slot fetch", () => {
     expect(backend.saveShortcutIcon).not.toHaveBeenCalled();
   });
 
-  it("asks for the icon past the filled check on the replacing apply, and records it", async () => {
+  it("asks for the icon past the filled check and its record on the replacing apply, and records it", async () => {
     answerIcon({ status: "ready" });
 
     await expect(applyArtwork(42, 5000)).resolves.toBe(1);

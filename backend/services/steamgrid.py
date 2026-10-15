@@ -464,8 +464,10 @@ class SteamGridService:
 
         A manual pick only paints pixels — it downloads the chosen
         game's four asset types into the rom's artwork cache (which the
-        cache-first ``get_sgdb_artwork_base64`` then serves onto the
-        Steam shortcut) and persists **nothing**. Only RomM's ``sgdb_id``
+        cache-first ``get_sgdb_artwork_base64`` serves for the hero, the
+        logo and the wide grid, and ``get_sgdb_slot_artwork`` for the icon,
+        also for a ROM with no SteamGridDB id stored) and persists
+        **nothing**. Only RomM's ``sgdb_id``
         is remembered as the resolved id; a manual pick is not. So a later
         "Refresh Artwork" on an otherwise-unresolvable rom stays
         ``needs_pick`` and reopens the picker, giving the user a free
@@ -594,8 +596,11 @@ class SteamGridService:
         """Serve SteamGridDB's image for one of *app_id*'s artwork slots, only while the slot is empty.
 
         *slot* is ``"grid"`` (the wide grid), ``"logo"``, ``"hero"`` or
-        ``"icon"``. With *replace* the slot is served whatever it holds and
-        whatever its record says. Answers a discriminated ``status``:
+        ``"icon"``. With *replace* none of the checks that leave a slot alone
+        is made: the slot is served whatever it holds, whatever its record
+        says, and whether ``shortcuts.vdf`` can be read. Without a SteamGridDB
+        id stored, what the artwork cache holds for the slot is served, as a
+        manual pick leaves it. Answers a discriminated ``status``:
 
         - ``"image"`` — for a wide grid, logo or hero: ``base64``, SteamGridDB's
           ``image_id`` (``None`` for the hero), the bytes' ``sha256`` and the
@@ -609,8 +614,8 @@ class SteamGridService:
           ``shortcuts.vdf`` points at one (``domain.shortcut_icon.is_icon_filled``)
           — or a recorded ``none`` or ``refused`` rules it out;
         - ``"none"`` — SteamGridDB's list is empty or it does not know the game,
-          or the ROM has no SteamGridDB id; recorded for the wide grid, the logo
-          and the icon;
+          or the ROM has no SteamGridDB id and the cache holds nothing for the
+          slot; recorded for the wide grid, the logo and the icon;
         - ``"failed"`` — an unsuccessful answer, a list with no usable entry, a
           download or read that failed, or, for the icon, a ``shortcuts.vdf``
           that could not be read or does not hold the shortcut yet; nothing is
@@ -620,8 +625,8 @@ class SteamGridService:
         - ``"no_api_key"`` — no key configured.
 
         Refuses with ``invalid_payload`` for any other slot, ``no_grid_dir``
-        when Steam's grid directory cannot be found, and ``auth_failed`` for a
-        key no header can carry.
+        when Steam's grid directory cannot be found (without *replace* only),
+        and ``auth_failed`` for a key no header can carry.
         """
         async with self._rules.hold("get_sgdb_slot_artwork", prune=True):
             result = await self._get_sgdb_slot_artwork(rom_id, app_id, slot, bool(replace))
@@ -690,7 +695,10 @@ class SteamGridService:
         return cached if cached is not None else _NoArtwork.NONE
 
     def _held_slot_io(self, rom_id: int, app_id: int, slot: ArtworkSlot, sgdb_id: int | None, now: float) -> str | None:
-        """The status that leaves *slot* alone — ``skip``, or ``failed`` for an icon nothing tells — or ``None``."""
+        """The status that leaves *slot* alone, or ``None`` where it waits.
+
+        ``skip``, or ``failed`` for an icon ``shortcuts.vdf`` cannot answer for.
+        """
         if slot is ArtworkSlot.ICON:
             return self._held_icon_io(rom_id, app_id, sgdb_id, now)
         file_names = self._steam_config.grid_file_names()
@@ -749,10 +757,10 @@ class SteamGridService:
         ``SetShortcutIcon`` for the icon, took it) or ``"refused"`` (it failed
         on the image); *sgdb_id*, *image_id* and *sha256* are what
         ``get_sgdb_slot_artwork`` or ``get_sgdb_artwork_base64`` answered for a
-        wide grid or logo, or what the shortcut artwork job's batch named for an
-        icon, passed back. Refuses with ``invalid_payload`` for a slot that is
-        not recorded, an unknown outcome, or a ``set`` without its image id and
-        hash.
+        wide grid or logo, or, for an icon, what :meth:`save_shortcut_icon`
+        answered or the shortcut artwork job's batch named, passed back.
+        Refuses with ``invalid_payload`` for a slot that is not recorded, an
+        unknown outcome, or a ``set`` without its image id and hash.
         """
         async with self._rules.hold("report_sgdb_slot_artwork", prune=True):
             record = self._reported_outcome(int(rom_id), slot, outcome, sgdb_id, image_id, sha256)
@@ -906,7 +914,7 @@ class SteamGridService:
 
         The artwork job takes it when it plans a run, before it reads
         ``shortcuts.vdf``, and writes and hands over an icon only while it is
-        unchanged, so an icon picked on the game page since wins.
+        unchanged, so an icon the game page writes since wins.
         """
         return self._icon_generations.get(int(app_id), 0)
 

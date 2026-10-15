@@ -637,16 +637,19 @@ page in a session sets each of the four **only where the slot is not filled** (`
 `utils/artwork.ts`). **Refresh Artwork** and the SteamGridDB game picker are an explicit request and still replace every
 slot (`applyArtwork`), and so does a version switch: once artwork was applied for one ROM of an app id, the newly bound
 ROM's is applied in the replacing mode, an image set by hand included. The replacing mode records the wide grid and the
-logo and icon it set, or Steam refused, under the ROM now bound, as the fill does below: `get_sgdb_artwork_base64`
-answers a wide grid or logo with its image id, the hash of its bytes and the ROM's SteamGridDB id, which go to the
-report, and the icon's come from its write. The shortcut artwork job fills the icon, the wide grid and the logo in the
-background by the same rules ([Shortcut artwork](#shortcut-artwork)), so a first visit usually finds them filled; the
-hero is the game page's alone. The icon has one fetch path, the per-slot one below, on the game page and in the job
-alike: `get_sgdb_artwork_base64` refuses its asset type (4) with `invalid_payload`.
+logo and icon it set, or Steam refused, under the ROM now bound, as the fill does below: what the report passes back —
+the image id, the hash of the bytes and the ROM's SteamGridDB id — comes with `get_sgdb_artwork_base64`'s answer for a
+wide grid or logo, and with `save_shortcut_icon`'s for the icon. The shortcut artwork job fills the icon, the wide grid
+and the logo in the background by the same rules ([Shortcut artwork](#shortcut-artwork)), so a first visit usually finds
+them filled; the hero is the game page's alone. The icon is fetched only as a slot — on the game page through
+`get_sgdb_slot_artwork`, in the job through `do_fetch_slot_artwork` — and `get_sgdb_artwork_base64` refuses its asset
+type (4) with `invalid_payload`.
 
 **Downloading anew.** `applyArtwork` serves each image from the artwork cache first (`get_sgdb_artwork_base64`, and
 `get_sgdb_slot_artwork` with `replace` for the icon), so a version switch downloads only what the new ROM's cache lacks.
-Refresh Artwork and the picker download past the cache: once `get_sgdb_resolution` answers `resolved`, the frontend asks
+For a ROM with no SteamGridDB id stored — the only kind the picker opens for, since a pick stores none — the per-slot
+fetch serves what the cache holds for the slot and answers `none` only where it holds nothing. Refresh Artwork and the
+picker download past the cache: once `get_sgdb_resolution` answers `resolved`, the frontend asks
 `refresh_sgdb_artwork(rom_id, sgdb_id)`, and a pick asks `apply_sgdb_game_id`. Both download all four images and replace
 a cached file only with a download that succeeded, before `applyArtwork` serves them; a pick then drops the previous
 pick's file of each image it did not download. A SteamGridDB id RomM now provides therefore replaces an image a manual
@@ -669,24 +672,28 @@ tools write. `SteamConfigAdapter.grid_file_names` lists the regular files; the r
 
 **One slot at a time.** For each slot the frontend asks `get_sgdb_slot_artwork(rom_id, app_id, slot)`, which answers
 `skip` for a filled slot or one a record rules out, `none` when SteamGridDB's list is empty or it does not know the game
-(a 404), or the ROM has no SteamGridDB id, `key_refused` for a 401 or 403 and `rate_limited` for a 429 — the answers the
-shortcut artwork job tells apart, through the same mapping (`SteamGridService._download_or_answer_io`) — `failed` for an
-unsuccessful answer, a list with no usable entry or a download that failed, or the image's base64 with SteamGridDB's
-image id, the SHA-256 of its bytes, the ROM's SteamGridDB id and an `sgdb_artwork` lease. The frontend sets the image
-under that lease, waits for it, and only then asks for the next slot, so one image at a time is in the renderer. For the
-wide grid and the logo it then reports what Steam made of it through `report_sgdb_slot_artwork` — `set`, or `refused`
-when `SetCustomArtworkForApp` failed — passing the fetch's answer back; the backend cannot see Steam's answer itself.
-The replacing mode asks for the icon with `replace`, which drops the two `skip` checks and nothing else.
+(a 404), or the ROM has no SteamGridDB id and the cache holds nothing for the slot, `key_refused` for a 401 or 403 and
+`rate_limited` for a 429 — the answers the shortcut artwork job tells apart, through the same mapping
+(`SteamGridService._download_or_answer_io`) — `failed` for an unsuccessful answer, a list with no usable entry or a
+download that failed, or the image's base64 with SteamGridDB's image id, the SHA-256 of its bytes, the ROM's SteamGridDB
+id and an `sgdb_artwork` lease; for the icon it answers `ready` in place of the image (below). The frontend sets the
+image under that lease, waits for it, and only then asks for the next slot, so one image at a time is in the renderer.
+For the wide grid and the logo it then reports what Steam made of it through `report_sgdb_slot_artwork` — `set`, or
+`refused` when `SetCustomArtworkForApp` failed — passing the fetch's answer back; the backend cannot see Steam's answer
+itself.
 
 **The icon on the game page** is judged by the job's own rule (`domain/artwork_slot_outcome.py`, `icon_waits`): the
 backend reads the shortcut's `icon` path in `shortcuts.vdf`, the grid directory's listing and the icon's record, so a
-first visit keeps an icon somebody set and replaces an empty path, the placeholder or the logo icon (the filled check is
-under Worklist in [Shortcut artwork](#shortcut-artwork)). A `shortcuts.vdf` that cannot be read, or does not hold the
-shortcut yet, answers `failed`: nothing is replaced on a guess. Where the icon is to be set the answer is `ready`,
-carrying the lease and no bytes; the frontend then asks `save_shortcut_icon(app_id, rom_id)`, which writes the cached
-icon as the job does ("Writing the icon", below) and answers its path, its image id, the hash of the bytes written and
-the ROM's SteamGridDB id. The frontend points the shortcut at the path with `SetShortcutIcon` and reports `set`, or
-`refused` when that throws, passing the save's answer back.
+first visit keeps an icon somebody set and replaces an empty path, the placeholder, the logo icon or a path in the grid
+directory whose file is gone, unless the record rules it out (the filled check is under Worklist in
+[Shortcut artwork](#shortcut-artwork)). A `shortcuts.vdf` that cannot be read, or does not hold the shortcut yet,
+answers `failed`: nothing is replaced on a guess. The replacing mode asks with `replace`, which makes none of these
+checks: it reads neither `shortcuts.vdf`, the grid directory nor the record, so it answers neither `skip` nor `failed`
+for them and does not refuse `no_grid_dir`. Where the icon is to be set the answer is `ready`, carrying the lease and no
+bytes; the frontend then asks `save_shortcut_icon(app_id, rom_id)`, which writes the cached icon as the job does
+("Writing the icon", below) and answers its path, its image id, the hash of the bytes written and the ROM's SteamGridDB
+id. The frontend points the shortcut at the path with `SetShortcutIcon` and reports `set`, or `refused` when that
+throws, passing the save's answer back.
 
 **What was found is recorded** per ROM and slot, for the wide grid, the logo and the icon, in `artwork_slot_outcomes`
 ([database design](database-design.md)): `set` with the image id and the hash, `none`, or `refused`, the ROM's
@@ -836,12 +843,12 @@ the game page.
   `ShortcutArtworkJob`'s (`services/protocols/cross_service.py`). The job is no endpoint, so it takes no conflict-rule
   `hold`; the lease on each batch is a claim like any event's, and a cleanup pressed while the frontend holds one is
   refused ([Prune conflicts](removed-game-cleanup.md#prune-conflicts)).
-- **A pick on the game page wins:** `save_shortcut_icon` and the job's write take turns under one lock per app id, and
-  the job writes only while the page has saved no icon since it took that app's generation, which it does when it plans
-  the run, before it reads `shortcuts.vdf`; the hand-over leaves out a shortcut whose generation has moved since, so a
-  logo icon queued before a pick is left out; and the frontend skips a shortcut whose artwork apply is under way
-  (`isArtworkApplyInFlight`), and sets no wide grid or logo once a game page's apply for the shortcut has started since
-  it began fetching it.
+- **An icon the game page writes wins:** `save_shortcut_icon` and the job's write take turns under one lock per app id,
+  and the job writes only while the page has saved no icon since it took that app's generation, which it does when it
+  plans the run, before it reads `shortcuts.vdf`; the hand-over leaves out a shortcut whose generation has moved since,
+  so a logo icon queued before the page writes one is left out; and the frontend skips a shortcut whose artwork apply is
+  under way (`isArtworkApplyInFlight`), and sets no wide grid or logo once a game page's apply for the shortcut has
+  started since it began fetching it.
 
 ## Pre-launch launch-options confirmation
 

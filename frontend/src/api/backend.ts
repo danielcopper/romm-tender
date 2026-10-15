@@ -547,7 +547,8 @@ export type SgdbSlotArtwork =
       /** SteamGridDB's image id; `null` for the hero, whose outcome is not recorded. */
       image_id: number | null;
       sha256: string;
-      sgdb_id: number;
+      /** The ROM's SteamGridDB id; `null` for an image a manual pick left in the cache of a ROM with none stored. */
+      sgdb_id: number | null;
       prune_lease_token?: string;
     }
   /** The icon: the artwork cache holds it, for `saveShortcutIcon` to write. */
@@ -555,9 +556,9 @@ export type SgdbSlotArtwork =
   | { status: "skip" | "none" | "failed" | "key_refused" | "rate_limited" | "no_api_key" };
 
 /**
- * Serve SteamGridDB's image for one slot of a shortcut, only while the slot is empty: Steam's grid directory has no
- * file for it, or, for the icon, `shortcuts.vdf` points at none but Tender's stand-ins. With `replace` the slot is
- * served whatever it holds.
+ * Serve SteamGridDB's image for one slot of a shortcut, only while the slot is not filled — Steam's grid directory has
+ * no file for it, or, for the icon, `shortcuts.vdf` points at none but Tender's stand-ins — and its record does not rule
+ * it out. With `replace` neither is checked: the slot is served whatever it holds and whatever its record says.
  */
 export const getSgdbSlotArtwork = endpoint<
   [number, number, SgdbArtworkSlot, boolean?],

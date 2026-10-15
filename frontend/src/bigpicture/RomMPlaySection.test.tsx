@@ -588,7 +588,8 @@ describe("RomMPlaySection", () => {
     it("replaces nothing on a first visit whose slots are already filled", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: true, rom_id: 50 });
       // The backend answers "skip" for a slot that is filled: a file in Steam's
-      // grid directory, or, for the icon, a path in shortcuts.vdf.
+      // grid directory, or, for the icon, a path in shortcuts.vdf other than
+      // Tender's stand-ins.
       vi.mocked(backend.getSgdbSlotArtwork).mockResolvedValue({ status: "skip" });
       const setArtwork = vi.fn().mockResolvedValue(undefined);
       const setIcon = vi.fn();
@@ -831,7 +832,7 @@ describe("RomMPlaySection", () => {
 
       // Cache re-read for the newly-bound rom_id, and the switch replaces hero,
       // logo and wide grid through the replacing fetch, as Refresh Artwork does,
-      // and the icon through the per-slot fetch past its filled check.
+      // and the icon through the per-slot fetch past its filled check and its record.
       expect(vi.mocked(cachedStore.getCachedGameDetail)).toHaveBeenCalledWith(testAppId);
       expect(vi.mocked(backend.getSgdbArtworkBase64).mock.calls).toEqual([
         [51, 1],
