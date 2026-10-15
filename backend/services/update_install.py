@@ -200,7 +200,6 @@ class UpdateInstallService:
         self._logger = config.logger
         self._log_debug = config.log_debug
         self._attempt: InstallAttempt | None = None
-        self._task: asyncio.Task[None] | None = None
         # Set in the same loop turn as the check a press passes, and cleared
         # only by an attempt that failed while this process still runs.
         self._holding = False
@@ -224,9 +223,6 @@ class UpdateInstallService:
         # acknowledged. Held for this process only, like the attempt itself.
         self._presses = 0
         self._attempt_toast_owed: int | None = None
-        # Judges the record an earlier start's attempt left, once the
-        # installer's unit has ended.
-        self._judging: asyncio.Task[None] | None = None
         # Whether this attempt's record was written, so a failure this process
         # reports itself takes it away again.
         self._record_written = False
@@ -269,7 +265,7 @@ class UpdateInstallService:
         it runs in a task of its own, the record and the unit read off the
         loop, so a user manager slow to answer holds up no other start step.
         """
-        self._judging = self._tasks.spawn(self._judge_the_last_attempt(), "judge the last update attempt")
+        self._tasks.spawn(self._judge_the_last_attempt(), "judge the last update attempt")
 
     def _judge_io(self, record: UpdateAttemptRecord) -> UpdateAttemptRecord | None:
         """*record* where it says the installer stopped without updating; any other record is removed."""
@@ -533,7 +529,7 @@ class UpdateInstallService:
         self._last_progress_emit = None
         self._bytes_seen = (0, None)
         self._attempt = InstallAttempt(version=release.version, step=InstallStep.DOWNLOADING)
-        self._task = self._tasks.spawn(self._run(release.version, release.tarball), "update install")
+        self._tasks.spawn(self._run(release.version, release.tarball), "update install")
         await self._emit_attempt()
         return {"success": True}
 

@@ -1037,9 +1037,7 @@ class TestAFailedAttempt:
         with caplog.at_level(logging.ERROR, logger="test_update_install"):
             await rig.service.install_update(_OFFERED)
             await rig.settled()
-            task = rig.service._task
-            assert task is not None
-            await asyncio.gather(task, return_exceptions=True)
+            await asyncio.gather(*rig.service._tasks, return_exceptions=True)
 
         assert rig.service.is_update_in_progress() is True
         assert (await rig.service.get_update_install_state())["attempt"]["step"] == "installer_started"
@@ -1225,7 +1223,7 @@ class TestTheAttemptRecord:
 
 async def _judged(rig: _Rig) -> list[dict[str, Any]]:
     """Wait for the judgement a start began to end, and answer what it pushed."""
-    task = rig.service._judging
+    task = next(t for t in rig.service._tasks if t.get_name() == "judge the last update attempt")
     assert task is not None
     await asyncio.wait_for(task, 2)
     return [payload for name, payload in rig.events.events if name == "update_attempt_stopped"]
@@ -1812,7 +1810,7 @@ class TestAnInstallerStillRunningAtTheNextStart:
         _leave_record(tmp_path)
         rig = await _built(rigs, tmp_path, unit_states=[True])
         rig.service.note_start()
-        task = rig.service._judging
+        task = next(t for t in rig.service._tasks if t.get_name() == "judge the last update attempt")
         assert task is not None
 
         await rig.service.shutdown()
