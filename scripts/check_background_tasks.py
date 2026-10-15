@@ -31,9 +31,13 @@ It is an AST call-name check, NOT dataflow analysis. It does not see:
 - ``Task`` reached through ``asyncio`` imported under another name
   (``import asyncio as aio``; ``aio.Task(...)``) — an ``aio.create_task(...)``
   or ``aio.ensure_future(...)`` is caught by its name;
-- a task a helper creates for its caller.
+- ``Task`` reached through ``asyncio.tasks``: ``asyncio.tasks.Task(...)``, or a
+  bare ``Task(...)`` after ``from asyncio.tasks import Task``;
+- a subclass of ``asyncio.Task`` called by its own name;
+- a task a helper creates for its caller;
+- a file it cannot read or parse, which it skips without a word.
 
-Exit 0 when no module creates a task outside the helper, 1 (one line per
+Exit 0 when no module calls one of them outside the helper, 1 (one line per
 offending call) otherwise.
 """
 
@@ -135,7 +139,10 @@ def main(argv: list[str]) -> int:
             "the task it answers if you need a handle (CLAUDE.md → Invariant register)."
         )
         return 1
-    print("OK: under backend/ outside host/, tasks are created only in lib/background_tasks.py.")
+    print(
+        "OK: under backend/ outside host/, _vendor/ and native/, create_task, ensure_future and asyncio.Task(...) "
+        "are called only in lib/background_tasks.py."
+    )
     return 0
 
 

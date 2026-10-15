@@ -243,7 +243,7 @@ jobs:
       - name: Check sync-lifecycle owner confinement
         run: python scripts/check_sync_lifecycle_owner.py
 
-      - name: Check every background task starts through BackgroundTasks
+      - name: Check create_task, ensure_future and asyncio.Task are called only in lib/background_tasks.py
         run: python scripts/check_background_tasks.py
 
       - name: Check library-sync seam-owner confinement
