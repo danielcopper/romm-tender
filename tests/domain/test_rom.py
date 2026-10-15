@@ -293,3 +293,15 @@ class TestClearSelectedDisc:
         assert rom.selected_disc is None
         rom.clear_selected_disc()
         assert rom.selected_disc is None
+
+
+class TestRecordDelivery:
+    def test_a_synced_rom_names_no_route(self):
+        assert _make_rom().delivered_through is None
+
+    @pytest.mark.parametrize("route", ["platform", "collection"])
+    def test_the_last_route_recorded_wins(self, route):
+        rom = _make_rom()
+        rom.record_delivery("collection" if route == "platform" else "platform")
+        rom.record_delivery(route)
+        assert rom.delivered_through == route

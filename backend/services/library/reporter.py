@@ -27,7 +27,7 @@ from domain.collection_label import steam_collection_key
 from domain.collection_name import fold_collection_name
 from domain.fetch_generation import prune_candidate_ids
 from domain.platform_names import decode_platform_names
-from domain.rom import Rom
+from domain.rom import DeliveryRoute, Rom
 from domain.rom_file import has_file_on_romm
 from domain.rom_metadata_mapping import build_rom_metadata
 from domain.sibling_resolution import reachable_rom_ids
@@ -497,7 +497,13 @@ class SyncReporter:
     # ── Report unit results (per-unit pipeline) ──────────────────
 
     def _commit_unit_results_io(
-        self, rom_id_to_app_id, unit_roms, platform_stamp=None, collection_stamp=None, fetch_id=None
+        self,
+        rom_id_to_app_id,
+        unit_roms,
+        platform_stamp=None,
+        collection_stamp=None,
+        fetch_id=None,
+        delivered_through: DeliveryRoute | None = None,
     ):
         """Finalise artwork names, then persist EVERY fetched ROM of the chunk.
 
@@ -509,9 +515,9 @@ class SyncReporter:
         re-acked this cycle is never silently unbound.
 
         The frontend ack is **translated through any rebind** first: a rebind
-        entry is keyed by the vanished bound sibling (so the frontend reused its
-        shortcut), but the binding — and the finalised cover — move onto the
-        surviving representative named in ``bind_rom_id``.
+        entry is keyed by the bound sibling it moves off (so the frontend reused
+        its shortcut), but the binding — and the finalised cover — move onto the
+        same dump named in ``bind_rom_id``.
 
         ADR-0006 two-pass: cover-file RENAME is filesystem I/O so it runs FIRST
         (outside any UoW); the final paths are collected, then one short write
@@ -536,8 +542,8 @@ class SyncReporter:
         grid = self._steam_config.grid_dir()
         box = self._sync_state
 
-        # Translate the ack onto binding targets (rebind moves the binding off
-        # the vanished sibling onto its representative) and finalise the staged
+        # Translate the ack onto binding targets (a rebind moves the binding off
+        # the sibling it is keyed by onto the same dump) and finalise the staged
         # cover to ``{app_id}p.png``, keyed by the target rom_id.
         binding: dict[int, int] = {}
         finalized: dict[int, str] = {}
@@ -555,7 +561,9 @@ class SyncReporter:
         with self._uow_factory() as uow:
             for raw in unit_roms:
                 if "id" in raw:
-                    self._persist_synced_rom(uow, int(raw["id"]), binding, finalized, roms_by_id, fetch_id)
+                    self._persist_synced_rom(
+                        uow, int(raw["id"]), binding, finalized, roms_by_id, fetch_id, delivered_through
+                    )
             if platform_stamp is not None:
                 uow.platform_sync_state.save(platform_stamp)
             if collection_stamp is not None:
@@ -568,7 +576,9 @@ class SyncReporter:
             except Exception as e:
                 self._logger.error(f"Failed to set Steam Input config: {e}")
 
-    def _persist_synced_rom(self, uow, rom_id, binding, finalized, roms_by_id, fetch_id=None) -> None:
+    def _persist_synced_rom(
+        self, uow, rom_id, binding, finalized, roms_by_id, fetch_id=None, delivered_through=None
+    ) -> None:
         """Upsert one fetched ROM + its cached metadata into the open write UoW.
 
         Reads the built identity + version fields from ``pending_all_roms`` (the
@@ -607,6 +617,9 @@ class SyncReporter:
             return
         self._merge_locally_resolved_fields(rom, rom_id, built, finalized, existing)
         self._merge_fetch_generation(rom, fetch_id, existing)
+        route = delivered_through or (existing.delivered_through if existing is not None else None)
+        if route:
+            rom.record_delivery(route)
         uow.roms.save(rom)
 
         # Record the applied launch command for a binding TARGET this cycle (the
@@ -775,6 +788,7 @@ class SyncReporter:
         platform_stamp: PlatformSyncState | None = None,
         collection_stamp: CollectionSyncState | None = None,
         fetch_id: str | None = None,
+        delivered_through: DeliveryRoute | None = None,
     ):
         """Per-chunk commit: cover-path finalize then atomic ``roms`` + metadata upsert.
 
@@ -801,6 +815,10 @@ class SyncReporter:
         stamp records (#1504). Collection units and the late-ack path pass
         ``None``, leaving each row's existing generation untouched.
 
+        ``delivered_through`` names the kind of unit committing the chunk, which
+        each upserted row records (:meth:`Rom.record_delivery`). The late-ack
+        path passes ``None`` and leaves each row's existing route untouched.
+
         Records every bound appId in the shared box so the stale-removal scan
         excludes appIds this run committed, whichever path drove the commit —
         a new rom_id reusing an old appId must not look stale (#1036).
@@ -813,6 +831,7 @@ class SyncReporter:
             platform_stamp,
             collection_stamp,
             fetch_id,
+            delivered_through,
         )
         self._sync_state.committed_app_ids.update(int(aid) for aid in rom_id_to_app_id.values())
 

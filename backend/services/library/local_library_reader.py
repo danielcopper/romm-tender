@@ -58,6 +58,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.platform_sync_state import stamp_for_skip
+from domain.platform_system import PLATFORM_IDS_KEY, decode_platform_ids
 from domain.sibling_resolution import reachable_rom_ids
 from domain.sync_diff import StaleRow, select_stale_removals
 
@@ -118,6 +119,7 @@ class LocalLibraryReader:
                     "sibling_group_key": rom.sibling_group_key,
                     "applied_launch_options": rom.applied_launch_options,
                     "cover_source": rom.cover_source,
+                    "delivered_through": rom.delivered_through,
                 }
             latest = uow.sync_runs.get_latest_completed()
             last_platforms = list(latest.platforms_completed or []) if latest is not None else []
@@ -211,6 +213,18 @@ class LocalLibraryReader:
                 rom_id for stamp in uow.collection_sync_state.iter_all() for rom_id in stamp.member_rom_ids
             )
 
+    def do_read_listed_platform_slugs(self) -> frozenset[str] | None:
+        """Every platform slug RomM's last platform listing named, or ``None`` where none is kept.
+
+        The fetcher keeps every listed platform's ids at the start of a run
+        (``services/library/_platform_ids.py``), on in Tender or not, so after
+        the work queue is built this is the run's own listing. One short read
+        UoW.
+        """
+        with self._uow_factory() as uow:
+            kept = decode_platform_ids(uow.kv_config.get(PLATFORM_IDS_KEY))
+        return None if kept is None else frozenset(kept)
+
     def do_scan_stale_roms(self, synced_rom_ids: set[int], synced_app_ids: set[int]) -> list[StaleRow]:
         """Return a :class:`StaleRow` for every bound ROM not synced this run.
 
@@ -230,11 +244,15 @@ class LocalLibraryReader:
         """
         with self._uow_factory() as uow:
             candidates = {
-                rom.rom_id: (rom.shortcut_app_id, rom.platform_slug)
+                rom.rom_id: rom
                 for rom in uow.roms.iter_all()
                 if rom.shortcut_app_id is not None and rom.rom_id not in synced_rom_ids
             }
         kept = select_stale_removals(
-            [(rom_id, app_id) for rom_id, (app_id, _slug) in candidates.items()], synced_app_ids
+            [(rom_id, rom.shortcut_app_id) for rom_id, rom in candidates.items() if rom.shortcut_app_id is not None],
+            synced_app_ids,
         )
-        return [StaleRow(rom_id, app_id, candidates[rom_id][1]) for rom_id, app_id in kept]
+        return [
+            StaleRow(rom_id, app_id, candidates[rom_id].platform_slug, candidates[rom_id].delivered_through)
+            for rom_id, app_id in kept
+        ]

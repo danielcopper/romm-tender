@@ -1395,16 +1395,57 @@ class TestSortStaleRows:
     """``sort_stale_rows`` / ``settle_asked_rows`` — which stale shortcut goes (D4, D11)."""
 
     def test_each_row_lands_by_what_the_run_knows(self):
-        read = StaleRow(1, 1001, "n64")
-        listed = StaleRow(2, 1002, "gba")
-        unlisted = StaleRow(3, 1003, "gba")
+        read = StaleRow(1, 1001, "n64", "platform")
+        via_collection = StaleRow(2, 1002, "gba", "collection")
+        via_platform_turned_off = StaleRow(3, 1003, "gba", "platform")
+        via_platform_gone_from_romm = StaleRow(4, 1004, "psx", "platform")
+        unrecorded_listed = StaleRow(5, 1005, "gba")
+        unrecorded_unlisted = StaleRow(6, 1006, "gba")
+        unrecorded_platform_gone = StaleRow(7, 1007, "psx")
 
-        sort = sort_stale_rows([read, listed, unlisted], read_platform_slugs={"n64"}, collection_listed_rom_ids={1, 2})
+        sort = sort_stale_rows(
+            [
+                read,
+                via_collection,
+                via_platform_turned_off,
+                via_platform_gone_from_romm,
+                unrecorded_listed,
+                unrecorded_unlisted,
+                unrecorded_platform_gone,
+            ],
+            read_platform_slugs={"n64"},
+            listed_platform_slugs={"n64", "gba"},
+            collection_listed_rom_ids={5},
+        )
 
-        assert sort == StaleSort(remove=[unlisted], keep=[read], ask=[listed])
+        assert sort == StaleSort(
+            remove=[via_platform_turned_off, unrecorded_unlisted],
+            keep=[read, via_platform_gone_from_romm, unrecorded_platform_gone],
+            ask=[via_collection, unrecorded_listed],
+        )
+
+    def test_a_collection_route_is_asked_even_on_a_platform_romm_no_longer_lists(self):
+        row = StaleRow(1, 1001, "psx", "collection")
+
+        sort = sort_stale_rows(
+            [row], read_platform_slugs=set(), listed_platform_slugs=set(), collection_listed_rom_ids=()
+        )
+
+        assert sort.ask == [row]
+
+    def test_an_unknown_listing_reads_as_every_platform_listed(self):
+        row = StaleRow(1, 1001, "psx", "platform")
+
+        sort = sort_stale_rows(
+            [row], read_platform_slugs=set(), listed_platform_slugs=None, collection_listed_rom_ids=()
+        )
+
+        assert sort.remove == [row]
 
     def test_nothing_stale_sorts_into_nothing(self):
-        assert sort_stale_rows([], read_platform_slugs=set(), collection_listed_rom_ids=set()) == StaleSort([], [], [])
+        assert sort_stale_rows(
+            [], read_platform_slugs=set(), listed_platform_slugs=set(), collection_listed_rom_ids=set()
+        ) == StaleSort([], [], [])
 
     def test_only_a_rom_romm_returned_is_removed(self):
         gone, present, unknown, unasked = (StaleRow(rid, 1000 + rid, "gba") for rid in (1, 2, 3, 4))

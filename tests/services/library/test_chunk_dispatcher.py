@@ -62,7 +62,9 @@ class TestApplyChunking:
 
         commit_rows: list[list[int]] = []
 
-        async def capture_commit(_rid_to_aid, chunk_rows, platform_stamp=None, collection_stamp=None, fetch_id=None):
+        async def capture_commit(
+            _rid_to_aid, chunk_rows, platform_stamp=None, collection_stamp=None, fetch_id=None, delivered_through=None
+        ):
             commit_rows.append([r["id"] for r in chunk_rows])
 
         library.sync._reporter.commit_unit_results = capture_commit  # type: ignore[method-assign]
@@ -152,7 +154,9 @@ class TestApplyChunking:
 
         commit_rows: list[list[int]] = []
 
-        async def capture_commit(_rid_to_aid, chunk_rows, platform_stamp=None, collection_stamp=None, fetch_id=None):
+        async def capture_commit(
+            _rid_to_aid, chunk_rows, platform_stamp=None, collection_stamp=None, fetch_id=None, delivered_through=None
+        ):
             commit_rows.append([r["id"] for r in chunk_rows])
 
         library.sync._reporter.commit_unit_results = capture_commit  # type: ignore[method-assign]
@@ -215,7 +219,9 @@ class TestApplyChunking:
         commit_rows: list[list[int]] = []
         box = library.sync._box
 
-        async def capture_commit(_rid_to_aid, chunk_rows, platform_stamp=None, collection_stamp=None, fetch_id=None):
+        async def capture_commit(
+            _rid_to_aid, chunk_rows, platform_stamp=None, collection_stamp=None, fetch_id=None, delivered_through=None
+        ):
             commit_rows.append([r["id"] for r in chunk_rows])
             # Cancel lands the instant chunk 0's commit resolves — before the loop
             # returns to the top to emit chunk 1.
@@ -456,7 +462,9 @@ class TestFinalChunkCollectionStamp:
 
         stamps = []
 
-        async def capture_commit(_rid_to_aid, _chunk_rows, platform_stamp=None, collection_stamp=None, fetch_id=None):
+        async def capture_commit(
+            _rid_to_aid, _chunk_rows, platform_stamp=None, collection_stamp=None, fetch_id=None, delivered_through=None
+        ):
             stamps.append(collection_stamp)
 
         library.sync._reporter.commit_unit_results = capture_commit  # type: ignore[method-assign]
@@ -506,7 +514,9 @@ class TestFinalChunkCollectionStamp:
         stamps = []
         box = library.sync._box
 
-        async def capture_commit(_rid_to_aid, _chunk_rows, platform_stamp=None, collection_stamp=None, fetch_id=None):
+        async def capture_commit(
+            _rid_to_aid, _chunk_rows, platform_stamp=None, collection_stamp=None, fetch_id=None, delivered_through=None
+        ):
             stamps.append(collection_stamp)
 
         async def wait(_unit, event):
@@ -548,7 +558,9 @@ class TestFinalChunkCollectionStamp:
     async def test_a_virtual_collection_is_stamped_with_an_empty_updated_at(self, library):
         stamps = []
 
-        async def capture_commit(_rid_to_aid, _chunk_rows, platform_stamp=None, collection_stamp=None, fetch_id=None):
+        async def capture_commit(
+            _rid_to_aid, _chunk_rows, platform_stamp=None, collection_stamp=None, fetch_id=None, delivered_through=None
+        ):
             stamps.append(collection_stamp)
 
         library.sync._reporter.commit_unit_results = capture_commit  # type: ignore[method-assign]

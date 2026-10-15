@@ -21,6 +21,8 @@ from domain.sibling_resolution import AUTO_REGION, canonical_group_name, fs_name
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping
 
+    from domain.rom import DeliveryRoute
+
 # Marker key a rebind entry carries so the per-unit commit moves the DB binding
 # from the bound sibling it is keyed by (the entry's ``rom_id``, kept so the
 # frontend reuses its existing shortcut) onto the same dump under the sibling it
@@ -486,11 +488,12 @@ def select_stale_removals(
 
 
 class StaleRow(NamedTuple):
-    """A bound row no unit of the run returned: its id, its shortcut's appId, and its platform."""
+    """A bound row no unit of the run returned: its id, its shortcut's appId, its platform, and how it last arrived."""
 
     rom_id: int
     app_id: int
     platform_slug: str
+    delivered_through: DeliveryRoute | None = None
 
 
 # What one exact-id question to RomM established about a ROM: a proven 404
@@ -510,32 +513,44 @@ def sort_stale_rows(
     rows: Iterable[StaleRow],
     *,
     read_platform_slugs: Collection[str],
+    listed_platform_slugs: Collection[str] | None,
     collection_listed_rom_ids: Collection[int],
 ) -> StaleSort:
     """Split the stale rows into the ones to remove, to keep, and to ask RomM about.
 
     *read_platform_slugs* are the platforms the run read whole, skipped or
-    fetched; *collection_listed_rom_ids* are the members every collection held
-    at its last completed apply, read before the run rewrote any of them.
+    fetched; *listed_platform_slugs* every platform RomM's listing named this
+    run, on in Tender or not (``None`` where that is not known, which reads as
+    every platform listed); *collection_listed_rom_ids* the members every
+    collection held at its last completed apply, read before the run rewrote
+    any of them.
 
     * **keep** — the row's platform was read whole and did not return it, so it
-      is gone from RomM, and its shortcut stays bound to it. A skipped platform
-      rebuilds every bound row, so only a fetched one can leave one out.
-    * **ask** — the run did not read the row's platform, and a collection last
-      listed it: it was reached through a collection that no longer returns it,
-      and only RomM's answer to its exact id tells "gone" from "left the
-      collection".
-    * **remove** — the run did not read the row's platform and no collection
-      listed it: its platform is turned off, or RomM no longer lists it, and the
-      game is outside what the sync syncs. A collection whose last apply never
-      finished keeps no list, so its members land here too.
+      is gone from RomM. A skipped platform rebuilds every bound row, so only a
+      fetched one can leave one out. Also kept: a row last delivered through
+      its platform, or never delivered since the route was recorded, whose
+      platform RomM no longer lists — that platform was on, and RomM's listing
+      is a complete answer, so the game is gone from RomM rather than turned
+      off.
+    * **ask** — the run did not read the row's platform, and the row was last
+      delivered through a collection, or, with no route recorded, a
+      collection's last completed apply listed it. Only RomM's answer to its
+      exact id tells "gone" from "left the collection".
+    * **remove** — the rest: the row's platform is listed and turned off in
+      Tender, and no collection reached it.
     """
+    listed = None if listed_platform_slugs is None else set(listed_platform_slugs)
     sort = StaleSort(remove=[], keep=[], ask=[])
     for row in rows:
+        unlisted = listed is not None and row.platform_slug not in listed
         if row.platform_slug in read_platform_slugs:
             sort.keep.append(row)
-        elif row.rom_id in collection_listed_rom_ids:
+        elif row.delivered_through == "collection" or (
+            row.delivered_through is None and row.rom_id in collection_listed_rom_ids
+        ):
             sort.ask.append(row)
+        elif unlisted:
+            sort.keep.append(row)
         else:
             sort.remove.append(row)
     return sort

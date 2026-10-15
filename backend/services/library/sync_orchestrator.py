@@ -371,9 +371,21 @@ class SyncOrchestrator:
             collection_listed = await self._loop.run_in_executor(
                 None, self._local_library_reader.do_read_collection_listed_rom_ids
             )
+            listed_platforms = await self._loop.run_in_executor(
+                None, self._local_library_reader.do_read_listed_platform_slugs
+            )
             removals, _kept = await self._settle_stale_rows(
-                (StaleRow(rid, registry[str(rid)]["app_id"], registry[str(rid)]["platform_slug"]) for rid in stale),
+                (
+                    StaleRow(
+                        rid,
+                        registry[str(rid)]["app_id"],
+                        registry[str(rid)]["platform_slug"],
+                        registry[str(rid)].get("delivered_through"),
+                    )
+                    for rid in stale
+                ),
                 read_platform_slugs=set(slug_to_name),
+                listed_platform_slugs=listed_platforms,
                 collection_listed_rom_ids=collection_listed,
             )
             removed_ids = {row.rom_id for row in removals}
@@ -1248,6 +1260,7 @@ class SyncOrchestrator:
         rows: Iterable[StaleRow],
         *,
         read_platform_slugs: Collection[str],
+        listed_platform_slugs: Collection[str] | None,
         collection_listed_rom_ids: Collection[int],
     ) -> tuple[list[StaleRow], list[StaleRow]]:
         """``(remove, kept_on_read_platforms)`` for the stale *rows*.
@@ -1258,16 +1271,19 @@ class SyncOrchestrator:
         preview promises are the ones its apply makes.
         """
         sort = sort_stale_rows(
-            rows, read_platform_slugs=read_platform_slugs, collection_listed_rom_ids=collection_listed_rom_ids
+            rows,
+            read_platform_slugs=read_platform_slugs,
+            listed_platform_slugs=listed_platform_slugs,
+            collection_listed_rom_ids=collection_listed_rom_ids,
         )
         answers = await self._fetcher.ask_romm_for_roms([row.rom_id for row in sort.ask]) if sort.ask else {}
         asked_remove, asked_keep = settle_asked_rows(sort.ask, answers)
         if sort.keep or asked_keep:
             self._logger.info(
-                f"Stale removal: keeping {len(sort.keep)} bound version(s) gone from a platform read whole "
+                f"Stale removal: keeping {len(sort.keep)} bound version(s) gone from RomM with their platform "
                 f"and {len(asked_keep)} reached through a collection RomM did not confirm"
             )
-        return sort.remove + asked_remove, sort.keep
+        return sort.remove + asked_remove, [row for row in sort.keep if row.platform_slug in read_platform_slugs]
 
     async def _finalize_per_unit(
         self,
@@ -1309,9 +1325,13 @@ class SyncOrchestrator:
                 synced_rom_ids,
                 set(self._sync_state.committed_app_ids),
             )
+            listed_platforms = await self._loop.run_in_executor(
+                None, self._local_library_reader.do_read_listed_platform_slugs
+            )
             stale, kept_on_read_platforms = await self._settle_stale_rows(
                 candidates,
                 read_platform_slugs=processed_platform_slugs,
+                listed_platform_slugs=listed_platforms,
                 collection_listed_rom_ids=collection_listed_rom_ids,
             )
             platform_rom_ids.update(row.rom_id for row in kept_on_read_platforms)

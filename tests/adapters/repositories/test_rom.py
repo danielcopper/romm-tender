@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
+
 from domain.playtime import Playtime
 from domain.rom import Rom
 from domain.rom_install import RomInstall
@@ -56,6 +58,19 @@ class TestRoundTrip:
         assert loaded.igdb_id is None
         assert loaded.sgdb_id is None
         assert loaded.ra_id is None
+
+
+class TestDeliveredThrough:
+    @pytest.mark.parametrize("route", ["platform", "collection", None])
+    def test_round_trips(self, uow: SqliteUnitOfWork, route):
+        rom = _rom(1)
+        if route is not None:
+            rom.record_delivery(route)
+        uow.roms.save(rom)
+
+        loaded = uow.roms.get(1)
+        assert loaded is not None
+        assert loaded.delivered_through == route
 
 
 class TestMiss:

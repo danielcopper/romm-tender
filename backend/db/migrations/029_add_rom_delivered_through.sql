@@ -1,0 +1,26 @@
+-- =============================================================================
+-- 029_add_rom_delivered_through.sql — which kind of sync unit last committed a ROM
+-- #2407 (a version gone from RomM stays the shortcut's version)
+-- =============================================================================
+--
+-- The end-of-run stale removal has to tell a bound ROM reached only through a
+-- collection from one reached through its platform, once a run returns neither:
+-- the first is asked for by its exact id, the second is gone with its
+-- platform's toggle. A collection's completion stamp cannot carry that, because
+-- every collection apply rewrites its members from RomM's current membership.
+--
+--   * roms.delivered_through — 'platform' or 'collection': the kind of unit
+--     whose chunk commit last upserted the row.
+--
+-- NULL is a row no unit has committed since this migration. The stale removal
+-- reads NULL with the rule it used before the column existed (the members the
+-- collections' stamps list), so nothing is fetched again to fill it in: the
+-- next commit of each row writes it, and a row the server no longer returns
+-- keeps NULL. Adding a nullable column changes no existing row, so the runner's
+-- user_version ladder is the only guard this step needs.
+--
+-- Transaction-safe DDL only — the runner (adapters/sqlite_migrations.py) wraps
+-- BEGIN/COMMIT and stamps PRAGMA user_version = 29.
+-- -----------------------------------------------------------------------------
+ALTER TABLE roms ADD COLUMN delivered_through TEXT
+    CHECK (delivered_through IS NULL OR delivered_through IN ('platform', 'collection'));

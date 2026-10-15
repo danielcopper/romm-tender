@@ -308,6 +308,7 @@ class ChunkDispatcher:
                 # platforms, and re-marking a foreign platform's row would drop it
                 # from that platform's counted rows.
                 fetch_id=fetch_id,
+                delivered_through="platform" if unit.type == "platform" else "collection",
             )
             applied_count += len(applied)
             # Only a COMMITTED chunk's items count as done (#1383): an emitted chunk

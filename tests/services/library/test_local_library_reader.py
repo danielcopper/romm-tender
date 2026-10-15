@@ -152,3 +152,19 @@ class TestStaleScan:
         stale = library.sync._local_library_reader.do_scan_stale_roms({1}, set())
 
         assert stale == [StaleRow(2, 200, "gba")]
+
+
+class TestListedPlatformSlugs:
+    """Every platform the last listing named, kept by the fetcher at the start of a run."""
+
+    def test_the_kept_listing_s_slugs(self, library):
+        from domain.platform_system import PLATFORM_IDS_KEY, encode_platform_ids, platform_ids_by_slug
+
+        listed = [{"id": 1, "slug": "n64", "name": "N64"}, {"id": 2, "slug": "gba", "name": "GBA"}]
+        with library.uow as uow:
+            uow.kv_config.set(PLATFORM_IDS_KEY, encode_platform_ids(platform_ids_by_slug(listed)))
+
+        assert library.sync._local_library_reader.do_read_listed_platform_slugs() == frozenset({"n64", "gba"})
+
+    def test_no_kept_listing_is_none(self, library):
+        assert library.sync._local_library_reader.do_read_listed_platform_slugs() is None

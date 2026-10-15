@@ -55,6 +55,10 @@ _SYNC_COLUMNS = (
     # confirmed-else-preserved before save(), so a platform apply advances it
     # while a collection apply carries the existing value forward.
     "last_fetch_id",
+    # Which kind of unit last committed the row (platform | collection). Like the
+    # fetch generation it rides the UPSERT confirmed-else-preserved: a commit
+    # that names no route (the late-ack path) carries the existing value.
+    "delivered_through",
 )
 
 # Read set: the synced columns plus the pin-only emulator_override, selected_disc,
@@ -96,6 +100,7 @@ def _row_to_rom(row: sqlite3.Row) -> Rom:
         fs_size_bytes=row["fs_size_bytes"],
         has_file_on_disk=bool(row["has_file_on_disk"]),
         last_fetch_id=row["last_fetch_id"],
+        delivered_through=row["delivered_through"],
     )
 
 
@@ -169,6 +174,7 @@ class SqliteRomRepository(BaseRepository):
                 rom.fs_size_bytes,
                 int(rom.has_file_on_disk),
                 rom.last_fetch_id,
+                rom.delivered_through,
             ),
         )
 

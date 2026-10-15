@@ -83,8 +83,9 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 021_add_rom_fs_size + 022_rename_collection_kind_user_to_standard
 # + 023_add_rom_install_launchable + 024_add_answered_save_directories
 # + 025_add_platform_skip_revoked + 026_add_rom_has_file_on_disk
-# + 027_add_artwork_slot_outcomes + 028_widen_artwork_slot_outcomes_to_the_icon).
-_SHIPPED_VERSION = 28
+# + 027_add_artwork_slot_outcomes + 028_widen_artwork_slot_outcomes_to_the_icon
+# + 029_add_rom_delivered_through).
+_SHIPPED_VERSION = 29
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp,
@@ -1944,3 +1945,74 @@ class Test028WidenArtworkSlotOutcomesToTheIcon:
         finally:
             conn.close()
         assert recorded == (0,)
+
+
+class Test029AddRomDeliveredThrough:
+    """029 — adds the nullable delivered_through column to roms (#2407)."""
+
+    def test_adds_delivered_through_to_roms_only(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+
+        apply_migrations(db_path)
+
+        assert "delivered_through" in _columns(db_path, "roms")
+        assert "delivered_through" not in _columns(db_path, "rom_installs")
+
+    def test_delivered_through_absent_before_029(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 28)))
+
+        assert _user_version(db_path) == 28
+        assert "delivered_through" not in _columns(db_path, "roms")
+
+    def test_an_existing_row_reads_null_across_the_migration(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 28)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO roms (rom_id, platform_slug, name, fs_name, last_synced_at) "
+                "VALUES (1, 'snes', 'Game', 'game.sfc', '2026-10-15T10:00:00')"
+            )
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        conn = sqlite3.connect(db_path)
+        try:
+            value = conn.execute("SELECT delivered_through FROM roms WHERE rom_id = 1").fetchone()[0]
+        finally:
+            conn.close()
+        assert value is None
+
+    @pytest.mark.parametrize("route", ["platform", "collection"])
+    def test_each_route_round_trips(self, tmp_path: Path, route: str):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO roms (rom_id, platform_slug, name, fs_name, last_synced_at, delivered_through) "
+                "VALUES (1, 'snes', 'Game', 'game.sfc', '2026-10-15T10:00:00', ?)",
+                (route,),
+            )
+            stored = conn.execute("SELECT delivered_through FROM roms WHERE rom_id = 1").fetchone()[0]
+        finally:
+            conn.close()
+        assert stored == route
+
+    def test_any_other_route_is_refused(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute(
+                    "INSERT INTO roms (rom_id, platform_slug, name, fs_name, last_synced_at, delivered_through) "
+                    "VALUES (1, 'snes', 'Game', 'game.sfc', '2026-10-15T10:00:00', 'both')"
+                )
+        finally:
+            conn.close()
