@@ -368,6 +368,39 @@ describe("ListDetail", () => {
     expect(rowOf(/PlayStation/)).toBeNull();
   });
 
+  it("marks the selected row as where entering from the Quick Access strip lands", () => {
+    // On the page the panel appears with nothing places focus, so the row the
+    // page was opened with is reached through Steam's entry preference — a
+    // non-first one, for the reason the declaration's test gives.
+    const { rerender } = render(
+      <ListDetail
+        items={platformItems(() => {})}
+        selectedId="psx"
+        onSelect={vi.fn()}
+        renderDetail={(id) => <div>detail for {id ?? "nothing"}</div>}
+      />,
+    );
+    const preferred = () => document.querySelectorAll('[data-preferred-focus="true"]');
+    const rowOf = (name: RegExp) => screen.getByRole("button", { name }).closest('[data-preferred-focus="true"]');
+
+    expect(preferred()).toHaveLength(1);
+    expect(rowOf(/PlayStation/)).not.toBeNull();
+    expect(rowOf(/Nintendo 64/)).toBeNull();
+
+    rerender(
+      <ListDetail
+        items={platformItems(() => {})}
+        selectedId="n64"
+        onSelect={vi.fn()}
+        renderDetail={(id) => <div>detail for {id ?? "nothing"}</div>}
+      />,
+    );
+
+    expect(preferred()).toHaveLength(1);
+    expect(rowOf(/Nintendo 64/)).not.toBeNull();
+    expect(rowOf(/PlayStation/)).toBeNull();
+  });
+
   it("declares nothing where nothing is selected", () => {
     // A list that opens with no selection — the Library page's platforms —
     // names no area, so the frame falls back to the body's first stop and the

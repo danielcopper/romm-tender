@@ -563,6 +563,24 @@ describe("WidePage", () => {
     expect(screen.getByTestId("steam-tabs")).toHaveAttribute("data-auto-focus-contents", "false");
   });
 
+  it("has entering from the Quick Access strip land in the body, never on Back", async () => {
+    const WidePage = await loadWidePage(StubTabs);
+
+    render(
+      <WidePage title="Settings" onBack={vi.fn()}>
+        <button>a page row</button>
+      </WidePage>,
+    );
+
+    // The node Steam's breadth-first search finds is the body's, and the body
+    // searches on in turn for whatever the page marks — a list's selected row.
+    const preferred = body().closest('[data-preferred-focus="true"]');
+    expect(preferred).not.toBeNull();
+    expect(preferred).toHaveAttribute("data-nav-entry-prefer-position", "4");
+    expect(preferred).toContainElement(screen.getByRole("button", { name: "a page row" }));
+    expect(preferred).not.toContainElement(screen.getByRole("button", { name: "‹ Back" }));
+  });
+
   it("wraps no region around a body whose page builds its own", async () => {
     const WidePage = await loadWidePage(StubTabs, StubScrollPanel);
 

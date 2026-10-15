@@ -152,7 +152,16 @@ vi.mock("@decky/ui", async () => {
     PanelSectionRow: passthrough("div"),
     // Focusable wrappers around read-only rows (info fields, banners, progress) —
     // pass children through a plain div so the wrapped content stays queryable.
-    Focusable: passthrough("div"),
+    // Steam's entry preference rides along as the shared stub's attributes.
+    Focusable: (p: AnyProps & { preferredFocus?: boolean; navEntryPreferPosition?: number }) =>
+      ce(
+        "div",
+        {
+          "data-preferred-focus": p.preferredFocus ? "true" : undefined,
+          "data-nav-entry-prefer-position": p.navEntryPreferPosition,
+        },
+        p.children as never,
+      ),
     // Mirrors the shared stub in frontend/src/test-setup.ts: the description
     // rides in a SIBLING span, never inside the button, so it stays assertable
     // (a dropped prop would make every assertion of its ABSENCE vacuously true)
@@ -483,6 +492,20 @@ describe("MainPage", () => {
       // found: the body's own first stop is a status row that acts on nothing,
       // so opening there spends the reader's first press on a move.
       expect(firstBodyStop(container)?.querySelector('[data-testid="field-label"]')?.textContent).toBe("Connection");
+    });
+
+    it("has entering from the Quick Access strip land on the menu's Sync entry", async () => {
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+
+      // Nothing places focus on the Main the panel appears with; Steam's entry
+      // preference does the landing, searching Main's root for the one marked
+      // node. `ButtonItem` takes no such prop, so a carrier holds the mark.
+      const preferred = container.querySelectorAll('[data-preferred-focus="true"]');
+      expect(preferred).toHaveLength(1);
+      expect(preferred[0]?.querySelector("button")?.textContent).toBe("Sync");
+      expect(preferred[0]).not.toHaveAttribute("tabindex");
+      expect(preferred[0]?.closest('[data-nav-entry-prefer-position="4"]')).not.toBeNull();
     });
 
     it("opens there with a notice's own button on screen, which no button-first rule could", async () => {

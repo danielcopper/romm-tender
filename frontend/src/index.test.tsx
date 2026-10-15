@@ -3170,6 +3170,27 @@ describe("index.tsx — the panel appearing places no focus", () => {
     }
   });
 
+  it("has entering a sub-page left open search it for the stop the page marks", async () => {
+    const panel = panelFactory();
+    render(panel.content);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "go to downloads" }));
+      await Promise.resolve();
+    });
+
+    // A wide page marks its body; the search starts at the router's Focusable,
+    // which is the same one that takes B back to Main.
+    expect(screen.getByText("downloads page").closest('[data-nav-entry-prefer-position="4"]')).not.toBeNull();
+
+    await act(async () => {
+      fireEvent(
+        screen.getByText("downloads page"),
+        new CustomEvent("decky-button-down", { detail: { button: 2 }, bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+  });
+
   it("leaves focus alone on the stranded card", async () => {
     vi.useFakeTimers();
     try {
