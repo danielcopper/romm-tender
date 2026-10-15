@@ -1613,7 +1613,7 @@ describe("syncManager — files each game into its collections while the run app
     };
   }
 
-  it("a new platform's collection exists and holds its games while the run is still applying them", async () => {
+  it("a new platform's collection exists with its first game while the run is still applying the rest, and holds every game once the chunk ends", async () => {
     const store = stubLiveCollectionStore();
     let releaseThird!: (appId: number) => void;
     addShortcut
@@ -1637,8 +1637,9 @@ describe("syncManager — files each game into its collections while the run app
     });
 
     // The third game's shortcut is still being created: the run is applying.
+    // The first game was written at once; the second waits for its group.
     const collection = store.named("RomM: PlayStation (test)");
-    expect([...(collection?.apps ?? [])]).toEqual([6000, 6001]);
+    expect([...(collection?.apps ?? [])]).toEqual([6000]);
     expect(store.NewUnsavedCollection).toHaveBeenCalledTimes(1);
     expect(vi.mocked(backend.reportUnitResults)).not.toHaveBeenCalled();
 
@@ -1679,22 +1680,42 @@ describe("syncManager — files each game into its collections while the run app
     expect(existing.dnd.RemoveApps).not.toHaveBeenCalled();
   });
 
-  it("a cancel mid-chunk keeps the games already filed and removes nothing from their collection", async () => {
+  it("a cancel mid-chunk keeps the games already filed, writes the ones gathered, and removes nothing from their collection", async () => {
     const store = stubLiveCollectionStore();
     addShortcut.mockImplementation(async (item: { rom_id: number }) => {
-      if (item.rom_id === 1) requestSyncCancel();
+      if (item.rom_id === 2) requestSyncCancel();
       return 6000 + item.rom_id;
     });
 
     const applyUnit = initUnitSyncManager();
     await act(async () => {
-      await applyUnit(chunk("run-cancel", [filedItem(1, "PlayStation"), filedItem(2, "PlayStation")]));
+      await applyUnit(
+        chunk("run-cancel", [filedItem(1, "PlayStation"), filedItem(2, "PlayStation"), filedItem(3, "PlayStation")]),
+      );
     });
 
     const collection = store.named("RomM: PlayStation (test)");
-    expect([...(collection?.apps ?? [])]).toEqual([6001]);
+    expect([...(collection?.apps ?? [])]).toEqual([6001, 6002]);
     expect(collection?.dnd.RemoveApps).not.toHaveBeenCalled();
     expect(collection?.Delete).not.toHaveBeenCalled();
     expect(vi.mocked(backend.reportUnitResults)).not.toHaveBeenCalled();
+  });
+
+  it("writes the chunk's gathered games before it acknowledges the chunk", async () => {
+    const store = stubLiveCollectionStore();
+    let next = 6000;
+    addShortcut.mockImplementation(async () => next++);
+    let heldAtAck: number[] = [];
+    vi.mocked(backend.reportUnitResults).mockImplementationOnce(async () => {
+      heldAtAck = [...(store.named("RomM: PlayStation (test)")?.apps ?? [])];
+      return undefined as never;
+    });
+
+    const applyUnit = initUnitSyncManager();
+    await act(async () => {
+      await applyUnit(chunk("run-ack", [filedItem(1, "PlayStation"), filedItem(2, "PlayStation")]));
+    });
+
+    expect(heldAtAck).toEqual([6000, 6001]);
   });
 });

@@ -142,9 +142,11 @@ const createOrUpdateRomMCollections = vi.fn().mockResolvedValue(undefined);
 const clearPlatformCollection = vi.fn().mockResolvedValue(undefined);
 const addToCollections = vi.fn().mockResolvedValue(undefined);
 const startCollectionsRun = vi.fn();
+const flushCollections = vi.fn().mockResolvedValue(undefined);
 vi.mock("./utils/collections", () => ({
   addToCollections: (...args: unknown[]) => addToCollections(...args),
   startCollectionsRun: (...args: unknown[]) => startCollectionsRun(...args),
+  flushCollections: (...args: unknown[]) => flushCollections(...args),
   createOrUpdateCollections: (...args: unknown[]) => createOrUpdateCollections(...args),
   createOrUpdateRomMCollections: (...args: unknown[]) => createOrUpdateRomMCollections(...args),
   clearPlatformCollection: (...args: unknown[]) => clearPlatformCollection(...args),
@@ -1991,6 +1993,19 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     expect(addToCollections).toHaveBeenCalledWith({ "Nintendo 64": [1] }, { Faves: [1] }, expect.any(AbortSignal));
     expect(createOrUpdateCollections).not.toHaveBeenCalled();
     expect(createOrUpdateRomMCollections).not.toHaveBeenCalled();
+  });
+
+  it("writes the run's gathered games before a cancelled sync's end write", async () => {
+    seedCollections();
+    flushCollections.mockClear();
+    addToCollections.mockClear();
+    panelFactory();
+
+    emitSyncComplete({ platform_app_ids: { "Nintendo 64": [1] }, total_games: 1, cancelled: true });
+    await flush();
+
+    expect(flushCollections).toHaveBeenCalledTimes(1);
+    expect(flushCollections.mock.invocationCallOrder[0]).toBeLessThan(addToCollections.mock.invocationCallOrder[0]!);
   });
 
   describe("over a collection the run filed a game into that its map lacks", () => {

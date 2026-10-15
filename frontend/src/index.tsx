@@ -48,6 +48,7 @@ import {
 } from "./api/backend";
 import {
   addToCollections,
+  flushCollections,
   startCollectionsRun,
   createOrUpdateCollections,
   createOrUpdateRomMCollections,
@@ -788,6 +789,7 @@ const tender = definePanel(() => {
 
     const reconcileCollections = async (signal: AbortSignal): Promise<void> => {
       try {
+        await flushCollections();
         if (data.cancelled) {
           await addToCollections(data.platform_app_ids, data.romm_collection_app_ids ?? {}, signal);
           return;

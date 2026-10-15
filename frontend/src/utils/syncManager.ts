@@ -22,7 +22,7 @@ import { recordUnitCreated, recordUnitUpdated } from "./runUnitsStore";
 import { observeUnitTotal } from "./syncEta";
 import { registerRomMAppId } from "./rommAppIds";
 import { pacedForEach } from "./pacedOps";
-import { addAppToCollections } from "./collections";
+import { addAppToCollections, flushCollections } from "./collections";
 
 let _cancelRequested = false;
 let _isUnitRunning = false;
@@ -543,6 +543,10 @@ export function initUnitSyncManager(): (data: SyncApplyUnitData) => unknown {
       if (!isCancelRequested() && data.cover_refreshes?.length) {
         await processCoverRefreshes(data);
       }
+
+      // Before the ack, so a committed chunk's games are in their collections,
+      // and on a cancel too, since what the run added stays.
+      await flushCollections();
 
       // Do NOT ack a cancelled unit: the backend has already discarded this
       // run's in-flight state, so a post-cancel ack only risks being credited

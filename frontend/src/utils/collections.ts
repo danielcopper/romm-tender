@@ -201,14 +201,32 @@ export async function createOrUpdateRomMCollections(
  */
 let _createdThisRun: { runId: string; byFold: Map<string, SteamCollection> } | null = null;
 
-/** Begin *runId*'s record of the collections it creates, forgetting any earlier run's. */
+/**
+ * How long the add-only pass gathers games before it writes their collections
+ * again. Why the writes are grouped, and what one costs:
+ * docs/architecture/steam-non-steam-shortcuts.md, "Collection management".
+ */
+export const COLLECTION_WRITE_INTERVAL_MS = 2000;
+
+/** The games {@link addAppToCollections} gathered since the last write, by collection name. */
+let _pending: { runId: string; appIdsByName: Map<string, number[]> } | null = null;
+/** When the add-only pass last wrote, or `null` where this run has not written yet. */
+let _lastWriteAt: number | null = null;
+
+/** Begin *runId*'s record of the collections it creates, forgetting any earlier run's; its first game is written at once. */
 export function startCollectionsRun(runId: string): void {
-  _createdThisRun = { runId, byFold: new Map() };
+  beginCollectionsRun(runId);
+}
+
+function beginCollectionsRun(runId: string): Map<string, SteamCollection> {
+  const byFold = new Map<string, SteamCollection>();
+  _createdThisRun = { runId, byFold };
+  _lastWriteAt = null;
+  return byFold;
 }
 
 function collectionsCreatedIn(runId: string): Map<string, SteamCollection> {
-  if (_createdThisRun?.runId !== runId) _createdThisRun = { runId, byFold: new Map() };
-  return _createdThisRun.byFold;
+  return _createdThisRun?.runId === runId ? _createdThisRun.byFold : beginCollectionsRun(runId);
 }
 
 /**
@@ -242,10 +260,13 @@ async function addAppsToCollection(
 
 /**
  * File one shortcut into the collections the backend named for it, while a sync
- * runs. Only adds: a collection that is missing is created holding this game,
- * and nothing is ever removed — the complete set of each collection is written
- * once a run completes (`onSyncComplete`). A failure on one collection is logged
- * and the others still run; nothing here throws.
+ * runs. The game is gathered with the others for its collections, and every
+ * gathered collection is written when {@link COLLECTION_WRITE_INTERVAL_MS} has
+ * passed since the last write — at once for a run's first game — or when
+ * {@link flushCollections} is called. Only adds: a collection that is missing is
+ * created holding its gathered games, and nothing is ever removed — the
+ * complete set of each collection is written once a run completes
+ * (`onSyncComplete`). Nothing here throws.
  */
 export async function addAppToCollections(
   appId: number,
@@ -255,16 +276,42 @@ export async function addAppToCollections(
 ): Promise<void> {
   if (typeof collectionStore === "undefined") return;
   const hostname = await getHostname();
-  const created = collectionsCreatedIn(runId);
   const names = [
     ...(platformCollection === null ? [] : [platformCollectionName(platformCollection, hostname)]),
     ...rommCollections.map((key) => rommCollectionName(key, hostname)),
   ];
+  if (_pending?.runId !== runId) await flushCollections();
+  collectionsCreatedIn(runId);
+  const pending = _pending?.runId === runId ? _pending : { runId, appIdsByName: new Map<string, number[]>() };
+  _pending = pending;
   for (const name of names) {
+    const appIds = pending.appIdsByName.get(name);
+    if (appIds) appIds.push(appId);
+    else pending.appIdsByName.set(name, [appId]);
+  }
+  if (_lastWriteAt === null || Date.now() - _lastWriteAt >= COLLECTION_WRITE_INTERVAL_MS) await flushCollections();
+}
+
+/**
+ * Write every collection {@link addAppToCollections} has gathered games for and
+ * not written yet: one `AddApps` and one `Save` each. Called at the end of each
+ * apply chunk, before its acknowledgement, and before the end-of-run write, so
+ * nothing gathered is lost. A failure on one collection is logged and the
+ * others still run; nothing here throws.
+ */
+export async function flushCollections(): Promise<void> {
+  const pending = _pending;
+  if (!pending || pending.appIdsByName.size === 0 || typeof collectionStore === "undefined") return;
+  _pending = { runId: pending.runId, appIdsByName: new Map() };
+  _lastWriteAt = Date.now();
+  // A run's games reach the record of the collections that run created, and no
+  // other run's: games still gathered when the next run started go by the store.
+  const created = _createdThisRun?.runId === pending.runId ? _createdThisRun.byFold : null;
+  for (const [name, appIds] of pending.appIdsByName) {
     try {
-      await addAppsToCollection([appId], name, created);
+      await addAppsToCollection(appIds, name, created);
     } catch (e) {
-      logError(`Failed to add appId ${appId} to collection "${name}": ${e}`);
+      logError(`Failed to add ${appIds.length} apps to collection "${name}": ${e}`);
     }
   }
 }

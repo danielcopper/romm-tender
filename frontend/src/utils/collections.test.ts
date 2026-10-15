@@ -1,7 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
+  COLLECTION_WRITE_INTERVAL_MS,
   addAppToCollections,
   addToCollections,
+  flushCollections,
   startCollectionsRun,
   createOrUpdateRomMCollections,
   createOrUpdateCollections,
@@ -183,11 +185,16 @@ describe("clearAllRomMCollections — case-insensitive identity (#1569)", () => 
   });
 });
 
+/** Write what an earlier test left gathered into a store of its own, and start a fresh run. */
+async function startIsolated(): Promise<void> {
+  stubLiveCollectionStore();
+  await flushCollections();
+  startCollectionsRun("run-isolated");
+  vi.clearAllMocks();
+}
+
 describe("addAppToCollections — the add-only path a sync files each game through", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    startCollectionsRun("run-isolated");
-  });
+  beforeEach(startIsolated);
 
   it("creates a missing platform collection holding its first game", async () => {
     const store = stubLiveCollectionStore();
@@ -204,6 +211,7 @@ describe("addAppToCollections — the add-only path a sync files each game throu
 
     await addAppToCollections(101, "PlayStation", [], "run-unlisted");
     await addAppToCollections(102, "PlayStation", [], "run-unlisted");
+    await flushCollections();
 
     expect(store.created.map((c) => [...c.apps])).toEqual([[101, 102]]);
   });
@@ -273,7 +281,7 @@ describe("addAppToCollections — the add-only path a sync files each game throu
     await addAppToCollections(9, "PlayStation", ["Favs"], "run-fail");
 
     expect(vi.mocked(logError)).toHaveBeenCalledWith(
-      'Failed to add appId 9 to collection "RomM: PlayStation (test)": Error: cloud write failed',
+      'Failed to add 1 apps to collection "RomM: PlayStation (test)": Error: cloud write failed',
     );
     expect(store.named("RomM: [Favs] (test)")?.apps.has(9)).toBe(true);
   });
@@ -287,11 +295,56 @@ describe("addAppToCollections — the add-only path a sync files each game throu
   });
 });
 
-describe("addToCollections — a cancelled run's maps, added without removing", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    startCollectionsRun("run-isolated");
+describe("addAppToCollections — games gathered and written in groups", () => {
+  beforeEach(async () => {
+    await startIsolated();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(0);
   });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("writes the run's first game at once and gathers the games added within the interval into one write", async () => {
+    const store = stubLiveCollectionStore();
+
+    await addAppToCollections(1, "PlayStation", [], "run-groups");
+    vi.setSystemTime(COLLECTION_WRITE_INTERVAL_MS / 4);
+    await addAppToCollections(2, "PlayStation", [], "run-groups");
+    vi.setSystemTime(COLLECTION_WRITE_INTERVAL_MS - 1);
+    await addAppToCollections(3, "PlayStation", [], "run-groups");
+
+    const collection = store.named("RomM: PlayStation (test)");
+    expect([...(collection?.apps ?? [])]).toEqual([1]);
+    expect(collection?.Save).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(COLLECTION_WRITE_INTERVAL_MS);
+    await addAppToCollections(4, "PlayStation", [], "run-groups");
+
+    expect([...(collection?.apps ?? [])]).toEqual([1, 2, 3, 4]);
+    expect(collection?.Save).toHaveBeenCalledTimes(2);
+  });
+
+  it("writes every gathered collection when flushed, one write each", async () => {
+    const store = stubLiveCollectionStore();
+    await addAppToCollections(1, "PlayStation", ["Favs"], "run-flush");
+    await addAppToCollections(2, "PlayStation", ["Favs"], "run-flush");
+    await addAppToCollections(3, "PlayStation", [], "run-flush");
+
+    await flushCollections();
+
+    const platform = store.named("RomM: PlayStation (test)");
+    const favs = store.named("RomM: [Favs] (test)");
+    expect([...(platform?.apps ?? [])]).toEqual([1, 2, 3]);
+    expect([...(favs?.apps ?? [])]).toEqual([1, 2]);
+    expect(platform?.Save).toHaveBeenCalledTimes(2);
+    expect(favs?.Save).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("addToCollections — a cancelled run's maps, added without removing", () => {
+  beforeEach(startIsolated);
 
   it("a new run does not use the previous run's created collection", async () => {
     const store = stubLiveCollectionStore({ listsOnSave: false });
