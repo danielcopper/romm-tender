@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, FC, ReactNode } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, Field, Focusable, ProgressBar, Spinner } from "@decky/ui";
 import { FaCheckCircle, FaTimesCircle, FaExclamationTriangle } from "react-icons/fa";
 import { cancelSync, refreshMigrationState, getSyncStatus, getEmulatorSources, logError } from "../api/backend";
-import { ENTRY_STOP_ATTR } from "../utils/entryFocus";
+import { ENTRY_STOP_ATTR, PREFER_MARKED_CHILD } from "../utils/entryFocus";
 import { formatTimeAgo } from "../utils/formatters";
 import { pluralize } from "../utils/pluralize";
 import { getSyncProgress, setSyncProgress as setStoredSyncProgress } from "../utils/syncProgress";
@@ -561,8 +561,10 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
     return <MigrationBlockedPage migration={migration} />;
   }
 
+  // Entering the panel from the Quick Access strip searches this root for the
+  // node marked `preferredFocus` — the menu's Sync entry, below.
   return (
-    <>
+    <Focusable navEntryPreferPosition={PREFER_MARKED_CHILD}>
       {settingsReset.pending && <SettingsResetBanner backedUpTo={settingsReset.backedUpTo} />}
       {playtimeScope.pending && (
         <PlaytimeScopeBanner onOpenConnections={() => onNavigate({ page: "settings", section: "connections" })} />
@@ -797,11 +799,18 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
               render: Steam's `ButtonItem` takes its own props and nothing
               establishes that it passes an unknown one down to the DOM.
               `display: contents` keeps the wrapper out of the layout — it
-              carries the attribute and nothing else. */}
+              carries the attribute and nothing else.
+
+              The declaration serves a swap back to Main; entering from the
+              Quick Access strip is Steam's own, and the `preferredFocus`
+              carrier is what that entry lands by — `ButtonItem` takes no such
+              prop. A container, not a stop: it holds the button. */}
           <div {...{ [ENTRY_STOP_ATTR]: "" }} style={{ display: "contents" }}>
-            <ButtonItem layout="below" bottomSeparator="none" onClick={() => onNavigate("sync")}>
-              Sync
-            </ButtonItem>
+            <Focusable preferredFocus style={{ display: "contents" }}>
+              <ButtonItem layout="below" bottomSeparator="none" onClick={() => onNavigate("sync")}>
+                Sync
+              </ButtonItem>
+            </Focusable>
           </div>
         </PanelSectionRow>
         <PanelSectionRow>
@@ -820,6 +829,6 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
           </ButtonItem>
         </PanelSectionRow>
       </PanelSection>
-    </>
+    </Focusable>
   );
 };

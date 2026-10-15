@@ -3018,11 +3018,28 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
     mainPageDeclaresEntryStop = false;
   });
 
+  // To Downloads and back on B: Main mounted by a swap rather than with the
+  // panel, which places no focus at all.
+  async function swapAwayFromMainAndBack(): Promise<void> {
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "go to downloads" }));
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    await act(async () => {
+      fireEvent(
+        screen.getByText("downloads page"),
+        new CustomEvent("decky-button-down", { detail: { button: 2 }, bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+  }
+
   it("focuses the mounted page's first button", async () => {
     vi.useFakeTimers();
     try {
       const panel = panelFactory();
       render(panel.content);
+      await swapAwayFromMainAndBack();
 
       // Steam's gamepad nav keeps a focus pointer across page swaps and would
       // otherwise resolve it onto whatever sits at the old page's position.
@@ -3044,6 +3061,7 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
       mainPageDeclaresEntryStop = true;
       const panel = panelFactory();
       render(panel.content);
+      await swapAwayFromMainAndBack();
 
       // The router still does the placing — the page only says where. Main is
       // the one page that says anything: its status rows act on nothing, so
@@ -3119,6 +3137,55 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
 
       expect(btn).not.toHaveFocus();
       expect(btn).not.toHaveClass("gpfocus");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("index.tsx — the panel appearing places no focus", () => {
+  // Steam mounts the panel as soon as the Quick Access strip highlights
+  // Tender's icon, so focus placed on that mount takes the reader off the strip
+  // on the way past. Entering is Steam's, by the stop the page marks preferred.
+  beforeEach(() => {
+    mainPageOwnsEntryFocus = false;
+    mainPageDeclaresEntryStop = true;
+  });
+
+  it("leaves focus alone on Main, its declared stop included", async () => {
+    vi.useFakeTimers();
+    try {
+      const panel = panelFactory();
+      render(panel.content);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+
+      expect(screen.getByRole("button", { name: "go to downloads" })).not.toHaveFocus();
+      expect(screen.getByRole("button", { name: "first button" })).not.toHaveFocus();
+      expect(document.querySelector(".gpfocus")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("leaves focus alone on the stranded card", async () => {
+    vi.useFakeTimers();
+    try {
+      setStrandedAnswer("reloads");
+      const panel = panelFactory();
+      const { container } = render(panel.content);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+
+      // The card is a stop of its own, so a placement would have found it.
+      const card = container.querySelector<HTMLElement>('[tabindex="0"]');
+      expect(card).not.toBeNull();
+      expect(card).not.toHaveFocus();
+      expect(document.querySelector(".gpfocus")).toBeNull();
     } finally {
       vi.useRealTimers();
     }

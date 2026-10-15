@@ -70,7 +70,13 @@ import { attachRunUnitsMirror, seedRunUnits } from "./utils/runUnitsStore";
 import { setVersionError, setServerRetryProgress } from "./utils/connectionState";
 import { initSessionManager } from "./utils/sessionManager";
 import { findOutermostScrollParent } from "./utils/scrollHelpers";
-import { ENTRY_FOCUS_DELAY_MS, pageEntryStop, placeEntryFocus } from "./utils/entryFocus";
+import {
+  ENTRY_FOCUS_DELAY_MS,
+  EntryFocusOnMountContext,
+  PREFER_MARKED_CHILD,
+  pageEntryStop,
+  placeEntryFocus,
+} from "./utils/entryFocus";
 import { setNotificationsUnavailable } from "./utils/notificationsHealth";
 import { detach } from "./utils/detach";
 import type {
@@ -137,8 +143,12 @@ const QAMPanel: FC = () => {
   const stranded = useStrandedAnswer() !== null;
   const [page, setPageState] = useState<Page>(currentPage); // NOSONAR(typescript:S6754) — setter intentionally renamed; setPage wraps it below to provide custom navigation behavior.
   const [settingsSection, setSettingsSectionState] = useState<SettingsSection | null>(currentSection); // NOSONAR(typescript:S6754) — set through setPage, which owns both halves of a navigation.
+  // False until the first page swap: the page the panel appears with takes no
+  // focus (`EntryFocusOnMountContext`).
+  const [swapped, setSwapped] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const setPage = (p: Page, section: SettingsSection | null = null) => {
+    if (p !== page) setSwapped(true);
     currentPage = p;
     currentSection = section;
     setPageState(p);
@@ -178,15 +188,17 @@ const QAMPanel: FC = () => {
     // gamepad focus is within it (`chunk~2dcc5aaf7.js`, the tab row's
     // `showGlyphs`). Landing here would leave such a page with no visible way
     // to switch tabs.
+    //
+    // Only after a swap: on the page the panel appears with, entry is Steam's,
+    // by the `preferredFocus` the page marks (`EntryFocusOnMountContext`).
     const ownsFocus = el.querySelector(`[${OWNS_ENTRY_FOCUS_ATTR}]`) !== null;
-    const focusTimer = ownsFocus
-      ? undefined
-      : setTimeout(() => placeEntryFocus(el, pageEntryStop), ENTRY_FOCUS_DELAY_MS);
+    const focusTimer =
+      ownsFocus || !swapped ? undefined : setTimeout(() => placeEntryFocus(el, pageEntryStop), ENTRY_FOCUS_DELAY_MS);
     return () => {
       cancelAnimationFrame(rafHandle);
       clearTimeout(focusTimer);
     };
-  }, [page]);
+  }, [page, swapped]);
 
   // Decided here rather than per page, so a page added later is covered too. The
   // re-check stays mounted: what the card says may change on the next open.
@@ -232,10 +244,21 @@ const QAMPanel: FC = () => {
   // never removed, it is exactly as far away as the user walked in, and the last
   // press is never swallowed. Steam already prints "B ZURÜCK" in its footer
   // legend, which this makes true.
+  //
+  // The same `Focusable` is where entering a sub-page from the Quick Access strip
+  // starts its search for the page's preferred stop; Main carries its own.
   return (
     <div ref={rootRef}>
       <StrandedRecheck />
-      {page === "main" ? content : <Focusable onCancelButton={() => setPage("main")}>{content}</Focusable>}
+      <EntryFocusOnMountContext.Provider value={swapped}>
+        {page === "main" ? (
+          content
+        ) : (
+          <Focusable navEntryPreferPosition={PREFER_MARKED_CHILD} onCancelButton={() => setPage("main")}>
+            {content}
+          </Focusable>
+        )}
+      </EntryFocusOnMountContext.Provider>
     </div>
   );
 };

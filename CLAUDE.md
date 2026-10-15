@@ -998,7 +998,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   is device-only. Prompt-only: `bigpicture/layout/WidePage.tsx` places entry focus through `pageEntryStop`
   (`utils/entryFocus.ts`), never `firstBodyStop`; `bigpicture/layout/ListDetail.tsx` puts the `ENTRY_STOP_ATTR` mark on
   the `display: contents` wrapper around the selected row, never on the row; a wide page that opens on a non-first row
-  without `ListDetail` places the mark itself, the same way
+  without `ListDetail` places the mark itself, the same way; on the page the panel appears with nothing places focus,
+  and the selected row's own `Focusable` carries `preferredFocus`, which Steam's entry from the Quick Access strip lands
+  on
 
 When a change applies a guard / sanitize / backup / grouping pattern, sweep for sibling sites of the same pattern — the
 register is what that sweep checks against.

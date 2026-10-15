@@ -522,6 +522,47 @@ describe("WidePage", () => {
     }
   });
 
+  it("places no entry focus on the page the panel appears with", async () => {
+    const WidePage = await loadWidePage(StubTabs);
+    // The copy `loadWidePage`'s fresh module graph reads, not this file's.
+    const { EntryFocusOnMountContext } = await import("../../utils/entryFocus");
+    vi.useFakeTimers();
+    try {
+      render(
+        <EntryFocusOnMountContext.Provider value={false}>
+          <WidePage title="Settings" onBack={vi.fn()}>
+            <button>a page row</button>
+          </WidePage>
+        </EntryFocusOnMountContext.Provider>,
+      );
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+
+      // Steam mounts the panel as the Quick Access strip highlights Tender's
+      // icon; focus placed now would take the reader off the strip.
+      expect(screen.getByRole("button", { name: "a page row" })).not.toHaveFocus();
+      expect(document.querySelector(".gpfocus")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps Steam's tabbed page from taking focus on the page the panel appears with", async () => {
+    const WidePage = await loadWidePage(StubTabs);
+    const { EntryFocusOnMountContext } = await import("../../utils/entryFocus");
+
+    render(
+      <EntryFocusOnMountContext.Provider value={false}>
+        <WidePage title="Library" onBack={vi.fn()} tabs={TAB_SET} activeTab="platforms" onShowTab={vi.fn()} />
+      </EntryFocusOnMountContext.Provider>,
+    );
+
+    // The real tabbed page requests focus for its content as that content
+    // mounts, so leaving the prop on would take focus all the same.
+    expect(screen.getByTestId("steam-tabs")).toHaveAttribute("data-auto-focus-contents", "false");
+  });
+
   it("wraps no region around a body whose page builds its own", async () => {
     const WidePage = await loadWidePage(StubTabs, StubScrollPanel);
 

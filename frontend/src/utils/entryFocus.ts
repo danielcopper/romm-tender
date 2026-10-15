@@ -26,7 +26,8 @@
  * that swaps declares an area.
  */
 
-import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { createContext, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import type { NavEntryPositionPreferences } from "@decky/ui";
 
 /**
  * Every shape Steam gives a focus stop, measured in the running QAM rather than
@@ -117,6 +118,36 @@ export function firstBodyStop(root: ParentNode): HTMLElement | null {
  * opened anyway.
  */
 export const ENTRY_STOP_ATTR = "data-romm-entry-stop";
+
+/**
+ * Whether the page mounting now may place entry focus: `true` for a page opened
+ * by a swap inside the panel, `false` for the page the panel itself appears
+ * with. The panel's router (`frontend/src/index.tsx`) provides it, and the
+ * wide-page frame reads it.
+ *
+ * **The panel appearing is not a page being opened.** Steam mounts the panel as
+ * soon as the Quick Access strip highlights Tender's icon, and focus placed then
+ * leaves the strip under the reader's feet; Steam's own panels take no focus
+ * until Right or A enters them, and where that entry lands is Steam's entry
+ * preference (`preferredFocus` under `navEntryPreferPosition`), which the
+ * panel declares instead. A swap has no such alternative: Steam resolves a
+ * pointer retained from the old page, so the new page claims focus itself.
+ *
+ * `true` where no router provides it: nothing outside the router says the page
+ * arrived with the panel.
+ */
+export const EntryFocusOnMountContext = createContext(true);
+
+/**
+ * Steam's `navEntryPreferPosition` value under which entering a node searches
+ * its descendants, breadth first, for the first one marked `preferredFocus`
+ * (`FindFocusableDescendant` in Steam's `sp.js`).
+ *
+ * The number rather than `@decky/ui`'s enum value: the coexistence bundle takes
+ * `@decky/ui` from Decky's `DFL`, so the value would be whatever enum the
+ * running Decky carries, and the suite's `@decky/ui` mocks define no enum.
+ */
+export const PREFER_MARKED_CHILD = 4 as NavEntryPositionPreferences.PREFERRED_CHILD;
 
 /**
  * Long enough to land after Steam has finished mounting the page and resolving

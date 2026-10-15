@@ -21,10 +21,16 @@
  * Structure and vocabulary: `docs/architecture/qam-panel.md`.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState, type FC, type ReactNode } from "react";
+import { useContext, useEffect, useLayoutEffect, useRef, useState, type FC, type ReactNode } from "react";
 import { DialogButton, Focusable } from "@decky/ui";
 import { ControllerGlyph, GLYPH_BUTTON_B, Tabs } from "../../utils/deckyUiInternals";
-import { ENTRY_FOCUS_DELAY_MS, pageEntryStop, placeEntryFocus } from "../../utils/entryFocus";
+import {
+  ENTRY_FOCUS_DELAY_MS,
+  EntryFocusOnMountContext,
+  PREFER_MARKED_CHILD,
+  pageEntryStop,
+  placeEntryFocus,
+} from "../../utils/entryFocus";
 import { WIDE_ROOT_CLASS, useWideQamPanel } from "../../utils/qamExpansion";
 import { offsetWithinScroller } from "../../utils/scrollHelpers";
 import { ScrollRegion } from "./ScrollRegion";
@@ -76,7 +82,9 @@ export type WidePageProps = {
  * to keep its first-button focus away. Every wide page sets it, because the
  * frame places that focus: `autoFocusContents` where Steam's tabbed page is
  * there to consume it, and this frame's own timer everywhere else. Either way
- * focus lands inside the body, never on the Back row above it.
+ * focus lands inside the body, never on the Back row above it — and only on a
+ * page opened by a swap, never on the one the panel appears with
+ * ({@link EntryFocusOnMountContext}).
  */
 export const OWNS_ENTRY_FOCUS_ATTR = "data-romm-owns-entry-focus";
 
@@ -290,6 +298,7 @@ export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, on
   const rootRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState<BodyFit | null>(null);
+  const placesEntryFocus = useContext(EntryFocusOnMountContext);
 
   useWideQamPanel(rootRef);
 
@@ -336,15 +345,18 @@ export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, on
   }, []);
 
   // `autoFocusContents` lands entry focus in the active tab's content, so where
-  // Steam's tabbed page renders there is nothing for the frame to do. It is also
-  // what makes Steam draw the L1/R1 glyphs: its tab row shows them only while
-  // gamepad focus is within the tabbed page, and the Back row above the tabs is
-  // outside it (`chunk~2dcc5aaf7.js`, the tab row's `showGlyphs`).
+  // Steam's tabbed page renders there is nothing for the frame to do. It takes
+  // that focus as the content mounts (the content node's `OnMount` requests it,
+  // Steam's `sp.js`), so it is passed only where the frame would place focus
+  // itself — on a page opened by a swap. It is also what makes Steam draw the
+  // L1/R1 glyphs: its tab row shows them only while gamepad focus is within the
+  // tabbed page, and the Back row above the tabs is outside it
+  // (`chunk~2dcc5aaf7.js`, the tab row's `showGlyphs`).
   const steamPlacesFocus = Boolean(tabs && Tabs);
 
   useEffect(() => {
     const body = bodyRef.current;
-    if (steamPlacesFocus || !body) return;
+    if (steamPlacesFocus || !placesEntryFocus || !body) return;
     // The same delay the panel's router uses for the pages it still covers:
     // Steam's navigation resolves its retained focus pointer after the mount,
     // and a focus placed before that is taken back.
@@ -356,7 +368,7 @@ export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, on
     // discard the section the reader was sent to.
     const timer = setTimeout(() => placeEntryFocus(body, pageEntryStop), ENTRY_FOCUS_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [steamPlacesFocus]);
+  }, [steamPlacesFocus, placesEntryFocus]);
 
   // A `min-height` is not enough here — Steam's tabbed page fills its parent and
   // clips instead of growing, so the body needs a definite height. Its pull-up
@@ -378,7 +390,13 @@ export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, on
       // `cancelSkipTabHeader` leaves the content pane's cancel handler unset, so
       // B reaches the router's binding instead of being spent moving focus to
       // the tab row.
-      <Tabs tabs={tabs} activeTab={activeTab} onShowTab={onShowTab} autoFocusContents cancelSkipTabHeader />
+      <Tabs
+        tabs={tabs}
+        activeTab={activeTab}
+        onShowTab={onShowTab}
+        autoFocusContents={placesEntryFocus}
+        cancelSkipTabHeader
+      />
     ) : (
       tabs.find((tab) => tab.id === activeTab)?.content
     );
@@ -397,9 +415,15 @@ export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, on
         </DialogButton>
         <span style={{ fontSize: "16px", fontWeight: 600, color: "#dcdedf" }}>{title}</span>
       </Focusable>
-      <div ref={bodyRef} style={bodyStyle} data-testid="wide-page-body">
-        {body}
-      </div>
+      {/* What entering the panel from the Quick Access strip lands in, rather
+          than the Back chip above it: the body is preferred, and inside it
+          whatever the page marks preferred — a list's selected row — else its
+          first stop. */}
+      <Focusable preferredFocus navEntryPreferPosition={PREFER_MARKED_CHILD}>
+        <div ref={bodyRef} style={bodyStyle} data-testid="wide-page-body">
+          {body}
+        </div>
+      </Focusable>
     </div>
   );
 };

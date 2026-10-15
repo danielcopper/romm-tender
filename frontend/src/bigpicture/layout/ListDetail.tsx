@@ -20,7 +20,10 @@
  * Because focus selects, where the page OPENS decides what it opens on: entry
  * focus landing on the first row selects that row and overwrites the selection
  * the page was opened with. So the selected row declares itself the area entry
- * focus belongs in ({@link ENTRY_STOP_ATTR}) and the frame places focus there.
+ * focus belongs in ({@link ENTRY_STOP_ATTR}) and the frame places focus there —
+ * on a page opened by a swap. On the page the panel appears with, nothing places
+ * focus, and entering from the Quick Access strip lands on the row carrying
+ * Steam's `preferredFocus`, which is the selected one.
  */
 
 import type { FC, ReactNode } from "react";
@@ -108,6 +111,7 @@ export const ListDetail: FC<ListDetailProps> = ({
                   onFocus={() => {
                     if (item.id !== selectedId) onSelect(item.id);
                   }}
+                  preferredFocus={item.id === selectedId}
                   // Spread rather than a conditional value: under
                   // `exactOptionalPropertyTypes` an explicit `undefined` is not
                   // the same as an absent prop, and `FocusableProps` declares the

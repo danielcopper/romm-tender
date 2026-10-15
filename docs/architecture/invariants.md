@@ -1634,4 +1634,9 @@ Format: **invariant** — tier — enforced by.
   Connections. A check that exercises the first row proves nothing about the rule. The mark sits on a
   `display: contents` wrapper AROUND each row rather than on the row, and that is load-bearing rather than stylistic:
   `pageEntryStop` calls `firstBodyStop(declared)`, which searches DESCENDANTS — a mark on the row itself finds no
-  candidate inside it, falls back to the first row, and ships the defect under a comment saying it does not
+  candidate inside it, falls back to the first row, and ships the defect under a comment saying it does not. **The page
+  the panel appears with is opened by neither placer** — focus placed as the panel mounts would take the reader off the
+  Quick Access strip — so there the same row is reached through Steam's entry preference: `ListDetail` gives the
+  selected row's own `Focusable` `preferredFocus`, and the frame's body prefers it. Nothing joins that mark to
+  `ENTRY_STOP_ATTR` either, and whether Steam honours it is device-only. Detail: `docs/architecture/qam-panel.md`,
+  "Building blocks → Tabs"
