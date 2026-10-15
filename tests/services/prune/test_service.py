@@ -25,6 +25,7 @@ from domain.retrodeck_folders import FindingRefused, finding_refusal
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.version_metadata import VersionMetadata
+from lib.background_tasks import BackgroundTasks
 from lib.errors import OperationAbortedError, Refused, RommConnectionError, RommNotFoundError
 from lib.prune_conflicts import PruneConflicts
 from models.prune import InstalledContentRemoval, SaveQuarantine, SealedSourceClaims
@@ -322,7 +323,11 @@ async def harness() -> Harness:
         return {"drifted": rom_id in drifted}
 
     clock = FakeClock()
-    conflicts = PruneConflicts(logger=logging.getLogger("test-prune-conflicts"), log_debug=lambda _msg: None)
+    conflicts = PruneConflicts(
+        logger=logging.getLogger("test-prune-conflicts"),
+        log_debug=lambda _msg: None,
+        release_tasks=BackgroundTasks(logger=logging.getLogger("test-prune-conflicts")),
+    )
     artwork_job = FakeShortcutArtworkJob()
     service = PruneService(
         config=PruneServiceConfig(

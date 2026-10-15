@@ -354,7 +354,7 @@ class LibrarySyncStateBox:
         # reaching the ``finally: finish_run(run_id)`` that lands here, so this
         # drops a snapshot the frontend has already been sent as an event — never
         # one it is still waiting for. The per-unit error path schedules its emit
-        # through ``create_task``, which may run after this line; that is safe
+        # as a task of its own, which may run after this line; that is safe
         # only because the coroutine binds the ERROR frame BY VALUE and this
         # rebinds the attribute rather than mutating the dict it holds. A future
         # in-place edit here would corrupt a frame already handed to a pending

@@ -125,7 +125,7 @@ class TestTheSessionStartFlush:
         assert result == {"success": True}
         assert len(svc._flush_tasks) == 1
         await asyncio.gather(*svc._flush_tasks)
-        assert svc._flush_tasks == set()
+        assert len(svc._flush_tasks) == 0
         assert flushed == [True]
 
     async def test_a_flush_holds_its_operation_until_it_ends(self, monkeypatch):
@@ -194,7 +194,7 @@ class TestTheSessionStartFlush:
 
         await svc.shutdown()
 
-        assert svc._flush_tasks == set()
+        assert len(svc._flush_tasks) == 0
 
     async def test_a_running_cleanup_refuses_the_start_and_begins_no_flush(self):
         prune_conflicts = _make_prune_conflicts()
@@ -206,7 +206,7 @@ class TestTheSessionStartFlush:
             await svc.record_session_start(7)
 
         assert uow.playtime.get(7) is None
-        assert svc._flush_tasks == set()
+        assert len(svc._flush_tasks) == 0
         assert prune_conflicts.conflicting_operations == 0
 
 

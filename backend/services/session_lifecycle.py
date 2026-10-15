@@ -19,11 +19,11 @@ the backend-owned message convention.
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.save_answer import BENIGN_SYNC_SKIP_REASONS
+from lib.background_tasks import BackgroundTasks
 from lib.errors import DeviceSyncDisabled, Refused, RommApiError, SyncBusy, classify_error, romm_error_log_level
 
 if TYPE_CHECKING:
@@ -203,11 +203,7 @@ class SessionLifecycleService:
         self._update_in_progress = config.update_in_progress
         self._logger = config.logger
         self._rules = config.conflict_rules
-        # Strong refs to in-flight background tasks. ``asyncio.create_task``
-        # alone is not enough — without a strong ref, the loop is free to
-        # garbage-collect the task before it completes. ``add_done_callback``
-        # prunes finished entries to keep the set bounded.
-        self._background_tasks: set[asyncio.Task[None]] = set()
+        self._background_tasks = BackgroundTasks(logger=config.logger)
 
     async def shutdown(self) -> None:
         """Cancel any in-flight background tasks and await their completion.
@@ -216,10 +212,7 @@ class SessionLifecycleService:
         coroutines do not outlive the backend. No-op when no tasks are
         pending.
         """
-        for task in self._background_tasks:
-            task.cancel()
-        if self._background_tasks:
-            await asyncio.gather(*self._background_tasks, return_exceptions=True)
+        await self._background_tasks.shutdown()
 
     async def finalize(self, rom_id: int) -> SessionFinalizeResult:
         """Run the four end-of-session steps and return the combined verdict.
@@ -282,14 +275,9 @@ class SessionLifecycleService:
         """Kick off the achievement refresh as a background task.
 
         The frontend does not surface achievement-sync progress, so the
-        call runs detached from the lifecycle return value. A strong
-        ref into ``_background_tasks`` keeps the task alive long enough
-        for the executor to finish; ``add_done_callback`` prunes the set
-        once the task completes.
+        call runs detached from the lifecycle return value.
         """
-        task = asyncio.create_task(self._run_achievement_sync(rom_id))
-        self._background_tasks.add(task)
-        task.add_done_callback(self._background_tasks.discard)
+        self._background_tasks.spawn(self._run_achievement_sync(rom_id), "achievement sync after a session")
 
     async def _run_achievement_sync(self, rom_id: int) -> None:
         """Wrap the achievement-sync call so its failure is logged backend-side."""

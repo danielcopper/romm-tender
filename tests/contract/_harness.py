@@ -297,7 +297,7 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
 
     # 4. The real Application and Endpoints over the wired services, as the
     # entry point builds them.
-    app = Application(services, logger=logger, loop=loop, user_agent=result.user_agent)
+    app = Application(services, logger=logger, user_agent=result.user_agent)
 
     return ContractHarness(
         endpoints=Endpoints(app, HostStatus()),

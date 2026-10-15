@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from lib.background_tasks import BackgroundTasks
+
 _OPERATION_BLOCKED_MESSAGE = (
     "Another local-data operation is in progress; wait for it to finish before starting cleanup."
 )
@@ -63,7 +65,9 @@ class _Holder:
 class PruneConflicts:
     """The one record of every claim that conflicts with a removed-game cleanup."""
 
-    def __init__(self, *, logger: _InfoLogger, log_debug: Callable[[str], None]) -> None:
+    def __init__(
+        self, *, logger: _InfoLogger, log_debug: Callable[[str], None], release_tasks: BackgroundTasks
+    ) -> None:
         self._logger = logger
         self._log_debug = log_debug
         self._lock = asyncio.Lock()
@@ -78,9 +82,7 @@ class PruneConflicts:
         # round-trips, so operation registrations must not shift the ids it sees.
         self._next_lease_id = 1
         self._next_operation_id = 1
-        # A retained claim's release runs as its own task after the detached work
-        # ends, and the loop keeps only a weak reference to a task.
-        self._release_tasks: set[asyncio.Task[None]] = set()
+        self._release_tasks = release_tasks
 
     @property
     def conflicting_operations(self) -> int:
@@ -163,11 +165,11 @@ class PruneConflicts:
             self._runs.discard(run_id)
             self._log_debug(f"[prune-conflicts] released cleanup run {run_id}")
 
-    async def retain(self, task: asyncio.Task[Any], label: str) -> None:
-        """Hold an operation named *label* until *task* ends."""
+    async def hold_until_done(self, task: asyncio.Task[Any], label: str) -> None:
+        """Hold an operation named *label* until *task* ends; *task* itself is not held here."""
         async with self._lock:
             registration = self._register_operation(label)
-        self._log_debug(f"[prune-conflicts] retained {label} for detached work (#{registration})")
+        self._log_debug(f"[prune-conflicts] holding {label} until its detached work ends (#{registration})")
 
         async def release() -> None:
             async with self._lock:
@@ -175,9 +177,7 @@ class PruneConflicts:
             self._log_debug(f"[prune-conflicts] released {label} (#{registration})")
 
         def done(_task: asyncio.Task[Any]) -> None:
-            release_task = asyncio.get_running_loop().create_task(release())
-            self._release_tasks.add(release_task)
-            release_task.add_done_callback(self._release_tasks.discard)
+            self._release_tasks.spawn(release(), f"release of {label}")
 
         task.add_done_callback(done)
 

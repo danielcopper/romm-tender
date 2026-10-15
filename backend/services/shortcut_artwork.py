@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any
 from domain.artwork_slot import ArtworkSlot
 from domain.artwork_slot_outcome import icon_waits, logo_icon_waits, slot_waits
 from domain.shortcut_icon import LOGO_ICON_NAME, PLACEHOLDER_ICON_NAME, PLACEHOLDER_ICON_PNG
+from lib.background_tasks import BackgroundTasks
 from lib.errors import SteamGridDirMissingError
 from models.shortcut_artwork import SlotAnswer
 
@@ -199,6 +200,7 @@ class ShortcutArtworkService:
         self._loop = config.loop
         self._logger = config.logger
         self._log_debug = config.log_debug
+        self._tasks = BackgroundTasks(logger=config.logger)
         self._task: asyncio.Task[None] | None = None
         self._waiting_for_a_panel: asyncio.Task[None] | None = None
         self._again = False
@@ -228,7 +230,7 @@ class ShortcutArtworkService:
         if self._task is not None and not self._task.done():
             self._again = True
             return
-        self._task = self._loop.create_task(self._run())
+        self._task = self._tasks.spawn(self._run(), "shortcut artwork run")
 
     async def run_when_a_panel_connects(self) -> None:
         """Start a run once a panel is there to hear its batches; the backend's start-up trigger."""
@@ -275,6 +277,7 @@ class ShortcutArtworkService:
         if self._waiting_for_a_panel is not None:
             self._waiting_for_a_panel.cancel()
         await self._stop()
+        await self._tasks.shutdown()
 
     async def _stop(self) -> None:
         self._stopped = True
@@ -295,7 +298,7 @@ class ShortcutArtworkService:
     def _wait_for(self, wait: Callable[[], Coroutine[Any, Any, None]]) -> None:
         if self._closed or (self._waiting_for_a_panel is not None and not self._waiting_for_a_panel.done()):
             return
-        self._waiting_for_a_panel = self._loop.create_task(wait())
+        self._waiting_for_a_panel = self._tasks.spawn(wait(), "shortcut artwork waiting for a panel")
 
     async def _run_when_a_new_panel_connects(self) -> None:
         while self._panel_connected():
@@ -357,7 +360,9 @@ class ShortcutArtworkService:
         for item in work:
             queue.put_nowait(item)
         batch: list[_Finished | _SlotReady] = []
-        workers = [self._loop.create_task(self._work(queue, batch, plan)) for _ in range(_WORKERS)]
+        workers = [
+            self._tasks.spawn(self._work(queue, batch, plan), "shortcut artwork worker") for _ in range(_WORKERS)
+        ]
         try:
             await asyncio.gather(*workers)
         finally:
@@ -622,7 +627,7 @@ class ShortcutArtworkService:
         """Run *work* in a task of its own and count it, so :meth:`_stop` waits for it to end."""
         self._writing += 1
         self._no_write.clear()
-        task = self._loop.create_task(work)
+        task = self._tasks.spawn(work, "shortcut artwork write")
         task.add_done_callback(self._write_done)
         return await asyncio.shield(task)
 

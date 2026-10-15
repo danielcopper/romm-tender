@@ -136,7 +136,7 @@ class _Recorded:
                 note_start=self._step("note_update_attempt"),
                 shutdown=self._async_step("update_install_service.shutdown"),
             ),
-            sync_service=MagicMock(shutdown=self._step("sync_service.shutdown")),
+            sync_service=MagicMock(shutdown=self._async_step("sync_service.shutdown")),
             prune_service=MagicMock(shutdown=self._async_step("prune_service.shutdown")),
             download_service=MagicMock(shutdown=self._async_step("download_service.shutdown")),
             session_lifecycle_service=MagicMock(shutdown=self._async_step("session_lifecycle_service.shutdown")),
@@ -148,7 +148,6 @@ def _application(recorded: _Recorded) -> Application:
     return Application(
         recorded.bundle(),
         logger=LOGGER,
-        loop=asyncio.get_running_loop(),
         user_agent="romm-tender/0.0.0-test",
     )
 

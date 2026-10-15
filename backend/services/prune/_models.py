@@ -152,8 +152,11 @@ def cancellation_state(error: BaseException) -> PruneCancellationState:
     return state
 
 
-async def shielded(awaitable: Awaitable[Any], *, on_cancel: Callable[[], None] | None = None) -> Any:
-    """Run *awaitable* to its own end even when this task is cancelled.
+async def shielded(child: asyncio.Future[Any], *, on_cancel: Callable[[], None] | None = None) -> Any:
+    """Run *child* to its own end even when this task is cancelled.
+
+    *child* is already running: a task its caller started, or an executor
+    future. The caller keeps no other handle on it, so it is awaited here.
 
     A cancellation arriving mid-mutation must not leave the group unable to say
     what happened, so the child is awaited to completion and its outcome is
@@ -165,15 +168,14 @@ async def shielded(awaitable: Awaitable[Any], *, on_cancel: Callable[[], None] |
     a chunk rather than in minutes. A committed phase passes nothing and is
     awaited to its natural end, unchanged.
     """
-    task = asyncio.ensure_future(awaitable)
     try:
-        return await asyncio.shield(task)
+        return await asyncio.shield(child)
     except asyncio.CancelledError as exc:
         if on_cancel is not None:
             on_cancel()
         state = cancellation_state(exc)
         try:
-            state.child_result = await task
+            state.child_result = await child
             state.child_completed = True
         except asyncio.CancelledError as child_cancel:
             # The child was cancelled too, and its own CancelledError carries

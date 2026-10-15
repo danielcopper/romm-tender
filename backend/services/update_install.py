@@ -15,7 +15,6 @@ the download, the files, the hashing and the unit are behind seams.
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
@@ -34,9 +33,11 @@ from domain.update_install import (
 )
 from domain.update_outcome import standing_update_failure
 from domain.version import is_newer_version
+from lib.background_tasks import BackgroundTasks
 from lib.errors import NamedRefused, Refused
 
 if TYPE_CHECKING:
+    import asyncio
     import logging
 
     from domain.update_install import UpdateAttemptRecord
@@ -210,9 +211,8 @@ class UpdateInstallService:
         # The download runs on a thread that cancelling the attempt does not
         # stop; its progress callback ends it once this is set.
         self._stopping = False
-        # The frames the download's thread hands the loop, held so the loop
-        # cannot collect one before it is sent.
-        self._frames: set[asyncio.Task[None]] = set()
+        # The attempt, the judgement of the last one, and the frames the download's thread hands the loop.
+        self._tasks = BackgroundTasks(logger=config.logger)
         # The attempt a previous start's installer stopped without updating, as
         # this start found it; gone once dismissed or a new attempt starts.
         self._stopped: UpdateAttemptRecord | None = None
@@ -269,7 +269,7 @@ class UpdateInstallService:
         it runs in a task of its own, the record and the unit read off the
         loop, so a user manager slow to answer holds up no other start step.
         """
-        self._judging = self._loop.create_task(self._judge_the_last_attempt())
+        self._judging = self._tasks.spawn(self._judge_the_last_attempt(), "judge the last update attempt")
 
     def _judge_io(self, record: UpdateAttemptRecord) -> UpdateAttemptRecord | None:
         """*record* where it says the installer stopped without updating; any other record is removed."""
@@ -463,10 +463,7 @@ class UpdateInstallService:
     async def shutdown(self) -> None:
         """Stop the attempt, a download on its thread and a judgement still waiting; the hold ends with the process."""
         self._stopping = True
-        for task in (self._task, self._judging):
-            if task is not None and not task.done():
-                task.cancel()
-                await asyncio.gather(task, return_exceptions=True)
+        await self._tasks.shutdown()
 
     async def get_update_install_state(self) -> dict[str, Any]:
         """Report whether an install is offered, what it waits for, and how the latest attempt went.
@@ -536,7 +533,7 @@ class UpdateInstallService:
         self._last_progress_emit = None
         self._bytes_seen = (0, None)
         self._attempt = InstallAttempt(version=release.version, step=InstallStep.DOWNLOADING)
-        self._task = self._loop.create_task(self._run(release.version, release.tarball))
+        self._task = self._tasks.spawn(self._run(release.version, release.tarball), "update install")
         await self._emit_attempt()
         return {"success": True}
 
@@ -788,9 +785,7 @@ class UpdateInstallService:
         if attempt is None or attempt.step is not InstallStep.DOWNLOADING:
             return
         self._attempt = replace(attempt, bytes_done=done, bytes_total=total)
-        frame = self._loop.create_task(self._emit_frame(self._attempt))
-        self._frames.add(frame)
-        frame.add_done_callback(self._frames.discard)
+        self._tasks.spawn(self._emit_frame(self._attempt), "update_install_progress")
 
     async def _emit_attempt(self) -> None:
         if self._attempt is not None:

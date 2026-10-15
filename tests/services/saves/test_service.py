@@ -16,6 +16,7 @@ from _factories import (
     _make_prune_conflicts,
     _refused_by_conflict_rule,
 )
+from _spawns import record_spawns
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_hostname_reader import FakeHostnameReader
 from fakes.fake_retrodeck_folders import FakeRetroDeckFolders
@@ -588,6 +589,22 @@ class TestConflictRulesAtTheUseCase:
         await asyncio.gather(*conflicts._release_tasks)
         assert checked == [42]
         assert conflicts.conflicting_operations == 0
+
+    async def test_refresh_save_status_starts_its_check_through_the_helper(self, tmp_path, monkeypatch):
+        spawned = record_spawns(monkeypatch)
+        svc, _ = make_service(tmp_path)
+        checked: list[int] = []
+
+        async def check(rom_id):
+            checked.append(rom_id)
+
+        monkeypatch.setattr(svc, "check_save_status_background", check)
+
+        await svc.refresh_save_status(42)
+        await asyncio.sleep(0)
+
+        assert spawned[0] == "refresh_save_status"
+        assert checked == [42]
 
     async def test_update_save_sync_settings_refused_while_a_migration_is_pending_changes_nothing(self, tmp_path):
         svc, _ = make_service(tmp_path, conflict_rules=_make_conflict_rules(migration_pending=True))

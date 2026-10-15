@@ -61,6 +61,7 @@ from domain.sync_diff import (
 from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
+from lib.background_tasks import BackgroundTasks
 from lib.errors import Refused, classify_error
 from services.library._state import CollectionMembership
 from services.library.session_budget import SYNC_PAUSED_BUDGET, SessionBudgetMonitor
@@ -217,6 +218,7 @@ class SyncOrchestrator:
         self._sync_run_recorder = config.sync_run_recorder
         self._rules = config.conflict_rules
         self._artwork_job = config.artwork_job
+        self._tasks = BackgroundTasks(logger=config.logger)
 
     # ── Sync control ─────────────────────────────────────────────
 
@@ -226,7 +228,7 @@ class SyncOrchestrator:
         if not box.try_begin_run(run_id, kind=SyncRunKind.APPLY):
             raise Refused("sync_in_progress", _SYNC_IN_PROGRESS)
         box.sync_last_heartbeat = self._clock.monotonic()
-        self._loop.create_task(self._do_sync_per_unit())
+        self._tasks.spawn(self._do_sync_per_unit(), "library sync run")
         return {"success": True, "message": "Sync started"}
 
     def cancel_sync(self, run_id=None):
@@ -258,9 +260,14 @@ class SyncOrchestrator:
         self._sync_state.sync_last_heartbeat = self._clock.monotonic()
         return {"success": True}
 
-    def shutdown(self) -> None:
-        """Request graceful shutdown — cancels sync if running."""
+    async def shutdown(self) -> None:
+        """Set the run's cancel flag, then cancel the run and wait until it has ended.
+
+        No grace wait between the two; why is docs/architecture/backend-architecture.md's, "The shutdown stops what
+        runs in a fixed order".
+        """
         self._sync_state.request_cancel()
+        await self._tasks.shutdown()
 
     # ── Preview / Apply ──────────────────────────────────────────
 
@@ -575,7 +582,7 @@ class SyncOrchestrator:
         box.discard_preview()
         box.sync_last_heartbeat = self._clock.monotonic()
 
-        self._loop.create_task(self._do_sync_per_unit())
+        self._tasks.spawn(self._do_sync_per_unit(), "library sync run")
 
         return {"success": True, "message": "Applying changes"}
 
@@ -928,7 +935,7 @@ class SyncOrchestrator:
                 "runId": str(box.current_sync_id or ""),
                 "runKind": box.run_kind_value(),
             }
-            self._loop.create_task(self._emit("sync_progress", box.sync_progress))
+            self._tasks.spawn(self._emit("sync_progress", box.sync_progress), "sync_progress error frame")
             # The captured ``run_id``, for the reason given where it is taken.
             # This path is reached by every failure inside the run, including
             # the ones before ``do_open_run`` ever wrote a row; those carry a

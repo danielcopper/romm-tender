@@ -53,6 +53,7 @@ from domain.rom_files import (
     resolve_local_file_name,
     synthetic_rom_name,
 )
+from lib.background_tasks import BackgroundTasks
 from lib.errors import Refused, RommApiError, classify_error, romm_error_log_level
 from lib.path_safety import PathTraversalError, coerce_safe_component, is_inside_folder, safe_join
 from services.rom_adoption._target import Target as _Target
@@ -197,6 +198,7 @@ class RomAdoptionService:
         self._emit = config.emit
         self._clock = config.clock
         self._rules = config.conflict_rules
+        self._tasks = BackgroundTasks(logger=config.logger)
 
     # ── Download pre-flight (DownloadTargetGateFn) ──────────────────
 
@@ -908,11 +910,12 @@ class RomAdoptionService:
 
     def _schedule_verify_frame(self, rom_id: int, bytes_done: int, bytes_total: int) -> None:
         """Fire one ``verify_progress`` frame from the loop thread."""
-        self._loop.create_task(
+        self._tasks.spawn(
             self._emit(
                 "verify_progress",
                 {"rom_id": rom_id, "bytes_done": bytes_done, "bytes_total": bytes_total},
-            )
+            ),
+            "verify_progress",
         )
 
     # ── Target resolution ───────────────────────────────────────────

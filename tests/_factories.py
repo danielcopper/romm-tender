@@ -20,9 +20,9 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from fakes.running_loop import running_loop
 
 from bootstrap import Application, ServicesBundle
+from lib.background_tasks import BackgroundTasks
 from lib.conflict_rules import ConflictRuleSet
 from lib.errors import Refused
 from lib.prune_conflicts import PruneConflicts
@@ -54,7 +54,11 @@ def _make_retry():
 
 def _make_prune_conflicts() -> PruneConflicts:
     """The real prune conflicts, logging nowhere a test would look."""
-    return PruneConflicts(logger=logging.getLogger("test-prune-conflicts"), log_debug=lambda _msg: None)
+    return PruneConflicts(
+        logger=logging.getLogger("test-prune-conflicts"),
+        log_debug=lambda _msg: None,
+        release_tasks=BackgroundTasks(logger=logging.getLogger("test-prune-conflicts")),
+    )
 
 
 def _record_operations_at_lease(prune_conflicts: PruneConflicts, monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
@@ -107,6 +111,5 @@ def _make_application(services: ServicesBundle) -> Application:
     return Application(
         services,
         logger=logging.getLogger("test-application"),
-        loop=running_loop(),
         user_agent="romm-tender/0.0.0-test",
     )

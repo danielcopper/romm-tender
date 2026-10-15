@@ -14,7 +14,6 @@ communication goes through ``RommPlaytimeApi``.
 
 from __future__ import annotations
 
-import asyncio
 import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -27,9 +26,11 @@ from domain.playtime import (
     latest_end_time,
     rejected_session_indices,
 )
+from lib.background_tasks import BackgroundTasks
 from lib.errors import Refused, RommForbiddenError, RommNotFoundError, RommUnprocessableEntityError
 
 if TYPE_CHECKING:
+    import asyncio
     import logging
 
     from domain.playtime import PendingSessionRow
@@ -135,9 +136,8 @@ class PlaytimeService:
         self._log_debug = config.log_debug
         self._uow_factory = config.uow_factory
         self._rules = config.conflict_rules
-        # Strong refs to the detached outbox flushes a session start begins:
-        # ``create_task`` alone lets the loop collect a task before it ends.
-        self._flush_tasks: set[asyncio.Task[None]] = set()
+        # The detached outbox flushes a session start begins.
+        self._flush_tasks = BackgroundTasks(logger=config.logger)
 
     async def shutdown(self) -> None:
         """Cancel and await any outbox flush a session start left running.
@@ -145,10 +145,7 @@ class PlaytimeService:
         Called from ``Application.shutdown`` so a detached flush does not
         outlive the backend. No-op when none is pending.
         """
-        for task in self._flush_tasks:
-            task.cancel()
-        if self._flush_tasks:
-            await asyncio.gather(*self._flush_tasks, return_exceptions=True)
+        await self._flush_tasks.shutdown()
 
     # ------------------------------------------------------------------
     # Session recording
@@ -168,10 +165,8 @@ class PlaytimeService:
             try:
                 self._record_session_start(rom_id)
             finally:
-                flush = self._loop.create_task(self.flush_pending_sessions())
-                self._flush_tasks.add(flush)
-                flush.add_done_callback(self._flush_tasks.discard)
-                await self._rules.retain(flush, "record_session_start")
+                flush = self._flush_tasks.spawn(self.flush_pending_sessions(), "playtime outbox flush")
+                await self._rules.hold_until_done(flush, "record_session_start")
             return {"success": True}
 
     def _record_session_start(self, rom_id: int) -> None:

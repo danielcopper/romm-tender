@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 from domain.identity import VERSION
 from domain.iso_time import epoch_to_iso
 from domain.rom_save_sync_state import RomSaveSyncState
+from lib.background_tasks import BackgroundTasks
 from lib.partial_failure import PartialFailure
 from services.saves._config import SaveServiceConfig
 from services.saves._settings import (
@@ -86,6 +87,7 @@ class SaveService:
         # save count walks the filesystem once per installed ROM, and the page
         # asks it on every selection.
         self._loop = config.loop
+        self._tasks = BackgroundTasks(logger=config.logger)
         # The single owner of the server device id (kv_config["device_id"]).
         # Built once here and shared into every sub-service that needs the id
         # (sync_engine, status, versions, slots) — the same-bounded-context
@@ -253,8 +255,8 @@ class SaveService:
         prune conflicts until it ends, so a cleanup cannot start under it.
         """
         async with self._rules.hold("refresh_save_status", prune=True):
-            task = self._loop.create_task(self.check_save_status_background(rom_id))
-            await self._rules.retain(task, "refresh_save_status")
+            task = self._tasks.spawn(self.check_save_status_background(rom_id), "refresh_save_status")
+            await self._rules.hold_until_done(task, "refresh_save_status")
             return {"success": True}
 
     async def check_save_status_background(self, rom_id: int) -> None:

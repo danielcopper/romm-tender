@@ -25,6 +25,7 @@ from _factories import (
     _record_operations_at_lease,
     _refused_by_conflict_rule,
 )
+from _spawns import record_spawns
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_adoption_move import FakeAdoptionMoveStore
 from fakes.fake_disc_resolver import FakeDiscResolver
@@ -1333,6 +1334,19 @@ class TestVerifyArchives:
 
         frames = [payload for name, payload in h.events if name == "verify_progress"]
         assert frames[-1] == {"rom_id": _ROM_ID, "bytes_done": 144, "bytes_total": 144}
+
+
+class TestTheVerifyFrameIsHeld:
+    async def test_the_verify_progress_frame_starts_through_the_helper(self, h, monkeypatch):
+        spawned = record_spawns(monkeypatch)
+
+        h.service._schedule_verify_frame(_ROM_ID, 1, 2)
+        await asyncio.sleep(0)
+
+        assert spawned == ["verify_progress"]
+        assert [payload for name, payload in h.events if name == "verify_progress"] == [
+            {"rom_id": _ROM_ID, "bytes_done": 1, "bytes_total": 2}
+        ]
 
 
 class TestVerifyArchivesWithStatedMembers:

@@ -153,15 +153,15 @@ def _contains_outside_nested(node: ast.AST, target: ast.AST) -> bool:
 
 
 # The calls that take a claim, and which positional argument names it. The
-# download's ``_retain_started_task`` hands its label on to ``retain``, so it is
+# download's ``_hold_until_started_task_done`` hands its label on to ``hold_until_done``, so it is
 # read at its own call sites.
 _CLAIM_TAKERS = {
     "hold": 0,
     "hold_start": 0,
-    "retain": 1,
+    "hold_until_done": 1,
     "acquire_lease": 0,
     "emit_under_lease": 0,
-    "_retain_started_task": 2,
+    "_hold_until_started_task_done": 2,
 }
 
 
@@ -178,7 +178,7 @@ def claim_names_in_source() -> set[str]:
 # The takers among them whose claim ``PruneConflicts.held_claims`` names: a
 # retained operation and a lease. ``hold`` registers an operation only with
 # ``prune=True``, and ``hold_start`` takes a reservation, which it does not name.
-_HELD_CLAIM_TAKERS = ("retain", "acquire_lease", "emit_under_lease", "_retain_started_task")
+_HELD_CLAIM_TAKERS = ("hold_until_done", "acquire_lease", "emit_under_lease", "_hold_until_started_task_done")
 
 
 def claims_held_on_the_prune_conflicts() -> set[str]:

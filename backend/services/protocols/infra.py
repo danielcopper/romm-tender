@@ -346,9 +346,10 @@ class ConflictRules(Protocol):
     ``hold(label, update=…, migration=…, sync=…, prune=…)`` raises the
     ``Refused`` of the first named rule that holds, so the block does not run;
     with ``prune`` the block runs under an operation named *label*. *label* is
-    the endpoint's name. ``retain`` holds an operation named *label* for
-    detached work until *task* ends; it checks no rule, so it is called inside
-    the ``hold(..., prune=True)`` block that started *task*.
+    the endpoint's name. ``hold_until_done`` holds an operation named *label*
+    for detached work until *task* ends, and does not hold *task* itself; it
+    checks no rule, so it is called inside the ``hold(..., prune=True)`` block
+    that started *task*.
     ``acquire_lease`` takes a lease under *key* for Steam writes the frontend
     makes after the call or the event and answers its token;
     ``release_lease`` gives one back by token. ``emit_under_lease`` emits an
@@ -377,7 +378,7 @@ class ConflictRules(Protocol):
         self, label: str, *, update: bool = False, migration: bool = False, sync: bool = False
     ) -> AbstractAsyncContextManager[None]: ...
 
-    async def retain(self, task: asyncio.Task[Any], label: str) -> None: ...
+    async def hold_until_done(self, task: asyncio.Task[Any], label: str) -> None: ...
 
     async def acquire_lease(self, key: str) -> str: ...
 

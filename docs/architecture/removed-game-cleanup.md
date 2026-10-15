@@ -157,8 +157,8 @@ cache.
 Every prune conflict is recorded on one object, `PruneConflicts` (its four kinds are defined in GLOSSARY.md → Prune
 conflicts). The composition root builds it before any service and hands it on. The prune service registers its run
 there. The conflict rules a use case checks at its entry (GLOSSARY.md → Conflict rules) hold that use case's operation
-there, retain one for detached work it starts — a background save-status check, a download, the outbox flush a play
-session's start begins — and take and release the leases the use case hands the frontend: a shortcut removal's, an
+there, hold one until detached work it starts has ended (`hold_until_done`) — a background save-status check, a
+download, the outbox flush a play session's start begins — and take and release the leases the use case hands the frontend: a shortcut removal's, an
 uninstall's, a core, disc or version change's, an adoption's, an artwork fetch's, the pre-launch re-confirm's and the
 start-up reconcile's, and the ones `sync_complete`, `sync_stale`, `download_complete`, `migration_relaunch_options` and
 the shortcut artwork job's `shortcut_artwork` batches carry. The lease service (`services/prune_leases.py`) renews and
