@@ -2515,7 +2515,7 @@ def _seed_cached_artwork(cache: FakeSgdbArtworkCache, rom_id: int) -> dict[str, 
         "hero": os.path.join(art_dir, f"{rom_id}_hero.png"),
         "logo": os.path.join(art_dir, f"{rom_id}_logo_11.png"),
         "grid": os.path.join(art_dir, f"{rom_id}_grid_12.png"),
-        "icon": os.path.join(art_dir, f"{rom_id}_icon.png"),
+        "icon": os.path.join(art_dir, f"{rom_id}_icon_13.png"),
     }
     for path in paths.values():
         cache.files[path] = b"old"
@@ -2540,6 +2540,7 @@ class TestRefreshSgdbArtwork:
             )
         assert old["logo"] not in sgdb_artwork_cache.files
         assert old["grid"] not in sgdb_artwork_cache.files
+        assert old["icon"] not in sgdb_artwork_cache.files
 
     @pytest.mark.asyncio
     async def test_a_failed_download_keeps_the_cached_image(self, steamgrid, sgdb_artwork_cache, fake_steamgrid_db_api):
