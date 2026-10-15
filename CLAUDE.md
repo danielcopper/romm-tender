@@ -613,7 +613,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `tests/services/library/test_reporter.py::TestCommitUnitResults` for the route the commit records. Prompt-only: the
   collection records are read before the run's first unit (`do_read_collection_listed_rom_ids`), the platform listing is
   the run's own (`LibrarySyncStateBox.run_listed_platform_slugs`) and never the kept ids, the chunk dispatcher names the
-  unit's kind on every commit, and the preview and the apply both sort through `SyncOrchestrator._settle_stale_rows`
+  unit's kind on every commit, and the preview and the apply both sort through `StaleSettler.settle`
+  (`services/library/stale_settler.py`)
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py`,
   `tests/domain/test_firmware_wants.py` and `tests/services/test_firmware.py::TestCheckPlatformBiosUnknown`;
