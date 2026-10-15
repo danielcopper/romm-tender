@@ -203,12 +203,19 @@ vi.mock("./bigpicture/MainPage", () => ({
     );
   },
 }));
-vi.mock("./bigpicture/DownloadQueue", () => ({
-  DownloadQueue: () => {
-    pageRenders++;
-    return createElement("div", null, "downloads page");
-  },
-}));
+// The page reports what the router told it about entry focus, which is how the
+// panel's side of that handshake is seen.
+vi.mock("./bigpicture/DownloadQueue", async () => {
+  const { useContext } = await import("react");
+  const { EntryFocusOnMountContext } = await import("./utils/entryFocus");
+  return {
+    DownloadQueue: () => {
+      pageRenders++;
+      const placesEntryFocus = useContext(EntryFocusOnMountContext);
+      return createElement("div", { "data-entry-focus-on-mount": String(placesEntryFocus) }, "downloads page");
+    },
+  };
+});
 const relocateShortcutsToLauncher = vi.fn().mockResolvedValue({ status: "relocated" });
 vi.mock("./utils/launcherRelocation", () => ({
   relocateShortcutsToLauncher: () => relocateShortcutsToLauncher(),
@@ -3126,6 +3133,7 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
       mainPageOwnsEntryFocus = true;
       const panel = panelFactory();
       render(panel.content);
+      await swapAwayFromMainAndBack();
 
       // A wide page's first button is its Back row, which sits above the tabs
       // and so outside Steam's tabbed page — landing there would hide the L1/R1
@@ -3145,8 +3153,9 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
 
 describe("index.tsx — the panel appearing places no focus", () => {
   // Steam mounts the panel as soon as the Quick Access strip highlights
-  // Tender's icon, so focus placed on that mount takes the reader off the strip
-  // on the way past. Entering is Steam's, by the stop the page marks preferred.
+  // Tender's Quick Access entry, so focus placed on that mount takes the reader
+  // off the strip on the way past. Entering is Steam's, by the stop the page
+  // marks preferred.
   beforeEach(() => {
     mainPageOwnsEntryFocus = false;
     mainPageDeclaresEntryStop = true;
@@ -3170,7 +3179,7 @@ describe("index.tsx — the panel appearing places no focus", () => {
     }
   });
 
-  it("has entering a sub-page left open search it for the stop the page marks", async () => {
+  it("puts Steam's entry preference on the router's Focusable around a page", async () => {
     const panel = panelFactory();
     render(panel.content);
     await act(async () => {
@@ -3178,8 +3187,8 @@ describe("index.tsx — the panel appearing places no focus", () => {
       await Promise.resolve();
     });
 
-    // A wide page marks its body; the search starts at the router's Focusable,
-    // which is the same one that takes B back to Main.
+    // The search starts at the router's Focusable, which is the same one that
+    // takes B back to Main.
     expect(screen.getByText("downloads page").closest('[data-nav-entry-prefer-position="4"]')).not.toBeNull();
 
     await act(async () => {
@@ -3189,6 +3198,31 @@ describe("index.tsx — the panel appearing places no focus", () => {
       );
       await Promise.resolve();
     });
+    expect(screen.getByRole("button", { name: "first button" })).toBeInTheDocument();
+  });
+
+  it("tells a page whether a swap opened it, also after the panel remounts on it", async () => {
+    // The module-level page survives a remount, so a panel can appear on a page
+    // other than Main — and that page must not place focus either.
+    const first = render(panelFactory().content);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "go to downloads" }));
+      await Promise.resolve();
+    });
+    expect(screen.getByText("downloads page")).toHaveAttribute("data-entry-focus-on-mount", "true");
+
+    first.unmount();
+    render(panelFactory().content);
+    expect(screen.getByText("downloads page")).toHaveAttribute("data-entry-focus-on-mount", "false");
+
+    await act(async () => {
+      fireEvent(
+        screen.getByText("downloads page"),
+        new CustomEvent("decky-button-down", { detail: { button: 2 }, bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("button", { name: "first button" })).toBeInTheDocument();
   });
 
   it("leaves focus alone on the stranded card", async () => {

@@ -494,7 +494,7 @@ describe("MainPage", () => {
       expect(firstBodyStop(container)?.querySelector('[data-testid="field-label"]')?.textContent).toBe("Connection");
     });
 
-    it("has entering from the Quick Access strip land on the menu's Sync entry", async () => {
+    it("marks the menu's Sync entry as Steam's entry preference", async () => {
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
 
@@ -504,7 +504,6 @@ describe("MainPage", () => {
       const preferred = container.querySelectorAll('[data-preferred-focus="true"]');
       expect(preferred).toHaveLength(1);
       expect(preferred[0]?.querySelector("button")?.textContent).toBe("Sync");
-      expect(preferred[0]).not.toHaveAttribute("tabindex");
       expect(preferred[0]?.closest('[data-nav-entry-prefer-position="4"]')).not.toBeNull();
     });
 

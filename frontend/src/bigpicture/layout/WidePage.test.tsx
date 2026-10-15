@@ -563,7 +563,7 @@ describe("WidePage", () => {
     expect(screen.getByTestId("steam-tabs")).toHaveAttribute("data-auto-focus-contents", "false");
   });
 
-  it("has entering from the Quick Access strip land in the body, never on Back", async () => {
+  it("marks the body, not the Back row, as Steam's entry preference", async () => {
     const WidePage = await loadWidePage(StubTabs);
 
     render(
