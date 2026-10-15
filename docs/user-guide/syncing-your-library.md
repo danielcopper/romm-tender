@@ -500,8 +500,8 @@ game, use [Clean Up Removed RomM Games](managing-games.md#cleaning-up-versions-r
 
 A platform RomM no longer lists at all is gone from RomM rather than turned off, even while it is still on in Tender:
 its games keep their shortcuts and their place in its Steam collection, each game's page says the game is no longer
-available, and only the cleanup removes them. A game on it that came in through a collection is asked about by its id,
-as described below.
+available, and only the cleanup removes them; after such a sync they appear under **Data Management › Gone from RomM**.
+A game on it that came in through a collection is asked about by its id, as described below.
 
 One case still moves the shortcut: the same file coming back under a new id, as after a server switch or a re-import.
 Where RomM serves a version of the same game with exactly the old file name, the shortcut follows it and keeps its
@@ -511,10 +511,11 @@ land, so the new version's page offers **Use Existing Files** instead of a downl
 What a sync still removes is a game outside what you sync: its platform is turned off and no enabled collection holds
 it. A game a collection brought in, that no collection returns any more, is asked for by its id: if RomM still has it,
 it left the collection and its shortcut is removed; if RomM answers that it is gone, or does not answer, the shortcut
-stays, and the next sync asks again. Tender remembers whether a game last came in through its platform or through a
-collection; a game it has no such record for yet, as after the update that added it, is judged by the collections' last
-completed sync instead. A platform that holds a version gone from RomM is read in full on every sync while that version
-stays bound, so it does not skip the way an unchanged platform does.
+stays, and the next sync asks again. A game RomM answered as gone then appears under **Data Management › Gone from
+RomM**, until a sync brings it in again or the cleanup finds it back on RomM. Tender remembers whether a game last came
+in through its platform or through a collection; a game it has no such record for yet, as after the update that added
+it, is judged by the collections' last completed sync instead. A platform that holds a version gone from RomM is read in
+full on every sync while that version stays bound, so it does not skip the way an unchanged platform does.
 
 Sync itself never purges a retained local ROM row, installed content, saves, or playtime solely because RomM stopped
 returning that id. Removing that state requires the separate confirmed

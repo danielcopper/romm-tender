@@ -410,9 +410,9 @@ solo groups). Key derivation: `domain/sibling_group.py`, persisted as `roms.sibl
   of bindings is what it states about shortcuts (a platform states both, and they need not agree); a group with no
   binding raises neither (`reachable_count` vs. `count`, `services/library/reporter.py`). The platform count
   (`reachable_count`) is the reachable versions less those the fetch the platform's completion stamp records did not
-  return, which it leaves out because RomM no longer serves them (the exact rule:
-  [qam-panel.md § Library](docs/architecture/qam-panel.md#library)); the collection count (`in_steam_count`) is the
-  reachable versions as the sync's collection filing resolves them, with no such exclusion. Both start from one
+  return and those the library sync marked gone from RomM, which it leaves out because RomM no longer serves them (the
+  exact rule: [qam-panel.md § Library](docs/architecture/qam-panel.md#library)); the collection count (`in_steam_count`)
+  is the reachable versions as the sync's collection filing resolves them, with no such exclusion. Both start from one
   computation, `domain/sibling_resolution.py`'s `reachable_rom_ids`.
 
 **Region** and **Languages** are **attributes of a single version**, parsed from its filename tags: `(Spain)` → where

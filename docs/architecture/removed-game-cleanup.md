@@ -126,16 +126,17 @@ replaces the stamp. The canary ids a 404 round asks first are read the same way,
 
 **The library sync marks what no stamp can name.** A platform reached only through RomM collections never gets a stamp,
 since only a platform unit writes one, and a platform whose stamp was cleared, by Force Full Sync or by an apply that
-did not finish, has none until it is synced whole again. A platform RomM no longer lists keeps its stamp, which still
-counts its rows as returned. Each of these keeps a bound version gone from RomM with its shortcut, so the apply's
-end-of-run stale removal records on the row what it established
+did not finish, has none until it is synced whole again: while its sync is on, the next completed apply stamps it and
+the stamp names its rows, but while its sync stays off that apply never comes, and only its collection-reached rows are
+asked about. A platform RomM no longer lists keeps its stamp, which still counts its rows as returned. So the apply's
+end-of-run stale removal records on a bound row it keeps what it established
 ([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "The stale removal keeps
 a game gone from RomM"): `roms.gone_from_romm` is `not_found` where RomM answered the exact id of a version reached
 through a collection with a proven 404, and `delisted` where the version was kept on a platform RomM no longer lists. A
 preview asks the same questions and writes none of the answers. Discovery adds every marked row to the candidates the
 stamps give (`domain/fetch_generation.py::gone_from_romm_ids`), and the Library page's `reachable_count` leaves out the
-same rows, so its count and this list agree. The mark is evidence for the list only: the run proves every exact id
-again, with its liveness tiers, before anything is removed.
+same rows. The mark is discovery only, never deletion authority: the run proves every exact id again, with its liveness
+tiers, before anything is removed.
 
 The mark goes when RomM is seen serving the row again: a sync unit commits it (a commit writes the row as RomM delivered
 it, with no mark), or an apply's exact-id question gets the ROM back. It goes with the row when the cleanup removes it.

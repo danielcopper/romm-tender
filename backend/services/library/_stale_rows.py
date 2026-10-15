@@ -35,8 +35,7 @@ async def settle_stale_rows(
 
     Sorts them by :func:`sort_stale_rows`, asks RomM once about the ones it
     cannot decide, settles those by :func:`settle_asked_rows`, and marks by
-    :meth:`~domain.sync_diff.StaleSort.gone_from_romm_marks`, which only the
-    apply writes.
+    :meth:`~domain.sync_diff.StaleSort.gone_from_romm_marks`.
     """
     sort = sort_stale_rows(
         rows,

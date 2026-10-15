@@ -59,10 +59,8 @@ _SYNC_COLUMNS = (
     # fetch generation it rides the UPSERT confirmed-else-preserved: a commit
     # that names no route (the late-ack path) carries the existing value.
     "delivered_through",
-    # The sync's evidence that RomM no longer serves the row (not_found |
-    # delisted). Unlike the route it is NOT merged: a commit is RomM delivering
-    # the row, so the fresh Rom's NULL is the value to write, while every
-    # load-mutate-save carries the mark it read.
+    # The sync's gone-from-RomM mark. Unlike the route it is NOT merged, so a
+    # commit's fresh Rom writes NULL; why is docs/architecture/database-design.md.
     "gone_from_romm",
 )
 

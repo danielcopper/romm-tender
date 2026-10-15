@@ -1,4 +1,4 @@
-"""Local generation-gated candidate discovery and paged preview projection."""
+"""Local candidate discovery (platform stamps plus the sync's gone-from-RomM marks) and paged preview projection."""
 
 from __future__ import annotations
 

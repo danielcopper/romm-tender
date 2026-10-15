@@ -263,9 +263,9 @@ class PruneExecutor:
     async def _clear_gone_marks(self) -> None:
         """Take the sync's gone-from-RomM mark off every row this run found on RomM.
 
-        Written before the completion frame, so the list the frontend reopens on
-        it no longer offers such a row. A failure costs only that entry, which
-        the next run proves again, so it is logged and the run still completes.
+        Why before the completion frame is docs/architecture/removed-game-cleanup.md,
+        "Discovery". A failure costs only that entry, which the next run proves
+        again, so it is logged and the run still completes.
         """
         try:
             await self._loop.run_in_executor(None, self._registry.clear_gone_marks, self._liveness.live_rom_ids())

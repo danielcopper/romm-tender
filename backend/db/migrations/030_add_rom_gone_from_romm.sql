@@ -6,10 +6,11 @@
 --
 --   * roms.gone_from_romm — 'not_found' where an apply's exact-id question
 --     got a proven 404 for the row, 'delisted' where the apply kept the row
---     bound on a platform RomM no longer lists. NULL is no such evidence. Who
---     writes and clears it is docs/architecture/backend-architecture.md, "The
---     stale removal keeps a game gone from RomM"; what the cleanup makes of it
---     is docs/architecture/removed-game-cleanup.md, "Discovery".
+--     bound on a platform RomM no longer lists. NULL is no such evidence. How
+--     the sync writes and clears it is docs/architecture/backend-architecture.md,
+--     "The stale removal keeps a game gone from RomM"; what the cleanup makes of
+--     it, and the cleanup's own clear, docs/architecture/removed-game-cleanup.md,
+--     "Discovery".
 --
 -- No backfill: the evidence comes only from the next apply's own answers.
 -- Adding a nullable column changes no existing row, so the runner's

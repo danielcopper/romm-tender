@@ -371,8 +371,8 @@ class SyncOrchestrator:
             collection_listed = await self._loop.run_in_executor(
                 None, self._local_library_reader.do_read_collection_listed_rom_ids
             )
-            # The preview asks what its apply will ask and records none of the
-            # answers: only the apply's finalize marks a row gone from RomM.
+            # The marks are discarded: docs/architecture/backend-architecture.md,
+            # "The stale removal keeps a game gone from RomM".
             removals, kept, _marks = await settle_stale_rows(
                 (
                     StaleRow(

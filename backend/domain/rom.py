@@ -142,9 +142,9 @@ class Rom:
     def mark_gone_from_romm(self, evidence: GoneEvidence) -> None:
         """Record the sync's *evidence* that RomM no longer serves this ROM.
 
-        Evidence for the removed-game cleanup's list only, never deletion
-        authority: the cleanup's run proves every exact id again. A sync commit
-        of the row writes a fresh ``Rom`` and so takes the mark away.
+        Discovery only, never deletion authority: the cleanup's run proves every
+        exact id again. Who writes and clears it is
+        docs/architecture/database-design.md, the ``roms`` row.
         """
         self.gone_from_romm = evidence
 

@@ -102,11 +102,9 @@ def gone_from_romm_ids(rows: Sequence[Rom], stamp: PlatformSyncState | None) -> 
     """Return the rows of one platform there is local evidence RomM no longer serves.
 
     :func:`prune_candidate_ids` over *stamp*, plus every row the library sync
-    marked gone from RomM (``Rom.gone_from_romm``). The mark covers what no
-    stamp can: a row reached only through a collection, whose platform carries
-    no stamp, and a row on a platform RomM no longer lists, whose stamp still
-    counts it as returned. Discovery only, never deletion authority, like the
-    candidates it extends.
+    marked gone from RomM (``Rom.gone_from_romm``); which rows the mark covers
+    that no stamp can is docs/architecture/removed-game-cleanup.md, "Discovery".
+    Discovery only, never deletion authority, like the candidates it extends.
     """
     return prune_candidate_ids(rows, stamp) | {row.rom_id for row in rows if row.gone_from_romm is not None}
 
@@ -119,7 +117,9 @@ def current_generation_ids(rows: Sequence[Rom], stamp: PlatformSyncState | None)
     empty stamp yields nothing, because it cannot establish that any row was
     seen. Useful wherever a row that RomM *should* still serve is needed as a
     control — it is a local record of what the server last said, never a promise
-    about what it says now.
+    about what it says now. A row the sync marked gone from RomM is still
+    returned here; the cleanup's canary read leaves it out
+    (``PruneRegistry.canary_rom_ids``).
     """
     if stamp is None or not stamp.fetch_id or stamp.rom_count <= 0:
         return set()

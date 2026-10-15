@@ -407,7 +407,8 @@ class SyncReporter:
 
         ``gone_marks`` is the stale removal's verdict per row on whether RomM
         still serves it (:meth:`domain.sync_diff.StaleSort.gone_from_romm_marks`), written
-        in the same UoW; only an apply passes it, never a preview.
+        in the same UoW. Who may pass it is docs/architecture/backend-architecture.md,
+        "The stale removal keeps a game gone from RomM".
 
         Returns the ``(platform_app_ids, romm_collection_app_ids)`` maps the caller
         needs for the completed-run ``SyncRun`` write and the terminal emit. The
