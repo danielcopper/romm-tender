@@ -151,9 +151,9 @@ class SyncReporter:
 
         Platform collections are grouped from the full ``roms`` table
         (every bound ROM, including ones an incremental sync skipped —
-        they remain rows), keyed by the platform's live display name
-        resolved from *platform_names* (the work-queue), falling back to
-        the slug when absent.
+        they remain rows), keyed by the platform's display name
+        resolved from *platform_names*, falling back to the slug when
+        absent.
 
         RomM collections keep the per-run membership accumulator (keyed by a
         collision-free ``(collection_kind, collection_id)`` identity, name in the
@@ -304,7 +304,9 @@ class SyncReporter:
         the row per ADR-0007 — never delete), revoke the skip of the
         platforms :meth:`finalize_per_unit_run` says to and delete the stamp of
         every collection whose member set holds an unbound ROM, (2) refresh the offline
-        ``platform_slug → display_name`` cache from the live work-queue, and
+        ``platform_slug → display_name`` cache — the live work-queue's names
+        plus each bound platform's kept name
+        (:meth:`_names_with_bound_platforms_kept`) — and
         (3) build the cross-unit collection mappings. The last-sync timestamp
         and the synced platform/collection lists live on the ``SyncRun``
         record :class:`SyncRunRecorder` writes — they are not persisted here.
