@@ -1240,9 +1240,10 @@ class TestAWriteItsRunNoLongerAwaits:
         release = asyncio.Event()
         release.set()
 
+        write = self._failing_write(release)
         with caplog.at_level(logging.WARNING, logger="test_shortcut_artwork"):
             with pytest.raises(OSError, match="disk full"):
-                await job.service._shielded(self._failing_write(release))
+                await job.service._shielded(write)
             await asyncio.sleep(0)
 
         assert "left behind" not in caplog.text
