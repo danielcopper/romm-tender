@@ -173,7 +173,7 @@ class GroupFinalizer:
                 delete_inventory=delete_inventory,
                 ledger=ledger,
             )
-            result = await self._commit_shielded(self._tasks.spawn(commit, "cleanup cascade"))
+            result = await self._commit_shielded(self._tasks.start_awaited(commit, "cleanup cascade"))
 
         await self._report_removed(run_id, index, total, rows, handle, result)
         return result

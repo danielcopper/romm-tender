@@ -361,7 +361,8 @@ class ShortcutArtworkService:
             queue.put_nowait(item)
         batch: list[_Finished | _SlotReady] = []
         workers = [
-            self._tasks.spawn(self._work(queue, batch, plan), "shortcut artwork worker") for _ in range(_WORKERS)
+            self._tasks.start_awaited(self._work(queue, batch, plan), "shortcut artwork worker")
+            for _ in range(_WORKERS)
         ]
         try:
             await asyncio.gather(*workers)
@@ -627,7 +628,7 @@ class ShortcutArtworkService:
         """Run *work* in a task of its own and count it, so :meth:`_stop` waits for it to end."""
         self._writing += 1
         self._no_write.clear()
-        task = self._tasks.spawn(work, "shortcut artwork write")
+        task = self._tasks.start_awaited(work, "shortcut artwork write")
         task.add_done_callback(self._write_done)
         return await asyncio.shield(task)
 

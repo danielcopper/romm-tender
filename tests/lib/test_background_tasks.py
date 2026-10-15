@@ -6,6 +6,7 @@ import asyncio
 import gc
 import logging
 import weakref
+from typing import Any
 
 from lib.background_tasks import BackgroundTasks
 
@@ -91,6 +92,34 @@ class TestHowATaskEnds:
         assert [record for record in caplog.records if record.name == logger.name] == []
 
 
+class TestATaskItsStarterAwaits:
+    async def test_it_is_held_until_it_ends(self, logger):
+        tasks = _tasks(logger)
+        release = asyncio.Event()
+
+        task = tasks.start_awaited(release.wait(), "write")
+
+        assert list(tasks) == [task]
+        assert task.get_name() == "write"
+        release.set()
+        await task
+        assert len(tasks) == 0
+
+    async def test_its_failure_is_left_to_the_starter(self, logger, caplog):
+        tasks = _tasks(logger)
+
+        async def fails() -> None:
+            raise ValueError("refused")
+
+        with caplog.at_level(logging.DEBUG, logger=logger.name):
+            task = tasks.start_awaited(fails(), "version switch")
+            await asyncio.wait([task])
+
+        assert isinstance(task.exception(), ValueError)
+        assert [record for record in caplog.records if record.name == logger.name] == []
+        assert len(tasks) == 0
+
+
 class TestShutdown:
     async def test_every_task_still_held_is_cancelled_and_awaited_in_the_order_it_was_started(self, logger):
         tasks = _tasks(logger)
@@ -132,6 +161,25 @@ class TestShutdown:
 
         assert task.done()
         assert ended == ["written"]
+
+    async def test_a_task_started_while_shutting_down_is_cancelled_and_awaited_too(self, logger):
+        tasks = _tasks(logger)
+        late: list[asyncio.Task[Any]] = []
+
+        async def starts_a_frame_when_cancelled() -> None:
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                late.append(tasks.spawn(asyncio.Event().wait(), "frame"))
+                raise
+
+        tasks.spawn(starts_a_frame_when_cancelled(), "run")
+        await asyncio.sleep(0)
+
+        await asyncio.wait_for(tasks.shutdown(), 5)
+
+        assert late[0].cancelled()
+        assert len(tasks) == 0
 
     async def test_nothing_held_returns_at_once(self, logger):
         await asyncio.wait_for(_tasks(logger).shutdown(), 1)
