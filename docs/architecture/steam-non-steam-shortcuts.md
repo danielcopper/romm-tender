@@ -460,39 +460,46 @@ set once the run has ended.
 **During the run, add-only.** Each `sync_apply_unit` entry names the collections its game belongs to:
 `platform_collection` (the name `platform_app_ids` is keyed by, `null` where **Show collection games in platform
 groups** leaves the game out) and `romm_collections` (the keys `romm_collection_app_ids` uses). `RunCollections`
-(`backend/domain/entry_collections.py`) decides them: at run start it indexes the listed members of every queued
-collection unit under its key and reads the naming mode and the platform-groups setting; per unit it files each entry by
-its binding target, with the RomM keys of every collection that lists a version in the entry's sibling group. The
-platform rule is `platform_collection_name`, the same function the end-of-run map applies, so both answers agree. Right
-after a shortcut's appId resolves, `addAppToCollections` (`frontend/src/utils/collections.ts`) finds each named
-collection by its folded name — or creates it holding this game, so no collection appears empty — and adds the game
-where it is missing: one `AddApps` and one `Save` per collection the game was not in yet, nothing for one it already
-holds. It never removes a game, so a write that fails halfway cannot empty a collection. A collection this pass created
-is remembered for the run by its folded name and used when `collectionStore.userCollections` does not list it: whether
-Steam lists a new collection as soon as its first `Save()` resolves is not established, and creating the same name a
-second time overwrites the first collection and the game in it. A failure is logged per collection and never stops the
-apply.
+(`backend/domain/entry_collections.py`) decides them. At run start it indexes the listed members of every queued
+collection unit but a foreign smart one under that collection's key, and holds the naming mode and the platform-groups
+setting as they are then; the end-of-run maps are built with those same two values. Per unit it files each entry by its
+binding target, with the RomM keys of every collection that lists a version in the entry's sibling group, as far as the
+unit's own built set shows that group. The platform rule is `platform_collection_name`, the same function the end-of-run
+map applies, so both answers agree. Once a shortcut's appId resolves — after its cover, for a new one —
+`addAppToCollections` (`frontend/src/utils/collections.ts`) finds each named collection by its folded name, or creates
+it holding this game so no collection appears empty, and adds the game where it is missing: one `AddApps` and one `Save`
+per collection the game was not in yet, nothing for one it already holds. It never removes a game, so a write that fails
+halfway cannot empty a collection. A collection this pass created is remembered for the run by its folded name and used
+when `collectionStore.userCollections` does not list it: whether Steam lists a new collection as soon as its first
+`Save()` resolves is not established, and creating the same name a second time overwrites the first collection and the
+game in it. A failure is logged per collection and never stops the apply.
 
-What this pass does not file, and the end does: games the run does not send (a delta-unchanged entry, a skipped platform
-or collection), the members of a foreign smart collection — its listing is its owner's view, and the run follows the
-caller's walk — and members a collection's walk finds beyond its listing. A group still carrying several bound shortcuts
-files each of them, where the end-of-run map files the one its rule picks; the complete-set rewrite takes the others out
-again.
+What this pass does not file, and a completed run's end does: games the run does not send (a delta-unchanged entry, a
+skipped platform or collection), the members of a foreign smart collection — its listing is its owner's view, and the
+run follows the caller's walk — members a collection's walk finds beyond its listing, and a version listed in a
+collection whose sibling group the entry's unit did not fetch whole. In the other direction, while a sibling group still
+carries several bound shortcuts, a listed version files every one of them into its RomM collections, where the
+end-of-run map files the listed version's own shortcut, and for an unbound version only the shortcut of its group's
+smallest bound rom_id; the complete-set rewrite takes the others out again. Platform collections hold every bound row in
+both passes.
 
-**At the end, the complete set.** The `sync_complete` event carries `platform_app_ids` and `romm_collection_app_ids`
-maps; `onSyncComplete` (`frontend/src/index.tsx`) creates/updates the collections for the maps it receives, replacing
-each one's games with the map's, and then runs a **stale-collection cleanup** that deletes any `RomM: …` collection for
-this machine whose platform/collection name is absent from those maps.
+**At the end of a completed run, the complete set.** The `sync_complete` event carries `platform_app_ids` and
+`romm_collection_app_ids` maps; `onSyncComplete` (`frontend/src/index.tsx`) creates/updates the collections for the maps
+it receives, replacing each one's games with the map's, and then runs a **stale-collection cleanup** that deletes any
+`RomM: …` collection for this machine whose platform/collection name is absent from those maps. A collection the
+add-only pass created already exists by then, so even a collection's first sync writes its complete set through the
+remove-then-add replace, which empties the collection where it fails between the two steps (#980).
 
-The cleanup is **gated on a completed (non-cancelled) sync** (`!data.cancelled`). On a cancelled run the maps are
-**partial** — they list only the platforms the run reached before the cancel (empty if the cancel fired before the first
-unit), because the backend builds `platform_app_ids` from the cross-unit accumulator of reached platforms. Treating a
-partial map as the authoritative active-set would delete the collections for unreached platforms — an early cancel would
-wipe the entire library organization. The additive create/update path stays ungated, so the platforms that did complete
-still get their collections; only the destructive deletion is skipped on cancel. Steam collections are not backed up, so
-the safe behavior on a partial/cancelled run is to delete nothing. What the add-only pass filed stays on a cancelled run
-and on one that ends in an error, which sends no `sync_complete` at all: a RomM collection can be left partly filled
-until the next run that completes, never holding a game it does not hold in RomM.
+**At the end of a cancelled run, add-only again.** On a cancelled run — the user's Cancel, a session-budget pause or a
+heartbeat timeout, all of which reach `onSyncComplete` with `cancelled` set — the maps are **partial**: they list only
+what the run reached before it stopped (empty if it stopped before the first unit), and they lack the games of the chunk
+in flight, which the add-only pass has filed but whose bindings were never committed. So `addToCollections` adds each
+map's games to its collection through the same add path, and nothing is replaced or removed. The stale cleanup does not
+run either: treating a partial map as the authoritative active set would delete the collections for unreached platforms
+— an early cancel would wipe the entire library organization — and Steam collections are not backed up, so the safe
+behavior on a partial run is to delete nothing. A run that ends in an error sends no `sync_complete` at all and keeps
+what the add-only pass filed. Either way a RomM collection can be left partly filled until a later run completes; every
+game in it is one its RomM collection holds.
 
 ### Collection naming mode — `merge` vs `by_label` (#1539)
 
@@ -501,7 +508,7 @@ frontend sees them, and the frontend simply wraps each key as `RomM: [<key>] (<h
 is decided **entirely by the backend's key**, which `SyncReporter._resolve_collection_memberships`
 (`services/library/reporter.py`) for the end-of-run map, and `RunCollections` (`domain/entry_collections.py`) for an
 apply entry's `romm_collections`, both take from `domain/collection_label.py::steam_collection_key` under the
-`collection_naming_mode` setting:
+`collection_naming_mode` setting as the run read it at its start:
 
 - **`merge`** (default) — the key is the bare collection display name. Same-named RomM collections of any kind union
   into one `RomM: [<name>]` Steam collection (RomM permits same-named collections across kinds/users, #1503).
@@ -541,10 +548,11 @@ produced label is bracket-free (asserted in `tests/domain/test_collection_label.
 **No Force Full Sync on a mode flip.** Because the create-name and the reconcile's `activeNames` both derive from the
 same `romm_collection_app_ids` keys, flipping the mode is applied by the ordinary **complete-set reconcile** on the next
 normal sync: the reporter re-emits the complete set of enabled collections under the new keys, `onSyncComplete` creates
-the new-named collections and deletes any old-named collection absent from the new complete set. No skip-state
-invalidation is involved (same mechanism owner-scope reshaping uses). A change to a label reaches Steam the same way: a
-sync that reaches the collection creates it under its new name, and the first sync that finishes in full (its
-`sync_complete` carries no `cancelled`) deletes the old one — a new Steam collection, not the old one renamed.
+the new-named collections and deletes any old-named collection absent from the new complete set; during that sync the
+add-only pass already creates each new-named collection with the first game it files there. No skip-state invalidation
+is involved (same mechanism owner-scope reshaping uses). A change to a label reaches Steam the same way: a sync that
+reaches the collection creates it under its new name, and the first sync that finishes in full (its `sync_complete`
+carries no `cancelled`) deletes the old one — a new Steam collection, not the old one renamed.
 
 **The preview names collections by the same key.** A completed run records the reporter's keys as its
 `collections_completed`, and the preview's `collection_diff` builds its current set with the same

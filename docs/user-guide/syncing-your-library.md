@@ -329,8 +329,7 @@ hostname to avoid conflicts if you run Tender on multiple devices:
 
 Collections appear in Steam's library sidebar and can be used to browse games by platform. A collection appears with the
 first of its games the sync adds, and fills while the sync goes on. Games the sync does not need to touch — ones that
-have not changed since the last sync — reach a collection they are new to when the sync finishes, as do the games of
-another user's smart collection.
+have not changed since the last sync — reach a collection they are new to when the sync finishes.
 
 ### Syncing RomM collections
 
@@ -353,7 +352,9 @@ Each kind row other than Favorites says how many of its collections are on, for 
 synced.** A collection is not limited to the platforms you switched on under Platforms: every game in it is added, and
 the games are grouped in a Steam collection named after it, `RomM: [<name>] (<device>)`. Each kind's pane says this in
 its first sentence. What **Distinguish collection types in Steam names** adds to the name is under
-[Collections that share a name](#collections-that-share-a-name).
+[Collections that share a name](#collections-that-share-a-name). Such a Steam collection fills while the sync runs, as a
+platform's does, with two exceptions that arrive when the sync finishes: the games of another user's smart collection,
+and the games one of your own smart collections matches beyond those RomM last stored for it.
 
 The table has these columns:
 

@@ -1154,10 +1154,10 @@ label** appended to the name, so collections that share a name but not a type la
 Standard one under its bare name; the rule and the labels are in `docs/architecture/steam-non-steam-shortcuts.md` §
 Collection naming mode. For a virtual collection the type label names its virtual type rather than the kind — franchise
 and IGDB-collection are both `kind="virtual"`, distinguished by `virtual_type` (see the **Collection kind** entry above)
-— except one of no known type, which gets a fallback label. Computed backend-side at the reporter's union key
-(`domain/collection_label.py`), so the wire payload stays name→appIds; the mode flip is applied by the ordinary
-complete-set reconcile on the next normal sync (no Force Full Sync). Collections whose Steam names come out the same
-still union.
+— except one of no known type, which gets a fallback label. Computed backend-side by `steam_collection_key`
+(`domain/collection_label.py`), which both the reporter's union key and the apply entries' `romm_collections` use, so
+the wire carries keys only; the mode flip is applied by the ordinary complete-set reconcile on the next normal sync (no
+Force Full Sync). Collections whose Steam names come out the same still union.
 
 ### Artwork slot / filled slot / slot outcome
 
