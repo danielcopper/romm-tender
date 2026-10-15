@@ -305,3 +305,16 @@ class TestRecordDelivery:
         rom.record_delivery("collection" if route == "platform" else "platform")
         rom.record_delivery(route)
         assert rom.delivered_through == route
+
+
+class TestGoneFromRomm:
+    def test_a_synced_rom_carries_no_mark(self):
+        assert _make_rom().gone_from_romm is None
+
+    @pytest.mark.parametrize("evidence", ["not_found", "delisted"])
+    def test_a_mark_records_its_evidence_and_a_clear_drops_it(self, evidence):
+        rom = _make_rom()
+        rom.mark_gone_from_romm(evidence)
+        assert rom.gone_from_romm == evidence
+        rom.clear_gone_from_romm()
+        assert rom.gone_from_romm is None

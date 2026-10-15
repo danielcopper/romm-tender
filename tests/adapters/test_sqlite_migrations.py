@@ -84,8 +84,8 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 023_add_rom_install_launchable + 024_add_answered_save_directories
 # + 025_add_platform_skip_revoked + 026_add_rom_has_file_on_disk
 # + 027_add_artwork_slot_outcomes + 028_widen_artwork_slot_outcomes_to_the_icon
-# + 029_add_rom_delivered_through).
-_SHIPPED_VERSION = 29
+# + 029_add_rom_delivered_through + 030_add_rom_gone_from_romm).
+_SHIPPED_VERSION = 30
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp,
@@ -2013,6 +2013,78 @@ class Test029AddRomDeliveredThrough:
                 conn.execute(
                     "INSERT INTO roms (rom_id, platform_slug, name, fs_name, last_synced_at, delivered_through) "
                     "VALUES (1, 'snes', 'Game', 'game.sfc', '2026-10-15T10:00:00', 'both')"
+                )
+        finally:
+            conn.close()
+
+
+class Test030AddRomGoneFromRomm:
+    """030 — adds the nullable gone_from_romm column to roms, with no backfill (#2431)."""
+
+    def test_adds_gone_from_romm_to_roms_only(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+
+        apply_migrations(db_path)
+
+        assert "gone_from_romm" in _columns(db_path, "roms")
+        assert "gone_from_romm" not in _columns(db_path, "rom_installs")
+
+    def test_gone_from_romm_absent_before_030(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 29)))
+
+        assert _user_version(db_path) == 29
+        assert "gone_from_romm" not in _columns(db_path, "roms")
+
+    def test_an_existing_row_reads_null_across_the_migration(self, tmp_path: Path):
+        """No backfill: a row bound on a platform RomM no longer lists is still unmarked until the next apply."""
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 29)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO roms (rom_id, platform_slug, name, fs_name, last_synced_at, shortcut_app_id, "
+                "delivered_through) VALUES (1, 'snes', 'Game', 'game.sfc', '2026-10-15T10:00:00', 5001, 'collection')"
+            )
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        conn = sqlite3.connect(db_path)
+        try:
+            value = conn.execute("SELECT gone_from_romm FROM roms WHERE rom_id = 1").fetchone()[0]
+        finally:
+            conn.close()
+        assert value is None
+
+    @pytest.mark.parametrize("evidence", ["not_found", "delisted"])
+    def test_each_kind_of_evidence_round_trips(self, tmp_path: Path, evidence: str):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO roms (rom_id, platform_slug, name, fs_name, last_synced_at, gone_from_romm) "
+                "VALUES (1, 'snes', 'Game', 'game.sfc', '2026-10-15T10:00:00', ?)",
+                (evidence,),
+            )
+            stored = conn.execute("SELECT gone_from_romm FROM roms WHERE rom_id = 1").fetchone()[0]
+        finally:
+            conn.close()
+        assert stored == evidence
+
+    def test_any_other_evidence_is_refused(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path)
+
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            with pytest.raises(sqlite3.IntegrityError):
+                conn.execute(
+                    "INSERT INTO roms (rom_id, platform_slug, name, fs_name, last_synced_at, gone_from_romm) "
+                    "VALUES (1, 'snes', 'Game', 'game.sfc', '2026-10-15T10:00:00', 'gone')"
                 )
         finally:
             conn.close()

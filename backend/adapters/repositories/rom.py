@@ -59,6 +59,11 @@ _SYNC_COLUMNS = (
     # fetch generation it rides the UPSERT confirmed-else-preserved: a commit
     # that names no route (the late-ack path) carries the existing value.
     "delivered_through",
+    # The sync's evidence that RomM no longer serves the row (not_found |
+    # delisted). Unlike the route it is NOT merged: a commit is RomM delivering
+    # the row, so the fresh Rom's NULL is the value to write, while every
+    # load-mutate-save carries the mark it read.
+    "gone_from_romm",
 )
 
 # Read set: the synced columns plus the pin-only emulator_override, selected_disc,
@@ -101,6 +106,7 @@ def _row_to_rom(row: sqlite3.Row) -> Rom:
         has_file_on_disk=bool(row["has_file_on_disk"]),
         last_fetch_id=row["last_fetch_id"],
         delivered_through=row["delivered_through"],
+        gone_from_romm=row["gone_from_romm"],
     )
 
 
@@ -175,6 +181,7 @@ class SqliteRomRepository(BaseRepository):
                 int(rom.has_file_on_disk),
                 rom.last_fetch_id,
                 rom.delivered_through,
+                rom.gone_from_romm,
             ),
         )
 

@@ -21,6 +21,10 @@ _EMPTY_VERSION_METADATA = VersionMetadata()
 # Which kind of sync unit last committed a ROM: its platform's, or a collection's.
 DeliveryRoute = Literal["platform", "collection"]
 
+# What the library sync established about a bound version RomM no longer serves:
+# a proven 404 to its exact id, or a platform RomM no longer lists.
+GoneEvidence = Literal["not_found", "delisted"]
+
 
 @cosmic_aggregate
 class Rom:
@@ -62,6 +66,7 @@ class Rom:
     fs_size_bytes: int | None = None
     has_file_on_disk: bool = True
     delivered_through: DeliveryRoute | None = None
+    gone_from_romm: GoneEvidence | None = None
 
     @classmethod
     def synced(
@@ -133,6 +138,19 @@ class Rom:
         ``None`` is a ROM no unit has committed since the column was added.
         """
         self.delivered_through = route
+
+    def mark_gone_from_romm(self, evidence: GoneEvidence) -> None:
+        """Record the sync's *evidence* that RomM no longer serves this ROM.
+
+        Evidence for the removed-game cleanup's list only, never deletion
+        authority: the cleanup's run proves every exact id again. A sync commit
+        of the row writes a fresh ``Rom`` and so takes the mark away.
+        """
+        self.gone_from_romm = evidence
+
+    def clear_gone_from_romm(self) -> None:
+        """Drop the mark once RomM answered this ROM's exact id with the ROM itself."""
+        self.gone_from_romm = None
 
     def update_cover_path(self, path: str) -> None:
         """Record the local cover-art path once artwork has been written."""

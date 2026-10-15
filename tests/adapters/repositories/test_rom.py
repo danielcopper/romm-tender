@@ -73,6 +73,45 @@ class TestDeliveredThrough:
         assert loaded.delivered_through == route
 
 
+class TestGoneFromRomm:
+    @pytest.mark.parametrize("evidence", ["not_found", "delisted", None])
+    def test_round_trips(self, uow: SqliteUnitOfWork, evidence):
+        rom = _rom(1)
+        if evidence is not None:
+            rom.mark_gone_from_romm(evidence)
+        uow.roms.save(rom)
+
+        loaded = uow.roms.get(1)
+        assert loaded is not None
+        assert loaded.gone_from_romm == evidence
+
+    def test_a_fresh_row_saved_over_a_marked_one_clears_the_mark(self, uow: SqliteUnitOfWork):
+        """A sync commit builds a fresh ``Rom``; RomM delivering the row is what takes the mark away."""
+        marked = _rom(1)
+        marked.mark_gone_from_romm("not_found")
+        uow.roms.save(marked)
+
+        uow.roms.save(_rom(1))
+
+        loaded = uow.roms.get(1)
+        assert loaded is not None
+        assert loaded.gone_from_romm is None
+
+    def test_a_row_read_changed_and_saved_keeps_its_mark(self, uow: SqliteUnitOfWork):
+        marked = _rom(1)
+        marked.mark_gone_from_romm("delisted")
+        uow.roms.save(marked)
+
+        loaded = uow.roms.get(1)
+        assert loaded is not None
+        loaded.unbind_shortcut()
+        uow.roms.save(loaded)
+
+        again = uow.roms.get(1)
+        assert again is not None
+        assert again.gone_from_romm == "delisted"
+
+
 class TestMiss:
     def test_get_absent_returns_none(self, uow: SqliteUnitOfWork):
         assert uow.roms.get(999) is None
