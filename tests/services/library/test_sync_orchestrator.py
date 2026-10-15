@@ -3822,10 +3822,9 @@ class TestCommitUnitResults:
 
 
 class TestShutdown:
-    """Tests for shutdown().
+    """Tests for shutdown()'s first step: it flips a RUNNING sync into CANCELLING.
 
-    Graceful shutdown flips a RUNNING sync into CANCELLING so the
-    per-unit loop drops its in-flight work on the next checkpoint.
+    It then cancels the run and waits for it, which ``TestTheRunIsHeldUntilItEnds`` pins.
     """
 
     async def test_shutdown_when_running_marks_cancelling(self, library):

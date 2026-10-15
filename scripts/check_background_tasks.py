@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """Background-task creation gate.
 
-The event loop keeps only a weak reference to a task, so a task nothing holds
-can be collected before it ends, and a task's exception is looked at by nobody.
-``BackgroundTasks`` (``backend/lib/background_tasks.py``) holds every task it
-starts until it ends, logs one that fails, and cancels and awaits what it still
-holds at its owner's shutdown. A task is therefore created only inside that
-module.
+Under ``backend/``, ``create_task``, ``ensure_future`` and ``asyncio.Task(...)``
+are called only in ``backend/lib/background_tasks.py``, whose
+``BackgroundTasks`` holds every task it starts until the task ends: ``spawn``
+for a task nobody awaits, which it also logs when it fails, and
+``start_awaited`` for one its starter awaits itself. Why, and what an owner's
+shutdown does with them, is the invariant register's long form
+(``docs/architecture/invariants.md``). A task ``asyncio.gather`` or
+``asyncio.shield`` makes from a coroutine its caller awaits on the spot is the
+other kind, and outside the rule.
 
-This check fails on a call that creates a task anywhere else under
-``backend/``:
+This check fails on a call anywhere else under ``backend/``:
 
 - a call named ``create_task`` — ``loop.create_task(...)``,
   ``asyncio.create_task(...)``, a ``TaskGroup``'s, or a bare ``create_task(...)``;
@@ -21,14 +23,15 @@ Exempt: the helper's own module, ``backend/host/`` (it uses the standard
 library only, and its call tasks end with their connection),
 ``backend/_vendor/`` and ``backend/native/``. There is no pragma.
 
-It is an AST call-name check, NOT dataflow analysis. It does not see a task
-created under another name: an alias (``ct = loop.create_task``,
-``from asyncio import create_task as start``, ``from asyncio import Task as T``),
-a ``getattr(loop, "create_task")``, a ``Task`` reached through another module
-(``import asyncio as aio``; ``aio.Task(...)``), or anything reached through a
-helper that creates the task for its caller. A task that ``asyncio.shield``,
-``asyncio.gather`` or ``asyncio.wait_for`` creates from a bare coroutine is not
-a call it looks for either.
+It is an AST call-name check, NOT dataflow analysis. It does not see:
+
+- one of those names bound under another one: ``ct = loop.create_task``,
+  ``from asyncio import create_task as start``, ``from asyncio import Task as T``;
+- a ``getattr(loop, "create_task")``;
+- ``Task`` reached through ``asyncio`` imported under another name
+  (``import asyncio as aio``; ``aio.Task(...)``) — an ``aio.create_task(...)``
+  or ``aio.ensure_future(...)`` is caught by its name;
+- a task a helper creates for its caller.
 
 Exit 0 when no module creates a task outside the helper, 1 (one line per
 offending call) otherwise.
@@ -112,7 +115,7 @@ def find_violations(files: list[Path] | None = None) -> list[str]:
             if name is not None:
                 findings.append(
                     f"{rel}:{node.lineno}:{node.col_offset} '{name}(...)' creates a task outside "
-                    "lib/background_tasks.py — start it with BackgroundTasks.spawn."
+                    "lib/background_tasks.py — start it through BackgroundTasks."
                 )
     return sorted(findings)
 
@@ -127,12 +130,12 @@ def main(argv: list[str]) -> int:
             print(line)
         print()
         print(
-            "ERROR: a task is created only by BackgroundTasks.spawn (backend/lib/background_tasks.py), "
-            "which holds it until it ends, logs it if it fails and cancels it at its owner's shutdown — "
-            "start it there and keep the task it answers if you need a handle (CLAUDE.md → Invariant register)."
+            "ERROR: a task is created only by BackgroundTasks (backend/lib/background_tasks.py), which holds it "
+            "until it ends — spawn for a task nobody awaits, start_awaited for one its starter awaits itself; keep "
+            "the task it answers if you need a handle (CLAUDE.md → Invariant register)."
         )
         return 1
-    print("OK: every task under backend/ outside host/ is created by BackgroundTasks.spawn.")
+    print("OK: under backend/ outside host/, tasks are created only in lib/background_tasks.py.")
     return 0
 
 

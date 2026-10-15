@@ -149,7 +149,7 @@ until a new complete fetch landed; revoking its skip would cost the first of tho
 
 A running cleanup excludes library sync, downloads and resumes, migrations, version switches, core/disc/controller
 writes, launch evaluation, save mutations, session writes, uninstalls, connection identity changes, and affected cache
-cleanup. Each conflicting endpoint holds an operation before anything it does can yield; which detached work retains one
+cleanup. Each conflicting endpoint holds an operation before anything it does can yield; which detached work holds one
 for its lifetime is named below. The achievement refresh a game session's finalize starts is detached and holds none,
 because it only reads — the ROM's RetroAchievements id and RomM's achievement data — and writes nothing but an in-memory
 cache.
@@ -158,7 +158,8 @@ Every prune conflict is recorded on one object, `PruneConflicts` (its four kinds
 conflicts). The composition root builds it before any service and hands it on. The prune service registers its run
 there. The conflict rules a use case checks at its entry (GLOSSARY.md → Conflict rules) hold that use case's operation
 there, hold one until detached work it starts has ended (`hold_until_done`) — a background save-status check, a
-download, the outbox flush a play session's start begins — and take and release the leases the use case hands the frontend: a shortcut removal's, an
+download, the outbox flush a play session's start begins, the thread of a removal or of Uninstall all whose call was
+cancelled — and take and release the leases the use case hands the frontend: a shortcut removal's, an
 uninstall's, a core, disc or version change's, an adoption's, an artwork fetch's, the pre-launch re-confirm's and the
 start-up reconcile's, and the ones `sync_complete`, `sync_stale`, `download_complete`, `migration_relaunch_options` and
 the shortcut artwork job's `shortcut_artwork` batches carry. The lease service (`services/prune_leases.py`) renews and

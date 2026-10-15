@@ -153,7 +153,10 @@ waiting on a RomM request sees the flag only once the request ends, which can ou
 unit; each unit of work commits or rolls back in its own transaction, so the cancellation leaves nothing half written;
 and the start-up repair (`reconcile_orphaned_sync_runs`) records the run it finds still `running` as interrupted by a
 restart, which is what happened. The resume offer the next start computes reads only committed data, so a run cancelled
-in the middle of an apply chunk is offered for resumption like any other interrupted run.
+in the middle of an apply chunk is offered for resumption like any other interrupted run. Cancelling the run does not
+stop work it already handed to a worker thread: a unit's commit running there finishes in its own transaction after the
+run's task has ended, possibly after the lock is released. Whether a second backend can start against the database in
+that window is not established.
 
 The services with no place in that order hold only short tasks — the removal's and the adoption's progress frames, the
 save-status check a refresh starts, the wait on a cancelled removal's thread, the retry frame, and the prune conflicts'
@@ -2773,14 +2776,14 @@ from the other layers.
 
 ### Other
 
-| File                      | Role                                                                                                                                                                                                           |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `main.py`                 | `run()` and `build_backend()`, the process entry, and `Endpoints` (one method marked `@route` per endpoint)                                                                                                    |
-| `check.py`                | `check()`, the pre-install check's entry: builds the `Application` on copies of the live data and runs none of it                                                                                              |
-| `bootstrap/`              | Composition root — `build_application()` composes `bootstrap()` and `wire_services()` into an `Application`                                                                                                    |
-| `lib/errors.py`           | Exception hierarchy (`RommApiError`, `Refused`, `classify_error`)                                                                                                                                              |
-| `lib/background_tasks.py` | `BackgroundTasks`: every task the backend starts outside `host/` — held until it ends, a failure logged as a warning under its name, and cancelled and awaited by its owner's shutdown where the owner has one |
-| `lib/list_result.py`      | `ErrorCode` and the canonical endpoint failure shape                                                                                                                                                           |
+| File                      | Role                                                                                                                                                                                                                              |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main.py`                 | `run()` and `build_backend()`, the process entry, and `Endpoints` (one method marked `@route` per endpoint)                                                                                                                       |
+| `check.py`                | `check()`, the pre-install check's entry: builds the `Application` on copies of the live data and runs none of it                                                                                                                 |
+| `bootstrap/`              | Composition root — `build_application()` composes `bootstrap()` and `wire_services()` into an `Application`                                                                                                                       |
+| `lib/errors.py`           | Exception hierarchy (`RommApiError`, `Refused`, `classify_error`)                                                                                                                                                                 |
+| `lib/background_tasks.py` | `BackgroundTasks`: the only caller of `create_task` outside `host/` — `spawn` for a task nobody awaits (a failure logged as a warning under its name), `start_awaited` for one its starter awaits itself; each held until it ends |
+| `lib/list_result.py`      | `ErrorCode` and the canonical endpoint failure shape                                                                                                                                                                              |
 
 ## Where user data lives
 
@@ -2904,10 +2907,11 @@ write `from bootstrap import …` and never deep-import a submodule:
    `bootstrap()`, composes the runtime bundle from the loop, the event sink's emit and the host's reading of Steam the
    entry point hands it, passes `MIN_ROMM_VERSION` from `domain/identity.py` as `min_required_version`, calls
    `wire_services()`, and answers an `Application` holding the `ServicesBundle` as one field (`services`). It runs
-   nothing. The `Application` runs the start-up repairs (`run_startup_repairs`, which also starts the two background
-   tasks it holds — the save-directory backfill and the running release check) and `shutdown()` — each when the entry
-   point calls it. Its constructor takes a ready `ServicesBundle`, which is the seam the contract harness uses: it swaps
-   adapters between `bootstrap()` and `wire_services()` and constructs the `Application` itself.
+   nothing. The `Application` runs the start-up repairs (`run_startup_repairs`, which also starts the three background
+   tasks it holds — the save-directory backfill, the running release check and the shortcut artwork job's wait for a
+   panel) and `shutdown()` — each when the entry point calls it. Its constructor takes a ready `ServicesBundle`, which
+   is the seam the contract harness uses: it swaps adapters between `bootstrap()` and `wire_services()` and constructs
+   the `Application` itself.
 
 The two-phase split exists because adapter instantiation and state loading happen first (`bootstrap()`), then
 `build_application()` composes the runtime bundle (event loop, the event sink's emit, the host's reading of Steam) and
@@ -3083,14 +3087,11 @@ says. The script's docstring names what it cannot see, a computed `success` firs
 
 ### 5. Background-task gate
 
-`scripts/check_background_tasks.py` (also bundled into `mise run lint`) fails on a task created anywhere under
-`backend/` but `lib/background_tasks.py`, `host/`, `_vendor/` and `native/`: a call named `create_task` or
-`ensure_future`, or `asyncio.Task(...)`. The event loop keeps only a weak reference to a task, so a task nothing holds
-can be collected before it ends; `BackgroundTasks.spawn` holds it until it ends and logs it if it fails, and an owner
-with a place in `Application.shutdown` cancels and awaits it there. A service that needs a handle on its task keeps the
-one `spawn` answers. `host/` keeps its own: it uses the standard library only, and its call tasks end with their
-connection. There is no pragma; the script's docstring names what it cannot see (an alias, a `getattr`, a task created
-by a helper for its caller).
+`scripts/check_background_tasks.py` (also bundled into `mise run lint`) fails on a call named `create_task` or
+`ensure_future`, on `asyncio.Task(...)` and on a bare `Task(...)` imported from `asyncio`, anywhere under `backend/` but
+`lib/background_tasks.py`, `host/`, `_vendor/` and `native/`. The rule and why it exists are the invariant register's
+long form ([invariants](invariants.md)); what the shutdown does with the tasks is the shutdown paragraph above; what the
+check does not see is listed in its docstring.
 
 ### 6. Enforced: underscore prefix
 

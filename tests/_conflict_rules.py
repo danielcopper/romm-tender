@@ -176,14 +176,14 @@ def claim_names_in_source() -> set[str]:
 
 
 # The takers among them whose claim ``PruneConflicts.held_claims`` names: a
-# retained operation and a lease. ``hold`` registers an operation only with
+# held operation and a lease. ``hold`` registers an operation only with
 # ``prune=True``, and ``hold_start`` takes a reservation, which it does not name.
 _HELD_CLAIM_TAKERS = ("hold_until_done", "acquire_lease", "emit_under_lease", "_hold_until_started_task_done")
 
 
 def claims_held_on_the_prune_conflicts() -> set[str]:
     """Every name a claim ``PruneConflicts.held_claims`` answers with can go by: a ``hold`` label with the prune rule, a
-    retained operation's label, a lease's key.
+    held operation's label, a lease's key.
 
     Blind where :func:`claim_names_in_source` and :func:`endpoints_with_rule` are.
     """

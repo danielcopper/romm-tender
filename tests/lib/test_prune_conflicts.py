@@ -256,7 +256,7 @@ async def test_reservation_is_released_when_the_start_begins_no_run(outcome) -> 
 
 
 @pytest.mark.asyncio
-async def test_detached_task_retains_conflict_claim_for_its_full_lifetime() -> None:
+async def test_a_detached_task_holds_its_conflict_claim_for_its_full_lifetime() -> None:
     endpoints, conflicts, _logger, _debug = _endpoints()
     release = asyncio.Event()
     task = asyncio.create_task(release.wait())
@@ -392,7 +392,7 @@ async def test_expired_lease_is_reported_at_info_as_never_released(monkeypatch) 
 
 
 @pytest.mark.asyncio
-async def test_detached_retention_is_labelled_by_its_originating_endpoint() -> None:
+async def test_a_hold_for_detached_work_is_labelled_by_its_originating_endpoint() -> None:
     endpoints, conflicts, logger, _debug = _endpoints()
     release = asyncio.Event()
     task = asyncio.create_task(release.wait())

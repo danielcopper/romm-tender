@@ -312,11 +312,11 @@ class TestStartDownload:
 
         downloads.service._loop = MagicMock()
         downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
-        _create_task_calls = []
+        _spawn_calls = []
 
         def _close_coro_task(coro, _name):
             coro.close()
-            _create_task_calls.append(coro)
+            _spawn_calls.append(coro)
             return MagicMock()
 
         downloads.service._tasks.spawn = _close_coro_task
@@ -329,7 +329,7 @@ class TestStartDownload:
         # The initial status is "queued" (#1053) — the task flips it to
         # "downloading" only once it acquires the concurrency semaphore.
         assert downloads.service._download_queue[42]["status"] == "queued"
-        assert len(_create_task_calls) == 1
+        assert len(_spawn_calls) == 1
         # The download's required bytes are reserved so a sibling's pre-flight
         # accounts for the outstanding claim.
         assert 42 in downloads.service._reserved_bytes
@@ -685,7 +685,7 @@ class TestOccupiedTargetPreFlight:
 
         downloads.service._loop = MagicMock()
         downloads.service._loop.run_in_executor = _hops_answering(detail)
-        # Close the coroutine the real create_task would have owned; leaving it
+        # Close the coroutine the real spawn would have owned; leaving it
         # unawaited makes pytest raise a RuntimeWarning at collection time.
         downloads.service._tasks.spawn = MagicMock(side_effect=lambda coro, _name: (coro.close(), MagicMock())[1])
         store = downloads.service._download_file_store
@@ -1254,7 +1254,7 @@ class TestDiskSpaceMultiFile:
         downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         def _close_coro_task(coro, _name):
-            # Consume the fire-and-forget _do_download coroutine so it isn't left
+            # Consume the spawned _do_download coroutine so it isn't left
             # un-awaited (RuntimeWarning); this unit only exercises the disk-space
             # gate, not the download itself.
             coro.close()
@@ -2359,7 +2359,7 @@ class TestDoDownloadMultiFile:
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.service._do_download(55, rom_detail, target_path, "psx", "FF7.zip")
 
-        # Drain the create_task-scheduled emits marshaled onto the loop.
+        # Drain the spawned emits marshaled onto the loop.
         await asyncio.sleep(0)
         await asyncio.sleep(0)
 
@@ -4202,11 +4202,11 @@ class TestPruneDownloadQueue:
             assert i not in downloads.service._download_queue
 
 
-class TestStartDownloadCreateTaskFailure:
-    """Tests for start_download when create_task raises."""
+class TestStartDownloadSpawnFailure:
+    """Tests for start_download when spawn raises."""
 
     @pytest.mark.asyncio
-    async def test_create_task_failure_propagates_and_releases_the_flag(self, downloads, tmp_path):
+    async def test_spawn_failure_propagates_and_releases_the_flag(self, downloads, tmp_path):
 
         downloads.service._retrodeck_folders = FakeRetroDeckFolders(
             roms=str(tmp_path / "retrodeck" / "roms"),
@@ -4229,9 +4229,9 @@ class TestStartDownloadCreateTaskFailure:
         downloads.service._loop.run_in_executor = _hops_answering(rom_detail)
 
         def _raise_after_closing(coro, _name):
-            # Close the fire-and-forget _do_download coroutine before raising so it
+            # Close the spawned _do_download coroutine before raising so it
             # isn't left un-awaited (RuntimeWarning); the raise still drives the
-            # create_task-failure branch under test.
+            # spawn-failure branch under test.
             coro.close()
             raise RuntimeError("loop closed")
 
@@ -4367,7 +4367,7 @@ class TestMakeProgressCallback:
 
         # Replace the event loop with a MagicMock so call_soon_threadsafe
         # is observable without actually scheduling on the real loop.
-        # Run create_task eagerly inside call_soon_threadsafe so the
+        # Run spawn eagerly inside call_soon_threadsafe so the
         # coroutine returned by emit() gets consumed (otherwise it
         # leaks as un-awaited).
         scheduled_calls: list[int] = []
@@ -4430,7 +4430,7 @@ class TestMakeProgressCallback:
         downloads.service._clock = fake_clock
         # The queue mutation now happens inside the function marshaled onto the
         # loop thread via call_soon_threadsafe (#973), so run it eagerly to
-        # observe the in-place update; create_task just consumes the coroutine.
+        # observe the in-place update; spawn just consumes the coroutine.
         downloads.service._loop = MagicMock()
         downloads.service._loop.call_soon_threadsafe = lambda fn, *args, **kwargs: fn(*args, **kwargs)
         downloads.service._tasks.spawn = lambda coro, _name: coro.close() or MagicMock()
@@ -4818,7 +4818,7 @@ class TestProgressCallbackEvictionSafe:
 
     def _eager_loop(self, downloads):
         """Make call_soon_threadsafe run its target synchronously so the marshaled
-        ``_apply_progress`` executes in-test; create_task consumes the
+        ``_apply_progress`` executes in-test; spawn consumes the
         coroutine. Returns the recorded emit calls list.
         """
         downloads.service._loop = MagicMock()

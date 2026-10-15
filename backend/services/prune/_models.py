@@ -156,7 +156,7 @@ async def shielded(child: asyncio.Future[Any], *, on_cancel: Callable[[], None] 
     """Run *child* to its own end even when this task is cancelled.
 
     *child* is already running: a task its caller started, or an executor
-    future. The caller keeps no other handle on it, so it is awaited here.
+    future.
 
     A cancellation arriving mid-mutation must not leave the group unable to say
     what happened, so the child is awaited to completion and its outcome is

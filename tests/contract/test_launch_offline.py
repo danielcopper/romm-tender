@@ -118,7 +118,7 @@ async def test_refresh_save_status_returns_success_and_schedules_emit(harness):
     result = await harness.endpoints.refresh_save_status(3)
 
     assert result == {"success": True}
-    # Drain the fire-and-forget task scheduled via loop.create_task.
+    # Drain the task the endpoint spawned.
     pending = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
     for task in pending:
         await task

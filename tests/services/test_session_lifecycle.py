@@ -1176,7 +1176,7 @@ class TestBackgroundTaskTracking:
     """Coverage for the background-task tracking + ``shutdown()`` lifecycle.
 
     ``finalize`` schedules the achievement refresh detached from its
-    return value via ``asyncio.create_task``. Without strong refs into
+    return value via ``BackgroundTasks.spawn``. Without strong refs into
     ``_background_tasks`` and a cancellation hook in ``shutdown()``,
     those tasks outlive the backend's shutdown. These tests pin the contract.
     """

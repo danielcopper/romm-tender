@@ -438,7 +438,7 @@ class RomRemovalService:
         """Keep a cancelled call's removal claimed until *work* ends, under an operation named *label*.
 
         *on_end* gives the claim back when the thread ends. The operation is
-        retained from inside the call's ``hold(..., prune=True)`` block, so no
+        held from inside the call's ``hold(..., prune=True)`` block, so no
         cleanup starts between the call's end and the thread's.
         """
         work.add_done_callback(on_end)
