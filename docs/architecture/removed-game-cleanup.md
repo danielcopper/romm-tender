@@ -159,10 +159,10 @@ conflicts). The composition root builds it before any service and hands it on. T
 there. The conflict rules a use case checks at its entry (GLOSSARY.md → Conflict rules) hold that use case's operation
 there, hold one until detached work it starts has ended (`hold_until_done`) — a background save-status check, a
 download, the outbox flush a play session's start begins, the thread of a removal or of Uninstall all whose call was
-cancelled — and take and release the leases the use case hands the frontend: a shortcut removal's, an
-uninstall's, a core, disc or version change's, an adoption's, an artwork fetch's, the pre-launch re-confirm's and the
-start-up reconcile's, and the ones `sync_complete`, `sync_stale`, `download_complete`, `migration_relaunch_options` and
-the shortcut artwork job's `shortcut_artwork` batches carry. The lease service (`services/prune_leases.py`) renews and
+cancelled — and take and release the leases the use case hands the frontend: a shortcut removal's, an uninstall's, a
+core, disc or version change's, an adoption's, an artwork fetch's, the pre-launch re-confirm's and the start-up
+reconcile's, and the ones `sync_complete`, `sync_stale`, `download_complete`, `migration_relaunch_options` and the
+shortcut artwork job's `shortcut_artwork` batches carry. The lease service (`services/prune_leases.py`) renews and
 releases a lease by its token, and disowns the ones a gone frontend left behind; `Endpoints` reads none of it. The prune
 service takes the start's reservation through the rules' `hold_start`, before it asks the update, migration and sync
 rules. Before that it stops the shortcut artwork job (`stop_for_cleanup`), waiting for an icon being written or a batch
