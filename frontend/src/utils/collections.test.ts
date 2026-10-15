@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   addAppToCollections,
+  addToCollections,
   createOrUpdateRomMCollections,
   createOrUpdateCollections,
   clearPlatformCollection,
@@ -281,5 +282,33 @@ describe("addAppToCollections — the add-only path a sync files each game throu
     await addAppToCollections(1, "PlayStation", ["Favs"], "run-none");
 
     expect(vi.mocked(logError)).not.toHaveBeenCalled();
+  });
+});
+
+describe("addToCollections — a cancelled run's maps, added without removing", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("adds each map's games to its collection, creating a missing one, and removes none", async () => {
+    const store = stubLiveCollectionStore();
+    const platform = store.make("RomM: Nintendo 64 (test)", [6000]);
+    store.userCollections.push(platform);
+
+    await addToCollections({ "Nintendo 64": [5000, 6000] }, { Favs: [5000] });
+
+    expect([...platform.apps]).toEqual([6000, 5000]);
+    expect(platform.dnd.RemoveApps).not.toHaveBeenCalled();
+    expect([...(store.named("RomM: [Favs] (test)")?.apps ?? [])]).toEqual([5000]);
+  });
+
+  it("writes no further collection once the signal aborts", async () => {
+    const store = stubLiveCollectionStore();
+    const controller = new AbortController();
+    controller.abort();
+
+    await addToCollections({ "Nintendo 64": [5000] }, { Favs: [5000] }, controller.signal);
+
+    expect(store.NewUnsavedCollection).not.toHaveBeenCalled();
   });
 });

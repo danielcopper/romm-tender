@@ -16,6 +16,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { recheckStranded, toaster, type PanelDefinition } from "./api/host";
+import { stubLiveCollectionStore } from "./test-utils/steamStubs";
 import { emitHostEvent, hostEventListenerCount } from "./test-utils/host-event-bus";
 import { resetStrandedPanel, setStrandedAnswer } from "./test-utils/stranded-panel";
 import {
@@ -139,7 +140,9 @@ vi.mock("./utils/syncManager", () => ({
 const createOrUpdateCollections = vi.fn().mockResolvedValue(undefined);
 const createOrUpdateRomMCollections = vi.fn().mockResolvedValue(undefined);
 const clearPlatformCollection = vi.fn().mockResolvedValue(undefined);
+const addToCollections = vi.fn().mockResolvedValue(undefined);
 vi.mock("./utils/collections", () => ({
+  addToCollections: (...args: unknown[]) => addToCollections(...args),
   createOrUpdateCollections: (...args: unknown[]) => createOrUpdateCollections(...args),
   createOrUpdateRomMCollections: (...args: unknown[]) => createOrUpdateRomMCollections(...args),
   clearPlatformCollection: (...args: unknown[]) => clearPlatformCollection(...args),
@@ -1970,16 +1973,66 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
     expect(applyAllPlaytime).toHaveBeenCalledTimes(1);
   });
 
-  it("still creates/updates the reached platforms' collections on a cancelled sync", async () => {
+  it("adds the reached platforms' games to their collections on a cancelled sync, replacing nothing", async () => {
     seedCollections();
+    addToCollections.mockClear();
     panelFactory();
 
-    emitSyncComplete({ platform_app_ids: { "Nintendo 64": [1] }, total_games: 1, cancelled: true });
+    emitSyncComplete({
+      platform_app_ids: { "Nintendo 64": [1] },
+      romm_collection_app_ids: { Faves: [1] },
+      total_games: 1,
+      cancelled: true,
+    });
     await flush();
 
-    // The additive create/update path is NOT gated on cancel — the platforms
-    // that DID complete still get their collections.
-    expect(createOrUpdateCollections).toHaveBeenCalledWith({ "Nintendo 64": [1] }, undefined, expect.any(AbortSignal));
+    expect(addToCollections).toHaveBeenCalledWith({ "Nintendo 64": [1] }, { Faves: [1] }, expect.any(AbortSignal));
+    expect(createOrUpdateCollections).not.toHaveBeenCalled();
+    expect(createOrUpdateRomMCollections).not.toHaveBeenCalled();
+  });
+
+  describe("over a collection the run filed a game into that its map lacks", () => {
+    // The real collection writes, over a store that keeps what each collection
+    // holds: a cancelled run's map lacks the game of its last, unacked chunk.
+    async function prefilled(): Promise<{ apps: Set<number>; RemoveApps: ReturnType<typeof vi.fn> }> {
+      const actual = await vi.importActual<typeof import("./utils/collections")>("./utils/collections");
+      addToCollections.mockImplementation(actual.addToCollections);
+      createOrUpdateCollections.mockImplementation(actual.createOrUpdateCollections);
+      const store = stubLiveCollectionStore();
+      const collection = store.make(`RomM: Nintendo 64 (${await actual.getHostname()})`, [6000]);
+      store.userCollections.push(collection);
+      return { apps: collection.apps, RemoveApps: collection.dnd.RemoveApps };
+    }
+
+    afterEach(() => {
+      addToCollections.mockReset();
+      addToCollections.mockResolvedValue(undefined);
+      createOrUpdateCollections.mockReset();
+      createOrUpdateCollections.mockResolvedValue(undefined);
+    });
+
+    it("a cancelled sync keeps the game and adds the map's games", async () => {
+      const collection = await prefilled();
+      panelFactory();
+
+      emitSyncComplete({ platform_app_ids: { "Nintendo 64": [5000] }, total_games: 1, cancelled: true });
+      await vi.waitFor(() => expect([...collection.apps]).toEqual([6000, 5000]));
+
+      expect(collection.RemoveApps).not.toHaveBeenCalled();
+      expect(createOrUpdateCollections).not.toHaveBeenCalled();
+    });
+
+    it("a completed sync still replaces the collection with its map", async () => {
+      const collection = await prefilled();
+      panelFactory();
+
+      emitSyncComplete({ platform_app_ids: { "Nintendo 64": [5000] }, total_games: 1 });
+      await vi.waitFor(() => expect(createOrUpdateCollections).toHaveBeenCalled());
+      await flush();
+
+      expect(addToCollections).not.toHaveBeenCalled();
+      expect([...collection.apps]).toEqual([5000]);
+    });
   });
 });
 

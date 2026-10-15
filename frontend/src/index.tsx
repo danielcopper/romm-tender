@@ -47,6 +47,7 @@ import {
   logInfo,
 } from "./api/backend";
 import {
+  addToCollections,
   createOrUpdateCollections,
   createOrUpdateRomMCollections,
   clearPlatformCollection,
@@ -786,6 +787,10 @@ const tender = definePanel(() => {
 
     const reconcileCollections = async (signal: AbortSignal): Promise<void> => {
       try {
+        if (data.cancelled) {
+          await addToCollections(data.platform_app_ids, data.romm_collection_app_ids ?? {}, signal);
+          return;
+        }
         if (Object.keys(data.platform_app_ids).length > 0) {
           await createOrUpdateCollections(data.platform_app_ids, undefined, signal);
         }
@@ -794,7 +799,7 @@ const tender = definePanel(() => {
           await createOrUpdateRomMCollections(data.romm_collection_app_ids, undefined, signal);
         }
         if (isPruneLeaseCancelled(signal)) return;
-        if (!data.cancelled && typeof collectionStore !== "undefined") {
+        if (typeof collectionStore !== "undefined") {
           await removeStaleCollections(
             Object.keys(data.platform_app_ids),
             Object.keys(data.romm_collection_app_ids ?? {}),
@@ -977,10 +982,9 @@ const tender = definePanel(() => {
     }).catch((e: unknown) => logError(`sync_stale: stale shortcut removal failed: ${e}`));
   });
 
-  // ``sync_collections`` carries the same complete maps ``sync_complete`` does,
-  // and only ``sync_complete`` writes them: a game reaches its collections one
-  // by one while the run applies it (syncManager), and the complete set is
-  // written once the run has ended.
+  // ``sync_collections`` carries the same maps ``sync_complete`` does, and only
+  // ``sync_complete`` writes them; how collections are written is
+  // docs/architecture/steam-non-steam-shortcuts.md, "Collection management".
   addEventListener<SyncCollectionsData>("sync_collections", (data: SyncCollectionsData) => {
     logInfo(`sync_collections received: ${Object.keys(data.platform_app_ids).length} platforms`);
   });

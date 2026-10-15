@@ -1679,7 +1679,7 @@ describe("syncManager — files each game into its collections while the run app
     expect(existing.dnd.RemoveApps).not.toHaveBeenCalled();
   });
 
-  it("a cancelled run keeps the games it filed and removes nothing", async () => {
+  it("a cancel mid-chunk keeps the games already filed and removes nothing from their collection", async () => {
     const store = stubLiveCollectionStore();
     addShortcut.mockImplementation(async (item: { rom_id: number }) => {
       if (item.rom_id === 1) requestSyncCancel();

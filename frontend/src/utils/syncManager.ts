@@ -337,10 +337,6 @@ async function processCoverRefreshes(data: SyncApplyUnitData): Promise<void> {
  * chunk's ``cover_refreshes`` list and is re-applied by
  * {@link processCoverRefreshes} (#1386). A cover failure is fail-soft and never
  * fails the item/chunk.
- *
- * Every shortcut with an appId is then filed into the collections its entry
- * names ({@link addAppToCollections}), so a collection appears with its first
- * game and fills while the run goes on.
  */
 async function processUnitShortcuts(
   data: SyncApplyUnitData,

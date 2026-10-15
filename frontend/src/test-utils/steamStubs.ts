@@ -62,7 +62,7 @@ export interface LiveCollection {
 
 /**
  * A `collectionStore` whose collections hold the appIds their `AddApps` /
- * `RemoveApps` leave them with, and whose `Save` lists a new collection in
+ * `RemoveApps` leave them with (read through `apps` and `allApps`), and whose `Save` lists a new collection in
  * `userCollections` — unless `listsOnSave` is off, which stands for Steam not
  * listing a just-saved collection yet.
  */
@@ -83,7 +83,9 @@ export function stubLiveCollectionStore(options: { listsOnSave?: boolean } = {})
       id: `id-${displayName}`,
       displayName,
       apps,
-      allApps: [],
+      get allApps() {
+        return [...apps].map((appid) => ({ appid }));
+      },
       AsDragDropCollection: () => dnd,
       Save: vi.fn(() => {
         if (listsOnSave && !userCollections.includes(collection)) userCollections.push(collection);

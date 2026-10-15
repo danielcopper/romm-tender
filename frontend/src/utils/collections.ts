@@ -194,11 +194,9 @@ export async function createOrUpdateRomMCollections(
 
 /**
  * The collections {@link addAppToCollections} created in one run, by folded
- * name. Consulted when `collectionStore.userCollections` does not list a name:
- * whether Steam lists a collection there as soon as its first `Save()`
- * resolves is not established, and creating the same name a second time
- * overwrites the first collection and the game in it. Keyed by `run_id`, so a
- * new run starts empty.
+ * name, consulted where `collectionStore.userCollections` does not list one —
+ * why is docs/architecture/steam-non-steam-shortcuts.md, "Collection
+ * management". Keyed by `run_id`, so a new run starts empty.
  */
 let _createdThisRun: { runId: string; byFold: Map<string, SteamCollection> } | null = null;
 
@@ -207,13 +205,23 @@ function collectionsCreatedIn(runId: string): Map<string, SteamCollection> {
   return _createdThisRun.byFold;
 }
 
-async function addAppToCollection(appId: number, collectionName: string, runId: string): Promise<void> {
+/**
+ * Add *appIds* to one collection, creating it holding them if it is missing.
+ * Only the appIds it does not hold yet are written; nothing is removed.
+ * *created* records the collections a run created, or is `null` where only the
+ * store is asked.
+ */
+async function addAppsToCollection(
+  appIds: number[],
+  collectionName: string,
+  created: Map<string, SteamCollection> | null,
+): Promise<void> {
   const target = foldCollectionName(collectionName);
-  const created = collectionsCreatedIn(runId);
   const existing =
-    collectionStore.userCollections.find((c) => foldCollectionName(c.displayName) === target) ?? created.get(target);
-  if (existing?.apps.has(appId)) return;
-  const overviews = getOverviews([appId]);
+    collectionStore.userCollections.find((c) => foldCollectionName(c.displayName) === target) ?? created?.get(target);
+  const missing = existing ? appIds.filter((appId) => !existing.apps.has(appId)) : appIds;
+  if (missing.length === 0) return;
+  const overviews = getOverviews(missing);
   if (existing) {
     existing.AsDragDropCollection().AddApps(overviews);
     await existing.Save();
@@ -222,16 +230,16 @@ async function addAppToCollection(appId: number, collectionName: string, runId: 
   const collection = collectionStore.NewUnsavedCollection(collectionName, undefined, []);
   collection.AsDragDropCollection().AddApps(overviews);
   await collection.Save();
-  created.set(target, collection);
-  logInfo(`Created collection "${collectionName}" with its first game`);
+  created?.set(target, collection);
+  logInfo(`Created collection "${collectionName}" with ${missing.length} apps`);
 }
 
 /**
  * File one shortcut into the collections the backend named for it, while a sync
  * runs. Only adds: a collection that is missing is created holding this game,
  * and nothing is ever removed — the complete set of each collection is written
- * once the run completes. A failure on one collection is logged and the others
- * still run; nothing here throws.
+ * once a run completes (`onSyncComplete`). A failure on one collection is logged
+ * and the others still run; nothing here throws.
  */
 export async function addAppToCollections(
   appId: number,
@@ -241,15 +249,49 @@ export async function addAppToCollections(
 ): Promise<void> {
   if (typeof collectionStore === "undefined") return;
   const hostname = await getHostname();
+  const created = collectionsCreatedIn(runId);
   const names = [
     ...(platformCollection === null ? [] : [platformCollectionName(platformCollection, hostname)]),
     ...rommCollections.map((key) => rommCollectionName(key, hostname)),
   ];
   for (const name of names) {
     try {
-      await addAppToCollection(appId, name, runId);
+      await addAppsToCollection([appId], name, created);
     } catch (e) {
       logError(`Failed to add appId ${appId} to collection "${name}": ${e}`);
+    }
+  }
+}
+
+/**
+ * Add the games of a cancelled run's maps to their collections, removing none:
+ * such a run's maps hold only what it reached, so they are not each collection's
+ * complete set. A failure on one collection is logged and the rest still run;
+ * an abort stops the run.
+ */
+export async function addToCollections(
+  platformAppIds: Record<string, number[]>,
+  collectionAppIds: Record<string, number[]>,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (typeof collectionStore === "undefined") return;
+  const hostname = await getHostname();
+  const entries: Array<[string, number[]]> = [
+    ...Object.entries(platformAppIds).map(([name, ids]): [string, number[]] => [
+      platformCollectionName(name, hostname),
+      ids,
+    ]),
+    ...Object.entries(collectionAppIds).map(([key, ids]): [string, number[]] => [
+      rommCollectionName(key, hostname),
+      ids,
+    ]),
+  ];
+  for (const [name, appIds] of entries) {
+    if (signal?.aborted) return;
+    try {
+      await addAppsToCollection(appIds, name, null);
+    } catch (e) {
+      logError(`Failed to add ${appIds.length} apps to collection "${name}": ${e}`);
     }
   }
 }
