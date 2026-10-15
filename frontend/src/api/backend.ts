@@ -967,7 +967,6 @@ export interface PrunePreviewResult {
 export interface StartPruneRequest {
   preview_id: string;
   confirmed: boolean;
-  repoint_shortcuts: boolean;
   remove_rows: boolean;
   remove_fully_vanished: boolean;
   create_recovery_bundle: boolean;

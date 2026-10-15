@@ -46,13 +46,12 @@ def parse_preview_request(
 
 def parse_options(request: dict[str, Any], include_installed_rom_ids: frozenset[int]) -> PruneOptions:
     """Validate explicit one-run destructive options."""
-    keys = ("repoint_shortcuts", "remove_rows", "remove_fully_vanished", "create_recovery_bundle")
+    keys = ("remove_rows", "remove_fully_vanished", "create_recovery_bundle")
     if any(type(request.get(key)) is not bool for key in keys):
         raise Refused("invalid_options", "Every cleanup option must be explicitly true or false.")
     if not request["create_recovery_bundle"] and include_installed_rom_ids:
         raise Refused("invalid_options", "Installed content cannot be selected when recovery is disabled.")
     return PruneOptions(
-        repoint_shortcuts=request["repoint_shortcuts"],
         remove_rows=request["remove_rows"],
         remove_fully_vanished=request["remove_fully_vanished"],
         create_recovery_bundle=request["create_recovery_bundle"],

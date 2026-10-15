@@ -616,7 +616,6 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
     () => setStatus((current) => (current === listRefusal.current ? "" : current)),
     [],
   );
-  const [repoint, setRepoint] = useState(true);
   const [removeRows, setRemoveRows] = useState(true);
   const [removeDeadGames, setRemoveDeadGames] = useState(true);
   const [recovery, setRecovery] = useState(true);
@@ -677,7 +676,7 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
     destructiveConfirmed,
     insufficientSpace,
     unknownSelectedSize,
-    anyOptionChosen: repoint || removeRows || removeDeadGames,
+    anyOptionChosen: removeRows || removeDeadGames,
   });
   // Disabled ONLY where a press is unsafe or meaningless: a run is already
   // going, or this dialog is showing a finished one. Every other reason to
@@ -788,7 +787,6 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
         startPrune({
           preview_id: initial.preview_id,
           confirmed: true,
-          repoint_shortcuts: repoint,
           remove_rows: removeRows,
           remove_fully_vanished: removeDeadGames,
           create_recovery_bundle: recovery,
@@ -899,20 +897,13 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
                 control itself, which strands the text off the top on a controller. */}
             <div onFocus={scrollNearestToTop}>
               <ToggleField
-                label="Repoint vanished shortcuts"
-                description="Each to its game's live default version, keeping the shortcut."
-                checked={repoint}
+                label="Remove gone versions"
+                description="The confirmed rows and their installed content, in games that still have a live version."
+                checked={removeRows}
                 disabled={runInFlight}
-                onChange={setRepoint}
+                onChange={setRemoveRows}
               />
             </div>
-            <ToggleField
-              label="Remove gone versions"
-              description="The confirmed rows and their installed content, in games that still have a live version."
-              checked={removeRows}
-              disabled={runInFlight}
-              onChange={setRemoveRows}
-            />
           </Focusable>
           <Focusable flow-children="vertical" style={{ flex: "1 1 0", minWidth: 0 }}>
             <ToggleField

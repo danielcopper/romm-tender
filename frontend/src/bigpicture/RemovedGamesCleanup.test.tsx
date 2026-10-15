@@ -119,7 +119,6 @@ function contentToggleFor(modal: RenderResult, gameName: string): HTMLInputEleme
  * only while the recovery bundle is switched off.
  */
 const OPTION_LABELS = {
-  repoint: "Repoint vanished shortcuts",
   removeRows: "Remove gone versions",
   removeDeadGames: "Remove fully vanished games",
   recovery: "Create recovery bundle",
@@ -210,7 +209,6 @@ describe("RemovedGamesCleanup", () => {
     // Whole-game removal is on: it is what the dialog exists for, and the
     // default-on recovery bundle is what makes it recoverable. Per-ROM content
     // stays off — it is the only one that can exhaust the disk.
-    expect(optionToggleFor(modal, OPTION_LABELS.repoint).checked).toBe(true);
     expect(optionToggleFor(modal, OPTION_LABELS.removeRows).checked).toBe(true);
     expect(optionToggleFor(modal, OPTION_LABELS.removeDeadGames).checked).toBe(true);
     expect(optionToggleFor(modal, OPTION_LABELS.recovery).checked).toBe(true);
@@ -231,6 +229,13 @@ describe("RemovedGamesCleanup", () => {
     expect(modal.container.textContent).toContain("doesn't fit in the free space");
   });
 
+  it("offers no option that moves a vanished version's shortcut onto another version", async () => {
+    await openRemovedGamesCleanupModal();
+    const modal = render(shownModal());
+
+    expect(modal.container.textContent).not.toMatch(/repoint/i);
+  });
+
   it("submits all temporary options and re-enables confirmation after a failed start", async () => {
     vi.mocked(backend.startPrune).mockRejectedValueOnce(new Error("bridge offline"));
     await openRemovedGamesCleanupModal();
@@ -244,7 +249,6 @@ describe("RemovedGamesCleanup", () => {
     expect(vi.mocked(backend.startPrune)).toHaveBeenCalledWith({
       preview_id: "preview-1",
       confirmed: true,
-      repoint_shortcuts: true,
       remove_rows: true,
       remove_fully_vanished: true,
       create_recovery_bundle: true,
@@ -632,7 +636,7 @@ describe("RemovedGamesCleanup", () => {
     expect(modal.container.textContent).toContain("Without a backup, the downloaded ROM file is deleted");
   });
 
-  it("allows a repoint-only run and resets an old completion when opening", async () => {
+  it("allows a run with one option off and resets an old completion when opening", async () => {
     setPruneComplete({
       success: true,
       partial: false,
@@ -809,10 +813,9 @@ describe("RemovedGamesCleanup", () => {
       fireEvent.click(optionToggleFor(modal, OPTION_LABELS.recovery));
 
       const column = (label: string) => optionToggleFor(modal, label).closest('[data-testid="focusable"]')!;
-      expect(column(OPTION_LABELS.repoint)).toBe(column(OPTION_LABELS.removeRows));
       expect(column(OPTION_LABELS.removeDeadGames)).toBe(column(OPTION_LABELS.recovery));
       expect(column(OPTION_LABELS.confirmWithoutRecovery)).toBe(column(OPTION_LABELS.recovery));
-      expect(column(OPTION_LABELS.repoint)).not.toBe(column(OPTION_LABELS.recovery));
+      expect(column(OPTION_LABELS.removeRows)).not.toBe(column(OPTION_LABELS.recovery));
     });
 
     it("puts the run's controls between the options and the table, where focus reaches them first", async () => {
@@ -1365,7 +1368,7 @@ describe("RemovedGamesCleanup", () => {
       const scrollTo = vi.fn();
       body.scrollTo = scrollTo as unknown as typeof body.scrollTo;
 
-      fireEvent.focusIn(optionToggleFor(modal, OPTION_LABELS.repoint));
+      fireEvent.focusIn(optionToggleFor(modal, OPTION_LABELS.removeRows));
       expect(scrollTo).not.toHaveBeenCalled();
       act(() => {
         vi.runAllTimers();

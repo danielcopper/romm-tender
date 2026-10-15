@@ -6,7 +6,6 @@ import re
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 from domain.identity import DISPLAY_NAME
-from domain.sibling_resolution import fs_name_stem, resolve_group_representative
 
 
 class BundleGameRow(TypedDict):
@@ -36,9 +35,8 @@ class BundleReadmeContext(TypedDict):
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Mapping, Sequence
 
-    from domain.rom import Rom
 
 _UNSAFE_PACKAGE_RUN = re.compile(r"[^A-Za-z0-9._-]+", re.ASCII)
 _SAFE_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$", re.ASCII)
@@ -238,34 +236,3 @@ def liveness_guard(
         verdict = verdicts[vanished_source_id]
         return verdict["reason"], f"Vanished source {vanished_source_id}: {verdict['message']}"
     return None
-
-
-def natural_default(rows: Iterable[Rom], live_ids: set[int], preferred_region: str) -> int | None:
-    """Pick the live row a repointed shortcut should bind to, or ``None``.
-
-    Runs the same representative resolution the library sync uses, restricted to
-    the group's live rows and with no installed/bound bias — the shortcut is
-    about to move, so what it points at today may not influence where it lands.
-    ``None`` when the group's live rows cannot yield one.
-    """
-    candidates = [
-        {
-            "rom_id": row.rom_id,
-            "is_main_sibling": row.is_main_sibling,
-            "regions": list(row.regions),
-            "revision": row.revision,
-            "tags": list(row.tags),
-            "fs_name_no_ext": fs_name_stem(row.fs_name),
-        }
-        for row in rows
-        if row.rom_id in live_ids
-    ]
-    try:
-        return resolve_group_representative(
-            candidates,
-            installed_rom_ids=set(),
-            bound_rom_ids=set(),
-            preferred_region=preferred_region,
-        )
-    except (KeyError, ValueError):
-        return None

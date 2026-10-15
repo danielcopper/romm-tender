@@ -160,7 +160,6 @@ async def test_unbound_exact_404_cleanup_deletes_real_aggregate_and_emits_comple
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
-            "repoint_shortcuts": True,
             "remove_rows": True,
             "remove_fully_vanished": True,
             "create_recovery_bundle": False,
@@ -202,7 +201,6 @@ async def test_a_misrouted_404_removes_nothing_over_the_real_wire(harness):
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
-            "repoint_shortcuts": True,
             "remove_rows": True,
             "remove_fully_vanished": True,
             "create_recovery_bundle": False,
@@ -229,7 +227,6 @@ async def test_cancel_prune_stops_the_running_run_over_the_real_wire(harness):
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
-            "repoint_shortcuts": True,
             "remove_rows": True,
             "remove_fully_vanished": True,
             "create_recovery_bundle": False,
@@ -274,7 +271,6 @@ async def test_a_cleanup_refuses_conflicting_endpoints_from_its_start_to_its_end
             {
                 "preview_id": preview["preview_id"],
                 "confirmed": True,
-                "repoint_shortcuts": True,
                 "remove_rows": True,
                 "remove_fully_vanished": True,
                 "create_recovery_bundle": False,
@@ -360,7 +356,6 @@ async def test_detached_writer_lifetime_blocks_prune_start(harness, monkeypatch,
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
-            "repoint_shortcuts": True,
             "remove_rows": True,
             "remove_fully_vanished": True,
             "create_recovery_bundle": False,
@@ -380,7 +375,6 @@ async def test_detached_writer_lifetime_blocks_prune_start(harness, monkeypatch,
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
-            "repoint_shortcuts": True,
             "remove_rows": True,
             "remove_fully_vanished": True,
             "create_recovery_bundle": False,
@@ -408,7 +402,6 @@ async def test_frontend_core_continuation_lease_blocks_prune_until_ack(harness, 
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
-            "repoint_shortcuts": True,
             "remove_rows": True,
             "remove_fully_vanished": True,
             "create_recovery_bundle": False,
@@ -422,7 +415,6 @@ async def test_frontend_core_continuation_lease_blocks_prune_until_ack(harness, 
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
-            "repoint_shortcuts": True,
             "remove_rows": True,
             "remove_fully_vanished": True,
             "create_recovery_bundle": False,
@@ -446,7 +438,7 @@ async def _wait_for_prune_action(harness, action: str, *, timeout: float = 5.0):
         await asyncio.sleep(0.01)
 
 
-async def test_recovery_on_repoint_uses_real_save_inventory_filesystem_and_sqlite(harness):
+async def test_a_bound_vanished_version_with_a_live_sibling_keeps_its_shortcut_row_and_files(harness):
     app_id = 0x80000041
     source = Rom.synced(
         rom_id=41,
@@ -515,61 +507,32 @@ async def test_recovery_on_repoint_uses_real_save_inventory_filesystem_and_sqlit
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
-            "repoint_shortcuts": True,
             "remove_rows": True,
             "remove_fully_vanished": False,
             "create_recovery_bundle": True,
             "installed_selection_id": staged["selection_id"],
         }
     )
-    action = await _wait_for_prune_action(harness, "repoint_shortcut")
-    claim = await harness.endpoints.report_prune_action(
-        {
-            "phase": "claim",
-            "run_id": action["run_id"],
-            "action_token": action["action_token"],
-            "action": action["action"],
-            "app_id": action["app_id"],
-            "target_rom_id": action["target_rom_id"],
-        }
-    )
-    assert claim["success"] is True
-    assert (
-        await harness.endpoints.report_prune_action(
-            {
-                "phase": "complete",
-                "run_id": action["run_id"],
-                "action_token": action["action_token"],
-                "success": True,
-                "message": "Steam confirmed the launch command.",
-            }
-        )
-    )["success"] is True
     task = harness.app.services.prune_service._task
     assert task is not None
     await task
 
-    with harness.uow_factory() as uow:
-        assert uow.roms.get(41) is None
-        bound = uow.roms.get(42)
-        assert bound is not None
-        assert bound.shortcut_app_id == app_id
-        assert uow.rom_installs.get(41) is None
-        assert uow.rom_save_sync_states.get(41) is None
     assert started["success"] is True
-    assert not rom_path.exists()
-    assert not save_path.exists()
-    backups = list((save_path.parent / ".romm-backup").glob("Removed Game_*.srm"))
-    assert len(backups) == 1
-    assert backups[0].read_bytes() == b"local save"
+    with harness.uow_factory() as uow:
+        kept = uow.roms.get(41)
+        assert kept is not None
+        assert kept.shortcut_app_id == app_id
+        live = uow.roms.get(42)
+        assert live is not None
+        assert live.shortcut_app_id is None
+        assert uow.rom_installs.get(41) is not None
+    assert rom_path.read_bytes() == b"installed rom"
+    assert save_path.read_bytes() == b"local save"
+    events = [call.args[0] for call in harness.emit.await_args_list]
+    assert "prune_action_required" not in events
     complete = [call.args[1] for call in harness.emit.await_args_list if call.args[0] == "prune_complete"][-1]
-    result = complete["results"][0]
-    assert result["status"] == "removed"
-    assert result["committed_action"] == "repoint_shortcut"
-    assert {"save_quarantine", "installed_rom_content"} <= set(result["mutations"])
-    bundle = Path(result["bundle_path"])
-    manifest = json.loads((bundle / "manifest.json").read_text())
-    assert {item["kind"] for item in manifest["artifacts"]} >= {"current_save", "installed_rom"}
+    assert complete["removed_rom_ids"] == []
+    assert complete["results"][0]["reason"] == "options_excluded"
 
 
 async def test_stage_selection_rejects_a_foreign_preview_id(harness):
@@ -714,7 +677,6 @@ async def test_full_purge_leaves_save_states_completely_untouched(harness):
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
-            "repoint_shortcuts": True,
             "remove_rows": True,
             "remove_fully_vanished": True,
             "create_recovery_bundle": True,
@@ -760,7 +722,6 @@ async def test_without_a_rom_root_the_cleanup_runs_and_reports_the_files_it_coul
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
-            "repoint_shortcuts": True,
             "remove_rows": True,
             "remove_fully_vanished": True,
             "create_recovery_bundle": True,
@@ -810,7 +771,6 @@ async def _run_installed_cleanup(harness, rom_ids: list[int]) -> dict[str, Any]:
         {
             "preview_id": preview["preview_id"],
             "confirmed": True,
-            "repoint_shortcuts": True,
             "remove_rows": True,
             "remove_fully_vanished": True,
             "create_recovery_bundle": True,

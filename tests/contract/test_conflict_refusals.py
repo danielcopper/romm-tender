@@ -57,7 +57,6 @@ _PRUNE_PREVIEW_REQUEST = {"scope": "bulk", "rom_id": None, "preview_id": None, "
 _START_PRUNE_REQUEST = {
     "preview_id": "no-such-preview",
     "confirmed": True,
-    "repoint_shortcuts": True,
     "remove_rows": True,
     "remove_fully_vanished": True,
     "create_recovery_bundle": False,

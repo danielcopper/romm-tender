@@ -55,7 +55,6 @@ class PrunePreview:
 class PruneOptions:
     """One-run user choices; never persisted."""
 
-    repoint_shortcuts: bool
     remove_rows: bool
     remove_fully_vanished: bool
     create_recovery_bundle: bool

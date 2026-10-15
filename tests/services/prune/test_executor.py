@@ -61,7 +61,6 @@ def _preview(rows: list[Rom], namespace: str) -> PrunePreview:
 
 def _options() -> PruneOptions:
     return PruneOptions(
-        repoint_shortcuts=False,
         remove_rows=True,
         remove_fully_vanished=True,
         create_recovery_bundle=False,

@@ -124,7 +124,6 @@ class PruneExecutor:
                 liveness=self._liveness,
                 active_downloads=config.active_downloads,
                 drift_probe=config.drift_probe,
-                settings=config.settings,
             ),
         )
         self._steam = SteamActionRunner(
@@ -219,7 +218,7 @@ class PruneExecutor:
         """
         self._logger.info(
             f"Cleanup run {run_id} starting: {groups} group(s), {len(preview.candidate_ids)} candidate(s), "
-            f"scope={preview.scope}, repoint={options.repoint_shortcuts}, remove_rows={options.remove_rows}, "
+            f"scope={preview.scope}, remove_rows={options.remove_rows}, "
             f"remove_fully_vanished={options.remove_fully_vanished}, recovery={options.create_recovery_bundle}, "
             f"installed_content_selected={len(options.include_installed_rom_ids)}"
         )
