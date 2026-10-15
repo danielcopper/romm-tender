@@ -28,13 +28,17 @@ export async function executeRomUninstall(options: RomUninstallOptions): Promise
   const { romId, appId, romName, leaseOwner, tag = "handleUninstall", context = "ROM uninstall" } = options;
   const currentAdmission = capturePruneLeaseAdmission(leaseOwner);
 
-  try {
-    const result = await removeRom(romId);
-    if (!result.success) {
-      showToast(result.message || "Uninstall failed");
-      return false;
-    }
+  const result = await removeRom(romId).catch(() => null);
+  if (!result) {
+    showToast("Uninstall failed");
+    return false;
+  }
+  if (!result.success) {
+    showToast(result.message || "Uninstall failed");
+    return false;
+  }
 
+  try {
     // Reset the shortcut's now-stale launch command to the uninstalled ""
     // placeholder under the removal's lease. The reset keeps a raced-past
     // not_installed launch from exec'ing a stale `flatpak run … '<path>'` (#1051);
@@ -58,9 +62,8 @@ export async function executeRomUninstall(options: RomUninstallOptions): Promise
     showToast(`${romName || "ROM"} uninstalled`);
     return true;
   } catch (e) {
-    // A throw once the page's admission is stale is its teardown, not a failure the
-    // user can act on: the page is gone, and where the lease was refused the backend
-    // uninstall had already committed.
+    // The backend uninstall has committed, so a throw once the page's admission is
+    // stale is its teardown, not a failure the user can act on.
     if (isPruneLeaseCancellation(e, currentAdmission)) {
       detach(debugLog(`${tag}: continuation was cancelled: ${e}`));
       return false;

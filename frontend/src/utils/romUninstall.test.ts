@@ -97,9 +97,11 @@ describe("executeRomUninstall", () => {
     uninstalls.stop();
   });
 
-  it("handles teardown cancellation by logging to debugLog and suppressing toast", async () => {
-    const error = new pruneLease.PruneLeaseAdmissionCancelled("unmounted");
-    vi.mocked(backend.removeRom).mockRejectedValueOnce(error);
+  it("logs a cancelled continuation and says nothing failed when the page is left before the removal's lease is taken", async () => {
+    vi.mocked(backend.removeRom).mockImplementationOnce(async () => {
+      await pruneLease.releasePruneLeasesByOwner("test-owner");
+      return { success: true, message: "", prune_lease_token: "test-token" };
+    });
 
     const removed = await executeRomUninstall({
       romId: 42,
@@ -114,6 +116,27 @@ describe("executeRomUninstall", () => {
       expect.stringContaining("handleUninstall: continuation was cancelled"),
     );
     expect(toast.showToast).not.toHaveBeenCalled();
+  });
+
+  it("says the uninstall failed when the removal itself fails after the page was left", async () => {
+    vi.mocked(backend.removeRom).mockImplementationOnce(async () => {
+      await pruneLease.releasePruneLeasesByOwner("test-owner");
+      throw new Error("connection_lost");
+    });
+    const uninstalls = listenForUninstalls();
+
+    const removed = await executeRomUninstall({
+      romId: 42,
+      appId: 100,
+      romName: "Super Mario 64",
+      leaseOwner: "test-owner",
+    });
+
+    expect(removed).toBe(false);
+    expect(toast.showToast).toHaveBeenCalledWith("Uninstall failed");
+    expect(backend.debugLog).not.toHaveBeenCalled();
+    expect(uninstalls.romIds).toEqual([]);
+    uninstalls.stop();
   });
 
   it("handles unexpected exceptions by displaying a toast", async () => {
@@ -139,20 +162,35 @@ describe("executeRomUninstall", () => {
 
     const uninstalls = listenForUninstalls();
 
-    // Spy on withPruneLease and pass an aborted signal
+    // Run the continuation with an aborted signal, and hold the lease until the
+    // test lets it go.
+    let releaseLease!: () => void;
+    const leaseReleased = new Promise<void>((resolve) => {
+      releaseLease = resolve;
+    });
     const withPruneLeaseSpy = vi
       .spyOn(pruneLease, "withPruneLease")
       .mockImplementationOnce(async (_token, _ctx, op) => {
         const controller = new AbortController();
         controller.abort();
-        return op(controller.signal);
+        const result = await op(controller.signal);
+        await leaseReleased;
+        return result;
       });
 
-    const removed = await executeRomUninstall({
+    const removal = executeRomUninstall({
       romId: 42,
       appId: 100,
       leaseOwner: "test-owner",
     });
+    for (let index = 0; index < 10; index++) await Promise.resolve();
+
+    // Nothing is announced while the removal's lease is held.
+    expect(withPruneLeaseSpy).toHaveBeenCalled();
+    expect(uninstalls.romIds).toEqual([]);
+
+    releaseLease();
+    const removed = await removal;
 
     expect(removed).toBe(true);
     expect(setLaunchOptionsConfirmed).not.toHaveBeenCalled();

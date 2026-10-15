@@ -3478,7 +3478,16 @@ describe("RomMPlaySection", () => {
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body: "Uninstall failed" }));
     });
 
-    it("throw caused by unmount → no toast, debug-logged instead (non-vacuous catch)", async () => {
+    interface Removal {
+      resolve: (result: backend.BackendResult) => void;
+      reject: (error: unknown) => void;
+    }
+
+    /**
+     * Press Uninstall, then leave the game page while the removal is in flight;
+     * the returned function answers the removal with *settle*.
+     */
+    async function uninstallThenLeave(): Promise<(settle: (removal: Removal) => void) => Promise<void>> {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 42,
@@ -3488,36 +3497,51 @@ describe("RomMPlaySection", () => {
       await flushAsync();
       const items = await openRomMMenuAndGetItems(testAppId);
 
-      let rejectRemove!: (error: unknown) => void;
-      vi.mocked(backend.removeRom).mockImplementation(
-        () =>
-          new Promise((_resolve, reject) => {
-            rejectRemove = reject;
-          }),
+      let removal!: Removal;
+      vi.mocked(backend.removeRom).mockReturnValue(
+        new Promise((resolve, reject) => {
+          removal = { resolve, reject };
+        }),
       );
       // The click's synchronous state update belongs inside act; the returned
-      // promise stays pending until rejectRemove below.
+      // promise stays pending until the removal is answered.
       let uninstall: unknown;
       await act(async () => {
         uninstall = items[items.length - 1]!.props.onClick?.();
       });
       await flushAsync();
 
-      // The user leaves the game page while the uninstall is still in flight.
       view.unmount();
       vi.mocked(toaster.toast).mockClear();
       vi.mocked(backend.debugLog).mockClear();
-      await act(async () => {
-        rejectRemove(new Error("teardown cancelled the endpoint call"));
-        await uninstall;
-        for (let i = 0; i < 6; i++) await Promise.resolve();
-      });
+      return async (settle) => {
+        await act(async () => {
+          settle(removal);
+          await uninstall;
+          for (let i = 0; i < 6; i++) await Promise.resolve();
+        });
+      };
+    }
 
-      // Post-catch state: no user-facing failure for work that already committed,
-      // and the cancellation is recorded on the debug channel instead.
+    it("a removal that lands after the page was left → no toast, debug-logged instead (non-vacuous catch)", async () => {
+      const answer = await uninstallThenLeave();
+
+      await answer((removal) => removal.resolve({ success: true, message: "", prune_lease_token: "uninstall-lease" }));
+
       expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
       expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(
         expect.stringContaining("handleUninstall: continuation was cancelled"),
+      );
+    });
+
+    it("a removal that fails after the page was left → toasts 'Uninstall failed'", async () => {
+      const answer = await uninstallThenLeave();
+
+      await answer((removal) => removal.reject(new Error("connection_lost")));
+
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body: "Uninstall failed" }));
+      expect(vi.mocked(backend.debugLog)).not.toHaveBeenCalledWith(
+        expect.stringContaining("continuation was cancelled"),
       );
     });
   });

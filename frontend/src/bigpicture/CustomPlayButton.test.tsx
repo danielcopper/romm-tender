@@ -1225,8 +1225,10 @@ describe("CustomPlayButton — uninstall resets launch_options (#1051)", () => {
     await clickUninstall(container);
     expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, "");
 
-    // Leaving the page aborts the removal's continuation while the reset runs.
+    // Leaving the page aborts the removal's continuation while the reset runs;
+    // the uninstall is announced only once the reset has settled.
     unmount();
+    expect(uninstalls.romIds).toEqual([]);
     await act(async () => {
       finishReset(true);
       for (let index = 0; index < 10; index++) await Promise.resolve();
