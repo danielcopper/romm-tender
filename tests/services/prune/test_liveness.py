@@ -379,3 +379,26 @@ class TestLiveRomIds:
         assert prober.live_rom_ids() == frozenset()
         prober.bind_run("run-2", romm_namespace(_NAMESPACE_SETTINGS))
         assert prober.live_rom_ids() == frozenset()
+
+    async def test_a_live_answer_after_a_namespace_change_is_not_recorded(self):
+        """The run clears the marks of exactly these ids, so a ROM another server returned clears none."""
+        settings = dict(_NAMESPACE_SETTINGS)
+
+        class _SwitchingReader(_FakeRomReader):
+            def get_rom_once(self, rom_id: int) -> object:
+                settings["romm_url"] = "https://other.example"
+                return {"id": rom_id}
+
+        prober = LivenessProber(
+            config=LivenessProberConfig(
+                loop=asyncio.get_running_loop(),
+                logger=logging.getLogger("prune-liveness-test"),
+                romm_api=cast("Any", _SwitchingReader({})),
+                settings=settings,
+                canary_rom_ids=lambda _exclude, _limit: [],
+            )
+        )
+        prober.bind_run("run-1", romm_namespace(_NAMESPACE_SETTINGS))
+
+        assert (await prober.probe_many({7}))[7]["reason"] == "server_namespace_changed"
+        assert prober.live_rom_ids() == frozenset()
