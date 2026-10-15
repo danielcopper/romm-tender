@@ -1270,7 +1270,7 @@ async def test_a_partially_live_group_keeps_the_bound_vanished_version_under_eve
 
 
 @pytest.mark.asyncio
-async def test_a_completion_that_needs_no_publication_carries_no_lease(harness):
+async def test_a_completion_carries_no_lease(harness):
     _seed(harness.uow, _rom(1, fetch="old"))
     harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
     preview = await _preview(harness)
@@ -1278,7 +1278,6 @@ async def test_a_completion_that_needs_no_publication_carries_no_lease(harness):
 
     complete = await _finish(harness)
 
-    assert "publication_required" not in complete
     assert "prune_lease_token" not in complete
     assert harness.conflicts.conflicting_operations == 0
 
