@@ -897,7 +897,7 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
             <div onFocus={scrollNearestToTop}>
               <ToggleField
                 label="Remove gone versions"
-                description="The confirmed rows and their installed content, in games that still have a live version."
+                description="The confirmed rows and their installed content, in games that still have a live version — never the version a shortcut is on."
                 checked={removeRows}
                 disabled={runInFlight}
                 onChange={setRemoveRows}

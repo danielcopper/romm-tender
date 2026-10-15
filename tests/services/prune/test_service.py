@@ -1261,7 +1261,7 @@ async def test_a_partially_live_group_keeps_the_bound_vanished_version_under_eve
     complete = await _finish(harness)
 
     assert complete["removed_rom_ids"] == []
-    assert complete["results"][0]["reason"] == "options_excluded"
+    assert complete["results"][0]["reason"] == "shortcut_version_kept"
     kept = harness.uow.roms.get(1)
     assert kept is not None
     assert kept.shortcut_app_id == app_id

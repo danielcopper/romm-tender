@@ -153,14 +153,15 @@ class GroupPlanner:
             remove_rows=options.remove_rows,
             remove_fully_vanished=options.remove_fully_vanished,
         )
-        if bound_row is not None and bound_row.rom_id in delete_ids and proof.live_ids:
+        spared_bound = bound_row is not None and bound_row.rom_id in delete_ids and bool(proof.live_ids)
+        if spared_bound and bound_row is not None:
             # The shortcut is the game while it still has live versions; the
             # user moves it with the version picker, never the cleanup.
             delete_ids.remove(bound_row.rom_id)
 
         whole_game_action = proof.fully_dead and bool(delete_ids)
         if not delete_ids:
-            return self._nothing_to_do(rows, proof.uncertain_ids)
+            return self._nothing_to_do(rows, proof.uncertain_ids, spared_bound=spared_bound)
 
         drifted, unsynced = await self._probe_drift(rows, bound_row, proof, whole_game_action, options)
         if unsynced is not None:
@@ -205,14 +206,23 @@ class GroupPlanner:
             )
         return (bound[0] if bound else None), None
 
-    def _nothing_to_do(self, rows: list[Rom], uncertain_ids: set[int]) -> dict[str, Any]:
+    def _nothing_to_do(self, rows: list[Rom], uncertain_ids: set[int], *, spared_bound: bool) -> dict[str, Any]:
         """Say why a group with nothing selected has nothing selected.
 
         Distinguish "your options excluded everything" from "RomM never
-        confirmed anything gone". Both leave nothing to do, but only the first
-        is answered by changing a toggle — reporting the second as an options
-        problem sends the user to fiddle with settings that cannot help.
+        confirmed anything gone" and from "the version the shortcut is on is
+        kept". All three leave nothing to do, but only the first is answered by
+        changing a toggle — reporting the others as an options problem sends the
+        user to fiddle with settings that cannot help.
         """
+        if spared_bound:
+            return self._results.group_result(
+                rows,
+                "skipped",
+                "shortcut_version_kept",
+                "The version this game's shortcut is on is kept while another version is on RomM; "
+                "switch versions first.",
+            )
         if uncertain_ids:
             return self._results.group_result(
                 rows,

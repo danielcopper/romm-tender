@@ -207,7 +207,10 @@ class TestPlans:
         result, _ = await _plan(rows, {1: "vanished", 2: "live"})
 
         assert not isinstance(result, GroupPlan)
-        assert result["reason"] == "options_excluded"
+        assert (result["reason"], result["message"]) == (
+            "shortcut_version_kept",
+            "The version this game's shortcut is on is kept while another version is on RomM; switch versions first.",
+        )
 
     async def test_drift_rides_the_plan_when_a_bundle_will_be_sealed(self):
         rows = [_rom(1, app_id=0x8001)]

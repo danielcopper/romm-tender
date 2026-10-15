@@ -532,7 +532,10 @@ async def test_a_bound_vanished_version_with_a_live_sibling_keeps_its_shortcut_r
     assert "prune_action_required" not in events
     complete = [call.args[1] for call in harness.emit.await_args_list if call.args[0] == "prune_complete"][-1]
     assert complete["removed_rom_ids"] == []
-    assert complete["results"][0]["reason"] == "options_excluded"
+    assert complete["results"][0]["reason"] == "shortcut_version_kept"
+    assert complete["results"][0]["message"] == (
+        "The version this game's shortcut is on is kept while another version is on RomM; switch versions first."
+    )
 
 
 async def test_stage_selection_rejects_a_foreign_preview_id(harness):
