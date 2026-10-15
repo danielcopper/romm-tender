@@ -112,9 +112,10 @@ an already-vanished version-picker row needs no generation — the row is alread
 same fresh exact-id proof.
 
 Discovery reads the platform's completion stamp whether or not its skip was revoked. The end-of-run stale removal
-unbinds the rows of a platform the run did not process — its sync turned off, or RomM no longer listing it — all but
-those an enabled collection holds, and "Remove all shortcuts", a per-platform removal and a shortcut deleted in Steam's
-own UI unbind rows too; each of those revokes the platform's skip and keeps the stamp
+unbinds the rows of a platform whose sync is turned off, all but those an enabled collection returned and those a
+collection last delivered that RomM's exact-id answer does not show present; a platform RomM no longer lists keeps its
+rows bound. "Remove all shortcuts", a per-platform removal and a shortcut deleted in Steam's own UI unbind rows too;
+each of those revokes the platform's skip and keeps the stamp
 ([Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental skip"). The
 rows keep their fetch generation and the stamp still records the fetch that set it, so Gone from RomM keeps naming the
 rows that fetch did not return — including for as long as the platform's sync stays off, while no new complete fetch
@@ -424,9 +425,10 @@ disabled or failed, the group is skipped instead.
 
 The cleanup never moves a shortcut onto another version: a shortcut is the game, and the version picker is the way to
 switch it. A bound vanished version whose game still has a live version is kept with its shortcut and its row, whatever
-the options, and a group whose only confirmed-gone row is that one has nothing to do. Once the user has switched away
-from it, it is an unbound gone version, removed like any other. A group with multiple bound shortcuts is skipped
-unchanged.
+the options, and a group whose only confirmed-gone row is that one has nothing to do: the group is reported skipped as
+`shortcut_version_kept`, _The version this game's shortcut is on is kept while another version is on RomM; switch
+versions first._, rather than with the answer that blames the options. Once the user has switched away from it, it is an
+unbound gone version, removed like any other. A group with multiple bound shortcuts is skipped unchanged.
 
 Removing a fully vanished game's shortcut requires a claimed action and live Steam confirmation. An attempted but
 unconfirmed removal is reported as ambiguous and its local rows are retained for reconciliation. A fully vanished

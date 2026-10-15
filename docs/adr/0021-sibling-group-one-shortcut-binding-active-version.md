@@ -94,9 +94,11 @@ target row; artwork, collections, playtime and the Steam appId all survive. Rena
 >   re-import that reissues every id then leaves no game behind a banner.
 > - **A group gone from the server keeps its shortcut too.** Only the removed-game cleanup removes it.
 > - **What the sync still removes is a game outside what it syncs**: its platform is turned off and no enabled
->   collection holds it. A bound sibling missing from a platform the run read whole is gone from RomM and stays. One
->   reached only through collections, that a collection's last completed apply listed and none returns now, is asked for
->   once by its exact id: only a ROM RomM still returns is removed, since only a 404 is evidence of absence.
+>   collection holds it. A bound sibling missing from a platform the run read whole is gone from RomM and stays, and so
+>   does one on a platform RomM no longer lists. Each row records whether a platform or a collection last delivered it;
+>   one a collection last delivered and none returns now is asked for once by its exact id on every run until it is
+>   found or unbound: only a ROM RomM still returns is removed, since only a 404 is evidence of absence. One its
+>   platform last delivered is removed unasked, its platform turned off.
 
 ### 3. Version resolution chain: installed > existing binding > RomM default > 1G1R ranking; the choice stays local
 

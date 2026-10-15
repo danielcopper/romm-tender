@@ -1039,8 +1039,10 @@ Three deliberately-distinct ROM-removal notions (see [ADR-0007](docs/adr/0007-ro
 - **Unbind** — drop a ROM's Steam-shortcut binding (`shortcut_app_id` → NULL, via `Rom.unbind_shortcut()`) while keeping
   its `roms` row and all per-ROM state (install, metadata, playtime, saves). What removing a shortcut does.
 - **Stale** — a **bound** ROM that no unit of a sync returned, judged only when the sync was not stopped (→ SyncRun); a
-  unit the sync skipped as unchanged counts as returning every ROM it held. Triggers an **unbind**, never a delete: a
-  stale signal may be a transient server blip or a reversible RomM change, and local playtime/saves must survive.
+  unit the sync skipped as unchanged counts as returning every ROM it held. Triggers an **unbind** only for a ROM
+  outside what the sync syncs — its platform turned off, or RomM still serving it outside every synced collection — and
+  never a delete: a ROM RomM no longer serves keeps its binding until the user switches versions or runs a **Prune**,
+  and local playtime/saves must survive either way.
 - **Prune** — an explicit, opt-in purge that `DELETE`s the `roms` row, cascading every per-ROM child away atomically.
   The **only** thing that deletes rows. **Clean Up Removed RomM Games** performs it only after fresh exact-ID 404s,
   explicit options, and any enabled recovery bundle have passed their final guards.

@@ -117,8 +117,7 @@ The answer is what a prune claim on an event needs. Five events carry one, becau
 backend's, and the service that emits each takes it when it emits, through `ConflictRules.emit_under_lease`: the library
 service for `sync_complete` and `sync_stale`, the download service for a bound ROM's `download_complete`, the migration
 service for a non-empty `migration_relaunch_options`, and the shortcut artwork service for each `shortcut_artwork`
-batch. What the frontend does under the two library-sync claims
-is
+batch. What the frontend does under the two library-sync claims is
 [Steam Non-Steam Shortcuts — Explicit cleanup of vanished versions](steam-non-steam-shortcuts.md#explicit-cleanup-of-vanished-versions).
 A service's `EventEmitter` is the sink's own `emit`, so it answers whether anybody heard too. A claim handed to a panel
 that is not there holds off every removed-game cleanup until it expires — so whichever side took it gives it straight
@@ -830,11 +829,22 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
 - **The stale removal keeps a game gone from RomM.** A bound row no unit of the run returned is sorted by
   `domain/sync_diff.py::sort_stale_rows`: on a platform the run read whole it is gone from RomM and stays bound — and
   stays in its platform's Steam collection; on a platform the run did not read, it was reached either through a
-  collection or through its platform. The collections' completion stamps tell the two apart, read once before the run's
-  first unit rewrites any of them (`do_read_collection_listed_rom_ids`): a row one of them listed is asked for once by
-  its exact id (`LibraryFetcher.ask_romm_for_roms`, single attempt), and removed only when RomM returns the very ROM,
-  since it left the collection — a 404 or an answer that establishes nothing keeps it for the run. A row no stamp lists
-  is outside what the sync syncs and removed, as is one whose collection stamp is missing. The preview asks the same
+  collection or through its platform. The row itself says which: `roms.delivered_through` records the kind of unit whose
+  commit last upserted it (`Rom.record_delivery`, written by `SyncReporter.commit_unit_results` for the unit the chunk
+  dispatcher names; a commit that names none, such as a unit acknowledged after its run ended, keeps the row's value). A
+  row last delivered through a collection is asked for once by its exact id (`LibraryFetcher.ask_romm_for_roms`, single
+  attempt), and removed only when RomM returns the very ROM, since it left the collection — a 404 or an answer that
+  establishes nothing writes nothing, so the row is asked again on every later run until it is found or unbound, and a
+  stopped run, which sorts nothing, leaves it as it was. A row last delivered through its platform is outside what the
+  sync syncs, its platform turned off, and removed unasked. A row no commit has recorded a route for since migration
+  `029` falls back to the collections' completion stamps, read once before the run's first unit rewrites any of them
+  (`do_read_collection_listed_rom_ids`): one a stamp lists is asked, any other removed. **A platform RomM no longer
+  lists is gone from RomM, not turned off**: `keep_platform_ids` rewrites `kv_config`'s `platform_ids` with every
+  platform RomM lists at the start of every run, preview included, and a row whose platform is not in that listing
+  (`do_read_listed_platform_slugs`) keeps its shortcut, with no request, unless it was last delivered through a
+  collection. Which platforms are on in Tender is keyed by RomM's platform id, which an unlisted platform no longer has,
+  so the route is what says the platform was on: a row last delivered through its platform had it on. When the listing
+  cannot be read every platform counts as listed. Force Full Sync leaves the routes in place. The preview asks the same
   question for the same rows, through the same `_settle_stale_rows`, so the removals it counts are the ones the apply
   makes.
 - **Grandfathering.** A group that already carries several bound shortcuts (a library synced before this model) keeps
@@ -935,20 +945,20 @@ stamp's fetch did not return, the `updated_after` server-delta check, the persis
 stamp's `rom_count` must still equal the server's platform `rom_count` — a server-side count change invalidates it.
 
 **A bound row the stamp's fetch did not return forces a full fetch.** The skip rebuilds its unit from every bound row,
-and a rebuilt row counts as returned, so the run's stale-removal scan can never name one. Such a row is a version gone
-from RomM, and it stays bound: the stale removal keeps a bound row missing from a platform the run read whole (ADR-0021
-§2's amendment), and a run stopped before its end — cancelled, interrupted, paused by the session budget, or failed —
-scans for none at all. The count guards cannot catch every such row either: the stamp's `rom_count` is the count RomM
-reported when the run that wrote it planned its work, so a ROM RomM dropped **before** that read is already left out of
-it. The gate therefore refuses the skip while any bound row on the platform does not carry the stamp's generation, a
-NULL one included (`domain/fetch_generation.py::bound_row_not_returned`), and full-fetches instead. **A version gone
-from RomM that stays bound therefore holds its platform's skip until the user switches to another version or the
-removed-game cleanup removes it**: the platform is fetched in full on every sync meanwhile. That full fetch is what lets
-the same-dump move see an id a re-import reissued, which a rebuilt unit never contains; an unchanged platform still has
-nothing applied again, since its entries classify as unchanged. Leaving such rows out of the rebuilt unit instead would
-decide on a stored marker rather than on RomM's answer: the generation records the last completed fetch, not what RomM
-serves now. A stamp with no generation predates the contract and cannot say what its fetch returned, so it skips as
-before.
+and a rebuilt row counts as returned, so the run's stale-removal scan can never name one. Such a row is usually a
+version gone from RomM, and it stays bound: the stale removal keeps a bound row missing from a platform the run read
+whole (ADR-0021 §2's amendment), and a run stopped before its end — cancelled, interrupted, paused by the session
+budget, or failed — scans for none at all. The count guards cannot catch every such row either: the stamp's `rom_count`
+is the count RomM reported when the run that wrote it planned its work, so a ROM RomM dropped **before** that read is
+already left out of it. The gate therefore refuses the skip while any bound row on the platform does not carry the
+stamp's generation, a NULL one included (`domain/fetch_generation.py::bound_row_not_returned`), and full-fetches
+instead. **A version gone from RomM that stays bound therefore holds its platform's skip until the user switches to
+another version or the removed-game cleanup removes it**: the platform is fetched in full on every sync meanwhile. That
+full fetch is what lets the same-dump move see an id a re-import reissued, which a rebuilt unit never contains; an
+unchanged platform still has nothing applied again, since its entries classify as unchanged. Leaving such rows out of
+the rebuilt unit instead would decide on a stored marker rather than on RomM's answer: the generation records the last
+completed fetch, not what RomM serves now. A stamp with no generation predates the contract and cannot say what its
+fetch returned, so it skips as before.
 
 The stamp's contract is **a stamp may authorise a skip ⟺ the platform's most recent apply attempt ran to completion, and
 neither a local removal nor a stale removal on a run that did not process the platform has unbound one of its rows

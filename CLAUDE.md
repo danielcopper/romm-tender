@@ -583,20 +583,26 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `fs_name_no_ext`; and a bound member gone from RomM is rebound only by that same rule, installed or not, its stem read
   off its stored `fs_name`, and otherwise keeps its binding** — test + prompt-only —
   `tests/domain/test_sibling_resolution.py::TestMembersWithoutAFile`,
-  `tests/domain/test_sync_diff.py::TestCollapseMembersWithoutAFile` (the name, shortcut and partial-view cases) and
-  `tests/services/test_version_switch.py::test_a_member_without_a_file_is_marked_and_never_the_default`. Prompt-only: a
-  new caller of `resolve_group_representative` passes `fileless_rom_ids`, or ranks only members with a file as the
-  version picker's default does; the flag is read off a RomM payload only through
-  `domain/rom_file.py::has_file_on_romm`, and the stored `Rom.has_file_on_disk` is written only from its answer
+  `tests/domain/test_sync_diff.py::TestCollapseMembersWithoutAFile` (the name, shortcut and partial-view cases),
+  `tests/services/test_version_switch.py::test_a_member_without_a_file_is_marked_and_never_the_default`,
+  `tests/domain/test_sync_diff.py::TestCollapseSiblingGroups` (a bound member gone from RomM) and
+  `tests/contract/test_vanished_version_same_dump.py`. Prompt-only: a new caller of `resolve_group_representative`
+  passes `fileless_rom_ids`, or ranks only members with a file as the version picker's default does; the flag is read
+  off a RomM payload only through `domain/rom_file.py::has_file_on_romm`, and the stored `Rom.has_file_on_disk` is
+  written only from its answer
 - **The end-of-run stale removal removes the shortcut only of a game outside what the sync syncs: a bound row missing
-  from a platform the run read whole is kept; one on a platform the run did not read is kept when a collection's last
-  completed apply listed it and RomM's one exact-id answer is not the ROM itself, and removed otherwise; the preview
-  counts exactly the removals the apply makes** — test + prompt-only —
-  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule,
-  `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
-  preview, and `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and
-  `TestPlatformTurnedOffAndBackOn` for the two ends. Prompt-only: the collection records are read before the run's first
-  unit (`do_read_collection_listed_rom_ids`), and the preview and the apply both sort through
+  from a platform the run read whole, or from a platform RomM no longer lists, is kept; one on a platform the run did
+  not read is asked for by its exact id when a collection last delivered it (`roms.delivered_through`), on every run
+  until it is found or unbound, kept unless RomM's answer is the ROM itself, and removed unasked when its platform last
+  delivered it; a row with no recorded route follows the collections' last completed members; the preview counts exactly
+  the removals the apply makes** — test + prompt-only — `tests/domain/test_sync_diff.py::TestSortStaleRows` for the
+  rule, `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and
+  the preview (among it the third run, the stopped run, the platform route and the fallback),
+  `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and `TestPlatformTurnedOffAndBackOn`
+  (with `test_a_platform_still_on_that_romm_no_longer_lists_keeps_its_shortcuts`) for the two ends, and
+  `tests/services/library/test_reporter.py::TestCommitUnitResults` for the route the commit records. Prompt-only: the
+  collection records are read before the run's first unit (`do_read_collection_listed_rom_ids`), the chunk dispatcher
+  names the unit's kind on every commit, and the preview and the apply both sort through
   `SyncOrchestrator._settle_stale_rows`
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py`,

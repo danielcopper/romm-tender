@@ -1380,13 +1380,11 @@ with RomM unreachable.
 
 The exclusion also means **`reachable_count` is not bounded below by `count`**: a _bound_ row the stamp's fetch did not
 return raises the shortcut count without raising the header, so a pane can read `2 on RomM · 3 in Steam` beside
-`Remove 4 shortcuts`. Two shapes reach it — a bound version deleted on RomM, in the gap before that run's stale-removal
-scan, and a collection-added row on an already-stamped platform, which commits with no generation, so the exclusion
-leaves out a row RomM still serves — and both heal at a sync that applies that platform: the second at the platform's
-commit, the first at the stale-removal scan of the run that opened it. A stopped run skips that scan, and later runs do
-not skip a platform that still holds such a bound row — they full-fetch it — so after a stop the first heals at the
-stale-removal scan of the first later run that completes. The direction is a conservative under-count, which is why it
-is recorded rather than guarded.
+`Remove 4 shortcuts`. Two shapes reach it — a bound version deleted on RomM, which the stale removal keeps bound, and a
+collection-added row on an already-stamped platform, which commits with no generation, so the exclusion leaves out a row
+RomM still serves. The second heals at the platform's next commit. The first lasts until the user switches the game to
+another version or removes the gone one with this cleanup; until then later runs full-fetch that platform rather than
+skip it. The direction is a conservative under-count, which is why it is recorded rather than guarded.
 
 **The BIOS ratio is not on the second line** — it was, and its width is what wrapped the line three times on a platform
 with a long name and a long core label. It is stated once instead, beside `BIOS FILES` eight pixels below, in the colour
