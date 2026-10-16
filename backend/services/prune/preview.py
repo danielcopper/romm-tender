@@ -65,6 +65,7 @@ def _preview_entry(
         "group_id": group_id,
         "group_size": group_size,
         "bound_count": bound_count,
+        "bound": row.shortcut_app_id is not None,
         "candidate": candidate,
         "installed": install is not None,
         "installed_bytes": size,

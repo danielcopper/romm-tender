@@ -183,3 +183,20 @@ def test_a_row_carries_its_text_whole_and_no_truncation_flag() -> None:
         "w" * long,
     )
     assert [key for key in item if key.endswith("_truncated")] == []
+
+
+def test_a_row_says_whether_a_shortcut_is_on_that_version() -> None:
+    uow = FakeUnitOfWork()
+    with uow:
+        bound = _rom(4375, name="Game A", group="igdb:1217:53", fetch_id="old")
+        bound.bind_shortcut(900)
+        uow.roms.save(bound)
+        uow.roms.save(_rom(25135, name="Game A", group="igdb:1217:53", fetch_id="current"))
+        uow.platform_sync_state.save(
+            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="current")
+        )
+    builder = _builder(uow)
+
+    page = builder.page(builder.build("preview", "bulk", None), 0, 50)
+
+    assert {item["rom_id"]: item["bound"] for item in page["items"]} == {4375: True, 25135: False}

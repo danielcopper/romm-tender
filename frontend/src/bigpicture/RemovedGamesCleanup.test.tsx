@@ -34,6 +34,7 @@ const preview: backend.PrunePreviewResult = {
       group_id: "group-1",
       group_size: 1,
       bound_count: 0,
+      bound: false,
       candidate: true,
       installed: true,
       installed_bytes: 200,

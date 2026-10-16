@@ -936,6 +936,7 @@ export interface PrunePreviewItem {
   group_id: string;
   group_size: number;
   bound_count: number;
+  bound: boolean;
   candidate: boolean;
   installed: boolean;
   installed_bytes: number | null;
