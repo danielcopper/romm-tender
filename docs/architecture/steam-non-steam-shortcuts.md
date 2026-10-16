@@ -468,10 +468,11 @@ the safe behavior on a partial/cancelled run is to delete nothing.
 
 The collections are written once, at the end of the run, and not as each game's shortcut is created. Writing each game
 into its collections during the run was measured on the reference device over a sync of 329 new games on 10 platforms
-(#2416, D7): it took 151–154 s against 118–120 s. A collection's `Save()` costs 250–380 ms whatever the collection's
-size, and while collections change during the apply, Steam's own calls for each new shortcut — its creation, its
-registration and its artwork — get slower, 30–60 ms per game together. Grouping the saves every 5 s cut Tender's own
-share to about 25 ms per game but left Steam's as it was; a sync over games already filed cost nothing extra.
+(#2416, D7): it took 151–154 s, about 280–290 ms per game, against 118–120 s, about 200 ms per game. A collection's
+`Save()` cost 250–380 ms whatever the collection's size, and while collections changed during the apply, Steam's own
+calls for each new shortcut — its creation, its registration and its artwork — got slower, 30–60 ms per game together.
+Grouping the saves every 5 s cut the cost of Tender's own collection writes to about 25 ms per game but left Steam's
+slowdown as it was; a sync over games already filed cost nothing extra.
 
 ### Collection naming mode — `merge` vs `by_label` (#1539)
 

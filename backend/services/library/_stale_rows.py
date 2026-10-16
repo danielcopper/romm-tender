@@ -2,8 +2,8 @@
 
 Shared by :class:`~services.library.sync_orchestrator.SyncOrchestrator`'s
 preview and its apply's finalize, so the removals a preview promises are the
-ones its apply makes. The preview also names a kept row's platform collection
-here (:func:`with_kept_platform_names`).
+ones its apply makes. The preview also reads here the name of a kept row's
+platform (:func:`with_kept_platform_names`).
 """
 
 from __future__ import annotations
@@ -21,8 +21,7 @@ if TYPE_CHECKING:
 
     # ``LibraryFetcher.ask_romm_for_roms``: one exact-id question per ROM.
     AskRommFn = Callable[[Collection[int]], Awaitable[dict[int, RomAnswer]]]
-    # ``LocalLibraryReader.do_read_kept_platform_names``, offloaded by the caller:
-    # the cached name of each slug asked that has one.
+    # ``LocalLibraryReader.do_read_kept_platform_names``, offloaded by the caller.
     ReadKeptNamesFn = Callable[[Collection[str]], Awaitable[dict[str, str]]]
 
 
@@ -40,8 +39,10 @@ async def settle_stale_rows(
     Sorts them by :func:`sort_stale_rows`, asks RomM once about the ones it
     cannot decide, settles those by :func:`settle_asked_rows`, and answers the
     marks by :meth:`~domain.sync_diff.StaleSort.gone_from_romm_marks`. A row RomM
-    was asked about and did not confirm is in neither list: its shortcut stays,
-    and it is not among the rows kept in their platform's collection.
+    was asked about and did not return — a proven 404, or an answer that
+    established nothing — is in neither list: its shortcut stays, and being kept
+    does not file it in its platform's collection; only the platform-groups
+    setting can.
     """
     sort = sort_stale_rows(
         rows,
@@ -64,11 +65,9 @@ async def with_kept_platform_names(
 ) -> dict[str, str]:
     """*live*, plus the cached name of each platform outside it that a *kept* row is on, for the preview.
 
-    Such a platform is one RomM no longer lists, and its Steam collection
-    keeps that name: the apply's finalize carries it forward
-    (``SyncReporter._names_with_bound_platforms_kept``), so the preview
-    counts the collection under the same name. *read_kept_names* is asked only
-    when such a platform exists.
+    Must answer the names the apply's finalize carries forward
+    (``SyncReporter._names_with_bound_platforms_kept``). *read_kept_names* is
+    asked only when such a platform exists.
     """
     outside = {row.platform_slug for row in kept} - live.keys()
     if not outside:

@@ -495,7 +495,7 @@ class TestShouldIncludeInPlatformCollection:
 
 
 class TestPlatformCollectionName:
-    """platform_collection_name() — the platform collection a ROM is filed in."""
+    """platform_collection_name() — the platform name a ROM is filed under."""
 
     def test_a_rom_a_platform_unit_fetched_is_filed_under_the_runs_display_name(self):
         assert platform_collection_name(1, "n64", {1}, {"n64": "Nintendo 64"}, False) == "Nintendo 64"

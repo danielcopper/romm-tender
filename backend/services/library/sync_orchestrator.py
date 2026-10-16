@@ -129,29 +129,29 @@ class SyncOrchestratorConfig:
     ``shortcut_launch_resolver`` peer answers the two per-ROM questions each
     shortcut bake needs — the disc-resolved installed path and the active
     emulator — which preview and the per-unit apply both hand straight to
-    :func:`build_shortcuts_data`. The ``local_library_reader`` peer answers every
-    question the orchestrator asks of this device's own record of the library —
-    the classify baseline, the per-unit bound-row projection, the
+    :func:`build_shortcuts_data`. The ``local_library_reader`` peer answers
+    every question the orchestrator asks of this device's own record of the
+    library — the classify baseline, the per-unit bound-row projection, the
     unstamped-platform count, the resident sibling-group keys, the members the
     collections listed at their last completed apply, the cached names of the
-    preview's kept platforms, and the stale-row scan — each in its own short read
-    Unit of Work, where the fetcher asks the same kinds of question of RomM.
-    The ``chunk_dispatcher`` peer takes the unit's built delta the rest of the
-    way: it emits each chunk to the frontend, waits out the
-    heartbeat clock for the ack, and commits the chunk through the reporter. The
-    ``session_budget`` seam owns every
-    renderer-heap reading and verdict, which the dispatcher asks at each chunk
-    boundary — whether applying the chunk would exhaust Steam's per-session heap
-    budget, and how much headroom is left for the chunk's additive cover work
-    (#1383); the terminal memory delta this module reports is drawn from the same
-    seam. The ``cover_preparer`` peer holds the apply path's covers, and the
-    reporter holds the same ``artwork`` seam for commit-time cover-path
-    finalisation — between them, no ``ArtworkManager`` is owed here. The
-    ``sync_run_recorder`` peer writes the run's ``SyncRun`` row: this module
-    decides which terminal status a stopped run earns, and hands that decision
-    over as a method call. The ``conflict_rules`` are what a ``sync_stale``
-    event that removes shortcuts takes its lease through. The ``artwork_job`` is
-    asked for a run at every run's end: it stops while a run is in flight.
+    preview's kept platforms, and the stale-row scan — each in its own short
+    read Unit of Work, where the fetcher asks the same kinds of question of
+    RomM. The ``chunk_dispatcher`` peer takes the unit's built delta the rest of
+    the way: it emits each chunk to the frontend, waits out the heartbeat clock
+    for the ack, and commits the chunk through the reporter. The
+    ``session_budget`` seam owns every renderer-heap reading and verdict, which
+    the dispatcher asks at each chunk boundary — whether applying the chunk
+    would exhaust Steam's per-session heap budget, and how much headroom is left
+    for the chunk's additive cover work (#1383); the terminal memory delta this
+    module reports is drawn from the same seam. The ``cover_preparer`` peer
+    holds the apply path's covers, and the reporter holds the same ``artwork``
+    seam for commit-time cover-path finalisation — between them, no
+    ``ArtworkManager`` is owed here. The ``sync_run_recorder`` peer writes the
+    run's ``SyncRun`` row: this module decides which terminal status a stopped
+    run earns, and hands that decision over as a method call. The
+    ``conflict_rules`` are what a ``sync_stale`` event that removes shortcuts
+    takes its lease through. The ``artwork_job`` is asked for a run at every
+    run's end: it stops while a run is in flight.
     """
 
     settings: dict[str, Any]

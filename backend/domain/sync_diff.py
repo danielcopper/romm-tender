@@ -3,8 +3,8 @@
 Anything that compares "what the next sync should produce" against "what we
 recorded last sync" lives here: per-ROM bucketing (new / changed / unchanged /
 stale), enabled-collection add/remove diffs, the platform-collection
-membership predicate that drives the platform-collection diff, and the name of
-the platform collection a ROM is filed in.
+membership predicate that drives the platform-collection diff, and the platform
+name a ROM is filed under.
 
 State reads (registry, last_synced_*), setting reads, network fetches, and
 Steam interaction stay in LibraryService; this module receives the relevant

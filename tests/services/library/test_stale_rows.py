@@ -1,4 +1,4 @@
-"""Tests for services/library/_stale_rows.py — which stale rows a run removes."""
+"""Tests for services/library/_stale_rows.py — which stale rows a run removes, and kept rows' platform names."""
 
 from __future__ import annotations
 
@@ -29,7 +29,9 @@ class TestSettleStaleRows:
         )
 
         assert [row.rom_id for row in remove] == [1]
-        assert kept == [], "a row RomM did not confirm is not among the rows kept in their platform's collection"
+        assert kept == [], (
+            "a row RomM did not return is in neither list: being kept does not file it in its platform's collection"
+        )
         ask.assert_awaited_once_with([1, 2])
 
     @pytest.mark.asyncio
