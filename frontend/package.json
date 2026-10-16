@@ -3,6 +3,7 @@
   "scripts": {
     "build": "rm -rf ../dist && rollup -c",
     "build:dev": "rm -rf ../dist && rollup -c rollup.dev.config.js",
+    "build:desktop": "rm -rf ../dist && rollup -c rollup.desktop.config.js",
     "size": "size-limit",
     "check:bundle": "node scripts/check-bundle-shape.mjs",
     "check:packages": "node scripts/check-package-budgets.mjs",

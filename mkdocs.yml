@@ -108,6 +108,7 @@ nav:
       - QAM Panel: architecture/qam-panel.md
       - Frontend Bundles: architecture/frontend-bundles.md
       - Loading the Panel: architecture/loading-the-panel.md
+      - Desktop Surface: architecture/desktop-dom-architecture.md
       - Steam Remote Play & Cross-Device: architecture/steam-remote-play.md
       - Invariant Register: architecture/invariants.md
   - Contributing:

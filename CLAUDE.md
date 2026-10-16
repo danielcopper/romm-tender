@@ -53,6 +53,8 @@ is invisible at the citation site), so reach it through the page that owns the t
 - Emulator and core selection — [core-emulator-selection.md](docs/architecture/core-emulator-selection.md)
 - RetroArch/ES-DE config parsing — [config-source-parsers.md](docs/architecture/config-source-parsers.md)
 - Steam Remote Play — [steam-remote-play.md](docs/architecture/steam-remote-play.md)
+- The desktop surface's changes to Steam's page in the desktop client (dev build only) —
+  [desktop-dom-architecture.md](docs/architecture/desktop-dom-architecture.md)
 - **End-user-facing behavior and UI** — setup, configuration, syncing, save-sync, BIOS, troubleshooting —
   `docs/user-guide/`
 - Dev setup, dependency management, frontend loop — `docs/contributing/`
@@ -95,6 +97,10 @@ new code in it.
   constraint the code cannot express. A fact has one home, and how a value was arrived at goes in the commit rather than
   the file. Re-read the comment on the line you touch — a stale one is worse than none, because it is believed and
   nothing in the toolchain contradicts it. **No mechanical check exists.**
+- `desktop-dom.md` — every change the desktop surface makes to Steam's page goes through the restoration ledger, or
+  leaving the page leaves it behind; and a selector never names a hashed class. Both are in the register below, with
+  what checks them; the file's other rules — Steam's part hidden only behind a drawn view, every failure logged — have
+  no check.
 
 ## Documentation
 
@@ -238,16 +244,20 @@ locally with `mise run docs`.
   (7.46 MiB), so a 4 MiB cap would have refused it silently.
 - **No `BIsModOrShortcut` bypass**: the bypass counter was removed deliberately. Shortcuts return `true` (natural
   state); we own the game detail UI. Do not reintroduce a bypass.
-- **`instanceof` against a DOM global is false in QAM code**: the panel's code runs in the **SharedJSContext** window
-  while the nodes it renders belong to the QAM view's own document — two realms, confirmed live (the two documents do
-  not share a URL, and neither can see the other's elements). What is **measured** is the `instanceof`: such a test is
-  false for **every** node such code will ever see, so a guard written that way rejects everything and the feature is
-  simply inert. Whether a constructor that takes the node as an argument — `new ResizeObserver(...)`,
-  `new MutationObserver(...)` — also misbehaves across realms is **not** established here in either direction; those are
-  named because taking the constructor from the node costs a property read, so the question need not be answered. Take
-  the constructor from the node — `el.ownerDocument.defaultView` — as `WidePage` and `ScrollRegion` do. **The frontend
-  suite cannot see this**: happy-dom has one realm, so the wrong global and the right one are the same object and every
-  test passes.
+- **`instanceof` against a DOM global is false in QAM and desktop-client code**: the panel's code runs in the
+  **SharedJSContext** window while the nodes it renders belong to another document — the QAM view's own, or, for the
+  desktop surface (dev build only), the desktop client's window (#1866). Two realms, confirmed live for the QAM view
+  (the two documents do not share a URL, and neither can see the other's elements). What is **measured** is the
+  `instanceof`: such a test is false for **every** node such code will ever see, so a guard written that way rejects
+  everything and the feature is simply inert. Whether a constructor that takes the node as an argument —
+  `new ResizeObserver(...)`, `new MutationObserver(...)` — also misbehaves across realms is **not** established here in
+  either direction; those are named because taking the constructor from the node costs a property read, so the question
+  need not be answered. Take the constructor from the node — `el.ownerDocument.defaultView` — as `WidePage` and
+  `ScrollRegion` do, or from the window the code was handed, as the desktop surface's navigation watcher does. **The
+  frontend suite cannot see the `instanceof` half**: two happy-dom windows answer it alike. A `MutationObserver` taken
+  from the wrong window it CAN see — each happy-dom `Window` has its own, and a document's `defaultView` is its window —
+  but not a `ResizeObserver`, which every happy-dom `Window` shares (`new Window().ResizeObserver` is the same class
+  twice), and neither over a document built with `createHTMLDocument`, whose `defaultView` is null.
 - **The Python CI runs is not the Python a device runs** — what that makes of a change under `_vendor/` is
   [`.claude/rules/vendored-assets.md`](.claude/rules/vendored-assets.md)'s, which loads only once a file there is read.
 - **An empty collection in a resolver answer is a statement about PROVENANCE, never about need** — and Python spells it
@@ -1044,6 +1054,19 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   the `display: contents` wrapper around the selected row, never on the row; and a wide page that opens on a non-first
   row without `ListDetail` places the mark itself, the same way, and gives that row `preferredFocus` too, only while
   `EntryPreferenceContext` holds
+- **Every change the desktop surface's navigation watcher makes to Steam's page goes through the restoration ledger, and
+  is given back on leaving the page whenever the ledger holds anything — a pass that threw partway included** (dev build
+  only) — test + prompt-only — `frontend/src/desktop/navigationWatcher.test.ts`, "every change it makes is given back":
+  the `style` attribute of every element on a page, recorded before the watcher starts, is what it was after passes from
+  Steam's mutations and from a change to the set of RomM shortcuts, a scroll and a resize, and leaving the page, with
+  both views handed and with none; and "gives back what a pass changed before it threw" for a pass that threw partway.
+  Prompt-only: a write to anything but `style` — a class, another attribute, a node moved — and a change to an element
+  the test's page does not hold
+- **No code under `frontend/src/desktop/` names one of Steam's minified class hashes** (dev build only) — check —
+  `frontend/eslint.config.js` (`no-restricted-syntax` over string literals, regex literals and template parts,
+  `NO_CLASS_HASHES`; test files left out), kept live by `frontend/src/eslintNoClassHashes.test.ts`. Unseen by it: a hash
+  with no digit, no capital or no small letter in it, one shorter than twelve characters, and one built at run time.
+  This list is the one home of what the check misses; the config, the rules file and the long form point here
 
 When a change applies a guard / sanitize / backup / grouping pattern, sweep for sibling sites of the same pattern — the
 register is what that sweep checks against.

@@ -173,3 +173,14 @@ interface MobxGlobals {
  * unchecked cast.
  */
 declare var __mobxGlobals: MobxGlobals | undefined;
+
+/**
+ * Ambient typing for the one member of `react-dom/client` the desktop surface
+ * imports (`Root`); `@types/react-dom` is not a dependency.
+ */
+declare module "react-dom/client" {
+  export interface Root {
+    render(children: React.ReactNode): void;
+    unmount(): void;
+  }
+}

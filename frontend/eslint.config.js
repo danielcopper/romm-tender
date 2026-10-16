@@ -22,6 +22,29 @@ const NAMES_NOT_ABOUT_TENDER = [
   "extraPlugins",
 ];
 
+const NAMES_THAT_MISNAME_TENDER = ["Identifier", "JSXIdentifier", "PrivateIdentifier"].map((type) => ({
+  selector: `${type}[name=/plugin/i]${NAMES_NOT_ABOUT_TENDER.map((name) => `:not([name="${name}"])`).join("")}`,
+  message:
+    "Tender is not a plugin: name this after what it is (the panel, the backend, Tender). A third-party name that must keep the word goes on NAMES_NOT_ABOUT_TENDER in eslint.config.js, with its reason.",
+}));
+
+// A token shaped like a minified class hash: twelve or more letters, digits,
+// `_` and `-`, holding a digit, a capital and a small letter. What that shape
+// misses is listed at the rule's entry in CLAUDE.md's invariant register.
+const CLASS_HASH = String.raw`(^|[^\w-])(?=[\w-]*\d)(?=[\w-]*[A-Z])(?=[\w-]*[a-z])[\w-]{12,}([^\w-]|$)`;
+
+// A regex literal's `value` is a RegExp, which the `value` selector never
+// matches, so its pattern is read separately.
+const NO_CLASS_HASHES = [
+  `Literal[value=/${CLASS_HASH}/]`,
+  `Literal[regex.pattern=/${CLASS_HASH}/]`,
+  `TemplateElement[value.raw=/${CLASS_HASH}/]`,
+].map((selector) => ({
+  selector,
+  message:
+    'This looks like one of Steam\'s minified class hashes, which a Steam update changes. Find the element through the selector ladder instead (docs/architecture/desktop-dom-architecture.md, "The selector ladder").',
+}));
+
 export default tseslint.config(
   // ESLint's root is this package, so the only gitignored trees it can reach are
   // this package's own: its `node_modules` and the coverage report Vitest writes
@@ -258,14 +281,18 @@ export default tseslint.config(
   // than adding to them, so such a block repeats this entry.
   {
     rules: {
-      "no-restricted-syntax": [
-        "error",
-        ...["Identifier", "JSXIdentifier", "PrivateIdentifier"].map((type) => ({
-          selector: `${type}[name=/plugin/i]${NAMES_NOT_ABOUT_TENDER.map((name) => `:not([name="${name}"])`).join("")}`,
-          message:
-            "Tender is not a plugin: name this after what it is (the panel, the backend, Tender). A third-party name that must keep the word goes on NAMES_NOT_ABOUT_TENDER in eslint.config.js, with its reason.",
-        })),
-      ],
+      "no-restricted-syntax": ["error", ...NAMES_THAT_MISNAME_TENDER],
+    },
+  },
+  // No code under src/desktop/ names one of Steam's minified class hashes: a
+  // string, template part or regex literal holding a token shaped like one
+  // fails. Test files are left out, because a test builds Steam's page out of
+  // such classes.
+  {
+    files: ["src/desktop/**/*.{ts,tsx}"],
+    ignores: ["src/**/*.{test,spec}.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": ["error", ...NAMES_THAT_MISNAME_TENDER, ...NO_CLASS_HASHES],
     },
   },
   // Must stay LAST: turns off ESLint rules that conflict with Prettier formatting

@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { isRomMAppId, registerRomMAppId, unregisterRomMAppId, rommAppIdCount } from "./rommAppIds";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { isRomMAppId, onRomMAppIdsChanged, registerRomMAppId, unregisterRomMAppId, rommAppIdCount } from "./rommAppIds";
 
 // The registry is module-level state shared by every importer, which is the
 // point of it — so each case unregisters what it added rather than relying on a
@@ -49,5 +49,42 @@ describe("rommAppIds", () => {
     expect(rommAppIdCount()).toBe(2);
     unregisterRomMAppId(4242);
     expect(rommAppIdCount()).toBe(1);
+  });
+
+  describe("change listeners", () => {
+    const flushMicrotasks = () => new Promise<void>((resolve) => queueMicrotask(resolve));
+
+    it("hears a run of registrations as one change", async () => {
+      const listener = vi.fn();
+      const stop = onRomMAppIdsChanged(listener);
+      registerRomMAppId(4242);
+      registerRomMAppId(9001);
+      await flushMicrotasks();
+      stop();
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it("hears nothing for a register or unregister that changes nothing", async () => {
+      registerRomMAppId(4242);
+      await flushMicrotasks();
+      const listener = vi.fn();
+      const stop = onRomMAppIdsChanged(listener);
+      registerRomMAppId(4242);
+      unregisterRomMAppId(9001);
+      await flushMicrotasks();
+      stop();
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it("hears an unregister of an appId it held", async () => {
+      registerRomMAppId(4242);
+      await flushMicrotasks();
+      const listener = vi.fn();
+      const stop = onRomMAppIdsChanged(listener);
+      unregisterRomMAppId(4242);
+      await flushMicrotasks();
+      stop();
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
   });
 });

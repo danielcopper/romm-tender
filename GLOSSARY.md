@@ -1186,11 +1186,11 @@ Detail: [Shortcut artwork](docs/architecture/steam-non-steam-shortcuts.md#shortc
 
 One of the two UIs Tender draws, each with its own directory under `frontend/src/`: **bigpicture** is the gamepad
 surface — the QAM panel and the patch into Steam's game-detail route (`frontend/src/bigpicture/`) — and **desktop** is
-the keyboard-and-mouse client (`frontend/src/desktop/`, which holds a README and nothing else so far). They are **peers,
-not layers**: the two share data and logic and almost nothing visual, so neither may import from the other. Anything
-that turns out to belong to both moves _down_ rather than sideways: UI into `shared/` (see **Shared (UI layer)**), the
-rest into `api/`, `utils/` or `types/`. `import-x/no-restricted-paths` in `frontend/eslint.config.js` refuses a sideways
-import in either direction.
+the surface drawn into Steam's **desktop client** (`frontend/src/desktop/`). They are **peers, not layers**: the two
+share data and logic and almost nothing visual, so neither may import from the other. Anything that turns out to belong
+to both moves _down_ rather than sideways: UI into `shared/` (see **Shared (UI layer)**), the rest into `api/`, `utils/`
+or `types/`. `import-x/no-restricted-paths` in `frontend/eslint.config.js` refuses a sideways import in either
+direction.
 
 The word predates the directories and the older use is still current: `docs/architecture/qam-panel.md` and
 `frontend/src/utils/gameDetailStore.ts` call the components subscribed to one game page's **game-detail store** that
@@ -1199,6 +1199,21 @@ store**). Every one of them lives inside `bigpicture/`, so in the sense above th
 the scope tells the readings apart: a surface of Tender is a directory, a surface of a game page is a component
 subscribed to that page's game-detail store. _Avoid_: platform, target; _frontend_ (the whole of `frontend/src/` — both
 surfaces and everything below them).
+
+### Desktop client
+
+Steam's own window outside Big Picture: the library window a keyboard and mouse drive, which Steam's popup manager lists
+under a name starting with `SP Desktop`. It is Steam's, not Tender's; what Tender draws into it is the **desktop
+surface** (see **Surface**). _Avoid_: _Desktop Mode_, which on a Steam Deck is the KDE session, not Steam's client.
+
+### Navigation watcher / restoration ledger
+
+The **navigation watcher** (`frontend/src/desktop/navigationWatcher.ts`) is what the desktop surface adapts Steam's game
+page with: it finds the **desktop client**'s window, follows its route to a RomM shortcut's game page, and adapts that
+page in passes. The **restoration ledger** (`DomRestorationLedger`) is the record of every change it makes to Steam's
+page, so that leaving the page gives each one back. Detail:
+[How the desktop surface adapts Steam's game page](docs/architecture/desktop-dom-architecture.md). _Avoid_: _DOM
+coordinator_, _desktop supervisor_ (earlier names for the watcher).
 
 ### Shared (UI layer)
 
