@@ -15,11 +15,12 @@ the platform's emulators ask for. The two overlap but neither contains the
 other: the library holds files nothing wants, and an emulator can want a file
 the library has never had. That third kind is shown like any other and marked
 ``on_server: False`` — it is real, it may be missing, and nothing here can fetch
-it, so it counts towards readiness and never towards a download button.
+it, so it counts in the launching emulator's required counts and never towards a
+download button.
 
 Readiness therefore needs no server at all. Which emulator is active comes from
-ES-DE, what it wants comes from the resolver, what is on disk comes from the
-filesystem; RomM contributes the download and nothing else. What an unreachable
+ES-DE; what it wants, and what is in place, comes from the resolver's per-file
+verdicts; RomM contributes the download and nothing else. What an unreachable
 server costs is the files only it knows about.
 """
 

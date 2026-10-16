@@ -10,6 +10,7 @@
 
 import { FC } from "react";
 import { DialogButton, Focusable } from "@decky/ui";
+import { useTriggerHandler } from "./emulatorStepping";
 
 interface PanelTabBarProps {
   activeTab: string;
@@ -20,6 +21,7 @@ interface PanelTabBarProps {
 }
 
 export const PanelTabBar: FC<PanelTabBarProps> = ({ activeTab, hasAchievements, hasSaves, hasBios, onSelect }) => {
+  const onTrigger = useTriggerHandler();
   const tabs: { id: string; label: string; visible: boolean }[] = [
     { id: "info", label: "GAME INFO", visible: true },
     { id: "achievements", label: "ACHIEVEMENTS", visible: hasAchievements },
@@ -28,7 +30,7 @@ export const PanelTabBar: FC<PanelTabBarProps> = ({ activeTab, hasAchievements, 
   ];
 
   return (
-    <Focusable className="romm-tab-bar" flow-children="right" data-romm="true">
+    <Focusable className="romm-tab-bar" flow-children="right" data-romm="true" onButtonDown={onTrigger}>
       {tabs
         .filter((t) => t.visible)
         .map((t) => (

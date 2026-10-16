@@ -17,7 +17,8 @@ describe("isFetchable", () => {
   });
 
   it("refuses a file the RomM library does not hold", () => {
-    // It still counts towards readiness — there is simply nothing to press.
+    // Where the launch requires it, it still counts in the required counts —
+    // there is simply nothing to press.
     expect(isFetchable({ ...fetchableRow, on_server: false })).toBe(false);
   });
 
@@ -31,6 +32,12 @@ describe("isFetchable", () => {
     // stamps every folder row `on_server: False`, so the flag is set here
     // deliberately to show the clause standing on its own.
     expect(isFetchable({ on_server: true, downloaded: false, declared_kind: "directory" })).toBe(false);
+  });
+
+  it("refuses a file whose place the resolver could not look at", () => {
+    // A download there could overwrite a file nobody could see.
+    expect(isFetchable({ ...fetchableRow, caveats: ["firmware-path-inaccessible"] })).toBe(false);
+    expect(isFetchable({ ...fetchableRow, caveats: ["firmware-image-identified"] })).toBe(true);
   });
 
   it("treats a payload that never spoke about the library as not fetchable", () => {

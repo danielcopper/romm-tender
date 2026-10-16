@@ -59,15 +59,28 @@ _ENTRY_KEYS = {
     "required_downloaded",
     "required_withheld",
     "bios_level",
-    "system_image",
     # Not in a5777746: the launching emulator's one-of groups, each one
-    # requirement, and how many of them are covered for some regions only.
-    "required_partial",
+    # requirement.
     "one_of_groups",
     # The pair the "n/N RomM library files" ratio states, over the rows whose
     # verdict was established.
     "ratio_server_count",
     "ratio_local_count",
+    # Not in a5777746: what the resolver says about the launching emulator
+    # — whether it was read, how it finds its firmware, the console's
+    # need, and what keeps the verdict open. The verdict itself is
+    # `bios_level`.
+    "emulator_read",
+    "locating",
+    "emulator_declaration",
+    "console_needs_image",
+    "refused",
+    "emulator_notes",
+    # Not in a5777746 either: what the launching emulator's search of the BIOS
+    # folder established, for an emulator that searches by content.
+    "content_search",
+    # Not in a5777746: one entry per emulator the resolver answered for.
+    "emulator_tabs",
 }
 
 # And every key a row carried: the server's own fields, the destination and its
@@ -101,6 +114,9 @@ _ROW_KEYS = {
     "caveats",
     "images",
     "deletable_count",
+    # Not in a5777746: the emulator whose requirement the row is, which a
+    # surface shows it with.
+    "declared_by",
 }
 
 

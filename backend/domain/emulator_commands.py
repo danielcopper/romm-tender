@@ -294,17 +294,32 @@ def resolve_platform_option(options: list[EmulatorOption], override: str | None)
     the caller bakes the plain RetroDECK launch and RetroDECK resolves the
     emulator itself, so the games still start.
 
-    **One pick, because a platform's surfaces must not be able to answer for two
+    **One pick, because a surface must not be able to answer for two
     emulators.** The option is returned rather than one projection of it so that
-    the name a pane displays (:func:`resolve_platform_label`) and the identity
-    its BIOS answers are joined and scoped on (``EmulatorOption.emulator``, the
-    one field that names a standalone emulator, where ``core_so`` is ``None`` for
-    every standalone pick) come off the same choice. Resolving them separately is
-    what let a pane name PCSX ReARMed and judge the platform by the system
-    default beside it.
+    the name a surface displays and the identity it scopes on
+    (``EmulatorOption.emulator``, the one field that names a standalone emulator,
+    where ``core_so`` is ``None`` for every standalone pick) come off the same
+    choice. Resolving them separately is what let a pane name PCSX ReARMed and
+    judge the platform by the system default beside it. The BIOS answers take
+    this pick through :func:`resolve_firmware_option`, which goes one rung
+    further where it is ``None``.
     """
     pinned = _pinned_option(options, override) if override is not None else None
     return pinned if pinned is not None else select_default_option(options)
+
+
+def resolve_firmware_option(options: list[EmulatorOption], override: str | None) -> EmulatorOption | None:
+    """Return the emulator a platform's BIOS answer is about, or ``None``.
+
+    The pick (:func:`resolve_platform_option`) where there is one. Where nothing
+    is bakeable the platform's games launch through RetroDECK's plain launch,
+    which starts the emulator RetroDECK declares first — installed or not —
+    unless an alternative emulator is set in ES-DE; that first entry is the one
+    the answer is about, since an emulator that is not installed still declares
+    the firmware it would need. ``None`` only where no emulator is
+    listed at all.
+    """
+    return resolve_platform_option(options, override) or (options[0] if options else None)
 
 
 def resolve_platform_label(options: list[EmulatorOption], override: str | None) -> str | None:

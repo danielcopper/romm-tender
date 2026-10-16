@@ -11,12 +11,13 @@
 // `testAppId` per test (incremented in `beforeEach`) — Option A in the playbook.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, act, waitFor } from "@testing-library/react";
+import { render, act, fireEvent, waitFor } from "@testing-library/react";
 import { createElement, type ComponentProps, type ReactElement } from "react";
 import { RomMPlaySection } from "./RomMPlaySection";
 import * as backend from "../api/backend";
 import { _resetSharedReadsForTests } from "../api/sharedReads";
 import { showContextMenu, showModal } from "@decky/ui";
+import { EmulatorStepScope, useStepOnTriggers } from "./emulatorStepping";
 import { HostTransportError, toaster } from "../api/host";
 import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import {
@@ -209,7 +210,20 @@ vi.mock("@decky/ui", async () => {
         },
         children as never,
       ),
-    Focusable: (p: AnyProps) => ce("div", p, p.children as never),
+    GamepadButton: { TRIGGER_LEFT: 7, TRIGGER_RIGHT: 8 },
+    // `onButtonDown` is Steam's, not the DOM's: it rides a "decky-button-down"
+    // listener, as in the global stub, rather than reaching the div as a prop.
+    Focusable: ({ onButtonDown, ...p }: AnyProps & { onButtonDown?: (e: Event) => void }) =>
+      ce(
+        "div",
+        {
+          ...p,
+          ref: (el: HTMLDivElement | null) => {
+            if (el && onButtonDown) el.addEventListener("decky-button-down", onButtonDown);
+          },
+        },
+        p.children as never,
+      ),
     Menu: (p: AnyProps & { label?: string }) =>
       ce("div", { "data-testid": "menu", "data-menu-label": p.label }, p.children as never),
     MenuItem: ({
@@ -461,6 +475,28 @@ describe("RomMPlaySection", () => {
       await flushAsync();
       expect(queryByTestId("play-button")).not.toBeNull();
       expect(capturedPlayButton[0]?.appId).toBe(testAppId);
+    });
+
+    it("hands L2 and R2 from the play row to the BIOS tab's emulator selector", async () => {
+      const step = vi.fn();
+      const Selector = () => {
+        useStepOnTriggers(step);
+        return null;
+      };
+      const { container } = render(
+        <EmulatorStepScope>
+          {() => (
+            <>
+              <Selector />
+              <RomMPlaySection appId={testAppId} />
+            </>
+          )}
+        </EmulatorStepScope>,
+      );
+      await flushAsync();
+      const row = container.querySelector(".romm-play-section-row") as HTMLElement;
+      fireEvent(row, new CustomEvent("decky-button-down", { detail: { button: 7 }, bubbles: true }));
+      expect(step).toHaveBeenCalledWith(-1);
     });
   });
 

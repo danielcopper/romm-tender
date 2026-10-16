@@ -30,7 +30,7 @@
  */
 
 import { useContext, type FC, type ReactNode } from "react";
-import { Focusable } from "@decky/ui";
+import { Focusable, type GamepadEvent } from "@decky/ui";
 import { ENTRY_STOP_ATTR, EntryPreferenceContext } from "../../utils/entryFocus";
 import { Columns } from "./Columns";
 
@@ -68,6 +68,8 @@ export interface ListDetailProps {
    * Off by default, because a row that DOES carry a control must leave A to it.
    */
   selectOnActivate?: boolean;
+  /** A gamepad button pressed anywhere on the list or the detail, before Steam acts on it. */
+  onButtonDown?: (evt: GamepadEvent) => void;
 }
 
 // The list takes about a third of the 806 px a wide tab panel offers.
@@ -80,10 +82,12 @@ export const ListDetail: FC<ListDetailProps> = ({
   renderDetail,
   listHeader,
   selectOnActivate,
+  onButtonDown,
 }) => {
   const preferEntry = useContext(EntryPreferenceContext);
   return (
     <Columns
+      {...(onButtonDown ? { onButtonDown } : {})}
       columns={[
         {
           id: "list",

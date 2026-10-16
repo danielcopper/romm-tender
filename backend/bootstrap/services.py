@@ -549,6 +549,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             core_info=cfg.adapters.core_info_provider,
             platform_systems=platform_systems,
             platform_core_reader=cfg.callbacks.platform_core_reader,
+            active_core=active_core_resolver,
             uow_factory=cfg.callbacks.uow_factory,
             conflict_rules=conflict_rules,
         ),

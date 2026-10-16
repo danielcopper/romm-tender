@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain import firmware_paths
 from domain.bios_file import BiosFile
-from domain.emulator_commands import resolve_platform_option
+from domain.emulator_commands import resolve_firmware_option
 from domain.firmware_groups import fetched_as_required
 from domain.retrodeck_folders import BIOS_DOWNLOAD
 from domain.rom_files import TMP_EXT
@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from services.firmware.demand import FirmwareDemand
     from services.firmware.listing import FirmwareListing
     from services.protocols import (
+        ActiveCoreReader,
         Clock,
         CoreInfoProvider,
         FirmwareFileStore,
@@ -51,7 +52,8 @@ class FirmwareDownloaderConfig:
     Holds the RomM API adapter the bytes come from, the two peer sub-services
     (the listing a platform's rows are picked out of, the demand each
     destination is resolved through), the ES-DE core reads and the per-platform
-    emulator override the required-only filter resolves its emulator from, the file
+    emulator override the required-only filter resolves its emulator from, the
+    per-game pick a game page's download places its files for, the file
     store, the clock the download timestamp is taken from, the Unit-of-Work
     factory the record is written through, and runtime infrastructure.
     """
@@ -62,6 +64,7 @@ class FirmwareDownloaderConfig:
     core_info: CoreInfoProvider
     platform_systems: PlatformSystems
     platform_core_reader: PlatformCoreReader
+    active_core: ActiveCoreReader
     firmware_file_store: FirmwareFileStore
     clock: Clock
     uow_factory: UnitOfWorkFactory
@@ -79,6 +82,7 @@ class FirmwareDownloader:
         self._core_info = config.core_info
         self._platform_systems = config.platform_systems
         self._platform_core_reader = config.platform_core_reader
+        self._active_core = config.active_core
         self._firmware_file_store = config.firmware_file_store
         self._clock = config.clock
         self._uow_factory = config.uow_factory
@@ -224,12 +228,18 @@ class FirmwareDownloader:
         """Download all firmware for a given platform slug.
 
         With *rom_id*, a downloaded game's files are placed for the system its
-        install record holds; without one, for the platform's current system.
+        install record holds and where the emulator THAT game launches with opens
+        them — its own pick over the platform's; without one, for the
+        platform's current system and pick.
         """
         await self._loop.run_in_executor(None, self._demand.download_root)
         platform_firmware = await self._platform_firmware_rows(platform_slug)
 
-        placements = await self._platform_placements(await self._platform_system(platform_slug, rom_id))
+        system = await self._platform_system(platform_slug, rom_id)
+        if rom_id is None:
+            placements = await self._platform_placements(system, platform_slug)
+        else:
+            placements = await self._rom_placements(system, platform_slug, int(rom_id))
         downloaded, errors = await self._download_firmware_batch(platform_firmware, placements)
 
         msg = f"Downloaded {downloaded} firmware files"
@@ -253,7 +263,9 @@ class FirmwareDownloader:
         avoid.
 
         A folder declaration is skipped whatever is at its destination: the
-        emulator lists that name, so there is no file to fetch into it.
+        emulator lists that name, so there is no file to fetch into it. So is a
+        file whose place could not be looked at: a download there could
+        overwrite a file nobody could see.
 
         A file whose download this service refuses (``Refused``, logged where it
         is refused) or that meets a RomM error (logged here, at the RomM error's
@@ -265,7 +277,7 @@ class FirmwareDownloader:
         errors = []
         for fw in platform_firmware:
             placement = placements.get(fw.get("file_name", ""))
-            if placement is not None and placement.declares_directory:
+            if placement is not None and (placement.declares_directory or placement.place_unreadable):
                 continue
             dest = self._demand.safe_dest_path(fw, placement)
             if dest is not None and self._firmware_file_store.exists(dest):
@@ -285,8 +297,13 @@ class FirmwareDownloader:
             downloaded += 1
         return downloaded, errors
 
-    async def download_platform_firmware_file(self, platform_slug, file_name) -> dict[str, Any]:
+    async def download_platform_firmware_file(
+        self, platform_slug, file_name, emulator: str | None = None
+    ) -> dict[str, Any]:
         """Download the one firmware file *file_name* the library holds for *platform_slug*.
+
+        It lands where *emulator* opens it — the emulator the page shows — and,
+        without one, where the platform's own pick does (:meth:`_shown_emulator`).
 
         The per-row Download button's backend. Addressed by name within the
         platform rather than by RomM's firmware id: the id is the server's, and
@@ -298,7 +315,8 @@ class FirmwareDownloader:
         rather than ``NOT_FOUND``, which is RomM's entity layer answering and
         carries deletion authority downstream.
 
-        A folder declaration is refused on the same condition the batch skips it
+        A file whose place could not be looked at is refused as the batch skips
+        it. A folder declaration is refused on the same condition the batch skips it
         on, and for the same reason: the emulator opens that name as a directory,
         so there is no file to fetch into it. Where the batch is sweeping a set
         and simply passes over the row, this answers one file the user named, so
@@ -319,11 +337,19 @@ class FirmwareDownloader:
         if not wanted:
             raise Refused("not_in_library", f"{file_name} is not in your RomM library for {platform_slug}")
 
-        placements = await self._platform_placements(await self._platform_system(platform_slug))
+        system = await self._platform_system(platform_slug)
+        catalogue = await self._platform_catalogue(system)
+        identity = await self._shown_emulator(catalogue, system, platform_slug, emulator)
+        placements = catalogue.placements_for(identity)
         fw = wanted[0]
         placement = placements.get(file_name)
         if placement is not None and placement.declares_directory:
             raise Refused("declares_directory", f"{file_name} is a folder the emulator opens, not a file to download")
+        if placement is not None and placement.place_unreadable:
+            raise Refused(
+                "place_unreadable",
+                f"The place {file_name} goes could not be looked at, so a download could overwrite a file nobody saw",
+            )
 
         # The already-there skip probes the disk rather than reading the
         # catalogue, for the reason the batch states: the catalogue's answer
@@ -335,25 +361,27 @@ class FirmwareDownloader:
         result = await self._download_one(fw["id"], placements)
         return {**result, "message": f"Downloaded {file_name}", "downloaded": 1}
 
-    async def download_required_firmware(self, platform_slug) -> dict[str, Any]:
-        """Download only the firmware the platform's launching emulator will not run without.
+    async def download_required_firmware(self, platform_slug, emulator: str | None = None) -> dict[str, Any]:
+        """Download only the firmware *emulator* will not run without, where it opens it.
 
-        The emulator is the platform's own pick — the per-platform override when
-        it still resolves, else the es_systems default — which is the same pick
-        the status surfaces judge by. What is fetched is
+        *emulator* is the one the page shows; without one it is the platform's
+        own pick — the per-platform override when it still resolves, else the
+        es_systems default — which is the same pick the status surfaces judge
+        by (:meth:`_shown_emulator`). What is fetched is
         :func:`~domain.firmware_groups.fetched_as_required`'s answer, the same
         rule each row's ``fetch_for_required`` carries to the button's count: the
         files the emulator requires, and the options of its one-of groups that
         serve a region nothing in place covers yet. A pick the resolver could not
-        identify falls back to "any emulator requires it".
+        identify fetches nothing, and answers as an emulator that requires
+        nothing does.
         """
         await self._loop.run_in_executor(None, self._demand.download_root)
         rows = await self._platform_firmware_rows(platform_slug)
 
         system = await self._platform_system(platform_slug)
-        identity = await self._loop.run_in_executor(None, self._platform_emulator_identity, system, platform_slug)
         catalogue = await self._platform_catalogue(system)
-        placements = catalogue.by_file_name()
+        identity = await self._shown_emulator(catalogue, system, platform_slug, emulator)
+        placements = catalogue.placements_for(identity)
         groups = catalogue.groups_for(identity)
         platform_firmware = [
             fw for fw in rows if fetched_as_required(placements.get(fw.get("file_name", "")), identity, groups)
@@ -366,11 +394,26 @@ class FirmwareDownloader:
             msg += f" ({len(errors)} failed: {', '.join(errors)})"
         return {"success": True, "message": msg, "downloaded": downloaded, "failed": errors}
 
+    async def _shown_emulator(
+        self, catalogue: FirmwareCatalogue, system: str, platform_slug: str, emulator: str | None
+    ) -> str | None:
+        """The emulator a download is for: the one the page shows, or the platform's pick.
+
+        A named emulator must be one the answer holds: placing for an emulator
+        nobody answered for would fall back to the first declarer's place, which
+        is where some OTHER emulator opens the file.
+        """
+        if emulator is None:
+            return await self._loop.run_in_executor(None, self._platform_emulator_identity, system, platform_slug)
+        if catalogue.verdict_for(emulator) is None:
+            raise Refused("emulator_unknown", f"Nothing is known about where {emulator} opens its BIOS files")
+        return emulator
+
     def _platform_emulator_identity(self, system: str, platform_slug: str) -> str | None:
         """The identity of the platform's resolved emulator, or ``None``.
 
         The same resolution the status surfaces read
-        (:func:`domain.emulator_commands.resolve_platform_option`), asked here
+        (:func:`domain.emulator_commands.resolve_firmware_option`), asked here
         rather than taken off a status payload because this path never builds
         one — and asked the same way, so a third answer to "which emulator is
         this platform about" cannot appear behind a download button.
@@ -380,7 +423,7 @@ class FirmwareDownloader:
         the raw *platform_slug*.
         """
         options = self._core_info.get_emulator_options(system)
-        emulator = resolve_platform_option(
+        emulator = resolve_firmware_option(
             options["options"], self._platform_core_reader.get_platform_core(platform_slug)
         )
         return emulator.emulator if emulator is not None else None
@@ -402,9 +445,33 @@ class FirmwareDownloader:
             install = uow.rom_installs.get(int(rom_id))
         return self._platform_systems.rom_system(platform_slug, install)
 
-    async def _platform_placements(self, system: str) -> Mapping[str, FirmwarePlacement]:
-        """Where *system*'s firmware files go, read off that platform's own demand."""
-        return (await self._platform_catalogue(system)).by_file_name()
+    async def _platform_placements(self, system: str, platform_slug: str) -> Mapping[str, FirmwarePlacement]:
+        """Where *system*'s firmware files go for the platform's launching emulator.
+
+        Each file goes to the place the resolver names for THAT emulator —
+        with YabaSanshiro picked for Saturn, ``saturn_bios.bin`` lands
+        directly under the BIOS root, not under Kronos's ``kronos/``. A file it
+        does not declare goes where its first declarer opens it.
+        """
+        identity = await self._loop.run_in_executor(None, self._platform_emulator_identity, system, platform_slug)
+        return (await self._platform_catalogue(system)).placements_for(identity)
+
+    async def _rom_placements(self, system: str, platform_slug: str, rom_id: int) -> Mapping[str, FirmwarePlacement]:
+        """Where *system*'s firmware files go for the emulator the game *rom_id* launches with.
+
+        The game's own pick — its override, then the platform's, then the
+        system default (``ActiveCoreReader.active_emulator_for_rom``) — so a
+        game set to Kronos on a YabaSanshiro platform gets ``kronos/saturn_bios.bin``.
+        Where the game resolves to none, the platform's BIOS pick answers
+        (:meth:`_platform_emulator_identity`), as it does for the game page's
+        BIOS tab, so the play row fetches for the emulator that tab names.
+        """
+        invocation = await self._loop.run_in_executor(None, self._active_core.active_emulator_for_rom, rom_id)
+        if invocation is not None:
+            identity = invocation.emulator
+        else:
+            identity = await self._loop.run_in_executor(None, self._platform_emulator_identity, system, platform_slug)
+        return (await self._platform_catalogue(system)).placements_for(identity)
 
     async def _platform_catalogue(self, system: str) -> FirmwareCatalogue:
         """*system*'s own demand — where its files go, and the groups its emulators state.

@@ -54,8 +54,8 @@ export interface PanelState {
   // Core info comes from the dedicated get_platform_core_info path (#923), not
   // from biosStatus — the two concerns are decoupled. It stays here rather than
   // in the BIOS tab because it has to reach the render in the SAME update as
-  // biosStatus: two updates would briefly highlight the previous core and name
-  // it in the Emulator column against the new core's requirements.
+  // biosStatus: two updates would briefly name the previous emulator in the
+  // Emulator column against the new emulator's requirements.
   coreInfo: CoreInfo | null;
   saveSyncEnabled: boolean;
   saveStatus: SaveStatus | null;

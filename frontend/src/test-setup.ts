@@ -180,12 +180,15 @@ vi.mock("@decky/ui", () => {
       ...rest
     }: AnyProps & { disabled?: boolean; className?: string }) =>
       // Forward className + the a11y/identity attrs (aria-label, title, …) so
-      // icon-only buttons (no text child) stay queryable in tests. style and
-      // the FooterLegend-only props are dropped — no DOM effect under happy-dom.
+      // icon-only buttons (no text child) stay queryable in tests. onFocus is
+      // forwarded so a test can tell a control that acts on a press from one that
+      // acts on focus. style and the FooterLegend-only props are dropped — no DOM
+      // effect under happy-dom.
       createElement(
         "button",
         {
           onClick,
+          onFocus: rest.onFocus as never,
           disabled,
           className,
           "aria-label": rest["aria-label"],
@@ -314,6 +317,7 @@ vi.mock("@decky/ui", () => {
       OK: 1,
       CANCEL: 2,
       SECONDARY: 3,
+      TRIGGER_LEFT: 7,
       TRIGGER_RIGHT: 8,
       DIR_UP: 9,
       DIR_DOWN: 10,
@@ -365,7 +369,6 @@ vi.mock("@decky/ui", () => {
         // user-facing copy, so it has to be assertable rather than dropped.
         p.description == null ? null : createElement("span", { "data-testid": "toggle-desc" }, p.description as never),
       ),
-    Dropdown: passthrough("select"),
     DropdownItem: (p: AnyProps) => createElement("select", {}, p.children as never),
     // Per-prop testids so bar wiring (nProgress / indeterminate) is assertable
     // without a local re-mock; mirrors DownloadProgressRow's own stub.
