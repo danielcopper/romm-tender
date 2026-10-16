@@ -232,24 +232,6 @@ interface FirmwareFile extends FirmwareVerdict {
 }
 
 /**
- * One platform as the `get_firmware_status` overview names it — and the whole of
- * what that call says about it.
- *
- * The overview answers WHICH platforms the page can speak for; what each one's
- * BIOS state IS costs a live per-system reading (59-175 ms on the reference
- * machine at emu-atlas 0.22), asked for one platform at a time through
- * `get_platform_firmware_status`. So there is deliberately no level, no count
- * and no file list here: every field a surface could colour a dot or word a
- * sentence from belongs to the answer that did the reading, and one that leaked
- * onto this payload would be rendered over a platform nobody has asked about
- * yet.
- */
-export interface FirmwarePlatformNamed {
-  platform_slug: string;
-  has_games?: boolean;
-}
-
-/**
  * One ES-DE `<command>` classified for launch-bakeability (#1210), the shape the
  * backend `get_emulator_options` / picker payloads carry. `kind` is `"libretro"`
  * (`core_so` set to the bare core name) or `"standalone"` (`core_so` null).
@@ -359,16 +341,15 @@ export interface SystemCoreInfo {
  * The library-wide path, distinct from the per-game `check_platform_bios`
  * payload, which no longer carries any core fields (#923). Its core fields are
  * a second answer to {@link SystemCoreInfo}'s question, kept because they cost
- * nothing extra once this platform's catalogue has been read; a platform the
- * backend has nothing to say about answers with no entry at all, which is why
- * the Platforms detail asks the core read directly rather than joining onto
- * this one.
+ * nothing extra once this platform's catalogue has been read.
  *
  * `files` is the union of what the RomM library offers for the platform and what
  * the platform's emulators ask for, so a row can be present with `on_server`
  * false — wanted, possibly missing, and not downloadable from here.
  */
-export interface FirmwarePlatformExt extends FirmwarePlatformNamed, EmulatorAnswer {
+export interface FirmwarePlatformExt extends EmulatorAnswer {
+  platform_slug: string;
+  has_games?: boolean;
   files: FirmwareFile[];
   all_downloaded?: boolean;
   /** The platform pick's IDENTITY — the same space as {@link CoreInfo.active_core}
@@ -412,27 +393,31 @@ export interface FirmwarePlatformExt extends FirmwarePlatformNamed, EmulatorAnsw
   deletable_count?: number;
 }
 
+/**
+ * The `get_firmware_status` overview: whether RomM's firmware listing could be
+ * read, which the downloads stand on. It carries nothing about any platform —
+ * which platforms get a BIOS answer is the page's list, and each answer is a
+ * live per-system reading asked for through `get_platform_firmware_status`.
+ */
 export interface FirmwareStatus {
   success: boolean;
   message?: string;
   server_offline?: boolean;
-  platforms: FirmwarePlatformNamed[];
 }
 
 /**
  * One platform's answer from `get_platform_firmware_status`.
  *
- * `platform` is `null` where the backend has nothing to say — a platform the
- * RomM library holds no firmware for, whose reading finished and found its
- * emulators want none either. That is a FINISHED answer and not a failure: a
- * read that never came back is a rejected promise, and the page words the two
- * differently.
+ * Every platform answers with its entry: one whose reading did not happen says
+ * so through its verdict (`bios_level: "unknown"`, `emulator_read: false`), and
+ * one whose launching emulator needs nothing through its verdict too. A read
+ * that never came back is a rejected promise, and the page words it apart.
+ *
+ * The failing arm is not sent today; it is typed so that the page's handling
+ * of one cannot read an entry off it.
  */
-export interface PlatformFirmwareStatus {
-  success: boolean;
-  message?: string;
-  platform: FirmwarePlatformExt | null;
-}
+export type PlatformFirmwareStatus =
+  { success: true; platform: FirmwarePlatformExt } | { success: false; message?: string };
 
 export interface BiosFileStatus extends FirmwareVerdict {
   file_name: string;

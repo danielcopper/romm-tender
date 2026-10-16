@@ -54,7 +54,7 @@ describe("LibraryPage", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: [] });
-    vi.mocked(backend.getFirmwareStatus).mockResolvedValue({ success: true, platforms: [] });
+    vi.mocked(backend.getFirmwareStatus).mockResolvedValue({ success: true });
     vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({ platforms: [] });
     vi.mocked(backend.getCollections).mockResolvedValue({ success: true, collections: [] });
     vi.mocked(backend.getSettings).mockResolvedValue(settings());
@@ -113,7 +113,7 @@ describe("LibraryPage", () => {
         success: true,
         platforms: [{ id: 1, name: "Game Boy Advance", slug: "gba", rom_count: 12, sync_enabled: false }],
       });
-      vi.mocked(backend.getPlatformFirmwareStatus).mockResolvedValue({ success: true, platform: null });
+      vi.mocked(backend.getPlatformFirmwareStatus).mockRejectedValue(new Error("net"));
       vi.mocked(backend.getSystemCoreInfo).mockRejectedValue(new Error("net"));
       vi.mocked(backend.countPlatformSaves).mockResolvedValue({ count: 0 });
     });

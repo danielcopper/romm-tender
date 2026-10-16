@@ -192,7 +192,7 @@ describe("Library › Collections", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: [] });
-    vi.mocked(backend.getFirmwareStatus).mockResolvedValue({ success: true, platforms: [] });
+    vi.mocked(backend.getFirmwareStatus).mockResolvedValue({ success: true });
     vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({ platforms: [] });
     vi.mocked(backend.getSettings).mockResolvedValue(settings());
     vi.mocked(backend.saveCollectionSync).mockResolvedValue({ success: true });

@@ -639,9 +639,9 @@ export const removeSgdbApiKey = endpoint<[], { success: boolean; message: string
 export const verifySgdbApiKey = endpoint<[string], { success: boolean; message: string }>("verify_sgdb_api_key");
 export const saveSteamInputSetting = endpoint<[string], { success: boolean }>("save_steam_input_setting");
 export const applySteamInputSetting = endpoint<[], { success: boolean; message: string }>("apply_steam_input_setting");
-// Which platforms the BIOS page can speak for — not what it will say about any
-// of them. The state costs a live per-system reading, so it is asked for one
-// platform at a time below, in the order the page's own list is in.
+// Whether RomM's firmware listing could be read — nothing about any platform.
+// A platform's state costs a live per-system reading, so it is asked for one
+// platform at a time below, for every platform the page's own list shows.
 export const getFirmwareStatus = endpoint<[], FirmwareStatus>("get_firmware_status");
 export const getPlatformFirmwareStatus = endpoint<[string], PlatformFirmwareStatus>("get_platform_firmware_status");
 // The ROM is the game whose page started the download, whose install record names
@@ -716,9 +716,7 @@ export const clearGameCore = endpoint<[number], GameCoreApplyResult>("clear_game
 export const getPlatformCoreInfo = endpoint<[number], CoreInfo>("get_platform_core_info");
 // The platform-keyed twin (#1815): the Library page's Platforms detail asks it
 // once per selected platform. Distinct from getPlatformCoreInfo, which layers a
-// ROM's own pin on top and so cannot answer for a platform with no synced ROM;
-// distinct from the emulator fields on getFirmwareStatus, which cover only the
-// platforms that payload has something to say about.
+// ROM's own pin on top and so cannot answer for a platform with no synced ROM.
 export const getSystemCoreInfo = endpoint<[string], SystemCoreInfo>("get_system_core_info");
 
 /** Every detected emulator source, in the user's order, with its health and its switch. */

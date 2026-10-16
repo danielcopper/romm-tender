@@ -631,8 +631,8 @@ stale snapshot.
 The Library page's platform detail reads its core through **`get_system_core_info(platform_slug)`**, a read of its own
 rather than a slice of another payload: `get_platform_core_info` is keyed by ROM and layers that ROM's own pin on top,
 and `get_platform_firmware_status` answers whenever the page's walk reaches that platform — which is not when the reader
-focuses it, and never at all for a platform the page has nothing to say about. It costs one ES-DE options read and a
-`settings.json` lookup, opens no Unit of Work, and is issued once per selection.
+focuses it. It costs one ES-DE options read and a `settings.json` lookup, opens no Unit of Work, and is issued once per
+selection.
 
 Its **`active_core_label`** is `domain.emulator_commands.resolve_platform_label` — the platform-level projection of the
 read-path precedence: the per-platform override (`platform_cores`) when it is set and still resolves to a bakeable

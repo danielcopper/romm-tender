@@ -163,31 +163,53 @@ function firmwarePlatform(
 }
 
 /**
- * Seed BOTH halves of the page's BIOS read from one list of platforms: the
- * overview naming them, and each platform's own answer.
+ * What the backend answers for a platform whose reading did not happen — no
+ * system, no installation, a refused or sealed catalogue: no pick, no row, no
+ * entry per emulator, and a verdict nothing established.
+ */
+function unreadPlatform(slug: string): FirmwarePlatformExt {
+  return firmwarePlatform({
+    platform_slug: slug,
+    active_core_label: null,
+    files: [],
+    has_games: false,
+    bios_level: "unknown",
+    emulator_read: false,
+    locating: "unestablished",
+    required_count: 0,
+    required_downloaded: 0,
+    server_count: 0,
+    local_count: 0,
+    ratio_server_count: 0,
+    ratio_local_count: 0,
+  });
+}
+
+/**
+ * Seed BOTH halves of the page's BIOS read: the overview's `server_offline`,
+ * and each platform's own answer from one list of platforms.
  *
  * One fixture, because a test that seeded only the overview would leave every
  * per-platform read unmocked — which is a rejected promise, i.e. a read that
  * failed, and the page words that differently from every state these tests are
- * about. A platform not in the list answers `platform: null`, which is what the
- * backend says about one it has nothing to say about.
+ * about. A platform not in the list answers as one whose reading did not
+ * happen ({@link unreadPlatform}): no system or emulator source behind it.
  */
 function mockFirmware(platforms: FirmwarePlatformExt[], opts: { serverOffline?: boolean } = {}): void {
   vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
     success: true,
     server_offline: opts.serverOffline ?? false,
-    platforms: platforms.map((p) => ({ platform_slug: p.platform_slug, has_games: p.has_games ?? false })),
   });
   vi.mocked(backend.getPlatformFirmwareStatus).mockImplementation(async (slug: string) => ({
     success: true,
-    platform: platforms.find((p) => p.platform_slug === slug) ?? null,
+    platform: platforms.find((p) => p.platform_slug === slug) ?? unreadPlatform(slug),
   }));
 }
 
 /** One per-platform read the page has issued and is waiting on. */
 interface PendingRead {
   slug: string;
-  answer: (platform: FirmwarePlatformExt | null) => void;
+  answer: (platform: FirmwarePlatformExt) => void;
 }
 
 /**
@@ -211,7 +233,7 @@ function deferredPlatformReads(): PendingRead[] {
 }
 
 /** Answer the outstanding read for *slug* and let the page settle. */
-async function resolveRead(pending: PendingRead[], slug: string, platform: FirmwarePlatformExt | null): Promise<void> {
+async function resolveRead(pending: PendingRead[], slug: string, platform: FirmwarePlatformExt): Promise<void> {
   const read = pending.find((p) => p.slug === slug);
   if (!read) throw new Error(`no read outstanding for ${slug}`);
   await act(async () => {
@@ -572,12 +594,13 @@ describe("Library › Platforms", () => {
       expect(dot!.style.backgroundColor).toBe(biosColorForLevel(null));
     });
 
-    it("draws a row still waiting for its answer apart from one nothing is known about", async () => {
-      // The distinction this whole lazy read stands on. Both rows hold no
-      // answer, and if they render alike the reader takes "nothing could be
-      // established" off a platform whose turn has not come — which is most of
-      // the list, for the first seconds of every visit. A solid dot is a
-      // verdict; an outline is the absence of one.
+    it("draws a row still waiting for its answer apart from one nothing could be established for", async () => {
+      // The distinction this whole lazy read stands on. The waiting row holds no
+      // entry yet and the other holds one whose level is unknown, so the level
+      // cannot tell them apart — the read state does. If they render alike the
+      // reader takes "nothing could be established" off a platform whose turn
+      // has not come — which is most of the list, for the first seconds of every
+      // visit. A solid dot is an answer; an outline is the absence of one.
       mockFirmware([firmwarePlatform()]);
       const pending = deferredPlatformReads();
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
@@ -592,16 +615,16 @@ describe("Library › Platforms", () => {
       expect(dot().style.border).toContain(biosColorForLevel(null));
       expect(rowTitle()).toBe("Checking this platform's BIOS files…");
       expect(container.textContent).toContain("Checking what this platform needs…");
-      expect(container.textContent).not.toContain("Nothing is known about this platform");
+      expect(container.textContent).not.toContain("Nothing could be established");
 
-      // The same row once the answer is in: a solid dot, and words that are an
-      // answer rather than a wait.
-      await resolveRead(pending, "gba", null);
+      // The same row once a reading that did not happen is in: a solid dot,
+      // and words that are an answer rather than a wait.
+      await resolveRead(pending, "gba", unreadPlatform("gba"));
 
-      expect(dot().style.backgroundColor).toBe(biosColorForLevel(null));
+      expect(dot().style.backgroundColor).toBe(biosColorForLevel("unknown"));
       expect(dot().style.border).toBe("");
-      expect(rowTitle()).toBe("Nothing is known about this platform's BIOS files");
-      expect(container.textContent).toContain("Nothing is known about this platform");
+      expect(rowTitle()).toBe("Nothing could be established about what the launching emulator needs");
+      expect(container.textContent).not.toContain("Checking what this platform needs…");
     });
 
     it("asks the platform the reader is on before the ones above it", async () => {
@@ -656,6 +679,81 @@ describe("Library › Platforms", () => {
       // platform behind it is never asked for: the walk is not work that
       // outlives the page it is for.
       expect(pending.map((p) => p.slug)).toEqual(["gba"]);
+    });
+
+    it("reads every platform the list shows, top to bottom", async () => {
+      // The payload's order is not the list's: the list puts Synced above
+      // Available and sorts each by name. The walk follows what the reader
+      // sees.
+      vi.mocked(backend.getPlatforms).mockResolvedValue({
+        success: true,
+        platforms: [
+          platform({ id: 1, name: "Super Nintendo", slug: "snes", sync_enabled: false }),
+          platform({ id: 2, name: "Game Boy Advance", slug: "gba", sync_enabled: true }),
+          platform({ id: 3, name: "Nintendo 64", slug: "n64", sync_enabled: false }),
+          platform({ id: 4, name: "Dreamcast", slug: "dc", sync_enabled: true }),
+        ],
+      });
+      mockFirmware([]);
+      const pending = deferredPlatformReads();
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      for (const slug of ["dc", "gba", "n64", "snes"]) {
+        await resolveRead(pending, slug, unreadPlatform(slug));
+      }
+
+      const shown = [...container.querySelectorAll<HTMLElement>('[data-testid^="bios-dot-"]')].map((dot) =>
+        dot.dataset.testid!.replace("bios-dot-", ""),
+      );
+      expect(shown).toEqual(["dc", "gba", "n64", "snes"]);
+      expect(pending.map((p) => p.slug)).toEqual(shown);
+    });
+
+    it("shows the selector and the verdict of a platform with no synced game and no BIOS file in the library", async () => {
+      // PlayStation 2 as the device has it: games on RomM, none synced, no
+      // BIOS file in the library. Its emulator still needs an image, and the
+      // page has to say so.
+      vi.mocked(backend.getPlatforms).mockResolvedValue({
+        success: true,
+        platforms: [
+          platform({ id: 1, name: "Nintendo 64", slug: "n64", sync_enabled: true }),
+          platform({ id: 2, name: "PlayStation 2", slug: "ps2", sync_enabled: false }),
+        ],
+      });
+      const ps2 = firmwarePlatform({
+        platform_slug: "ps2",
+        has_games: false,
+        active_core_label: "PCSX2",
+        files: [
+          firmwareFile({
+            file_name: "scph39001.bin",
+            on_server: false,
+            declared_by: "PCSX2",
+            satisfied: false,
+            fetch_for_required: true,
+          }),
+        ],
+        emulator_tabs: [
+          { emulator: "PCSX2", label: "PCSX2", launching: true, requirements_met: false },
+          { emulator: "pcsx2_libretro.so", label: "LRPS2", launching: false, requirements_met: false, rows: [] },
+        ],
+        server_count: 0,
+        local_count: 0,
+        ratio_server_count: 0,
+        ratio_local_count: 0,
+      });
+      mockFirmware([firmwarePlatform({ platform_slug: "n64" }), ps2]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      await focusRow(container, "PlayStation 2");
+
+      expect(container.querySelector<HTMLElement>('[data-testid="bios-dot-ps2"]')!.style.backgroundColor).toBe(
+        biosColorForLevel("missing"),
+      );
+      expect(container.querySelector('[data-testid="emulator-selector"]')).not.toBeNull();
+      expect(container.textContent).toContain("The one file PCSX2 opens by name is not in place");
+      expect(container.textContent).not.toContain("Checking what this platform needs…");
     });
 
     it("drops an answer from a previous visit rather than writing it over this one's", async () => {
@@ -1571,19 +1669,25 @@ describe("Library › Platforms", () => {
       expect(heldRun(gamePage.textContent)).toBe(expected);
     });
 
-    it("tells a failed BIOS read apart from a platform the overview cannot speak for", async () => {
-      vi.mocked(backend.getFirmwareStatus).mockRejectedValue(new Error("net"));
+    it("tells a failed BIOS read apart from a platform nothing could be established for", async () => {
+      vi.mocked(backend.getPlatformFirmwareStatus).mockRejectedValue(new Error("net"));
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
+      const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
+        el.textContent.includes("Game Boy Advance"),
+      );
+      // A failed read holds no entry, as a waiting one does not either: the
+      // row's words come off the read state, never off the entry being absent.
+      expect(row?.title).toBe("Could not read this platform's BIOS state");
       expect(container.textContent).toContain("Could not read the BIOS state");
-      expect(container.textContent).not.toContain("Nothing is known about this platform");
+      expect(container.textContent).not.toContain("Nothing could be established");
     });
 
-    it("retries the overview when the reader picks a platform again", async () => {
-      // The pane tells the reader to pick the platform again, and on this pane
-      // the read that failed was the overview — nothing else would ever ask for
-      // it, so the line has to be true here too.
+    it("reads every platform though the overview did not come back", async () => {
+      // The overview says only whether RomM's listing could be read; which
+      // platforms get an answer is the list's. So a failed overview leaves
+      // every row to its own read rather than taking them all down with it.
       vi.mocked(backend.getPlatforms).mockResolvedValue({
         success: true,
         platforms: [
@@ -1591,13 +1695,9 @@ describe("Library › Platforms", () => {
           platform({ id: 2, name: "Nintendo 64", slug: "n64" }),
         ],
       });
-      mockFirmware([firmwarePlatform({ platform_slug: "n64", bios_level: "ok" })]);
-      vi.mocked(backend.getFirmwareStatus).mockRejectedValueOnce(new Error("net"));
+      mockFirmware([firmwarePlatform(), firmwarePlatform({ platform_slug: "n64", bios_level: "ok" })]);
+      vi.mocked(backend.getFirmwareStatus).mockRejectedValue(new Error("net"));
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
-      await flushAsync();
-      expect(container.textContent).toContain("Could not read the BIOS state");
-
-      await focusRow(container, "Nintendo 64");
       await flushAsync();
 
       expect(container.textContent).not.toContain("Could not read the BIOS state");
@@ -1606,21 +1706,8 @@ describe("Library › Platforms", () => {
       );
     });
 
-    it("reads a platform the overview simply has no entry for as an answer", async () => {
-      mockFirmware([]);
-      const { container } = render(<LibraryPage onBack={vi.fn()} />);
-      await flushAsync();
-
-      expect(container.textContent).toContain("Nothing is known about this platform");
-      expect(container.textContent).not.toContain("Could not read the BIOS state");
-    });
-
     it("surfaces a BIOS read that answered a failure rather than dropping it", async () => {
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: false,
-        platforms: [],
-        message: "backend said no",
-      });
+      vi.mocked(backend.getPlatformFirmwareStatus).mockResolvedValue({ success: false, message: "backend said no" });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1679,21 +1766,21 @@ describe("Library › Platforms", () => {
 
       await focusRow(container, "Nintendo 64");
 
-      expect(container.textContent).toContain("Nothing is known about this platform");
+      expect(container.textContent).toContain("Nothing could be established about what the launching emulator needs");
       expect(container.textContent).not.toContain("may be out of date");
       expect(container.textContent).not.toContain("Could not read the BIOS state.");
     });
 
-    it("keeps the no-entry wording after a failed re-read of a platform with nothing to say", async () => {
-      // "Nothing is known about this platform" is an ANSWER, and a failed
-      // re-read does not take it back — it warns beside it. The pane that says
-      // nothing could be read is the one holding no answer at all, which is a
-      // different pane and a different sentence.
+    it("keeps a nothing-established answer after a failed re-read", async () => {
+      // "Nothing could be established" is an ANSWER, and a failed re-read does
+      // not take it back — it warns beside it. The pane that says nothing could
+      // be read is the one holding no answer at all, which is a different pane
+      // and a different sentence.
       mockFirmware([]);
       vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true, rebake_items: [] });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
-      expect(container.textContent).toContain("Nothing is known about this platform");
+      expect(container.textContent).toContain("Nothing could be established about what the launching emulator needs");
 
       // A core change is what re-reads this platform; this one fails.
       vi.mocked(backend.getPlatformFirmwareStatus).mockRejectedValue(new Error("net"));
@@ -1704,7 +1791,7 @@ describe("Library › Platforms", () => {
       await pickFromCoreMenu("VBA Next");
       await flushAsync();
 
-      expect(container.textContent).toContain("Nothing is known about this platform");
+      expect(container.textContent).toContain("Nothing could be established about what the launching emulator needs");
       expect(container.textContent).toContain("may be out of date");
       expect(container.textContent).not.toContain("Could not read the BIOS state.");
     });

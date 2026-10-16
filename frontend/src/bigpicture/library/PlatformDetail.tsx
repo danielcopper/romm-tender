@@ -1089,9 +1089,9 @@ const RemoveSection: FC<{ row: PlatformRow; state: PlatformsPageState }> = ({ ro
           </span>
         </DialogButton>
       </ButtonRow>
-      {/* The one read of the five whose failure had nothing to say. With the
-          spinner above it that became worse rather than better — a spinner that
-          never stops — so the two land together. */}
+      {/* One of the six reads this page makes. Its failure gets a line because
+          with the spinner above it, a silent failure is a spinner that never
+          stops — so the two land together. */}
       {saveCount === null && (
         <Muted>Could not read how many save files this platform holds. Pick the platform again to retry.</Muted>
       )}
@@ -1228,19 +1228,15 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
       ) : (
         <>
           <SectionTitle title="BIOS files" />
-          {/* Three ways to have no rows, and they are three different
+          {/* Two ways to have no answer, and they are two different
               sentences. A read still out is a question nobody has answered yet
               — said as one, because the alternative is the reader taking the
               silence for "nothing needed" on a platform whose turn simply has
               not come. A read that did not come back is a question that could
-              not be asked. What is left is a finished answer: there is nothing
-              to manage here. */}
+              not be asked. */}
           {row.firmwareState === "pending" && <Muted fontSize={NOTE_FONT}>Checking what this platform needs…</Muted>}
           {row.firmwareState === "failed" && (
             <Muted fontSize={NOTE_FONT}>Could not read the BIOS state. Pick the platform again to retry.</Muted>
-          )}
-          {row.firmwareState === "nothing" && (
-            <Muted fontSize={NOTE_FONT}>Nothing is known about this platform&apos;s BIOS files.</Muted>
           )}
         </>
       )}

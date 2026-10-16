@@ -1338,31 +1338,32 @@ Format: **invariant** — tier — enforced by.
   (`resolve_platform_option`), and where nothing is bakeable the emulator RetroDECK declares first, installed or not,
   which its plain launch starts unless an alternative emulator is set in ES-DE (#2190 D26) — and it is the read-path
   precedence `ActiveCoreResolver` applies minus the per-game layer. Two call sites read it today:
-  `FirmwareStatusReader._platform_emulator` (which serves BOTH the overview's `active_core` / `active_core_label` and
-  `check_platform_bios`'s `launching_emulator=None` fallback) and `FirmwareDownloader._platform_emulator_identity`
-  (which also answers a game's "Download BIOS" where the game resolves to no emulator). The platform's core read
-  (`CoreService.get_system_core_info`) is not one of them: its `active_core_label` is the bake pick alone
-  (`resolve_platform_label`), and agrees with the BIOS pick wherever a bakeable emulator exists. **Nothing joins them**,
-  and a fourth resolution is exactly what this entry is about: the pane displayed a just-picked PCSX ReARMed and judged
-  the platform by the libretro system default beside it, so one PlayStation read `ok` on the game page and `missing` on
-  the pane. `.label` and `.emulator` must come off ONE call — two calls agree by coincidence, which is what the old pair
-  did until an override was set. **One seam now carries the pick rather than a projection of it**: `BiosChecker` takes a
-  `LaunchingEmulator` (`domain/emulator_commands.py` — `emulator` and `label`, both read-only), so the per-game caller
-  hands over the whole resolution and `check_platform_bios` reads both projections off that one value. A mismatched pair
-  is not representable there, which is why the answer may state its own `active_core_label`: it is the label half of the
-  pick those very counts were filtered by (`TestTheAnswerNamesTheEmulatorItJudgedBy`, which hands the check two picks
-  differing only in label and holds the label to moving while the judgment does not). That covers this seam and no other
-  — the remaining sites still pair by discipline. The game page's BIOS headline names the emulator by the answer's
-  launching entry in `emulator_tabs` — every label its identity goes by (#2190 D28, D38) — and by `active_core_label`
-  only where no entry is the launching emulator's (`launchingName` in `frontend/src/utils/biosSummary.ts`). **The key is
-  the emulator IDENTITY, not `.core_so`** (#1821): the identity names a standalone pick as readily as a libretro one,
-  where `core_so` is `None` for every standalone emulator, and a pick with no identity is answered as not established
-  (#2190 D26). Reaching for `.core_so` here again would turn every standalone pick into that answer silently, because
-  the field is still there and still right for the picker payload beside it. `CoreInfoProvider.get_active_core` — the
-  "first libretro entry, bakeable or not" reading these sites used — has no production caller left. **The ROM scope is
-  the same rule one layer in, over a different pair of modules**: the game page is assembled by two services that each
-  ask `ActiveCoreReader.active_emulator_for_rom` for themselves — `services/cores.py::get_platform_core_info` names the
-  pick in the picker, `services/game_detail.py::get_bios_status` scopes the BIOS question to it — and
+  `FirmwareStatusReader._platform_emulator` (which serves BOTH the per-platform answer's `active_core` /
+  `active_core_label` and `check_platform_bios`'s `launching_emulator=None` fallback) and
+  `FirmwareDownloader._platform_emulator_identity` (which also answers a game's "Download BIOS" where the game resolves
+  to no emulator). The platform's core read (`CoreService.get_system_core_info`) is not one of them: its
+  `active_core_label` is the bake pick alone (`resolve_platform_label`), and agrees with the BIOS pick wherever a
+  bakeable emulator exists. **Nothing joins them**, and a fourth resolution is exactly what this entry is about: the
+  pane displayed a just-picked PCSX ReARMed and judged the platform by the libretro system default beside it, so one
+  PlayStation read `ok` on the game page and `missing` on the pane. `.label` and `.emulator` must come off ONE call —
+  two calls agree by coincidence, which is what the old pair did until an override was set. **One seam now carries the
+  pick rather than a projection of it**: `BiosChecker` takes a `LaunchingEmulator` (`domain/emulator_commands.py` —
+  `emulator` and `label`, both read-only), so the per-game caller hands over the whole resolution and
+  `check_platform_bios` reads both projections off that one value. A mismatched pair is not representable there, which
+  is why the answer may state its own `active_core_label`: it is the label half of the pick those very counts were
+  filtered by (`TestTheAnswerNamesTheEmulatorItJudgedBy`, which hands the check two picks differing only in label and
+  holds the label to moving while the judgment does not). That covers this seam and no other — the remaining sites still
+  pair by discipline. The game page's BIOS headline names the emulator by the answer's launching entry in
+  `emulator_tabs` — every label its identity goes by (#2190 D28, D38) — and by `active_core_label` only where no entry
+  is the launching emulator's (`launchingName` in `frontend/src/utils/biosSummary.ts`). **The key is the emulator
+  IDENTITY, not `.core_so`** (#1821): the identity names a standalone pick as readily as a libretro one, where `core_so`
+  is `None` for every standalone emulator, and a pick with no identity is answered as not established (#2190 D26).
+  Reaching for `.core_so` here again would turn every standalone pick into that answer silently, because the field is
+  still there and still right for the picker payload beside it. `CoreInfoProvider.get_active_core` — the "first libretro
+  entry, bakeable or not" reading these sites used — has no production caller left. **The ROM scope is the same rule one
+  layer in, over a different pair of modules**: the game page is assembled by two services that each ask
+  `ActiveCoreReader.active_emulator_for_rom` for themselves — `services/cores.py::get_platform_core_info` names the pick
+  in the picker, `services/game_detail.py::get_bios_status` scopes the BIOS question to it — and
   `::TestOneRomOneEmulator` asserts they agree across every way a ROM arrives at an emulator (nothing pinned, the
   platform's pick, a per-game override, the override over a platform pick naming something else, a standalone pick, a
   stale pin that degrades). They read one seam today and nothing says they must; the picker reaching for
@@ -1396,27 +1397,28 @@ Format: **invariant** — tier — enforced by.
   exercises the weaker resolution
 - **A platform's BIOS answer is asked for one platform at a time, and a row that has not got one yet is never rendered
   as a row nothing could be established for** — test + prompt-only —
-  `frontend/src/bigpicture/library/PlatformsTab.test.tsx` pins the four halves that can be seen from a test: the two
-  renderings apart (an outline dot and "Checking…" against the solid grey dot and "Nothing is known"), the focused row
-  asked ahead of the rows above it, the walk stopping at unmount, and a read issued before a core change not overwriting
-  the one issued after it. Each was mutation-checked. **The JOIN between the two calls is pinned once**, in
-  `tests/contract/test_firmware_status_read.py`: it composes them over the real wiring and holds the result against the
-  key set the single whole-page call answered with, which is the one thing the service tier cannot do — its ~25
-  whole-page tests compose through a local helper that would reproduce a composition bug rather than catch it. **The
+  `frontend/src/bigpicture/library/PlatformsTab.test.tsx` pins the five parts that can be seen from a test: the two
+  renderings apart (an outline dot and "Checking…" against the solid grey dot and "Nothing could be established"), the
+  walk reading every listed platform in the list's own order, the focused row asked ahead of the rows above it, the walk
+  stopping at unmount, and a read issued before a core change not overwriting the one issued after it. Each was
+  mutation-checked. **The JOIN between the calls is pinned once**, in `tests/contract/test_firmware_status_read.py`: it
+  composes the list, the overview and one per-platform call per listed platform over the real wiring and holds the
+  result against the key set the single whole-page call answered with, which is the one thing the service tier cannot do
+  — its ~25 pane tests ask through a local helper that would reproduce a composition bug rather than catch it. **The
   rule spans three frontend modules and one backend split, and nothing joins them.** `services/firmware/status.py`
-  answers `get_firmware_status` (which platforms the page can speak for) and `get_platform_firmware_status` (one
-  platform's whole entry, which pays a live per-system reading — measured in
-  [qam-panel.md, "Library"](qam-panel.md#library)); `usePlatformsPage` owns the walk, the per-slug ordering counter and
-  the four-valued `firmwareState`; `PlatformsTab` draws the dot; `PlatformDetail` words the pane. Every failure here is
-  silent and looks like an answer. A state-bearing field creeping back onto the overview payload gets rendered over a
-  platform nobody has asked about yet. A fifth rendering path reading `firmware === null` instead of the state says
-  "nothing could be established" about most of the list for the first seconds of every visit — which is the confusion
-  this cut exists to remove, restored by a truthiness test. An answer already held is not taken back by a later failure
-  (`firmwareStale` beside the state, never instead of it), and "the overview did not name this platform" is one of the
-  two ways to hold one. **Two halves no test reaches**: the `alive` guard in the hook's `accept` is unobservable under
-  React Testing Library, which drops a write to an unmounted tree itself — what a test can see is the walk stopping, so
-  the guard states the rule rather than being held to it; and whether an 8px outline reads as "not yet" against a filled
-  dot is device-only, like everything else about this list's legibility
+  answers `get_firmware_status` (whether RomM's firmware listing could be read, and nothing about any platform) and
+  `get_platform_firmware_status` (one platform's whole entry, for every platform it is asked about, which pays a live
+  per-system reading — measured in [qam-panel.md, "Library"](qam-panel.md#library)); `usePlatformsPage` owns the walk,
+  the per-slug ordering counter and the three-valued `firmwareState`; `PlatformsTab` draws the dot; `PlatformDetail`
+  words the pane. Every failure here is silent and looks like an answer. A platform-bearing field creeping back onto the
+  overview payload gets rendered over a platform nobody has asked about yet. A fifth rendering path reading
+  `firmware === null` instead of the state says "nothing could be established" about most of the list for the first
+  seconds of every visit — which is the confusion this cut exists to remove, restored by a truthiness test. An answer
+  already held is not taken back by a later failure (`firmwareStale` beside the state, never instead of it). **Two
+  halves no test reaches**: the `alive` guard in the hook's `accept` is unobservable under React Testing Library, which
+  drops a write to an unmounted tree itself — what a test can see is the walk stopping, so the guard states the rule
+  rather than being held to it; and whether an 8px outline reads as "not yet" against a filled dot is device-only, like
+  everything else about this list's legibility
 - **The whole-machine firmware inventory is never asked with content verification, and the per-platform reading is never
   asked without it** — prompt-only — `firmware_inventory()` (`FirmwareResolver`, `AtlasFirmwareAdapter`) is asked
   unverified: `verify=True` there sweeps every unclaimed file under the BIOS root plus each declared file the packaged

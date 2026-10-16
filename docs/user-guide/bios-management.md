@@ -307,11 +307,12 @@ and the row you focus is the one the right-hand pane describes.
    on the right-hand pane, which also states them in full. With a mouse, hovering the row states it in a sentence — once
    the platform has been read, the same sentence the pane shows
 3. The dots fill in one platform at a time, from the top, and the platform you are on is always looked at next — so the
-   pane you have open does not wait behind the rows above it. A row that is still being checked draws its dot as an
-   **outline** rather than a filled circle, and its pane says "Checking what this platform needs…"; that is why a grey
-   filled dot can be trusted to mean "nothing to say" rather than "not looked at yet" (a read that failed says so in the
-   pane). Checking one platform takes a tenth to half a second on a Steam Deck, so a library of thirty is done in a few
-   seconds, and leaving the page stops the work
+   pane you have open does not wait behind the rows above it. Every platform in the list is looked at, whether or not
+   your RomM library holds BIOS files for it and whether or not any of its games is synced. A row that is still being
+   checked draws its dot as an **outline** rather than a filled circle, and its pane says "Checking what this platform
+   needs…"; that is why a grey filled dot can be trusted to mean "not established" rather than "not looked at yet" (a
+   read that failed says so in the pane). Checking one platform takes a tenth to half a second on a Steam Deck, so a
+   library of thirty is done in a few seconds, and leaving the page stops the work
 4. Move down the list to pick a platform; the pane on the right changes with the focus
 5. The pane's first line names the platform. The smaller grey line under it names the emulator it launches with — by
    name, in grey when it is the platform's default and in gold when you have picked something else — then how many ROMs
@@ -506,9 +507,8 @@ without a confirmation; that copy is gone.
 ## Which Systems Need BIOS?
 
 This depends on your emulators, not on your library. Common systems that require BIOS files include PlayStation, PS2,
-Saturn, Dreamcast, and some arcade systems. A platform appears with a BIOS status when your RomM library holds firmware
-for it **or** one of its emulators asks for a file — so a missing BIOS you have never uploaded is visible rather than
-silent.
+Saturn, Dreamcast, and some arcade systems. Every platform in **Library › Platforms** gets a BIOS status, whether or not
+your RomM library holds firmware for it — so a missing BIOS you have never uploaded is visible rather than silent.
 
 ### Where Tender gets its answers
 
@@ -578,8 +578,7 @@ and it reads green.
 
 The second is a system with **no files on the page at all**, where the launching emulator could not be asked either. An
 empty list means "nothing here wants anything" only when the emulator was asked; with it unread the list means nothing,
-and reporting it as ready would be an all-clear over firmware nobody checked. The system keeps its place in the platform
-list for the same reason — dropping it would say there is nothing to manage.
+and reporting it as ready would be an all-clear over firmware nobody checked.
 
 Both shapes, and a file reading unknown, come from the launching emulator not having been asked, and that has more than
 one cause:

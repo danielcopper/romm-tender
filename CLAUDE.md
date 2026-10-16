@@ -927,7 +927,7 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **A platform's BIOS answer is asked for one platform at a time, and a row that has not got one yet is never rendered
   as a row nothing could be established for** — test + prompt-only —
   `frontend/src/bigpicture/library/PlatformsTab.test.tsx` and `tests/contract/test_firmware_status_read.py`;
-  prompt-only: no state-bearing field returns to the overview payload, no rendering path reads `firmware === null`
+  prompt-only: no platform-bearing field returns to the overview payload, no rendering path reads `firmware === null`
   instead of `firmwareState`, a later failure never takes back an answer already held (`firmwareStale` beside the
   state), and the `alive` guard in `usePlatformsPage`'s `accept` (no write after unmount) is unpinned
 - **The whole-machine firmware inventory is never asked with content verification, and the per-platform reading is never

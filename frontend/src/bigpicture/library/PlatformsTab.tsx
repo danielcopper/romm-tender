@@ -51,13 +51,11 @@ import type { PlatformRow, PlatformsPageState } from "./usePlatformsPage";
  * to land; a tooltip has no heading and has room for the longer form, and the
  * pane it is meant to agree with shows both.
  *
- * What stays here are the three answers that are not BIOS states at all — they
+ * What stays here are the two answers that are not BIOS states at all — they
  * are about the READ, which the module has no input for and no business knowing.
  * Each is taken off the STATE rather than off the payload being absent:
- * `firmware` is non-null in the `answered` state alone, so all three of these
- * share `firmware === null` and a truthiness test cannot tell them apart —
- * saying one thing about a row still waiting and a row whose read settled
- * nothing is how a reader takes an answer where none has arrived. A failed
+ * `firmware` is non-null in the `answered` state alone, so both of these share
+ * `firmware === null` and a truthiness test cannot tell them apart. A failed
  * RE-read keeps the answer it could not replace and the dot goes on showing it,
  * so only a failure with nothing behind it is worded as one — the pane is where
  * a kept answer is flagged as possibly out of date.
@@ -66,7 +64,9 @@ function biosTooltip(row: PlatformRow): string {
   if (row.firmwareState === "pending") return "Checking this platform's BIOS files…";
   if (row.firmwareState === "failed") return "Could not read this platform's BIOS state";
   const firmware = row.firmware;
-  if (!firmware) return "Nothing is known about this platform's BIOS files";
+  // `answered` is the one state left, and it always holds an entry: this only
+  // narrows the type.
+  if (firmware === null) return "";
   return biosSummary(firmware, firmware.files, firmware.bios_level ?? null, row.name || null).sentence;
 }
 

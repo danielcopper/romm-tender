@@ -16,10 +16,10 @@ verdict.
 
 That reading is a live reading of the machine, too costly to pay for every
 platform at once (measured in ``docs/architecture/qam-panel.md``, "Library"), so
-the whole-library overview does not pay it at all: it answers WHICH platforms
-the page can speak for, and each platform's state is asked for on its own. The
-caller decides the order, because it is the one that knows which row the reader
-is looking at and when to stop.
+the whole-library overview does not pay it at all: it answers only whether the
+RomM listing could be read, and each platform's state is asked for on its own.
+The caller decides which platforms and in what order, because it is the one
+that holds the list, knows which row the reader is looking at and when to stop.
 
 The doubt is narrower still, and is narrowed to ONE emulator: the pick the
 platform launches with. An emulator ES-DE also offers, that nothing could be read
@@ -33,8 +33,6 @@ from typing import TYPE_CHECKING, Any
 
 from domain import firmware_paths
 from domain.bios_status import (
-    BIOS_LEVEL_MISSING,
-    BIOS_LEVEL_UNKNOWN,
     classify_content_search,
     collect_firmware_status,
     compute_bios_label,
@@ -99,7 +97,7 @@ class FirmwareStatusReaderConfig:
 
 
 class FirmwareStatusReader:
-    """Every status-bearing BIOS query the panel runs — the overview and the per-game check."""
+    """Every BIOS status query the panel runs — the listing check, each platform's entry and the per-game check."""
 
     def __init__(self, *, config: FirmwareStatusReaderConfig) -> None:
         self._demand = config.demand
@@ -333,30 +331,17 @@ class FirmwareStatusReader:
     # ── The whole-library overview ───────────────────────────
 
     @staticmethod
-    def _listed_slugs(firmware_list) -> set[str]:
-        """Every key the RomM listing names — the page's platforms, in RomM's vocabulary.
-
-        A firmware ``file_path`` carries the platform's FIRMWARE-directory name,
-        which is routinely a different word from its platform slug (``psx`` →
-        ``bios/ps/``); a path naming nothing under ``bios/`` is filed under
-        ``"unknown"``, a key like any other.
-        """
-        return {firmware_paths.parse_firmware_slug(fw.get("file_path", "")) or "unknown" for fw in firmware_list}
-
-    @staticmethod
     def _server_files(firmware_list, platform_slug: str) -> list[dict[str, Any]]:
         """The listing's own rows for one key, in the server's own fields.
 
-        Matched on the key EXACTLY, never through
-        :func:`firmware_paths.resolve_firmware_slugs`: a key is the firmware
-        directory's own name wherever the listing named one, and a key that is a
-        platform slug is there precisely because no spelling of it appears in
-        the listing (:meth:`_seeded_slugs`). Widening the match would hand a
-        ``psx`` entry the rows of a ``ps`` entry that keeps them too, so one file
-        would be offered twice on one page. The per-game check
-        (:meth:`check_platform_bios`) is keyed by platform slug instead and does
-        resolve the spellings — a different question, asked in the caller's
-        vocabulary rather than the listing's.
+        *platform_slug* is the RomM platform slug the page lists, matched
+        EXACTLY against the firmware directory a listed file sits under, never
+        through :func:`firmware_paths.resolve_firmware_slugs`. What that costs:
+        a library that files a platform's firmware under a directory named
+        otherwise than the platform's slug does not reach that platform's rows —
+        the pane shows the emulator's own rows and verdict, without the library
+        files. The per-game check (:meth:`check_platform_bios`) does resolve the
+        spellings.
 
         Where each file goes and whether it is there are answers about ONE
         platform's emulators, so they are filled in by :meth:`_platform_demand`
@@ -372,28 +357,6 @@ class FirmwareStatusReader:
             }
             for fw in firmware_list
             if (firmware_paths.parse_firmware_slug(fw.get("file_path", "")) or "unknown") == platform_slug
-        ]
-
-    @staticmethod
-    def _seeded_slugs(listed: set[str], synced_slugs) -> list[str]:
-        """Every synced platform the listing did not name.
-
-        A platform whose emulators want firmware the library has never held would
-        otherwise be absent from a page that is about exactly that — and with the
-        server unreachable, every platform is in that position. Whether such a
-        platform has anything to say is decided by its own reading
-        (:func:`_has_something_to_say`), which is why these are offered to the
-        caller rather than answered for here.
-
-        A slug is seeded only when none of its firmware-directory spellings is
-        already a key: RomM files a platform's firmware under its own directory
-        name (``psx`` → ``bios/ps/``), so the raw slug and the listing's key are
-        routinely different words for one platform.
-        """
-        return [
-            slug
-            for slug in sorted(synced_slugs)
-            if not any(fw_slug in listed for fw_slug in firmware_paths.resolve_firmware_slugs(slug))
         ]
 
     def _read_synced_slugs(self) -> set[str]:
@@ -557,7 +520,7 @@ class FirmwareStatusReader:
         self._set_platform_bios_aggregates(plat, slug, files, answer)
 
     def _set_platform_bios_aggregates(self, plat: dict[str, Any], slug: str, files, answer: EmulatorAnswer) -> None:
-        """Stamp the per-platform BIOS aggregates onto a ``get_firmware_status`` entry.
+        """Stamp the per-platform BIOS aggregates onto a ``get_platform_firmware_status`` entry.
 
         The counts, ``one_of_groups``, the resolver's own words about the
         launching emulator (:func:`emulator_fields`) and the ``bios_level`` state
@@ -588,48 +551,31 @@ class FirmwareStatusReader:
             plat[key] = payload[key]
 
     async def get_firmware_status(self) -> dict[str, Any]:
-        """Return which platforms the page can speak for — never what it will say.
+        """Return whether the RomM firmware listing could be read — and nothing about any platform.
 
-        The cheap half, and every input it reads serves the whole page: one DB
-        read of the synced platforms, and the RomM listing (one round trip for
-        the library, cached). What a platform's BIOS state IS costs a live
-        per-system reading, so it is asked for one platform at a time through
-        :meth:`get_platform_firmware_status` — paying all of them here is what
-        made this call cost seconds.
-
-        An unreachable server removes the platforms only it knows about and the
-        ability to download; the synced ones stay, because what the installed
-        emulators want is read locally.
+        The cheap half: one round trip for the library's listing, cached. The
+        page reads ``server_offline`` off it, which is what its downloads stand
+        on. Which platforms get a BIOS answer is the page's list, not this
+        payload's, and what a platform's state IS costs a live per-system
+        reading, asked for one platform at a time through
+        :meth:`get_platform_firmware_status`.
         """
-        server_offline = False
-        synced_slugs = await self._loop.run_in_executor(None, self._read_synced_slugs)
-        listed: set[str] = set()
         try:
-            firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
-            listed = self._listed_slugs(firmware_list)
+            await self._loop.run_in_executor(None, self._listing.get_firmware_list)
         except Exception as e:
-            self._logger.warning(f"Building the firmware overview without the server listing: {e}")
-            server_offline = True
-
-        slugs = sorted(listed.union(self._seeded_slugs(listed, synced_slugs)))
-        return {
-            "success": True,
-            "server_offline": server_offline,
-            "platforms": [{"platform_slug": slug, "has_games": slug in synced_slugs} for slug in slugs],
-        }
+            self._logger.warning(f"Answering the firmware overview without the server listing: {e}")
+            return {"success": True, "server_offline": True}
+        return {"success": True, "server_offline": False}
 
     async def get_platform_firmware_status(self, platform_slug: str) -> dict[str, Any]:
-        """Return one platform's whole overview entry, or that it has none to show.
+        """Return one platform's whole BIOS entry.
 
         The half of the page that pays the reading, asked for exactly the
-        platform the caller wants next. ``platform`` is ``None`` where the page
-        has nothing to say — a platform the listing never named whose reading
-        finished and found nothing wanted (:func:`_has_something_to_say`) — which
-        is the entry a whole-page answer used to drop before returning.
-
-        A platform the listing DOES name keeps its entry even where every row
-        falls away, because the rows falling away is itself an answer about a
-        platform the library holds firmware for.
+        platform the caller wants next. Every platform gets its entry, with or
+        without a row to show: a reading that found nothing wanted is the answer
+        that the launching emulator needs nothing, and a reading that did not
+        happen is the answer that nothing could be established — the verdict
+        tells the two apart, and dropping either would leave the page to guess.
         """
         synced_slugs, records = await self._loop.run_in_executor(None, self._read_status_inputs)
         try:
@@ -642,11 +588,8 @@ class FirmwareStatusReader:
             "platform_slug": platform_slug,
             "files": self._server_files(firmware_list, platform_slug),
         }
-        listed = bool(plat["files"])
         in_library = {fw.get("file_name", "") for fw in firmware_list}
         await self._enrich_platform(plat, synced_slugs, in_library, records)
-        if not listed and not _has_something_to_say(plat):
-            return {"success": True, "platform": None}
         return {"success": True, "platform": plat}
 
     def _read_status_inputs(self) -> tuple[set[str], list[BiosFile]]:
@@ -763,23 +706,6 @@ class FirmwareStatusReader:
             catalogue, identity, pick.label if pick is not None else None, options["options"], others
         )
         return payload
-
-
-def _has_something_to_say(plat: dict[str, Any]) -> bool:
-    """Does a seeded platform have an entry to show?
-
-    A seeded platform is one the listing never named — it is here because the
-    user syncs games for it, not because anything is known to be wanted. With a
-    file to show, it speaks for itself. With none, it answers only when its
-    level is ``unknown`` or ``missing``: answering with nothing is itself a
-    claim, read by anyone looking for the platform as "nothing to manage here".
-    That is the false negative a platform whose launching emulator cannot be
-    asked must never give, and the same claim would hide a verdict of not met
-    with no file to show — an emulator whose search found no image declares
-    none. A platform whose reading finished and found nothing wanted really has
-    nothing to manage, and answers with nothing.
-    """
-    return bool(plat["files"]) or plat["bios_level"] in (BIOS_LEVEL_UNKNOWN, BIOS_LEVEL_MISSING)
 
 
 def _overview_row(item: dict[str, Any]) -> dict[str, Any]:
