@@ -11,6 +11,7 @@ from models.prune import SaveQuarantine
 from tests.services.saves._helpers import (
     _create_save,
     _install_rom,
+    _no_save_directory,
     _seed_rom,
     make_service,
 )
@@ -209,6 +210,27 @@ class TestPruneSaveInventory:
 
         assert support.validate_prune_absences(inventory["source_claims"]) is False
         assert expected.read_bytes() == b"emulator-recreated"
+
+    def test_a_version_with_no_downloaded_files_leaves_no_warning(self, tmp_path):
+        """It has no save files of its own for the cleanup to move, so there is nothing to warn about."""
+        svc, _ = make_service(tmp_path)
+        _seed_rom(svc, 7, platform_slug="gba", fs_name="never-downloaded.gba")
+
+        inventory = svc.prune_support.inventory_prune_saves([7])
+
+        assert inventory["warnings"] == []
+        assert inventory["artifacts"] == []
+        assert inventory["exclusive"] == []
+
+    def test_a_downloaded_version_whose_save_files_could_not_be_found_still_warns(self, tmp_path):
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="game.gba")
+        _no_save_directory(svc, "gba")
+
+        inventory = svc.prune_support.inventory_prune_saves([42])
+
+        assert inventory["warnings"] == ["ROM 42: save path could not be resolved; physical saves were left untouched"]
+        assert inventory["exclusive"] == []
 
 
 class TestQuarantinePruneSaves:

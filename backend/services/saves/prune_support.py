@@ -185,7 +185,12 @@ class PruneSaveSupport:
         source_claims: dict[str, SourceClaim] = {}
         lock_ids = set(purge_ids)
         for rom_id in sorted(purge_ids):
-            expected = expected_by_id.get(rom_id, [])
+            if rom_id not in expected_by_id:
+                # Not downloaded: an uninstalled row has no save path of its own
+                # to resolve, and a save it shares by file name is an installed
+                # row's, whose ownership already counts this row.
+                continue
+            expected = expected_by_id[rom_id]
             if not expected:
                 warnings.append(f"ROM {rom_id}: save path could not be resolved; physical saves were left untouched")
                 continue
