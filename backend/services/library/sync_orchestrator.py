@@ -61,7 +61,7 @@ from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
 from lib.background_tasks import BackgroundTasks
 from lib.errors import Refused, classify_error
-from services.library._stale_rows import settle_stale_rows
+from services.library._stale_rows import settle_stale_rows, with_kept_platform_names
 from services.library._state import CollectionMembership
 from services.library.session_budget import SYNC_PAUSED_BUDGET, SessionBudgetMonitor
 
@@ -391,7 +391,13 @@ class SyncOrchestrator:
             )
             removed_ids = {row.rom_id for row in removals}
             stale = [rid for rid in stale if rid in removed_ids]
-            kept_names = await self._with_kept_platform_names(kept, slug_to_name)
+            kept_names = await with_kept_platform_names(
+                kept,
+                slug_to_name,
+                read_kept_names=lambda slugs: self._loop.run_in_executor(
+                    None, self._local_library_reader.do_read_kept_platform_names, slugs
+                ),
+            )
             kept_platform_names = {kept_names.get(row.platform_slug, row.platform_slug) for row in kept}
             disabled_count = count_disabled_platform_removals(stale, registry, platform_name_set)
             # Cover-only work (#1386): count the bound fetched ROMs whose server
@@ -1258,22 +1264,6 @@ class SyncOrchestrator:
                 virtual_type=unit.virtual_type,
             )
         return unit_roms, skipped
-
-    async def _with_kept_platform_names(self, kept: list[StaleRow], live: dict[str, str]) -> dict[str, str]:
-        """*live*, plus the cached name of each platform outside it that a *kept* row is on, for the preview.
-
-        Such a platform is one RomM no longer lists, and its Steam collection
-        keeps that name: the apply's finalize carries it forward
-        (``SyncReporter._names_with_bound_platforms_kept``), so the preview
-        counts the collection under the same name.
-        """
-        outside = {row.platform_slug for row in kept} - live.keys()
-        if not outside:
-            return live
-        kept_names = await self._loop.run_in_executor(
-            None, self._local_library_reader.do_read_kept_platform_names, outside
-        )
-        return {**kept_names, **live}
 
     async def _finalize_per_unit(
         self,

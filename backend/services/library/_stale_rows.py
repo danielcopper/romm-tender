@@ -2,7 +2,8 @@
 
 Shared by :class:`~services.library.sync_orchestrator.SyncOrchestrator`'s
 preview and its apply's finalize, so the removals a preview promises are the
-ones its apply makes.
+ones its apply makes. The preview also names a kept row's platform collection
+here (:func:`with_kept_platform_names`).
 """
 
 from __future__ import annotations
@@ -20,6 +21,9 @@ if TYPE_CHECKING:
 
     # ``LibraryFetcher.ask_romm_for_roms``: one exact-id question per ROM.
     AskRommFn = Callable[[Collection[int]], Awaitable[dict[int, RomAnswer]]]
+    # ``LocalLibraryReader.do_read_kept_platform_names``, offloaded by the caller:
+    # the cached name of each slug asked that has one.
+    ReadKeptNamesFn = Callable[[Collection[str]], Awaitable[dict[str, str]]]
 
 
 async def settle_stale_rows(
@@ -35,7 +39,9 @@ async def settle_stale_rows(
 
     Sorts them by :func:`sort_stale_rows`, asks RomM once about the ones it
     cannot decide, settles those by :func:`settle_asked_rows`, and answers the
-    marks by :meth:`~domain.sync_diff.StaleSort.gone_from_romm_marks`.
+    marks by :meth:`~domain.sync_diff.StaleSort.gone_from_romm_marks`. A row RomM
+    was asked about and did not confirm is in neither list: its shortcut stays,
+    and it is not among the rows kept in their platform's collection.
     """
     sort = sort_stale_rows(
         rows,
@@ -51,3 +57,20 @@ async def settle_stale_rows(
             f"collection and {len(asked_keep)} reached through a collection RomM did not confirm present"
         )
     return sort.remove + asked_remove, sort.keep, sort.gone_from_romm_marks(answers, read_platform_slugs)
+
+
+async def with_kept_platform_names(
+    kept: list[StaleRow], live: dict[str, str], *, read_kept_names: ReadKeptNamesFn
+) -> dict[str, str]:
+    """*live*, plus the cached name of each platform outside it that a *kept* row is on, for the preview.
+
+    Such a platform is one RomM no longer lists, and its Steam collection
+    keeps that name: the apply's finalize carries it forward
+    (``SyncReporter._names_with_bound_platforms_kept``), so the preview
+    counts the collection under the same name. *read_kept_names* is asked only
+    when such a platform exists.
+    """
+    outside = {row.platform_slug for row in kept} - live.keys()
+    if not outside:
+        return live
+    return {**await read_kept_names(outside), **live}
