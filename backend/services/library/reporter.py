@@ -31,7 +31,7 @@ from domain.rom import DeliveryRoute, GoneEvidence, Rom
 from domain.rom_file import has_file_on_romm
 from domain.rom_metadata_mapping import build_rom_metadata
 from domain.sibling_resolution import reachable_rom_ids
-from domain.sync_diff import BIND_ROM_ID_KEY, should_include_in_platform_collection
+from domain.sync_diff import BIND_ROM_ID_KEY, platform_collection_name
 from domain.sync_stage import SyncStage
 from domain.version_metadata import VersionMetadata
 
@@ -202,8 +202,10 @@ class SyncReporter:
         for rom in uow.roms.iter_all():
             if rom.shortcut_app_id is None:
                 continue
-            if should_include_in_platform_collection(rom.rom_id, pending_platform_rom_ids, create_groups):
-                display = platform_names.get(rom.platform_slug, rom.platform_slug)
+            display = platform_collection_name(
+                rom.rom_id, rom.platform_slug, pending_platform_rom_ids, platform_names, create_groups
+            )
+            if display is not None:
                 fold = fold_collection_name(display)
                 display_by_fold.setdefault(fold, display)
                 platform_app_ids_by_fold.setdefault(fold, []).append(rom.shortcut_app_id)

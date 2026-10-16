@@ -2,8 +2,9 @@
 
 Anything that compares "what the next sync should produce" against "what we
 recorded last sync" lives here: per-ROM bucketing (new / changed / unchanged /
-stale), enabled-collection add/remove diffs, and the platform-collection
-membership predicate that drives the platform-collection diff.
+stale), enabled-collection add/remove diffs, the platform-collection
+membership predicate that drives the platform-collection diff, and the name of
+the platform collection a ROM is filed in.
 
 State reads (registry, last_synced_*), setting reads, network fetches, and
 Steam interaction stay in LibraryService; this module receives the relevant
@@ -662,6 +663,24 @@ def should_include_in_platform_collection(
     if platform_rom_ids is None:
         return True
     return rom_id in platform_rom_ids
+
+
+def platform_collection_name(
+    rom_id: int,
+    platform_slug: str,
+    platform_rom_ids: set[int] | None,
+    platform_names: Mapping[str, str],
+    create_platform_groups: bool,
+) -> str | None:
+    """The platform name *rom_id* is filed under, or ``None`` where it is filed under none.
+
+    ``None`` where :func:`should_include_in_platform_collection` leaves the ROM
+    out. Otherwise the platform's display name — the one *platform_names* holds
+    for *platform_slug*, else the slug — not the Steam collection's full name.
+    """
+    if not should_include_in_platform_collection(rom_id, platform_rom_ids, create_platform_groups):
+        return None
+    return platform_names.get(platform_slug, platform_slug)
 
 
 def compute_platform_collection_diff(

@@ -14,6 +14,7 @@ from domain.sync_diff import (
     compute_collection_diff,
     compute_platform_collection_diff,
     platform_breakdown,
+    platform_collection_name,
     select_stale_removals,
     settle_asked_rows,
     should_include_in_platform_collection,
@@ -491,6 +492,22 @@ class TestShouldIncludeInPlatformCollection:
     def test_should_include_helper_includes_all_when_none_and_toggle_on(self):
         """None + toggle ON -> include all."""
         assert should_include_in_platform_collection(1, None, True) is True
+
+
+class TestPlatformCollectionName:
+    """platform_collection_name() — the platform collection a ROM is filed in."""
+
+    def test_a_rom_a_platform_unit_fetched_is_filed_under_the_runs_display_name(self):
+        assert platform_collection_name(1, "n64", {1}, {"n64": "Nintendo 64"}, False) == "Nintendo 64"
+
+    def test_a_rom_no_platform_unit_fetched_is_in_no_platform_collection_with_platform_groups_off(self):
+        assert platform_collection_name(30, "gba", {1}, {"n64": "Nintendo 64"}, False) is None
+
+    def test_with_platform_groups_on_it_is_filed_under_the_slug_where_no_name_is_held(self):
+        assert platform_collection_name(30, "gba", {1}, {"n64": "Nintendo 64"}, True) == "gba"
+
+    def test_no_platform_tracking_files_every_rom(self):
+        assert platform_collection_name(30, "n64", None, {"n64": "Nintendo 64"}, False) == "Nintendo 64"
 
 
 class TestComputePlatformCollectionDiff:
