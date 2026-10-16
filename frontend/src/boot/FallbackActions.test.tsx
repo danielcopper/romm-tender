@@ -15,14 +15,23 @@ import {
   checkForUpdateNow,
   getUpdateInstallState,
   getUpdateNotice,
+  getUpdateOutcome,
   installUpdate,
+  type UpdateFailure,
   type UpdateInstallAttempt,
   type UpdateInstallState,
   type UpdateNotice,
+  type UpdateOutcome,
 } from "../api/backend";
+import { toaster } from "../api/host";
 import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import { resetUpdateInstallStoreForTests, setUpdateInstallAttempt } from "../utils/updateInstallStore";
 import { getUpdateNoticeState, resetUpdateNoticeStoreForTests } from "../utils/updateNoticeStore";
+import {
+  getUpdateOutcomeState,
+  resetUpdateOutcomeStoreForTests,
+  updateFailureReason,
+} from "../utils/updateOutcomeStore";
 import { FallbackActions, NO_NEWER_RELEASE, TOUCH_SCREEN_LINE } from "./FallbackActions";
 import { PLAIN_BUTTONS, STEAM_BUTTONS, fallbackButtons } from "./fallbackButtons";
 import type { SearchingCopy } from "./searchingCopy";
@@ -57,6 +66,22 @@ const OFFERED: UpdateInstallState = {
 };
 
 const NOTHING_OFFERED: UpdateInstallState = { ...OFFERED, offered: false, version: null };
+
+const NO_OUTCOME: UpdateOutcome = {
+  announce_version: null,
+  announce_direction: null,
+  toast_owed: false,
+  failure: null,
+  failure_dismissed: false,
+  failure_toast_owed: false,
+};
+
+const ROLLED_BACK: UpdateFailure = {
+  attempted_version: "1.2.0",
+  restored_version: "1.1.0",
+  rolled_back_at: "2026-10-16T10:00:00Z",
+  kind: "rollback",
+};
 
 const DOWNLOADING: UpdateInstallAttempt = {
   version: "1.2.0",
@@ -118,8 +143,15 @@ const freshNoticeState = (() => {
   return getUpdateNoticeState();
 })();
 
+const freshOutcomeState = (() => {
+  resetUpdateOutcomeStoreForTests();
+  return getUpdateOutcomeState();
+})();
+
 beforeEach(() => {
   resetUpdateNoticeStoreForTests();
+  resetUpdateOutcomeStoreForTests();
+  vi.mocked(toaster.toast).mockClear();
   resetUpdateInstallStoreForTests();
   vi.mocked(getUpdateNotice).mockReset().mockResolvedValue(NOTICE);
   vi.mocked(checkForUpdateNow)
@@ -127,13 +159,16 @@ beforeEach(() => {
     .mockResolvedValue({ ...NOTICE, reached: true });
   vi.mocked(getUpdateInstallState).mockReset().mockResolvedValue(OFFERED);
   vi.mocked(installUpdate).mockReset().mockResolvedValue({ success: true });
+  vi.mocked(getUpdateOutcome).mockReset().mockResolvedValue(NO_OUTCOME);
   stubSteam();
 });
 
 describe("the fallback page's actions", () => {
-  it("import nothing from @decky/ui", () => {
+  it("imports nothing from @decky/ui directly", () => {
     // The buttons are handed in for exactly this reason: the module that may
-    // hand Steam's is `fallbackButtons.tsx`, never this one.
+    // hand Steam's is `fallbackButtons.tsx`, never this one. What this module
+    // reaches through its own imports may import the package — those modules
+    // were evaluated with the bundle, and nothing rendered here comes from it.
     const source = readFileSync(`${process.cwd()}/src/boot/FallbackActions.tsx`, "utf8");
     const specifiers = [...source.matchAll(/^\s*(?:import|export)[^;]*?from\s+"([^"]+)"/gm)].map((match) => match[1]);
     expect(specifiers.filter((name) => name?.startsWith("@decky/"))).toEqual([]);
@@ -266,17 +301,53 @@ describe("the fallback page's actions", () => {
     expect(screen.queryByRole("button", { name: "Install update" })).not.toBeInTheDocument();
   });
 
+  it("states an update the installer did not let through, beside Try again", async () => {
+    vi.mocked(getUpdateOutcome).mockResolvedValue({ ...NO_OUTCOME, failure: ROLLED_BACK, failure_toast_owed: true });
+    vi.mocked(getUpdateInstallState).mockResolvedValue({ ...OFFERED, try_again: true });
+    renderOffer();
+    await settle();
+    expect(screen.getByTestId("fallback-caption")).toHaveTextContent(
+      "Update to 1.2.0 failed — Tender went back to 1.1.0.",
+    );
+    expect(screen.getByTestId("fallback-note")).toHaveTextContent(
+      updateFailureReason({
+        attemptedVersion: "1.2.0",
+        restoredVersion: "1.1.0",
+        rolledBackAt: ROLLED_BACK.rolled_back_at,
+        kind: "rollback",
+      }),
+    );
+    expect(button("Try again")).toBeInTheDocument();
+    // Read, never kept where the card on Main or its toast would find it.
+    expect(toaster.toast).not.toHaveBeenCalled();
+    expect(getUpdateOutcomeState()).toEqual(freshOutcomeState);
+  });
+
   describe("on a stranded panel", () => {
     it.each([
       ["with the update offered", true],
       ["with Restart Steam alone", false],
-    ])("offers no button, %s", async (_, offerUpdate) => {
+    ])("offers only Restart Steam, %s", async (_, offerUpdate) => {
       render(<FallbackActions offerUpdate={offerUpdate} buttons={PLAIN_BUTTONS} />);
       await settle();
       act(() => setStrandedAnswer("reloads"));
-      expect(screen.queryAllByRole("button")).toEqual([]);
+      expect(screen.queryAllByRole("button").map((element) => element.textContent)).toEqual(["Restart Steam"]);
       expect(screen.getByTestId("fallback-stranded")).toHaveTextContent(
         "Tender was restarted — it reloads Steam's interface once no game is running.",
+      );
+    });
+
+    it("says that the install's result shows after the reload, from what the poll read", async () => {
+      vi.mocked(getUpdateInstallState).mockResolvedValue({
+        ...OFFERED,
+        attempt: { ...DOWNLOADING, step: "installer_started" },
+      });
+      renderOffer();
+      await settle();
+      act(() => setStrandedAnswer("reloads"));
+      expect(screen.getByTestId("fallback-stranded")).toHaveTextContent(
+        "Tender was restarted — it reloads Steam's interface once no game is running. " +
+          "The update's result shows after that.",
       );
     });
 

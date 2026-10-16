@@ -155,12 +155,6 @@ export async function fetchUpdateNotice(): Promise<void> {
  */
 export type UpdateCheckOutcome = "found" | "none" | "unreachable" | "superseded";
 
-/** What an asked-for check says when GitHub gave it no reading — the `unreachable` outcome. */
-export const UPDATE_CHECK_UNREACHABLE = "GitHub gave no usable answer. Try again later.";
-
-/** What an asked-for check says when the call itself failed; the log names the error. */
-export const UPDATE_CHECK_FAILED = "The check failed.";
-
 /**
  * Ask now, past the daily throttle, past a Dismiss and whatever the switch says
  * — the backend forgets the dismissed version, so a card that was waved away

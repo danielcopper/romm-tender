@@ -7,8 +7,9 @@
  * the package — and this page exists precisely because such a search missed.
  * A page built from them could be the next thing to render nothing.
  * Plain elements and inline styles only, so that whatever else is broken, this
- * still draws. The one exception is the buttons under it, which are Steam's
- * only where both of their own searches answered (`fallbackButtons.tsx`).
+ * still draws. The one exception is the buttons the page carries below its
+ * report, which are Steam's only where both of their own searches answered
+ * (`fallbackButtons.tsx`).
  *
  * `boot/` is Steam-specific throughout — what makes it so, and why nothing
  * should be built on it as general start-up code, is stated at `steamGlobals.ts`.
@@ -64,8 +65,8 @@ const MissingNames: FC<{ names: readonly string[] }> = ({ names }) => <div style
 
 /**
  * The page. *children* is what it offers under the report, chosen by the
- * composition root (`index.tsx`, `FallbackActions.tsx`): those call the backend
- * and may press with Steam's buttons, and the page itself does neither.
+ * composition root, `index.tsx` — `FallbackActions.tsx` today: those call the
+ * backend and may press with Steam's buttons, and the page itself does neither.
  */
 export const StartupFailurePanel: FC<{ report: StartupReport; copy: SearchingCopy; children?: ReactNode }> = ({
   report,

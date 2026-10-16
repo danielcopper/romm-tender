@@ -7,6 +7,9 @@
  * release (utils/updateDot.ts) — so none of them can show for a release the
  * others stay silent about. The dots answer one question more: whether the
  * release was seen.
+ *
+ * Also the two sentences an asked-for check answers with where it found
+ * nothing out, for Settings › Updates and the fallback page alike.
  */
 
 import { useUpdateNoticeState, type UpdateNoticeState } from "./updateNoticeStore";
@@ -16,6 +19,12 @@ import {
   useStoppedUpdateAttempt,
   type StoppedUpdateAttempt,
 } from "./stoppedUpdateStore";
+
+/** What an asked-for check says where GitHub gave no usable answer — the `unreachable` outcome. */
+export const UPDATE_CHECK_UNREACHABLE = "GitHub gave no usable answer. Try again later.";
+
+/** What an asked-for check says where the call itself failed; the log names the error. */
+export const UPDATE_CHECK_FAILED = "The check failed.";
 
 /** The card's colour, which the dots are drawn in too. */
 export const UPDATE_AVAILABLE_COLOR = "#3d9df6";

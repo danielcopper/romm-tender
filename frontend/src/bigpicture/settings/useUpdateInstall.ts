@@ -69,9 +69,10 @@ const started = (version: string): UpdateInstallAttempt => ({
 });
 
 /**
- * Settings › Updates' install: the state read every
- * {@link UPDATE_INSTALL_POLL_MS} while the caller is mounted, the frames the
- * backend pushes, and the press. One read is in flight at a time; why, and how
+ * The install, for Settings › Updates and for the fallback page: the state
+ * read every {@link UPDATE_INSTALL_POLL_MS} while the caller is mounted, the
+ * frames the backend pushes — where a listener feeds them in, which on the
+ * fallback page none does — and the press. One read is in flight at a time; why, and how
  * the reads and the frames are told apart, is `docs/architecture/qam-panel.md`,
  * Settings.
  */

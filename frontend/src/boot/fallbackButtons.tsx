@@ -10,8 +10,10 @@
  * plain buttons and asks for the touch screen, as Decky Loader's own error page
  * does (`DeckyErrorBoundary.tsx`).
  *
- * The page receives the set rather than importing it, so that it stays free of
- * `@decky/ui` itself (`StartupFailurePanel.tsx`).
+ * The page receives the set rather than importing it, so that neither it nor
+ * `FallbackActions.tsx` imports `@decky/ui` directly. Modules they import may —
+ * those were evaluated with the bundle already, and nothing the page renders
+ * comes from them but these buttons.
  */
 
 import { DialogButton, Focusable } from "@decky/ui";

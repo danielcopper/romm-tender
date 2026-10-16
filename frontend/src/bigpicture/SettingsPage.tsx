@@ -58,14 +58,13 @@ import { SETTINGS_SECTIONS } from "../utils/settingsSections";
 import { detach } from "../utils/detach";
 import { setQamEntryPositionState } from "../utils/qamEntryPositionStore";
 import {
-  UPDATE_CHECK_FAILED,
-  UPDATE_CHECK_UNREACHABLE,
   runUpdateCheckNow,
   setUpdateCheckSwitch,
   useUpdateNoticeState,
   type UpdateCheckOutcome,
 } from "../utils/updateNoticeStore";
 import { useUpdateOutcomeState } from "../utils/updateOutcomeStore";
+import { UPDATE_CHECK_FAILED, UPDATE_CHECK_UNREACHABLE } from "../utils/updateAvailableView";
 import { useSeenAfterDwell } from "../utils/updateDot";
 import { trimServerUrl, isValidServerUrl } from "../utils/serverUrl";
 import { WidePage } from "./layout/WidePage";

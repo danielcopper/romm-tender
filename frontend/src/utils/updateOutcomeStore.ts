@@ -133,7 +133,8 @@ export function useUpdateOutcomeState(): UpdateOutcomeState {
   return useSyncExternalStore(onUpdateOutcomeChange, getUpdateOutcomeState);
 }
 
-function failureFromWire(failure: UpdateFailure | null): RolledBackUpdate | null {
+/** The wire's record in this store's spelling — also for a reader that keeps it out of the store. */
+export function failureFromWire(failure: UpdateFailure | null): RolledBackUpdate | null {
   if (failure === null) return null;
   return {
     attemptedVersion: failure.attempted_version,

@@ -1034,8 +1034,10 @@ describe("the verdict the page and the log line share", () => {
   it.each(["standalone", "coexistence"] as const)(
     "names no Tender update when nothing at all answered, in the %s bundle",
     (bundle) => {
-      // Tender's own copy ran every search here, so the verdict below the
-      // sentence is `tender` — and the sentence still asks for a restart.
+      // The verdict below the sentence names a Tender update here — `tender`
+      // in the standalone bundle, `disagreement` in the coexistence one, whose
+      // copy carries none of the names — and the sentence still asks for a
+      // restart.
       const report = checkSteamModules([missedLookup("Focusable", true, "panel"), missedLookup("Tabs", true, "panel")]);
       const copy = readSearchingCopy(report, bundle, () => ({ carries: () => false, version: "v3.2.8" }));
       expect(sentenceNamesATenderUpdate(report, copy)).toBe(false);

@@ -10,14 +10,16 @@ import { isAnyAppHolding } from "./runningApps";
 const CLOSE_GAME_BEFORE_RESTART = "Close your running game before restarting Steam.";
 
 /**
- * Restart the Steam client — the deterministic "free memory" action. A full
- * client restart resets the renderer's per-session heap budget.
+ * Restart the Steam client — Sync's deterministic "free memory" action, since a
+ * full client restart resets the renderer's per-session heap budget, and the
+ * fallback page's Restart Steam.
  *
  * Fire-and-forget: `StartRestart` tears the client down and back up. Refused
  * while any listed app is starting, running or exiting, or one whose status
- * cannot be read, so a click does not close a game Steam reports; callers also
- * disable their button then, and this check covers the race where a game
- * started between render and click. The refusal is a toast.
+ * cannot be read, so a click does not close a game Steam reports. Sync's caller
+ * also disables its button then, and this check covers the race where a game
+ * started between render and click; the fallback page's button stays enabled
+ * and this check is its only guard. The refusal is a toast.
  */
 export function restartSteam(): void {
   restartSteamOrSay(showToast);

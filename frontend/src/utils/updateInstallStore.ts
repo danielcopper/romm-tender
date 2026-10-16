@@ -9,7 +9,8 @@
  *     clears the frame an earlier attempt left and stands for the attempt
  *     until its first frame or its refusal ({@link notePress}, {@link endPress})
  *   - the install's reads (useUpdateInstall.ts), which note an attempt and an
- *     installer they find
+ *     installer they find — on the fallback page, where no frame arrives, the
+ *     only word of either
  *   - panel load in index.tsx, which seeds an attempt under way from the
  *     install's read where no frame came first ({@link seedUpdateInstallAttempt})
  *
@@ -24,6 +25,7 @@
  *     ({@link installUnderWay})
  *   - bigpicture/StrandedPanelCard.tsx, which says where the update's result
  *     shows while the installer has been started ({@link useInstallerStarted})
+ *   - boot/FallbackActions.tsx, which says the same on a stranded fallback page
  *
  * Holds only what the event carries and that one moment: whether an install
  * is offered and what it waits for is a read (`getUpdateInstallState`), not a

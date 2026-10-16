@@ -6,23 +6,25 @@
  *
  * It registers nothing — no event listener, no update dot, no toast watcher —
  * and learns everything from endpoint calls: the due check when it appears,
- * Check for updates, and the install state polled by `useUpdateInstall`, which
- * here carries the attempt's progress alone because no frame reaches the store
- * it would otherwise be pushed into. Why the fallback path stays that bare is
+ * the installer's record of an update that did not go through, Check for
+ * updates, and the install state polled by `useUpdateInstall`, which here
+ * carries the attempt's progress alone because no frame reaches the store it
+ * would otherwise be pushed into. Why the fallback path stays that bare is
  * `docs/architecture/frontend-bundles.md`, "The start-up check".
  *
- * The release check's answers are kept here rather than in
- * `utils/updateNoticeStore.ts`: the tab icon's dot reads that store, and the
- * fallback path shows no dot.
+ * The release check's answers and the installer's record are kept here rather
+ * than in `utils/updateNoticeStore.ts` and `utils/updateOutcomeStore.ts`: the
+ * tab icon's dot reads those stores and the record's toast is raised from the
+ * second's fetch, and the fallback path shows neither.
  *
- * The install's home is Settings › Updates, and this is its one other: where
- * the panel does not mount, this page is all there is. Every state is worded
- * with the sentences that section uses.
+ * The install's states are worded with the sentences Settings › Updates uses;
+ * why the install has a second home here is `docs/architecture/qam-panel.md`,
+ * "One home per action".
  */
 
 import { type CSSProperties, type FC, type ReactNode, useEffect, useReducer, useRef, useState } from "react";
 
-import { checkForUpdateNow, getUpdateNotice, logError, type UpdateNotice } from "../api/backend";
+import { checkForUpdateNow, getUpdateNotice, getUpdateOutcome, logError, type UpdateNotice } from "../api/backend";
 import { NOT_INSTALLED_PROGRAM } from "../bigpicture/settings/UpdatesSection";
 import {
   type Block,
@@ -47,14 +49,15 @@ import {
   pausedDownloadsHint,
   waitReasonLines,
 } from "../utils/updateInstallView";
-import { UPDATE_CHECK_FAILED, UPDATE_CHECK_UNREACHABLE } from "../utils/updateNoticeStore";
+import { UPDATE_CHECK_FAILED, UPDATE_CHECK_UNREACHABLE } from "../utils/updateAvailableView";
+import { failureFromWire, type RolledBackUpdate } from "../utils/updateOutcomeStore";
 import type { FallbackButtons } from "./fallbackButtons";
 
 /** Above plain buttons, which Steam's navigation does not reach. */
 export const TOUCH_SCREEN_LINE = "Use the touch screen to press these.";
 
-/** A check answered and found no release newer than the running one. */
-export const NO_NEWER_RELEASE = "No newer release of Tender is out yet.";
+/** The last check answered and found no release newer than the running one; Check for updates stands beside it. */
+export const NO_NEWER_RELEASE = "No newer release of Tender was out at the last check.";
 
 const paragraph: CSSProperties = { margin: "0 0 10px" };
 const small: CSSProperties = { fontSize: "12px", color: MUTED, paddingTop: "6px" };
@@ -161,6 +164,7 @@ const UpdateOffer: FC<{ buttons: FallbackButtons }> = ({ buttons }) => {
   const install = useUpdateInstall();
   const restart = useRestartPress();
   const [notice, setNotice] = useState<UpdateNotice | null>(null);
+  const [record, setRecord] = useState<RolledBackUpdate | null>(null);
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState("");
   const [, tick] = useReducer((n: number) => n + 1, 0);
@@ -175,6 +179,18 @@ const UpdateOffer: FC<{ buttons: FallbackButtons }> = ({ buttons }) => {
         if (issued === noticeReads.current) setNotice(answer);
       },
       (e: unknown) => logError(`Failed to check for a newer release: ${e}`),
+    );
+  }, []);
+
+  useEffect(() => {
+    detach(
+      (async () => {
+        try {
+          setRecord(failureFromWire((await getUpdateOutcome()).failure));
+        } catch (e) {
+          logError(`Failed to read what the last update did: ${e}`);
+        }
+      })(),
     );
   }, []);
 
@@ -205,7 +221,7 @@ const UpdateOffer: FC<{ buttons: FallbackButtons }> = ({ buttons }) => {
   };
 
   const showInstall = installButtonShown(install);
-  const block = shownBlock(install, null, notice?.current_version || "the earlier version");
+  const block = shownBlock(install, record, notice?.current_version || "the earlier version");
   const pausedHint = pausedDownloadsHint(install.pausedDownloads);
   const noneNewer =
     notice !== null &&
@@ -257,7 +273,7 @@ const UpdateOffer: FC<{ buttons: FallbackButtons }> = ({ buttons }) => {
   );
 };
 
-/** Restart Steam alone, where the page's sentence names no update of Tender's. */
+/** Restart Steam alone: where the page's sentence names no update of Tender's, and on a stranded panel. */
 const RestartOnly: FC<{ buttons: FallbackButtons }> = ({ buttons }) => {
   const restart = useRestartPress();
   return (
@@ -269,16 +285,23 @@ const RestartOnly: FC<{ buttons: FallbackButtons }> = ({ buttons }) => {
 };
 
 /**
- * The page's actions, or — once the panel is stranded — none: nothing pressed
- * then could reach the backend, so the page says what the backend answered,
- * and that an install's result shows after the reload it names.
+ * The page's actions. Once the panel is stranded the update's go — the backend
+ * refuses every call this panel makes — and the page says what the backend
+ * answered, and that an install's result shows after the reload or restart it
+ * names. Restart Steam stays: it asks Steam rather than the backend, and the
+ * answer may be to restart Steam.
  */
 export const FallbackActions: FC<{ offerUpdate: boolean; buttons: FallbackButtons }> = ({ offerUpdate, buttons }) => {
   const stranded = useStrandedAnswer();
   const installerStarted = useInstallerStarted();
   if (stranded) {
     const sentence = [strandedPanelSentence(stranded), installerStarted ? UPDATE_RESULT_AFTER_RELOAD : ""];
-    return <Line testId="fallback-stranded">{sentence.filter(Boolean).join(" ")}</Line>;
+    return (
+      <>
+        <Line testId="fallback-stranded">{sentence.filter(Boolean).join(" ")}</Line>
+        <RestartOnly buttons={buttons} />
+      </>
+    );
   }
   return offerUpdate ? <UpdateOffer buttons={buttons} /> : <RestartOnly buttons={buttons} />;
 };
