@@ -57,6 +57,8 @@ was not found. The sentence says which case this is:
 - Tender and Decky Loader are out of step with each other — updating both should fix it.
 - Steam has changed and Decky Loader does not know its way around it yet — Tender shares that part with Decky, and
   updating Decky Loader should fix it.
+- Steam has changed and Decky Loader does not know its way around it yet, and something else is missing too — updating
+  Decky Loader fixes that part; if the page still appears afterwards, please report it.
 - Tender started before Steam was ready — restarting Steam is the first thing to try.
 - Tender could not find the parts it needs from Steam — please report it.
 

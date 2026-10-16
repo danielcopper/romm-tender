@@ -2249,22 +2249,22 @@ menu entry.
 
 ## One home per action
 
-| Action                             | Today                  | Target                                                 |
-| ---------------------------------- | ---------------------- | ------------------------------------------------------ |
-| Start a sync                       | Sync                   | Sync; Main starts none, but keeps Cancel               |
-| Review and apply a preview         | Sync, as a table       | Sync, as a table                                       |
-| Force Full Sync, Skip preview      | Sync                   | Sync                                                   |
-| Restart Steam now (session budget) | Sync                   | Sync; Main shows the notice                            |
-| Sync a platform on or off          | Library                | Library › Platforms                                    |
-| Choose the emulator core           | Library › Platforms    | Library › Platforms                                    |
-| Download BIOS files                | Library › Platforms    | Library › Platforms                                    |
-| Delete BIOS files                  | Library › Platforms    | Library › Platforms                                    |
-| Remove one platform's shortcuts    | Library › Platforms    | Library › Platforms                                    |
-| Delete one platform's save files   | Library › Platforms    | Library › Platforms                                    |
-| Pause or cancel a download         | Downloads              | Downloads                                              |
-| Clean up removed RomM games        | Data Management, modal | Data Management › Gone from RomM, reviewed in a dialog |
-| Check for a newer release          | Settings › Updates     | Settings › Updates; fallback page; Main shows notice   |
-| Install a Tender update            | Settings › Updates     | Settings › Updates; the fallback page too              |
+| Action                             | Today                             | Target                                                 |
+| ---------------------------------- | --------------------------------- | ------------------------------------------------------ |
+| Start a sync                       | Sync                              | Sync; Main starts none, but keeps Cancel               |
+| Review and apply a preview         | Sync, as a table                  | Sync, as a table                                       |
+| Force Full Sync, Skip preview      | Sync                              | Sync                                                   |
+| Restart Steam now (session budget) | Sync                              | Sync; Main shows the notice                            |
+| Sync a platform on or off          | Library                           | Library › Platforms                                    |
+| Choose the emulator core           | Library › Platforms               | Library › Platforms                                    |
+| Download BIOS files                | Library › Platforms               | Library › Platforms                                    |
+| Delete BIOS files                  | Library › Platforms               | Library › Platforms                                    |
+| Remove one platform's shortcuts    | Library › Platforms               | Library › Platforms                                    |
+| Delete one platform's save files   | Library › Platforms               | Library › Platforms                                    |
+| Pause or cancel a download         | Downloads                         | Downloads                                              |
+| Clean up removed RomM games        | Data Management, modal            | Data Management › Gone from RomM, reviewed in a dialog |
+| Check for a newer release          | Settings › Updates; fallback page | Settings › Updates; fallback page; Main shows notice   |
+| Install a Tender update            | Settings › Updates; fallback page | Settings › Updates; the fallback page too              |
 
 **The install's second home is a deliberate exception.** Where a start-up search the panel cannot render without came
 back empty, the panel does not mount and the fallback page stands in its place — and the release that repairs that is
