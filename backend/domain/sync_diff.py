@@ -674,9 +674,10 @@ def platform_collection_name(
 ) -> str | None:
     """The platform name *rom_id* is filed under, or ``None`` where it is filed under none.
 
-    ``None`` where :func:`should_include_in_platform_collection` leaves the ROM
-    out. Otherwise the platform's display name — the one *platform_names* holds
-    for *platform_slug*, else the slug — not the Steam collection's full name.
+    The name is the platform's display name — the one *platform_names* holds for
+    *platform_slug*, else the slug — not the Steam collection's full name; it is
+    filed under none where :func:`should_include_in_platform_collection` leaves
+    the ROM out.
     """
     if not should_include_in_platform_collection(rom_id, platform_rom_ids, create_platform_groups):
         return None
