@@ -113,6 +113,18 @@ missed is a name the panel renders with, the factory returns a fallback page and
 patch, no launch interceptor, no event listeners, no shortcut relocation. A half-working panel acts on what it cannot
 see, and nothing below the check is written to run without the components it was written against.
 
+**The fallback page calls endpoints, and registers nothing either** (`frontend/src/boot/FallbackActions.tsx`). Where its
+sentence names updating Tender as the repair — the `tender` and `disagreement` verdicts below, never where nothing
+answered — it offers the update that repairs it: it asks for the due release check when it appears (`get_update_notice`,
+which asks GitHub only with the check on and at most once a day), offers **Check for updates** (`check_for_update_now`,
+whatever the switch says), and reads the install through `useUpdateInstall`, the poll Settings › Updates reads it with,
+in Settings' sentences. No `update_install_progress` frame is listened for, so the attempt's progress arrives with the
+poll alone. On every verdict it offers **Restart Steam**, refused while a game runs, as Sync's is
+(`utils/steamRestart.ts`). The release check's answers stay on the page rather than in `utils/updateNoticeStore.ts`,
+which the tab icon's update dot and the update toast are drawn from, so this path shows neither. Once the panel is
+stranded — after the installer started, typically — the buttons go and the page says what the backend answered, and that
+an install's result shows after the reload it names.
+
 **Nothing it asks is answered by Steam's runtime state.** Every entry reads Steam's module registry or a global the
 React bootstrap installed — one registry, the same one in Big Picture and in the desktop client (the desktop measurement
 below answered every registry name) — and not what Steam has mounted or focused. `findSP` is such a name: `@decky/ui`
@@ -178,7 +190,10 @@ means something more basic than a stale predicate: the React bootstrap never ran
 before it was complete — neither is `@decky/ui`'s doing, so that one answer is the same in both bundles. The page words
 it as Tender having started before Steam was ready, with restarting Steam as the first thing to try, which is the plain
 reading of the second cause and does not rule out the first. The page uses no `@decky/ui`, because a page built out of
-searches is the wrong thing to render when a search has missed.
+searches is the wrong thing to render when a search has missed — but for its buttons, which only Steam's own components
+make reachable with the controller: Steam's `DialogButton` in a `Focusable` where neither of those two searches missed,
+and plain buttons under a line asking for the touch screen otherwise, as Decky Loader's own error page has them
+(`frontend/src/boot/fallbackButtons.tsx`, which `index.tsx` hands the page).
 
 **Some of them missing has five answers, not one, because the predicates are not always ours.** Most belong to
 `@decky/ui`, and the coexistence bundle runs Decky Loader's copy of it. `frontend/src/boot/searchingCopy.ts` decides

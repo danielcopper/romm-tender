@@ -45,6 +45,34 @@ after 60 seconds, so generate a fresh one for the retry.
 This message is specific to Tender's backend being unreachable. A RomM server that is merely down or misconfigured
 answers with its own message instead — "Server unreachable", "Sign-in rejected", or the RomM version notice.
 
+## Tender Can't Start Right Now
+
+**Symptom**: Tender's panel shows only "Tender can't start right now", a sentence saying what happened and which program
+to update, and a list of names.
+
+**Explanation**: A Steam update moved parts of its interface that Tender looks up before it draws the panel, and one it
+cannot draw without was not found. Rather than a panel that breaks halfway, Tender shows this page. The list of names is
+what to include when you report it.
+
+**What the page offers**:
+
+- **Restart Steam**, on every page. While a game is running it does not restart and says "Close your running game before
+  restarting Steam."
+- Where the sentence says updating Tender — or updating both Tender and Decky Loader — should fix it, the Tender update
+  as well. When the page appears it runs the usual check for a newer release (with **Check for updates daily** on in
+  Settings › Updates, at most once a day); **Check for updates** asks GitHub now, whatever that switch says. A newer
+  release shows as "Available: _version_" with **Install update**, which installs it exactly as Settings › Updates does:
+  while a game runs or Tender is busy the button waits and the page lists what for, an install shows its steps and how
+  far the download has got, and a failed one says why and offers **Try again**. "No newer release of Tender is out yet."
+  means the check found none, and "GitHub gave no usable answer. Try again later." that Check for updates got no answer.
+  A copy of Tender that was not installed with the installer is offered no update.
+- Once an install has started its installer, Tender restarts, the buttons go, and the page says "Tender was restarted",
+  adding "The update's result shows after that." ([Tender says it was restarted](#tender-says-it-was-restarted)).
+
+Where the page says "Use the touch screen to press these.", the parts of Steam that make a button reachable with the
+controller were among those not found: tap the buttons instead. Where the sentence names Decky Loader alone, the update
+that fixes it is Decky Loader's, and the page offers no Tender update.
+
 ## Tender Says It Was Restarted
 
 **Symptom**: A notification says "Tender was restarted", and Tender's panel shows only one of two notes, on every page:

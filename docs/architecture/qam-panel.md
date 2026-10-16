@@ -1998,10 +1998,11 @@ longer names any. Where there is no button, that line rides the **Available** ro
 there. The backend answers in discriminants; the sentences for them are in `utils/updateInstallView.ts`, and the
 button's labels, the block's captions and its failure titles in `bigpicture/settings/UpdateInstallRows.tsx`; the
 sentence an update that did not go through is stated in is `utils/updateOutcomeStore.ts`'s. A refusal is worded by the
-panel, not by the backend's message, and goes once a read says it no longer holds (`refusalStands`). After a press the
-attempt comes from two sources, the `update_install_progress` frames (`utils/updateInstallStore.ts`) and the reads;
-whichever got further wins, and a press fences off the reads that could carry the attempt it replaces (`furtherAttempt`,
-`useUpdateInstall.ts`).
+panel, not by the backend's message, and goes once a read says it no longer holds (`refusalStands`). The fallback page
+reads the install through the same hook and words it with the same sentences, where the panel does not mount
+([One home per action](#one-home-per-action)). After a press the attempt comes from two sources, the
+`update_install_progress` frames (`utils/updateInstallStore.ts`) and the reads; whichever got further wins, and a press
+fences off the reads that could carry the attempt it replaces (`furtherAttempt`, `useUpdateInstall.ts`).
 
 **What is happening is one block**, between the button and the daily-check switch: one focusable field whose content
 changes, so the focus stop stays put from the download through the restart to a failure. While an attempt is under way
@@ -2262,6 +2263,13 @@ menu entry.
 | Pause or cancel a download         | Downloads              | Downloads                                              |
 | Clean up removed RomM games        | Data Management, modal | Data Management › Gone from RomM, reviewed in a dialog |
 | Check for a newer release          | Settings › Updates     | Settings › Updates; Main shows the notice              |
+| Install a Tender update            | Settings › Updates     | Settings › Updates; the fallback page too              |
+
+**The install's second home is a deliberate exception.** Where a start-up search the panel cannot render without came
+back empty, the panel does not mount and the fallback page stands in its place — and the release that repairs that is
+often a Tender update, which Settings › Updates cannot install from a panel that is not there. So the fallback page
+offers the install and Check for updates as well, worded with Settings' sentences, wherever its own sentence names
+updating Tender ([frontend-bundles.md](frontend-bundles.md#the-start-up-check)).
 
 ## Sequence
 
