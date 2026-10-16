@@ -285,11 +285,12 @@ const RestartOnly: FC<{ buttons: FallbackButtons }> = ({ buttons }) => {
 };
 
 /**
- * The page's actions. Once the panel is stranded the update's go — the backend
- * refuses every call this panel makes — and the page says what the backend
- * answered, and that an install's result shows after the reload or restart it
- * names. Restart Steam stays: it asks Steam rather than the backend, and the
- * answer may be to restart Steam.
+ * The page's actions. Once the panel is stranded the update's buttons go — the
+ * backend refuses every call this panel makes — and the page says what the
+ * backend answered; where an install had started its installer, it adds that
+ * the result shows after the reload or restart that answer names. Restart
+ * Steam stays: it asks Steam rather than the backend, and the answer may be to
+ * restart Steam.
  */
 export const FallbackActions: FC<{ offerUpdate: boolean; buttons: FallbackButtons }> = ({ offerUpdate, buttons }) => {
   const stranded = useStrandedAnswer();

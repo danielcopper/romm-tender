@@ -70,7 +70,7 @@ const count = (text, needle) => text.split(needle).length - 1;
  *
  * `rollup.config.js` serves `virtual:tender-bundle-kind` once per panel build
  * with that build's own answer inside, and `src/boot/searchingCopy.ts` turns the
- * answer into the sentence the start-up failure page prints — our copy of
+ * answer into the sentence the fallback page prints — our copy of
  * `@decky/ui` searched and missed, or Decky Loader's did. The stamp is asserted
  * here because rollup answers an unresolved import with a WARNING and an
  * external import: a build that lost the plugin would emit a bundle that throws
@@ -181,7 +181,7 @@ const report = [];
   );
   if (kind !== "standalone") {
     findings.push(
-      `index.js ${stampSays(kind)}. It carries its own @decky/ui, so its start-up failure page must send the user ` +
+      `index.js ${stampSays(kind)}. It carries its own @decky/ui, so its fallback page must send the user ` +
         "after Tender; stamped the other way it names Decky Loader, whose copy ran none of these searches, and " +
         "unstamped it carries a bare import of a module no browser can resolve and never loads at all.",
     );
@@ -213,7 +213,7 @@ const report = [];
   if (kind !== "coexistence") {
     findings.push(
       `index-coexistence.js ${stampSays(kind)}. Its searches are run by Decky Loader's copy of @decky/ui, so ` +
-        "stamped the other way its start-up failure page sends the user after Tender for a fault in Decky — which " +
+        "stamped the other way its fallback page sends the user after Tender for a fault in Decky — which " +
         "is breaking Decky's own interface and its other plugins at the same moment.",
     );
   }

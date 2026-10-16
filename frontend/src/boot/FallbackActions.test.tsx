@@ -45,6 +45,14 @@ import {
   sentenceNamesATenderUpdate,
 } from "./steamModules";
 
+// The page logs what it could not read, and that line is the only trace a
+// failed read leaves, so it is what a catch is asserted by.
+const logError = vi.hoisted(() => vi.fn());
+vi.mock("../api/backend", async (importActual) => ({
+  ...(await importActual<typeof import("../api/backend")>()),
+  logError,
+}));
+
 const NOTICE: UpdateNotice = {
   available: true,
   newer: true,
@@ -149,6 +157,7 @@ const freshOutcomeState = (() => {
 })();
 
 beforeEach(() => {
+  logError.mockClear();
   resetUpdateNoticeStoreForTests();
   resetUpdateOutcomeStoreForTests();
   vi.mocked(toaster.toast).mockClear();
@@ -326,6 +335,16 @@ describe("the fallback page's actions", () => {
     // Read, never kept where the card on Main or its toast would find it.
     expect(toaster.toast).not.toHaveBeenCalled();
     expect(getUpdateOutcomeState()).toEqual(freshOutcomeState);
+  });
+
+  it("stays usable when the installer's record cannot be read, and logs why", async () => {
+    vi.mocked(getUpdateOutcome).mockRejectedValue(new Error("connection reset"));
+    renderOffer();
+    await settle();
+    expect(logError).toHaveBeenCalledWith("Failed to read what the last update did: Error: connection reset");
+    expect(screen.getByTestId("fallback-available")).toHaveTextContent("Available: 1.2.0");
+    expect(button("Install update")).toBeEnabled();
+    expect(button("Restart Steam")).toBeInTheDocument();
   });
 
   describe("on a stranded panel", () => {

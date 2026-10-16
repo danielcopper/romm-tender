@@ -329,7 +329,9 @@ describe("index.tsx — what the factory does when a Steam search found nothing"
     // The page reaches the backend only through endpoint calls and its poll:
     // no event the panel listens for, and nothing written into the store the
     // tab icon's update dot is drawn from.
-    vi.mocked(getUpdateNotice).mockResolvedValue({
+    // Once: no `beforeEach` here resets the notice read, so a standing answer
+    // would reach every later test; the page asks it once, when it appears.
+    vi.mocked(getUpdateNotice).mockResolvedValueOnce({
       available: true,
       newer: true,
       latest_version: "1.2.0",

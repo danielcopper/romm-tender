@@ -111,7 +111,7 @@ describe("TabIcon", () => {
   });
 
   describe("the update dot", () => {
-    it("is not drawn before any store has answered, as on the start-up failure page", () => {
+    it("is not drawn before any store has answered, as on the fallback page", () => {
       expect(dotOf(glyph(render(<TabIcon />).container))).toBeNull();
     });
 
