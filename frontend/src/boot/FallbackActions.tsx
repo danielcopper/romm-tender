@@ -57,7 +57,7 @@ import type { FallbackButtons } from "./fallbackButtons";
 export const TOUCH_SCREEN_LINE = "Use the touch screen to press these.";
 
 /** The last check answered and found no release newer than the running one; Check for updates stands beside it. */
-export const NO_NEWER_RELEASE = "No newer release of Tender was out at the last check.";
+const NO_NEWER_RELEASE = "No newer release of Tender was out at the last check.";
 
 const paragraph: CSSProperties = { margin: "0 0 10px" };
 const small: CSSProperties = { fontSize: "12px", color: MUTED, paddingTop: "6px" };

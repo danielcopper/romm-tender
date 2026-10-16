@@ -32,7 +32,7 @@ import {
   resetUpdateOutcomeStoreForTests,
   updateFailureReason,
 } from "../utils/updateOutcomeStore";
-import { FallbackActions, NO_NEWER_RELEASE, TOUCH_SCREEN_LINE } from "./FallbackActions";
+import { FallbackActions, TOUCH_SCREEN_LINE } from "./FallbackActions";
 import { PLAIN_BUTTONS, STEAM_BUTTONS, fallbackButtons } from "./fallbackButtons";
 import type { SearchingCopy } from "./searchingCopy";
 import { StartupFailurePanel } from "./StartupFailurePanel";
@@ -260,7 +260,12 @@ describe("the fallback page's actions", () => {
     vi.mocked(getUpdateInstallState).mockResolvedValue(NOTHING_OFFERED);
     renderOffer();
     await settle();
-    expect(screen.getByTestId("fallback-none-newer")).toHaveTextContent(NO_NEWER_RELEASE);
+    // The sentence names the last check, because that check may be a day
+    // old; Check for updates beside it asks again.
+    expect(screen.getByTestId("fallback-none-newer")).toHaveTextContent(
+      "No newer release of Tender was out at the last check.",
+    );
+    expect(button("Check for updates")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Install update" })).not.toBeInTheDocument();
   });
 
