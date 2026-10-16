@@ -307,6 +307,9 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   1.0.0 until the key is removed. **Take it out once 1.0.0 has shipped**, or the version stops moving and nothing says
   so.
 
+  **`main` is always releasable, and there are no hotfix branches**: a fault found after a merge — a database migration
+  included, through a new rung — is fixed forward on `main` and ships as a normal patch release.
+
   Two files carry the version and each is written by a different mechanism: `version.txt` at the repository root is the
   `simple` strategy's own version file, and `backend/domain/identity.py`'s `VERSION` line is an extra file, found by the
   `x-release-please-version` marker on that line (the `generic` entry reaches only `identity.py`). Both are OUTPUTS of
