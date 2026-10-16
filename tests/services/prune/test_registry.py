@@ -207,7 +207,7 @@ class TestCanaryRomIds:
         assert _registry(uow).canary_rom_ids(set(), 5) == [2]
 
 
-class TestClearGoneMarks:
+class TestWriteGoneMarks:
     def test_clears_the_mark_of_each_named_row_and_touches_no_other(self) -> None:
         uow = FakeUnitOfWork()
         with uow:
@@ -216,8 +216,23 @@ class TestClearGoneMarks:
                 rom.mark_gone_from_romm("not_found")
                 uow.roms.save(rom)
 
-        _registry(uow).clear_gone_marks(frozenset({1, 3}))
+        _registry(uow).write_gone_marks(mark=frozenset(), clear=frozenset({1, 3}))
 
         with uow:
             rows = [uow.roms.get(rom_id) for rom_id in (1, 2)]
         assert [row.gone_from_romm if row is not None else "missing" for row in rows] == [None, "not_found"]
+
+    def test_marks_an_unmarked_row_not_found_and_keeps_an_existing_mark(self) -> None:
+        uow = FakeUnitOfWork()
+        with uow:
+            uow.roms.save(_rom(1))
+            delisted = _rom(2)
+            delisted.mark_gone_from_romm("delisted")
+            uow.roms.save(delisted)
+            uow.roms.save(_rom(3))
+
+        _registry(uow).write_gone_marks(mark=frozenset({1, 2, 4}), clear=frozenset())
+
+        with uow:
+            rows = [uow.roms.get(rom_id) for rom_id in (1, 2, 3)]
+        assert [row.gone_from_romm if row is not None else "missing" for row in rows] == ["not_found", "delisted", None]

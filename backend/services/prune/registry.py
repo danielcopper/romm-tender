@@ -107,16 +107,21 @@ class PruneRegistry:
                 return False
             return bound.rom_id == expected_bound_rom_id
 
-    def clear_gone_marks(self, rom_ids: frozenset[int]) -> None:
-        """Drop the sync's gone-from-RomM mark from each of *rom_ids* RomM answered with the ROM itself."""
-        if not rom_ids:
+    def write_gone_marks(self, *, mark: frozenset[int], clear: frozenset[int]) -> None:
+        """Mark *mark* gone from RomM (``not_found``) where unmarked, and drop the mark from *clear*."""
+        if not mark and not clear:
             return
         with self._uow_factory() as uow:
-            for rom_id in sorted(rom_ids):
+            for rom_id in sorted(mark | clear):
                 row = uow.roms.get(rom_id)
-                if row is None or row.gone_from_romm is None:
+                if row is None:
                     continue
-                row.clear_gone_from_romm()
+                if rom_id in mark and row.gone_from_romm is None:
+                    row.mark_gone_from_romm("not_found")
+                elif rom_id in clear and row.gone_from_romm is not None:
+                    row.clear_gone_from_romm()
+                else:
+                    continue
                 uow.roms.save(row)
 
     def reconcile_removed_shortcut(self, expected_bound_rom_id: int, app_id: int) -> bool:

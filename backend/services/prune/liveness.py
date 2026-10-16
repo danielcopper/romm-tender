@@ -63,22 +63,29 @@ class LivenessProber:
         self._run_id: str | None = None
         self._run_namespace: str | None = None
         self._live_rom_ids: set[int] = set()
+        self._gone_rom_ids: set[int] = set()
 
     def bind_run(self, run_id: str, namespace: str) -> None:
         """Pin the namespace every later proof in this run must still be answered under."""
         self._run_id = run_id
         self._run_namespace = namespace
         self._live_rom_ids = set()
+        self._gone_rom_ids = set()
 
     def end_run(self) -> None:
         """Release the run's binding once no further proof can be issued."""
         self._run_id = None
         self._run_namespace = None
         self._live_rom_ids = set()
+        self._gone_rom_ids = set()
 
     def live_rom_ids(self) -> frozenset[int]:
         """Every id RomM answered with that very ROM in this run, canaries included."""
         return frozenset(self._live_rom_ids)
+
+    def gone_rom_ids(self) -> frozenset[int]:
+        """Every id whose 404 stood in this run: a proof tier vouched for its round and the namespace held."""
+        return frozenset(self._gone_rom_ids)
 
     async def probe_many(self, rom_ids: set[int]) -> dict[int, dict[str, str]]:
         """Prove every id concurrently, bounded, and return one confirmed verdict each."""
@@ -89,8 +96,10 @@ class LivenessProber:
                 verdict = await self._loop.run_in_executor(None, self._probe_one, rom_id)
                 return rom_id, verdict
 
-        verdicts = dict(await asyncio.gather(*(one(rom_id) for rom_id in sorted(rom_ids))))
-        return await self._confirmed(verdicts)
+        verdicts = await self._confirmed(dict(await asyncio.gather(*(one(rom_id) for rom_id in sorted(rom_ids)))))
+        if self._namespace_holds():
+            self._gone_rom_ids.update(rom_id for rom_id, verdict in verdicts.items() if verdict["status"] == "vanished")
+        return verdicts
 
     async def _confirmed(self, verdicts: dict[int, dict[str, str]]) -> dict[int, dict[str, str]]:
         """Downgrade this round's 404s unless something proved the route in it.

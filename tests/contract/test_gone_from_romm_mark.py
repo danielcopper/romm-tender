@@ -21,6 +21,7 @@ import pytest
 from domain.platform_sync_state import PlatformSyncState
 from domain.rom import GoneEvidence, Rom
 from domain.sync_run_kind import SyncRunKind
+from domain.version_metadata import VersionMetadata
 from lib.errors import RommConnectionError, RommNotFoundError
 
 pytestmark = pytest.mark.usefixtures("seeded_retrodeck")
@@ -337,3 +338,77 @@ async def test_a_mark_that_goes_between_the_list_and_the_start_refuses_the_start
     )
 
     assert (started["success"], started["reason"]) == (False, "stale_preview")
+
+
+def _seed_group_member(
+    harness, rom_id: int, *, app_id: int | None = None, evidence: GoneEvidence | None = None
+) -> None:
+    rom = Rom.synced(
+        rom_id=rom_id,
+        platform_slug="gba",
+        name="Madagascar",
+        fs_name=f"Madagascar ({rom_id}).gba",
+        shortcut_app_id=app_id,
+        synced_at="2026-01-01T00:00:00",
+        version=VersionMetadata(sibling_group_key="igdb:1:2"),
+    )
+    if evidence is not None:
+        rom.mark_gone_from_romm(evidence)
+    with harness.uow_factory() as uow:
+        uow.roms.save(rom)
+
+
+async def test_a_version_the_run_proves_gone_outside_its_candidates_is_marked_and_listed_next(harness):
+    """D5: 31 is no candidate (its platform has no stamp), yet the run's group probe proves it gone."""
+    _seed_group_member(harness, 30, evidence="not_found")
+    _seed_group_member(harness, 31)
+    _seed_group_member(harness, 32, app_id=7032)
+    _seed_control(harness)
+    for rom_id in (30, 31):
+        harness.romm.get_rom_once_side_effect_by_id[rom_id] = RommNotFoundError(f"Rom with id {rom_id} not found")
+    assert await _listed(harness) == {30}
+
+    payload = await _run_the_cleanup(harness)
+
+    assert payload["removed_rom_ids"] == [30]
+    assert _mark(harness, 31) == "not_found"
+    assert _mark(harness, 32) is None
+    assert await _listed(harness) == {31}
+
+
+async def test_a_404_the_run_could_not_confirm_marks_nothing(harness):
+    """No version answered and the only control 404s too, so the round has no proof."""
+    _seed_group_member(harness, 30, evidence="not_found")
+    _seed_group_member(harness, 31)
+    _seed_control(harness)
+    for rom_id in (30, 31, 900041):
+        harness.romm.get_rom_once_side_effect_by_id[rom_id] = RommNotFoundError("misrouted")
+
+    payload = await _run_the_cleanup(harness)
+
+    assert payload["removed_rom_ids"] == []
+    assert _mark(harness, 31) is None
+    assert await _listed(harness) == {30}
+
+
+async def test_a_candidate_the_run_proves_gone_and_keeps_gains_no_mark(harness):
+    """40 is a stamp candidate the run keeps (its shortcut is on it, 41 is on RomM); the stamp already lists it."""
+    _seed_group_member(harness, 40, app_id=7040)
+    _seed_group_member(harness, 41)
+    with harness.uow_factory() as uow:
+        for rom_id, fetch_id in ((40, "older-fetch"), (41, "gba-fetch")):
+            row = uow.roms.get(rom_id)
+            assert row is not None
+            row.record_fetch_generation(fetch_id)
+            uow.roms.save(row)
+        uow.platform_sync_state.save(
+            PlatformSyncState.stamp(platform_slug="gba", at="2026-01-02T00:00:00", rom_count=1, fetch_id="gba-fetch")
+        )
+    harness.romm.get_rom_once_side_effect_by_id[40] = RommNotFoundError("Rom with id 40 not found")
+    assert await _listed(harness) == {40}
+
+    payload = await _run_the_cleanup(harness)
+
+    assert payload["results"][0]["reason"] == "shortcut_version_kept"
+    assert _mark(harness, 40) is None
+    assert await _listed(harness) == {40}
