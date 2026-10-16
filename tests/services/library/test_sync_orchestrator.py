@@ -5855,7 +5855,8 @@ class TestPlatformTurnedOffAndBackOn:
     async def test_a_platform_romm_no_longer_lists_keeps_its_steam_collection(self, library, fake_romm_api, emit):
         """D15 rows stay in their platform's collection under its last known name, as D1's kept rows do."""
         _use_fake_romm(library, fake_romm_api)
-        _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
+        # A name that does not fold equal to its slug, so a collection keyed by the slug reads as a change.
+        _seed_platform(fake_romm_api, platform_id=1, name="Nintendo 64", slug="n64", roms=[{"id": 1, "name": "A"}])
         _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 4, "name": "D"}])
         library.settings["enabled_platforms"] = {"1": True, "2": True}
 
@@ -5881,7 +5882,7 @@ class TestPlatformTurnedOffAndBackOn:
             await complete_a_run(run_id)
 
             complete = [c.args[1] for c in emit.call_args_list[run_starts_at:] if c.args[0] == "sync_complete"]
-            assert [event["platform_app_ids"] for event in complete] == [{"N64": [5001], "GBA": [5004]}]
+            assert [event["platform_app_ids"] for event in complete] == [{"Nintendo 64": [5001], "GBA": [5004]}]
 
         preview = await library.sync.sync_preview()
         assert preview["summary"]["remove_count"] == 0
