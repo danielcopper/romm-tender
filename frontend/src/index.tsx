@@ -3,8 +3,16 @@ import { showToast, DISPLAY_NAME } from "./utils/toast";
 import { useState, useRef, useEffect, FC, type ReactNode } from "react";
 import { Focusable, PanelSection, PanelSectionRow } from "@decky/ui";
 import { StartupFailurePanel } from "./boot/StartupFailurePanel";
+import { FallbackActions } from "./boot/FallbackActions";
+import { fallbackButtons } from "./boot/fallbackButtons";
 import { readSearchingCopy } from "./boot/searchingCopy";
-import { checkSteamModules, describeFailure, describeSurvivedMiss, notificationsMissing } from "./boot/steamModules";
+import {
+  checkSteamModules,
+  describeFailure,
+  describeSurvivedMiss,
+  notificationsMissing,
+  sentenceNamesATenderUpdate,
+} from "./boot/steamModules";
 import { MainPage } from "./bigpicture/MainPage";
 import { SettingsPage } from "./bigpicture/SettingsPage";
 import { LibraryPage } from "./bigpicture/LibraryPage";
@@ -437,7 +445,14 @@ const tender = definePanel(() => {
       return {
         name: DISPLAY_NAME,
         icon: <TabIcon />,
-        content: <StartupFailurePanel report={startup} copy={copy} />,
+        content: (
+          <StartupFailurePanel report={startup} copy={copy}>
+            <FallbackActions
+              offerUpdate={sentenceNamesATenderUpdate(startup, copy)}
+              buttons={fallbackButtons(startup)}
+            />
+          </StartupFailurePanel>
+        ),
       };
     }
     // The panel mounts, so nothing on screen reports this: the log line is the

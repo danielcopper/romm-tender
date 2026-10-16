@@ -58,6 +58,8 @@ import { SETTINGS_SECTIONS } from "../utils/settingsSections";
 import { detach } from "../utils/detach";
 import { setQamEntryPositionState } from "../utils/qamEntryPositionStore";
 import {
+  UPDATE_CHECK_FAILED,
+  UPDATE_CHECK_UNREACHABLE,
   runUpdateCheckNow,
   setUpdateCheckSwitch,
   useUpdateNoticeState,
@@ -122,7 +124,7 @@ const SECTION_LABELS: Record<SettingsSection, string> = {
 const CHECK_OUTCOME_LINES: Record<Exclude<UpdateCheckOutcome, "superseded">, string> = {
   found: "",
   none: "",
-  unreachable: "GitHub gave no usable answer. Try again later.",
+  unreachable: UPDATE_CHECK_UNREACHABLE,
 };
 
 /** The list hands its ids back as plain strings; this is where one becomes a
@@ -523,7 +525,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
       }
     } catch (e) {
       logError(`Failed to check for updates: ${e}`);
-      setUpdateCheckResult("The check failed.");
+      setUpdateCheckResult(UPDATE_CHECK_FAILED);
     } finally {
       setCheckingForUpdate(false);
     }

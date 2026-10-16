@@ -4,10 +4,9 @@ import { readRunningOrStartingApps } from "../utils/runningApps";
 import { statusUnreadSentence } from "../utils/runningAppsWording";
 import { isStopObserved } from "../utils/sessionManager";
 import { useStrandedAnswer } from "../utils/strandedPanelStore";
-import { strandedPanelSentence } from "../utils/strandedPanelWording";
+import { UPDATE_RESULT_AFTER_RELOAD, strandedPanelSentence } from "../utils/strandedPanelWording";
 import { useInstallerStarted } from "../utils/updateInstallStore";
 
-const UPDATE_LINE = "The update's result shows after that.";
 const QUIT_LINE = "Quit the running game yourself — Tender can't stop it right now.";
 
 /** Whether a game runs: `true`; or else, where the store lists apps whose
@@ -73,6 +72,6 @@ export const StrandedPanelCard: FC<{ compact?: boolean }> = ({ compact = false }
   let runningLine = "";
   if (running === true) runningLine = QUIT_LINE;
   else if (running !== false) runningLine = statusUnreadSentence(running.statusUnread);
-  const message = [installerStarted ? UPDATE_LINE : "", runningLine].filter(Boolean).join(" ");
+  const message = [installerStarted ? UPDATE_RESULT_AFTER_RELOAD : "", runningLine].filter(Boolean).join(" ");
   return <WarningCard title={strandedPanelSentence(answer)} message={message} compact={compact} />;
 };

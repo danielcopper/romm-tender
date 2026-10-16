@@ -31,3 +31,6 @@ export function strandedPanelDetail(answer: StrandedAnswer): string {
 export function strandedPanelSentence(answer: StrandedAnswer): string {
   return SENTENCE[answer];
 }
+
+/** Beside the sentence once an update attempt has started the installer: the reload or restart it names shows the result. */
+export const UPDATE_RESULT_AFTER_RELOAD = "The update's result shows after that.";

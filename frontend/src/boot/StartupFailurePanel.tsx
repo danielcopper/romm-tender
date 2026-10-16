@@ -7,7 +7,8 @@
  * the package — and this page exists precisely because such a search missed.
  * A page built from them could be the next thing to render nothing.
  * Plain elements and inline styles only, so that whatever else is broken, this
- * still draws.
+ * still draws. The one exception is the buttons under it, which are Steam's
+ * only where both of their own searches answered (`fallbackButtons.tsx`).
  *
  * `boot/` is Steam-specific throughout — what makes it so, and why nothing
  * should be built on it as general start-up code, is stated at `steamGlobals.ts`.
@@ -30,7 +31,7 @@
  * Decky's.
  */
 
-import type { CSSProperties, FC } from "react";
+import type { CSSProperties, FC, ReactNode } from "react";
 
 import type { SearchingCopy } from "./searchingCopy";
 import { describeFailure, sentenceAsksForAReport, type StartupReport } from "./steamModules";
@@ -61,7 +62,16 @@ const nameList: CSSProperties = {
  */
 const MissingNames: FC<{ names: readonly string[] }> = ({ names }) => <div style={nameList}>{names.join(", ")}</div>;
 
-export const StartupFailurePanel: FC<{ report: StartupReport; copy: SearchingCopy }> = ({ report, copy }) => {
+/**
+ * The page. *children* is what it offers under the report, chosen by the
+ * composition root (`index.tsx`, `FallbackActions.tsx`): those call the backend
+ * and may press with Steam's buttons, and the page itself does neither.
+ */
+export const StartupFailurePanel: FC<{ report: StartupReport; copy: SearchingCopy; children?: ReactNode }> = ({
+  report,
+  copy,
+  children,
+}) => {
   const reportLine = sentenceAsksForAReport(report, copy)
     ? `You can do that at ${ISSUES_URL} — please include these names:`
     : `If this keeps happening after the update, please report it at ${ISSUES_URL} and include these names:`;
@@ -71,6 +81,7 @@ export const StartupFailurePanel: FC<{ report: StartupReport; copy: SearchingCop
       <p style={paragraph}>{describeFailure(report, copy)}</p>
       <p style={paragraph}>{reportLine}</p>
       <MissingNames names={report.missing} />
+      {children}
     </div>
   );
 };

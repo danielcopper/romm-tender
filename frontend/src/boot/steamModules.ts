@@ -653,6 +653,21 @@ export function sentenceAsksForAReport(report: StartupReport, copy: SearchingCop
 }
 
 /**
+ * Does the page's own sentence name updating Tender as the repair?
+ *
+ * Where it does — `tender`, and `disagreement`, whose sentence sends the
+ * reader after both programs — the page offers the update that repairs it.
+ * Where Decky Loader's copy ran the searches, the update that repairs them is
+ * not Tender's to install; where nothing answered, the sentence asks for a
+ * restart of Steam rather than for any update, whatever the verdict below it.
+ */
+export function sentenceNamesATenderUpdate(report: StartupReport, copy: SearchingCopy): boolean {
+  if (nothingAnswered(report)) return false;
+  const owner = searchOwner(report, copy);
+  return owner === "tender" || owner === "disagreement";
+}
+
+/**
  * The sentence for a miss the panel survives — the log's, not the page's.
  *
  * The panel mounts, so nothing on screen says anything happened: this line is

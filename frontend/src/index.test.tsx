@@ -11,6 +11,8 @@
  * post-catch side effect (the surfaced error message) is observable.
  */
 
+import { readFileSync } from "node:fs";
+
 import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -321,6 +323,39 @@ describe("index.tsx — what the factory does when a Steam search found nothing"
     expect(relocateShortcutsToLauncher).not.toHaveBeenCalled();
     expect(hostEventListenerCount("sync_progress")).toBe(0);
     expect(hostEventListenerCount("download_complete")).toBe(0);
+  });
+
+  it("registers no listener and shows no update dot while the page offers the update", async () => {
+    // The page reaches the backend only through endpoint calls and its poll:
+    // no event the panel listens for, and nothing written into the store the
+    // tab icon's update dot is drawn from.
+    vi.mocked(getUpdateNotice).mockResolvedValue({
+      available: true,
+      newer: true,
+      latest_version: "1.2.0",
+      current_version: "1.1.0",
+      enabled: true,
+      installed_program: true,
+      toast_owed: true,
+      seen: false,
+    });
+    vi.mocked(getUpdateInstallState).mockResolvedValue({ ...NOTHING_INSTALLING, offered: true, version: "1.2.0" });
+    resetUpdateNoticeStoreForTests();
+    const freshNotice = getUpdateNoticeState();
+
+    const panel = panelFactory();
+    render(createElement("div", null, panel.content));
+    await act(flush);
+
+    expect(screen.getByRole("button", { name: "Install update" })).toBeInTheDocument();
+    const source = readFileSync(`${process.cwd()}/src/index.tsx`, "utf8");
+    const events = [...source.matchAll(/^\s*addEventListener(?:<[\s\S]*?>)?\(\s*"([a-z_]+)"/gm)].map((m) => m[1]!);
+    // Every event the ordinary start listens for, read off its own source, so
+    // a listener added there is held here without a list to keep in step.
+    expect(events).toContain("update_install_progress");
+    expect(events.length).toBeGreaterThan(10);
+    for (const name of events) expect(hostEventListenerCount(name)).toBe(0);
+    expect(getUpdateNoticeState()).toEqual(freshNotice);
   });
 });
 

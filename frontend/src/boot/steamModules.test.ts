@@ -42,6 +42,7 @@ import {
   notificationsMissing,
   searchOwner,
   sentenceAsksForAReport,
+  sentenceNamesATenderUpdate,
 } from "./steamModules";
 
 const SRC_DIR = `${process.cwd()}/src/`;
@@ -1017,6 +1018,27 @@ describe("the verdict the page and the log line share", () => {
         "Tender started before Steam was ready. Restarting Steam is the first thing to try; if this page " +
           "comes back every time, please report it.",
       );
+    },
+  );
+
+  it.each(SEARCH_OWNERS)("says whether the %s sentence names updating Tender", (owner) => {
+    // The page offers Tender's update off this predicate, so it must agree with
+    // the sentence it sits under: an offer under a sentence that sends the
+    // reader after Decky Loader would install the wrong program's repair.
+    const { report, copy } = read(pageFixtures[owner]);
+    const names = sentenceNamesATenderUpdate(report, copy);
+    expect(names).toBe(owner === "tender" || owner === "disagreement");
+    expect(names).toBe(/Updating (Tender|both)/.test(describeFailure(report, copy)));
+  });
+
+  it.each(["standalone", "coexistence"] as const)(
+    "names no Tender update when nothing at all answered, in the %s bundle",
+    (bundle) => {
+      // Tender's own copy ran every search here, so the verdict below the
+      // sentence is `tender` — and the sentence still asks for a restart.
+      const report = checkSteamModules([missedLookup("Focusable", true, "panel"), missedLookup("Tabs", true, "panel")]);
+      const copy = readSearchingCopy(report, bundle, () => ({ carries: () => false, version: "v3.2.8" }));
+      expect(sentenceNamesATenderUpdate(report, copy)).toBe(false);
     },
   );
 });

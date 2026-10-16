@@ -32,7 +32,7 @@ import { cardFrame } from "../UpdateCard";
 import { showUpdateOutput } from "./UpdateOutputModal";
 import type { UpdateInstall } from "./useUpdateInstall";
 
-function buttonLabel(install: UpdateInstall): string {
+export function buttonLabel(install: UpdateInstall): string {
   if (install.underWay) return "Installing…";
   return install.tryAgain ? "Try again" : "Install update";
 }
@@ -53,7 +53,8 @@ export function installStateUnread(install: UpdateInstall): boolean {
   return install.readFailed && !install.restarting;
 }
 
-const MARKS: Record<InstallStepStatus, [string, string]> = {
+/** Each step's mark and its colour. */
+export const STEP_MARKS: Record<InstallStepStatus, [string, string]> = {
   done: ["✓", GREEN],
   current: ["●", SELECTION_ACCENT],
   pending: ["○", MUTED],
@@ -68,7 +69,7 @@ function clock(ms: number): string {
 }
 
 /** What the block under the button shows: an attempt's progress, or a failure. */
-interface Block {
+export interface Block {
   caption: string;
   /** Beside the caption: the percent and the clock of an attempt under way. */
   aside?: string;
@@ -197,7 +198,7 @@ function recordFailure(record: RolledBackUpdate): Block {
  * nothing is known about the offer yet, so it stays, and the block it replaced
  * does not leave under focus.
  */
-function shownBlock(install: UpdateInstall, record: RolledBackUpdate | null, earlier: string): Block | null {
+export function shownBlock(install: UpdateInstall, record: RolledBackUpdate | null, earlier: string): Block | null {
   const { attempt } = install;
   if (attempt !== null && install.underWay) return progressBlock(install, attempt, earlier);
   if (attempt?.step === "failed" && (!install.answered || attempt.version === install.version)) {
@@ -308,7 +309,7 @@ export const UpdateInstallRows: FC<{ install: UpdateInstall; record: RolledBackU
                 >
                   {installSteps(block.at, block.failed).map(({ id, label, status }) => (
                     <span key={id} data-testid={`updates-step-${id}`} data-status={status}>
-                      <span style={{ color: MARKS[status][1] }}>{MARKS[status][0]}</span> {label}
+                      <span style={{ color: STEP_MARKS[status][1] }}>{STEP_MARKS[status][0]}</span> {label}
                     </span>
                   ))}
                 </div>
