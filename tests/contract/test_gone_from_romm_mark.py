@@ -14,7 +14,7 @@ fake, and the frontend's ack is the one stand-in.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -412,3 +412,58 @@ async def test_a_candidate_the_run_proves_gone_and_keeps_gains_no_mark(harness):
     assert payload["results"][0]["reason"] == "shortcut_version_kept"
     assert _mark(harness, 40) is None
     assert await _listed(harness) == {40}
+
+
+def _answer_in_turn(harness, answers: dict[int, list[object]]) -> None:
+    """Each listed id gets its answers in order, the last one repeating; every other id is served."""
+
+    def get_rom_once(rom_id: int) -> dict[str, Any]:
+        harness.romm.call_log.append(("get_rom_once", (rom_id,), {}))
+        queue = answers.get(rom_id)
+        answer = (queue.pop(0) if len(queue) > 1 else queue[0]) if queue else {"id": rom_id}
+        if isinstance(answer, Exception):
+            raise answer
+        return dict(cast("dict[str, Any]", answer))
+
+    harness.romm.get_rom_once = get_rom_once
+
+
+async def test_a_marked_candidate_that_answers_both_ways_in_one_run_keeps_its_mark(harness):
+    """30 404s in its group's check and answers at the re-check before removal: the run settles nothing."""
+    _seed_group_member(harness, 30, evidence="not_found")
+    _seed_group_member(harness, 32, app_id=7032)
+    _answer_in_turn(harness, {30: [RommNotFoundError("Rom with id 30 not found"), {"id": 30}]})
+
+    payload = await _run_the_cleanup(harness)
+
+    assert payload["removed_rom_ids"] == []
+    assert _mark(harness, 30) == "not_found"
+
+
+async def test_a_version_that_answers_both_ways_in_one_run_gains_no_mark(harness):
+    """31 is no candidate: it 404s in its group's check, then answers as the control of 30's re-check."""
+    _seed_group_member(harness, 30, evidence="not_found")
+    _seed_group_member(harness, 31)
+    _seed_group_member(harness, 32, app_id=7032)
+    with harness.uow_factory() as uow:
+        for rom_id in (31, 32):
+            row = uow.roms.get(rom_id)
+            assert row is not None
+            row.record_fetch_generation("gba-fetch")
+            uow.roms.save(row)
+        uow.platform_sync_state.save(
+            PlatformSyncState.stamp(platform_slug="gba", at="2026-01-02T00:00:00", rom_count=2, fetch_id="gba-fetch")
+        )
+    assert await _listed(harness) == {30}
+    _answer_in_turn(
+        harness,
+        {
+            30: [RommNotFoundError("Rom with id 30 not found")],
+            31: [RommNotFoundError("Rom with id 31 not found"), {"id": 31}],
+        },
+    )
+
+    payload = await _run_the_cleanup(harness)
+
+    assert payload["removed_rom_ids"] == [30]
+    assert _mark(harness, 31) is None
