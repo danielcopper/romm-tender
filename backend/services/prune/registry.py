@@ -52,7 +52,7 @@ class PruneRegistry:
         cheapest available test of whether the ROM endpoint is still answering
         for ids that exist. Deterministic (ascending) so the audit trail names
         the same subject a re-run would pick, and capped by *limit* because this
-        is a control, not a survey. A row the sync marked gone from RomM is never
+        is a control, not a survey. A row carrying a gone-from-RomM mark is never
         one; why is docs/architecture/removed-game-cleanup.md, "Discovery".
         """
         with self._uow_factory() as uow:

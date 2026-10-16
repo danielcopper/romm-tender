@@ -1362,7 +1362,7 @@ removed-game cleanup removes one — and its group's shortcut still reaches it (
 half does not count a version RomM has stopped serving as in Steam. `reachable_count` is the reachable rows less the
 ones the cleanup's own discovery lists — `domain/fetch_generation.py::gone_from_romm_ids` answers for both, so the count
 leaves out the same versions the Gone from RomM list shows: every row not carrying the fetch generation the platform's
-completion stamp recorded, a row carrying none included, and every row the library sync marked gone from RomM
+completion stamp recorded, a row carrying none included, and every row carrying a gone-from-RomM mark
 (`roms.gone_from_romm`, [Removed-game cleanup](removed-game-cleanup.md#discovery)). Where no usable stamp exists — none,
 one with no generation, or one recording an empty fetch — the stamp names nothing and only the marked rows are left out,
 so the exclusion's worst case is the number printed before it.
@@ -1376,9 +1376,9 @@ apply's commit ([Backend Architecture](backend-architecture.md#libraryservice-de
 ends at "Everything is up to date.", and such a sync is possible: an unbound version deleted from a group that still
 holds a binding changes no shortcut, and the preview's removals count bound rows only. An apply that stops inside the
 platform, however it stops, leaves it open too, and wider: it deletes the stamp at its start, and with no stamp every
-reachable version RomM no longer serves counts again, except one the library sync marked gone from RomM. Closing it
-without a sync would need a live server call, which this read deliberately does not make — `get_registry_platforms`
-answers offline, and that is what keeps the pane useful with RomM unreachable.
+reachable version RomM no longer serves counts again, except one carrying a gone-from-RomM mark. Closing it without a
+sync would need a live server call, which this read deliberately does not make — `get_registry_platforms` answers
+offline, and that is what keeps the pane useful with RomM unreachable.
 
 The exclusion also means **`reachable_count` is not bounded below by `count`**: a _bound_ row the stamp's fetch did not
 return raises the shortcut count without raising the header, so a pane can read `2 on RomM · 3 in Steam` beside

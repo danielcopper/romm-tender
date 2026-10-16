@@ -1,4 +1,4 @@
-"""Local candidate discovery (platform stamps plus the sync's gone-from-RomM marks) and paged preview projection."""
+"""Local candidate discovery (platform stamps plus the gone-from-RomM marks) and paged preview projection."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def _explicit_candidate(uow: UnitOfWork, explicit_rom_id: int | None) -> set[int
 
 
 def _discovered_candidates(uow: UnitOfWork, rows: list[Rom]) -> set[int]:
-    """Every row absent from its own platform's last completed fetch, or the sync marked gone from RomM."""
+    """Every row absent from its own platform's last completed fetch, and every row carrying a gone-from-RomM mark."""
     platform_rows: dict[str, list[Rom]] = {}
     for row in rows:
         platform_rows.setdefault(row.platform_slug, []).append(row)

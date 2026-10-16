@@ -4,8 +4,8 @@ The generation marker's read side: given a platform's ``roms`` rows and the
 generation its completion stamp recorded, answer which rows that fetch returned
 and which it did not. Anything that decides whether to skip belongs to the
 fetcher, and anything that writes a generation belongs to the reporter.
-:func:`gone_from_romm_ids` adds to that answer the rows the library sync marked
-gone from RomM, which no stamp can name.
+:func:`gone_from_romm_ids` adds to that answer the rows carrying a gone-from-RomM
+mark, which no stamp can name.
 """
 
 from __future__ import annotations
@@ -101,8 +101,8 @@ def prune_candidate_ids(rows: Sequence[Rom], stamp: PlatformSyncState | None) ->
 def gone_from_romm_ids(rows: Sequence[Rom], stamp: PlatformSyncState | None) -> set[int]:
     """Return the rows of one platform there is local evidence RomM no longer serves.
 
-    :func:`prune_candidate_ids` over *stamp*, plus every row the library sync
-    marked gone from RomM (``Rom.gone_from_romm``); which rows the mark covers
+    :func:`prune_candidate_ids` over *stamp*, plus every row carrying a
+    gone-from-RomM mark (``Rom.gone_from_romm``); which rows the mark covers
     that no stamp can is docs/architecture/removed-game-cleanup.md, "Discovery".
     Discovery only, never deletion authority, like the candidates it extends.
     """
@@ -117,7 +117,7 @@ def current_generation_ids(rows: Sequence[Rom], stamp: PlatformSyncState | None)
     empty stamp yields nothing, because it cannot establish that any row was
     seen. Useful wherever a row that RomM *should* still serve is needed as a
     control — it is a local record of what the server last said, never a promise
-    about what it says now. A row the sync marked gone from RomM is still
+    about what it says now. A row carrying a gone-from-RomM mark is still
     returned here; the cleanup's canary read leaves it out
     (``PruneRegistry.canary_rom_ids``).
     """

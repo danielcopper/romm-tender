@@ -151,7 +151,7 @@ Normal library sync never deletes retained local rows, installed files, saves, o
 disappears from RomM. To remove that state explicitly, open **Data Management › Gone from RomM**. The first scan is
 local and finds groups containing rows absent from a completed platform fetch. It also lists the versions a sync already
 found gone from RomM: games a collection brought in that RomM answered as gone, and the games of a platform RomM no
-longer lists.
+longer lists. It lists, too, a version an earlier cleanup found gone while it was checking that game's other versions.
 
 The dialog opens on the count that matters — how many locally kept versions are no longer on your RomM server. Under
 that come the options in two columns, then the controls for the run, and last the versions themselves as a table: the

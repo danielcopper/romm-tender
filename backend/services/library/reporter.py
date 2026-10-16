@@ -1120,7 +1120,7 @@ def _reachable_row_count(rows: list[Rom], dropped: set[int]) -> int:
 
     What a binding reaches is :func:`domain.sibling_resolution.reachable_rom_ids`.
     *dropped* is the rows the last completed fetch of their platform did not
-    return, and the rows the sync marked gone from RomM
+    return, and the rows carrying a gone-from-RomM mark
     (:func:`domain.fetch_generation.gone_from_romm_ids`) — the same set the
     removed-game cleanup lists. They stay
     reachable and are left out because RomM no longer serves them — the rule and

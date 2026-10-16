@@ -330,14 +330,14 @@ launch-command resolution, event, cache invalidation, sync, or completion-stamp 
 
 #### Explicit removed-game cleanup (`services/prune/`)
 
-| Module        | Role                                                                                                                                              |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `service.py`  | Use-case facade, atomic preview/run admission, and claimed frontend action leases                                                                 |
-| `executor.py` | Serial per-group liveness, recovery, Steam-action, reconciliation, and finalization state machine                                                 |
-| `preview.py`  | Local candidate snapshot from generation-gated stamps and the sync's gone-from-RomM marks, complete affected-group disclosure, sizing, and paging |
-| `recovery.py` | Lossless aggregate snapshots, recovery artifact assembly, and sealed-state comparison                                                             |
-| `registry.py` | Short SQLite reads, action/final race validation, reconciliation, and final cascade delete                                                        |
-| `requests.py` | Preview/option decoding, bounded selections, and lossless bounded Steam snapshot validation                                                       |
+| Module        | Role                                                                                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `service.py`  | Use-case facade, atomic preview/run admission, and claimed frontend action leases                                                                                         |
+| `executor.py` | Serial per-group liveness, recovery, Steam-action, reconciliation, and finalization state machine                                                                         |
+| `preview.py`  | Local candidate snapshot from generation-gated stamps and the gone-from-RomM marks (the sync's and the cleanup's), complete affected-group disclosure, sizing, and paging |
+| `recovery.py` | Lossless aggregate snapshots, recovery artifact assembly, and sealed-state comparison                                                                                     |
+| `registry.py` | Short SQLite reads, action/final race validation, reconciliation, and final cascade delete                                                                                |
+| `requests.py` | Preview/option decoding, bounded selections, and lossless bounded Steam snapshot validation                                                                               |
 
 `PruneService` is the only path that deliberately deletes retained `roms` aggregate roots. A bulk preview is local-only:
 for each platform it requires a non-empty completed fetch generation and selects rows whose `last_fetch_id` differs,

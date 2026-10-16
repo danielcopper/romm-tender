@@ -478,10 +478,11 @@ Format: **invariant** — tier — enforced by.
   RomM's answer is the ROM itself, while any other row is kept when the run's own platform listing no longer names its
   platform and removed unasked when it does; a row with no recorded route is asked only when the collections' last
   completed members list it; a kept row stays in its platform's Steam collection; the preview counts exactly the
-  removals and the platform collections the apply makes; and only the apply records what it established on the row
-  (`roms.gone_from_romm`): a 404 or a keep on a platform RomM no longer lists marks it, the ROM itself clears the mark,
-  and any other answer writes nothing** — test + prompt-only — `tests/domain/test_sync_diff.py::TestSortStaleRows` for
-  the rule (`sort_stale_rows`, `settle_asked_rows`),
+  removals and the platform collections the apply makes; and of the two, only the apply records what the stale removal
+  established on the row (`roms.gone_from_romm`): a 404 or a keep on a platform RomM no longer lists marks it, the ROM
+  itself clears the mark, and any other answer writes nothing. The removed-game cleanup's own proof marks and clears
+  rows too, by its rule in docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
+  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule (`sort_stale_rows`, `settle_asked_rows`),
   `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
   preview (a 404 keeps, a found ROM removes, an answer that establishes nothing keeps; a 404 is asked again on the third
   run, a stopped run leaves the row asked at the next, a row its platform last delivered is removed unasked, and a row

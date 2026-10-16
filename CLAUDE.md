@@ -602,11 +602,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   RomM's answer is the ROM itself, while any other row is kept when the run's own platform listing no longer names its
   platform and removed unasked when it does; a row with no recorded route is asked only when the collections' last
   completed members list it; a kept row stays in its platform's Steam collection; the preview counts exactly the
-  removals and the platform collections the apply makes; and only the apply records what it established on the row
-  (`roms.gone_from_romm`): a 404 or a keep on a platform RomM no longer lists marks it, the ROM itself clears the mark,
-  and any other answer writes nothing** — test + prompt-only — `tests/domain/test_sync_diff.py::TestSortStaleRows` for
-  the rule, `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply
-  and the preview (among it the third run, the stopped run, the platform route and the fallback),
+  removals and the platform collections the apply makes; and of the two, only the apply records what the stale removal
+  established on the row (`roms.gone_from_romm`): a 404 or a keep on a platform RomM no longer lists marks it, the ROM
+  itself clears the mark, and any other answer writes nothing. The removed-game cleanup's own proof marks and clears
+  rows too, by its rule in docs/architecture/removed-game-cleanup.md, "Discovery"** — test + prompt-only —
+  `tests/domain/test_sync_diff.py::TestSortStaleRows` for the rule,
+  `tests/services/library/test_sync_orchestrator.py::TestAVersionReachedOnlyThroughACollection` for the apply and the
+  preview (among it the third run, the stopped run, the platform route and the fallback),
   `TestDoSyncPerUnit::test_a_game_whose_every_version_is_gone_keeps_its_shortcut` and `TestPlatformTurnedOffAndBackOn`
   (with `test_a_platform_still_on_that_romm_no_longer_lists_keeps_its_shortcuts`,
   `test_a_platform_romm_no_longer_lists_keeps_its_steam_collection` and
