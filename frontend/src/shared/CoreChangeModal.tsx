@@ -1,5 +1,12 @@
 import { FC } from "react";
 import { ModalRoot, DialogButton, showModal } from "@decky/ui";
+import {
+  CANCEL_LABEL,
+  CORE_CHANGE_CONTINUE_LABEL,
+  CORE_CHANGE_TITLE,
+  CORE_CHANGE_WARNING,
+  CORE_CHANGE_WARNING_HEADING,
+} from "../utils/launchPromptWording";
 
 interface CoreChangeModalProps {
   oldLabel: string;
@@ -30,7 +37,7 @@ const CoreChangeModalContent: FC<CoreChangeModalProps> = ({ oldLabel, newLabel, 
             color: "#fff",
           }}
         >
-          Emulator Core Changed
+          {CORE_CHANGE_TITLE}
         </div>
         <div
           style={{
@@ -52,18 +59,17 @@ const CoreChangeModalContent: FC<CoreChangeModalProps> = ({ oldLabel, newLabel, 
           }}
         >
           <div style={{ fontSize: "12px", color: "#ffb74d", marginBottom: "6px", fontWeight: "bold" }}>
-            Save Compatibility Warning
+            {CORE_CHANGE_WARNING_HEADING}
           </div>
           <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.7)", lineHeight: "1.4" }}>
-            Some emulator cores use incompatible save formats. Continuing may overwrite your existing saves with data
-            the previous core can&apos;t read.
+            {CORE_CHANGE_WARNING}
           </div>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          <DialogButton onClick={() => handleChoice(true)}>Continue</DialogButton>
+          <DialogButton onClick={() => handleChoice(true)}>{CORE_CHANGE_CONTINUE_LABEL}</DialogButton>
           <DialogButton onClick={() => handleChoice(false)} style={{ opacity: 0.5 }}>
-            Cancel
+            {CANCEL_LABEL}
           </DialogButton>
         </div>
       </div>

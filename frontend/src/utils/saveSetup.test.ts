@@ -177,7 +177,7 @@ describe("applyLaunchGateSetupOutcome", () => {
     // a try/catch that returns "proceed" on any error, swallowing the toast
     // exception would silently flip an abort decision into a launch. Surfacing
     // the throw forces the caller to keep its try shape narrow (network call
-    // only) — see CustomPlayButton.ensureTrackingConfigured.
+    // only) — see ensureTrackingConfiguredOnPage in launchGateOps.ts.
     const deps = makeLaunchGateDeps({
       toast: vi.fn().mockImplementation(() => {
         throw new Error("toast boom");
@@ -243,6 +243,18 @@ describe("applyWizardInitialSetupResult", () => {
     expect(NOT_FOUND_WIZARD_MESSAGE).not.toMatch(/no saves|has no save|without saves/i);
     expect(NOT_FOUND_WIZARD_MESSAGE).not.toMatch(/unreachable|not reachable|offline/i);
     expect(NOT_FOUND_TOAST_BODY).not.toMatch(/unreachable|not reachable|offline/i);
+  });
+
+  it("pins the banner and toast copy constants", () => {
+    expect(SERVER_UNREACHABLE_TOAST_BODY).toBe(
+      "Cannot configure save slot — RomM server is not reachable. Open the Saves tab to retry.",
+    );
+    expect(NOT_FOUND_WIZARD_MESSAGE).toBe(
+      "RomM couldn't find the save data for this setup — setup paused. The game or this device may no longer be on the server.",
+    );
+    expect(NOT_FOUND_TOAST_BODY).toBe(
+      "Cannot configure save slot — RomM couldn't find the save data for this setup. Open the Saves tab.",
+    );
   });
 
   it("auto-confirms and calls onComplete on 'auto_confirm_default'", async () => {

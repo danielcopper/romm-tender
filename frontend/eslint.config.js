@@ -84,19 +84,19 @@ export default tseslint.config(
               target: "./src/utils",
               from: "./src/bigpicture",
               message:
-                "utils/ is the bottom layer and must not reach up into a surface. Declare what you need to ask (see LaunchPrompts in utils/launchInterceptor.ts) and let index.tsx supply it.",
+                "utils/ is the bottom layer and must not reach up into a surface. Declare what you need to ask (see LaunchPrompts in utils/launchVerdict.ts) and let index.tsx supply it.",
             },
             {
               target: "./src/utils",
               from: "./src/desktop",
               message:
-                "utils/ is the bottom layer and must not reach up into a surface. Declare what you need to ask (see LaunchPrompts in utils/launchInterceptor.ts) and let the surface's entry point supply it.",
+                "utils/ is the bottom layer and must not reach up into a surface. Declare what you need to ask (see LaunchPrompts in utils/launchVerdict.ts) and let the surface's entry point supply it.",
             },
             {
               target: "./src/utils",
               from: "./src/shared",
               message:
-                "utils/ is the bottom layer and must not reach up into shared/. Declare what you need to ask (see LaunchPrompts in utils/launchInterceptor.ts) and let index.tsx supply it.",
+                "utils/ is the bottom layer and must not reach up into shared/. Declare what you need to ask (see LaunchPrompts in utils/launchVerdict.ts) and let index.tsx supply it.",
             },
             {
               target: "./src/api",

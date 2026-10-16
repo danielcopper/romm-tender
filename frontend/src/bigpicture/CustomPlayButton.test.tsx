@@ -2540,6 +2540,45 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     expect(vi.mocked(markLaunchSkipped)).not.toHaveBeenCalled();
   });
 
+  it("offline + drift → retry → the button reads checking again, even after the page settled it during the prompt", async () => {
+    let answerDrift!: (choice: "start_anyway" | "retry" | "cancel") => void;
+    vi.mocked(showOfflineDriftModal)
+      .mockReturnValueOnce(new Promise((resolve) => (answerDrift = resolve)))
+      .mockResolvedValue("cancel");
+    let answerReprobe!: (probe: { online: boolean }) => void;
+    vi.mocked(backend.probeReachability)
+      .mockResolvedValueOnce({ online: false })
+      .mockReturnValueOnce(new Promise((resolve) => (answerReprobe = resolve)));
+    vi.mocked(backend.checkLocalDrift).mockResolvedValue({ drifted: true, rom_id: 42 });
+
+    await clickPlay();
+    await waitFor(() => expect(showOfflineDriftModal).toHaveBeenCalledTimes(1));
+
+    // A version switch while the prompt is open re-reads the detail, which
+    // settles the button on Play under the open prompt.
+    await act(async () => {
+      globalThis.dispatchEvent(
+        new CustomEvent("romm_data_changed", { detail: { type: "version_switched", app_id: 100 } }),
+      );
+      await Promise.resolve();
+    });
+    expect(await within(document.body).findByText("Play")).toBeInTheDocument();
+
+    await act(async () => {
+      answerDrift("retry");
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(backend.probeReachability).toHaveBeenCalledTimes(2));
+    expect(within(document.body).getByText("Checking saves...")).toBeInTheDocument();
+
+    await act(async () => {
+      answerReprobe({ online: false });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(showOfflineDriftModal).toHaveBeenCalledTimes(2));
+    expect(SteamClient.Apps.RunGame).not.toHaveBeenCalled();
+  });
+
   it("offline + drift → retry → now online conflict → conflict modal (online path)", async () => {
     // Retry flips online and the online sync surfaces a conflict → the conflict
     // modal runs, proving retry routes to the FULL online path, not just allow.

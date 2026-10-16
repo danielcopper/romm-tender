@@ -34,7 +34,9 @@ describe("OfflineDriftModal — showOfflineDriftModal", () => {
     void showOfflineDriftModal();
     const props = lastConfirmModalProps();
     expect(props.strTitle).toBe("RomM Unreachable");
-    expect(props.strDescription).toContain("unsynced changes");
+    expect(props.strDescription).toBe(
+      "Your local save has unsynced changes. Playing now may create a conflict you'll resolve later. Start anyway?",
+    );
     expect(props.strOKButtonText).toBe("Start Anyway");
     expect(props.strMiddleButtonText).toBe("Retry connection");
     expect(props.strCancelButtonText).toBe("Cancel");

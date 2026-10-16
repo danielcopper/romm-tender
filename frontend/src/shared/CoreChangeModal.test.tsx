@@ -109,6 +109,10 @@ describe("CoreChangeModal", () => {
       expect(container.textContent).toContain("Emulator Core Changed");
       expect(container.textContent).toContain("CoreA → CoreB");
       expect(container.textContent).toContain("Save Compatibility Warning");
+      expect(container.textContent).toContain(
+        "Some emulator cores use incompatible save formats. Continuing may overwrite your existing saves with data " +
+          "the previous core can't read.",
+      );
     });
   });
 

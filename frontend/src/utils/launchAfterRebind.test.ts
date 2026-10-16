@@ -5,7 +5,8 @@ import * as rommAppIds from "./rommAppIds";
 import * as launchGate from "./launchGate";
 import * as steamShortcuts from "./steamShortcuts";
 import { ADOPTION_POLL_MAX_MS, initSessionManager } from "./sessionManager";
-import { registerLaunchInterceptor, type LaunchPrompts } from "./launchInterceptor";
+import { registerLaunchInterceptor } from "./launchInterceptor";
+import type { LaunchPrompts } from "./launchVerdict";
 import { applyCommittedVersionSwitch } from "./versionSwitchApplication";
 
 // The real interceptor over the real session manager and the real launch gate:

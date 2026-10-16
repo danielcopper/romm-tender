@@ -4,10 +4,9 @@
  *
  * `runLaunchGate` SEQUENCES the gate steps and returns a {@link GateVerdict} —
  * it shows NO modals or toasts itself. Every side-effecting operation is
- * injected as a callback (see {@link LaunchGateOps}), so the gate is a pure
- * decision tree that callers act on: each caller maps the verdict onto its own
- * UI (the Play button drives in-place button states; the watcher drives
- * imperative modals).
+ * injected as a callback (see {@link LaunchGateOps}, built by
+ * `launchGateOps.ts`), so the gate is a pure decision tree; `launchVerdict.ts`
+ * acts on its verdict, through prompts and hooks each launch path supplies.
  *
  * The gate also owns the cross-cutting skip-set (`markLaunchSkipped` /
  * `consumeLaunchSkip`): a one-shot handshake by which a caller about to start a
@@ -297,8 +296,9 @@ export async function runLaunchGate(_appId: number, _romId: number, ops: LaunchG
     }
     // Never trap the user's game behind a gate bug — fail open to "allow". The
     // log leaves a breadcrumb so a gate bug that should have blocked isn't
-    // swallowed with zero trace. After the watcher's preLaunchSync op handles
-    // its own throws, this catch is only reached on a truly-unexpected error.
+    // swallowed with zero trace. Each step answers a failed backend read itself,
+    // so a throw that reaches here, timeouts aside, is one no step answered: the
+    // setup step's slot confirm or side effects, a prompt, or a bug.
     logError(`runLaunchGate threw (failing open to allow): ${e}`);
     return { decision: "allow" };
   }

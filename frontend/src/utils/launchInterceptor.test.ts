@@ -6,7 +6,8 @@ import * as rommAppIds from "./rommAppIds";
 import * as launchGate from "./launchGate";
 import * as sessionManager from "./sessionManager";
 import * as steamShortcuts from "./steamShortcuts";
-import { FIRST_CONTACT_DEADLINE_MS, registerLaunchInterceptor, type LaunchPrompts } from "./launchInterceptor";
+import { FIRST_CONTACT_DEADLINE_MS, registerLaunchInterceptor } from "./launchInterceptor";
+import type { LaunchPrompts } from "./launchVerdict";
 import type { GateVerdict, LaunchGateOps } from "./launchGate";
 import type { SyncConflict } from "../types";
 import type { GameRunningReading } from "./sessionManager";
@@ -1484,11 +1485,21 @@ describe("launchInterceptor — full funnel watcher", () => {
       // A throw must NOT fail open — it maps to a failed outcome so the gate
       // surfaces sync_failed instead of silently allowing.
       vi.mocked(backend.preLaunchSync).mockRejectedValueOnce(new Error("boom"));
-      expect(await ops.preLaunchSync()).toEqual({
-        success: false,
-        message: "Couldn't sync saves with RomM server.",
-      });
+      expect(await ops.preLaunchSync()).toEqual({ success: false, message: "" });
       expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("pre-launch sync failed"));
+    });
+
+    it("preLaunchSync: a sync that moved saves toasts nothing — a caught start has no page to toast over", async () => {
+      const ops = await captureOps();
+
+      vi.mocked(backend.preLaunchSync).mockResolvedValueOnce({
+        success: true,
+        message: "",
+        uploaded: 1,
+        downloaded: 1,
+      });
+      expect(await ops.preLaunchSync()).toEqual({ success: true, message: "" });
+      expect(toaster.toast).not.toHaveBeenCalled();
     });
 
     it("preLaunchSync: save_shape_unsupported → success, so a shared-card game never nags on launch", async () => {
