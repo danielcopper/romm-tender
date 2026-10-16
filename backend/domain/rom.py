@@ -21,8 +21,8 @@ _EMPTY_VERSION_METADATA = VersionMetadata()
 # Which kind of sync unit last committed a ROM: its platform's, or a collection's.
 DeliveryRoute = Literal["platform", "collection"]
 
-# What the library sync established about a bound version RomM no longer serves:
-# a proven 404 to its exact id, or a platform RomM no longer lists.
+# What Tender established about a version RomM no longer serves: a proven 404 to
+# its exact id, or a platform RomM no longer lists.
 GoneEvidence = Literal["not_found", "delisted"]
 
 
@@ -140,7 +140,7 @@ class Rom:
         self.delivered_through = route
 
     def mark_gone_from_romm(self, evidence: GoneEvidence) -> None:
-        """Record the sync's *evidence* that RomM no longer serves this ROM.
+        """Record the *evidence* that RomM no longer serves this ROM.
 
         Discovery only, never deletion authority: the cleanup's run proves every
         exact id again. Who writes and clears it is

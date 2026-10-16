@@ -138,11 +138,19 @@ stamps give (`domain/fetch_generation.py::gone_from_romm_ids`), and the Library 
 same rows. The mark is discovery only, never deletion authority: the run proves every exact id again, with its liveness
 tiers, before anything is removed.
 
+**The cleanup's own run marks too.** It probes every version of each group it plans, candidates or not, so it can prove
+a version gone that no stamp and no sync named — an unbound sibling on a platform with no stamp, say. Where a version
+outside this run's candidates got a 404 that stands under the run's proof tiers (`still_there`, `canary_rom`,
+`canary_user`; an `unconfirmed_server` 404 never does) while the namespace held, the run marks it `not_found` and
+removes nothing it was not asked to remove; the next scan lists it. A row that already carries a mark keeps it, and a
+candidate gains none, since its stamp or its mark already lists it.
+
 The mark goes when RomM is seen serving the row again: a sync unit commits it (a commit writes the row as RomM delivered
 it, with no mark), or an apply's exact-id question gets the ROM back. It goes with the row when the cleanup removes it.
 And it goes when the cleanup's own exact-id check finds the ROM on RomM: the run's prober records every id any of its
-requests answered with that very ROM, a canary's included, and the run clears their marks before its completion frame,
-so the list reopened on that frame no longer shows them. The prune conflicts already refuse a sync for the whole run, so
+requests answered with that very ROM, a canary's included, and every 404 that stood, and the run writes both before its
+completion frame — the clears and the marks of the paragraph above, leaving as it was an id answered both ways — so the
+list reopened on that frame already shows the result. The prune conflicts already refuse a sync for the whole run, so
 nothing marks a row again in between. A version the cleanup keeps, such as the one a shortcut is on while another
 version is still on RomM, stays marked and stays listed. A marked row is never a canary: a platform RomM no longer lists
 keeps its stamp, so its rows still carry the generation the canary read looks for, and asking one would 404 and leave a

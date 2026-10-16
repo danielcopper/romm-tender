@@ -1,18 +1,18 @@
 -- =============================================================================
--- 030_add_rom_gone_from_romm.sql — the library sync's evidence that RomM no
--- longer serves a bound version
+-- 030_add_rom_gone_from_romm.sql — local evidence that RomM no longer serves a
+-- version
 -- #2431 (the cleanup's list shows a game gone from RomM it could not see)
 -- =============================================================================
 --
---   * roms.gone_from_romm — 'not_found' where an apply's exact-id question
---     got a proven 404 for the row, 'delisted' where the apply kept the row
---     bound on a platform RomM no longer lists. NULL is no such evidence. How
---     the sync writes and clears it is docs/architecture/backend-architecture.md,
---     "The stale removal keeps a game gone from RomM"; what the cleanup makes of
---     it, and the cleanup's own clear, docs/architecture/removed-game-cleanup.md,
---     "Discovery".
+--   * roms.gone_from_romm — 'not_found' where an apply's exact-id question, or
+--     a removed-game cleanup's proof, got a 404 for the row; 'delisted' where
+--     the apply kept the row bound on a platform RomM no longer lists. NULL is
+--     no such evidence. How the sync writes and clears it is
+--     docs/architecture/backend-architecture.md, "The stale removal keeps a game
+--     gone from RomM"; what the cleanup makes of it, and the cleanup's own
+--     writes, docs/architecture/removed-game-cleanup.md, "Discovery".
 --
--- No backfill: the evidence comes only from the next apply's own answers.
+-- No backfill: the evidence comes only from later answers RomM gives.
 -- Adding a nullable column changes no existing row, so the runner's
 -- user_version ladder is the only guard this step needs.
 --
