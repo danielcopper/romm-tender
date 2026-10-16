@@ -466,6 +466,13 @@ wipe the entire library organization. The additive create/update path stays unga
 still get their collections; only the destructive deletion is skipped on cancel. Steam collections are not backed up, so
 the safe behavior on a partial/cancelled run is to delete nothing.
 
+The collections are written once, at the end of the run, and not as each game's shortcut is created. Writing each game
+into its collections during the run was measured on the reference device over a sync of 329 new games on 10 platforms
+(#2416, D7): it took 151–154 s against 118–120 s. A collection's `Save()` costs 250–380 ms whatever the collection's
+size, and while collections change during the apply, Steam's own calls for each new shortcut — its creation, its
+registration and its artwork — get slower, 30–60 ms per game together. Grouping the saves every 5 s cut Tender's own
+share to about 25 ms per game but left Steam's as it was; a sync over games already filed cost nothing extra.
+
 ### Collection naming mode — `merge` vs `by_label` (#1539)
 
 The `romm_collection_app_ids` wire payload is `name → appIds` **only** — kind/virtual_type are collapsed away before the

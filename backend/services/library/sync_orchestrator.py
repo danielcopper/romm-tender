@@ -130,12 +130,14 @@ class SyncOrchestratorConfig:
     shortcut bake needs — the disc-resolved installed path and the active
     emulator — which preview and the per-unit apply both hand straight to
     :func:`build_shortcuts_data`. The ``local_library_reader`` peer answers every
-    question the run asks of this device's own record of the library — the
-    classify baseline, the per-unit bound-row projection, the unstamped-platform
-    count, the resident sibling-group keys, and the stale-row scan — each in its
-    own short read Unit of Work, where the fetcher asks the same kinds of
-    question of RomM. The ``chunk_dispatcher`` peer takes the unit's built delta
-    the rest of the way: it emits each chunk to the frontend, waits out the
+    question the orchestrator asks of this device's own record of the library —
+    the classify baseline, the per-unit bound-row projection, the
+    unstamped-platform count, the resident sibling-group keys, the members the
+    collections listed at their last completed apply, the cached names of the
+    preview's kept platforms, and the stale-row scan — each in its own short read
+    Unit of Work, where the fetcher asks the same kinds of question of RomM.
+    The ``chunk_dispatcher`` peer takes the unit's built delta the rest of the
+    way: it emits each chunk to the frontend, waits out the
     heartbeat clock for the ack, and commits the chunk through the reporter. The
     ``session_budget`` seam owns every
     renderer-heap reading and verdict, which the dispatcher asks at each chunk

@@ -992,11 +992,9 @@ const tender = definePanel(() => {
     }).catch((e: unknown) => logError(`sync_stale: stale shortcut removal failed: ${e}`));
   });
 
-  // ``sync_collections`` arrives at the end of the per-unit run with the
-  // full platform / RomM-collection app-id maps. The monolithic path
-  // routes these through ``sync_complete``; the per-unit path emits them
-  // separately so the frontend can apply collection updates before the
-  // terminal "done" toast.
+  // ``sync_collections`` carries the same platform / RomM-collection app-id
+  // maps ``sync_complete`` does, and is only logged here: the collections are
+  // written from ``sync_complete``.
   addEventListener<SyncCollectionsData>("sync_collections", (data: SyncCollectionsData) => {
     logInfo(`sync_collections received: ${Object.keys(data.platform_app_ids).length} platforms`);
   });
