@@ -502,10 +502,11 @@ budget with it.
 **`@decky/ui` gets about a quarter instead of a tenth.** A release of it can repair a Steam update that broke the panel,
 and its update is meant to merge itself and ship as a fix
 ([Dependency management](../contributing/dependency-management.md#deckyui-ships-as-a-fix)). A repair is taken whatever
-its size, so a tight budget has nothing to decide for this package and would only hold the repair back; the bundle's
-total in `frontend/.size-limit.json` still catches an outlier. JSON carries no comment, so this paragraph is the reason
-beside the budget, and `frontend/scripts/package-budgets.test.mjs` holds the sizes the two budgets were set from — a
-raise of them sets those anew.
+its size, so a tight budget has nothing to decide for this package and would only hold the repair back. The wider margin
+lets a repair grow the package by up to about a quarter; a larger one still fails `check:packages`, and its two budgets
+— `globals.js` and `index.js` — are raised by hand on the Renovate PR. Only a gross outlier is left to the bundle's
+total in `frontend/.size-limit.json`, the coarse net above. The sizes the two budgets were set from are in
+`frontend/scripts/package-budgets.test.mjs`.
 
 A package that joins a bundle also needs a `## <package>` section of its own in `THIRD-PARTY-NOTICES.md`, which
 `scripts/check_third_party_notices.py` fails without. A package that leaves every bundle takes its section along, and no

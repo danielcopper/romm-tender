@@ -201,17 +201,17 @@ function deckyUiGrownBy(factor) {
 }
 
 describe("@decky/ui's budgets in package-budgets.json", () => {
-  it("stand in exactly the bundles grown below", () => {
+  it("stand in exactly the bundles DECKY_UI_SET_FROM records", () => {
     expect(Object.keys(PACKAGE_BUDGETS).filter((bundle) => "@decky/ui" in PACKAGE_BUDGETS[bundle])).toEqual(
       Object.keys(DECKY_UI_SET_FROM),
     );
   });
 
-  it("let a bump grow it by a fifth", () => {
+  it("let a bump grow the package by a fifth", () => {
     expect(deckyUiGrownBy(1.2)).toEqual([]);
   });
 
-  it("still refuse a bump that grows it by a third", () => {
+  it("still refuse a bump that grows the package by a third", () => {
     expect(deckyUiGrownBy(4 / 3)).toEqual([
       expect.stringMatching(/^globals\.js: @decky\/ui puts \d+ B into it, over its budget/),
       expect.stringMatching(/^index\.js: @decky\/ui puts \d+ B into it, over its budget/),

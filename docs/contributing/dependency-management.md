@@ -38,8 +38,10 @@ everything is green. The checks say nothing about whether a release is authentic
 release only once it is three days old (the `security:minimumReleaseAgeNpm` and `security:minimumReleaseAgePypi`
 presets), which gives a compromised release time to be flagged and pulled before it can merge itself — lock-file
 maintenance, pins and replacements are exempt, and GitHub Actions updates carry no such wait. Renovate opens a new PR
-only before 6am on Mondays (UTC), so a week's updates arrive together; a PR already open is kept up to date outside that
-window too.
+before 6am on Mondays (UTC), so a week's updates arrive together; a PR already open is kept up to date outside that
+window too. Three kinds of PR keep a schedule of their own: lock-file maintenance opens on the first of the month,
+`@decky/ui` on any day ([below](#deckyui-ships-as-a-fix)), and a fix for a reported vulnerability as soon as it is
+found, which is Renovate's default for those.
 
 | Category                                           | Auto-merges?                    |
 | -------------------------------------------------- | ------------------------------- |
@@ -66,8 +68,9 @@ only inside a new Tender release. So one rule in `renovate.json` treats its mino
   release-please to propose one.
 
 The three-day release age stays: it is the supply-chain lever where the schedule is only the noise one, and the Steam
-breaks so far reached Steam's beta first, which leaves that time. Its package budget is also wider than the others', so
-a repair that grows the package does not stop the auto-merge
+breaks so far reached Steam's beta first, which leaves that time. Its package budgets are also wider than the others',
+so a repair that grows the package by up to about a quarter does not stop the auto-merge; a larger one still fails
+`check:packages`, and its budgets are raised by hand on the Renovate PR
 ([Third-party package budgets](../architecture/frontend-bundles.md#third-party-package-budgets)). A major `@decky/ui`
 update keeps the default handling — the Monday window and human review — and its commit type is chosen when it is merged
 by hand.

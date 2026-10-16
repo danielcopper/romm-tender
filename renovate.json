@@ -71,7 +71,7 @@
       "automerge": false
     },
     {
-      "description": "@decky/ui minor/patch: a release of it can repair a Steam update that broke the standalone panel, and that repair reaches a user only inside a Tender release. So its PR is opened as soon as the release is old enough rather than in the next Monday window, and commits as fix(deps): an in-range bump only touches the lock, which :semanticPrefixFixDepsChoreOthers types chore, and release-please proposes no release for chore. The three-day minimum release age still applies, auto-merge comes from the npm rule, and a major keeps the default handling. Why: docs/contributing/dependency-management.md.",
+      "description": "@decky/ui minor/patch: no schedule, so its PR opens on any day once the release is old enough, and fix as the commit type, so the bump lands as fix(deps). Why: docs/contributing/dependency-management.md, \"`@decky/ui` ships as a fix\".",
       "matchPackageNames": [
         "@decky/ui"
       ],
