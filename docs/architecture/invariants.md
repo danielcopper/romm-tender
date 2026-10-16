@@ -771,33 +771,35 @@ Format: **invariant** — tier — enforced by.
   beside them renders a hole. Detail: `docs/architecture/frontend-bundles.md` → Tender's section on Steam's game page
 - **While the panel is stranded it offers no press that cannot work: the stranded card stands in place of Tender's whole
   Quick Access panel and of a game page's section, the play row keeps only Resume for its game while that game runs,
-  Steam's own Play on a RomM shortcut that is not running is refused, and the fallback page drops every button** —
-  test + prompt-only — `frontend/src/index.test.tsx`, `frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`,
-  `frontend/src/bigpicture/RomMPlaySection.test.tsx`, `frontend/src/bigpicture/CustomPlayButton.test.tsx`,
-  `frontend/src/utils/launchInterceptor.test.ts` and `frontend/src/boot/FallbackActions.test.tsx`, each in its
-  stranded-panel `describe` block. They pin the six shells that gate today: the Quick Access root (`QAMPanel` in
-  `frontend/src/index.tsx`) renders the card above its page switch, so no page component runs; the game page's section
-  (`RomMGameInfoPanel.tsx`) renders it ahead of every other card and of Loading; the play row (`RomMPlaySection.tsx`)
-  drops its gears, its version and disc pickers and the two badges whose tabs the card replaced, and stays hidden under
-  a version error or a pending migration as it is otherwise; the play button (`CustomPlayButton.tsx`) renders nothing
-  unless its game runs, and then Resume without the chevron whose only entry was Stop Game; the launch interceptor
-  (`frontend/src/utils/launchInterceptor.ts`) refuses a start after its cancel and before the launch gate asks anything;
-  the fallback page's actions (`frontend/src/boot/FallbackActions.tsx`) give way to the answer, with the line that an
-  update's result shows after it. **Why**: a stranded panel is never admitted again — it holds the token of a backend
-  process that is gone — so every press that reaches the backend could only fail. Before #2275 each such press failed in
-  a way of its own: some with the answer, some with a bare failure, some with a wrong reason, some with nothing at all,
-  leaving a switch at a value that was never saved; Play on a page opened before the restart started the game without
-  its pre-launch save sync. A gate at the shells covers a press added inside them later without a change of its own,
-  where a message per press would be a rule every new failure path has to remember. **What fails green**: a new surface
-  outside the shells — another element injected into Steam's game page, another hook on Steam's launch — offers presses
-  that can only fail, and nothing notices: `api/host` is stubbed suite-wide, so a test of that surface sees a stranded
-  panel only if it arranges one (`frontend/src/test-utils/stranded-panel.ts`). That half is prompt-only: such a surface
-  gates itself on `useStrandedAnswer()` in a component or `strandedAnswer()` in a handler. **The exceptions are
-  deliberate**: a Tender dialog or menu already open when the panel is stranded stays open and its buttons fail as
-  before (#2275 D6), since closing every one would need one opener in place of `showModal` and `showContextMenu`
-  everywhere one is opened, and Stop Game in a menu opened before the strand says at once that it cannot stop the game;
-  a Play press on a game already running passes the interceptor, whose running-game guard comes before the cancel.
-  Detail: `docs/architecture/loading-the-panel.md` → What the stranded panel is told
+  Steam's own Play on a RomM shortcut that is not running is refused, and the fallback page drops every button but
+  Restart Steam** — test + prompt-only — `frontend/src/index.test.tsx`,
+  `frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`, `frontend/src/bigpicture/RomMPlaySection.test.tsx`,
+  `frontend/src/bigpicture/CustomPlayButton.test.tsx`, `frontend/src/utils/launchInterceptor.test.ts` and
+  `frontend/src/boot/FallbackActions.test.tsx`, each in its stranded-panel `describe` block. They pin the six shells
+  that gate today: the Quick Access root (`QAMPanel` in `frontend/src/index.tsx`) renders the card above its page
+  switch, so no page component runs; the game page's section (`RomMGameInfoPanel.tsx`) renders it ahead of every other
+  card and of Loading; the play row (`RomMPlaySection.tsx`) drops its gears, its version and disc pickers and the two
+  badges whose tabs the card replaced, and stays hidden under a version error or a pending migration as it is otherwise;
+  the play button (`CustomPlayButton.tsx`) renders nothing unless its game runs, and then Resume without the chevron
+  whose only entry was Stop Game; the launch interceptor (`frontend/src/utils/launchInterceptor.ts`) refuses a start
+  after its cancel and before the launch gate asks anything; the fallback page's actions
+  (`frontend/src/boot/FallbackActions.tsx`) give way to the answer — every button but Restart Steam, which asks Steam
+  rather than the backend — with the line that an update's result shows after the reload or restart that answer names.
+  **Why**: a stranded panel is never admitted again — it holds the token of a backend process that is gone — so every
+  press that reaches the backend could only fail. Before #2275 each such press failed in a way of its own: some with the
+  answer, some with a bare failure, some with a wrong reason, some with nothing at all, leaving a switch at a value that
+  was never saved; Play on a page opened before the restart started the game without its pre-launch save sync. A gate at
+  the shells covers a press added inside them later without a change of its own, where a message per press would be a
+  rule every new failure path has to remember. **What fails green**: a new surface outside the shells — another element
+  injected into Steam's game page, another hook on Steam's launch — offers presses that can only fail, and nothing
+  notices: `api/host` is stubbed suite-wide, so a test of that surface sees a stranded panel only if it arranges one
+  (`frontend/src/test-utils/stranded-panel.ts`). That half is prompt-only: such a surface gates itself on
+  `useStrandedAnswer()` in a component or `strandedAnswer()` in a handler. **The exceptions are deliberate**: a Tender
+  dialog or menu already open when the panel is stranded stays open and its buttons fail as before (#2275 D6), since
+  closing every one would need one opener in place of `showModal` and `showContextMenu` everywhere one is opened, and
+  Stop Game in a menu opened before the strand says at once that it cannot stop the game; a Play press on a game already
+  running passes the interceptor, whose running-game guard comes before the cancel. Detail:
+  `docs/architecture/loading-the-panel.md` → What the stranded panel is told
 - **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
   `scripts/check_aggregate_field_assignment.py`
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, PlatformSystems, uow_factory) is called while a
@@ -1023,8 +1025,8 @@ Format: **invariant** — tier — enforced by.
   dependency cosmetic and the panel mounts and renders a hole, which is the fault the whole check exists to tell apart
   from a backend that is not running; call a decoration blocking and one missing glyph costs the user their entire
   interface, which is what this entry removed
-- **The start-up failure page names the copy of `@decky/ui` that actually ran the search that missed, and the repair
-  that follows from it** — check + test + prompt-only — the artefact's stamp is checked
+- **The fallback page names the copy of `@decky/ui` that actually ran the search that missed, and the repair that
+  follows from it** — check + test + prompt-only — the artefact's stamp is checked
   (`frontend/scripts/check-bundle-shape.mjs`, per bundle and on `globals.js`, which must carry none), and the sentence
   behind every verdict in `SEARCH_OWNERS` is pinned in `frontend/src/boot/steamModules.test.ts` and
   `StartupFailurePanel.test.tsx` with both bundle values exercised — the test iterates that list rather than a count, so

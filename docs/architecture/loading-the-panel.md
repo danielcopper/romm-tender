@@ -247,9 +247,10 @@ says Tender was restarted whatever RomM last answered. What each of them says:
 [troubleshooting.md](../user-guide/troubleshooting.md#tender-says-it-was-restarted). A Tender dialog already open when
 the panel is stranded stays open, and its buttons fail as they always did.
 
-The **fallback page**, which stands in the panel's place where the start-up check refused it, takes none of the card's
-route: that path raises no notification and asks no re-check. The page itself drops its buttons and says the same
-answer, with the line that an update's result shows after it where the installer had started
+The **fallback page**, which stands in the panel's place where the start-up check refused it, is not the card, and its
+path does none of what the card's does: it raises no notification and asks no re-check. The page drops its update
+buttons, keeps Restart Steam, and says the same answer, with the line that an update's result shows after the reload or
+restart that answer names where the installer had started
 ([frontend-bundles.md](frontend-bundles.md#the-start-up-check)).
 
 The panel asks again — one connection opened only to read the close, bounded at two seconds, never two at once — when

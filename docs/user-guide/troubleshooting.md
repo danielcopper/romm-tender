@@ -47,31 +47,46 @@ answers with its own message instead — "Server unreachable", "Sign-in rejected
 
 ## Tender Can't Start Right Now
 
-**Symptom**: Tender's panel shows only "Tender can't start right now", a sentence saying what happened and which program
-to update, and a list of names.
+**Symptom**: In place of its panel, Tender shows "Tender can't start right now", a sentence saying what happened and
+what to do about it, and a list of names.
 
-**Explanation**: A Steam update moved parts of its interface that Tender looks up before it draws the panel, and one it
-cannot draw without was not found. Rather than a panel that breaks halfway, Tender shows this page. The list of names is
-what to include when you report it.
+**Explanation**: Before it draws the panel, Tender looks up parts of Steam's interface, and one it cannot draw without
+was not found. The sentence says which case this is:
+
+- Steam has changed and this version of Tender does not know its way around it yet — updating Tender should fix it.
+- Tender and Decky Loader are out of step with each other — updating both should fix it.
+- Steam has changed and Decky Loader does not know its way around it yet — Tender shares that part with Decky, and
+  updating Decky Loader should fix it.
+- Tender started before Steam was ready — restarting Steam is the first thing to try.
+- Tender could not find the parts it needs from Steam — please report it.
+
+The list of names is what to include when you report it.
 
 **What the page offers**:
 
-- **Restart Steam**, on every page. While a game is running it does not restart and says "Close your running game before
-  restarting Steam."
-- Where the sentence says updating Tender — or updating both Tender and Decky Loader — should fix it, the Tender update
-  as well. When the page appears it runs the usual check for a newer release (with **Check for updates daily** on in
-  Settings › Updates, at most once a day); **Check for updates** asks GitHub now, whatever that switch says. A newer
-  release shows as "Available: _version_" with **Install update**, which installs it exactly as Settings › Updates does:
-  while a game runs or Tender is busy the button waits and the page lists what for, an install shows its steps and how
-  far the download has got, and a failed one says why and offers **Try again**. "No newer release of Tender is out yet."
-  means the check found none, and "GitHub gave no usable answer. Try again later." that Check for updates got no answer.
-  A copy of Tender that was not installed with the installer is offered no update.
-- Once an install has started its installer, Tender restarts, the buttons go, and the page says "Tender was restarted",
-  adding "The update's result shows after that." ([Tender says it was restarted](#tender-says-it-was-restarted)).
+- **Restart Steam**, whatever the sentence says. While a game is starting, running or closing — or Tender cannot tell
+  whether one is — it does not restart and says "Close your running game before restarting Steam."
+- Where the sentence says updating Tender, or updating both, should fix it, the Tender update as well; for "both", Decky
+  Loader still needs its own update. When the page appears it runs the usual check for a newer release (with **Check for
+  updates daily** on in Settings › Updates, at most once a day); **Check for updates** — **Check now** in Settings —
+  asks GitHub now, whatever that switch says. A newer release shows as "Available: _version_" with **Install update**,
+  which installs it exactly as Settings › Updates does: while a game runs or Tender is busy the button waits and the
+  page lists what for, an install shows its steps and how far the download has got, and an update that failed —
+  including one the installer rolled back or its pre-install check refused — says why, as Settings › Updates does, and
+  offers **Try again**. "No newer release of Tender was out at the last check." means the last check found none; Check
+  for updates asks again. "GitHub gave no usable answer. Try again later." means Check for updates got no answer. A copy
+  of Tender that was not installed with the installer says "Development build — install updates with the installer." and
+  is offered no update.
+- Once an install has started its installer, Tender restarts. The update's buttons go, Restart Steam stays, and the page
+  says "Tender was restarted — it reloads Steam's interface once no game is running." or "Tender was restarted — restart
+  Steam to use it again.", adding "The update's result shows after that." Unlike the panel
+  ([Tender says it was restarted](#tender-says-it-was-restarted)), this page raises no notification and does not ask the
+  backend again when you open the menu.
 
 Where the page says "Use the touch screen to press these.", the parts of Steam that make a button reachable with the
-controller were among those not found: tap the buttons instead. Where the sentence names Decky Loader alone, the update
-that fixes it is Decky Loader's, and the page offers no Tender update.
+controller were among those not found: tap the buttons instead. Under the other sentences the page offers no Tender
+update: where it names Decky Loader alone, the update is Decky Loader's; where Tender started before Steam was ready,
+restart Steam; and where it asks for a report, send one with the names.
 
 ## Tender Says It Was Restarted
 

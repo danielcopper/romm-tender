@@ -689,13 +689,14 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   panel name moves to `feature` beside them (that renders a hole)
 - **While the panel is stranded it offers no press that cannot work: the stranded card stands in place of Tender's whole
   Quick Access panel and of a game page's section, the play row keeps only Resume for its game while that game runs,
-  Steam's own Play on a RomM shortcut that is not running is refused, and the fallback page drops every button** —
-  test + prompt-only — `frontend/src/index.test.tsx`, `frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`,
-  `frontend/src/bigpicture/RomMPlaySection.test.tsx`, `frontend/src/bigpicture/CustomPlayButton.test.tsx`,
-  `frontend/src/utils/launchInterceptor.test.ts` and `frontend/src/boot/FallbackActions.test.tsx`, each in its
-  stranded-panel `describe` block. Prompt-only: a new surface outside these shells — another element injected into
-  Steam's game page, another hook on Steam's launch — gates itself on `useStrandedAnswer()` / `strandedAnswer()`; a
-  Tender dialog or menu already open at the strand stays open and fails as before (#2275 D6)
+  Steam's own Play on a RomM shortcut that is not running is refused, and the fallback page drops every button but
+  Restart Steam** — test + prompt-only — `frontend/src/index.test.tsx`,
+  `frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`, `frontend/src/bigpicture/RomMPlaySection.test.tsx`,
+  `frontend/src/bigpicture/CustomPlayButton.test.tsx`, `frontend/src/utils/launchInterceptor.test.ts` and
+  `frontend/src/boot/FallbackActions.test.tsx`, each in its stranded-panel `describe` block. Prompt-only: a new surface
+  outside these shells — another element injected into Steam's game page, another hook on Steam's launch — gates itself
+  on `useStrandedAnswer()` / `strandedAnswer()`; a Tender dialog or menu already open at the strand stays open and fails
+  as before (#2275 D6)
 - **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
   `scripts/check_aggregate_field_assignment.py`
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, PlatformSystems, uow_factory) is called while a
@@ -766,9 +767,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `describeSurvivedMiss`, which names no repair of its own; `absenceCost` is read only as `!== "panel"`; the notice on
   Main that toasts are unavailable comes from `notificationsMissing` over `NOTIFICATION_LOOKUPS` names, never from a
   `feature` cost; a name leaves `panel` only once its every consumer is read
-- **The start-up failure page names the copy of `@decky/ui` that actually ran the search that missed, and the repair
-  that follows from it** — check + test + prompt-only — `frontend/scripts/check-bundle-shape.mjs` checks the stamp the
-  build puts on each bundle (`BUNDLE_KIND`, standalone or coexistence) and that `globals.js` carries none; every
+- **The fallback page names the copy of `@decky/ui` that actually ran the search that missed, and the repair that
+  follows from it** — check + test + prompt-only — `frontend/scripts/check-bundle-shape.mjs` checks the stamp the build
+  puts on each bundle (`BUNDLE_KIND`, standalone or coexistence) and that `globals.js` carries none; every
   `SEARCH_OWNERS` verdict's sentence is pinned by `frontend/src/boot/steamModules.test.ts` and
   `StartupFailurePanel.test.tsx`. Prompt-only: `rollup.config.js` serves the stamp, `boot/searchingCopy.ts` reads it,
   `boot/steamModules.ts` words it, and `index.tsx` resolves the answer once for both the log line and the page; the copy

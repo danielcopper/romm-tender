@@ -52,8 +52,8 @@ name inside it, rather than the name as a string. That is a measurement and not 
 Access document, Steam's own tabs head their panels with an element carrying that class, drawn at 22 px / weight 700,
 while a bare string lands as a plain text node in the panel container at body size, 16 px / weight 400 — which is what
 the entry shipped with. Without the class map the start-up check has already refused the panel, so the heading stands
-over the start-up failure page, and it is drawn unstyled rather than not at all. The panel's content carries no heading
-of its own: Steam draws the tab's, and a second would be two.
+over the fallback page, and it is drawn unstyled rather than not at all. The panel's content carries no heading of its
+own: Steam draws the tab's, and a second would be two.
 
 **Nothing in this path touches Decky.** Not `window.__TABS_HOOK_INSTANCE`, whose `deinit()` Decky's own constructor
 calls on whatever it finds there; and not its `add()` either — Decky's render counts its `decky`-marked entries against
@@ -164,8 +164,8 @@ taken out. That is one CSS transition of `transform` and `opacity`, set on the d
 carries none. The fade is inline style on the element the glyph renders and its end a timer of the window the panel's
 code runs in, so nothing is taken from, or bound to, the menu's window. The strip has no error boundary (§ The
 boundary), so a store state the answer cannot be worked out from draws no dot rather than throwing; with every store as
-it starts — the start-up failure page's case — there is none. Its size and place on the strip, and how the fade looks
-there, are device questions; nothing in the suite can see them.
+it starts — the fallback page's case — there is none. Its size and place on the strip, and how the fade looks there, are
+device questions; nothing in the suite can see them.
 
 Two things about the glyph are unmeasured, and neither is guessed at:
 
@@ -2001,8 +2001,9 @@ sentence an update that did not go through is stated in is `utils/updateOutcomeS
 panel, not by the backend's message, and goes once a read says it no longer holds (`refusalStands`). The fallback page
 reads the install through the same hook and words it with the same sentences, where the panel does not mount
 ([One home per action](#one-home-per-action)). After a press the attempt comes from two sources, the
-`update_install_progress` frames (`utils/updateInstallStore.ts`) and the reads; whichever got further wins, and a press
-fences off the reads that could carry the attempt it replaces (`furtherAttempt`, `useUpdateInstall.ts`).
+`update_install_progress` frames (`utils/updateInstallStore.ts`) and the reads — on the fallback page, where no frame is
+listened for, from the reads alone; whichever got further wins, and a press fences off the reads that could carry the
+attempt it replaces (`furtherAttempt`, `useUpdateInstall.ts`).
 
 **What is happening is one block**, between the button and the daily-check switch: one focusable field whose content
 changes, so the focus stop stays put from the download through the restart to a failure. While an attempt is under way
@@ -2262,14 +2263,15 @@ menu entry.
 | Delete one platform's save files   | Library › Platforms    | Library › Platforms                                    |
 | Pause or cancel a download         | Downloads              | Downloads                                              |
 | Clean up removed RomM games        | Data Management, modal | Data Management › Gone from RomM, reviewed in a dialog |
-| Check for a newer release          | Settings › Updates     | Settings › Updates; Main shows the notice              |
+| Check for a newer release          | Settings › Updates     | Settings › Updates; fallback page; Main shows notice   |
 | Install a Tender update            | Settings › Updates     | Settings › Updates; the fallback page too              |
 
 **The install's second home is a deliberate exception.** Where a start-up search the panel cannot render without came
 back empty, the panel does not mount and the fallback page stands in its place — and the release that repairs that is
 often a Tender update, which Settings › Updates cannot install from a panel that is not there. So the fallback page
-offers the install and Check for updates as well, worded with Settings' sentences, wherever its own sentence names
-updating Tender ([frontend-bundles.md](frontend-bundles.md#the-start-up-check)).
+offers the install and the check for a newer release as well (its **Check for updates** is Settings' **Check now**),
+worded with Settings' sentences, wherever its own sentence names updating Tender
+([frontend-bundles.md](frontend-bundles.md#the-start-up-check)).
 
 ## Sequence
 

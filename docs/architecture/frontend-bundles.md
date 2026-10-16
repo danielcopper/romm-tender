@@ -116,14 +116,16 @@ see, and nothing below the check is written to run without the components it was
 **The fallback page calls endpoints, and registers nothing either** (`frontend/src/boot/FallbackActions.tsx`). Where its
 sentence names updating Tender as the repair — the `tender` and `disagreement` verdicts below, never where nothing
 answered — it offers the update that repairs it: it asks for the due release check when it appears (`get_update_notice`,
-which asks GitHub only with the check on and at most once a day), offers **Check for updates** (`check_for_update_now`,
-whatever the switch says), and reads the install through `useUpdateInstall`, the poll Settings › Updates reads it with,
-in Settings' sentences. No `update_install_progress` frame is listened for, so the attempt's progress arrives with the
-poll alone. On every verdict it offers **Restart Steam**, refused while a game runs, as Sync's is
-(`utils/steamRestart.ts`). The release check's answers stay on the page rather than in `utils/updateNoticeStore.ts`,
-which the tab icon's update dot and the update toast are drawn from, so this path shows neither. Once the panel is
-stranded — after the installer started, typically — the buttons go and the page says what the backend answered, and that
-an install's result shows after the reload it names.
+which asks GitHub only with the check on and at most once a day) and reads the installer's record of an update that did
+not go through (`get_update_outcome`), offers **Check for updates** (`check_for_update_now`, whatever the switch says),
+and reads the install through `useUpdateInstall`, the poll Settings › Updates reads it with, in Settings' sentences. No
+`update_install_progress` frame is listened for, so the attempt's progress arrives with the poll alone. On every verdict
+it offers **Restart Steam**, refused while a game runs, as Sync's is (`utils/steamRestart.ts`). The release check's
+answers and the installer's record stay on the page rather than in `utils/updateNoticeStore.ts` and
+`utils/updateOutcomeStore.ts`, which the tab icon's update dot and the update toasts are drawn from, so this path shows
+none of them. Once the panel is stranded — after the installer started, typically — the update's buttons go, Restart
+Steam stays — it asks Steam rather than the backend — and the page says what the backend answered, and that an install's
+result shows after the reload or restart it names.
 
 **Nothing it asks is answered by Steam's runtime state.** Every entry reads Steam's module registry or a global the
 React bootstrap installed — one registry, the same one in Big Picture and in the desktop client (the desktop measurement
