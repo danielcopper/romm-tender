@@ -19,7 +19,10 @@ shell does, so a client can start the program itself:
    ``%ENABLESHORTCUTS%`` removed with the leading blanks (``:1057-1093``), the
    quote before ``%CORE_`` dropped (``:1145-1151``), every ``~`` replaced with
    ES-DE's home (``:1164``), the ``%PRECOMMAND_X%`` and ``%EMULATOR_X%`` tokens
-   replaced with what the find rules found (``:1166-1294``, ``:2536-2590``),
+   replaced with what the find rules found (``:1166-1294``, ``:2536-2590``) —
+   or, for a command without an emulator token, ES-DE's second method's own
+   edits: ``%ESPATH%`` expanded and a wildcard first word replaced with its
+   first match (``:2595-2616``) —
    the ``%CORE_X%/name`` reference with the core file (``:1484-1551``),
    ``%STARTDIR%`` cut out (``:1570-1670``), each ``%INJECT%`` replaced with the
    text of its file (``:1672-1791``), then ``%ROM%`` … ``%ROMPATH%``
@@ -103,12 +106,16 @@ from .find_rules import (
     LIMIT_INJECTIONS,
     LIMIT_RESCANS,
     LIMIT_SUBSTITUTIONS,
+    RULE_COMMAND,
     RULE_SYSTEMPATH,
     LaunchCommandLimit,
 )
 from .launch import (
+    ENABLESHORTCUTS,
+    ISSPACE,
     PROBE_HIT,
     PROBE_UNKNOWN,
+    RUNINBACKGROUND,
     CommandParts,
     Found,
     LaunchView,
@@ -492,17 +499,16 @@ class _Built:
 
     def strip_leading(self) -> None:
         """The leading-blank trim ES-DE runs after removing a flag (``std::isspace``)."""
-        kept = len(self.text) - len(self.text.lstrip(_ISSPACE))
+        kept = len(self.text) - len(self.text.lstrip(ISSPACE))
         self.splice(0, kept)
 
     def strip(self) -> None:
         """``Utils::String::trim`` (``StringUtil.cpp:249-265``)."""
         self.strip_leading()
-        kept = len(self.text.rstrip(_ISSPACE))
+        kept = len(self.text.rstrip(ISSPACE))
         self.splice(kept, len(self.text))
 
 
-_ISSPACE = " \t\n\v\f\r"
 # What stands in for a value ES-DE substitutes as nothing: one character from
 # the other private-use plane, apart from the reading's own stand-ins.
 _LOST = "\U00100000"
@@ -1167,8 +1173,6 @@ _GAMEDIRRAW = "%GAMEDIRRAW%"
 _GAMEENTRYDIR = "%GAMEENTRYDIR%"
 _STARTDIR = "%STARTDIR%"
 _INJECT = "%INJECT%"
-_RUNINBACKGROUND = "%RUNINBACKGROUND%"
-_ENABLESHORTCUTS = "%ENABLESHORTCUTS%"
 
 
 class _Assembly:
@@ -1184,13 +1188,13 @@ class _Assembly:
 
     def run(self) -> TakenApart:
         built, content = self.built, self.content
-        if built.find(_RUNINBACKGROUND) != -1:
-            built.replace(_RUNINBACKGROUND, None)
+        if built.find(RUNINBACKGROUND) != -1:
+            built.replace(RUNINBACKGROUND, None)
             built.strip_leading()
         shortcut = False
-        if built.find(_ENABLESHORTCUTS) != -1:
+        if built.find(ENABLESHORTCUTS) != -1:
             shortcut = _extension(content.rom_raw, kept=False) == ".desktop"
-            built.replace(_ENABLESHORTCUTS, None)
+            built.replace(ENABLESHORTCUTS, None)
             built.strip_leading()
         quoted_core = built.find('"%CORE_') != -1
         if quoted_core:
@@ -1199,7 +1203,10 @@ class _Assembly:
         parts = self.inputs.parts
         if parts.precommand is not None:
             self._program_token("%PRECOMMAND_", parts.precommand)
-        self._program_token("%EMULATOR_", parts.emulator)
+        if parts.emulator.launcher.rule == RULE_COMMAND:
+            self._second_method(parts.emulator)
+        else:
+            self._program_token("%EMULATOR_", parts.emulator)
         if parts.core is not None:
             self._core(parts.core, quoted=quoted_core)
         folder = self._working_folder()
@@ -1228,6 +1235,20 @@ class _Assembly:
         else:
             value = _Value(placeholder, found.substituted, launcher.path, escaped=True)
         built.splice(start, end + 1, value.actual, built.add(_Segment("value", value)))
+
+    def _second_method(self, found: Found) -> None:
+        """What ES-DE's second method writes into the command (``FileData.cpp:2598``, ``:2610-2616``).
+
+        It replaces no token: ``%ESPATH%`` is expanded across the command
+        before the first word is read, and a first word holding a ``*`` is
+        replaced, wherever it stands, with the first match — a value put in as
+        it is, unescaped.
+        """
+        built, es_path = self.built, self.inputs.es_path
+        built.replace(_ESPATH, _raw_value(_ESPATH, es_path, es_path))
+        if found.replaced is not None:
+            word, match = found.replaced
+            built.replace(word, _raw_value(word, match, match))
 
     def _core(self, core: str, *, quoted: bool) -> None:
         """The ``%CORE_X%/name`` reference replaced with the core file (``FileData.cpp:1484-1551``)."""

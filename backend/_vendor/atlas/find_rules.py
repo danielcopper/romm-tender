@@ -56,17 +56,22 @@ AVAILABILITY_UNESTABLISHED: Availability = "unestablished"
 # ``availability`` may be, and nothing else.
 AVAILABILITIES = (AVAILABILITY_STARTABLE, AVAILABILITY_NOT_INSTALLED, AVAILABILITY_UNESTABLISHED)
 
-LaunchRule = Literal["systempath", "staticpath"]
+LaunchRule = Literal["systempath", "staticpath", "command"]
 
 RULE_SYSTEMPATH: LaunchRule = "systempath"
 """The entry is a program name, found by searching the directories of the frontend's ``PATH``."""
 RULE_STATICPATH: LaunchRule = "staticpath"
 """The entry is a path, found where it names a file (or a link) after ES-DE expanded it."""
+RULE_COMMAND: LaunchRule = "command"
+"""No find rule: the command names no emulator token, and its first word was found as a file or on the frontend's
+``PATH`` — ES-DE's second method.
+"""
 
-# The two rule types ES-DE evaluates for an emulator on Linux, in the order it
-# evaluates them: every systempath entry before every staticpath entry
-# (``FileData::findEmulator``, ``es-app/src/FileData.cpp:2506-2593`` @ v3.4.1).
-LAUNCH_RULES = (RULE_SYSTEMPATH, RULE_STATICPATH)
+# How ES-DE finds what a command launches on Linux, in the order it tries
+# them: every systempath entry before every staticpath entry, and the
+# command's own first word where it names no emulator token
+# (``FileData::findEmulator``, ``es-app/src/FileData.cpp:2506-2649`` @ v3.4.1).
+LAUNCH_RULES = (RULE_SYSTEMPATH, RULE_STATICPATH, RULE_COMMAND)
 
 FindRulesLayer = Literal["bundled", "custom"]
 
@@ -82,15 +87,19 @@ LAYER_CUSTOM: FindRulesLayer = "custom"
 FIND_RULES_LAYERS = (LAYER_BUNDLED, LAYER_CUSTOM)
 
 # Why a catalogue row's launch answer is not ``startable``, one reason per
-# entry: nothing the rules name was found or the core is missing
-# (``emulator-not-found`` beside the shared ``core-not-installed``, both
-# ``not-installed``), or the answer cannot be told — no rules for the
+# entry: nothing the rules name was found, the program a command without an
+# emulator token names was found nowhere, the launcher script that program
+# runs is missing, or the core is missing (``emulator-not-found``,
+# ``program-not-found`` and ``launcher-script-missing`` beside the shared
+# ``core-not-installed``, all ``not-installed``), or the answer cannot be told — no rules for the
 # emulator or the core, an unread bundled layer, a case the evaluation does
 # not cover, a path atlas cannot see the way the frontend sees it (all
 # ``unestablished``). ``find-rules-unreadable`` on the custom layer is the
 # exception: it is no reason but a note beside whatever verdict the bundled
 # layer reached, because ES-DE skips that layer and reads on.
 CAVEAT_EMULATOR_NOT_FOUND = "emulator-not-found"
+CAVEAT_PROGRAM_NOT_FOUND = "program-not-found"
+CAVEAT_LAUNCHER_SCRIPT_MISSING = "launcher-script-missing"
 CAVEAT_EMULATOR_RULES_MISSING = "emulator-rules-missing"
 CAVEAT_CORE_RULES_MISSING = "core-rules-missing"
 CAVEAT_FIND_RULES_UNREADABLE = "find-rules-unreadable"
@@ -99,6 +108,15 @@ CAVEAT_LAUNCH_PATH_UNESTABLISHED = "launch-path-unestablished"
 # A note beside ``startable``: RetroDECK's own direct start would run
 # something else, or nothing.
 CAVEAT_RUN_GAME_DIFFERS = "run-game-differs"
+# Three notes beside any verdict of a frontend on the host (EmuDeck's): the
+# ``PATH`` and working directory the search ran over are assumed rather than
+# read, because the frontend process's own are written nowhere on disk; and the
+# frontend's launcher rewrites, at its next start, the custom rule or the
+# command the answer read, so the disk the answer reads is not the file that
+# start leaves.
+CAVEAT_LAUNCH_PATH_ASSUMED = "launch-path-assumed"
+CAVEAT_FIND_RULES_REWRITTEN_AT_START = "find-rules-rewritten-at-start"
+CAVEAT_COMMAND_REWRITTEN_AT_START = "command-rewritten-at-start"
 
 # Why a launch command is not taken apart (#573), each a refusal of the whole
 # command: shell syntax beyond plain words, a value a second shell would not

@@ -282,8 +282,9 @@ class SandboxLauncherFn(Protocol):
     The folder-boot bake (ADR-0019) cannot go through RetroDECK's ``run_game.sh``
     — it reinterprets a directory ``%ROM%`` as an ES-DE "directory as a file" —
     so it execs the emulator's own component launcher via ``flatpak run
-    --command=``. That path comes from ES-DE's ``es_find_rules.xml``: the
-    catalogue names the emulator a command runs, never where its binary lives.
+    --command=``. That path comes from ES-DE's ``es_find_rules.xml``. The
+    resolver answers it too, as a catalogue entry's ``launcher`` path, which
+    Tender does not read.
 
     ``None`` when the command names no emulator token, when the find rules do not
     carry it, or when none of its entries is reachable inside the sandbox — the

@@ -85,6 +85,7 @@ import fnmatch
 import hashlib
 import json
 import os
+import re
 import stat as _stat
 import subprocess
 import sys
@@ -133,15 +134,40 @@ GlobStatus = Literal["complete", "incomplete"]
 AppImageReadStatus = Literal[
     "ok", "missing", "unreadable", "invalid-text", "not-appimage", "entry-missing", "capability-missing"
 ]
+# The ways an entry's bytes do not come back at all, which every read out of
+# an AppImage shares whatever it then does with the bytes.
+AppImageEntryFailure = Literal["missing", "unreadable", "not-appimage", "entry-missing", "capability-missing"]
 
 READ_OK: ReadStatus = "ok"
 READ_MISSING: ReadStatus = "missing"
 READ_UNREADABLE: ReadStatus = "unreadable"
 READ_INVALID_TEXT: ReadStatus = "invalid-text"
 
-APPIMAGE_NOT_APPIMAGE: AppImageReadStatus = "not-appimage"
-APPIMAGE_ENTRY_MISSING: AppImageReadStatus = "entry-missing"
-APPIMAGE_CAPABILITY_MISSING: AppImageReadStatus = "capability-missing"
+APPIMAGE_NOT_APPIMAGE: AppImageEntryFailure = "not-appimage"
+APPIMAGE_ENTRY_MISSING: AppImageEntryFailure = "entry-missing"
+APPIMAGE_CAPABILITY_MISSING: AppImageEntryFailure = "capability-missing"
+# The plain read's two failures, in the entry read's own type.
+_APPIMAGE_MISSING: AppImageEntryFailure = "missing"
+_APPIMAGE_UNREADABLE: AppImageEntryFailure = "unreadable"
+_APPIMAGE_ENTRY_FAILURES: tuple[AppImageEntryFailure, ...] = (
+    _APPIMAGE_MISSING,
+    _APPIMAGE_UNREADABLE,
+    APPIMAGE_NOT_APPIMAGE,
+    APPIMAGE_ENTRY_MISSING,
+    APPIMAGE_CAPABILITY_MISSING,
+)
+# Each of them by its word, so a status read as a plain string answers in the type.
+_APPIMAGE_ENTRY_FAILURE_OF: Mapping[str, AppImageEntryFailure] = {word: word for word in _APPIMAGE_ENTRY_FAILURES}
+
+# Reading a build stamp out of an AppImage entry's bytes has the entry read's
+# ways to fail, short of the one that judges text, and two of its own: the
+# bytes hold nothing the pattern matches ("no-stamp"), or more than one place
+# does ("ambiguous") — a stamp the read would have to pick between is one it
+# refuses rather than guesses.
+AppImageStampStatus: TypeAlias = Literal["ok", "no-stamp", "ambiguous"] | AppImageEntryFailure
+APPIMAGE_STAMP_OK: AppImageStampStatus = "ok"
+APPIMAGE_NO_STAMP: AppImageStampStatus = "no-stamp"
+APPIMAGE_AMBIGUOUS: AppImageStampStatus = "ambiguous"
 
 # A PS2 BIOS header read has one way to fail beyond a plain file read:
 # "not-a-bios" is a file that was opened and read and fails the core's own
@@ -296,6 +322,24 @@ class AppImageReadResult:
         if (self.text is None) == (self.status == READ_OK):
             raise ValueError(
                 f"AppImageReadResult: text must be set exactly when status is 'ok' (got {self.status!r})"
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class AppImageStampResult:
+    """One stamp read's explicit outcome — ``stamp`` is set exactly when ``status`` is ok.
+
+    The statuses are documented on :data:`AppImageStampStatus`; the stamp is
+    the text the pattern's first group captured, decoded as ASCII.
+    """
+
+    status: AppImageStampStatus
+    stamp: str | None = None
+
+    def __post_init__(self) -> None:
+        if (self.stamp is None) == (self.status == APPIMAGE_STAMP_OK):
+            raise ValueError(
+                f"AppImageStampResult: stamp must be set exactly when status is 'ok' (got {self.status!r})"
             )
 
 
@@ -930,6 +974,9 @@ class Machine(Protocol):
     (:class:`CoreReading`) — an observation of this machine, never the
     resolver's guess at one, which is why an answer that degrades over a core
     can say which way the probe went unanswered.
+    ``read_appimage_stamp`` searches one AppImage entry's bytes for a build
+    stamp: the pattern's first group where the pattern matches exactly once,
+    ``no-stamp`` or ``ambiguous`` where it matches nowhere or more than once.
     ``file_size`` and ``file_digest`` answer for regular files only and return
     ``None`` whenever the answer cannot be determined (missing, unreadable, not
     a regular file, or an algorithm outside :data:`DIGEST_ALGORITHMS`).
@@ -944,6 +991,8 @@ class Machine(Protocol):
     def read_text(self, path: str) -> ReadResult: ...
 
     def read_appimage_text(self, path: str, inner_path: str) -> AppImageReadResult: ...
+
+    def read_appimage_stamp(self, path: str, inner_path: str, pattern: re.Pattern[bytes]) -> AppImageStampResult: ...
 
     def read_ps2_bios_header(self, path: str) -> Ps2BiosHeaderResult: ...
 
@@ -964,6 +1013,43 @@ class Machine(Protocol):
     def file_size(self, path: str) -> int | None: ...
 
     def file_digest(self, path: str, algorithm: str, *, first_bytes: int | None = None) -> str | None: ...
+
+
+def _appimage_entry_bytes(path: str, inner_path: str) -> bytes | AppImageEntryFailure:
+    """One AppImage entry's bytes, or the status its read failed with — every failure the reader names, kept apart.
+
+    The reader is :mod:`atlas.squashfs`; the caller's next step differs for
+    each failure — a missing file is the AppImage being gone,
+    ``capability-missing`` is this interpreter lacking the image's codec
+    while the file is fine.
+    """
+    try:
+        return squashfs.read_appimage_entry(path, inner_path)
+    except (FileNotFoundError, NotADirectoryError):
+        return _APPIMAGE_MISSING
+    except IsADirectoryError:
+        return _APPIMAGE_UNREADABLE
+    except squashfs.CodecUnavailable:
+        return APPIMAGE_CAPABILITY_MISSING
+    except squashfs.EntryNotFound:
+        return APPIMAGE_ENTRY_MISSING
+    except squashfs.SquashfsError:
+        return APPIMAGE_NOT_APPIMAGE
+    except OSError:
+        return _APPIMAGE_UNREADABLE
+
+
+def _stamp_in(data: bytes, pattern: re.Pattern[bytes]) -> AppImageStampResult:
+    """The stamp *pattern* finds in *data*: its first group where it matches exactly once."""
+    matches = pattern.findall(data)
+    if len(matches) > 1:
+        return AppImageStampResult(APPIMAGE_AMBIGUOUS)
+    if not matches:
+        return AppImageStampResult(APPIMAGE_NO_STAMP)
+    try:
+        return AppImageStampResult(APPIMAGE_STAMP_OK, matches[0].decode("ascii"))
+    except UnicodeDecodeError:
+        return AppImageStampResult(APPIMAGE_NO_STAMP)
 
 
 class RealMachine:
@@ -1055,24 +1141,26 @@ class RealMachine:
         missing file is the AppImage being gone, ``capability-missing`` is
         this interpreter lacking the image's codec while the file is fine.
         """
-        try:
-            data = squashfs.read_appimage_entry(path, inner_path)
-        except (FileNotFoundError, NotADirectoryError):
-            return AppImageReadResult(READ_MISSING)
-        except IsADirectoryError:
-            return AppImageReadResult(READ_UNREADABLE)
-        except squashfs.CodecUnavailable:
-            return AppImageReadResult(APPIMAGE_CAPABILITY_MISSING)
-        except squashfs.EntryNotFound:
-            return AppImageReadResult(APPIMAGE_ENTRY_MISSING)
-        except squashfs.SquashfsError:
-            return AppImageReadResult(APPIMAGE_NOT_APPIMAGE)
-        except OSError:
-            return AppImageReadResult(READ_UNREADABLE)
+        data = _appimage_entry_bytes(path, inner_path)
+        if isinstance(data, str):
+            return AppImageReadResult(data)
         try:
             return AppImageReadResult(READ_OK, data.decode("utf-8"))
         except UnicodeDecodeError:
             return AppImageReadResult(READ_INVALID_TEXT)
+
+    def read_appimage_stamp(self, path: str, inner_path: str, pattern: re.Pattern[bytes]) -> AppImageStampResult:
+        """A build stamp out of one AppImage entry's bytes — the pattern's first group, where it matches once.
+
+        The entry is read the way :meth:`read_appimage_text` reads it, and
+        every failure keeps that read's word; the bytes are then searched
+        whole. A match whose group is not ASCII is no stamp: a version string
+        a build prints is ASCII, so bytes that are not cannot be one.
+        """
+        data = _appimage_entry_bytes(path, inner_path)
+        if isinstance(data, str):
+            return AppImageStampResult(data)
+        return _stamp_in(data, pattern)
 
     def read_ps2_bios_header(self, path: str) -> Ps2BiosHeaderResult:
         """The ROMDIR read LRPS2 makes over a folder candidate — a status, and the fields where it passes.
@@ -1900,6 +1988,61 @@ def _validate_fixture_appimages(
     return validated
 
 
+# The states a fixture stamp read may declare short of the stamp itself: the
+# two the search reaches over bytes it read. The whole-image states and an
+# absent entry come from ``appimages``, which a stamp sits beside.
+_FIXTURE_APPIMAGE_STAMP_STATES: tuple[AppImageStampStatus, ...] = (APPIMAGE_NO_STAMP, APPIMAGE_AMBIGUOUS)
+_FIXTURE_APPIMAGE_STAMP_STATE_OF: Mapping[str, AppImageStampStatus] = {
+    state: state for state in _FIXTURE_APPIMAGE_STAMP_STATES
+}
+
+
+def _validate_fixture_appimage_stamps(
+    stamps: Mapping[str, object],
+    appimages: Mapping[str, Mapping[str, object] | str],
+) -> dict[str, dict[str, str]]:
+    """The declared stamp reads, held to the AppImage entries they search.
+
+    A stamp describes an entry's bytes, so it names an entry ``appimages``
+    declares in an image that opens — a stamp beside a whole-image state, or
+    beside an entry that is not there, would let a vector assert a read the
+    machine it models never completes — and not one declared ``unreadable``,
+    whose bytes do not come back to be searched.
+    """
+    validated: dict[str, dict[str, str]] = {}
+    for path, entries in stamps.items():
+        image = appimages.get(path)
+        if not isinstance(image, Mapping):
+            raise ValueError(
+                f"appimage stamp {path!r}: a stamp is read out of an image's entry, and no image with entries "
+                "is declared there"
+            )
+        if not isinstance(entries, Mapping):
+            raise ValueError(f"appimage stamp {path!r}: expected an object of entries, got {entries!r}")
+        validated[path] = {
+            str(inner): _fixture_appimage_stamp(path, image, str(inner), stamp) for inner, stamp in entries.items()
+        }
+    return validated
+
+
+def _fixture_appimage_stamp(path: str, image: Mapping[str, object], inner: str, stamp: object) -> str:
+    """One declared stamp, held to the entry it is read out of."""
+    declared = image.get(inner)
+    if declared is None:
+        raise ValueError(f"appimage stamp {path!r} entry {inner!r}: the image declares no such entry")
+    if isinstance(declared, Mapping) and declared.get("status") == READ_UNREADABLE:
+        raise ValueError(
+            f"appimage stamp {path!r} entry {inner!r}: an unreadable entry's bytes are what cannot be read, "
+            "so it states no stamp"
+        )
+    if not isinstance(stamp, str) or not stamp:
+        raise ValueError(
+            f"appimage stamp {path!r} entry {inner!r}: expected the stamp or one of "
+            f"{_FIXTURE_APPIMAGE_STAMP_STATES}, got {stamp!r}"
+        )
+    return stamp
+
+
 # The states a fixture PS2 BIOS header may declare short of the two strings:
 # what RealMachine can report about a file it opened. "missing" is not among
 # them — an absent file is modeled by not declaring it in ``files``.
@@ -2151,10 +2294,11 @@ class FixtureMachine:
     would fail where nothing is there, so it reads as a binary nothing could
     be loaded from, and everywhere else the loader refuses it, because a
     fixture's files are text and blobs and never a library a loader opens.
-    ``appimages``, ``ps2_bios_headers``, ``archives``
-    and ``whdload_slaves`` model four content reads at the seam rather than as
-    bytes — see :meth:`read_appimage_text`, :meth:`read_ps2_bios_header`,
-    :meth:`list_archive` and :meth:`read_whdload_slave`. The last two are a
+    ``appimages``, ``appimage_stamps``, ``ps2_bios_headers``, ``archives``
+    and ``whdload_slaves`` model five content reads at the seam rather than as
+    bytes — see :meth:`read_appimage_text`, :meth:`read_appimage_stamp`,
+    :meth:`read_ps2_bios_header`, :meth:`list_archive` and
+    :meth:`read_whdload_slave`. The last two are a
     pair: ``archives`` maps an archive's path to its member list (or to
     ``"unreadable"`` / ``"not-archive"``), and ``whdload_slaves`` maps the
     same path to what the slave inside it states — ``{"slave": ..., "version":
@@ -2207,6 +2351,7 @@ class FixtureMachine:
         inaccessible: Iterable[str] | None = None,
         unlistable: Iterable[str] | None = None,
         appimages: Mapping[str, Mapping[str, object] | str] | None = None,
+        appimage_stamps: Mapping[str, object] | None = None,
         ps2_bios_headers: Mapping[str, Mapping[str, object] | str] | None = None,
         archives: Mapping[str, object] | None = None,
         whdload_slaves: Mapping[str, object] | None = None,
@@ -2215,6 +2360,7 @@ class FixtureMachine:
         self._symlinks = dict(symlinks or {})
         self._cores = _validate_fixture_cores(cores or {})
         self._appimages = _validate_fixture_appimages(appimages or {})
+        self._appimage_stamps = _validate_fixture_appimage_stamps(appimage_stamps or {}, self._appimages)
         self._ps2_bios_headers = _validate_fixture_ps2_bios_headers(ps2_bios_headers or {}, self._files)
         self._inaccessible = set(inaccessible or ())
         self._unlistable = set(unlistable or ())
@@ -2336,6 +2482,32 @@ class FixtureMachine:
             return AppImageReadResult(READ_OK, entry)
         entry_status: AppImageReadStatus = entry["status"]  # type: ignore[index,assignment]
         return AppImageReadResult(entry_status)
+
+    def read_appimage_stamp(self, path: str, inner_path: str, pattern: re.Pattern[bytes]) -> AppImageStampResult:
+        """The modeled stamp read — the string the search yields in, the same outcomes RealMachine reports.
+
+        Modeling lives beside the seam for the reason ``appimages`` does: the
+        bytes a real stamp is searched in (a whole frontend binary) are what a
+        fixture must not carry, so *pattern* is not applied here — the
+        declaration states what applying it yields. The image and the entry
+        answer as :meth:`read_appimage_text` answers them, an entry's
+        ``invalid-text`` aside, because a binary is what a stamp is read out
+        of; a declared entry with no stamp declared for it answers
+        ``no-stamp``, so a vector that forgot the key cannot pass a build off
+        as stamped.
+        """
+        del pattern
+        status = self.read_appimage_text(path, inner_path).status
+        failure = _APPIMAGE_ENTRY_FAILURE_OF.get(status)
+        if failure is not None:
+            return AppImageStampResult(failure)
+        stamp = self._appimage_stamps.get(path, {}).get(inner_path)
+        if stamp is None:
+            return AppImageStampResult(APPIMAGE_NO_STAMP)
+        state = _FIXTURE_APPIMAGE_STAMP_STATE_OF.get(stamp)
+        if state is not None:
+            return AppImageStampResult(state)
+        return AppImageStampResult(APPIMAGE_STAMP_OK, stamp)
 
     def read_ps2_bios_header(self, path: str) -> Ps2BiosHeaderResult:
         """The modeled ROMDIR read — the two strings the walk yields in, the same outcomes RealMachine reports.

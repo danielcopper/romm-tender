@@ -469,13 +469,15 @@ def _requirement_entry_contract(
 def firmware_contract(answer: FirmwareAnswer) -> dict[str, Any]:
     """The stable form of a :class:`~atlas.firmware.FirmwareAnswer`.
 
-    ``description`` is prose and stays out. Four derived fields are in on
+    ``description`` is prose and stays out. Five derived fields are in on
     purpose, because a consumer deriving them itself is exactly how the answer
     gets read wrongly: ``declaration`` separates "this core needs nothing" from
     "atlas knows nothing about this core", ``satisfied`` says whether one file
     is actually usable (a *present* file with the wrong bytes is not),
     ``system_firmware`` says what is recorded about the system behind the core,
-    and ``requirements_met`` is the single number a client renders — never
+    ``system_firmware_met`` is the console-level verdict ``requirements_met``
+    folds in, ``null`` wherever that need is not established, and
+    ``requirements_met`` is the single number a client renders — never
     ``true`` out of ignorance, never ``true`` with a required file known to be
     wrong.
 
@@ -599,6 +601,7 @@ def firmware_contract(answer: FirmwareAnswer) -> dict[str, Any]:
                 "locating": core.locating,
                 "requirements_met": core.requirements_met,
                 "system_firmware": core.system_firmware,
+                "system_firmware_met": core.system_firmware_met,
                 "requirements": [_requirement_entry_contract(r) for r in core.requirements],
                 "refused": [{"declared": r.declared, "need": r.need, "reason": r.reason} for r in core.refused],
                 "caveats": _caveats_contract(core.caveats),

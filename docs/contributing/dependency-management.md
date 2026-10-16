@@ -37,17 +37,43 @@ Auto-merge uses GitHub's native auto-merge, so **the required CI checks are the 
 everything is green. The checks say nothing about whether a release is authentic, so Renovate proposes an npm or PyPI
 release only once it is three days old (the `security:minimumReleaseAgeNpm` and `security:minimumReleaseAgePypi`
 presets), which gives a compromised release time to be flagged and pulled before it can merge itself — lock-file
-maintenance, pins and replacements are exempt, and GitHub Actions updates carry no such wait.
+maintenance, pins and replacements are exempt, and GitHub Actions updates carry no such wait. Renovate opens a new PR
+before 6am on Mondays (UTC), so a week's updates arrive together; a PR already open is kept up to date outside that
+window too. Three kinds of PR keep a schedule of their own: lock-file maintenance opens on the first of the month,
+`@decky/ui` on any day ([below](#deckyui-ships-as-a-fix)), and a fix for a reported vulnerability as soon as it is
+found, which is Renovate's default for those.
 
 | Category                                           | Auto-merges?                    |
 | -------------------------------------------------- | ------------------------------- |
 | Python (pip) in-range minor/patch + lock refreshes | ✅                              |
 | npm / GitHub-Actions minor / patch / digest        | ✅                              |
+| `@decky/ui` minor / patch — any day, as a fix      | ✅ (see below)                  |
 | Monthly lock-file maintenance (transitive refresh) | ✅                              |
 | **Any major** (any ecosystem)                      | ❌ → human review               |
 | **Shared workflows** (`danielcopper/.github`)      | ❌ → human review               |
 | **Toolchain** (`node`/`pnpm`/`python`/`uv`/`deno`) | ❌ not even proposed (excluded) |
 | **Raising a deliberate ceiling** (see below)       | ❌ not even proposed            |
+
+### `@decky/ui` ships as a fix
+
+`@decky/ui` is the one dependency whose update can repair Tender rather than maintain it. The standalone panel bundle
+carries its own copy ([how the panel is built](../architecture/frontend-bundles.md)), and when a Steam update moves a
+module one of its lookups searches for, upstream repairs the lookup in a new release — which reaches a standalone user
+only inside a new Tender release. So one rule in `renovate.json` treats its minor and patch updates apart:
+
+- **No schedule.** Its PR opens on whichever day the release becomes old enough, not in the next Monday window.
+- **`fix` as the commit type.** An in-range bump touches only the lock, and the `:semanticPrefixFixDepsChoreOthers`
+  preset that `config:recommended` brings commits a lock-only update as `chore(deps)`. release-please proposes no
+  release for a `chore`; as `fix(deps)` the bump is a bug fix in the next release PR, and on its own is enough for
+  release-please to propose one.
+
+The three-day release age stays: it is the supply-chain lever where the schedule is only the noise one, and the Steam
+breaks so far reached Steam's beta first, which leaves that time. Its package budgets are also wider than the others',
+so a repair that grows the package by up to about a quarter does not stop the auto-merge; a larger one still fails
+`check:packages`, and its budgets are raised by hand on the Renovate PR
+([Third-party package budgets](../architecture/frontend-bundles.md#third-party-package-budgets)). A major `@decky/ui`
+update keeps the default handling — the Monday window and human review — and its commit type is chosen when it is merged
+by hand.
 
 ## Ceilings — versions deliberately held back
 

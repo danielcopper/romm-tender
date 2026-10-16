@@ -139,10 +139,10 @@ _IDENTIFIED_IMAGE_CODES = frozenset({CAVEAT_FIRMWARE_IMAGE_IDENTIFIED, CAVEAT_FI
 # regions for which nothing boots. A region named here may have an option too;
 # the verdict's precedence decides between the two
 # (:mod:`domain.firmware_groups`). The group's own ``core-mode-unestablished``
-# names regions as well, and they are the regions its options DO serve, so it
-# says nothing about a region left out. A region whose every name the resolver
-# refused (it leaves the root) arrives with neither an option nor one of these
-# codes — emu-atlas#556 asks for it.
+# names regions as well: under ``regions`` the regions its options DO serve, and
+# under ``unstated`` the regions it states nothing for. A region whose every name
+# the resolver refused (it leaves the root) arrives with neither an option nor
+# one of these codes, only in ``unstated``, which this adapter does not read.
 _UNCHECKED_REGION_CODES = frozenset({CAVEAT_FIRMWARE_SCAN_INCOMPLETE, CAVEAT_FIRMWARE_SEARCH_UNVERIFIED})
 _ABSENT_REGION_CODES = frozenset({CAVEAT_FIRMWARE_PATH_NAMES_NO_FILE})
 

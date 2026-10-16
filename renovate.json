@@ -71,6 +71,20 @@
       "automerge": false
     },
     {
+      "description": "@decky/ui minor/patch: no schedule, so its PR opens on any day once the release is old enough, and fix as the commit type, so the bump lands as fix(deps). Why: docs/contributing/dependency-management.md, \"`@decky/ui` ships as a fix\".",
+      "matchPackageNames": [
+        "@decky/ui"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "schedule": [
+        "at any time"
+      ],
+      "semanticCommitType": "fix"
+    },
+    {
       "description": "Toolchain versions (node, pnpm, python, uv, deno) are pinned and cross-file-coupled: each appears in mise.toml AND in frontend/package.json's packageManager and/or the workflow setup-* version inputs, and all copies must match (python = docs/contributing/dependency-management.md says why, uv pinned for lock reproducibility, pnpm = packageManager, node = CI). Disabled by NAME across every manager so a bot bump can't desync one copy. The setup-* action SHAs themselves stay updatable (different dep names).",
       "matchDepNames": [
         "node",

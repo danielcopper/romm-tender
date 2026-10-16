@@ -1,13 +1,15 @@
 """Interpretation of ``retroarch.cfg`` and its override chain — the layout keys.
 
 RetroArch's on-disk layout for save data is not a static path: it is governed by
-live config values, resolved through a four-layer chain in which later files win
-(``config_load_override()``, RetroArch ``configuration.c:7095``):
+live config values, resolved through a five-layer chain in which later files win
+(``config_load_file()``, RetroArch ``configuration.c:6309-6353`` for the
+appended files, ``config_load_override()`` at ``:7095`` for the overrides):
 
 1. ``retroarch.cfg`` — global
-2. ``config/<library_name>/<library_name>.cfg`` — core override
-3. ``config/<library_name>/<content_dir>.cfg`` — content-dir override
-4. ``config/<library_name>/<rom_name>.cfg`` — game override
+2. the files a launch appends with ``--appendconfig``, in the order given
+3. ``config/<library_name>/<library_name>.cfg`` — core override
+4. ``config/<library_name>/<content_dir>.cfg`` — content-dir override
+5. ``config/<library_name>/<rom_name>.cfg`` — game override
 
 "Later files win" is where the chain ends, not how it is walked: RetroArch
 merges the whole chain into ONE config and reads each key from it once — see
@@ -33,7 +35,7 @@ Pure text in, value object out. No I/O — the machine seam supplies the texts.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Sequence
+from typing import Callable, Literal, Sequence
 
 from ._question import once
 
@@ -171,6 +173,21 @@ class RejectedDirectory:
 
 
 @dataclass(frozen=True, slots=True)
+class AppendedOverridden:
+    """A layout key an appended file sets and an override then decides.
+
+    ``key`` is the setting, ``override`` the override layer whose read stands.
+    RetroArch merges the overrides on top of the appended files
+    (``configuration.c:6355`` onwards), so the override's value is the answer
+    and the appended one never reaches the getter — which is exactly what a
+    caller that appended the file to move its saves needs to be told.
+    """
+
+    key: str
+    override: "CfgSource"
+
+
+@dataclass(frozen=True, slots=True)
 class RetroArchCfg:
     """One family's layout decision resolved through the override chain, with provenance.
 
@@ -193,7 +210,8 @@ class RetroArchCfg:
     line its parser drops, a value its typed getter refuses — so a caller sees
     why the file and the answer disagree. ``rejected_directories`` is the same
     kind of gap for the root: values RetroArch read and found not to be
-    directories.
+    directories. ``appended_overridden`` names each governing key an appended
+    file sets whose standing value an override supplied instead.
     """
 
     keys: LayoutKeys
@@ -204,6 +222,7 @@ class RetroArchCfg:
     sources: tuple[str, ...]
     ignored: tuple[IgnoredSetting, ...] = ()
     rejected_directories: tuple[RejectedDirectory, ...] = ()
+    appended_overridden: tuple[AppendedOverridden, ...] = ()
 
 
 # RetroArch's parser, ported line for line from ``config_file.c`` (pinned
@@ -505,27 +524,45 @@ def expand_home(raw: str, *, home: str | None) -> str | None:
     return raw
 
 
-# Which file of the override chain a value was read from — the kind, not the
-# path. Four kinds and no more: RetroArch loads the global cfg and then, in
-# this order, the core, content-directory and game override
-# (``configuration.c:7095``). A client branching on where a refused root came
-# from reads these; the file itself rides beside them.
-CFG_LAYER_GLOBAL = "global"
-CFG_LAYER_CORE_OVERRIDE = "core-override"
-CFG_LAYER_CONTENT_DIR_OVERRIDE = "content-dir-override"
-CFG_LAYER_GAME_OVERRIDE = "game-override"
+# Which file of the chain a value was read from — the kind, not the path. Five
+# kinds and no more, in RetroArch's load order: the global cfg, the files a
+# launch appends with ``--appendconfig`` (``configuration.c:6309-6353``), and
+# then the core, content-directory and game override (``configuration.c:7095``).
+# A client branching on where a refused root came from reads these; the file
+# itself rides beside them.
+CfgLayerKind = Literal["global", "appended", "core-override", "content-dir-override", "game-override"]
+CFG_LAYER_GLOBAL: CfgLayerKind = "global"
+"""The global ``retroarch.cfg`` the installation runs on."""
+CFG_LAYER_APPENDED: CfgLayerKind = "appended"
+"""A file the launch appended with ``--appendconfig``, named as the caller passed it."""
+CFG_LAYER_CORE_OVERRIDE: CfgLayerKind = "core-override"
+"""The per-core override, ``config/<library_name>/<library_name>.cfg``."""
+CFG_LAYER_CONTENT_DIR_OVERRIDE: CfgLayerKind = "content-dir-override"
+"""The per-content-directory override, ``config/<library_name>/<content_dir>.cfg``."""
+CFG_LAYER_GAME_OVERRIDE: CfgLayerKind = "game-override"
+"""The per-game override, ``config/<library_name>/<rom_name>.cfg``."""
 CFG_LAYER_KINDS = (
     CFG_LAYER_GLOBAL,
+    CFG_LAYER_APPENDED,
+    CFG_LAYER_CORE_OVERRIDE,
+    CFG_LAYER_CONTENT_DIR_OVERRIDE,
+    CFG_LAYER_GAME_OVERRIDE,
+)
+# The three kinds ``config_load_override`` stacks on top of the others. The
+# global cfg and the appended files are read at boot and again under them;
+# these are read only in the override reload (:func:`_read_layers`).
+CFG_LAYER_OVERRIDE_KINDS = (
     CFG_LAYER_CORE_OVERRIDE,
     CFG_LAYER_CONTENT_DIR_OVERRIDE,
     CFG_LAYER_GAME_OVERRIDE,
 )
 # How each kind reads in a sentence. The global cfg is named by its file alone
-# — "retroarch.cfg: save_directory = …" — and an override says which kind it is
-# in front of the file, which is the phrasing every provenance line and message
-# in this package already uses.
+# — "retroarch.cfg: save_directory = …" — and every other layer says which kind
+# it is in front of the file, which is the phrasing every provenance line and
+# message in this package already uses.
 _CFG_LAYER_PHRASE = {
     CFG_LAYER_GLOBAL: "",
+    CFG_LAYER_APPENDED: "appended config ",
     CFG_LAYER_CORE_OVERRIDE: "core override ",
     CFG_LAYER_CONTENT_DIR_OVERRIDE: "content-dir override ",
     CFG_LAYER_GAME_OVERRIDE: "game override ",
@@ -558,7 +595,7 @@ class CfgSource:
 
 
 # One layer of the chain: where it came from, its parsed content, and whether
-# it is an override (the global cfg is not).
+# it is an override (the global cfg and the appended files are not).
 _Layer = tuple[CfgSource, ParsedCfg, bool]
 
 # One layer as a caller holds it before parsing: source and text, in load order.
@@ -572,8 +609,11 @@ DirectoryCheck = Callable[[str], bool]
 
 
 def _parse_layers(layers: Sequence[CfgLayer]) -> list[_Layer]:
-    """Text layers as parsed layers — the global cfg first, its overrides after."""
-    return [(source, parse_cfg_once(text), index > 0) for index, (source, text) in enumerate(layers)]
+    """Text layers as parsed layers, in load order — each marked by whether its kind is an override."""
+    return [
+        (source, parse_cfg_once(text), source.kind in CFG_LAYER_OVERRIDE_KINDS)
+        for source, text in layers
+    ]
 
 
 def _read_layers(layers: Sequence[_Layer], key: str) -> list[_Layer]:
@@ -588,15 +628,22 @@ def _read_layers(layers: Sequence[_Layer], key: str) -> list[_Layer]:
     per key — the last file that sets it.
 
     That reload runs without ``config_set_defaults`` (``:7243``), so whatever
-    it refuses leaves standing what the BOOT load left: the global cfg alone,
-    read the same way, on top of the compile-time defaults. Two reads, then,
-    not four — a layer between those two is shadowed, and its value never
+    it refuses leaves standing what the BOOT load left, on top of the
+    compile-time defaults. The boot load is not the global cfg alone where a
+    launch appends files: ``config_load_file`` merges each ``--appendconfig``
+    file into the global cfg the same way, in the order given, before any
+    override (``configuration.c:6309-6353``), and the override reload re-reads
+    them under the overrides (``should_append``, ``:7155-7157``). So the boot
+    read is the last of the global cfg and the appended files that sets the
+    key, and the reload's is the last override that sets it. Two reads, then,
+    whatever the chain's length — a layer shadowed within either group never
     reaches a getter at all.
     """
     reads: list[_Layer] = []
-    if layers and key in layers[0][1].values:
-        reads.append(layers[0])
-    overriding = [layer for layer in layers[1:] if key in layer[1].values]
+    booted = [layer for layer in layers if not layer[2] and key in layer[1].values]
+    if booted:
+        reads.append(booted[-1])
+    overriding = [layer for layer in layers if layer[2] and key in layer[1].values]
     if overriding:
         reads.append(overriding[-1])
     return reads
@@ -635,14 +682,29 @@ def chain_bool(
     Returns the effective value and the settings the configs state that it does
     not reflect — values the typed getter refuses, lines the parser drops.
     """
+    value, _, ignored = chain_bool_read(layers, key, default=default)
+    return value, ignored
+
+
+def chain_bool_read(
+    layers: Sequence[CfgLayer], key: str, *, default: bool
+) -> tuple[bool, CfgSource | None, tuple[IgnoredSetting, ...]]:
+    """:func:`chain_bool` plus the layer whose read stands — ``None`` when the default does.
+
+    The layer is what a provenance line names: a setting an appended file
+    makes is that file's, not the global cfg's, and a statement naming the
+    wrong one sends the reader to edit a file that decides nothing.
+    """
     parsed_layers = _parse_layers(layers)
-    value = default
+    value, deciding = default, None
     ignored: list[IgnoredSetting] = []
     for layer in _read_layers(parsed_layers, key):
         value, refused = _apply_bool(layer, key, value)
         if refused is not None:
             ignored.append(refused)
-    return value, (*ignored, *_dropped_lines(parsed_layers, key))
+        else:
+            deciding = layer[0]
+    return value, deciding, (*ignored, *_dropped_lines(parsed_layers, key))
 
 
 def chain_value(
@@ -657,17 +719,36 @@ def chain_value(
     lines travel along: a line the parser refused sets nothing, and nothing else
     in the answer says so.
     """
+    value, _, dropped = chain_value_read(layers, key)
+    return value, dropped
+
+
+def chain_value_read(
+    layers: Sequence[CfgLayer], key: str
+) -> tuple[str | None, CfgSource | None, tuple[IgnoredSetting, ...]]:
+    """:func:`chain_value` plus the layer the value was read from — ``None`` when unset."""
     parsed_layers = _parse_layers(layers)
     reads = _read_layers(parsed_layers, key)
-    value = reads[-1][1].values[key] if reads else None
-    return value, _dropped_lines(parsed_layers, key)
+    if not reads:
+        return None, None, _dropped_lines(parsed_layers, key)
+    source, parsed, _ = reads[-1]
+    return parsed.values[key], source, _dropped_lines(parsed_layers, key)
+
+
+@dataclass(frozen=True, slots=True)
+class _Resolved:
+    """One governing key through the chain: what stands, the prose for it, and the layer that set it."""
+
+    source: str
+    deciding: _Layer | None
 
 
 def _resolve_flag(
     layers: Sequence[_Layer], key: str, *, default: bool, defaults_label: str
-) -> tuple[bool, str, tuple[IgnoredSetting, ...]]:
+) -> tuple[bool, _Resolved, tuple[IgnoredSetting, ...]]:
     """One boolean key through the chain, with provenance — see :func:`chain_bool`."""
     value, source = default, f"default: {key} = {str(default).lower()} ({defaults_label})"
+    deciding: _Layer | None = None
     ignored: list[IgnoredSetting] = []
     for layer in _read_layers(layers, key):
         source_layer, parsed, is_override = layer
@@ -676,13 +757,39 @@ def _resolve_flag(
             ignored.append(refused)
             continue
         raw = parsed.values[key]
+        deciding = layer
         source = f'{source_layer.label}: {key} = "{raw}"' + (" (override wins)" if is_override else "")
-    return value, source, tuple(ignored)
+    return value, _Resolved(source, deciding), tuple(ignored)
+
+
+def _appended_overridden(layers: Sequence[_Layer], key: str, resolved: _Resolved) -> AppendedOverridden | None:
+    """*key* as :class:`AppendedOverridden` where an appended file sets it and an override's read stands."""
+    deciding = resolved.deciding
+    if deciding is None or not deciding[2]:
+        return None
+    appended = any(
+        source.kind == CFG_LAYER_APPENDED and key in parsed.values for source, parsed, _ in layers
+    )
+    return AppendedOverridden(key, deciding[0]) if appended else None
+
+
+def _directory_check(
+    layer: CfgSource, *, is_directory: DirectoryCheck | None, appended_is_directory: DirectoryCheck | None
+) -> DirectoryCheck | None:
+    """Which ``path_is_directory`` answers for a root *layer* states — an appended file's may have its own."""
+    if layer.kind == CFG_LAYER_APPENDED and appended_is_directory is not None:
+        return appended_is_directory
+    return is_directory
 
 
 def _resolve_directory(
-    layers: Sequence[_Layer], *, keys: LayoutKeys, home: str | None, is_directory: DirectoryCheck | None
-) -> tuple[str | None, str, tuple[RejectedDirectory, ...]]:
+    layers: Sequence[_Layer],
+    *,
+    keys: LayoutKeys,
+    home: str | None,
+    is_directory: DirectoryCheck | None,
+    appended_is_directory: DirectoryCheck | None = None,
+) -> tuple[str | None, _Resolved, tuple[RejectedDirectory, ...]]:
     """The family's root through the chain — ``None`` when the platform default applies.
 
     Each read is validated the way ``config_load_file`` validates it
@@ -733,7 +840,8 @@ def _resolve_directory(
     # a later read overwrote did not — see RejectedDirectory.superseded.
     refusals: list[tuple[int, CfgSource, str]] = []
     last_set = -1
-    for index, (layer, parsed, is_override) in enumerate(_read_layers(layers, keys.directory)):
+    reads = _read_layers(layers, keys.directory)
+    for index, (layer, parsed, is_override) in enumerate(reads):
         raw = parsed.values[keys.directory]
         suffix = " (override wins)" if is_override else ""
         if raw == _UNSET_VALUE:
@@ -744,7 +852,8 @@ def _resolve_directory(
             )
             continue
         candidate = expand_home(raw, home=home)
-        if candidate is None or (is_directory is not None and not is_directory(candidate)):
+        check = _directory_check(layer, is_directory=is_directory, appended_is_directory=appended_is_directory)
+        if candidate is None or (check is not None and not check(candidate)):
             refusals.append((index, layer, candidate if candidate is not None else raw))
             continue
         directory, last_set = candidate, index
@@ -753,7 +862,8 @@ def _resolve_directory(
         RejectedDirectory(layer, value, superseded=index < last_set)
         for index, layer, value in refusals
     ]
-    return directory, source, tuple(rejected)
+    deciding = reads[last_set] if last_set >= 0 else None
+    return directory, _Resolved(source, deciding), tuple(rejected)
 
 
 def _dropped_governing_lines(layers: Sequence[_Layer], keys: LayoutKeys) -> tuple[IgnoredSetting, ...]:
@@ -781,14 +891,17 @@ def resolve_layout(
     home: str | None,
     cfg_label: str,
     defaults: LayoutDefaults,
+    appended: Sequence[CfgLayer] = (),
     overrides: Sequence[CfgLayer] = (),
     is_directory: DirectoryCheck | None = None,
+    appended_is_directory: DirectoryCheck | None = None,
 ) -> RetroArchCfg:
     """Resolve one family's layout through the override chain, as RetroArch reads it.
 
-    The overrides are merged into the global cfg and each key is read from the
-    result — the last file that sets it wins, and a value RetroArch refuses
-    falls back to the global cfg's own (:func:`_read_layers`).
+    The appended files and then the overrides are merged into the global cfg
+    and each key is read from the result — the last file that sets it wins,
+    and a value RetroArch refuses in an override falls back to what the global
+    cfg and the appended files left (:func:`_read_layers`).
 
     Parameters
     ----------
@@ -811,6 +924,10 @@ def resolve_layout(
         as that layer's :class:`CfgSource`.
     defaults:
         The flavor's defaults, applied when no layer sets a key.
+    appended:
+        ``(CfgSource, text)`` pairs for the files a launch appends with
+        ``--appendconfig``, in the order RetroArch reads them — each of kind
+        :data:`CFG_LAYER_APPENDED` and already read through the machine seam.
     overrides:
         ``(CfgSource, text)`` pairs in load order (core, content-dir, game) —
         exactly the files that exist, already read through the machine seam.
@@ -819,6 +936,10 @@ def resolve_layout(
         ``path_is_directory`` as this machine answers it, used to validate each
         root value RetroArch reads. Omitted, the values are taken as written
         and ``rejected_directories`` reports only the blank one.
+    appended_is_directory:
+        The same test for a root an appended file states, where the caller
+        answers it through the program's own view of the filesystem rather
+        than through *is_directory*. Omitted, *is_directory* tests those too.
     """
     empty = ParsedCfg({})
     layers: list[_Layer] = [
@@ -828,21 +949,24 @@ def resolve_layout(
             False,
         )
     ]
+    layers.extend((source, parse_cfg_once(text), False) for source, text in appended)
     layers.extend((source, parse_cfg_once(text), True) for source, text in overrides)
 
     defaults_label = defaults.label
-    in_content_dir, s1, i1 = _resolve_flag(
+    in_content_dir, r1, i1 = _resolve_flag(
         layers, keys.in_content_dir, default=defaults.in_content_dir, defaults_label=defaults_label
     )
-    sort_by_content, s2, i2 = _resolve_flag(
+    sort_by_content, r2, i2 = _resolve_flag(
         layers, keys.sort_by_content, default=defaults.sort_by_content, defaults_label=defaults_label
     )
-    sort_by_core, s3, i3 = _resolve_flag(
+    sort_by_core, r3, i3 = _resolve_flag(
         layers, keys.sort_by_core, default=defaults.sort_by_core, defaults_label=defaults_label
     )
-    directory, dir_source, rejected = _resolve_directory(
-        layers, keys=keys, home=home, is_directory=is_directory
+    directory, r4, rejected = _resolve_directory(
+        layers, keys=keys, home=home, is_directory=is_directory, appended_is_directory=appended_is_directory
     )
+    resolved = (r1, r2, r3, r4)
+    overridden = (_appended_overridden(layers, key, r) for key, r in zip(keys.governing, resolved, strict=True))
 
     return RetroArchCfg(
         keys=keys,
@@ -850,7 +974,8 @@ def resolve_layout(
         sort_by_content=sort_by_content,
         sort_by_core=sort_by_core,
         directory=directory,
-        sources=(s1, s2, s3, dir_source),
+        sources=tuple(r.source for r in resolved),
         ignored=(*_dropped_governing_lines(layers, keys), *i1, *i2, *i3),
         rejected_directories=rejected,
+        appended_overridden=tuple(o for o in overridden if o is not None),
     )

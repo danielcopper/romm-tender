@@ -1,9 +1,9 @@
 {
   "globals.js": {
-    "@decky/ui": 5000
+    "@decky/ui": 5500
   },
   "index.js": {
-    "@decky/ui": 38500,
+    "@decky/ui": 44000,
     "react-icons": 11000
   },
   "index-coexistence.js": {

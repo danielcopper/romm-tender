@@ -67,6 +67,7 @@ from .placement import (
     SoftPatchAnswer,
     TexturePlacement,
     Unresolved,
+    checked_appendconfig,
     checked_cwd,
 )
 
@@ -135,6 +136,7 @@ class EveryInstallation:
         core_so: str | None = None,
         system: str | None = None,
         cwd: str | None = None,
+        appendconfig: Sequence[str] = (),
     ) -> tuple[InstallationAnswer[SavefilePlacement | Unresolved], ...]:
         """Where each installation keeps this save — one placement per arrangement.
 
@@ -144,12 +146,14 @@ class EveryInstallation:
         which is exactly what this route exists to show. ``cwd`` is the
         launch's working folder, checked here — so a value that is not an
         absolute path raises even with no installation to ask — and handed to
-        every handle.
+        every handle. ``appendconfig`` is checked here the same way and handed
+        to every handle as the files its own RetroArch launch appends.
         """
         checked_cwd(cwd)
+        files = checked_appendconfig(appendconfig)
         return self._ask(
             lambda installation: installation.savefile_location(
-                content_path=content_path, core_so=core_so, system=system, cwd=cwd
+                content_path=content_path, core_so=core_so, system=system, cwd=cwd, appendconfig=files
             )
         )
 
@@ -159,17 +163,19 @@ class EveryInstallation:
         content_path: str | None = None,
         core_so: str | None = None,
         cwd: str | None = None,
+        appendconfig: Sequence[str] = (),
     ) -> tuple[InstallationAnswer[SavestatePlacement | Unresolved], ...]:
         """Where each installation keeps this content's savestates, or refuses to.
 
         Refuses on the same condition the savefile route does: a core this
-        installation does not have. ``cwd`` is taken as the savefile route
-        takes it.
+        installation does not have. ``cwd`` and ``appendconfig`` are taken as
+        the savefile route takes them.
         """
         checked_cwd(cwd)
+        files = checked_appendconfig(appendconfig)
         return self._ask(
             lambda installation: installation.savestate_location(
-                content_path=content_path, core_so=core_so, cwd=cwd
+                content_path=content_path, core_so=core_so, cwd=cwd, appendconfig=files
             )
         )
 

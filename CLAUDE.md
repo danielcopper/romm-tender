@@ -852,7 +852,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   option's `need` as `required`, a second download rule, a judging that names a console, an emulator or a region; the
   state never travels as a colour; `unknown` is never read as `met` or `unmet`; which caveats name a group's other
   regions is `adapters/atlas_firmware.py::_UNCHECKED_REGION_CODES`'s. Unseen by every test: a region whose every name
-  the resolver refused carries neither an option nor such a caveat, so a group can read `met` over it (emu-atlas#556)
+  the resolver refused carries neither an option nor such a caveat, so a group can read `met` over it — the resolver
+  names it only in the group's `core-mode-unestablished` caveat's `unstated`, which Tender does not read; reading it is
+  #2190's (D11)
 - **Which emulator a set of answers is about is ONE pick per scope — a platform's, and a ROM's — and every answer in
   that scope is a projection of it** — test + prompt-only — `tests/services/test_firmware.py`
   (`TestOnePlatformOneEmulator`,

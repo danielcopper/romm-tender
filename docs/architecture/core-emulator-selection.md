@@ -295,17 +295,18 @@ standalone invocation. The kind is `libretro` when the command matches the stric
 lists more standalone emulators in `es_systems.xml` than it bundles, so a system's bakeable default could name an
 emulator that is not on disk (Ryubing on `switch`, any un-installed external component) — baking it produces a shortcut
 that dies in ~0.4 s. To prevent that regression the catalogue adapter asks an injected probe backed by
-`es_find_rules.xml` (`adapters/es_find_rules.py` — the resolver states the emulator a command names, never where its
-binary lives): it maps a standalone command's `%EMULATOR_<NAME>%` token to the find-rule entry, checks whether any of
-that entry's `staticpath` locations exist on disk (mapping the sandbox `/app` and `/var/{data,config}` prefixes to their
-host paths, glob-aware), and hands the verdict to the pure `downgrade_if_not_installed(option, installed)` rule — which
-turns a bakeable **standalone** whose emulator is absent into `needs_setup` with reason `not_installed`. It then drops
-out of `select_default_option` (the system plain-launches, as it did before #1210) and shows disabled in the picker. The
-probe is **absence-only** — it downgrades only on positive evidence that a RetroDECK component (`retrodeck/components/…`
-or `retrodeck/external_components/…`) is missing; a `systempath`-only emulator (binary on RetroDECK's sandbox `PATH`,
-not visible from outside), an emulator with no find rule, and the whole `es_find_rules.xml`-unreadable case are all
-assumed installed, so it never falsely downgrades. Libretro is always installed (RetroArch ships with RetroDECK), so
-libretro options are never downgraded. See [ADR-0020](../adr/0020-live-es-systems-emulator-resolution.md) §2.
+`es_find_rules.xml` (`adapters/es_find_rules.py` — the resolver answers the same question as each catalogue entry's
+`availability`, which Tender does not read; taking it from there is #2425's): it maps a standalone command's
+`%EMULATOR_<NAME>%` token to the find-rule entry, checks whether any of that entry's `staticpath` locations exist on
+disk (mapping the sandbox `/app` and `/var/{data,config}` prefixes to their host paths, glob-aware), and hands the
+verdict to the pure `downgrade_if_not_installed(option, installed)` rule — which turns a bakeable **standalone** whose
+emulator is absent into `needs_setup` with reason `not_installed`. It then drops out of `select_default_option` (the
+system plain-launches, as it did before #1210) and shows disabled in the picker. The probe is **absence-only** — it
+downgrades only on positive evidence that a RetroDECK component (`retrodeck/components/…` or
+`retrodeck/external_components/…`) is missing; a `systempath`-only emulator (binary on RetroDECK's sandbox `PATH`, not
+visible from outside), an emulator with no find rule, and the whole `es_find_rules.xml`-unreadable case are all assumed
+installed, so it never falsely downgrades. Libretro is always installed (RetroArch ships with RetroDECK), so libretro
+options are never downgraded. See [ADR-0020](../adr/0020-live-es-systems-emulator-resolution.md) §2.
 
 `get_emulator_options(system)` returns `{"available": bool, "options": [EmulatorOption, ...], "reason", "source"}`.
 **`available` is `False` whenever nothing could be established**: no emulator source answers (`reason` `no_source`, or

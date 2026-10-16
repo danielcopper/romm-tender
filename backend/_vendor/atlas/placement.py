@@ -71,7 +71,7 @@ from .find_rules import (
     SHELL_CONSTRUCTS,
 )
 from .machine import CORE_UNANSWERED_STATUSES
-from .retroarch_cfg import CFG_LAYER_KINDS, RetroArchCfg
+from .retroarch_cfg import CFG_LAYER_KINDS, CFG_LAYER_OVERRIDE_KINDS, RetroArchCfg
 from .system_firmware import CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE, STATED_EVIDENCE_WORDS
 from .yaml_scalars import REFUSAL_CODES
 
@@ -538,6 +538,28 @@ CAVEAT_UNVERIFIED_VERSION = "unverified-version"
 # what it is — a fact about the FRONTEND — and this says the other half is open.
 CAVEAT_CORE_OWN_WRITES_UNESTABLISHED = "core-own-writes-unestablished"
 CAVEAT_INVALID_SAVE_DIRECTORY = "invalid-save-directory"
+# A file the launch appends (``--appendconfig``) sets a layout key, and an
+# override then wins it: RetroArch merges the core, content-directory and game
+# overrides on top of the appended files (``configuration.c:6355`` onwards), so
+# the answer is the override's folder and the appended value never applies. A
+# note, one per key — ``data`` names the ``key``, the override's kind
+# (``layer``) and the override ``file`` — because a caller that appended the
+# file to move its saves reads the answer as the redirect unless told.
+CAVEAT_APPENDED_CONFIG_OVERRIDDEN = "appended-config-overridden"
+# Whether the program sees the appended files and the folders they set was not
+# established, and the answer is computed as if they were the host's own paths.
+# Either the program's sandbox is not modelled (EmuDeck's and a bare RetroArch
+# Flatpak) or RetroDECK's model cannot tell for one of the paths (an override
+# that changes the filesystem grants, a path under ``/run/user``). One note per
+# answer, ``data`` naming the sandbox's ``app_id``; a RetroArch running on the
+# host has no sandbox and never carries it.
+CAVEAT_APPENDED_CONFIG_VISIBILITY_UNESTABLISHED = "appended-config-visibility-unestablished"
+# The entry runs a standalone emulator, which never reads RetroArch's
+# configuration, so the appended files the question was asked with change
+# nothing: the answer is the one without them, and this note says the redirect
+# does not apply here. It carries no data: the caller asked that very entry,
+# which states the emulator it runs itself.
+CAVEAT_APPENDED_CONFIG_NOT_READ = "appended-config-not-read"
 # The screenshot family's own spelling of the refused-directory fact, because
 # the consequence differs: a refused save root falls back to the value that
 # stood before it or the platform default, while a refused screenshot
@@ -708,7 +730,9 @@ REASON_FIRST_USER_CREATED = "first-user-created"
 # both read builds compose alike are still stated.
 REASON_EMULATOR_BUILD_UNESTABLISHED = "emulator-build-unestablished"
 # Which console a launch is, and where the emulator's own root comes from.
-# ``region-decided-by-disc`` rides ``regions``, the regions found side by side.
+# ``region-decided-by-disc`` rides ``regions``, the regions found side by side;
+# where it explains a core's firmware group, ``unstated`` names the route's
+# regions that group carries no option for.
 REASON_REGION_DECIDED_BY_DISC = "region-decided-by-disc"
 REASON_DATA_ROOT_DECIDED_BY_LAUNCH = "data-root-decided-by-launch"
 # What sits in an emulated slot (Dolphin's EXI devices): ``slot`` names the
@@ -1115,6 +1139,26 @@ def checked_cwd(cwd: str | None) -> str | None:
     if cwd is not None and not os.path.isabs(cwd):
         raise ValueError(f"cwd must be an absolute path, got {cwd!r}")
     return cwd
+
+
+def checked_appendconfig(appendconfig: Sequence[str]) -> tuple[str, ...]:
+    """The files a launch appends, one path each, in the order RetroArch reads them.
+
+    Each element may carry several paths joined by ``|``, the spelling of
+    RetroArch's own ``--appendconfig`` value, and is split as RetroArch splits
+    it: on every ``|``, an empty piece skipped (``configuration.c:6309-6353``).
+    A bare string is refused rather than iterated, which would hand over one
+    path per character. A relative path would resolve against RetroArch's own
+    working directory, which atlas cannot know, so it is the caller's mistake
+    the way a relative ``cwd`` is and raises.
+    """
+    if isinstance(appendconfig, str):
+        raise TypeError("appendconfig must be a sequence of paths, not a single string")
+    files = tuple(piece for value in appendconfig for piece in value.split("|") if piece)
+    for path in files:
+        if not os.path.isabs(path):
+            raise ValueError(f"appendconfig paths must be absolute, got {path!r}")
+    return files
 
 
 # How a ``save_id`` fill is spelled, under ``data["save_id_spelling"]`` beside
@@ -1721,6 +1765,15 @@ UNRESOLVED_STANDALONE_VARIANT_UNESTABLISHED = "standalone-variant-unestablished"
 # reads the other. Not to be confused with a core that is *there* and will not
 # load — that one still has a placement, with its generation left unestablished.
 UNRESOLVED_CORE_NOT_INSTALLED = "core-not-installed"
+# A file the question was asked to append is one RetroArch cannot open: missing,
+# a directory, unreadable, hidden by the program's sandbox. RetroArch skips such
+# a file and launches without it (``config_append_file`` fails,
+# ``configuration.c:6341-6347``, ``config_file.c:773-779``, ``:829-850``), so
+# no answer with the redirect would be true and the question refuses. A file
+# that is not valid UTF-8 refuses the same way for the opposite reason:
+# RetroArch reads it byte-wise and applies it, atlas cannot read what it sets.
+# ``data`` names the ``file`` as the caller passed it.
+UNRESOLVED_APPENDED_CONFIG_UNREACHABLE = "appended-config-unreachable"
 # The catalogue row launches RetroArch and hands it a core file this host
 # cannot load: the name carries another platform's shared-library suffix —
 # EmuDeck's two ``n3ds`` rows each name a Windows ``*_libretro.dll`` — so
@@ -1865,6 +1918,8 @@ ENUMERATED_DATA: "Mapping[tuple[str, str], tuple[str, ...]]" = MappingProxyType(
         # verdict hangs on, or the custom one ES-DE skips beside it.
         (CAVEAT_FIND_RULES_UNREADABLE, "layer"): FIND_RULES_LAYERS,
         (CAVEAT_INVALID_SAVE_DIRECTORY, "layer"): CFG_LAYER_KINDS,
+        # Only an override can win a key an appended file sets.
+        (CAVEAT_APPENDED_CONFIG_OVERRIDDEN, "layer"): CFG_LAYER_OVERRIDE_KINDS,
         # Which reading of a launch command made it more than plain words.
         (CAVEAT_LAUNCH_COMMAND_SHELL_SYNTAX, "construct"): SHELL_CONSTRUCTS,
         # Which bound atlas puts on taking one command apart was reached.

@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "spec": "The PATH a frontend on the host searches its systempath find rules over, and the directory it runs in — facts no file on the machine states. ES-DE takes the directories of its own process's PATH (FileSystemUtil.cpp:353-370 @ ES-DE v3.4.1, the non-Flatpak branch), and that PATH is the environment the frontend was started in, which is written nowhere on disk: so it is assembled here from the scripts that build it, each directory in the order the PATH holds it and with a citation of the line that puts it there. A directory spelled with a leading ~/ is under the user's home. Every answer whose search went through this list says so with the note launch-path-assumed. A frontend's working_directory, where it states one, is the directory ES-DE tests a relative first word against before it searches the PATH (FileData.cpp:2634-2643; ES-DE calls chdir nowhere, so it is the directory whatever started it left it in); a frontend without one has none atlas can state. Read by atlas.frontend_path.load_frontend_path and load_frontend_working_directories.",
+  "frontends": {
+    "emudeck": {
+      "working_directory": {
+        "directory": "~/.config/EmuDeck/backend",
+        "citation": "EmuDeck's ES-DE launcher calls emulatorInit (tools/launchers/es-de/es-de.sh:4 at dragoonDorise/EmuDeck@863ab69), which runs cd $emudeckBackend (functions/helperFunctions.sh:1046) in the same shell that then runs the AppImage (es-de.sh:5); the AppImage's entry point is the es-de binary itself, so nothing moves the directory after that. The backend is $HOME/.config/EmuDeck/backend/ (functions/all.sh:12-14), and the directory the kernel keeps is spelled without the trailing separator."
+      },
+      "search_path": [
+        {
+          "directory": "~/.config/EmuDeck/backend//tools/binaries/",
+          "citation": "EmuDeck's ES-DE launcher sources the backend's functions/all.sh before it runs the AppImage (tools/launchers/es-de/es-de.sh:2 and :5 at dragoonDorise/EmuDeck@863ab69), and all.sh puts $emudeckBackend/tools/binaries/ in front of the PATH it inherited on every system but darwin (functions/all.sh:32-35). The backend is $HOME/.config/EmuDeck/backend/ with a trailing separator (:12-14), so the PATH holds this directory with its separator doubled, which is how it is spelled here."
+        },
+        {
+          "directory": "/usr/local/sbin",
+          "citation": "/etc/profile:18 (append_path, :8-15) on SteamOS build 20260922.1, package filesystem 2021.12.07-1.17 — the session the launcher inherits its PATH from is built by it."
+        },
+        {
+          "directory": "/usr/local/bin",
+          "citation": "/etc/profile:19 on SteamOS build 20260922.1, package filesystem 2021.12.07-1.17."
+        },
+        {
+          "directory": "/usr/bin",
+          "citation": "/etc/profile:20 on SteamOS build 20260922.1, package filesystem 2021.12.07-1.17."
+        },
+        {
+          "directory": "~/.local/share/flatpak/exports/bin",
+          "citation": "/etc/profile.d/flatpak-bindir.sh:3-4, sourced by /etc/profile:26-30, on SteamOS build 20260922.1, package flatpak 1:1.16.6+r39+g187a5439b571-1.1: the user installation's exports, appended where XDG_DATA_HOME is unset (:1-2 take that directory's instead) and the directory exists — a directory that does not exist finds nothing, so stating it unconditionally answers the same."
+        },
+        {
+          "directory": "/var/lib/flatpak/exports/bin",
+          "citation": "/etc/profile.d/flatpak-bindir.sh:7-8 on SteamOS build 20260922.1, package flatpak 1:1.16.6+r39+g187a5439b571-1.1: the system installation's exports, appended where the directory exists."
+        },
+        {
+          "directory": "/usr/bin/site_perl",
+          "citation": "/etc/profile.d/perlbin.sh:5, sourced by /etc/profile:26-30, on SteamOS build 20260922.1, package perl 5.42.0-1, appended where the directory exists."
+        },
+        {
+          "directory": "/usr/bin/vendor_perl",
+          "citation": "/etc/profile.d/perlbin.sh:7 on SteamOS build 20260922.1, package perl 5.42.0-1, appended where the directory exists."
+        },
+        {
+          "directory": "/usr/bin/core_perl",
+          "citation": "/etc/profile.d/perlbin.sh:9 on SteamOS build 20260922.1, package perl 5.42.0-1, appended where the directory exists."
+        }
+      ]
+    }
+  }
+}
