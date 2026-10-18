@@ -155,54 +155,72 @@ local and finds groups containing rows absent from a completed platform fetch. I
 found gone from RomM: games a collection brought in that RomM answered as gone, and the games of a platform RomM no
 longer lists. It lists, too, a version an earlier cleanup found gone while it was checking that game's other versions.
 
-The dialog opens on the count that matters — how many locally kept versions are no longer on your RomM server. Under
-that come the options in two columns, then the controls for the run, and last the versions themselves as a table: the
-game, its platform, a short verdict, how much is installed, and **Keep a copy**. Under each row a line names the version
-— its ROM id, and its file name where that differs from the game's name — so two versions of one game can be told apart.
-The versions that are gone come first, each marked **Gone from RomM**. Other versions of the same games follow under
-**Other versions of these games — still on RomM**, each marked **Still on RomM**: they were still on RomM at your last
-sync, and they go only if the run's fresh check finds every version of that game gone, in which case the whole game is
-removed with its Steam shortcut. Where a game has more than one version, the verdict says so — for example **Still on
-RomM · one of 4**. They are listed so nothing can be removed without having been shown, and they appear only while
-**Remove fully vanished games** is on — with that option off they cannot be removed at all, so the list drops them. A
-warning about a version — including that its downloaded ROM file will be deleted without a backup if that version is
-removed — is a line under its row. The headline count always counts the versions that are gone, never these. The modal
-loads the rest of the list by itself, one page after another, and **Confirm Cleanup** refuses until every entry has
-arrived, saying how many have. If a page fails to load, the modal says why and offers **Retry loading**, which carries
-on from the entries already loaded. The confirmation run checks every exact RomM id again. Only a confirmed 404 can be
-removed. Offline, timeout, authentication, server, malformed-response, active-download, and ambiguous multi-shortcut
-cases are skipped and reported without deleting data.
+The dialog opens with what a cleanup would do: _RomM no longer has N versions this device still holds. Each one is
+checked against RomM again before anything is removed. If you clean up now:_, followed by how many versions are removed,
+how many games are removed with their shortcut, how many downloaded files are deleted, and how many versions are kept
+because a shortcut is on them. A count that is zero is left out, and the counts change as you change the options. When
+no version would be removed it says _If you clean up now: nothing is removed._, still naming the versions a shortcut
+keeps, and the confirm button cannot be pressed.
+
+Under that come the four options in one column, then **Cancel** and the confirm button, which names its count — **Remove
+3 versions** — in red, last. Last comes the list, grouped by game. Each game is a row of its own: its name, its platform
+and how many of its versions are gone (_1 of 2 versions gone_, _every version gone_), and what happens to it as a whole
+— **Game stays**, **Nothing removed**, **Game removed, with its shortcut**, or **Game removed** for a game that has no
+Steam shortcut. Its versions follow underneath, the ones still on RomM included. Each version row shows its file name,
+where it is (**Gone from RomM** or **On RomM**, plus **your shortcut** on the version a Steam shortcut is on), and what
+happens to it:
+
+- **Removed**, or **Removed, file deleted** where its downloaded files go with it. A removed version whose **Back up**
+  switch is on says _A copy of its file goes into the backup first._
+- **Kept**, with the reason: _Switch to another version first, then this one can be removed._ where a shortcut is on it
+  (the cleanup never moves a shortcut onto another version — switch in the version list, and the gone version is then an
+  ordinary one), or which option keeps it.
+- **Stays**, for a version on RomM, which the cleanup never touches; _Its files stay on this device._ where it is
+  downloaded.
+
+**Downloaded** is the size of the game files of that version on this device; a file is deleted only where the row says
+so. When more than two of a game's other versions are still on RomM, they fold into one row, _N more versions, all on
+RomM · Show_, which opens them in place; the version your shortcut is on is always shown. A version gone from RomM next
+to a version on RomM with the same file name is an old entry RomM replaced in a rescan: it reads _Replaced on RomM by
+the same file under a new ID_, and when removed _Its save files stay; the new entry uses them._ A warning about a
+version is a line under its row.
+
+The modal loads the rest of the list by itself, one page after another, and the confirm button refuses until every entry
+has arrived, saying how many have. If a page fails to load, the modal says why and offers **Retry loading**, beside the
+confirm button, which carries on from the entries already loaded. The confirmation run checks every exact RomM id again.
+Only a confirmed 404 can be removed. Offline, timeout, authentication, server, malformed-response, active-download, and
+ambiguous multi-shortcut cases are skipped and reported without deleting data. A run never removes more than the
+dialog's counts: a version it finds still on RomM is kept, and where it finds every version of a game gone but the game
+holds a version the dialog did not offer for removal, it leaves the whole game as it is and says _Another version of
+this game is gone from RomM too. Scan again to review it._ — the next scan lists that version.
 
 The confirmation options apply to this run only:
 
-- **Remove gone versions** is on. It removes the confirmed rows and their installed content in games that still have a
-  live version. The version the game's shortcut is bound to is kept while another version of the game is still on RomM,
-  because the cleanup never moves a shortcut onto another version: switch to another version in the version list first,
-  and the gone version is then an ordinary one this option removes. When that kept version is the only gone one in the
-  game, the game's result says _The version this game's shortcut is on is kept while another version is on RomM; switch
-  versions first._
-- **Remove fully vanished games** is on. It applies only to games where the server confirms every single version is
-  gone; those are removed whole, with any Steam shortcut they have. It ships on because removing a game RomM no longer
-  has is what this dialog is for, and because the default-on recovery bundle keeps the shortcut's Steam details so it
-  can be rebuilt by hand. Switch it off to limit the run to individual versions of games that still exist — the list
-  then hides the retained siblings, since nothing else can reach them.
-- **Create recovery bundle** is on. Bundles are sealed under `~/romm-tender-recovery/bundles/` before mutation. Leaving
-  it on is what makes whole-game removal reversible by hand; turning it off asks you to confirm separately, with **I
-  understand there is no recovery bundle** under it.
-- **Keep a copy** — the toggle in each installed row — is off for every disclosed installed row. It puts that version's
-  installed ROM content in the recovery bundle. Its exact recursive size is in the **Installed** column; selecting more
-  than the currently free recovery space blocks confirmation. Turning recovery off clears and disables these selections,
-  and so does switching off whole-game removal for a row that is only listed because of it. Large selections are staged
-  a page at a time before the run, without a total selection cap. Unselected installed content is still deleted if the
-  row is removed. When no listed version has ROM files on this device the option has nothing to attach to, so the list
-  says so instead of leaving the option apparently missing.
+- **Remove gone versions** is on. It removes the gone versions of games that still have another version on RomM, with
+  their downloaded files, except the version the game's shortcut is on. When that kept version is the only gone one in
+  the game, the game's result says _The version this game's shortcut is on is kept while another version is on RomM;
+  switch versions first._
+- **Remove games that are gone entirely** is on. It applies only to games where the server confirms every version is
+  gone; those are removed whole, with the Steam shortcut where they have one. It ships on because removing a game RomM
+  no longer has is what this dialog is for, and because the default-on backup keeps the shortcut's Steam details so it
+  can be rebuilt by hand. Switch it off to limit the run to individual versions of games that still exist; the list
+  still shows every game, and those games read **Nothing removed**.
+- **Back up before removing** is on. It seals saves, playtime and the shortcut's Steam details in a recovery bundle
+  under `~/romm-tender-recovery/bundles/` before anything changes. Leaving it on is what makes whole-game removal
+  reversible by hand; turning it off asks you to confirm separately, with **I understand there is no recovery bundle**
+  under it, and switches every file backup off.
+- **Back up downloaded game files too** switches on the **Back up** switch of every row whose downloaded file the run
+  would delete; each row keeps its own switch, which shows only on such a row. Under it a line states the space this
+  needs, _Selected: X of Y · Z free_ — the files whose backup is on, of every file the run would delete, against the
+  free space at the recovery folder — and selecting more than is free blocks confirmation. When the run would delete no
+  downloaded file the option cannot be switched and says _No downloaded file would be deleted, so there is nothing to
+  back up._ A file whose backup is off is deleted with its version.
 
-The recovery estimate, **Refresh free space**, **Retry loading** (after part of the list failed to load), **Cancel** and
-**Confirm Cleanup** sit directly under the options, above the table, so they are a few presses away however long the
-list is; a running cleanup's progress, its **Stop Cleanup** button and its result appear there too. The displayed
-selected-content total is a lower-bound preflight, not the complete bundle size. Use **Refresh free space** after
-freeing disk space. The backend remeasures selected ROMs plus mandatory saves, backup history, caches, and Steam files
-before mutation and safely fails the group if the complete bundle does not fit.
+The space line is a lower bound, not the complete bundle size. Use **Refresh free space**, under it, after freeing disk
+space. The backend remeasures selected ROMs plus mandatory saves, backup history, caches, and Steam files before
+mutation and safely fails the group if the complete bundle does not fit. A running cleanup's progress, its **Stop
+Cleanup** button and its result appear beside the confirm button, above the list, so they are a few presses away however
+long the list is.
 
 Recovery always records the affected database state, local playtime and pending sessions, exact attributable current
 saves (including path-safe filenames retained in prior save-sync state) and backup history, and Tender's relevant
@@ -216,9 +234,11 @@ by hand starting with `sha256sum -c checksums.sha256`. The recovery folder itsel
 it is.
 
 A vanished row carries a red trash icon at its right edge in the version picker, and activating that row opens the same
-confirmation scoped to that one version. A singleton vanished binding shows the same trash action as a single button,
-without opening an otherwise empty picker. The vanished version itself remains non-switchable either way — selecting it
-can only ever start the cleanup, never bind the shortcut to it.
+confirmation scoped to that one version: a gone version other than the one you chose reads **Kept**, _Only the version
+you chose is removed here._ Where every version of the game is gone, it offers all of them instead, so the whole game,
+as Data Management would. A singleton vanished binding shows the same trash action as a single button, without opening
+an otherwise empty picker. The vanished version itself remains non-switchable either way — selecting it can only ever
+start the cleanup, never bind the shortcut to it.
 
 While a cleanup runs, the Gone from RomM pane shows a progress bar under the entry point — the game being worked on, the
 phase in words (checking with RomM, backing up, backup complete, removing the Steam shortcut, removing local data, done)
@@ -240,8 +260,8 @@ its files on disk or not, so Tender still knows its files may be there, and the 
 sentence. The record stays until RetroDECK is back; the next cleanup then removes it with its files. Where only the
 question about one system's folder failed, the games of that system are kept and reported the same way, with the
 sentence below, and every other system's games are removed. While RetroDECK's settings are in doubt, or Tender could not
-ask about its folders ([below](#downloading-roms)), **Confirm Cleanup** starts nothing and answers with the sentence
-that says why.
+ask about its folders ([below](#downloading-roms)), the confirm button starts nothing and answers with the sentence that
+says why.
 
 If Steam changes before local cleanup can finish, the report can show a **partial** group with the concrete committed
 action and failure message. A confirmed shortcut removal is reconciled to an unbound retained row. If Steam removal
