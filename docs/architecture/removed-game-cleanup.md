@@ -110,7 +110,9 @@ Bulk discovery from Data Management's Gone from RomM row sends no request, and r
 first is generation-gated: a platform with no known completed fetch produces no candidates from its stamp, because
 absence from an incomplete fetch is not evidence of removal. The second is the library sync's own mark on a row, below,
 which reaches the rows no stamp can name. Inline removal from an already-vanished version-picker row needs no generation
-— the row is already known vanished — but still takes the same fresh exact-id proof.
+— the row is already known vanished — but still takes the same fresh exact-id proof. It offers that one row, unless the
+same two kinds of evidence find every version of its game gone: then it offers all of them, so the whole game, as the
+bulk scan would. Either way each preview row says whether that evidence finds it gone (`gone_from_romm`).
 
 Discovery reads the platform's completion stamp whether or not its skip was revoked. The end-of-run stale removal
 unbinds the rows of a platform whose sync is turned off, all but those an enabled collection returned and those a
@@ -142,8 +144,10 @@ tiers, before anything is removed.
 a version gone that no stamp and no sync named — an unbound sibling on a platform with no stamp, say. Where a version
 outside this run's candidates got a 404 that stands under the run's proof tiers (`still_there`, `canary_rom`,
 `canary_user`; an `unconfirmed_server` 404 never does) while the namespace held, the run marks it `not_found` and
-removes nothing it was not asked to remove; the next scan lists it. A row that already carries a mark keeps it, and a
-candidate gains none, since its stamp or its mark already lists it.
+removes nothing it was not asked to remove; the next scan lists it. Where that leaves every version of a game gone, the
+whole-game removal would take the version the preview never offered, so the group is skipped whole as
+`another_version_gone`, _Another version of this game is gone from RomM too. Scan again to review it._ A row that
+already carries a mark keeps it, and a candidate gains none, since its stamp or its mark already lists it.
 
 The mark goes when RomM is seen serving the row again: a sync unit commits it (a commit writes the row as RomM delivered
 it, with no mark), or an apply's exact-id question gets the ROM back. It goes with the row when the cleanup removes it.
@@ -161,12 +165,15 @@ stamp's current fetch generation is not evidence that RomM still serves it: whol
 fresh probe of every id in the group, never by the stored generation, so a generation-current row can still be taken and
 may never be deleted unseen. What the generation does establish is that the row was there at the last completed fetch,
 so the projection separates the two classes rather than flattening them — candidates sort first, the page carries a
-`candidate_total` beside `total`, and the dialog leads with the candidate count and labels the rest as retained.
+`candidate_total` beside `total`, and the dialog leads with the candidate count.
 
-The wire always carries both classes; which ones are **rendered** is a frontend decision keyed on the whole-game removal
-option, because `selected_prune_ids` returns a non-candidate only under that option. With it off, the retained rows
-describe an outcome that cannot occur, so the dialog hides them and drops any installed-content selection they carried;
-every page is still fetched, and the completeness gate before confirmation is unchanged.
+Each row also carries what the dialog predicts its outcome from: `gone_from_romm` (above), `bound` (a Steam shortcut is
+on that version, beside the group's `bound_count`) and `fs_name_no_ext` (its file name without the extension, the stem
+the sync rebinds onto the same dump by). The dialog renders every row with either option on or off and says per row what
+the run would do; the run's own check still decides. A run never removes more than that prediction: a candidate RomM
+still serves is kept, and a game found gone whole that holds a row the preview did not offer is skipped (above). Every
+page is still fetched, and the completeness gate before confirmation is unchanged. What the dialog shows is
+[QAM Panel](qam-panel.md#data-management), "The removed-games review".
 
 Cleanup deliberately does **not** clear the platform's `platform_sync_state` completion stamp, nor revoke its skip. It
 does not need to. The incremental skip compares RomM's visible id set with the checksum the stamp recorded
@@ -468,7 +475,7 @@ unbound gone version, removed like any other. A group with multiple bound shortc
 Removing a fully vanished game's shortcut requires a claimed action and live Steam confirmation. An attempted but
 unconfirmed removal is reported as ambiguous and its local rows are retained for reconciliation. A fully vanished
 group's explicit action removes its confirmed shortcut and every confirmed-404 row and file, regardless of the
-individual-row toggle.
+individual-row toggle, once every one of those rows was offered by the preview.
 
 The shortcut's Steam-side files — grid artwork, the per-app Steam Input roots, and the `localconfig.vdf` controller
 entry — are removed only when a recovery bundle captured them, because the capture is where their claims are taken and

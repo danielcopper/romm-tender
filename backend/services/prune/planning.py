@@ -144,6 +144,15 @@ class GroupPlanner:
                 {verdicts[rom_id]["reason"] for rom_id in proof.uncertain_ids}, len(proof.uncertain_ids)
             )
             return self._results.group_result(rows, "skipped", reason, message)
+        if proof.fully_dead and group_ids - candidate_ids:
+            # A whole-game removal would take a version the preview never offered
+            # for removal. The run still marks it gone, so the next scan lists it.
+            return self._results.group_result(
+                rows,
+                "skipped",
+                "another_version_gone",
+                "Another version of this game is gone from RomM too. Scan again to review it.",
+            )
 
         delete_ids = selected_prune_ids(
             group_ids=sorted(group_ids),

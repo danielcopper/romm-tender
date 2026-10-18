@@ -2524,7 +2524,7 @@ async def test_unbound_group_plans_no_steam_action_and_takes_no_steam_path(harne
     with a live sibling nor the whole-game branch (every member vanished) may
     raise a shortcut action.
     """
-    _seed(harness.uow, _rom(1, fetch="old", group="g"), _rom(2, fetch="new", group="g"))
+    _seed(harness.uow, _rom(1, fetch="old", group="g"), _rom(2, fetch="old" if fully_dead else "new", group="g"))
     harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
     harness.romm.outcomes[2] = [RommNotFoundError("gone")] * 3 if fully_dead else [{"id": 2}] * 3
     preview = await _preview(harness)
@@ -2536,6 +2536,30 @@ async def test_unbound_group_plans_no_steam_action_and_takes_no_steam_path(harne
     assert [name for name, _ in harness.events.events if name == "prune_action_required"] == []
     assert harness.uow.roms.get(1) is None
     assert (harness.uow.roms.get(2) is None) is fully_dead
+
+
+@pytest.mark.asyncio
+async def test_a_game_found_gone_whole_with_a_version_the_preview_did_not_offer_is_left_as_it_is(harness):
+    """A run never removes a version the dialog did not offer for removal; it marks it so the next scan lists it."""
+    _seed(harness.uow, _rom(1, fetch="old", group="g"), _rom(2, fetch="new", group="g"))
+    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
+    harness.romm.outcomes[2] = [RommNotFoundError("gone")] * 3
+    preview = await _preview(harness)
+    assert preview["candidate_total"] == 1
+    await _start(harness, preview["preview_id"], remove_fully_vanished=True)
+
+    complete = await _finish(harness)
+
+    assert complete["removed_rom_ids"] == []
+    assert (complete["results"][0]["status"], complete["results"][0]["reason"], complete["results"][0]["message"]) == (
+        "skipped",
+        "another_version_gone",
+        "Another version of this game is gone from RomM too. Scan again to review it.",
+    )
+    assert harness.uow.roms.get(1) is not None
+    unlisted = harness.uow.roms.get(2)
+    assert unlisted is not None
+    assert unlisted.gone_from_romm == "not_found"
 
 
 @pytest.mark.asyncio
