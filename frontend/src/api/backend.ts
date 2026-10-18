@@ -932,12 +932,17 @@ export interface PrunePreviewItem {
   rom_id: number;
   name: string;
   fs_name: string;
+  /** The file name without its extension: the stem the sync rebinds onto the same dump by. */
+  fs_name_no_ext: string;
   platform_slug: string;
   group_id: string;
   group_size: number;
   bound_count: number;
+  /** A Steam shortcut is on this version. */
   bound: boolean;
   candidate: boolean;
+  /** Gone from RomM by the Gone from RomM list's local rule — never asked of RomM. */
+  gone_from_romm: boolean;
   installed: boolean;
   installed_bytes: number | null;
   warning: string | null;

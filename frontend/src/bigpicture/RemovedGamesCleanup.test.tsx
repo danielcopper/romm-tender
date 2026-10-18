@@ -20,6 +20,7 @@ import {
   stageInstalledSelections,
   STAGE_LABELS,
 } from "./RemovedGamesCleanup";
+import { RED } from "./layout/pane";
 
 const preview: backend.PrunePreviewResult = {
   success: true,
@@ -30,12 +31,14 @@ const preview: backend.PrunePreviewResult = {
       rom_id: 7,
       name: "Removed Game",
       fs_name: "Removed Game.gba",
+      fs_name_no_ext: "Removed Game",
       platform_slug: "gba",
       group_id: "group-1",
       group_size: 1,
       bound_count: 0,
       bound: false,
       candidate: true,
+      gone_from_romm: true,
       installed: true,
       installed_bytes: 200,
       warning: null,
@@ -75,30 +78,45 @@ function pendingPage(): {
   return { promise, resolve, reject };
 }
 
-/** The preview's one row again as `romId`, for the pages after the first. */
+/** The preview's one row again as `romId`, a game of its own, for the pages after the first. */
 function rowAs(romId: number, name: string): backend.PrunePreviewItem {
-  return { ...preview.items![0]!, rom_id: romId, name, fs_name: `${name}.gba` };
+  return {
+    ...preview.items![0]!,
+    rom_id: romId,
+    name,
+    fs_name: `${name}.gba`,
+    fs_name_no_ext: name,
+    group_id: `group-${romId}`,
+  };
+}
+
+/** `a` comes before `b` in document order — which is the order focus walks. */
+function precedes(a: Element, b: Element): boolean {
+  return (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+}
+
+/** The Confirm button, by the count it names. */
+function confirmButton(modal: RenderResult): HTMLButtonElement {
+  return modal.getByRole("button", { name: /^Remove \d+ versions?$/ }) as HTMLButtonElement;
 }
 
 /**
- * The candidate table's row for `gameName`.
+ * The list's row whose first line reads `text` — a game's name or a version's file name.
  *
- * A row that carries a Keep-a-copy toggle is a plain element marked with the
- * table's own test id; a row with nothing to press is a focus stop, which the
+ * A row that carries a Back up switch is a plain element marked with the
+ * list's own test id; a row with nothing to press is a focus stop, which the
  * `Focusable` stub renders under its own id. Either way it is the nearest of
- * the two above the name. Throws rather than returning nothing: a missing row
+ * the two above the text. Throws rather than returning nothing: a missing row
  * is the failure.
  */
-function rowFor(modal: RenderResult, gameName: string): HTMLElement {
-  const row = modal
-    .getByText(gameName)
-    .closest<HTMLElement>('[data-testid^="cleanup-row-"], [data-testid="focusable"]');
-  if (!row) throw new Error(`No table row for ${gameName}`);
+function rowFor(modal: RenderResult, text: string): HTMLElement {
+  const row = modal.getByText(text).closest<HTMLElement>('[data-testid^="cleanup-row-"], [data-testid="focusable"]');
+  if (!row) throw new Error(`No table row for ${text}`);
   return row;
 }
 
 /**
- * The Keep-a-copy checkbox belonging to `gameName`'s row.
+ * The Back up checkbox belonging to the row of the version whose file is `gameName`.
  *
  * The dialog's option toggles and its per-row content toggles share one flat
  * `toggle-input` list, so indexing it ties every row assertion to the number of
@@ -109,7 +127,7 @@ function contentToggleFor(modal: RenderResult, gameName: string): HTMLInputEleme
   const input = rowFor(modal, gameName).querySelector<HTMLInputElement>(
     '[data-testid="toggle"] [data-testid="toggle-input"]',
   );
-  if (!input) throw new Error(`No Keep-a-copy toggle in the row for ${gameName}`);
+  if (!input) throw new Error(`No Back up switch in the row for ${gameName}`);
   return input;
 }
 
@@ -121,9 +139,10 @@ function contentToggleFor(modal: RenderResult, gameName: string): HTMLInputEleme
  */
 const OPTION_LABELS = {
   removeRows: "Remove gone versions",
-  removeDeadGames: "Remove fully vanished games",
-  recovery: "Create recovery bundle",
+  removeDeadGames: "Remove games that are gone entirely",
+  recovery: "Back up before removing",
   confirmWithoutRecovery: "I understand there is no recovery bundle",
+  backUpFiles: "Back up downloaded game files too",
 } as const;
 
 /**
@@ -213,15 +232,15 @@ describe("RemovedGamesCleanup", () => {
     expect(optionToggleFor(modal, OPTION_LABELS.removeRows).checked).toBe(true);
     expect(optionToggleFor(modal, OPTION_LABELS.removeDeadGames).checked).toBe(true);
     expect(optionToggleFor(modal, OPTION_LABELS.recovery).checked).toBe(true);
-    expect(contentToggleFor(modal, "Removed Game").checked).toBe(false);
+    expect(contentToggleFor(modal, "Removed Game.gba").checked).toBe(false);
     // The acknowledgement exists only to gate a run that keeps no bundle, so it
     // must not be on screen while the bundle is on.
     expect(modal.container.textContent).not.toContain(OPTION_LABELS.confirmWithoutRecovery);
-    const confirm = modal.getByRole("button", { name: "Confirm Cleanup" }) as HTMLButtonElement;
+    const confirm = confirmButton(modal);
     expect(confirm.disabled).toBe(false);
-    expect(modal.container.textContent).toContain("Without a backup, the downloaded ROM file is deleted");
+    expect(rowFor(modal, "Removed Game.gba").textContent).toContain("Removed, file deleted");
 
-    fireEvent.click(contentToggleFor(modal, "Removed Game"));
+    fireEvent.click(contentToggleFor(modal, "Removed Game.gba"));
 
     expect(modal.container.textContent).toContain("Not enough free space.");
     fireEvent.click(confirm);
@@ -241,7 +260,7 @@ describe("RemovedGamesCleanup", () => {
     vi.mocked(backend.startPrune).mockRejectedValueOnce(new Error("bridge offline"));
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    const confirm = modal.getByRole("button", { name: "Confirm Cleanup" }) as HTMLButtonElement;
+    const confirm = confirmButton(modal);
 
     fireEvent.click(confirm);
     await waitFor(() => expect(modal.container.textContent).toContain("bridge offline"));
@@ -260,7 +279,7 @@ describe("RemovedGamesCleanup", () => {
   it("stays open and renders live progress through completion", async () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    const confirm = modal.getByRole("button", { name: "Confirm Cleanup" }) as HTMLButtonElement;
+    const confirm = confirmButton(modal);
 
     fireEvent.click(confirm);
     await waitFor(() => expect(modal.container.textContent).toContain("Cleanup running..."));
@@ -300,7 +319,7 @@ describe("RemovedGamesCleanup", () => {
     try {
       await openRemovedGamesCleanupModal();
       const modal = render(shownModal());
-      fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+      fireEvent.click(confirmButton(modal));
       await act(async () => Promise.resolve());
 
       act(() => {
@@ -330,7 +349,7 @@ describe("RemovedGamesCleanup", () => {
     vi.mocked(backend.startPrune).mockImplementation(() => new Promise(() => {}));
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await act(async () => Promise.resolve());
 
     act(() => {
@@ -392,7 +411,7 @@ describe("RemovedGamesCleanup", () => {
       .mockReturnValueOnce(third.promise);
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    const confirm = modal.getByRole("button", { name: "Confirm Cleanup" }) as HTMLButtonElement;
+    const confirm = confirmButton(modal);
 
     expect(modal.queryByRole("button", { name: /Load more/ })).toBeNull();
     await waitFor(() =>
@@ -445,7 +464,7 @@ describe("RemovedGamesCleanup", () => {
     // A failed page is not retried behind the user's back.
     await act(async () => Promise.resolve());
     expect(backend.getPrunePreview).toHaveBeenCalledTimes(2);
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await act(async () => Promise.resolve());
     expect(backend.startPrune).not.toHaveBeenCalled();
     expect(modal.container.textContent).toContain("Cleanup did not start: The list stopped loading at 1 of 2 entries.");
@@ -456,7 +475,7 @@ describe("RemovedGamesCleanup", () => {
     expect(vi.mocked(backend.getPrunePreview).mock.calls[2]?.[0]).toMatchObject({ preview_id: "preview-1", offset: 1 });
     expect(modal.queryByRole("button", { name: "Retry loading" })).toBeNull();
     expect(modal.container.textContent).not.toContain("Could not load the rest of the list");
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => expect(backend.startPrune).toHaveBeenCalled());
   });
 
@@ -468,7 +487,7 @@ describe("RemovedGamesCleanup", () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
     await waitFor(() => expect(backend.getPrunePreview).toHaveBeenCalledTimes(2));
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await act(async () => Promise.resolve());
     expect(modal.container.textContent).toContain("Cleanup did not start: The list is still loading");
 
@@ -486,7 +505,7 @@ describe("RemovedGamesCleanup", () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
     await waitFor(() => expect(backend.getPrunePreview).toHaveBeenCalledTimes(2));
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await act(async () => Promise.resolve());
     expect(modal.container.textContent).toContain("Cleanup did not start: The list is still loading (1 of 2 entries).");
 
@@ -505,7 +524,7 @@ describe("RemovedGamesCleanup", () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
     await waitFor(() => expect(modal.getByRole("button", { name: "Retry loading" })).toBeTruthy());
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await act(async () => Promise.resolve());
     expect(modal.container.textContent).toContain("Cleanup did not start: The list stopped loading at 1 of 2 entries.");
 
@@ -626,15 +645,15 @@ describe("RemovedGamesCleanup", () => {
   it("clears and disables installed-content selections when recovery is off", async () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    fireEvent.click(contentToggleFor(modal, "Removed Game"));
-    expect(contentToggleFor(modal, "Removed Game").checked).toBe(true);
+    fireEvent.click(contentToggleFor(modal, "Removed Game.gba"));
+    expect(contentToggleFor(modal, "Removed Game.gba").checked).toBe(true);
 
     fireEvent.click(optionToggleFor(modal, OPTION_LABELS.recovery));
     await waitFor(() => {
-      expect(contentToggleFor(modal, "Removed Game").checked).toBe(false);
-      expect(modal.container.textContent).toContain("Selected ROM-content recovery estimate: 0 B");
+      expect(contentToggleFor(modal, "Removed Game.gba").checked).toBe(false);
+      expect(modal.container.textContent).toContain("Selected: 0 B of 200 B");
     });
-    expect(modal.container.textContent).toContain("Without a backup, the downloaded ROM file is deleted");
+    expect(rowFor(modal, "Removed Game.gba").textContent).toContain("Removed, file deleted");
   });
 
   it("allows a run with one option off and resets an old completion when opening", async () => {
@@ -650,13 +669,14 @@ describe("RemovedGamesCleanup", () => {
     await openRemovedGamesCleanupModal(7);
     const modal = render(shownModal());
     fireEvent.click(optionToggleFor(modal, OPTION_LABELS.removeRows));
-    const confirm = modal.getByRole("button", { name: "Confirm Cleanup" }) as HTMLButtonElement;
+    const confirm = confirmButton(modal);
     expect(confirm.disabled).toBe(false);
 
     fireEvent.click(confirm);
     await waitFor(() => expect(backend.startPrune).toHaveBeenCalled());
     expect(vi.mocked(backend.startPrune).mock.calls[0]?.[0].remove_rows).toBe(false);
-    expect(modal.container.textContent).toContain("1 locally kept version of this game is no longer on your RomM");
+    expect(modal.container.textContent).toContain("RomM no longer has 1 version this device still holds.");
+    expect(modal.container.textContent).not.toContain("of this game");
   });
 
   it("refreshes the free-space snapshot without replacing the preview", async () => {
@@ -667,7 +687,7 @@ describe("RemovedGamesCleanup", () => {
     const modal = render(shownModal());
 
     fireEvent.click(modal.getByRole("button", { name: "Refresh free space" }));
-    await waitFor(() => expect(modal.container.textContent).toContain("Free at target: 500 B"));
+    await waitFor(() => expect(modal.container.textContent).toContain("500 B free"));
     expect(vi.mocked(backend.getPrunePreview).mock.calls[1]?.[0]).toMatchObject({
       preview_id: "preview-1",
       limit: 0,
@@ -680,8 +700,8 @@ describe("RemovedGamesCleanup", () => {
       total: 2,
       free_bytes: 1,
       items: [
-        { ...preview.items![0]!, rom_id: 11, installed_bytes: 0, name: "Game 11" },
-        { ...preview.items![0]!, rom_id: 12, installed_bytes: 0, name: "Game 12" },
+        { ...rowAs(11, "Game 11"), installed_bytes: 0 },
+        { ...rowAs(12, "Game 12"), installed_bytes: 0 },
       ],
     });
     vi.mocked(backend.stagePruneInstalledSelection).mockResolvedValue({
@@ -692,10 +712,10 @@ describe("RemovedGamesCleanup", () => {
     });
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    fireEvent.click(contentToggleFor(modal, "Game 11"));
-    fireEvent.click(contentToggleFor(modal, "Game 12"));
+    fireEvent.click(contentToggleFor(modal, "Game 11.gba"));
+    fireEvent.click(contentToggleFor(modal, "Game 12.gba"));
 
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => expect(backend.startPrune).toHaveBeenCalled());
 
     expect(vi.mocked(backend.stagePruneInstalledSelection)).toHaveBeenCalledExactlyOnceWith({
@@ -720,14 +740,14 @@ describe("RemovedGamesCleanup", () => {
     });
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    fireEvent.click(contentToggleFor(modal, "Removed Game"));
+    fireEvent.click(contentToggleFor(modal, "Removed Game.gba"));
 
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => {
       expect(modal.container.textContent).toContain("That cleanup preview is no longer current.");
       // Back at its resting label, so the whole Confirm path has run and the
       // control is usable for a retry.
-      expect((modal.getByRole("button", { name: "Confirm Cleanup" }) as HTMLButtonElement).disabled).toBe(false);
+      expect(confirmButton(modal).disabled).toBe(false);
     });
 
     // The run would otherwise execute against a selection the backend never accepted.
@@ -740,60 +760,65 @@ describe("RemovedGamesCleanup", () => {
       total: 2,
       candidate_total: 1,
       items: [
-        { ...preview.items![0]!, warning: "Save ownership is shared." },
-        { ...preview.items![0]!, rom_id: 8, candidate: false, installed: false, name: "Live sibling", group_size: 2 },
+        { ...preview.items![0]!, group_size: 2, warning: "Save ownership is shared." },
+        {
+          ...preview.items![0]!,
+          rom_id: 8,
+          candidate: false,
+          gone_from_romm: false,
+          installed: false,
+          installed_bytes: null,
+          name: "Removed Game",
+          fs_name: "Live sibling.gba",
+          fs_name_no_ext: "Live sibling",
+          group_size: 2,
+        },
       ],
     };
 
-    /** `a` comes before `b` in document order — which is the order focus walks. */
-    const precedes = (a: Element, b: Element): boolean =>
-      (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-
-    it("draws the candidates as a table under the five column names", async () => {
+    it("draws the list under the four column names, a game's row over its versions", async () => {
       vi.mocked(backend.getPrunePreview).mockResolvedValue(withSibling);
       await openRemovedGamesCleanupModal();
       const modal = render(shownModal());
 
       const header = modal.getByTestId("cleanup-header");
       expect([...header.children].map((cell) => cell.textContent)).toEqual([
-        "Game",
-        "Platform",
-        "Verdict",
-        "Installed",
-        "Keep a copy",
+        "Game and versions",
+        "What happens",
+        "Downloaded",
+        "Back up file",
       ]);
-      const candidate = rowFor(modal, "Removed Game");
-      expect(candidate.textContent).toContain("gba");
-      expect(candidate.textContent).toContain("Gone from RomM");
-      expect(candidate.textContent).toContain("200 B");
-      const sibling = rowFor(modal, "Live sibling");
-      // A verdict says what is known now, never the run's outcome: this version
-      // still goes if the run finds every version of its game gone.
-      expect(sibling.textContent).toContain("Still on RomM · one of 2");
-      expect(sibling.textContent).not.toContain("kept");
-      // The full sentence is the cell's title for a mouse; the controller reads
-      // the same sentence in the section line above the row.
-      expect(within(sibling).getByTitle(/^Still on RomM at your last sync\./)).toBeTruthy();
-      // The versions still on RomM are a section of the same table, after the candidates.
-      const section = modal.getByTestId("cleanup-kept-section");
-      expect(section.textContent).toContain("Other versions of these games — still on RomM");
-      expect(precedes(candidate, section)).toBe(true);
-      expect(precedes(section, sibling)).toBe(true);
+      const game = rowFor(modal, "Removed Game");
+      expect(game.textContent).toContain("gba · 1 of 2 versions gone");
+      expect(game.textContent).toContain("Game stays");
+      const gone = rowFor(modal, "Removed Game.gba");
+      expect(gone.textContent).toContain("Gone from RomM");
+      expect(gone.textContent).toContain("200 B");
+      // The version still on RomM sits under its own game, not in a section of its own.
+      const sibling = rowFor(modal, "Live sibling.gba");
+      expect(sibling.textContent).toContain("On RomM");
+      expect(sibling.textContent).toContain("Stays");
+      expect(precedes(game, gone)).toBe(true);
+      expect(precedes(gone, sibling)).toBe(true);
+      expect(modal.getByTestId("cleanup-table").textContent).toContain(
+        "Downloaded: the game files of that version on this device. A file is deleted only where the row says so.",
+      );
     });
 
-    it("makes the Keep-a-copy toggle an installed row's stop, and the row itself the stop otherwise", async () => {
+    it("makes the Back up switch the stop of a row whose file goes, and every other row a stop itself", async () => {
       vi.mocked(backend.getPrunePreview).mockResolvedValue(withSibling);
       await openRemovedGamesCleanupModal();
       const modal = render(shownModal());
 
-      // A stop on the wrapper as well would put a dead step in front of the toggle.
-      const installed = rowFor(modal, "Removed Game");
-      expect(installed.getAttribute("data-activate")).toBeNull();
-      expect(within(installed).getAllByTestId("toggle")).toHaveLength(1);
-      // A row with nothing to press has to be a stop, or the table cannot be walked.
-      const notInstalled = rowFor(modal, "Live sibling");
-      expect(notInstalled.getAttribute("data-activate")).toBe("true");
-      expect(within(notInstalled).queryAllByTestId("toggle")).toHaveLength(0);
+      // A stop on the wrapper as well would put a dead step in front of the switch.
+      const deleting = rowFor(modal, "Removed Game.gba");
+      expect(deleting.getAttribute("data-activate")).toBeNull();
+      expect(within(deleting).getAllByTestId("toggle")).toHaveLength(1);
+      // A row with nothing to press has to be a stop, or the list cannot be walked.
+      const sibling = rowFor(modal, "Live sibling.gba");
+      expect(sibling.getAttribute("data-activate")).toBe("true");
+      expect(within(sibling).queryAllByTestId("toggle")).toHaveLength(0);
+      expect(rowFor(modal, "Removed Game").getAttribute("data-activate")).toBe("true");
     });
 
     it("keeps every per-row warning on screen, under its own row", async () => {
@@ -801,45 +826,52 @@ describe("RemovedGamesCleanup", () => {
       await openRemovedGamesCleanupModal();
       const modal = render(shownModal());
 
-      const row = rowFor(modal, "Removed Game");
-      expect(row.textContent).toContain("Save ownership is shared.");
-      expect(row.textContent).toContain(
-        "Without a backup, the downloaded ROM file is deleted along with this version.",
-      );
+      expect(rowFor(modal, "Removed Game.gba").textContent).toContain("Save ownership is shared.");
     });
 
-    it("puts the options in two columns, the acknowledgement under the bundle it answers for", async () => {
+    it("puts the four options in one column, the acknowledgement under the backup it answers for", async () => {
       await openRemovedGamesCleanupModal();
       const modal = render(shownModal());
       fireEvent.click(optionToggleFor(modal, OPTION_LABELS.recovery));
 
-      const column = (label: string) => optionToggleFor(modal, label).closest('[data-testid="focusable"]')!;
-      expect(column(OPTION_LABELS.removeDeadGames)).toBe(column(OPTION_LABELS.recovery));
-      expect(column(OPTION_LABELS.confirmWithoutRecovery)).toBe(column(OPTION_LABELS.recovery));
-      expect(column(OPTION_LABELS.removeRows)).not.toBe(column(OPTION_LABELS.recovery));
+      const toggles = [
+        OPTION_LABELS.removeRows,
+        OPTION_LABELS.removeDeadGames,
+        OPTION_LABELS.recovery,
+        OPTION_LABELS.confirmWithoutRecovery,
+        OPTION_LABELS.backUpFiles,
+      ].map((label) => optionToggleFor(modal, label));
+      const column = (input: HTMLInputElement) => input.closest('[data-testid="focusable"]')!;
+      expect(new Set(toggles.map(column)).size).toBe(1);
+      for (let index = 1; index < toggles.length; index++) {
+        expect(precedes(toggles[index - 1]!, toggles[index]!)).toBe(true);
+      }
     });
 
-    it("puts the run's controls between the options and the table, where focus reaches them first", async () => {
+    it("puts the run's controls between the options and the list, where focus reaches them first", async () => {
       vi.mocked(backend.getPrunePreview).mockResolvedValue(withSibling);
       await openRemovedGamesCleanupModal();
       const modal = render(shownModal());
       const table = modal.getByTestId("cleanup-table");
-      const lastOption = optionToggleFor(modal, OPTION_LABELS.recovery);
+      const lastOption = optionToggleFor(modal, OPTION_LABELS.backUpFiles);
 
       // Focus follows element order, not the picture: a control after the rows
       // is one press per row away however it is drawn.
-      for (const name of ["Refresh free space", "Cancel", "Confirm Cleanup"]) {
-        const control = modal.getByRole("button", { name });
+      for (const control of [modal.getByRole("button", { name: "Cancel" }), confirmButton(modal)]) {
         expect(precedes(lastOption, control)).toBe(true);
         expect(precedes(control, table)).toBe(true);
       }
-      expect(precedes(modal.getByText(/Selected ROM-content recovery estimate/), table)).toBe(true);
+      // Refresh free space sits with the space line it refreshes, under the fourth option.
+      const refresh = modal.getByRole("button", { name: "Refresh free space" });
+      expect(precedes(lastOption, refresh)).toBe(true);
+      expect(modal.getByTestId("cleanup-space").contains(refresh)).toBe(true);
+      expect(precedes(modal.getByText(/^Selected: /), table)).toBe(true);
     });
 
-    it("keeps a running run's Stop and a finished run's details above the table too", async () => {
+    it("keeps a running run's Stop and a finished run's details above the list too", async () => {
       await openRemovedGamesCleanupModal();
       const modal = render(shownModal());
-      fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+      fireEvent.click(confirmButton(modal));
       await waitFor(() => expect(modal.container.textContent).toContain("Cleanup running..."));
       act(() => {
         setPruneProgress({
@@ -884,47 +916,41 @@ describe("RemovedGamesCleanup", () => {
       const table = modal.getByTestId("cleanup-table");
       const retry = await modal.findByRole("button", { name: "Retry loading" });
 
-      // Every row is a stop, so after the table it would be a table's length
+      // Every row is a stop, so after the list it would be a list's length
       // away from the Confirm that refuses until the list has loaded.
       expect(bar.contains(retry)).toBe(true);
-      expect(precedes(retry, modal.getByRole("button", { name: "Confirm Cleanup" }))).toBe(true);
+      expect(precedes(retry, confirmButton(modal))).toBe(true);
       expect(precedes(retry, table)).toBe(true);
       expect(bar.textContent).toContain("Could not load the rest of the list");
     });
 
     it("tells two gone versions of one game apart on screen, not only in a title", async () => {
+      const disc = (romId: number, file: string): backend.PrunePreviewItem => ({
+        ...preview.items![0]!,
+        rom_id: romId,
+        name: "Chrono Cross",
+        fs_name: `${file}.chd`,
+        fs_name_no_ext: file,
+        group_id: "chrono",
+        group_size: 2,
+      });
       vi.mocked(backend.getPrunePreview).mockResolvedValue({
         ...preview,
         total: 2,
         candidate_total: 2,
-        items: [
-          {
-            ...preview.items![0]!,
-            rom_id: 21,
-            name: "Chrono Cross",
-            fs_name: "Chrono Cross (Disc 1).chd",
-            group_size: 2,
-          },
-          {
-            ...preview.items![0]!,
-            rom_id: 22,
-            name: "Chrono Cross",
-            fs_name: "Chrono Cross (Disc 2).chd",
-            group_size: 2,
-          },
-        ],
+        items: [disc(21, "Chrono Cross (Disc 1)"), disc(22, "Chrono Cross (Disc 2)")],
       });
       await openRemovedGamesCleanupModal();
       const modal = render(shownModal());
 
       // A title is a hover the controller cannot perform, and each row carries
-      // its own Keep a copy toggle.
+      // its own Back up switch.
       const first = modal.getByTestId("cleanup-row-21");
       const second = modal.getByTestId("cleanup-row-22");
-      expect(first.textContent).toContain("ROM 21 · Chrono Cross (Disc 1).chd");
-      expect(second.textContent).toContain("ROM 22 · Chrono Cross (Disc 2).chd");
-      expect(first.textContent).toContain("Gone from RomM · one of 2");
-      expect(second.textContent).toContain("Gone from RomM · one of 2");
+      expect(first.textContent).toContain("Chrono Cross (Disc 1).chd");
+      expect(second.textContent).toContain("Chrono Cross (Disc 2).chd");
+      expect(first.textContent).toContain("Gone from RomM");
+      expect(second.textContent).toContain("Gone from RomM");
     });
 
     it("scrolls the dialog to its end when the last row takes focus, and not before", async () => {
@@ -941,15 +967,15 @@ describe("RemovedGamesCleanup", () => {
         const scrollTo = vi.fn();
         body.scrollTo = scrollTo as unknown as typeof body.scrollTo;
 
-        fireEvent.focusIn(contentToggleFor(modal, "Removed Game"));
+        fireEvent.focusIn(contentToggleFor(modal, "Removed Game.gba"));
         act(() => {
           vi.runAllTimers();
         });
         expect(scrollTo).not.toHaveBeenCalled();
 
         // Steam stops at the control itself, leaving what sits under the last
-        // row — its own lines, the note after the table — below the view.
-        fireEvent.focusIn(rowFor(modal, "Live sibling"));
+        // row — its own lines, the note after the list — below the view.
+        fireEvent.focusIn(rowFor(modal, "Live sibling.gba"));
         act(() => {
           vi.runAllTimers();
         });
@@ -957,6 +983,357 @@ describe("RemovedGamesCleanup", () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+  });
+
+  describe("what a cleanup would do", () => {
+    /** A version of `group`, gone and offered unless the overrides say otherwise. */
+    const version = (
+      romId: number,
+      file: string,
+      group: string,
+      size: number,
+      overrides: Partial<backend.PrunePreviewItem> = {},
+    ): backend.PrunePreviewItem => ({
+      ...preview.items![0]!,
+      rom_id: romId,
+      name: group,
+      fs_name: file,
+      fs_name_no_ext: file.replace(/\.[^.]+$/, ""),
+      group_id: group,
+      group_size: size,
+      installed: false,
+      installed_bytes: null,
+      ...overrides,
+    });
+    const onRomm = { candidate: false, gone_from_romm: false };
+
+    /** The three games of the layout study: one keeps a version, one keeps everything, one goes whole. */
+    const threeGames: backend.PrunePreviewResult = {
+      ...preview,
+      total: 10,
+      candidate_total: 3,
+      free_bytes: 10_000_000,
+      items: [
+        version(31, "Rally Cup (USA).zip", "Rally Cup", 2, { bound_count: 1 }),
+        version(41, "Island Hopper (Netherlands).gba", "Island Hopper", 7, { bound: true, bound_count: 1 }),
+        version(51, "Moon Patrol (USA) (Proto 2).zip", "Moon Patrol", 1, {
+          bound: true,
+          bound_count: 1,
+          installed: true,
+          installed_bytes: 1_887_436,
+        }),
+        version(32, "Rally Cup (Europe).zip", "Rally Cup", 2, {
+          ...onRomm,
+          bound: true,
+          bound_count: 1,
+          installed: true,
+          installed_bytes: 467_664_896,
+        }),
+        ...[42, 43, 44, 45, 46, 47].map((romId) =>
+          version(romId, `Island Hopper (${romId}).gba`, "Island Hopper", 7, { ...onRomm, bound_count: 1 }),
+        ),
+      ],
+    };
+
+    const counts = (modal: RenderResult): string[] =>
+      [...modal.getByTestId("cleanup-summary").querySelectorAll("li")].map((item) => item.textContent);
+
+    async function open(result: backend.PrunePreviewResult, romId?: number): Promise<RenderResult> {
+      vi.mocked(backend.getPrunePreview).mockResolvedValue(result);
+      await openRemovedGamesCleanupModal(romId);
+      return render(shownModal());
+    }
+
+    it("groups the list by game, says what happens to each game and version, and follows the options", async () => {
+      const modal = await open(threeGames);
+
+      const rally = rowFor(modal, "Rally Cup");
+      expect(rally.textContent).toContain("gba · 1 of 2 versions gone");
+      expect(rally.textContent).toContain("Game stays");
+      expect(rowFor(modal, "Rally Cup (USA).zip").textContent).toContain("Removed");
+      const kept = rowFor(modal, "Rally Cup (Europe).zip");
+      expect(kept.textContent).toContain("Stays");
+      expect(kept.textContent).toContain("Its files stay on this device.");
+      expect(rowFor(modal, "Island Hopper").textContent).toContain("Nothing removed");
+      const moon = rowFor(modal, "Moon Patrol");
+      expect(moon.textContent).toContain("gba · every version gone");
+      expect(moon.textContent).toContain("Game removed, with its shortcut");
+      expect(rowFor(modal, "Moon Patrol (USA) (Proto 2).zip").textContent).toContain("Removed, file deleted");
+      // Every game row is a stop of its own.
+      for (const game of ["Rally Cup", "Island Hopper", "Moon Patrol"]) {
+        expect(rowFor(modal, game).getAttribute("data-activate")).toBe("true");
+      }
+
+      fireEvent.click(optionToggleFor(modal, OPTION_LABELS.removeRows));
+      expect(rowFor(modal, "Rally Cup").textContent).toContain("Nothing removed");
+      const rallyGone = rowFor(modal, "Rally Cup (USA).zip");
+      expect(rallyGone.textContent).toContain("Kept");
+      expect(rallyGone.textContent).toContain("“Remove gone versions” is off.");
+      expect(counts(modal)).toContain("1 version removed");
+
+      fireEvent.click(optionToggleFor(modal, OPTION_LABELS.removeDeadGames));
+      expect(rowFor(modal, "Moon Patrol").textContent).toContain("Nothing removed");
+      expect(rowFor(modal, "Moon Patrol (USA) (Proto 2).zip").textContent).toContain(
+        "“Remove games that are gone entirely” is off.",
+      );
+      expect(counts(modal)).not.toContain("1 version removed");
+    });
+
+    it("folds more than two other versions on RomM into one row that opens them in place", async () => {
+      const modal = await open(threeGames);
+
+      const show = modal.getByRole("button", { name: "6 more versions, all on RomM · Show" });
+      expect(modal.queryByText("Island Hopper (42).gba")).toBeNull();
+      // Rally Cup's one other version on RomM is not folded.
+      expect(modal.getByText("Rally Cup (Europe).zip")).toBeTruthy();
+
+      fireEvent.click(show);
+
+      expect(modal.queryByRole("button", { name: /more versions, all on RomM/ })).toBeNull();
+      for (const romId of [42, 43, 44, 45, 46, 47]) {
+        expect(rowFor(modal, `Island Hopper (${romId}).gba`).textContent).toContain("On RomM");
+      }
+      expect(precedes(rowFor(modal, "Island Hopper (47).gba"), rowFor(modal, "Moon Patrol"))).toBe(true);
+    });
+
+    it("keeps the version a shortcut is on in view while the game's other versions on RomM fold", async () => {
+      const modal = await open({
+        ...preview,
+        total: 5,
+        candidate_total: 1,
+        items: [
+          version(101, "Tower (USA).zip", "Tower", 5),
+          version(102, "Tower (Japan).zip", "Tower", 5, { ...onRomm, bound: true, bound_count: 1 }),
+          ...[103, 104, 105].map((romId) => version(romId, `Tower (${romId}).zip`, "Tower", 5, onRomm)),
+        ],
+      });
+
+      expect(rowFor(modal, "Tower (Japan).zip").textContent).toContain("On RomM · your shortcut");
+      expect(modal.getByRole("button", { name: "3 more versions, all on RomM · Show" })).toBeTruthy();
+      expect(modal.queryByText("Tower (103).zip")).toBeNull();
+    });
+
+    it("opens with the summary and counts that follow the options, a zero count left out", async () => {
+      const modal = await open(threeGames);
+
+      expect(modal.getByTestId("cleanup-summary").textContent).toContain(
+        "RomM no longer has 3 versions this device still holds. Each one is checked against RomM again before anything is removed. If you clean up now:",
+      );
+      expect(counts(modal)).toEqual([
+        "2 versions removed",
+        "1 game removed with its shortcut",
+        "1 downloaded file deleted",
+        "1 version kept because a shortcut is on it",
+      ]);
+
+      fireEvent.click(contentToggleFor(modal, "Moon Patrol (USA) (Proto 2).zip"));
+
+      expect(counts(modal)).toEqual([
+        "2 versions removed",
+        "1 game removed with its shortcut",
+        "1 version kept because a shortcut is on it",
+      ]);
+    });
+
+    it("leaves out a count of games with a shortcut where the game removed has none", async () => {
+      const modal = await open({ ...preview, items: [{ ...preview.items![0]!, installed: false }] });
+
+      expect(rowFor(modal, "Removed Game").textContent).toContain("Game removed");
+      expect(rowFor(modal, "Removed Game").textContent).not.toContain("with its shortcut");
+      expect(counts(modal)).toEqual(["1 version removed"]);
+    });
+
+    it("switches every row's backup with the fourth option, each row on its own too, and the space line follows", async () => {
+      const modal = await open({
+        ...preview,
+        total: 2,
+        candidate_total: 2,
+        free_bytes: 1000,
+        items: [
+          { ...rowAs(61, "First"), installed_bytes: 100 },
+          { ...rowAs(62, "Second"), installed_bytes: 300 },
+        ],
+      });
+      const every = () => optionToggleFor(modal, OPTION_LABELS.backUpFiles);
+      expect(modal.container.textContent).toContain("Selected: 0 B of 400 B · 1000 B free");
+
+      fireEvent.click(every());
+      expect(contentToggleFor(modal, "First.gba").checked).toBe(true);
+      expect(contentToggleFor(modal, "Second.gba").checked).toBe(true);
+      expect(modal.container.textContent).toContain("Selected: 400 B of 400 B · 1000 B free");
+
+      fireEvent.click(contentToggleFor(modal, "First.gba"));
+      expect(contentToggleFor(modal, "Second.gba").checked).toBe(true);
+      expect(every().checked).toBe(false);
+      expect(modal.container.textContent).toContain("Selected: 300 B of 400 B · 1000 B free");
+
+      fireEvent.click(every());
+      expect(contentToggleFor(modal, "First.gba").checked).toBe(true);
+      fireEvent.click(every());
+      expect(contentToggleFor(modal, "First.gba").checked).toBe(false);
+      expect(contentToggleFor(modal, "Second.gba").checked).toBe(false);
+      expect(modal.container.textContent).toContain("Selected: 0 B of 400 B · 1000 B free");
+    });
+
+    it("offers the Back up switch only on a row whose file the run deletes, and marks only the shortcut's version", async () => {
+      const modal = await open(threeGames);
+
+      // Rally Cup (Europe) is downloaded too, but stays: its file is not the run's to delete.
+      const [only, ...others] = within(modal.getByTestId("cleanup-table")).getAllByTestId("toggle");
+      expect(others).toHaveLength(0);
+      expect(rowFor(modal, "Moon Patrol (USA) (Proto 2).zip").contains(only!)).toBe(true);
+      expect(only!.textContent).toContain("Back up");
+      expect(rowFor(modal, "Rally Cup (Europe).zip").textContent).toContain("On RomM · your shortcut");
+      expect(rowFor(modal, "Island Hopper (Netherlands).gba").textContent).toContain("Gone from RomM · your shortcut");
+      expect(rowFor(modal, "Rally Cup (USA).zip").textContent).not.toContain("your shortcut");
+    });
+
+    it("names the count on Confirm, red and last beside Cancel", async () => {
+      const modal = await open(threeGames);
+
+      const confirm = modal.getByRole("button", { name: "Remove 2 versions" });
+      const red = document.createElement("span");
+      red.style.color = RED;
+      expect(confirm.querySelector("span")!.style.color).toBe(red.style.color);
+      expect(confirm.parentElement!.lastElementChild).toBe(confirm);
+      expect(confirm.previousElementSibling?.textContent).toBe("Cancel");
+    });
+
+    it("reads an old entry beside a version on RomM with the same file name as replaced, and removes it", async () => {
+      const modal = await open({
+        ...preview,
+        total: 4,
+        candidate_total: 2,
+        items: [
+          version(71, "Dump (USA).zip", "Dump", 2),
+          version(81, "Other (USA).zip", "Other", 2),
+          version(72, "Dump (USA).7z", "Dump", 2, onRomm),
+          version(82, "Other (Europe).zip", "Other", 2, onRomm),
+        ],
+      });
+
+      const replaced = rowFor(modal, "Dump (USA).zip");
+      expect(replaced.textContent).toContain("Replaced on RomM by the same file under a new ID");
+      expect(replaced.textContent).not.toContain("Gone from RomM");
+      expect(replaced.textContent).toContain("Removed");
+      expect(replaced.textContent).toContain("Its save files stay; the new entry uses them.");
+      // Another file name is no replacement.
+      const other = rowFor(modal, "Other (USA).zip");
+      expect(other.textContent).toContain("Gone from RomM");
+      expect(other.textContent).not.toContain("the new entry uses them");
+      expect(counts(modal)).toEqual(["2 versions removed"]);
+    });
+
+    it("never reads an empty file name as the same file", async () => {
+      const modal = await open({
+        ...preview,
+        total: 2,
+        candidate_total: 1,
+        items: [
+          version(73, "", "Nameless", 2, { fs_name_no_ext: "" }),
+          version(74, "", "Nameless", 2, { ...onRomm, fs_name_no_ext: "" }),
+        ],
+      });
+
+      expect(modal.container.textContent).not.toContain("Replaced on RomM");
+    });
+
+    it("says a backed-up version goes into the backup, a file deleted how to keep it, and why a version is kept", async () => {
+      const modal = await open(threeGames);
+      const moonVersion = () => rowFor(modal, "Moon Patrol (USA) (Proto 2).zip");
+      expect(moonVersion().textContent).toContain("Switch on “Back up” to keep a copy.");
+      expect(rowFor(modal, "Island Hopper (Netherlands).gba").textContent).toContain(
+        "Switch to another version first, then this one can be removed.",
+      );
+
+      fireEvent.click(contentToggleFor(modal, "Moon Patrol (USA) (Proto 2).zip"));
+      expect(moonVersion().textContent).toContain("Removed");
+      expect(moonVersion().textContent).not.toContain("file deleted");
+      expect(moonVersion().textContent).toContain("A copy of its file goes into the backup first.");
+
+      fireEvent.click(optionToggleFor(modal, OPTION_LABELS.recovery));
+      expect(moonVersion().textContent).toContain("Removed, file deleted");
+      // With the backup off the switch is disabled, so nothing points at it.
+      expect(moonVersion().textContent).not.toContain("Switch on “Back up”");
+    });
+
+    it("keeps the shortcut's reason where an option would keep the version too", async () => {
+      const modal = await open(threeGames);
+      fireEvent.click(optionToggleFor(modal, OPTION_LABELS.removeRows));
+
+      const bound = rowFor(modal, "Island Hopper (Netherlands).gba");
+      expect(bound.textContent).toContain("Switch to another version first");
+      expect(bound.textContent).not.toContain("is off.");
+      expect(counts(modal)).toContain("1 version kept because a shortcut is on it");
+    });
+
+    it("says nothing is removed, with the kept count, and disables Confirm where no version would go", async () => {
+      const modal = await open(
+        {
+          ...preview,
+          scope: "rom",
+          total: 2,
+          items: [
+            version(41, "Island Hopper (Netherlands).gba", "Island Hopper", 2, { bound: true, bound_count: 1 }),
+            version(42, "Island Hopper (Europe).gba", "Island Hopper", 2, { ...onRomm, bound_count: 1 }),
+          ],
+        },
+        41,
+      );
+
+      expect(modal.getByTestId("cleanup-summary").textContent).toContain("If you clean up now: nothing is removed.");
+      expect(counts(modal)).toEqual(["1 version kept because a shortcut is on it"]);
+      expect(confirmButton(modal).disabled).toBe(true);
+    });
+
+    it("offers a game whose every version is gone whole from the trash icon, every row listed with the option off", async () => {
+      const modal = await open(
+        {
+          ...preview,
+          scope: "rom",
+          total: 2,
+          candidate_total: 2,
+          items: [version(91, "Gone (USA).zip", "Gone", 2), version(92, "Gone (Europe).zip", "Gone", 2)],
+        },
+        91,
+      );
+
+      expect(rowFor(modal, "Gone").textContent).toContain("Game removed");
+      expect(counts(modal)).toEqual(["2 versions removed"]);
+      expect(confirmButton(modal).textContent).toBe("Remove 2 versions");
+
+      fireEvent.click(optionToggleFor(modal, OPTION_LABELS.removeDeadGames));
+
+      expect(rowFor(modal, "Gone").textContent).toContain("Nothing removed");
+      for (const file of ["Gone (USA).zip", "Gone (Europe).zip"]) {
+        expect(rowFor(modal, file).textContent).toContain("“Remove games that are gone entirely” is off.");
+      }
+    });
+
+    it("keeps a gone version other than the one chosen from the trash icon, from the row's own field", async () => {
+      const modal = await open(
+        {
+          ...preview,
+          scope: "rom",
+          total: 3,
+          candidate_total: 1,
+          items: [
+            version(93, "Chosen (USA).zip", "Chosen", 3),
+            version(94, "Chosen (Europe).zip", "Chosen", 3, { candidate: false }),
+            version(95, "Chosen (Japan).zip", "Chosen", 3, onRomm),
+          ],
+        },
+        93,
+      );
+
+      const other = rowFor(modal, "Chosen (Europe).zip");
+      expect(other.textContent).toContain("Gone from RomM");
+      expect(other.textContent).toContain("Kept");
+      expect(other.textContent).toContain("Only the version you chose is removed here.");
+      expect(rowFor(modal, "Chosen (USA).zip").textContent).toContain("Removed");
+      expect(rowFor(modal, "Chosen (Japan).zip").textContent).toContain("On RomM");
+      expect(counts(modal)).toEqual(["1 version removed"]);
     });
   });
 
@@ -1041,7 +1418,7 @@ describe("RemovedGamesCleanup", () => {
   it("surfaces bounded save warnings in terminal details", async () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => expect(modal.container.textContent).toContain("Cleanup running..."));
 
     act(() => {
@@ -1079,7 +1456,7 @@ describe("RemovedGamesCleanup", () => {
   it("surfaces warnings from successful removals and a run-level terminal error", async () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => expect(modal.container.textContent).toContain("Cleanup running..."));
 
     act(() => {
@@ -1187,12 +1564,12 @@ describe("RemovedGamesCleanup", () => {
     });
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    const confirm = modal.getByRole("button", { name: "Confirm Cleanup" }) as HTMLButtonElement;
+    const confirm = confirmButton(modal);
     // Unselected, an unmeasurable ROM blocks nothing — it is simply not copied.
     expect(confirm.disabled).toBe(false);
     expect(modal.container.textContent).not.toContain("no safe measurable size");
 
-    fireEvent.click(contentToggleFor(modal, "Removed Game"));
+    fireEvent.click(contentToggleFor(modal, "Removed Game.gba"));
 
     // Selected for recovery, its required space cannot be proven, so the run is
     // refused rather than started on an unbacked estimate.
@@ -1203,14 +1580,24 @@ describe("RemovedGamesCleanup", () => {
     expect(modal.container.textContent).not.toContain("Not enough free space.");
   });
 
-  it("counts only removable rows in the headline and discloses a sibling as still on RomM", async () => {
+  it("counts only removable rows in the headline and lists a sibling as on RomM", async () => {
     vi.mocked(backend.getPrunePreview).mockResolvedValue({
       ...preview,
       total: 2,
       candidate_total: 1,
       items: [
-        preview.items![0]!,
-        { ...preview.items![0]!, rom_id: 8, candidate: false, installed: false, name: "Live sibling", group_size: 2 },
+        { ...preview.items![0]!, group_size: 2 },
+        {
+          ...preview.items![0]!,
+          rom_id: 8,
+          candidate: false,
+          gone_from_romm: false,
+          installed: false,
+          installed_bytes: null,
+          fs_name: "Live sibling.gba",
+          fs_name_no_ext: "Live sibling",
+          group_size: 2,
+        },
       ],
     });
     await openRemovedGamesCleanupModal();
@@ -1218,93 +1605,112 @@ describe("RemovedGamesCleanup", () => {
     const text = modal.container.textContent;
 
     // The headline must not inflate itself with the sibling RomM still serves.
-    expect(text).toContain("1 locally kept version is no longer on your RomM server");
-    expect(text).not.toContain("2 locally kept");
-    // The sibling is still disclosed — a fresh probe, not the local fetch
-    // generation, decides whole-game removal — but never called a candidate.
-    expect(text).toContain("Live sibling");
-    expect(text).toContain("Other versions of these games — still on RomM");
-    expect(text).toContain("Still on RomM at your last sync");
-    expect(text).toContain("Other versions of the same games are listed below");
-    expect(text).not.toContain("disclosed for whole-game removal");
+    expect(text).toContain("RomM no longer has 1 version this device still holds.");
+    expect(text).not.toContain("RomM no longer has 2 versions");
+    expect(rowFor(modal, "Live sibling.gba").textContent).toContain("On RomM");
   });
 
-  it("hides the disclosure rows when whole-game removal is switched off", async () => {
+  it("keeps every row listed with whole-game removal switched off, and changes only their outcomes", async () => {
     vi.mocked(backend.getPrunePreview).mockResolvedValue({
       ...preview,
-      total: 2,
-      candidate_total: 1,
+      total: 3,
+      candidate_total: 2,
       items: [
-        preview.items![0]!,
-        { ...preview.items![0]!, rom_id: 8, candidate: false, installed: false, name: "Live sibling", group_size: 2 },
+        { ...preview.items![0]!, group_size: 2 },
+        {
+          ...preview.items![0]!,
+          rom_id: 8,
+          candidate: false,
+          gone_from_romm: false,
+          installed: false,
+          installed_bytes: null,
+          fs_name: "Live sibling.gba",
+          fs_name_no_ext: "Live sibling",
+          group_size: 2,
+        },
+        { ...rowAs(9, "Dead Game"), installed: false, installed_bytes: null },
       ],
     });
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    expect(modal.container.textContent).toContain("Live sibling");
+    expect(rowFor(modal, "Dead Game").textContent).toContain("Game removed");
 
     fireEvent.click(optionToggleFor(modal, OPTION_LABELS.removeDeadGames));
 
-    // With whole-game removal off, `selected_prune_ids` can never return a
-    // non-candidate, so disclosing one describes a thing that cannot happen.
-    expect(modal.container.textContent).not.toContain("Live sibling");
-    expect(modal.container.textContent).not.toContain("Other versions of these games — still on RomM");
-    expect(modal.container.textContent).not.toContain("Other versions of the same games are listed below");
+    expect(rowFor(modal, "Live sibling.gba").textContent).toContain("Stays");
+    expect(rowFor(modal, "Dead Game").textContent).toContain("Nothing removed");
+    const dead = rowFor(modal, "Dead Game.gba");
+    expect(dead.textContent).toContain("Kept");
+    expect(dead.textContent).toContain("“Remove games that are gone entirely” is off.");
     // The headline counted candidates only, so it does not move.
-    expect(modal.container.textContent).toContain("1 locally kept version is no longer on your RomM server");
+    expect(modal.container.textContent).toContain("RomM no longer has 2 versions this device still holds.");
   });
 
-  it("unstages a hidden row's content when whole-game removal is switched off", async () => {
+  it("stages and counts no backup for a file the run no longer deletes once an option keeps its row", async () => {
     vi.mocked(backend.getPrunePreview).mockResolvedValue({
       ...preview,
-      total: 2,
-      candidate_total: 1,
+      total: 3,
+      candidate_total: 2,
       free_bytes: 10_000,
       items: [
-        { ...preview.items![0]!, installed: false, installed_bytes: null },
-        { ...preview.items![0]!, rom_id: 8, candidate: false, name: "Live sibling", installed_bytes: 512 },
+        { ...preview.items![0]!, group_size: 2, installed: false, installed_bytes: null },
+        {
+          ...preview.items![0]!,
+          rom_id: 8,
+          candidate: false,
+          gone_from_romm: false,
+          installed: false,
+          installed_bytes: null,
+          fs_name: "Live sibling.gba",
+          fs_name_no_ext: "Live sibling",
+          group_size: 2,
+        },
+        { ...rowAs(9, "Dead Game"), installed_bytes: 512 },
       ],
     });
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
 
-    fireEvent.click(contentToggleFor(modal, "Live sibling"));
-    expect(modal.container.textContent).toContain("recovery estimate: 512 B");
+    fireEvent.click(contentToggleFor(modal, "Dead Game.gba"));
+    expect(modal.container.textContent).toContain("Selected: 512 B of 512 B");
 
     fireEvent.click(optionToggleFor(modal, OPTION_LABELS.removeDeadGames));
-    await waitFor(() => expect(modal.container.textContent).toContain("recovery estimate: 0 B"));
+    expect(within(rowFor(modal, "Dead Game.gba")).queryAllByTestId("toggle")).toHaveLength(0);
+    expect(modal.container.textContent).not.toContain("Selected: 512 B");
 
-    // A selection the user can no longer see must not be staged behind their back.
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    // A selection the run would not act on must not be staged behind the user's back.
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => expect(backend.startPrune).toHaveBeenCalled());
     expect(backend.stagePruneInstalledSelection).not.toHaveBeenCalled();
     expect(vi.mocked(backend.startPrune).mock.calls[0]?.[0].installed_selection_id).toBeNull();
   });
 
-  it("states what whole-game removal takes and what the recovery bundle keeps", async () => {
+  it("states what each option takes and what the backup keeps", async () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    const descriptions = [...modal.container.querySelectorAll('[data-testid="toggle"]')]
-      .map((el) => el.textContent)
-      .join(" ");
+    const description = (label: string) =>
+      optionToggleFor(modal, label).closest('[data-testid="toggle"]')!.querySelector('[data-testid="toggle-desc"]')!
+        .textContent;
 
-    // The option ships on, so its description has to carry the full weight.
-    expect(modal.container.textContent).toContain("Only for games where the server confirms every single version is");
-    expect(modal.container.textContent).toContain("rebuild it by hand");
-    expect(descriptions).not.toContain("Off by default");
+    expect(description(OPTION_LABELS.removeRows)).toBe("Of games that still have another version on RomM.");
+    expect(description(OPTION_LABELS.recovery)).toBe(
+      "Saves, playtime and the shortcut’s Steam details, under /home/deck/romm-tender-recovery.",
+    );
+    expect(description(OPTION_LABELS.backUpFiles)).toBe("Selected: 0 B of 200 B · 100 B free");
   });
 
-  it("drops the disclosure sentence and heading when every listed row is removable", async () => {
+  it("names the shortcut removal as conditional on the game having one", async () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    const text = modal.container.textContent;
 
-    expect(text).toContain("1 locally kept version is no longer on your RomM server");
-    expect(text).not.toContain("Other versions of the same games are listed below");
-    expect(text).not.toContain("Other versions of these games — still on RomM");
+    // A game gone entirely may have no shortcut at all, so the option must not
+    // promise one is removed.
+    const option = optionToggleFor(modal, OPTION_LABELS.removeDeadGames).closest('[data-testid="toggle"]')!;
+    expect(option.textContent).toContain("where it has one");
+    expect(option.textContent).not.toContain("With their Steam shortcut");
   });
 
-  it("says so when no listed version has ROM files on this device", async () => {
+  it("disables the file backup and says why when the run would delete no downloaded file", async () => {
     vi.mocked(backend.getPrunePreview).mockResolvedValue({
       ...preview,
       items: [{ ...preview.items![0]!, installed: false, installed_bytes: null }],
@@ -1312,11 +1718,13 @@ describe("RemovedGamesCleanup", () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
 
-    // Otherwise the per-row content option is simply absent and reads as missing.
-    expect(modal.container.textContent).toContain("None of these versions has ROM files downloaded on this device");
+    const option = optionToggleFor(modal, OPTION_LABELS.backUpFiles).closest('[data-testid="toggle"]')!;
+    expect(option.getAttribute("data-disabled")).toBe("true");
+    expect(option.textContent).toContain("No downloaded file would be deleted, so there is nothing to back up.");
+    expect(modal.container.textContent).not.toContain("Selected: ");
   });
 
-  it("claims nothing about ROM files while a page is still undisclosed", async () => {
+  it("claims no file is deleted only once every page has arrived", async () => {
     vi.mocked(backend.getPrunePreview)
       .mockResolvedValueOnce({
         ...preview,
@@ -1327,23 +1735,15 @@ describe("RemovedGamesCleanup", () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
 
-    // An unloaded page could still hold an installed row.
-    expect(modal.container.textContent).not.toContain("None of these versions has ROM files");
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    // An unloaded page could still hold a file the run deletes.
+    expect(modal.container.textContent).not.toContain("No downloaded file would be deleted");
+    expect(modal.container.textContent).toContain("Selected: 0 B of 0 B");
+    fireEvent.click(confirmButton(modal));
     await act(async () => Promise.resolve());
     expect(backend.startPrune).not.toHaveBeenCalled();
   });
 
-  it("shows the installed-content option instead of the empty state when a row has files", async () => {
-    await openRemovedGamesCleanupModal();
-    const modal = render(shownModal());
-
-    expect(contentToggleFor(modal, "Removed Game")).toBeTruthy();
-    expect(rowFor(modal, "Removed Game").textContent).toContain("200 B");
-    expect(modal.container.textContent).not.toContain("None of these versions has ROM files");
-  });
-
-  it("keeps the confirm dialog to one scroll region so the estimate cannot cover the last row", async () => {
+  it("keeps the confirm dialog to one scroll region so the space line cannot cover the last row", async () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
 
@@ -1351,9 +1751,9 @@ describe("RemovedGamesCleanup", () => {
       (el) => el.style.overflowY === "auto",
     );
     expect(scrollers).toHaveLength(1);
-    // The space estimate scrolls WITH the list rather than sitting pinned over it.
+    // The space line scrolls WITH the list rather than sitting pinned over it.
     expect(scrollers[0]!.textContent).toContain("Removed Game");
-    expect(scrollers[0]!.textContent).toContain("Selected ROM-content recovery estimate");
+    expect(scrollers[0]!.textContent).toContain("Selected: ");
   });
 
   it("brings the intro back into view when the first option takes focus", async () => {
@@ -1391,12 +1791,12 @@ describe("RemovedGamesCleanup", () => {
     const modal = render(shownModal());
 
     // The dialog scrolls, so the reason has to be readable from where the button is.
-    expect((modal.getByRole("button", { name: "Confirm Cleanup" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(confirmButton(modal).disabled).toBe(false);
     expect(modal.container.textContent).toContain(
       "The list is still loading (1 of 2 entries). A cleanup can start once every entry has arrived.",
     );
     // Pressable, but locked while the second page is still pending.
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await act(async () => Promise.resolve());
     expect(backend.startPrune).not.toHaveBeenCalled();
   });
@@ -1408,7 +1808,7 @@ describe("RemovedGamesCleanup", () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
 
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await act(async () => Promise.resolve());
 
     expect(logs.info).toHaveBeenCalledWith(expect.stringContaining("[prune] Confirm pressed"));
@@ -1420,7 +1820,7 @@ describe("RemovedGamesCleanup", () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
 
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => expect(modal.container.textContent).toContain("Cleanup running..."));
 
     expect(logs.info).toHaveBeenCalledWith(expect.stringContaining("[prune] Confirm pressed"));
@@ -1436,7 +1836,7 @@ describe("RemovedGamesCleanup", () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
 
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => expect(modal.container.textContent).toContain("already running"));
 
     expect(logs.warn).toHaveBeenCalledWith(expect.stringContaining("reason=prune_active"));
@@ -1448,7 +1848,7 @@ describe("RemovedGamesCleanup", () => {
     // Another preview claimed the pending slot between opening and confirming.
     act(() => beginPrunePreview("preview-2"));
 
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => expect(modal.container.textContent).toContain("lost track of it"));
 
     // The run is executing; its frames can never be admitted, so "running..."
@@ -1458,28 +1858,17 @@ describe("RemovedGamesCleanup", () => {
     expect(logs.error).toHaveBeenCalledWith(expect.stringContaining("no longer pending"));
   });
 
-  it("names the shortcut removal as conditional on the fully-vanished toggle", async () => {
-    await openRemovedGamesCleanupModal();
-    const modal = render(shownModal());
-
-    // Rows in a fully vanished group may have no shortcut at all, so the option
-    // must not promise one is removed.
-    const option = optionToggleFor(modal, OPTION_LABELS.removeDeadGames).closest('[data-testid="toggle"]')!;
-    expect(option.textContent).toContain("with any Steam shortcut it has");
-    expect(option.textContent).not.toContain("the Steam shortcut");
-  });
-
   it("surfaces a success response that carries no run id instead of wedging admission", async () => {
     vi.mocked(backend.startPrune).mockResolvedValue({ success: true, status: "running" });
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
 
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => expect(modal.container.textContent).toContain("carried no run id"));
 
     // No run was adopted by id, and the control stays usable for a retry.
     expect(getPruneState().runId).toBeNull();
-    expect((modal.getByRole("button", { name: "Confirm Cleanup" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(confirmButton(modal).disabled).toBe(false);
   });
 
   it("rejects a scan response that carries no preview id", async () => {
@@ -1583,7 +1972,7 @@ describe("RemovedGamesCleanup", () => {
     vi.mocked(backend.cancelPrune).mockResolvedValue({ success: true, message: "ok", already_cancelling: false });
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => expect(modal.container.textContent).toContain("Cleanup running..."));
 
     act(() => {
@@ -1605,7 +1994,7 @@ describe("RemovedGamesCleanup", () => {
   it("renders a real progress bar with the phase in words", async () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => expect(modal.container.textContent).toContain("Cleanup running..."));
 
     act(() => {
@@ -1719,7 +2108,7 @@ describe("RemovedGamesCleanup", () => {
   it("fills the modal bar when the run reaches its terminal frame", async () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => expect(modal.container.textContent).toContain("Cleanup running..."));
 
     act(() => {
@@ -1826,7 +2215,7 @@ describe("RemovedGamesCleanup", () => {
   it("leads a result line with the game's name, not its metadata key", async () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => expect(modal.container.textContent).toContain("Cleanup running..."));
 
     act(() => {
@@ -1858,7 +2247,7 @@ describe("RemovedGamesCleanup", () => {
   it("falls back to the group key when a result carries no name", async () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => expect(modal.container.textContent).toContain("Cleanup running..."));
 
     act(() => {
@@ -1887,7 +2276,7 @@ describe("RemovedGamesCleanup", () => {
   it("says a bundle was left behind when a group backed up but removed nothing", async () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => expect(modal.container.textContent).toContain("Cleanup running..."));
 
     act(() => {
@@ -2004,7 +2393,7 @@ describe("RemovedGamesCleanup", () => {
     vi.mocked(backend.cancelPrune).mockResolvedValue({ success: true, message: "ok", already_cancelling: false });
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
-    fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+    fireEvent.click(confirmButton(modal));
     await waitFor(() => expect(modal.container.textContent).toContain("Cleanup running..."));
     act(() => {
       setPruneProgress({
