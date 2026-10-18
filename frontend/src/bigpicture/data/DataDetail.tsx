@@ -394,8 +394,8 @@ const NonSteamPane: FC<{ state: DataPageState }> = ({ state }) => {
 /**
  * The games this device still keeps that RomM no longer has.
  *
- * The count costs a server round trip, so it is the scan's answer rather than
- * something the page opens with, and the section that runs the scan is what
+ * The count costs a backend scan of the library, so it is the scan's answer
+ * rather than something the page opens with, and the section that runs the scan is what
  * reports where it stands. That section's button says it is scanning; this
  * pane adds only the retry a failed scan needs.
  */
