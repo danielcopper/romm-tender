@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from domain.fetch_generation import gone_from_romm_ids
 from domain.retrodeck_folders import FolderRefused, folder_of
-from domain.sibling_resolution import group_rows
+from domain.sibling_resolution import fs_name_stem, group_rows
 from lib.url_host import romm_namespace
 from services.prune._models import PrunePreview
 
@@ -27,22 +27,28 @@ class PreviewBuilderConfig:
     settings: dict[str, Any]
 
 
-def _explicit_candidate(uow: UnitOfWork, explicit_rom_id: int | None) -> set[int]:
-    """The single row an explicit per-ROM cleanup names, if it still exists."""
-    if explicit_rom_id is None or not uow.roms.get(explicit_rom_id):
-        return set()
-    return {explicit_rom_id}
+def _explicit_candidates(rows: list[Rom], gone_ids: set[int], explicit_rom_id: int | None) -> set[int]:
+    """The row an explicit per-ROM cleanup names, or every version of its game where each one is gone.
+
+    A run never removes a version its preview did not offer, so a game whose
+    every version is gone is offered whole here, as the bulk cleanup offers it.
+    """
+    for group in group_rows(rows):
+        group_ids = {row.rom_id for row in group}
+        if explicit_rom_id in group_ids:
+            return group_ids if group_ids <= gone_ids else {explicit_rom_id}
+    return set()
 
 
-def _discovered_candidates(uow: UnitOfWork, rows: list[Rom]) -> set[int]:
+def _gone_from_romm_ids(uow: UnitOfWork, rows: list[Rom]) -> set[int]:
     """Every row absent from its own platform's last completed fetch, and every row carrying a gone-from-RomM mark."""
     platform_rows: dict[str, list[Rom]] = {}
     for row in rows:
         platform_rows.setdefault(row.platform_slug, []).append(row)
-    candidate_ids: set[int] = set()
-    for slug, candidates in platform_rows.items():
-        candidate_ids.update(gone_from_romm_ids(candidates, uow.platform_sync_state.get(slug)))
-    return candidate_ids
+    gone_ids: set[int] = set()
+    for slug, platform in platform_rows.items():
+        gone_ids.update(gone_from_romm_ids(platform, uow.platform_sync_state.get(slug)))
+    return gone_ids
 
 
 def _preview_entry(
@@ -52,6 +58,7 @@ def _preview_entry(
     group_size: int,
     bound_count: int,
     candidate: bool,
+    gone: bool,
     install: RomInstall | None,
     size: int | None,
     warning: str | None,
@@ -61,12 +68,14 @@ def _preview_entry(
         "rom_id": row.rom_id,
         "name": row.name,
         "fs_name": row.fs_name,
+        "fs_name_no_ext": fs_name_stem(row.fs_name),
         "platform_slug": row.platform_slug,
         "group_id": group_id,
         "group_size": group_size,
         "bound_count": bound_count,
         "bound": row.shortcut_app_id is not None,
         "candidate": candidate,
+        "gone_from_romm": gone,
         "installed": install is not None,
         "installed_bytes": size,
         "warning": warning,
@@ -107,9 +116,8 @@ class PreviewBuilder:
         with self._uow_factory() as uow:
             rows = list(uow.roms.iter_all())
             installs = {install.rom_id: install for install in uow.rom_installs.iter_all()}
-            candidate_ids = (
-                _explicit_candidate(uow, explicit_rom_id) if scope == "rom" else _discovered_candidates(uow, rows)
-            )
+            gone_ids = _gone_from_romm_ids(uow, rows)
+            candidate_ids = _explicit_candidates(rows, gone_ids, explicit_rom_id) if scope == "rom" else gone_ids
 
             relevant_groups = [
                 group for group in group_rows(rows) if candidate_ids.intersection(r.rom_id for r in group)
@@ -131,6 +139,7 @@ class PreviewBuilder:
                         group_size=len(group),
                         bound_count=bound_count,
                         candidate=row.rom_id in candidate_ids,
+                        gone=row.rom_id in gone_ids,
                         install=install,
                         size=size,
                         warning=warning,

@@ -200,3 +200,74 @@ def test_a_row_says_whether_a_shortcut_is_on_that_version() -> None:
     page = builder.page(builder.build("preview", "bulk", None), 0, 50)
 
     assert {item["rom_id"]: item["bound"] for item in page["items"]} == {4375: True, 25135: False}
+
+
+def test_a_row_says_whether_it_is_gone_from_romm_by_its_platforms_stamp_or_its_mark() -> None:
+    uow = _two_groups()
+    with uow:
+        marked = uow.roms.get(25136)
+        assert marked is not None
+        marked.mark_gone_from_romm("not_found")
+        uow.roms.save(marked)
+    builder = _builder(uow)
+
+    page = builder.page(builder.build("preview", "bulk", None), 0, 50)
+
+    assert {item["rom_id"]: item["gone_from_romm"] for item in page["items"]} == {
+        4375: True,
+        25135: False,
+        4376: True,
+        25136: True,
+    }
+
+
+def test_the_trash_icons_preview_says_which_of_the_games_other_versions_are_gone_too() -> None:
+    uow = FakeUnitOfWork()
+    with uow:
+        uow.roms.save(_rom(4375, name="Game A (USA)", group="igdb:1217:53", fetch_id="old"))
+        uow.roms.save(_rom(4377, name="Game A (Europe)", group="igdb:1217:53", fetch_id="old"))
+        uow.roms.save(_rom(25135, name="Game A (Japan)", group="igdb:1217:53", fetch_id="current"))
+        uow.platform_sync_state.save(
+            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="current")
+        )
+    builder = _builder(uow)
+
+    page = builder.page(builder.build("preview", "rom", 4375), 0, 50)
+
+    assert {item["rom_id"]: (item["candidate"], item["gone_from_romm"]) for item in page["items"]} == {
+        4375: (True, True),
+        4377: (False, True),
+        25135: (False, False),
+    }
+
+
+def test_the_trash_icon_offers_the_whole_game_where_every_version_of_it_is_gone() -> None:
+    uow = FakeUnitOfWork()
+    with uow:
+        uow.roms.save(_rom(4375, name="Game A (USA)", group="igdb:1217:53", fetch_id="old"))
+        uow.roms.save(_rom(4377, name="Game A (Europe)", group="igdb:1217:53", fetch_id="old"))
+        uow.roms.save(_rom(25136, name="Game B", group="igdb:1218:53", fetch_id="current"))
+        uow.platform_sync_state.save(
+            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="current")
+        )
+    builder = _builder(uow)
+
+    preview = builder.build("preview", "rom", 4375)
+    page = builder.page(preview, 0, 50)
+
+    assert preview.candidate_ids == frozenset({4375, 4377})
+    assert page["candidate_total"] == 2
+    assert {item["rom_id"] for item in page["items"]} == {4375, 4377}
+
+
+def test_a_row_carries_its_file_name_without_its_extension() -> None:
+    builder = _builder(_two_groups())
+
+    page = builder.page(builder.build("preview", "bulk", None), 0, 50)
+
+    assert {item["rom_id"]: item["fs_name_no_ext"] for item in page["items"]} == {
+        4375: "Game A",
+        25135: "Game A",
+        4376: "Game B",
+        25136: "Game B",
+    }
