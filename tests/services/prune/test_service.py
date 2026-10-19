@@ -2563,6 +2563,53 @@ async def test_a_game_found_gone_whole_with_a_version_the_preview_did_not_offer_
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "fetches,answers,scope,reason,marks",
+    [
+        pytest.param(
+            ("new", "new"),
+            ([RommNotFoundError("gone")] * 3, [RommNotFoundError("gone")] * 3),
+            "rom",
+            "another_version_gone",
+            {1: "not_found", 2: "not_found"},
+            id="trash-icon-another-version-gone",
+        ),
+        pytest.param(
+            ("new", "old"),
+            ([RommNotFoundError("gone")] * 3, [{"id": 2}] * 3),
+            "rom",
+            "version_back_on_romm",
+            {1: "not_found", 2: None},
+            id="trash-icon-version-back-on-romm",
+        ),
+        pytest.param(
+            ("old", "old"),
+            ([RommNotFoundError("gone")] * 3, [{"id": 2}] * 3),
+            "bulk",
+            "version_back_on_romm",
+            {1: "not_found", 2: None},
+            id="bulk-version-back-on-romm",
+        ),
+    ],
+)
+async def test_a_skipped_game_leaves_every_version_the_check_found_gone_marked(
+    harness, fetches, answers, scope, reason, marks
+):
+    """The next scan lists every gone version at once, the trash icon's own included, which has no stamp behind it."""
+    _seed(harness.uow, _rom(1, fetch=fetches[0], group="g"), _rom(2, fetch=fetches[1], group="g"), stamp_count=2)
+    harness.romm.outcomes[1], harness.romm.outcomes[2] = answers
+    preview = await _preview(harness, scope=scope, rom_id=1 if scope == "rom" else None)
+    await _start(harness, preview["preview_id"], remove_fully_vanished=True)
+
+    complete = await _finish(harness)
+
+    assert complete["removed_rom_ids"] == []
+    assert complete["results"][0]["reason"] == reason
+    rows = {rom_id: harness.uow.roms.get(rom_id) for rom_id in marks}
+    assert {rom_id: row.gone_from_romm if row is not None else "missing" for rom_id, row in rows.items()} == marks
+
+
+@pytest.mark.asyncio
 async def test_inline_purge_keeps_the_platform_stamp_and_still_denies_the_incremental_skip(harness):
     _seed(harness.uow, _rom(1, fetch="new"), _rom(2, fetch="new"), stamp_count=2)
     harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
