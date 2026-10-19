@@ -2,7 +2,7 @@
  * Pure decision logic and branch handlers for "what should the caller do with
  * a SaveSetupInfo response?". Two callers consume the same three-way outcome:
  * the wizard (`SlotSetupWizard`) and the launch gate
- * (`ensureTrackingConfiguredOnPage` in `launchGateOps.ts`). Anything that lives
+ * (`ensureTrackingConfiguredBigPicture` in `launchGateOps.ts`). Anything that lives
  * here can be unit-tested without rendering the component or stubbing React.
  *
  * The "server_unreachable", "not_found" and "romm_refused" branches exist

@@ -2297,10 +2297,10 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     });
   });
 
-  async function clickPlay(): Promise<void> {
+  async function clickPlay(): Promise<ReturnType<typeof render>> {
     mockCachedDetail();
-    const { findByText } = render(<CustomPlayButton appId={100} />);
-    const playBtn = await findByText("Play");
+    const result = render(<CustomPlayButton appId={100} />);
+    const playBtn = await result.findByText("Play");
     await act(async () => {
       playBtn.click();
       // Drain the gate chain (migration → tracking → core → reachability →
@@ -2311,6 +2311,7 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
       await Promise.resolve();
       await Promise.resolve();
     });
+    return result;
   }
 
   it("online allow → marks the launch skipped BEFORE RunGame and launches (C1 double-gate fix)", async () => {
@@ -2698,13 +2699,15 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
     vi.mocked(getMigrationState).mockReturnValue({ pending: true });
     vi.mocked(backend.probeReachability).mockResolvedValue({ online: true });
 
-    await clickPlay();
+    const { findByText } = await clickPlay();
 
     // The migration block short-circuits the funnel before any network step.
     expect(vi.mocked(backend.probeReachability)).not.toHaveBeenCalled();
     expect(vi.mocked(backend.preLaunchSync)).not.toHaveBeenCalled();
     expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();
     expect(vi.mocked(markLaunchSkipped)).not.toHaveBeenCalled();
+    expect(await findByText("Play")).toBeInTheDocument();
+    expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
   });
 
   it("tracking-setup abort → silent bail back to play, no launch", async () => {

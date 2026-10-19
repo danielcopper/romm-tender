@@ -39,7 +39,6 @@ import {
   logError,
 } from "../api/backend";
 import { executeRomUninstall } from "../utils/romUninstall";
-import { confirmCoreChangeIfNeeded } from "../utils/coreChange";
 import { activateRunningApp, executeStopRunningGame } from "../utils/runningGame";
 import {
   formatProgress,
@@ -76,7 +75,7 @@ import { showStopGameModal } from "./StopGameModal";
 import { showForgetDownloadModal } from "./ForgetDownloadModal";
 import { reloadGameDetail } from "../utils/gameDetailStore";
 import { markLaunchSkipped } from "../utils/launchGate";
-import { ensureTrackingConfiguredOnPage, makeLaunchGateOps } from "../utils/launchGateOps";
+import { ensureTrackingConfiguredBigPicture, makeLaunchGateOps } from "../utils/launchGateOps";
 import { runGateLoop } from "../utils/launchVerdict";
 import { noteAppRom, readGameRunning } from "../utils/sessionManager";
 import type {
@@ -633,18 +632,18 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     detach(debugLog(`CustomPlayButton: appId=${appId} not running — running the launch gate [${running.diagnostics}]`));
 
     // The press shows "checking" until the verdict is acted on, and the pre-launch
-    // sync flips it to "syncing"; an unexpected throw from the gate or a verdict's
-    // modal helper (framework-level) would otherwise leave the button frozen
-    // there. The watcher never traps the user's game; the Play-button equivalent
-    // is to reset the button to "play".
+    // sync flips it to "syncing"; an unexpected throw while acting on the verdict
+    // (from a prompt's modal helper or launch dispatch) would otherwise leave the
+    // button frozen there. The watcher never traps the user's game (bare relaunch);
+    // the Play-button equivalent is to reset the button to "play".
     setState("checking");
     try {
       const ops = makeLaunchGateOps(romId, {
         tag: "CustomPlayButton",
         toastSyncResult: true,
         onSyncStart: () => setState("syncing"),
-        ensureTrackingConfigured: () => ensureTrackingConfiguredOnPage(romId),
-        checkCoreChange: () => confirmCoreChangeIfNeeded(romId, gamepadLaunchPrompts.confirmCoreChange),
+        ensureTrackingConfigured: () => ensureTrackingConfiguredBigPicture(romId),
+        confirmCoreChange: gamepadLaunchPrompts.confirmCoreChange,
         confirmUncheckedStartingSource: gamepadLaunchPrompts.confirmUncheckedSource,
       });
       // `dispatchLaunch` marks the skip-set, so no launch from here is gated

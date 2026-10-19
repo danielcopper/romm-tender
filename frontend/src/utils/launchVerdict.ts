@@ -125,36 +125,28 @@ export async function actOnGateVerdict(
   }
 }
 
-interface GateLoopHooks extends VerdictHooks {
-  /**
-   * The verdict to act on when a gate run throws. Absent, the throw propagates to
-   * the caller — which is how a Play button resets its trigger.
-   */
-  onGateError?: (e: unknown) => GateVerdict;
-}
-
 /**
  * Run the gate for `appId` / `romId` and act on its verdict, running it again for
  * as long as the user keeps choosing "Retry" on the offline-drift prompt. Each
  * retry re-probes connectivity, so a server back online launches through the
  * normal path and one still away asks again.
+ *
+ * `runLaunchGate` fails open to `allow` on internal errors, so a gate error
+ * allows the launch. Any unexpected throw while acting on the verdict (a prompt
+ * or launch rejecting) propagates out to the caller.
  */
 export async function runGateLoop(
   appId: number,
   romId: number,
   ops: LaunchGateOps,
-  hooks: GateLoopHooks,
+  hooks: VerdictHooks,
 ): Promise<void> {
-  const gate = (): Promise<GateVerdict> => {
-    const run = runLaunchGate(appId, romId, ops);
-    return hooks.onGateError ? run.catch(hooks.onGateError) : run;
-  };
-  let verdict = await gate();
+  let verdict = await runLaunchGate(appId, romId, ops);
   // Each pass starts only after the user answered the previous verdict's prompt with "retry", so
   // the awaits are sequential by design. S9382 is raised on the two await lines, so their NOSONARs
   // must stay there; prettier-ignore stops Prettier from moving them into the bodies.
   // prettier-ignore
   while ((await actOnGateVerdict(verdict, romId, hooks)) === "retry") { // NOSONAR(typescript:S9382)
-    verdict = await gate(); // NOSONAR(typescript:S9382)
+    verdict = await runLaunchGate(appId, romId, ops); // NOSONAR(typescript:S9382)
   }
 }

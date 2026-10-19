@@ -222,33 +222,23 @@ describe("runGateLoop", () => {
     expect(hooks.launch).toHaveBeenCalledTimes(1);
   });
 
-  it("without an error policy, a gate throw reaches the caller", async () => {
-    vi.mocked(launchGate.runLaunchGate).mockRejectedValue(new Error("boom"));
-    await expect(runGateLoop(100, ROM_ID, ops, hooks)).rejects.toThrow("boom");
+  it("a throw while acting on a verdict reaches the caller", async () => {
+    vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "offline_drift" });
+    hooks.prompts.askOfflineDrift.mockRejectedValue(new Error("prompt failed"));
+
+    await expect(runGateLoop(100, ROM_ID, ops, hooks)).rejects.toThrow("prompt failed");
     expect(hooks.launch).not.toHaveBeenCalled();
   });
 
-  it("with an error policy, a gate throw is acted on as the verdict the policy answers", async () => {
-    vi.mocked(launchGate.runLaunchGate).mockRejectedValue(new Error("boom"));
-    const onGateError = vi.fn((): GateVerdict => ({ decision: "allow" }));
-
-    await runGateLoop(100, ROM_ID, ops, { ...hooks, onGateError });
-
-    expect(onGateError).toHaveBeenCalledWith(expect.objectContaining({ message: "boom" }));
-    expect(hooks.launch).toHaveBeenCalledTimes(1);
-  });
-
-  it("the error policy also covers a gate run after a Retry", async () => {
+  it("a throw while acting on a retry verdict reaches the caller", async () => {
     vi.mocked(launchGate.runLaunchGate)
       .mockResolvedValueOnce({ decision: "offline_drift" })
-      .mockRejectedValueOnce(new Error("second"));
+      .mockResolvedValueOnce({ decision: "sync_failed", message: "fail" });
     hooks.prompts.askOfflineDrift.mockResolvedValue("retry");
-    const onGateError = vi.fn((): GateVerdict => ({ decision: "abort" }));
+    hooks.prompts.confirmFallbackLaunch.mockRejectedValue(new Error("fallback prompt failed"));
 
-    await runGateLoop(100, ROM_ID, ops, { ...hooks, onGateError });
-
-    expect(onGateError).toHaveBeenCalledWith(expect.objectContaining({ message: "second" }));
-    expect(hooks.onDeclined).toHaveBeenCalledTimes(1);
+    await expect(runGateLoop(100, ROM_ID, ops, hooks)).rejects.toThrow("fallback prompt failed");
+    expect(hooks.onRetry).toHaveBeenCalledTimes(1);
     expect(hooks.launch).not.toHaveBeenCalled();
   });
 });

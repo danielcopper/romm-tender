@@ -1468,13 +1468,13 @@ check, the pre-launch sync itself (`runPreLaunchSync`) and what each verdict mea
 switched-off source toasts, resolved conflicts announce the save change to the page and then launch. A path supplies
 only what is its own:
 
-| Supplied by the path               | Play button                                                                                                                  | Launch watcher                                        |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Prompts (`LaunchPrompts`)          | `gamepadLaunchPrompts` (`frontend/src/shared/launchPrompts.ts`)                                                              | `gamepadLaunchPrompts`, from `frontend/src/index.tsx` |
-| Tracking setup                     | `ensureTrackingConfiguredOnPage` — an answer it cannot settle aborts and opens the Saves tab (`applyLaunchGateSetupOutcome`) | adopts a default silently and always proceeds         |
-| Toast for a sync that moved saves  | yes                                                                                                                          | no                                                    |
-| A start that ends without a launch | the trigger returns to Play, or to Resolve Conflict after a cancelled conflict                                               | nothing of its own; a pending migration is toasted    |
-| A gate run that throws             | the trigger returns to Play                                                                                                  | fails open: the game starts                           |
+| Supplied by the path               | Play button                                                                                                                      | Launch watcher                                        |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Prompts (`LaunchPrompts`)          | `gamepadLaunchPrompts` (`frontend/src/shared/launchPrompts.ts`)                                                                  | `gamepadLaunchPrompts`, from `frontend/src/index.tsx` |
+| Tracking setup                     | `ensureTrackingConfiguredBigPicture` — an answer it cannot settle aborts and opens the Saves tab (`applyLaunchGateSetupOutcome`) | adopts a default silently and always proceeds         |
+| Toast for a sync that moved saves  | yes                                                                                                                              | no                                                    |
+| A start that ends without a launch | the trigger returns to Play, or to Resolve Conflict after a cancelled conflict                                                   | nothing of its own; a pending migration is toasted    |
+| Acting on a verdict throws         | the trigger returns to Play                                                                                                      | fails open: the game starts (bare relaunch)           |
 
 The watcher listens on `SteamClient.Apps.RegisterForGameActionStart`, which reports a start with `action` `"LaunchApp"`
 before Steam creates the game's process. Its second argument is **not the appId but the 64-bit game ID** in decimal: for

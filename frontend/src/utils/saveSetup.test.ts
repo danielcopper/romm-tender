@@ -177,7 +177,7 @@ describe("applyLaunchGateSetupOutcome", () => {
     // a try/catch that returns "proceed" on any error, swallowing the toast
     // exception would silently flip an abort decision into a launch. Surfacing
     // the throw forces the caller to keep its try shape narrow (network call
-    // only) — see ensureTrackingConfiguredOnPage in launchGateOps.ts.
+    // only) — see ensureTrackingConfiguredBigPicture in launchGateOps.ts.
     const deps = makeLaunchGateDeps({
       toast: vi.fn().mockImplementation(() => {
         throw new Error("toast boom");

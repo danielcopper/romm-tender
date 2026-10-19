@@ -32,11 +32,9 @@ import {
   logInfo,
   logError,
 } from "../api/backend";
-import { confirmCoreChangeIfNeeded } from "./coreChange";
 import { setMigrationStatus } from "./migrationStore";
 import { getAppIdRomIdMapSnapshot, readGameRunning, refreshAppIdMap } from "./sessionManager";
 import { markLaunchSkipped, consumeLaunchSkip, LOCAL_CALL_LIMIT_MS, SERVER_CALL_LIMIT_MS } from "./launchGate";
-import type { GateVerdict } from "./launchGate";
 import { makeLaunchGateOps } from "./launchGateOps";
 import { runGateLoop, type LaunchPrompts } from "./launchVerdict";
 import { reconfirmLaunchOptions } from "./launchOptionsReconcile";
@@ -151,9 +149,10 @@ const nothingToShow = (): void => undefined;
  * Run the shared launch gate for a cancelled start and act on its verdict. The
  * start is already stopped, so every branch either relaunches or leaves it
  * stopped; with no trigger of its own to reset, of the hooks for a start that
- * ends without a launch only the migration block's shows anything. A gate throw
- * fails open to `allow` so a gate bug never traps the user's already-cancelled
- * launch.
+ * ends without a launch only the migration block's shows anything. The gate
+ * itself fails open to `allow` so a gate bug never traps the user's
+ * already-cancelled launch; an unexpected throw while acting on the verdict or
+ * relaunching is caught by the outer loop, which falls back to a bare relaunch.
  */
 async function runWatcherGate(start: CancelledStart, romId: number, prompts: LaunchPrompts): Promise<void> {
   const ops = makeLaunchGateOps(romId, {
@@ -163,15 +162,8 @@ async function runWatcherGate(start: CancelledStart, romId: number, prompts: Lau
       await ensureTrackingConfiguredWatcher(romId);
       return "proceed";
     },
-    checkCoreChange: () =>
-      confirmCoreChangeIfNeeded(
-        romId,
-        (oldLabel, newLabel) => prompts.confirmCoreChange(oldLabel, newLabel),
-        (e) => {
-          logError(`Watcher core-change check failed (assuming unchanged): ${e}`);
-        },
-      ),
-    confirmUncheckedStartingSource: () => prompts.confirmUncheckedSource(),
+    confirmCoreChange: prompts.confirmCoreChange,
+    confirmUncheckedStartingSource: prompts.confirmUncheckedSource,
   });
   await runGateLoop(start.appId, romId, ops, {
     prompts,
@@ -186,10 +178,6 @@ async function runWatcherGate(start: CancelledStart, romId: number, prompts: Lau
     onConflictCancelled: nothingToShow,
     onRetry: nothingToShow,
     onMigrationBlocked: () => showToast(MIGRATION_TOAST_BODY),
-    onGateError: (e): GateVerdict => {
-      logError(`Watcher gate threw (failing open to allow): ${e}`);
-      return { decision: "allow" };
-    },
   });
 }
 
