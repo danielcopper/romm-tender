@@ -485,10 +485,9 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
   }, []);
 
   const total = initial.total ?? items.length;
-  // The headline count is the rows this run can remove on its own. `total` also
-  // counts the siblings that are merely disclosed because a whole-game removal
-  // could still take them, and leading with that number reads as a threat to
-  // versions RomM still serves.
+  // The summary counts the rows offered for removal. `total` also counts the
+  // other versions listed beside them, and leading with that number reads as a
+  // threat to versions RomM still serves.
   const candidateTotal = initial.candidate_total ?? total;
   const games = planCleanup(items, { removeRows, removeDeadGames });
   const fileVersions = versionsDeletingFiles(games);

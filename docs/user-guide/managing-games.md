@@ -192,7 +192,9 @@ Only a confirmed 404 can be removed. Offline, timeout, authentication, server, m
 ambiguous multi-shortcut cases are skipped and reported without deleting data. A run never removes more than the
 dialog's counts: a version it finds still on RomM is kept, and where it finds every version of a game gone but the game
 holds a version the dialog did not offer for removal, it leaves the whole game as it is and says _Another version of
-this game is gone from RomM too. Scan again to review it._ — the next scan lists that version.
+this game is gone from RomM too. Scan again to review it._ — the next scan lists that version. A game the dialog showed
+as gone entirely is removed whole or not at all: where the check finds one of its versions on RomM again, the run leaves
+it as it is and says _A version of this game is back on RomM. Scan again to review it._
 
 The confirmation options apply to this run only:
 
@@ -234,11 +236,12 @@ by hand starting with `sha256sum -c checksums.sha256`. The recovery folder itsel
 it is.
 
 A vanished row carries a red trash icon at its right edge in the version picker, and activating that row opens the same
-confirmation scoped to that one version: a gone version other than the one you chose reads **Kept**, _Only the version
-you chose is removed here._ Where every version of the game is gone, it offers all of them instead, so the whole game,
-as Data Management would. A singleton vanished binding shows the same trash action as a single button, without opening
-an otherwise empty picker. The vanished version itself remains non-switchable either way — selecting it can only ever
-start the cleanup, never bind the shortcut to it.
+confirmation scoped to that one version, offered for removal because RomM has just answered that it no longer has it: a
+gone version other than the one you chose reads **Kept**, _Only the version you chose is removed here._, or the
+shortcut's reason where your shortcut is on it. Where every version of the game is gone, it offers all of them instead,
+so the whole game, as Data Management would. A singleton vanished binding shows the same trash action as a single
+button, without opening an otherwise empty picker. The vanished version itself remains non-switchable either way —
+selecting it can only ever start the cleanup, never bind the shortcut to it.
 
 While a cleanup runs, the Gone from RomM pane shows a progress bar under the entry point — the game being worked on, the
 phase in words (checking with RomM, backing up, backup complete, removing the Steam shortcut, removing local data, done)

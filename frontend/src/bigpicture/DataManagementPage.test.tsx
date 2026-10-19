@@ -203,7 +203,7 @@ describe("DataManagementPage", () => {
       expect(view.getByTestId("data-row-recovery-bundles").textContent).toContain("2");
     });
 
-    it("reads `scan` on the two rows whose count costs a round trip", async () => {
+    it("reads `scan` on the two rows whose count costs a backend scan", async () => {
       const view = await renderPage();
 
       expect(view.getByTestId("data-row-grid-images").textContent).toContain("scan");

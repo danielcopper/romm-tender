@@ -146,8 +146,11 @@ outside this run's candidates got a 404 that stands under the run's proof tiers 
 `canary_user`; an `unconfirmed_server` 404 never does) while the namespace held, the run marks it `not_found` and
 removes nothing it was not asked to remove; the next scan lists it. Where that leaves every version of a game gone, the
 whole-game removal would take the version the preview never offered, so the group is skipped whole as
-`another_version_gone`, _Another version of this game is gone from RomM too. Scan again to review it._ A row that
-already carries a mark keeps it, and a candidate gains none, since its stamp or its mark already lists it.
+`another_version_gone`, _Another version of this game is gone from RomM too. Scan again to review it._ The other way
+round, where the preview offered every version of a game, so the dialog showed it as gone entirely, and the check finds
+one of them on RomM again, the game is removed whole or not at all: the group is skipped as `version_back_on_romm`, _A
+version of this game is back on RomM. Scan again to review it._, with either whole-game option. A row that already
+carries a mark keeps it, and a candidate gains none, since its stamp or its mark already lists it.
 
 The mark goes when RomM is seen serving the row again: a sync unit commits it (a commit writes the row as RomM delivered
 it, with no mark), or an apply's exact-id question gets the ROM back. It goes with the row when the cleanup removes it.
@@ -160,20 +163,22 @@ version is still on RomM, stays marked and stays listed. A marked row is never a
 keeps its stamp, so its rows still carry the generation the canary read looks for, and asking one would 404 and leave a
 fully gone game unprovable.
 
-The preview discloses **every** member of an affected group, not only the candidates. A member carrying the platform
-stamp's current fetch generation is not evidence that RomM still serves it: whole-game removal is decided by the run's
-fresh probe of every id in the group, never by the stored generation, so a generation-current row can still be taken and
-may never be deleted unseen. What the generation does establish is that the row was there at the last completed fetch,
-so the projection separates the two classes rather than flattening them — candidates sort first, the page carries a
-`candidate_total` beside `total`, and the dialog leads with the candidate count.
+The preview lists **every** member of an affected group, not only the candidates, so the dialog can say what happens to
+each game; only the rows it offers — the candidates — are ever removed, by the two skips above. A member carrying the
+platform stamp's current fetch generation is not evidence that RomM still serves it, which is why the run probes every
+id in the group afresh rather than trusting the stored generation. What the generation does establish is that the row
+was there at the last completed fetch, so the projection separates the two classes rather than flattening them —
+candidates sort first, the page carries a `candidate_total` beside `total`, and the dialog leads with the candidate
+count.
 
 Each row also carries what the dialog predicts its outcome from: `gone_from_romm` (above), `bound` (a Steam shortcut is
 on that version, beside the group's `bound_count`) and `fs_name_no_ext` (its file name without the extension, the stem
 the sync rebinds onto the same dump by). The dialog renders every row with either option on or off and says per row what
 the run would do; the run's own check still decides. A run never removes more than that prediction: a candidate RomM
-still serves is kept, and a game found gone whole that holds a row the preview did not offer is skipped (above). Every
-page is still fetched, and the completeness gate before confirmation is unchanged. What the dialog shows is
-[QAM Panel](qam-panel.md#data-management), "The removed-games review".
+still serves is kept, a game found gone whole that holds a row the preview did not offer is skipped, and so is a game
+the preview offered whole that has a version back on RomM (above). Every page is still fetched, and the completeness
+gate before confirmation is unchanged. What the dialog shows is [QAM Panel](qam-panel.md#data-management), "The
+removed-games review".
 
 Cleanup deliberately does **not** clear the platform's `platform_sync_state` completion stamp, nor revoke its skip. It
 does not need to. The incremental skip compares RomM's visible id set with the checksum the stamp recorded
@@ -456,7 +461,9 @@ There is no automatic restore. A bundle is machine-readable and documented for f
 
 Exclusive current saves leave the emulator directory only through the existing `.romm-backup` quarantine funnel. A save
 path shared with any remaining local version — installed **or not** — is copied into the bundle but never removed.
-Unknown or unsafe-to-resolve save locations are recorded, left untouched, and do not block pruning the row.
+Unknown or unsafe-to-resolve save locations are recorded, left untouched, and do not block pruning the row; that warning
+is given only for a downloaded version, since a version with no downloaded files has no save files of its own for the
+cleanup to move.
 
 Save **states** are entirely untouched and remain unsupported. Extending save-state support must extend this recovery
 contract before purge is allowed to remove state files.

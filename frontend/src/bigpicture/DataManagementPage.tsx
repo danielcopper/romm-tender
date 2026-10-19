@@ -29,9 +29,10 @@ import { useDataPage, type DataPageState, type PageRead, type ScannedCount } fro
  * What a row's count slot says: a figure, `—` for a read that failed, or `null`
  * while the read is still in flight, which the slot draws as a spinner.
  *
- * A figure that costs a round trip or a backend scan reads `scan` until the
- * reader asks for it, because focus selects on this layout: a figure fetched on
- * selection would put that round trip under every row the stick passes. From
+ * A figure that costs a backend scan, which sends no request to RomM, reads
+ * `scan` until the reader asks for it, because focus selects on this layout: a
+ * figure fetched on selection would put that scan under every row the stick
+ * passes. From
  * the press on it is read like any other figure; what sends it back to `scan`
  * is stated in `docs/architecture/qam-panel.md`, section Data Management.
  *

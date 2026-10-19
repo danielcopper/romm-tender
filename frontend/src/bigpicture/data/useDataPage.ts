@@ -9,7 +9,8 @@
  * Which figures are fetched and which are waited for is the page's rule rather
  * than a pane's: the inventory read and the shortcut count are asked once when
  * the page opens, the non-Steam scan is Steam's own store and costs nothing, and
- * the two that cost a round trip read `scan` until the reader presses for them.
+ * the two that cost a backend scan, which sends no request to RomM, read `scan`
+ * until the reader presses for them.
  *
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Data
  * Management.

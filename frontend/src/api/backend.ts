@@ -957,9 +957,9 @@ export interface PrunePreviewResult {
   items?: PrunePreviewItem[];
   offset?: number;
   limit?: number;
-  /** Every disclosed row: the candidates plus the siblings a whole-game removal could still take. */
+  /** Every listed row: the candidates and the other versions of their games. */
   total?: number;
-  /** Only the rows this run can remove on its own — the count the dialog leads with. */
+  /** Only the rows offered for removal — the count the dialog leads with. */
   candidate_total?: number;
   free_bytes?: number;
   recovery_root?: string | null;

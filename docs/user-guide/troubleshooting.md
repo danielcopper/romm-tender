@@ -716,14 +716,14 @@ it, and whatever can be done with it. Most rows offer one action, Other non-Stea
 whitelist, and Recovery bundles offers none at all. The six rows are **Tender's shortcuts**, **Installed ROMs**, **Grid
 images**, **Other non-Steam games**, **Gone from RomM** and **Recovery bundles**.
 
-A count shows a small spinner while it is being read, and a dash if it could not be read. Two counts cost a server round
-trip or a backend scan, so they read **scan** until you press for them: Grid images and Gone from RomM; while that scan
-runs, its row shows the spinner and the button says it is scanning. When a count could not be read, its pane says so and
-how to try again: open the page again for most rows, or press the scan button again for a scan that failed. Grid images
-keeps what its scan found until a removal changes it (see [Grid images](#grid-images)); Gone from RomM keeps it until a
-cleanup run finishes — which is what changes the number — and then asks to be scanned again. Every destructive action
-asks first — press once to see the prompt, press again to confirm. The per-platform actions — removing one platform's
-shortcuts, deleting its save files, deleting its BIOS files — live in
+A count shows a small spinner while it is being read, and a dash if it could not be read. Two counts cost a backend
+scan, which sends no request to RomM, so they read **scan** until you press for them: Grid images and Gone from RomM;
+while that scan runs, its row shows the spinner and the button says it is scanning. When a count could not be read, its
+pane says so and how to try again: open the page again for most rows, or press the scan button again for a scan that
+failed. Grid images keeps what its scan found until a removal changes it (see [Grid images](#grid-images)); Gone from
+RomM keeps it until a cleanup run finishes — which is what changes the number — and then asks to be scanned again. Every
+destructive action asks first — press once to see the prompt, press again to confirm. The per-platform actions —
+removing one platform's shortcuts, deleting its save files, deleting its BIOS files — live in
 **[Library › Platforms](bios-management.md#library-platforms)**, on the platform's own pane.
 
 While a library sync is running (or cancelling), the shortcut and ROM removals and the grid-image cleanup are
