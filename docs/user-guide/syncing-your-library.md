@@ -109,9 +109,10 @@ tiles without touching the shortcuts. A platform Tender has to read in full agai
 reads "No shortcut changes — recording what RomM has now." and offers **Apply Sync** as well: applying records what RomM
 serves on that platform, so the next sync can skip it again. You see it once after the update that introduced this
 check, while every platform is read in full one time; after a game was hidden or deleted in RomM; after a game was
-edited in RomM shortly before the last sync; and after a sync that stopped before it finished. With **Skip preview** on
-there is no preview to show it in: the sync records what RomM has now by itself. Only when there is truly nothing to do
-does the page read "Everything is up to date."
+changed in RomM in a way none of its shortcuts shows, such as a metadata edit or a rescan, since the last sync or
+shortly before it; and after a sync that stopped before it finished. With **Skip preview** on there is no preview to
+show it in: the sync records what RomM has now by itself. Only when there is truly nothing to do does the page read
+"Everything is up to date."
 
 A preview stays good for **30 minutes**, and it belongs to Tender rather than to the page you are looking at: you can
 leave for the settings or a submenu, come back, and the same preview is still there with **Apply Sync** ready. That

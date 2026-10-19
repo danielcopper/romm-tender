@@ -1025,10 +1025,11 @@ order puts the newest first, the index at `limit=1` equals the id set of the ful
 and timestamps are whole seconds with `+00:00`.
 
 **A full fetch whose stamp no longer matches is re-stamped through an Apply.** The stamp is written only by an apply,
-and a hidden ROM or an `updated_at` inside the margin changes no shortcut, so a preview with nothing else to do would
-short-circuit on "no changes" and the platform would be fetched in full on every sync. The preview therefore counts such
-a platform in `restamp_platform_count` (below, "Unstamped-platform re-run"), and the gated apply's 0-delta final chunk
-writes the fresh stamp.
+and many of the changes that make the skip refuse a stamp change no shortcut — an edit that moves `updated_at` but no
+field a shortcut carries (a metadata match, a rescan that rewrites the row), a hidden ROM, an `updated_at` inside the
+margin — so a preview with nothing else to do would short-circuit on "no changes" and the platform would be fetched in
+full on every sync. The preview therefore counts such a platform in `restamp_platform_count` (below, "Unstamped-platform
+re-run"), and the gated apply's 0-delta final chunk writes the fresh stamp.
 
 **A bound row the stamp's fetch did not return no longer holds the skip
 ([#743](https://github.com/danielcopper/romm-tender/issues/743) D10).** Such a row is a version gone from RomM —
