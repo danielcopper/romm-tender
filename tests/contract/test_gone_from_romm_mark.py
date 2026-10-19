@@ -391,8 +391,8 @@ async def test_a_404_the_run_could_not_confirm_marks_nothing(harness):
     assert await _listed(harness) == {30}
 
 
-async def test_a_candidate_the_run_proves_gone_and_keeps_gains_no_mark(harness):
-    """40 is a stamp candidate the run keeps (its shortcut is on it, 41 is on RomM); the stamp already lists it."""
+async def test_a_kept_candidate_the_run_proves_gone_carries_the_mark(harness):
+    """40 is a stamp candidate the run keeps (its shortcut is on it, 41 is on RomM); the run still marks it gone."""
     _seed_group_member(harness, 40, app_id=7040)
     _seed_group_member(harness, 41)
     with harness.uow_factory() as uow:
@@ -410,7 +410,7 @@ async def test_a_candidate_the_run_proves_gone_and_keeps_gains_no_mark(harness):
     payload = await _run_the_cleanup(harness)
 
     assert payload["results"][0]["reason"] == "shortcut_version_kept"
-    assert _mark(harness, 40) is None
+    assert _mark(harness, 40) == "not_found"
     assert await _listed(harness) == {40}
 
 
