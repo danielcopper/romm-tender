@@ -152,7 +152,7 @@ const nothingToShow = (): void => undefined;
  * ends without a launch only the migration block's shows anything. The gate
  * itself fails open to `allow` so a gate bug never traps the user's
  * already-cancelled launch; an unexpected throw while acting on the verdict or
- * relaunching is caught by the outer loop, which falls back to a bare relaunch.
+ * relaunching is caught by the listener's own catch, which falls back to a bare relaunch.
  */
 async function runWatcherGate(start: CancelledStart, romId: number, prompts: LaunchPrompts): Promise<void> {
   const ops = makeLaunchGateOps(romId, {

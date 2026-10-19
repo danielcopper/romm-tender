@@ -1324,16 +1324,18 @@ describe("launchInterceptor — full funnel watcher", () => {
   });
 
   describe("error fallback", () => {
-    it("relaunches (never traps) when the gate throws", async () => {
-      vi.mocked(launchGate.runLaunchGate).mockRejectedValue(new Error("boom"));
+    it("relaunches (never traps) when acting on the verdict throws", async () => {
+      vi.mocked(launchGate.runLaunchGate).mockResolvedValue({ decision: "offline_drift" });
+      prompts.askOfflineDrift.mockRejectedValue(new Error("boom"));
 
       register();
       const handler = captureHandler();
       handler(77, GAME_ID, "LaunchApp", DEEP_LINK_SOURCE);
       await flush();
 
-      // The interceptor's own `.catch(() => allow)` on runLaunchGate maps a
-      // throw to the allow verdict → relaunch. RunGame must have fired.
+      // A throw while acting on the verdict propagates out of the gate loop;
+      // the listener's own catch logs it and falls back to a bare relaunch.
+      expect(backend.logError).toHaveBeenCalledWith("Launch interceptor error: Error: boom");
       expect(runGameMock()).toHaveBeenCalledWith(GAME_ID, "", -1, 100);
     });
   });
@@ -1489,7 +1491,7 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("pre-launch sync failed"));
     });
 
-    it("preLaunchSync: a sync that moved saves toasts nothing — an intercepted start launches silently on success", async () => {
+    it("preLaunchSync: a caught start toasts nothing about a sync that moved saves", async () => {
       const ops = await captureOps();
 
       vi.mocked(backend.preLaunchSync).mockResolvedValueOnce({

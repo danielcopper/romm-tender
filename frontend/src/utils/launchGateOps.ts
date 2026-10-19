@@ -1,9 +1,8 @@
 /**
  * The gate's inputs ({@link LaunchGateOps}) for one ROM — the parts every launch
- * path asks the same way, built once here. A path supplies the three steps that
- * put something to the user, since only it knows where it may ask: the tracking
- * setup, the core-change question and the question asked where the starting
- * source could not be checked.
+ * path asks the same way, built once here. A path supplies what puts something
+ * to the user, since only it knows where it may ask: its tracking setup, and the
+ * prompts for a core change and for a starting source that could not be checked.
  */
 
 import {
@@ -32,11 +31,7 @@ import { boundedOr, withTimeout } from "./withTimeout";
 interface PreLaunchSyncOptions {
   /** Prefixes every log line, naming the launch path. */
   tag: string;
-  /**
-   * Toast what a successful sync moved (`saveSyncToastBody`). An automatic
-   * background start (the launch watcher) passes `false` so a clean launch into
-   * gameplay is silent; an explicit start through Tender's Play button passes `true`.
-   */
+  /** Whether a successful sync that moved saves is toasted (`saveSyncToastBody`). */
   toastSyncResult: boolean;
 }
 
