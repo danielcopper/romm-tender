@@ -61,23 +61,21 @@ def _counted(member_names: Iterable[str]) -> list[str]:
     ]
 
 
-def unpacked_name(name: str, prefix: str, ignored: frozenset[str] = frozenset()) -> str:
-    """Where member *name* lands in the folder a zip wrapped in *prefix* unpacks into, or ``""`` for nowhere.
+def unpacked_name(name: str, prefix: str, *, single_zip: bool = False) -> str:
+    """Where member *name* lands in the folder its zip unpacks into, or ``""`` for nowhere.
 
-    The wrapper and any separator left after it come off, so ``Game//Game.bin``
-    lands as ``Game.bin``. Nowhere: a member under one of the *ignored* top
-    folders, and — with a prefix — a directory-only entry, the wrapper's own
-    included, which would otherwise land as an empty file where its name ends
-    in a ``\\``. With no prefix and nothing ignored, the default and a
-    multi-file ROM's zip, every name lands as it is.
+    *prefix* is the wrapper folder (:func:`wrapper_prefix`): it and any
+    separator left after it come off, so ``Game//Game.bin`` lands as
+    ``Game.bin`` and the wrapper's own entry lands nowhere. Read as a user's
+    single zip (*single_zip*), a member under ``IGNORED_TOP_FOLDERS`` lands
+    nowhere, and so does a directory-only entry named with a ``\\``, which
+    ``zipfile`` reads as an empty file; one named with ``/`` stays a folder,
+    wrapped or not. With neither — a multi-file ROM's zip — every name lands
+    as it is.
     """
-    if _top_folder(name) in ignored:
+    if single_zip and (_top_folder(name) in IGNORED_TOP_FOLDERS or name.endswith("\\")):
         return ""
-    if not prefix:
-        return name
-    if name[-1:] in _SEPARATORS:
-        return ""
-    return name.removeprefix(prefix).lstrip("/\\")
+    return name.removeprefix(prefix).lstrip("/\\") if prefix else name
 
 
 def is_zip_name(name: str) -> bool:
@@ -126,7 +124,7 @@ def holds_disc_image(member_names: Iterable[str]) -> bool:
     prefix = wrapper_prefix(names)
     return any(
         not _SEPARATORS & set(name) and os.path.splitext(name)[1].casefold() in DISC_IMAGE_EXTENSIONS
-        for name in (unpacked_name(full, prefix) for full in names)
+        for name in (unpacked_name(full, prefix, single_zip=True) for full in names)
     )
 
 
@@ -146,7 +144,7 @@ def unpacked_manifest(manifest: tuple[ServerFile, ...]) -> tuple[ServerFile, ...
         prefix = wrapper_prefix(member.name for member in entry.members)
         counted = set(_counted(member.name for member in entry.members))
         for member in entry.members:
-            rel_path = unpacked_name(member.name, prefix)
+            rel_path = unpacked_name(member.name, prefix, single_zip=True)
             if member.name not in counted or not rel_path:
                 continue
             unpacked.append(

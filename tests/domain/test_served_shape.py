@@ -9,7 +9,6 @@ import pytest
 from domain.rom_adoption import ServerFile, server_manifest
 from domain.rom_candidates import DIR, FILE
 from domain.served_shape import (
-    IGNORED_TOP_FOLDERS,
     holds_disc_image,
     is_zip_name,
     listed_unpacked_bytes,
@@ -352,15 +351,22 @@ class TestUnpackedName:
     """Where one member lands (#910)."""
 
     def test_the_wrapper_and_a_doubled_separator_come_off(self):
-        assert unpacked_name("Game//Game.bin", "Game/") == "Game.bin"
+        assert unpacked_name("Game//Game.bin", "Game/", single_zip=True) == "Game.bin"
 
-    @pytest.mark.parametrize("name", ["Extras\\", "Game/", "Game/sub/"], ids=["backslash entry", "wrapper", "nested"])
-    def test_a_folder_entry_lands_nowhere_under_a_prefix(self, name):
-        assert unpacked_name(name, "Game/") == ""
+    @pytest.mark.parametrize("prefix", ["Game/", ""], ids=["wrapped", "flat"])
+    def test_a_folder_entry_named_with_a_backslash_lands_nowhere_in_a_single_zip(self, prefix):
+        assert unpacked_name(f"{prefix}Extras\\", prefix, single_zip=True) == ""
 
-    def test_an_ignored_folder_lands_nowhere_when_asked(self):
-        assert unpacked_name("__MACOSX/Game/._Game.cue", "Game/", IGNORED_TOP_FOLDERS) == ""
+    @pytest.mark.parametrize("prefix", ["Game/", ""], ids=["wrapped", "flat"])
+    def test_a_folder_entry_named_with_a_slash_stays_a_folder(self, prefix):
+        assert unpacked_name(f"{prefix}saves/", prefix, single_zip=True) == "saves/"
+
+    def test_the_wrappers_own_entry_lands_nowhere(self):
+        assert unpacked_name("Game/", "Game/", single_zip=True) == ""
+
+    def test_finders_folder_lands_nowhere_in_a_single_zip(self):
+        assert unpacked_name("__MACOSX/Game/._Game.cue", "Game/", single_zip=True) == ""
 
     @pytest.mark.parametrize("name", ["__MACOSX/Game/._Game.cue", "Extras\\", "Game/Game.cue"])
-    def test_by_default_without_a_prefix_every_name_lands_as_it_is(self, name):
+    def test_a_multi_file_zip_places_every_name_as_it_is(self, name):
         assert unpacked_name(name, "") == name

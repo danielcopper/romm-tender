@@ -29,7 +29,7 @@ from domain.rom_files import (
     is_multi_file_download,
     needs_m3u,
 )
-from domain.served_shape import IGNORED_TOP_FOLDERS, holds_disc_image, is_zip_name, served_shapes, wrapper_prefix
+from domain.served_shape import holds_disc_image, is_zip_name, served_shapes, wrapper_prefix
 
 if TYPE_CHECKING:
     import logging
@@ -110,7 +110,7 @@ class DownloadUnpacker:
             reserved_bytes=reserved_bytes,
             decode_names=True,
             strip_prefix="",
-            ignored_top_folders=frozenset(),
+            single_zip=False,
         )
 
     def finish_single(
@@ -150,7 +150,7 @@ class DownloadUnpacker:
                 reserved_bytes=reserved_bytes,
                 decode_names=False,
                 strip_prefix=wrapper_prefix(member["name"] for member in members),
-                ignored_top_folders=IGNORED_TOP_FOLDERS,
+                single_zip=True,
             )
             if error is None:
                 self._remove_replaced_file(target_path)
@@ -210,7 +210,7 @@ class DownloadUnpacker:
         reserved_bytes: int,
         decode_names: bool,
         strip_prefix: str,
-        ignored_top_folders: frozenset[str],
+        single_zip: bool,
     ) -> tuple[str | None, str | None]:
         """Unpack the downloaded *archive* into *extract_dir* and record the folder as the install.
 
@@ -228,9 +228,9 @@ class DownloadUnpacker:
         a literal ``%20`` included. *strip_prefix* is the folder a user's zip
         wraps all of its content in (``wrapper_prefix``), which is left out so
         the content lands as an unwrapped zip's would, and the ES-DE collapse
-        finds its launch file at the top; *ignored_top_folders* are not
-        unpacked at all (``IGNORED_TOP_FOLDERS``). A multi-file ROM's zip passes
-        neither. Too little space raises
+        finds its launch file at the top; *single_zip* leaves out what a user's
+        zip carries beside its content (``unpacked_name``). A multi-file ROM's
+        zip passes neither. Too little space raises
         :class:`NotEnoughSpaceToUnpack` before anything is written, with the
         archive left where it is for a retry. ``None`` — a file that would not
         open as a zip — skips the check, and the extraction then raises. Any
@@ -265,7 +265,7 @@ class DownloadUnpacker:
                 folder,
                 progress_callback=progress_callback,
                 strip_prefix=strip_prefix,
-                ignored_top_folders=ignored_top_folders,
+                single_zip=single_zip,
             )
             self._download_file_store.remove_file(archive)
             if decode_names:

@@ -340,7 +340,7 @@ class DownloadFileStore(Protocol):
         safe_root: str,
         progress_callback: Callable[[int, int], None] | None = None,
         strip_prefix: str = "",
-        ignored_top_folders: frozenset[str] = frozenset(),
+        single_zip: bool = False,
     ) -> None:
         """Extract *archive_path* into *dest_dir* with ZIP-slip protection.
 
@@ -350,8 +350,8 @@ class DownloadFileStore(Protocol):
         within *safe_root* before extracting.
 
         *strip_prefix* is the one folder a zip wraps its whole content in
-        (``wrapper_prefix``) and *ignored_top_folders* the top-level folders
-        left out (``IGNORED_TOP_FOLDERS``); each member lands where
+        (``wrapper_prefix``) and *single_zip* reads the archive as a user's
+        single zip rather than RomM's own; each member lands where
         ``unpacked_name`` (``domain/served_shape.py``) places it for the two,
         and the slip check runs on that name, where the member actually lands.
 

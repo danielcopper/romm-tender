@@ -1081,13 +1081,11 @@ class TestExtractingWithoutTheWrapperFolder:
         dest = tmp_path / "out"
         dest.mkdir()
 
-        DownloadFileAdapter().extract_zip(
-            str(archive), str(dest), str(tmp_path), strip_prefix="Game/", ignored_top_folders=frozenset({"__MACOSX"})
-        )
+        DownloadFileAdapter().extract_zip(str(archive), str(dest), str(tmp_path), strip_prefix="Game/", single_zip=True)
 
         assert [p.name for p in dest.iterdir()] == ["Game.cue"]
 
-    def test_without_a_prefix_or_ignored_folders_every_name_lands_as_it_is(self, tmp_path):
+    def test_a_multi_file_zip_places_every_name_as_it_is(self, tmp_path):
         archive = tmp_path / "Game.zip"
         with zipfile.ZipFile(archive, "w") as zf:
             zf.writestr("Game/Game.cue", b"FILE")
@@ -1101,3 +1099,18 @@ class TestExtractingWithoutTheWrapperFolder:
             "Game/Game.cue",
             "__MACOSX/Game/._Game.cue",
         ]
+
+    @pytest.mark.parametrize("prefix", ["Game/", ""], ids=["wrapped", "flat"])
+    def test_a_single_zip_keeps_a_slash_folder_and_drops_a_backslash_entry(self, tmp_path, prefix):
+        archive = tmp_path / "Game.zip"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr(f"{prefix}Game.cue", b"FILE")
+            zf.writestr(f"{prefix}saves/", b"")
+            zf.writestr(zipfile.ZipInfo(f"{prefix}Extras\\"), b"")
+        dest = tmp_path / "out"
+        dest.mkdir()
+
+        DownloadFileAdapter().extract_zip(str(archive), str(dest), str(tmp_path), strip_prefix=prefix, single_zip=True)
+
+        assert sorted(p.name for p in dest.iterdir()) == ["Game.cue", "saves"]
+        assert (dest / "saves").is_dir()

@@ -344,7 +344,7 @@ class DownloadFileAdapter:
         safe_root: str,
         progress_callback: Callable[[int, int], None] | None = None,
         strip_prefix: str = "",
-        ignored_top_folders: frozenset[str] = frozenset(),
+        single_zip: bool = False,
     ) -> None:
         """Extract *archive_path* into *dest_dir* with ZIP-slip protection.
 
@@ -353,7 +353,7 @@ class DownloadFileAdapter:
         writing any byte. Raises ``ValueError`` on any escape attempt.
 
         Every member lands where ``unpacked_name`` (``domain/served_shape.py``)
-        places it for *strip_prefix* and *ignored_top_folders*, and the check
+        places it for *strip_prefix* and *single_zip*, and the check
         above runs on that name.
 
         When *progress_callback* is supplied it is invoked with
@@ -369,7 +369,7 @@ class DownloadFileAdapter:
             raise ValueError(f"Extract directory would be outside safe root: {dest_dir}")
         with zipfile.ZipFile(archive_path, "r") as zf:
             placed = {
-                member.filename: unpacked_name(member.filename, strip_prefix, ignored_top_folders)
+                member.filename: unpacked_name(member.filename, strip_prefix, single_zip=single_zip)
                 for member in zf.infolist()
             }
             members = [member for member in zf.infolist() if placed[member.filename]]
