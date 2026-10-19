@@ -1124,7 +1124,7 @@ class TestARefusedKey:
             # finishes inside run_in_executor's submit, as one can while a new
             # pool thread starts, answers a future that is already done
             # (asyncio.futures._chain_future sets it at once on the loop's own
-            # thread, CPython 3.13), and its worker would then refuse the key
+            # thread, from CPython 3.13), and its worker would then refuse the key
             # before the other worker had taken anything.
             def ready() -> bool:
                 return 2 in job.source.fetched if rom_id == 1 else job.service._key_refused

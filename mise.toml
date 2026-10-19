@@ -1,7 +1,7 @@
 [tools]
 node = "24"      # major pin — "lts" is a moving alias that silently jumps majors; CI uses node 24
 pnpm = "10.29.3" # exact — must match frontend/package.json "packageManager"; bump both together
-python = "3.13"  # why 3.13, and every other copy: docs/contributing/dependency-management.md
+python = "3.14"  # why 3.14, and every other copy: docs/contributing/dependency-management.md
 uv = "0.10.2"    # exact — uv creates the venv AND compiles the dependency locks; pin so the local resolver == the lock author
 deno = "2.8"     # minor pin — deno fmt is a formatter; a version jump can reformat Markdown (the CI drift we're killing)
 
@@ -17,10 +17,14 @@ description = "Recompile the pinned Python dependency locks from their sources (
 # `--output-file=` (not `-o`): Renovate's pip-compile manager parses the uv
 # command recorded in each lock header and only recognizes the long `--output-file`
 # form with an `=`. `-o` makes it bail with "Option -o not supported (yet)", so it
-# can't recompile the lock on a dependency-update PR.
+# can't recompile the lock on a dependency-update PR. `--python-version=` likewise:
+# the locks resolve for the oldest Python Tender supports rather than the
+# toolchain's, Renovate reads the version it recompiles with from that option, and
+# it refuses the option spelled without the `=` (`throwForNoEqualSignInOptionWithArgument`
+# in its lib/modules/manager/pip-compile/common.ts).
 run = [
-    "uv pip compile requirements-dev.txt --output-file=requirements-dev.lock",
-    "uv pip compile docs/requirements.txt --output-file=docs/requirements.lock",
+    "uv pip compile requirements-dev.txt --python-version=3.12 --output-file=requirements-dev.lock",
+    "uv pip compile docs/requirements.txt --python-version=3.12 --output-file=docs/requirements.lock",
 ]
 
 [tasks.build]
@@ -104,7 +108,7 @@ description = "Run the CI battery locally in one command — every PR check in c
 # but the steps named under "Full CI gate", `gate:frontend-test` the
 # `frontend-test` job (`pnpm test` stands in for CI's `pnpm test:coverage` —
 # pass/fail parity), and `gate:markdown-format` the `markdown-format` job.
-# Omitted: `test-3.14` and the two jobs that feed Sonar (see "Full CI gate" in
+# Omitted: `test-3.12`, `test-3.13` and the two jobs that feed Sonar (see "Full CI gate" in
 # docs/contributing/development.md).
 depends = [
     "test",
