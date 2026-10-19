@@ -12,7 +12,7 @@ import pytest
 
 from host.inject import machine
 from host.inject.machine import decky_loader_is_serving, read_steam_build, terminate_steam_webhelper
-from tests.host.conftest import close_listener, free_port
+from tests.host.conftest import close_at_once, close_listener, free_port
 
 MANIFEST = '"ubuntu12"\n{\n\t"version"\t\t"1788652215"\n\t"tenfoot_images_all"\n\t{\n\t}\n}\n'
 
@@ -86,7 +86,7 @@ class TestAskingWhetherDeckyIsServing:
         assert await decky_loader_is_serving(free_port()) is False
 
     async def test_a_port_something_answers_on_is_read_as_the_loader(self):
-        server = await asyncio.start_server(lambda r, w: None, host="127.0.0.1", port=0)
+        server = await asyncio.start_server(close_at_once, host="127.0.0.1", port=0)
         port = server.sockets[0].getsockname()[1]
         try:
             assert await decky_loader_is_serving(port) is True

@@ -28,7 +28,7 @@ from host.runtime import AlreadyRunningError, BackendBuild, _where_the_running_o
 from host.single_instance import PortFile, SingleInstanceLock
 from host.status import HostStatus
 from lib.websocket_frames import OPCODE_CLOSE
-from tests.host.conftest import FakeEndpoints, close_listener, free_port
+from tests.host.conftest import FakeEndpoints, close_at_once, close_listener, free_port
 from tests.host.inject.fake_debugger import FakeDebugger, FakePage, FakeTarget
 from tests.host.ws_client import WsTestClient, http_get
 
@@ -244,7 +244,7 @@ class TestWhatTheRefusalTells:
     """
 
     async def test_a_port_that_answers_is_named_as_the_running_backend(self, tmp_path):
-        listener = await asyncio.start_server(lambda r, w: None, host="127.0.0.1", port=0)
+        listener = await asyncio.start_server(close_at_once, host="127.0.0.1", port=0)
         port = listener.sockets[0].getsockname()[1]
         note = PortFile(str(tmp_path / "port"))
         note.write(port)

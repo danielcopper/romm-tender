@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import socket
+import sys
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -131,14 +132,23 @@ async def squat_run(count: int) -> tuple[int, list[asyncio.Server]]:
     raise AssertionError(f"no run of {count + 1} consecutive free loopback ports")
 
 
+def close_at_once(_reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    """A listener's handler that keeps nothing it accepts, for a test that only needs a port answered."""
+    writer.close()
+
+
 async def close_listener(server: asyncio.Server) -> None:
     """Close a server something may still be connecting to, and every connection it holds.
 
     The same order as :meth:`host.server.HostServer.stop`, for the reasons stated there.
+    Below 3.13 ``asyncio.Server`` has no ``close_clients()``, so a listener closed here
+    holds no connection by then: its handler is :func:`close_at_once`, or it closes
+    its own connections first, as ``FakeDebugger.stop`` does.
     """
     await asyncio.sleep(0)
     server.close()
-    server.close_clients()
+    if sys.version_info >= (3, 13):
+        server.close_clients()
     await server.wait_closed()
 
 
