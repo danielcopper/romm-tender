@@ -117,6 +117,10 @@ class PreviewBuilder:
             rows = list(uow.roms.iter_all())
             installs = {install.rom_id: install for install in uow.rom_installs.iter_all()}
             gone_ids = _gone_from_romm_ids(uow, rows)
+            if scope == "rom" and explicit_rom_id is not None:
+                # The version picker offers this cleanup only after RomM answered
+                # the row with a 404, which no stamp or mark has to record yet.
+                gone_ids.add(explicit_rom_id)
             candidate_ids = _explicit_candidates(rows, gone_ids, explicit_rom_id) if scope == "rom" else gone_ids
 
             relevant_groups = [

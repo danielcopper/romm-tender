@@ -271,3 +271,38 @@ def test_a_row_carries_its_file_name_without_its_extension() -> None:
         4376: "Game B",
         25136: "Game B",
     }
+
+
+def test_the_trash_icon_offers_its_version_as_gone_while_its_platforms_last_fetch_still_holds_it() -> None:
+    """The picker offers the trash only after a live 404, which the stamp and the marks do not know of yet."""
+    uow = FakeUnitOfWork()
+    with uow:
+        uow.roms.save(_rom(4375, name="Game A (USA)", group="igdb:1217:53", fetch_id="current"))
+        uow.roms.save(_rom(25135, name="Game A (Japan)", group="igdb:1217:53", fetch_id="current"))
+        uow.platform_sync_state.save(
+            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=2, fetch_id="current")
+        )
+    builder = _builder(uow)
+
+    page = builder.page(builder.build("preview", "rom", 4375), 0, 50)
+
+    assert {item["rom_id"]: (item["candidate"], item["gone_from_romm"]) for item in page["items"]} == {
+        4375: (True, True),
+        25135: (False, False),
+    }
+    assert page["candidate_total"] == 1
+
+
+def test_the_trash_icon_offers_the_whole_game_where_its_version_was_the_last_one_still_in_the_fetch() -> None:
+    uow = FakeUnitOfWork()
+    with uow:
+        uow.roms.save(_rom(4375, name="Game A (USA)", group="igdb:1217:53", fetch_id="current"))
+        uow.roms.save(_rom(4377, name="Game A (Europe)", group="igdb:1217:53", fetch_id="old"))
+        uow.platform_sync_state.save(
+            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="current")
+        )
+    builder = _builder(uow)
+
+    preview = builder.build("preview", "rom", 4375)
+
+    assert preview.candidate_ids == frozenset({4375, 4377})
