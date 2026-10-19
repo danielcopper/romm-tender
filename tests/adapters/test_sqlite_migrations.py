@@ -85,8 +85,9 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 025_add_platform_skip_revoked + 026_add_rom_has_file_on_disk
 # + 027_add_artwork_slot_outcomes + 028_widen_artwork_slot_outcomes_to_the_icon
 # + 029_add_rom_delivered_through + 030_add_rom_gone_from_romm
-# + 031_add_platform_skip_fetch_start_and_checksum).
-_SHIPPED_VERSION = 31
+# + 031_add_platform_skip_fetch_start_and_checksum
+# + 032_add_collection_skip_fetch_start_and_checksum).
+_SHIPPED_VERSION = 32
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp,
@@ -1272,6 +1273,8 @@ class Test019CollectionSyncState:
 
         assert _user_version(db_path) == _SHIPPED_VERSION
         assert "collection_sync_state" in _tables(db_path)
+        # fetch_started_at and listing_rom_id_checksum are added by 032; after a
+        # full apply the table carries both.
         assert _columns(db_path, "collection_sync_state") == {
             "collection_id",
             "collection_kind",
@@ -1279,6 +1282,8 @@ class Test019CollectionSyncState:
             "completed_at",
             "rom_count",
             "member_rom_ids",
+            "fetch_started_at",
+            "listing_rom_id_checksum",
         }
 
     def test_table_absent_before_019(self, tmp_path: Path):
@@ -2100,7 +2105,7 @@ class Test031AddPlatformSkipFetchStartAndChecksum:
     def test_adds_both_columns_to_platform_sync_state_only(self, tmp_path: Path):
         db_path = str(tmp_path / "romm_sync.db")
 
-        apply_migrations(db_path)
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 31)))
 
         assert {"fetch_started_at", "rom_id_checksum"} <= _columns(db_path, "platform_sync_state")
         assert not {"fetch_started_at", "rom_id_checksum"} & _columns(db_path, "collection_sync_state")
@@ -2136,3 +2141,48 @@ class Test031AddPlatformSkipFetchStartAndChecksum:
         finally:
             conn.close()
         assert row == ("2026-10-15T10:00:00+00:00", 3, "run-1", 0, None, None)
+
+
+class Test032AddCollectionSkipFetchStartAndChecksum:
+    """032 — adds the nullable fetch_started_at and listing_rom_id_checksum to collection_sync_state (#2477)."""
+
+    def test_adds_both_columns_to_collection_sync_state_only(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+
+        apply_migrations(db_path)
+
+        assert {"fetch_started_at", "listing_rom_id_checksum"} <= _columns(db_path, "collection_sync_state")
+        assert "listing_rom_id_checksum" not in _columns(db_path, "platform_sync_state")
+
+    def test_both_absent_before_032(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 31)))
+
+        assert _user_version(db_path) == 31
+        assert not {"fetch_started_at", "listing_rom_id_checksum"} & _columns(db_path, "collection_sync_state")
+
+    def test_an_existing_stamp_reads_null_across_the_migration_and_keeps_the_rest(self, tmp_path: Path):
+        """No backfill: an upgraded stamp records neither, so its collection is fetched in full once."""
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 31)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO collection_sync_state "
+                "(collection_id, collection_kind, updated_at, completed_at, rom_count, member_rom_ids) "
+                "VALUES ('7', 'standard', '2026-10-01T09:00:00', '2026-10-15T10:00:00+00:00', 2, '[10, 11]')"
+            )
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        conn = sqlite3.connect(db_path)
+        try:
+            row = conn.execute(
+                "SELECT updated_at, completed_at, rom_count, member_rom_ids, fetch_started_at, listing_rom_id_checksum "
+                "FROM collection_sync_state WHERE collection_id = '7' AND collection_kind = 'standard'"
+            ).fetchone()
+        finally:
+            conn.close()
+        assert row == ("2026-10-01T09:00:00", "2026-10-15T10:00:00+00:00", 2, "[10, 11]", None, None)

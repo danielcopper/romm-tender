@@ -47,6 +47,7 @@ from lib.romm_paging import LIST_PAGE_SIZE
 from services.platform_systems import PlatformSystemService, PlatformSystemServiceConfig
 from tests.services.library._helpers import (
     _fake_wait_set_event,
+    _seed_collection_stamp,
     _seed_install,
     _seed_platform,
     _seed_rom_row,
@@ -841,6 +842,7 @@ class TestPreviewOverASkippedUnit:
     @pytest.mark.asyncio
     async def test_a_launch_command_only_difference_on_a_skipped_collection_is_unchanged(self, library, fake_romm_api):
         from domain.collection_sync_state import CollectionSyncState
+        from domain.platform_skip import rom_id_checksum
 
         _use_fake_romm(library, fake_romm_api)
         # The game's platform is off, so only the collection brings it in.
@@ -859,6 +861,8 @@ class TestPreviewOverASkippedUnit:
                     completed_at="2025-06-01T00:00:00",
                     rom_count=1,
                     member_rom_ids=(10,),
+                    fetch_started_at="2025-06-01T00:00:00+00:00",
+                    listing_rom_id_checksum=rom_id_checksum((10,)),
                 )
             )
 
@@ -924,6 +928,7 @@ class TestPreviewOverASkippedUnit:
         self, library, fake_romm_api, monkeypatch
     ):
         from domain.collection_sync_state import CollectionSyncState
+        from domain.platform_skip import rom_id_checksum
 
         # The platform has no stamp and is fetched; the collection holding the
         # same game is stamped and skipped. The game belongs to the platform unit,
@@ -946,6 +951,8 @@ class TestPreviewOverASkippedUnit:
                     completed_at="2025-06-01T00:00:00",
                     rom_count=1,
                     member_rom_ids=(10,),
+                    fetch_started_at="2025-06-01T00:00:00+00:00",
+                    listing_rom_id_checksum=rom_id_checksum((10,)),
                 )
             )
         fetcher = library.sync._collection_fetcher
@@ -5893,6 +5900,174 @@ class TestOnlyAFreshStampRestoresTheSkip:
         await self._apply(library, "run-2")
 
         assert self._walked_n64(fake_romm_api)
+
+
+class TestOnlyAFreshCollectionStampRestoresTheSkip:
+    """A collection follows the platform skip's rules: fetch start, listing checksum, re-stamp (#2477).
+
+    The collection's games are on N64, whose sync is off, so only the collection
+    delivers them and only its own skip decides whether they are walked. Each
+    case is a round like the platform's: a sync that fetches the collection in
+    full offers Apply through ``restamp_collection_count`` even with no shortcut
+    to change, the apply writes a stamp recording the fetch's start and the
+    listing's checksum, and the sync after that skips the collection.
+    """
+
+    _LISTED_AT = "2025-01-01T00:00:00+00:00"
+    _WALKS = ("list_roms_by_collection", "list_roms_by_smart_collection")
+
+    def _seed_faves(self, library, fake_romm_api, *, kind="standard", listed=(1, 2), members=(1, 2)):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[
+                {"id": rom_id, "name": f"G{rom_id}", "fs_name": f"g{rom_id}.z64", "updated_at": _OLD_UPDATED_AT}
+                for rom_id in members
+            ],
+        )
+        entry = {
+            "id": 7,
+            "name": "Faves",
+            "rom_count": len(listed),
+            "rom_ids": list(listed),
+            "updated_at": self._LISTED_AT,
+        }
+        if kind == "standard":
+            fake_romm_api.collections.append(entry)
+        else:
+            fake_romm_api.smart_collections.append(entry)
+        membership_key = "collection_ids" if kind == "standard" else "smart_collection_ids"
+        for rom_id in members:
+            fake_romm_api.roms[rom_id].setdefault(membership_key, []).append(7)
+            _seed_rom_row(
+                library, rom_id, app_id=5000 + rom_id, platform_slug="n64", name=f"G{rom_id}", fs_name=f"g{rom_id}.z64"
+            )
+        library.settings["enabled_platforms"] = {"1": False}
+        library.settings["enabled_collections"] = {kind: {"7": True}}
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+
+    @staticmethod
+    async def _apply(library, run_id, wait=_fake_wait_set_event):
+        box = library.sync._box
+        library.sync._chunk_dispatcher._wait_for_unit_complete = wait
+        box.sync_state = SyncState.RUNNING
+        box.current_sync_id = run_id
+        await library.sync._orchestrator._do_sync_per_unit()
+
+    def _walked(self, fake_romm_api) -> bool:
+        return any(name in self._WALKS for name, _args, _kwargs in fake_romm_api.call_log)
+
+    @staticmethod
+    def _probes(fake_romm_api):
+        return [args for name, args, _kwargs in fake_romm_api.call_log if name == "list_collection_roms_updated_after"]
+
+    @staticmethod
+    def _stamp(library, kind="standard"):
+        with library.uow as uow:
+            return uow.collection_sync_state.get("7", kind)
+
+    @pytest.mark.asyncio
+    async def test_a_stamp_without_a_fetch_start_is_fetched_in_full_once_then_skipped(self, library, fake_romm_api):
+        """Every stamp after the upgrade to migration 032: one full fetch and one Apply, then the skip again."""
+        from domain.platform_skip import rom_id_checksum
+
+        self._seed_faves(library, fake_romm_api)
+        _seed_collection_stamp(
+            library.uow,
+            "7",
+            "standard",
+            updated_at=self._LISTED_AT,
+            completed_at="2025-06-01T00:00:00+00:00",
+            rom_count=2,
+            member_rom_ids=(1, 2),
+        )
+
+        preview = await library.sync.sync_preview()
+
+        assert self._walked(fake_romm_api)
+        assert self._probes(fake_romm_api) == []
+        summary = preview["summary"]
+        assert summary["restamp_collection_count"] == 1
+        assert summary["restamp_platform_count"] == 0
+        assert (summary["new_count"], summary["changed_count"], summary["remove_count"]) == (0, 0, 0)
+
+        await self._apply(library, "run-1")
+
+        stamp = self._stamp(library)
+        assert stamp.fetch_started_at == "2026-01-01T00:00:00+00:00"
+        assert stamp.listing_rom_id_checksum == rom_id_checksum([1, 2])
+
+        fake_romm_api.call_log.clear()
+        preview = await library.sync.sync_preview()
+
+        assert not self._walked(fake_romm_api)
+        assert self._probes(fake_romm_api) == [(7, "standard", "2025-12-31T23:50:00+00:00")]
+        assert preview["summary"]["restamp_collection_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_a_member_edited_while_the_run_applied_is_fetched_in_full_next_sync(self, library, fake_romm_api):
+        """#2477 Done when: the stamp's reference is its fetch's start, not the run's end.
+
+        The apply takes half an hour on the clock; RomM records an edit to a
+        member twenty minutes in, after the collection's fetch started and before
+        its final chunk committed. The next sync fetches the collection in full
+        and offers Apply for it.
+        """
+        self._seed_faves(library, fake_romm_api)
+        clock = library.sync._orchestrator._clock
+
+        async def an_edit_lands_during_the_apply(_unit, event):
+            clock.advance(1200)
+            fake_romm_api.roms[1]["updated_at"] = clock.now().isoformat()
+            clock.advance(600)
+            event.set()
+            return {}
+
+        await self._apply(library, "run-1", wait=an_edit_lands_during_the_apply)
+        stamp = self._stamp(library)
+        assert stamp.fetch_started_at == "2026-01-01T00:00:00+00:00"
+        assert stamp.completed_at == "2026-01-01T00:30:00+00:00"
+
+        fake_romm_api.call_log.clear()
+        preview = await library.sync.sync_preview()
+
+        assert self._walked(fake_romm_api)
+        assert preview["summary"]["restamp_collection_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_an_empty_collection_and_one_without_updated_at_are_not_counted(self, library, fake_romm_api):
+        """The apply writes neither a stamp, so a re-stamp Apply would change nothing for them (#2477 D3)."""
+        self._seed_faves(library, fake_romm_api)
+        fake_romm_api.collections += [
+            {"id": 8, "name": "Empty", "rom_count": 0, "rom_ids": [], "updated_at": self._LISTED_AT},
+            {"id": 9, "name": "Undated", "rom_count": 1, "rom_ids": [1]},
+        ]
+        fake_romm_api.roms[1]["collection_ids"].append(9)
+        library.settings["enabled_collections"] = {"standard": {"7": True, "8": True, "9": True}}
+
+        preview = await library.sync.sync_preview()
+
+        # Only Faves, which has members, an updated_at and no stamp yet.
+        assert preview["summary"]["restamp_collection_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_an_own_smart_collection_whose_walk_returns_more_than_its_listing_is_skipped_once_stamped(
+        self, library, fake_romm_api
+    ):
+        """Its stamp replays the walk's extra member, while the skip compares only the listing's ids."""
+        self._seed_faves(library, fake_romm_api, kind="smart", listed=(1,), members=(1, 2))
+
+        await self._apply(library, "run-1")
+        assert self._stamp(library, "smart").member_rom_ids == (1, 2)
+
+        fake_romm_api.call_log.clear()
+        preview = await library.sync.sync_preview()
+
+        assert not self._walked(fake_romm_api)
+        assert preview["summary"]["restamp_collection_count"] == 0
 
 
 class TestPlatformTurnedOffAndBackOn:

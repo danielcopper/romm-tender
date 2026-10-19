@@ -249,9 +249,26 @@ def _seed_persisted_rom(uow, rom_id, *, app_id, group_key, platform_slug="n64", 
         )
 
 
-def _seed_collection_stamp(uow, cid, kind, *, updated_at, completed_at, rom_count, member_rom_ids):
-    """Persist a per-collection completion stamp (#742) so the skip can honor it."""
+def _seed_collection_stamp(
+    uow,
+    cid,
+    kind,
+    *,
+    updated_at,
+    completed_at,
+    rom_count,
+    member_rom_ids,
+    fetch_started_at=None,
+    listing_rom_ids=None,
+):
+    """Persist a per-collection completion stamp (#742) so the skip can honor it.
+
+    Without *fetch_started_at* and *listing_rom_ids* the stamp is one written
+    before migration 032, which never skips (#2477 D2); with both it records
+    their fetch start and the checksum of *listing_rom_ids*, as an apply does.
+    """
     from domain.collection_sync_state import CollectionSyncState
+    from domain.platform_skip import rom_id_checksum
 
     with uow:
         uow.collection_sync_state.save(
@@ -262,5 +279,7 @@ def _seed_collection_stamp(uow, cid, kind, *, updated_at, completed_at, rom_coun
                 completed_at=completed_at,
                 rom_count=rom_count,
                 member_rom_ids=member_rom_ids,
+                fetch_started_at=fetch_started_at,
+                listing_rom_id_checksum=rom_id_checksum(listing_rom_ids) if listing_rom_ids is not None else None,
             )
         )

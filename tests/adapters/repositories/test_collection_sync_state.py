@@ -53,6 +53,33 @@ class TestRoundTrip:
 
         assert uow.collection_sync_state.get("RnJhbmNoaXNlOjE=", "virtual") == stamp
 
+    def test_the_fetch_start_and_the_listing_checksum_read_back(self, uow: SqliteUnitOfWork):
+        stamp = CollectionSyncState.stamp(
+            collection_id="7",
+            collection_kind="standard",
+            updated_at="2026-10-01T09:00:00+00:00",
+            completed_at="2026-10-19T12:30:00+00:00",
+            rom_count=2,
+            member_rom_ids=(10, 11),
+            fetch_started_at="2026-10-19T12:00:00+00:00",
+            listing_rom_id_checksum="ab" * 32,
+        )
+        uow.collection_sync_state.save(stamp)
+
+        loaded = uow.collection_sync_state.get("7", "standard")
+        assert loaded == stamp
+        assert loaded is not None
+        assert loaded.fetch_started_at == "2026-10-19T12:00:00+00:00"
+        assert loaded.listing_rom_id_checksum == "ab" * 32
+
+    def test_a_stamp_without_them_reads_back_none(self, uow: SqliteUnitOfWork):
+        uow.collection_sync_state.save(_stamp("7"))
+
+        loaded = uow.collection_sync_state.get("7", "standard")
+        assert loaded is not None
+        assert loaded.fetch_started_at is None
+        assert loaded.listing_rom_id_checksum is None
+
 
 class TestMiss:
     def test_get_absent_returns_none(self, uow: SqliteUnitOfWork):

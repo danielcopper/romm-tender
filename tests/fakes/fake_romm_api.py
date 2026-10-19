@@ -158,6 +158,9 @@ class FakeRommApi:
         self.list_smart_collections_side_effect: Exception | None = None
         self.list_roms_by_collection_side_effect: Exception | None = None
         self.list_collection_roms_updated_after_side_effect: Exception | None = None
+        # An answer the collection skip probe returns as it is, in place of the
+        # one built from ``roms`` — set it to send a malformed answer.
+        self.list_collection_roms_updated_after_answer: Any = None
         self.list_roms_by_virtual_collection_side_effect: Exception | None = None
         self.list_roms_by_smart_collection_side_effect: Exception | None = None
         self.download_rom_content_side_effect: Exception | None = None
@@ -382,6 +385,8 @@ class FakeRommApi:
             {"limit": limit, "offset": offset},
         )
         self._check_fail(self.list_collection_roms_updated_after_side_effect)
+        if self.list_collection_roms_updated_after_answer is not None:
+            return self.list_collection_roms_updated_after_answer
         membership_key = {"smart": "smart_collection_ids", "virtual": "virtual_collection_ids"}.get(
             kind, "collection_ids"
         )

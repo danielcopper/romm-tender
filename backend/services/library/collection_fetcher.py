@@ -4,7 +4,7 @@ A collection unit is queued by :class:`~services.library.fetcher.LibraryFetcher`
 which reads the collection listings and keeps each collection's listed
 ``rom_ids`` on its unit. This module turns such a unit into ROMs: it tries the
 collection incremental skip against the ``CollectionSyncState`` stamp (#742,
-ADR-0023), and otherwise fetches only the listed members no unit of the run
+#2477, ADR-0023), and otherwise fetches only the listed members no unit of the run
 delivered, with one walk narrowed to the platforms the sync leaves off — the
 listed platforms with no platform unit this run. An own smart collection walks
 those platforms even when nothing is left over, and a foreign smart collection
@@ -18,6 +18,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.collection_skip import membership_verdict, probe_verdict, recorded_updated_at
+from domain.platform_skip import skip_reference
 from lib.romm_paging import LIST_PAGE_SIZE
 from services.library._fetch_pages import emit_fetch_page_progress, raise_if_cancelling
 
@@ -112,26 +114,26 @@ class CollectionFetcher:
         Returns the stamped member rom-id list when the collection is unchanged —
         the caller replays it into ``synced_rom_ids`` + the Steam-collection
         membership map without paginating. Returns ``None`` to fall through to a
-        fetch. The collection sibling of :meth:`_try_unit_incremental_skip`
-        (#742), gated on verified RomM signals, ALL of which must agree with the
-        ``CollectionSyncState`` stamp (ADR-0023):
+        fetch. The collection sibling of :meth:`_try_unit_incremental_skip`,
+        following the platform skip's rules (#2477 D1); both of these must agree
+        with the ``CollectionSyncState`` stamp (ADR-0023):
 
-        1. membership unchanged (:meth:`_collection_membership_unchanged`): for
-           a standard or smart collection its server ``updated_at`` and
-           ``rom_count``; for a virtual collection, whose ``updated_at`` says
-           nothing, the listing's ``rom_ids`` against the stamp's member set;
-           and
-        2. a scoped ``updated_after`` probe (keyed off the stamp's ``completed_at``,
-           our last sync time) reports zero rows — catches a member ROM's content
-           change and a ROM entering a smart collection via its own metadata.
+        1. the listing (``domain/collection_skip.membership_verdict``): the
+           checksum of its ``rom_ids`` is the stamp's, and for a standard or
+           smart collection its ``updated_at`` is the stamp's; and
+        2. a scoped ``updated_after`` probe keyed off the stamp's fetch start
+           less the margin (``domain/platform_skip.skip_reference``) answers no
+           ROM (``domain/collection_skip.probe_verdict``) — catches a member
+           ROM's content change and a ROM entering a smart collection via its
+           own metadata.
 
-        The probe exception (server error mid-check) falls open to a fetch,
-        mirroring the platform gate.
+        A probe that raises, or answers with something the verdict cannot read,
+        falls open to a fetch, mirroring the platform gate.
         """
         kind = unit.collection_kind
         if kind is None:
             return None
-        if kind != "virtual" and not unit.collection_updated_at:
+        if recorded_updated_at(kind, unit.collection_updated_at) is None:
             self._logger.info(f"Per-unit fetch {unit.name}: no collection updated_at — fetch")
             return None
 
@@ -139,18 +141,24 @@ class CollectionFetcher:
         if stamp is None:
             self._logger.info(f"Per-unit fetch {unit.name}: no completion stamp — fetch")
             return None
-        if not self._collection_membership_unchanged(unit, stamp):
+        listing = membership_verdict(
+            stamp, listing_updated_at=unit.collection_updated_at, listing_rom_ids=unit.member_rom_ids
+        )
+        reference = skip_reference(stamp)
+        if not listing.unchanged or reference is None:
+            self._logger.info(f"Per-unit fetch {unit.name}: {listing.reason} — fetch")
             return None
 
         try:
-            # Typed ``object`` so the isinstance guard below is genuine narrowing —
-            # the RomM API return type is a JSON-shape promise the server can break.
+            # Typed ``object`` so the verdict's isinstance guard is genuine
+            # narrowing — the RomM API return type is a JSON-shape promise the
+            # server can break.
             delta_resp: object = await self._loop.run_in_executor(
                 None,
                 self._romm_api.list_collection_roms_updated_after,
                 str(unit.id) if kind == "virtual" else int(unit.id),
                 kind,
-                stamp.completed_at,
+                reference.isoformat(),
                 1,
                 0,
             )
@@ -160,53 +168,15 @@ class CollectionFetcher:
             )
             return None
 
-        server_total = delta_resp.get("total", 0) if isinstance(delta_resp, dict) else 0
-        if server_total == 0:
-            self._logger.info(f"Per-unit skip: {unit.name} unchanged ({len(stamp.member_rom_ids)} members)")
-            return list(stamp.member_rom_ids)
-
+        probe = probe_verdict(delta_resp, reference)
+        if not probe.unchanged:
+            self._logger.info(f"Per-unit fetch {unit.name}: {listing.reason}; {probe.reason} — fetch")
+            return None
         self._logger.info(
-            f"Per-unit fetch {unit.name}: {server_total} member(s) updated, "
-            f"server={unit.rom_count} members={len(stamp.member_rom_ids)} — fetch"
+            f"Per-unit skip: {unit.name} unchanged ({len(stamp.member_rom_ids)} members; "
+            f"{listing.reason}; {probe.reason})"
         )
-        return None
-
-    def _collection_membership_unchanged(self, unit: WorkUnit, stamp: CollectionSyncState) -> bool:
-        """Whether the listing says the collection's membership is the stamp's.
-
-        A virtual collection answers by set equality of the listing's
-        ``rom_ids`` and the stamp's member set. A standard or smart collection
-        answers by its ``updated_at`` (RomM bumps it on any membership
-        add/remove, and a smart-criteria edit) and by its ``rom_count`` against
-        both the live listing and the stored member set — a stamp written from a
-        partial fetch is not trusted to reconstruct the whole membership.
-        """
-        if unit.collection_kind == "virtual":
-            if set(unit.member_rom_ids) != set(stamp.member_rom_ids):
-                self._logger.info(
-                    f"Per-unit fetch {unit.name}: listed members differ from the stamp's "
-                    f"({len(unit.member_rom_ids)} listed, {len(stamp.member_rom_ids)} stamped) — fetch"
-                )
-                return False
-            return True
-        if stamp.updated_at != unit.collection_updated_at:
-            self._logger.info(
-                f"Per-unit fetch {unit.name}: collection updated_at changed "
-                f"({stamp.updated_at!r} -> {unit.collection_updated_at!r}) — fetch"
-            )
-            return False
-        if stamp.rom_count != unit.rom_count:
-            self._logger.info(
-                f"Per-unit fetch {unit.name}: stamped rom_count {stamp.rom_count} != server {unit.rom_count} — fetch"
-            )
-            return False
-        if len(stamp.member_rom_ids) != unit.rom_count:
-            self._logger.info(
-                f"Per-unit fetch {unit.name}: stamped members {len(stamp.member_rom_ids)} "
-                f"!= server {unit.rom_count} — fetch"
-            )
-            return False
-        return True
+        return list(stamp.member_rom_ids)
 
     async def _fetch_collection_page(
         self, unit: WorkUnit, limit: int, offset: int, platform_ids: tuple[int, ...] | None

@@ -642,6 +642,122 @@ class TestFinalChunkCollectionStamp:
         assert (stamp.collection_id, stamp.collection_kind, stamp.updated_at) == ("fr-1", "virtual", "")
         assert stamp.member_rom_ids == (1, 2)
 
+    @staticmethod
+    async def _stamps_of(library, unit, *, emitted, collection_member_ids, fetch_started_at=None):
+        """Drive *unit* through ``apply_unit_in_chunks`` and answer the collection stamp each commit carried."""
+        stamps = []
+
+        async def capture_commit(
+            _rid_to_aid, _chunk_rows, platform_stamp=None, collection_stamp=None, fetch_id=None, delivered_through=None
+        ):
+            stamps.append(collection_stamp)
+
+        library.sync._reporter.commit_unit_results = capture_commit  # type: ignore[method-assign]
+        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        box = library.sync._box
+        box.sync_state = SyncState.RUNNING
+        box.current_sync_id = "run-collection-stamp"
+        await library.sync._chunk_dispatcher.apply_unit_in_chunks(
+            unit,
+            unit_index=0,
+            total_units=1,
+            emitted=emitted,
+            shortcuts_data=list(emitted),
+            unit_roms=[{"id": e["rom_id"]} for e in emitted],
+            new_ids=set(),
+            confirmed_cover_sources={},
+            collection_member_ids=collection_member_ids,
+            fetch_started_at=fetch_started_at,
+        )
+        return stamps
+
+    @pytest.mark.asyncio
+    async def test_the_final_chunk_s_stamp_records_the_fetch_start_and_the_listing_s_checksum(
+        self, library, monkeypatch
+    ):
+        """Across chunks: the fetch start handed in, and a checksum of the listing's ids, not the walk's extras."""
+        from domain.platform_skip import rom_id_checksum
+        from services.library import chunk_dispatcher
+
+        monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 1)
+        unit = WorkUnit(
+            type="collection",
+            id="9",
+            name="Smart",
+            slug="",
+            rom_count=2,
+            collection_kind="smart",
+            collection_updated_at="2025-01-01T00:00:00",
+            member_rom_ids=(1, 2),
+        )
+
+        stamps = await self._stamps_of(
+            library,
+            unit,
+            emitted=[{"rom_id": 1, "sibling_group_key": None}, {"rom_id": 3, "sibling_group_key": None}],
+            collection_member_ids=[1, 2, 3],
+            fetch_started_at="2026-10-19T12:00:00+00:00",
+        )
+
+        assert len(stamps) == 2
+        assert stamps[0] is None
+        stamp = stamps[1]
+        assert stamp is not None
+        assert stamp.fetch_started_at == "2026-10-19T12:00:00+00:00"
+        assert stamp.listing_rom_id_checksum == rom_id_checksum((1, 2))
+        assert stamp.member_rom_ids == (1, 2, 3)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("listed", [None, ""])
+    async def test_a_standard_collection_whose_listing_has_no_updated_at_is_not_stamped(self, library, listed):
+        unit = WorkUnit(
+            type="collection",
+            id="7",
+            name="Faves",
+            slug="",
+            rom_count=1,
+            collection_kind="standard",
+            collection_updated_at=listed,
+            member_rom_ids=(1,),
+        )
+
+        stamps = await self._stamps_of(
+            library, unit, emitted=[{"rom_id": 1, "sibling_group_key": None}], collection_member_ids=[1]
+        )
+
+        assert stamps == [None]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("kind", ["standard", "smart", "virtual"])
+    async def test_the_stamp_it_writes_matches_the_listing_it_was_written_from(self, library, kind):
+        """What the next gate compares: a stamp an apply writes is one an unchanged listing matches (#2477 D3)."""
+        from domain.collection_skip import membership_verdict
+
+        unit = WorkUnit(
+            type="collection",
+            id="7",
+            name="Faves",
+            slug="",
+            rom_count=2,
+            collection_kind=kind,
+            collection_updated_at="2025-01-01T00:00:00",
+            member_rom_ids=(2, 1),
+        )
+
+        [stamp] = await self._stamps_of(
+            library,
+            unit,
+            emitted=[{"rom_id": 1, "sibling_group_key": None}],
+            collection_member_ids=[1, 2, 3],
+            fetch_started_at="2026-10-19T12:00:00+00:00",
+        )
+
+        assert stamp is not None
+        verdict = membership_verdict(
+            stamp, listing_updated_at=unit.collection_updated_at, listing_rom_ids=unit.member_rom_ids
+        )
+        assert verdict.unchanged is True
+
 
 class TestAckIdentityPrecedesTheEmit:
     """The per-chunk ack identity is stamped BEFORE the frame goes out (#1041).

@@ -1,0 +1,23 @@
+-- =============================================================================
+-- 032_add_collection_skip_fetch_start_and_checksum.sql — what the collection
+-- skip compares RomM's answer with
+-- #2477 (D2, D4)
+-- =============================================================================
+--
+--   * collection_sync_state.fetch_started_at — when the completing apply's fetch
+--     of the collection started, on Tender's clock (ISO). The probe's reference
+--     is this minus the platform skip's margin, no longer completed_at.
+--   * collection_sync_state.listing_rom_id_checksum — sha256 hex of the sorted
+--     rom_ids the collection listing carried for that apply
+--     (domain/platform_skip.py::rom_id_checksum), not of member_rom_ids.
+--
+-- No backfill: neither value can be recovered from what a stamp already holds.
+-- A stamp without both never skips, so every collection is fetched in full once
+-- after the upgrade, and the preview offers Apply for it even with nothing else
+-- to do; that apply re-stamps the collection with both.
+--
+-- Transaction-safe DDL only — the runner (adapters/sqlite_migrations.py) wraps
+-- BEGIN/COMMIT and stamps PRAGMA user_version = 32.
+-- -----------------------------------------------------------------------------
+ALTER TABLE collection_sync_state ADD COLUMN fetch_started_at TEXT;
+ALTER TABLE collection_sync_state ADD COLUMN listing_rom_id_checksum TEXT;

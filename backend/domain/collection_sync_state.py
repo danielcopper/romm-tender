@@ -15,19 +15,12 @@ into the run's ``synced_rom_ids`` and Steam-collection membership map, resolving
 each id to its shortcut through the registry (the same sibling-group fallback the
 reporter uses at finalize).
 
-The skip is gated on three verified RomM signals, ALL of which must agree with
-the stamp for a skip to fire (see ``CollectionFetcher._try_collection_incremental_skip``):
-
-1. membership unchanged — for a standard or smart collection the row's
-   ``updated_at`` is unchanged (RomM bumps it on any membership add/remove, and a
-   smart-criteria edit); a virtual collection's ``updated_at`` says nothing, so
-   for it the listing's ``rom_ids`` must equal the stored member set instead.
-2. a scoped ``updated_after`` probe (keyed off ``completed_at``, our own last
-   sync time) returns zero — catches a member ROM's content change, and a ROM
-   entering a smart collection via its own metadata change (the collection row's
-   ``updated_at`` does not move for that).
-3. for a standard or smart collection, ``rom_count`` unchanged vs. both the live
-   listing and the stored member set.
+The skip compares RomM's answer with the stamp (``domain/collection_skip.py``):
+for a standard or smart collection the listing's ``updated_at``, for every kind
+a checksum of the listing's ``rom_ids`` (``listing_rom_id_checksum``), and a
+scoped ``updated_after`` probe keyed off ``fetch_started_at`` less the platform
+skip's margin. ``member_rom_ids`` is not what the checksum covers: it adds the
+ids a walk answered beyond the listing.
 
 All three kinds carry a stamp; the skip never reads a virtual collection's
 ``updated_at``, so it may be empty. A thin record built whole and upserted —
@@ -52,6 +45,8 @@ class CollectionSyncState:
     completed_at: str
     rom_count: int
     member_rom_ids: tuple[int, ...]
+    fetch_started_at: str | None = None
+    listing_rom_id_checksum: str | None = None
 
     @classmethod
     def stamp(
@@ -63,18 +58,24 @@ class CollectionSyncState:
         completed_at: str,
         rom_count: int,
         member_rom_ids: tuple[int, ...],
+        fetch_started_at: str | None = None,
+        listing_rom_id_checksum: str | None = None,
     ) -> CollectionSyncState:
         """Record that a collection fully synced with the given member set.
 
         ``updated_at`` is the collection's server ``updated_at`` at completion —
         the membership-stable signal the skip re-checks — and is required for a
-        standard or smart collection. ``completed_at`` is our own ISO sync
-        timestamp, the reference the scoped ``updated_after`` probe keys off to
-        detect a member ROM's content change. ``rom_count`` is the
+        standard or smart collection. ``completed_at`` is our own ISO time the
+        final chunk committed; the skip does not read it. ``rom_count`` is the
         server's collection ROM count as of completion, and ``member_rom_ids`` is
         the full member set the skip replays to rebuild collection membership
         without re-fetching. ``collection_kind`` is ``standard``, ``smart`` or
         ``virtual``.
+
+        ``fetch_started_at`` (ISO, Tender's clock) and ``listing_rom_id_checksum``
+        (``domain/platform_skip.rom_id_checksum`` over the listing's ``rom_ids``)
+        are what the skip compares RomM's answer with; a stamp without both never
+        skips.
         """
         if not collection_id:
             raise ValueError("collection_id is required")
@@ -93,4 +94,6 @@ class CollectionSyncState:
             completed_at=completed_at,
             rom_count=rom_count,
             member_rom_ids=tuple(member_rom_ids),
+            fetch_started_at=fetch_started_at,
+            listing_rom_id_checksum=listing_rom_id_checksum,
         )

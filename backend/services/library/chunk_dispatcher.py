@@ -35,6 +35,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.collection_skip import recorded_updated_at
 from domain.collection_sync_state import CollectionSyncState
 from domain.platform_skip import rom_id_checksum
 from domain.platform_sync_state import PlatformSyncState
@@ -150,8 +151,9 @@ class ChunkDispatcher:
         restart shows the rest), never to a run pause. ``confirmed_cover_sources``
         is the unit's ``rom_id → applied cover source`` map — the third of the
         whole-unit staging dicts the reporter's commit reads. ``fetch_started_at``
-        is when a platform unit's fetch started, which its final chunk's stamp
-        records beside the checksum of ``unit_roms``' ids. Returns the running
+        is when the unit's fetch started, which its final chunk's stamp records
+        beside a checksum: of ``unit_roms``' ids for a platform, of the listing's
+        ``rom_ids`` for a collection. Returns the running
         count of shortcuts applied — a cancel or heartbeat timeout returns early
         with the chunks committed so far.
         """
@@ -294,7 +296,9 @@ class ChunkDispatcher:
             platform_stamp = self._build_final_platform_stamp(
                 unit, chunk_index, chunk_count, fetch_id, fetch_started_at, roms_by_id.keys()
             )
-            collection_stamp = self._build_final_collection_stamp(unit, chunk_index, chunk_count, collection_member_ids)
+            collection_stamp = self._build_final_collection_stamp(
+                unit, chunk_index, chunk_count, collection_member_ids, fetch_started_at
+            )
 
             # Per-chunk commit: the reporter upserts every fetched ROM of this
             # chunk into the ``roms`` aggregate (identity + version metadata,
@@ -428,6 +432,7 @@ class ChunkDispatcher:
         chunk_index: int,
         chunk_count: int,
         member_rom_ids: list[int] | None,
+        fetch_started_at: str | None = None,
     ) -> CollectionSyncState | None:
         """Build the completion stamp for a collection's FINAL chunk, else ``None``.
 
@@ -437,21 +442,19 @@ class ChunkDispatcher:
         "stamp exists" is atomic on a crash. ``member_rom_ids`` is the
         collection's FULL membership (every member id, not just the applied
         new_roms), which a future skip replays to rebuild the Steam-collection
-        map. A standard or smart collection is stamped only when its listing
-        carried an ``updated_at``; a virtual collection's stamp carries an empty
-        ``updated_at``, because its skip compares member sets instead. A cancel
-        or heartbeat timeout mid-unit returns before the final chunk — an
-        incomplete collection is never stamped (ADR-0023).
+        map. The checksum the next skip compares is over the listing's
+        ``rom_ids`` (``unit.member_rom_ids``) instead, which leaves out the ids a
+        walk answered beyond them (#2477 D4). Which collections are stamped at all
+        is ``domain/collection_skip.recorded_updated_at``. A cancel or heartbeat
+        timeout mid-unit returns before the final chunk — an incomplete collection
+        is never stamped (ADR-0023).
         """
         if unit.type != "collection" or unit.collection_kind is None:
             return None
         if member_rom_ids is None or chunk_index != chunk_count - 1:
             return None
-        if unit.collection_kind == "virtual":
-            updated_at = ""
-        elif unit.collection_updated_at:
-            updated_at = unit.collection_updated_at
-        else:
+        updated_at = recorded_updated_at(unit.collection_kind, unit.collection_updated_at)
+        if updated_at is None:
             return None
         return CollectionSyncState.stamp(
             collection_id=str(unit.id),
@@ -460,4 +463,6 @@ class ChunkDispatcher:
             completed_at=self._clock.now().isoformat(),
             rom_count=unit.rom_count,
             member_rom_ids=tuple(member_rom_ids),
+            fetch_started_at=fetch_started_at,
+            listing_rom_id_checksum=rom_id_checksum(unit.member_rom_ids),
         )

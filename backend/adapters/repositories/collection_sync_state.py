@@ -21,7 +21,10 @@ if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Collection, Iterator
 
-_COLUMNS = "collection_id, collection_kind, updated_at, completed_at, rom_count, member_rom_ids"
+_COLUMNS = (
+    "collection_id, collection_kind, updated_at, completed_at, rom_count, member_rom_ids, "
+    "fetch_started_at, listing_rom_id_checksum"
+)
 
 
 class SqliteCollectionSyncStateRepository(BaseRepository):
@@ -35,6 +38,8 @@ class SqliteCollectionSyncStateRepository(BaseRepository):
             completed_at=row["completed_at"],
             rom_count=row["rom_count"],
             member_rom_ids=tuple(int(rid) for rid in self._json_or_none(row["member_rom_ids"]) or []),
+            fetch_started_at=row["fetch_started_at"],
+            listing_rom_id_checksum=row["listing_rom_id_checksum"],
         )
 
     def get(self, collection_id: str, collection_kind: str) -> CollectionSyncState | None:
@@ -46,7 +51,7 @@ class SqliteCollectionSyncStateRepository(BaseRepository):
 
     def save(self, state: CollectionSyncState) -> None:
         self._conn.execute(
-            f"INSERT OR REPLACE INTO collection_sync_state ({_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)",
+            f"INSERT OR REPLACE INTO collection_sync_state ({_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 state.collection_id,
                 state.collection_kind,
@@ -54,6 +59,8 @@ class SqliteCollectionSyncStateRepository(BaseRepository):
                 state.completed_at,
                 state.rom_count,
                 self._json(list(state.member_rom_ids)),
+                state.fetch_started_at,
+                state.listing_rom_id_checksum,
             ),
         )
 
