@@ -157,6 +157,9 @@ _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
                 "clear_sync_cache",
                 "record_session_start",
                 "reconcile_playtime",
+                # Where Tender's folder lies, written to the settings.
+                "choose_tender_place",
+                "use_recorded_tender_folder",
             ),
             WaitReason.OTHER_WORK,
         ),

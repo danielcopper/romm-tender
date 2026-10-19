@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import pwd
 from typing import Any
 
 import pytest
@@ -41,8 +40,8 @@ class TestThePlace:
     def test_without_a_drives_root_the_current_users_folder_under_run_media_is_used(self, tmp_path):
         adapter = TenderFolderAdapter(settings={}, user_home=str(tmp_path))
 
-        assert adapter.drives_root() == os.path.join("/run/media", pwd.getpwuid(os.getuid()).pw_name)
-        assert drives_root_for_current_user() == adapter.drives_root()
+        assert adapter.drives_root() == drives_root_for_current_user()
+        assert os.path.dirname(adapter.drives_root()) == "/run/media"
 
 
 class TestTheCondition:

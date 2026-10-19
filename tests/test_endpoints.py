@@ -217,6 +217,14 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "check_start_source",
     "set_emulator_source_enabled",
     "move_emulator_source",
+    # Tender's folder lies outside RetroDECK's tree, and a choice of its place
+    # is judged against the resolver's answers rather than against a RetroDECK
+    # path; nothing here reads or writes one.
+    "get_tender_folder",
+    "check_tender_place",
+    "choose_tender_place",
+    "use_recorded_tender_folder",
+    "forget_tender_folder_records",
     # Read-only disc-picker state query (the pin-write select_disc names the rule).
     "get_disc_selection",
     # Read-only version-picker state query (the binding-move switch_version names the rule).
