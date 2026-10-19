@@ -34,8 +34,8 @@ vi.mock("../api/backend", () => ({
   renewPruneConflictLease: vi.fn(),
   logInfo: vi.fn(),
   logError: vi.fn(),
-  // Not called by launchInterceptor itself — the real connectionState store it
-  // reports reachability into logs each transition through it.
+  // Called by runPreLaunchSync during the watcher's pre-launch sync (D6) and
+  // by connectionState transitions.
   debugLog: vi.fn(),
 }));
 
@@ -1489,7 +1489,7 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("pre-launch sync failed"));
     });
 
-    it("preLaunchSync: a sync that moved saves toasts nothing — a caught start has no page to toast over", async () => {
+    it("preLaunchSync: a sync that moved saves toasts nothing — an intercepted start launches silently on success", async () => {
       const ops = await captureOps();
 
       vi.mocked(backend.preLaunchSync).mockResolvedValueOnce({

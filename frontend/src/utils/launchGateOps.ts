@@ -31,7 +31,11 @@ import { boundedOr, withTimeout } from "./withTimeout";
 interface PreLaunchSyncOptions {
   /** Prefixes every log line, naming the launch path. */
   tag: string;
-  /** Toast what a successful sync moved (`saveSyncToastBody`); a path with no page to toast over passes `false`. */
+  /**
+   * Toast what a successful sync moved (`saveSyncToastBody`). An automatic
+   * background start (the launch watcher) passes `false` so a clean launch into
+   * gameplay is silent; an explicit start through Tender's Play button passes `true`.
+   */
   toastSyncResult: boolean;
 }
 

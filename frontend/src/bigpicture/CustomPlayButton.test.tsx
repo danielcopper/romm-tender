@@ -2664,7 +2664,7 @@ describe("CustomPlayButton — shared launch gate (ADR-0015)", () => {
   });
 
   it("a verdict modal helper that THROWS → resets to play (never frozen in syncing)", async () => {
-    // runPreLaunchSync flips the button to "syncing", the gate returns a
+    // onSyncStart flips the button to "syncing", the gate returns a
     // conflict verdict, then the shared handleConflicts REJECTS at the framework
     // level. Without the outer try/catch the button would stay stuck in
     // "syncing"; with it, handlePlay recovers to "play".

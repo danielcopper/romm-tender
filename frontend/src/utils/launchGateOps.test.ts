@@ -70,6 +70,7 @@ describe("runPreLaunchSync", () => {
       success: false,
       message: "skip",
       reason: "savefiles_in_content_dir",
+      uploaded: 1,
     });
 
     expect(await runPreLaunchSync(ROM_ID, { tag: TAG, toastSyncResult: true })).toEqual({
@@ -83,7 +84,12 @@ describe("runPreLaunchSync", () => {
   });
 
   it("conflicts pass through with the sync's own success and message", async () => {
-    vi.mocked(backend.preLaunchSync).mockResolvedValue({ success: false, message: "c", conflicts: [conflict] });
+    vi.mocked(backend.preLaunchSync).mockResolvedValue({
+      success: false,
+      message: "c",
+      conflicts: [conflict],
+      uploaded: 1,
+    });
 
     expect(await runPreLaunchSync(ROM_ID, { tag: TAG, toastSyncResult: true })).toEqual({
       success: false,
@@ -108,6 +114,7 @@ describe("runPreLaunchSync", () => {
       message: "Server offline",
       reason: "server_unreachable",
       errors: ["a", "b"],
+      uploaded: 1,
     });
 
     expect(await runPreLaunchSync(ROM_ID, { tag: TAG, toastSyncResult: true })).toEqual({
