@@ -2303,16 +2303,39 @@ class TestDoDownloadMultiFile:
         assert downloads.service._download_queue[4778]["status"] == "failed"
 
     @pytest.mark.asyncio
-    async def test_multi_file_emits_extracting_progress(self, downloads, tmp_path, emit):
+    async def test_multi_file_emits_extracting_progress(self, downloads, tmp_path, emit, monkeypatch):
         """A multi-file download emits ``download_progress`` ``status:"extracting"``
         frames after the byte transfer, then ``download_complete`` after.
 
         Drives the real adapter's streaming extraction through the fake store so
         the passed extract callback fires per member; the final tick (extracted
         == total) always bypasses the throttle, so at least one extracting frame
-        lands regardless of the fake clock.
+        lands regardless of the fake clock. Every executor hop settles behind the
+        ticks it queued, the order 3.12 keeps: from 3.13 a hop that finished
+        before it was chained settles at once, and its ticks are then dropped as
+        the comment at ``DownloadService._live_entry`` says.
         """
         from unittest.mock import patch
+
+        loop = asyncio.get_running_loop()
+        run_in_executor = loop.run_in_executor
+
+        def settle_behind_its_ticks(executor, fn, *args):
+            hop = run_in_executor(executor, fn, *args)
+            behind = loop.create_future()
+
+            def copy(done):
+                if done.cancelled():
+                    behind.cancel()
+                elif done.exception() is not None:
+                    behind.set_exception(done.exception())
+                else:
+                    behind.set_result(done.result())
+
+            hop.add_done_callback(lambda done: loop.call_soon(copy, done))
+            return behind
+
+        monkeypatch.setattr(loop, "run_in_executor", settle_behind_its_ticks)
 
         from fakes.fake_download_file_store import FakeDownloadFileStore
 
