@@ -5,7 +5,7 @@
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Library.
  */
 
-import { useRef, useState, type CSSProperties, type FC } from "react";
+import { useRef, type CSSProperties, type FC } from "react";
 import { ConfirmModal, DialogButton, TextField, ToggleField, showModal, type FieldProps } from "@decky/ui";
 import { LoadingRow } from "../LoadingRow";
 import {
@@ -19,6 +19,7 @@ import {
   PaneTableRow,
   FOCUSED_ROW,
   UNFOCUSED_ROW,
+  useFocusWithin,
   SECONDARY_FONT,
 } from "../layout/pane";
 import { ENTRY_FOCUS_DELAY_MS, placeEntryFocus } from "../../utils/entryFocus";
@@ -152,19 +153,10 @@ const CollectionRow: FC<{ collection: CollectionSyncSetting; owned: boolean; sta
 }) => {
   const number = { ...NUMBER, fontSize: SECONDARY_FONT };
   // The whole row shows that its toggle holds focus, as the layout study draws
-  // it: a fill across the row and a marker on its left edge. React delivers
-  // these through focusin/focusout, so they follow focus landing on the toggle
-  // inside the row.
-  const [focused, setFocused] = useState(false);
+  // it: a fill across the row and a marker on its left edge.
+  const { focused, handlers } = useFocusWithin();
   return (
-    <div
-      onFocus={() => setFocused(true)}
-      onBlur={(e) => {
-        // Focus moving between controls inside the row keeps it focused.
-        // `contains` is asked of the row's own node, so no global is involved.
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
-      }}
-    >
+    <div {...handlers}>
       <PaneTableRow
         columns={owned ? OWNED_COLUMNS : OWNERLESS_COLUMNS}
         register={COMPACT_TABLE_REGISTER}

@@ -13,7 +13,7 @@
  * Structure and vocabulary: `docs/architecture/qam-panel.md`.
  */
 
-import type { CSSProperties, FC, ReactElement, ReactNode } from "react";
+import { useState, type CSSProperties, type FC, type FocusEvent, type ReactElement, type ReactNode } from "react";
 import { Focusable } from "@decky/ui";
 
 /** The size every secondary LINE on a pane is set in: a header's counts clause,
@@ -84,6 +84,29 @@ export const FOCUSED_ROW: CSSProperties = {
   boxShadow: `inset ${ROW_MARKER_WIDTH}px 0 0 ${SELECTION_ACCENT}`,
 };
 export const UNFOCUSED_ROW: CSSProperties = { background: "transparent", boxShadow: "none" };
+
+/**
+ * Whether focus is inside the element `handlers` are spread on, for a row that
+ * draws its own focus with {@link FOCUSED_ROW}. React delivers these through
+ * focusin/focusout, so they follow focus landing on a control inside it. Focus
+ * moving between two controls inside it keeps it focused; `contains` is asked
+ * of the element's own node, so no global is involved.
+ */
+export function useFocusWithin(): {
+  focused: boolean;
+  handlers: { onFocus: () => void; onBlur: (event: FocusEvent<HTMLElement>) => void };
+} {
+  const [focused, setFocused] = useState(false);
+  return {
+    focused,
+    handlers: {
+      onFocus: () => setFocused(true),
+      onBlur: (event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
+      },
+    },
+  };
+}
 
 /** The horizontal gutter a pane's content sits in — what `SectionTitle` and
  *  `Muted` are padded by, so a table lines up with the section it sits under. */
