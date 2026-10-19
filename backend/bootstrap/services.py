@@ -54,6 +54,7 @@ from services.shortcut_relocation import ShortcutRelocationService, ShortcutRelo
 from services.shortcut_removal import ShortcutRemovalService, ShortcutRemovalServiceConfig
 from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
+from services.tender_folder import TenderFolderService, TenderFolderServiceConfig
 from services.update_check import UpdateCheckService, UpdateCheckServiceConfig
 from services.update_install import UpdateInstallService, UpdateInstallServiceConfig
 from services.update_outcome import UpdateOutcomeService, UpdateOutcomeServiceConfig
@@ -65,6 +66,7 @@ if TYPE_CHECKING:
 
     from domain.app_directories import AppDirectories
     from domain.update_release import UpdateSource
+    from lib.errors import Refused
     from models.shortcut_launcher import ShortcutLauncher
     from services.protocols import (
         InstalledRomRemoverFn,
@@ -138,6 +140,7 @@ class ServicesBundle:
     settings_service: SettingsService
     core_service: CoreService
     emulator_sources_service: EmulatorSourcesService
+    tender_folder_service: TenderFolderService
     disc_service: DiscService
     version_switch_service: VersionSwitchService
     connection_service: ConnectionService
@@ -193,18 +196,38 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
     )
     # The conflict rules a use case checks at its entry, built beside the
     # prune conflicts so any service can be handed them. The update install,
-    # migration and sync services that answer the other three rules are built
-    # later.
+    # folder, migration and sync services that answer the other four rules are
+    # built later.
     update_in_progress_binding: LateBinding[bool] = LateBinding("update_in_progress")
+    folder_unreachable_binding: LateBinding[Refused | None] = LateBinding("folder_unreachable")
     migration_pending_binding: LateBinding[bool] = LateBinding("migration_pending")
     sync_in_flight_binding: LateBinding[bool] = LateBinding("sync_in_flight")
     renderer_above_ceiling_binding: LateBinding[RendererAboveCeilingFn] = LateBinding("renderer_above_ceiling")
     conflict_rules = ConflictRuleSet(
         prune_conflicts=prune_conflicts,
         update_in_progress=update_in_progress_binding.get,
+        folder_unreachable=folder_unreachable_binding.get,
         migration_pending=migration_pending_binding.get,
         sync_in_flight=sync_in_flight_binding.get,
     )
+
+    # No store records anything under Tender's folder yet; each one that does
+    # joins this tuple.
+    tender_folder_service = TenderFolderService(
+        config=TenderFolderServiceConfig(
+            store=cfg.adapters.tender_folder,
+            sources=cfg.adapters.emulator_sources,
+            records=(),
+            settings=cfg.stores.settings,
+            settings_persister=cfg.callbacks.settings_persister,
+            uow_factory=cfg.callbacks.uow_factory,
+            uuid_gen=cfg.runtime.uuid_gen,
+            conflict_rules=conflict_rules,
+            loop=cfg.runtime.loop,
+            log_debug=cfg.callbacks.log_debug,
+        ),
+    )
+    folder_unreachable_binding.set(tender_folder_service.unreachable_refusal)
 
     # Forward-reference bindings for producers constructed later in this
     # function. Consumers receive ``binding.get`` (a bound method); the
@@ -742,6 +765,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
             uow_factory=cfg.callbacks.uow_factory,
             romm_api=cfg.adapters.romm_api,
             recovery_store=cfg.adapters.recovery_store,
+            prepare_folder=tender_folder_service.do_prepare_for_write,
             prune_artifacts=cfg.adapters.prune_artifacts,
             steam_recovery=cfg.adapters.steam_recovery,
             retrodeck_folders=cfg.callbacks.retrodeck_folders,
@@ -855,6 +879,7 @@ def wire_services(cfg: WiringConfig) -> ServicesBundle:
         settings_service=settings_service,
         core_service=core_service,
         emulator_sources_service=emulator_sources_service,
+        tender_folder_service=tender_folder_service,
         disc_service=disc_service,
         version_switch_service=version_switch_service,
         connection_service=connection_service,

@@ -60,6 +60,7 @@ from fakes.fake_steamgrid_db_api import FakeSteamGridDbApi
 from fakes.fake_transient_units import FakeTransientUnits
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
+from adapters.tender_folder import TenderFolderAdapter
 from bootstrap import (
     Application,
     RuntimeBundle,
@@ -147,6 +148,11 @@ class ContractHarness:
     journal: FakeJournal
     # What a platform's system answers; a test sets ``answers`` on it.
     platform_systems: FakeSourcePlatformSystems
+    # Where the drives a place for Tender's folder may lie on are mounted, and
+    # which paths count as mounts: a folder cannot be mounted in a test, so a
+    # test adds a drive's folder to ``mounts`` to connect it.
+    drives_root: str
+    mounts: set[str]
 
 
 def _single_attempt_pass_through(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
@@ -241,6 +247,8 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
     fake_units = FakeTransientUnits()
     fake_journal = FakeJournal()
     fake_steam = FakeSteamInterface()
+    drives_root = str(tmp_path / "media")
+    mounts: set[str] = set()
     patched_adapters = dataclasses.replace(
         result.adapters,
         romm_api=fake_romm,
@@ -256,6 +264,12 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
         download_release_asset=fake_downloads,
         transient_units=fake_units,
         journal=fake_journal,
+        tender_folder=TenderFolderAdapter(
+            settings=result.stores.settings,
+            user_home=str(tmp_path / "home"),
+            drives_root=drives_root,
+            is_mount=lambda path: path in mounts or os.path.ismount(path),
+        ),
     )
 
     # Deterministic time/uuid/sleep seams so timestamped responses assert cleanly.
@@ -324,6 +338,8 @@ def build_contract_harness(tmp_path: Any, *, installed_program: bool = False) ->
         units=fake_units,
         journal=fake_journal,
         platform_systems=fake_platform_systems,
+        drives_root=drives_root,
+        mounts=mounts,
     )
 
 

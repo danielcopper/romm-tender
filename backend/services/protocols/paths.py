@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from domain.save_answer import SaveAnswer
     from domain.savestate_location import NoSavestates, SavestateLocation
     from domain.shortcut_data import EmulatorInvocation
+    from domain.tender_folder import SourceRomFolders
 
 
 class SourcePlatformSystems(Protocol):
@@ -218,12 +219,17 @@ class EmulatorSourcesReader(Protocol):
     a run that asks the same questions for many games takes one and hands it
     down. ``describe`` is what the settings list shows of every detected source:
     over the sources a given reading detected, arranged as the settings stand
-    now, or from a fresh reading.
+    now, or from a fresh reading. ``rom_folders`` is what a place for Tender's
+    folder is judged against.
     """
 
     def read(self) -> SourcesReading: ...
 
     def describe(self, reading: SourcesReading | None = None) -> tuple[SourceReport, ...]: ...
+
+    def rom_folders(self) -> tuple[SourceRomFolders, ...] | None:
+        """Every detected source's ROM folder and system folders, resolved; ``None`` where they could not be read."""
+        ...
 
 
 class SaveLocationReader(Protocol):

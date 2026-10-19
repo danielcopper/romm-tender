@@ -23,6 +23,7 @@ of an unchanged core runs once.
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Any
 
 from _vendor.atlas import CAVEAT_EMULATOR_CATALOGUE_SEALED, detect
@@ -43,7 +44,15 @@ from domain.emulator_sources import (
     no_answering_source_reason,
     stored_kinds,
 )
-from domain.source_roots import ROOT_INSTALLATION, SourceRoot, SourceRoots, explains_roots, reported_findings
+from domain.source_roots import (
+    ROOT_INSTALLATION,
+    ROOT_ROMS,
+    SourceRoot,
+    SourceRoots,
+    explains_roots,
+    reported_findings,
+)
+from domain.tender_folder import SourceRomFolders
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Mapping
@@ -110,9 +119,11 @@ class DetectedSourcesReading:
         """Whether detecting the sources raised, so that none detected establishes nothing about any of them.
 
         RetroDECK's folders (``adapters/retrodeck_folders.py``), the platform's
-        system (``adapters/atlas_platforms.py``) and the launch check
-        (``services/emulator_sources.py``) read it; every other reader takes
-        such a reading as one that detected nothing.
+        system (``adapters/atlas_platforms.py``), the launch check
+        (``services/emulator_sources.py``) and the ROM folders a place for
+        Tender's folder is judged against (:meth:`EmulatorSourcesAdapter.rom_folders`)
+        read it; every other reader takes such a reading as one that detected
+        nothing.
         """
         return self._detection_failed
 
@@ -200,6 +211,28 @@ class EmulatorSourcesAdapter:
         arranged = self._arranged(reading.installations) if reading is not None else self.read()
         return tuple(self._report(source, arranged.installation(source.kind)) for source in arranged.sources)
 
+    def rom_folders(self) -> tuple[SourceRomFolders, ...] | None:
+        """Every detected source's ROM folder and each system folder it names, symlink-resolved; ``None`` when unread.
+
+        Every source counts, switched on or off, and a ROM folder counts
+        whatever its provenance — read, the frontend's default, or only
+        assumed. ``None`` where detecting the sources raised, or where a
+        question to one of them did: a folder that was not read could be the
+        one a place lies in.
+        """
+        reading = self.read()
+        if reading.detection_failed:
+            return None
+        folders: list[SourceRomFolders] = []
+        for installation in reading.installations:
+            try:
+                folders.append(_rom_folders_of(installation))
+            except Exception as exc:
+                # Deliberately broad, for the reason ``read`` gives.
+                self._log_debug(f"[sources] {installation.kind}: resolver failed on its ROM folders: {exc!r}")
+                return None
+        return tuple(folders)
+
     def _arranged(self, installations: tuple[Any, ...], *, detection_failed: bool = False) -> DetectedSourcesReading:
         switched_off = frozenset(stored_kinds(self._settings.get(SWITCHED_OFF_SETTING)))
         sources = arrange_sources(
@@ -261,3 +294,17 @@ class EmulatorSourcesAdapter:
         except Exception as exc:
             self._log_debug(f"[sources] {kind}: resolver failed on {subject}: {exc!r}")
             return None
+
+
+def _rom_folders_of(installation: Any) -> SourceRomFolders:
+    """*installation*'s ROM folder and its systems' folders, resolved; raises what the resolver raises."""
+    rom_root = None
+    if getattr(installation, "roots", None) is not None:
+        path = source_roots(installation.roots()).root(ROOT_ROMS).path
+        rom_root = os.path.realpath(path) if path else None
+    system_folders: list[tuple[str, str]] = []
+    for system in installation.systems().systems:
+        folder = installation.rom_location(system).dir
+        if folder:
+            system_folders.append((system, os.path.realpath(folder)))
+    return SourceRomFolders(kind=installation.kind, rom_root=rom_root, system_folders=tuple(system_folders))

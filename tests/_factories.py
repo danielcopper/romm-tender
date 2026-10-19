@@ -78,6 +78,7 @@ def _make_conflict_rules(
     *,
     prune_conflicts: PruneConflicts | None = None,
     update_in_progress: bool = False,
+    folder_unreachable: Refused | None = None,
     migration_pending: bool = False,
     sync_in_flight: bool = False,
 ) -> ConflictRuleSet:
@@ -85,6 +86,7 @@ def _make_conflict_rules(
     return ConflictRuleSet(
         prune_conflicts=prune_conflicts if prune_conflicts is not None else _make_prune_conflicts(),
         update_in_progress=lambda: update_in_progress,
+        folder_unreachable=lambda: folder_unreachable,
         migration_pending=lambda: migration_pending,
         sync_in_flight=lambda: sync_in_flight,
     )

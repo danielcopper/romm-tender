@@ -264,11 +264,8 @@ class TestDeleteRomFiles:
         rom_path = roms / "n64" / "game.z64"
         rom_path.parent.mkdir(parents=True)
         rom_path.write_bytes(b"sealed")
-        recovery = RecoveryBundleAdapter(
-            user_home=str(tmp_path),
-            package_name="romm-tender",
-            version="test",
-        )
+        (tmp_path / "Tender").mkdir()
+        recovery = RecoveryBundleAdapter(folder=lambda: str(tmp_path / "Tender"), version="test")
         bundle = recovery.seal_bundle(
             "Game_2026-07-24_romfile",
             {"roms": [{"rom_id": 1}]},
@@ -342,7 +339,8 @@ class TestDeleteRomFiles:
         rom_dir.mkdir(parents=True)
         child = rom_dir / "disc.bin"
         child.write_bytes(b"sealed")
-        recovery = RecoveryBundleAdapter(user_home=str(tmp_path), package_name="romm-tender", version="test")
+        (tmp_path / "Tender").mkdir()
+        recovery = RecoveryBundleAdapter(folder=lambda: str(tmp_path / "Tender"), version="test")
         bundle = recovery.seal_bundle(
             "Game_2026-07-24_romdir",
             {"roms": [{"rom_id": 1}]},

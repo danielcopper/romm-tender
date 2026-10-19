@@ -109,6 +109,20 @@ class FakeRecoveryStore:
         return f"/recovery/bundles/{bundle_id}"
 
 
+class FakePrepareFolder:
+    """Tender's folder made ready for a write, or the refusal a test names."""
+
+    def __init__(self) -> None:
+        self.refusal: Refused | None = None
+        self.calls = 0
+
+    def __call__(self) -> str:
+        self.calls += 1
+        if self.refusal is not None:
+            raise self.refusal
+        return "/tender"
+
+
 class FakePruneArtifacts:
     def __init__(self) -> None:
         self.removed: list[list[int]] = []
@@ -248,6 +262,7 @@ class Harness:
     clock: FakeClock
     conflicts: PruneConflicts
     artwork_job: FakeShortcutArtworkJob
+    folder: FakePrepareFolder
 
 
 def _rom(
@@ -311,6 +326,7 @@ async def harness() -> Harness:
     uow = FakeUnitOfWork()
     romm = FakeRomm()
     recovery = FakeRecoveryStore()
+    folder = FakePrepareFolder()
     artifacts = FakePruneArtifacts()
     steam_recovery = FakeSteamRecovery()
     saves = FakeSaveCoordinator()
@@ -347,6 +363,7 @@ async def harness() -> Harness:
             uow_factory=FakeUnitOfWorkFactory(uow),
             romm_api=cast("Any", romm),
             recovery_store=recovery,
+            prepare_folder=folder,
             prune_artifacts=artifacts,
             steam_recovery=steam_recovery,
             retrodeck_folders=FakeRetroDeckFolders(saves="/saves", roms="/roms", bios="/bios", home="/retrodeck"),
@@ -375,6 +392,7 @@ async def harness() -> Harness:
         clock,
         conflicts,
         artwork_job,
+        folder,
     )
 
 
@@ -1334,6 +1352,25 @@ async def test_binding_change_after_shortcut_action_blocks_source_removal(harnes
     assert harness.uow.roms.get(1) is not None
     assert harness.artifacts.removed == []
     assert harness.steam_recovery.removed == []
+
+
+@pytest.mark.asyncio
+async def test_a_bundle_on_a_folder_that_cannot_be_reached_fails_its_group_with_the_reason(harness):
+    _seed(harness.uow, _rom(1, fetch="old"))
+    harness.romm.outcomes[1] = [RommNotFoundError("gone")] * 3
+    preview = await _preview(harness)
+    harness.folder.refusal = Refused(
+        "folder_unreachable",
+        "Tender's folder at /run/media/deck/SD/Tender cannot be reached: the drive is not connected.",
+    )
+
+    await _start(harness, preview["preview_id"], remove_fully_vanished=True, create_recovery_bundle=True)
+    failed = await _finish(harness)
+
+    assert failed["results"][0]["reason"] == "recovery_failed"
+    assert "the drive is not connected" in failed["results"][0]["message"]
+    assert harness.recovery.sealed == []
+    assert harness.uow.roms.get(1) is not None
 
 
 @pytest.mark.asyncio

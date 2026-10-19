@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Hashable
 
     from domain.emulator_sources import SourceReport
+    from domain.tender_folder import SourceRomFolders
 
 _T = TypeVar("_T")
 
@@ -42,7 +43,8 @@ class FakeEmulatorSources:
 
     ``sources`` defaults to one RetroDECK, switched on. ``installations`` maps a
     kind to the object a reading answers as that source's installation.
-    ``reports`` is what :meth:`describe` answers. ``reads`` counts every reading
+    ``reports`` is what :meth:`describe` answers, ``rom_folders`` what
+    :meth:`rom_folders` does. ``reads`` counts every reading
     taken, so a test can tell one reading per run from one per question.
     """
 
@@ -52,10 +54,12 @@ class FakeEmulatorSources:
         sources: tuple[ArrangedSource, ...] = (ArrangedSource(kind="retrodeck", enabled=True, starts_games=True),),
         installations: dict[str, Any] | None = None,
         reports: tuple[SourceReport, ...] = (),
+        rom_folders: tuple[SourceRomFolders, ...] | None = (),
     ) -> None:
         self.sources = sources
         self.installations: dict[str, Any] = installations if installations is not None else {}
         self.reports = reports
+        self.answered_rom_folders = rom_folders
         self.reads = 0
         self.taken: list[FakeSourcesReading] = []
 
@@ -67,3 +71,6 @@ class FakeEmulatorSources:
 
     def describe(self, reading: Any = None) -> tuple[SourceReport, ...]:
         return self.reports
+
+    def rom_folders(self) -> tuple[SourceRomFolders, ...] | None:
+        return self.answered_rom_folders

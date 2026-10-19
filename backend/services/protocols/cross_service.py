@@ -873,3 +873,27 @@ class IconPlaceholderPathFn(Protocol):
     """The placeholder icon a sync gives each shortcut it mints; ``None`` where there is none to give."""
 
     async def __call__(self) -> str | None: ...
+
+
+class TenderFolderRecordReader(Protocol):
+    """What one store has recorded under Tender's folders — the question each store answers for itself.
+
+    A record is something the store keeps a path of, in the folder Tender
+    gave it: a download, a firmware file, a save. A recovery bundle is not
+    one. ``recorded_folders`` answers every Tender folder the store holds a
+    record under, as the folder path it was given; ``forget_records_under``
+    forgets every record under *folder* and touches no file. Both are called
+    from a worker thread, and ``recorded_folders`` also from the event loop,
+    by the folder rule (GLOSSARY.md → Conflict rules), so it answers from one
+    short query.
+    """
+
+    def recorded_folders(self) -> frozenset[str]: ...
+
+    def forget_records_under(self, folder: str) -> None: ...
+
+
+class PrepareTenderFolderFn(Protocol):
+    """Tender's folder made ready for one write, created where it is missing; refuses ``folder_unreachable``."""
+
+    def __call__(self) -> str: ...

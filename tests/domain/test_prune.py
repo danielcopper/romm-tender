@@ -10,7 +10,6 @@ from domain.prune import (
     parse_recovery_bundle_id,
     recovery_bundle_id,
     render_bundle_readme,
-    sanitize_package_name,
     selected_prune_ids,
 )
 
@@ -49,29 +48,6 @@ def _readme_context() -> BundleReadmeContext:
         ],
         "playtime_lines": ["Test Game (ROM 7): 894 seconds — 0h 14m 54s"],
     }
-
-
-def test_package_name_sanitization():
-    assert sanitize_package_name("romm tender/../x") == "romm-tender-..-x"
-    assert sanitize_package_name("tëst") == "t-st"
-    assert sanitize_package_name("aéb") == "a-b"
-
-
-def test_the_empty_name_fallback_is_a_guard_clause_with_no_caller():
-    """``"package"`` is unreachable in production, and stays covered anyway.
-
-    The one production caller is ``RecoveryBundleAdapter``, which is handed
-    ``PACKAGE_NAME`` (``domain/identity.py``) — a non-empty literal — so neither
-    input below can arise from this program. That is what this asserts:
-    a defensive branch, exercised so it keeps working if a caller ever passes
-    something it did not choose, not a behaviour anything depends on.
-
-    Do not read it as "the recovery root can fall back to ``package``". It
-    cannot; the root's name is settled by the constant, and
-    ``tests/test_bootstrap.py`` pins that end.
-    """
-    assert sanitize_package_name("///") == "package"
-    assert sanitize_package_name(None) == "package"
 
 
 def test_bundle_id_leads_with_the_game_and_stays_a_safe_path_component():

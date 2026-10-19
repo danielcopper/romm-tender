@@ -20,7 +20,7 @@ from adapters.descriptor_paths import (
     remove_current,
 )
 from domain.identity import DISPLAY_NAME
-from domain.prune import parse_recovery_bundle_id, render_bundle_readme, sanitize_package_name
+from domain.prune import parse_recovery_bundle_id, render_bundle_readme
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -36,6 +36,8 @@ if TYPE_CHECKING:
         SourceIdentity,
     )
 
+# The recovery root's name inside Tender's folder.
+RECOVERY_FOLDER_NAME = "recovery"
 _SAFE_BUNDLE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*_\d{4}-\d{2}-\d{2}_[A-Za-z0-9]{4,32}$", re.ASCII)
 _ROOT_README_NAME = "README.txt"
 _ROOT_README_HEADLINE = f"{DISPLAY_NAME} recovery bundles"
@@ -62,12 +64,25 @@ bundle once you are sure you no longer need it.
 
 
 class RecoveryBundleAdapter:
-    """Single owner of recovery staging, verification, and atomic sealing."""
+    """Single owner of recovery staging, verification, and atomic sealing.
 
-    def __init__(self, *, user_home: str, package_name: str, version: str) -> None:
-        self._home = os.path.abspath(user_home)
-        self._root = os.path.join(self._home, f"{sanitize_package_name(package_name)}-recovery")
+    The recovery root is :data:`RECOVERY_FOLDER_NAME` inside Tender's folder,
+    which *folder* answers as the settings name it at the moment of asking.
+    The folder itself is never created here: a seal needs it to exist, and
+    creating it is its owner's, who writes its id file with it.
+    """
+
+    def __init__(self, *, folder: Callable[[], str], version: str) -> None:
+        self._folder = folder
         self._version = version
+
+    @property
+    def _home(self) -> str:
+        return os.path.abspath(self._folder())
+
+    @property
+    def _root(self) -> str:
+        return os.path.join(self._home, RECOVERY_FOLDER_NAME)
 
     def root(self) -> str:
         return self._root
@@ -796,8 +811,6 @@ class RecoveryBundleAdapter:
 
     def _open_layout(self, *, create: bool) -> tuple[int, int, int, int]:
         flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
-        if create:
-            os.makedirs(self._home, exist_ok=True)
         home_fd = os.open(self._home, flags)
         root_fd: int | None = None
         staging_fd: int | None = None

@@ -33,6 +33,7 @@ if TYPE_CHECKING:
         ConflictRules,
         EventEmitter,
         InstalledRomFilesRemoverFn,
+        PrepareTenderFolderFn,
         PruneArtifactStore,
         PruneRunClaim,
         PruneSaveCoordinator,
@@ -87,6 +88,7 @@ class PruneServiceConfig:
     uow_factory: UnitOfWorkFactory
     romm_api: RommLivenessApi
     recovery_store: RecoveryBundleStore
+    prepare_folder: PrepareTenderFolderFn
     prune_artifacts: PruneArtifactStore
     steam_recovery: SteamRecoveryStore
     retrodeck_folders: RetroDeckFolders
@@ -158,6 +160,7 @@ class PruneService:
             config=RecoveryCoordinatorConfig(
                 uow_factory=config.uow_factory,
                 recovery_store=config.recovery_store,
+                prepare_folder=config.prepare_folder,
                 prune_artifacts=config.prune_artifacts,
                 steam_recovery=config.steam_recovery,
                 retrodeck_folders=config.retrodeck_folders,

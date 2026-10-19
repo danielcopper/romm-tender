@@ -55,6 +55,7 @@ class _Endpoints:
         self._rules = ConflictRuleSet(
             prune_conflicts=conflicts,
             update_in_progress=lambda: False,
+            folder_unreachable=lambda: None,
             migration_pending=lambda: False,
             sync_in_flight=lambda: False,
         )

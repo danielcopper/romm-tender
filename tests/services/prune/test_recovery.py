@@ -19,6 +19,7 @@ def _coordinator(uow: FakeUnitOfWork) -> RecoveryCoordinator:
         config=RecoveryCoordinatorConfig(
             uow_factory=FakeUnitOfWorkFactory(uow),
             recovery_store=unused,
+            prepare_folder=unused,
             prune_artifacts=unused,
             steam_recovery=unused,
             retrodeck_folders=unused,

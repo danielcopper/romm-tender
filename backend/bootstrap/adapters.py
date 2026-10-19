@@ -64,6 +64,7 @@ from adapters.steam_recovery import SteamRecoveryAdapter
 from adapters.steamgriddb import SteamGridDbAdapter
 from adapters.system_clock import SystemClock
 from adapters.system_uuid_gen import SystemUuidGen
+from adapters.tender_folder import TenderFolderAdapter
 from adapters.transient_unit import SystemdRunAdapter
 from adapters.update_attempt import UpdateAttemptFileAdapter
 from adapters.update_failure import UpdateFailureFileAdapter
@@ -129,6 +130,7 @@ if TYPE_CHECKING:
         SystemKnownFn,
         SystemM3uSupportFn,
         SystemSupportedExtensionsFn,
+        TenderFolderStore,
         TenderLogoFn,
         TransientUnitControl,
         UnitOfWorkFactory,
@@ -183,6 +185,7 @@ class AdapterBundle:
     game_process: GameProcessControl
     resolve_upload_conflict: ResolveUploadConflictFn
     compute_sync_action: ComputeSyncActionFn
+    tender_folder: TenderFolderStore
     recovery_store: RecoveryBundleStore
     # The same object as ``recovery_store``, offered under the narrower
     # question: a consumer that only describes the bundles must not be able
@@ -316,7 +319,7 @@ def bootstrap(
         by the entry point, like ``directories``.
     user_home:
         The user's home directory, for RetroDECK and Steam path lookups and for
-        the recovery root.
+        the default place of Tender's folder.
     logger:
         The configured root logger.
 
@@ -408,15 +411,12 @@ def bootstrap(
     # ``RendererGcAdapter`` also speaks HTTP, to Steam's own debugger on
     # localhost, and takes no UA. Bot Fight Mode on Cloudflare
     # blocks the default ``Python-urllib`` UA before requests reach self-hosted
-    # RomM (#249). Both halves come from ``domain/identity.py``, and so does the
-    # recovery root built out of the same name below: a literal spelled here
-    # would be a second spelling of the package, free to drift away from it.
+    # RomM (#249). Both halves come from ``domain/identity.py``: a literal
+    # spelled here would be a second spelling of the package, free to drift
+    # away from it.
     user_agent = f"{PACKAGE_NAME}/{VERSION}"
-    recovery_store = RecoveryBundleAdapter(
-        user_home=user_home,
-        package_name=PACKAGE_NAME,
-        version=VERSION,
-    )
+    tender_folder = TenderFolderAdapter(settings=settings, user_home=user_home)
+    recovery_store = RecoveryBundleAdapter(folder=tender_folder.folder, version=VERSION)
     # The CACHE root: this adapter's whole subject is ``covers/`` and
     # ``artwork/``, which live there and not under the data root.
     prune_artifacts = PruneArtifactAdapter(cache_dir=directories.cache_dir)
@@ -513,6 +513,7 @@ def bootstrap(
         game_process=game_process,
         resolve_upload_conflict=gavel,
         compute_sync_action=gavel.compute_sync_action,
+        tender_folder=tender_folder,
         recovery_store=recovery_store,
         recovery_inventory=recovery_store,
         prune_artifacts=prune_artifacts,

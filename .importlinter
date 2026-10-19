@@ -184,6 +184,7 @@ modules =
     services.shortcut_removal
     services.startup_healing
     services.steamgrid
+    services.tender_folder
     services.update_check
     services.update_install
     services.update_outcome

@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
 
-_UNSAFE_PACKAGE_RUN = re.compile(r"[^A-Za-z0-9._-]+", re.ASCII)
+_UNSAFE_NAME_RUN = re.compile(r"[^A-Za-z0-9._-]+", re.ASCII)
 _SAFE_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$", re.ASCII)
 _SAFE_SHORT_ID = re.compile(r"^[A-Za-z0-9]{4,32}$", re.ASCII)
 _MAX_BUNDLE_NAME_CHARS = 64
@@ -63,17 +63,10 @@ _READABLE_KINDS = {
 }
 
 
-def sanitize_package_name(name: object) -> str:
-    """Return an ASCII path component suitable for the recovery-root name."""
-    raw = name if isinstance(name, str) else ""
-    cleaned = _UNSAFE_PACKAGE_RUN.sub("-", raw).strip("-._")
-    return cleaned or "package"
-
-
 def sanitize_bundle_name(name: object) -> str:
     """Return a bounded ASCII path component for a game's name."""
     raw = name if isinstance(name, str) else ""
-    cleaned = _UNSAFE_PACKAGE_RUN.sub("-", raw).strip("-._")[:_MAX_BUNDLE_NAME_CHARS].strip("-._")
+    cleaned = _UNSAFE_NAME_RUN.sub("-", raw).strip("-._")[:_MAX_BUNDLE_NAME_CHARS].strip("-._")
     return cleaned or "game"
 
 

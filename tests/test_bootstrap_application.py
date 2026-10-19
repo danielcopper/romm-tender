@@ -28,6 +28,7 @@ LOGGER = logging.getLogger("test_bootstrap_application")
 # than performing it.
 _REPAIRS = [
     "note_update_outcome",
+    "create_tender_folder",
     "detect_retrodeck_path_change",
     "report_missing_installs",
     "reconcile_orphaned_sync_runs",
@@ -109,6 +110,7 @@ class _Recorded:
     def bundle(self) -> ServicesBundle:
         return _make_services_bundle(
             update_outcome_service=MagicMock(note_start=self._step("note_update_outcome")),
+            tender_folder_service=MagicMock(create_at_start=self._step("create_tender_folder")),
             migration_service=MagicMock(
                 detect_retrodeck_path_change=self._step("detect_retrodeck_path_change"),
                 shutdown=self._async_step("migration_service.shutdown"),

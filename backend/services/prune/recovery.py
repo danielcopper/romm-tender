@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from models.prune import RecoveryArtifact, SteamRecoverySnapshot
     from services.protocols import (
         Clock,
+        PrepareTenderFolderFn,
         PruneArtifactStore,
         RecoveryBundleStore,
         RetroDeckFolders,
@@ -31,6 +32,7 @@ class RecoveryCoordinatorConfig:
 
     uow_factory: UnitOfWorkFactory
     recovery_store: RecoveryBundleStore
+    prepare_folder: PrepareTenderFolderFn
     prune_artifacts: PruneArtifactStore
     steam_recovery: SteamRecoveryStore
     retrodeck_folders: RetroDeckFolders
@@ -44,6 +46,7 @@ class RecoveryCoordinator:
     def __init__(self, *, config: RecoveryCoordinatorConfig) -> None:
         self._uow_factory = config.uow_factory
         self._recovery_store = config.recovery_store
+        self._prepare_folder = config.prepare_folder
         self._prune_artifacts = config.prune_artifacts
         self._steam_recovery = config.steam_recovery
         self._retrodeck_folders = config.retrodeck_folders
@@ -196,6 +199,9 @@ class RecoveryCoordinator:
         if app_id is not None:
             readme_context["steam_app_id"] = app_id
         playtime_text = self._playtime_text(snapshot, names)
+        # The bundle lies in Tender's folder, which a write may have to create
+        # first — or find on a drive that is gone, which refuses this group.
+        self._prepare_folder()
         sealed = self._recovery_store.seal_bundle(
             bundle_id, snapshot, artifacts, readme_context, playtime_text, should_abort
         )

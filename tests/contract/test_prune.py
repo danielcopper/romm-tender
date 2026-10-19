@@ -122,7 +122,7 @@ async def test_preview_is_local_paged_and_frontend_shaped(harness):
     assert result["candidate_total"] == 1
     assert result["items"][0]["rom_id"] == 41
     assert result["items"][0]["installed"] is False
-    assert result["recovery_root"].endswith("-recovery")
+    assert result["recovery_root"] == str(harness.tmp_path / "home" / "Tender" / "recovery")
     assert harness.romm.call_log == []
 
 
@@ -690,6 +690,38 @@ async def test_full_purge_leaves_save_states_completely_untouched(harness):
     manifest = json.loads((bundle / "manifest.json").read_text())
     assert not any(str(item["source_path"]).endswith(".state") for item in manifest["artifacts"])
     assert list(bundle.rglob("*.state")) == []
+
+
+async def test_a_cleanup_seals_its_bundle_in_tenders_folder_and_leaves_older_bundles_where_they_are(harness):
+    _seed_bulk_candidate(harness)
+    home = harness.tmp_path / "home"
+    older = home / "romm-tender-recovery" / "bundles" / "Older_2026-01-01_abcd1234"
+    older.mkdir(parents=True)
+    (older / "README.txt").write_text("sealed by an older version")
+    harness.romm.get_rom_once_side_effect_by_id[41] = RommNotFoundError("gone")
+    preview = await harness.endpoints.get_prune_preview(_preview_request())
+
+    started = await harness.endpoints.start_prune(
+        {
+            "preview_id": preview["preview_id"],
+            "confirmed": True,
+            "remove_rows": True,
+            "remove_fully_vanished": True,
+            "create_recovery_bundle": True,
+            "installed_selection_id": None,
+        }
+    )
+    assert started["success"] is True
+    task = harness.app.services.prune_service._task
+    assert task is not None
+    await task
+
+    complete = [call.args[1] for call in harness.emit.await_args_list if call.args[0] == "prune_complete"][-1]
+    bundle = Path(complete["results"][0]["bundle_path"])
+    assert bundle.parent == home / "Tender" / "recovery" / "bundles"
+    assert (home / "Tender" / ".tender-folder").is_file()
+    assert [path.name for path in (home / "romm-tender-recovery" / "bundles").iterdir()] == [older.name]
+    assert (older / "README.txt").read_text() == "sealed by an older version"
 
 
 async def test_without_a_rom_root_the_cleanup_runs_and_reports_the_files_it_could_not_remove(harness):

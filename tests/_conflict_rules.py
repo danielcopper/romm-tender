@@ -1,7 +1,8 @@
 """Which endpoints declare a conflict rule, read from the use cases that check it.
 
-A rule is declared by a ``hold("<endpoint>", update=…, migration=…, sync=…,
-prune=…)`` or ``hold_start("<endpoint>", update=…, migration=…, sync=…)``
+A rule is declared by a ``hold("<endpoint>", update=…, folder=…, migration=…,
+sync=…, prune=…)`` or ``hold_start("<endpoint>", update=…, folder=…,
+migration=…, sync=…)``
 call at the entry of the use case the endpoint calls, under
 ``backend/services/``. The calls are read from the source by AST, since a use
 case's rules are not visible on the object.
@@ -34,8 +35,8 @@ _SERVICES = Path(__file__).resolve().parent.parent / "backend" / "services"
 # The rules each rule-set method takes, each as a keyword named after the rule,
 # and the rule the method declares by being called at all.
 _RULE_KEYWORDS = {
-    "hold": frozenset({"update", "migration", "sync", "prune"}),
-    "hold_start": frozenset({"update", "migration", "sync"}),
+    "hold": frozenset({"update", "folder", "migration", "sync", "prune"}),
+    "hold_start": frozenset({"update", "folder", "migration", "sync"}),
 }
 _IMPLIED_RULE = {"hold_start": "exclusive_start"}
 

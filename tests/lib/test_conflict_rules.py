@@ -18,6 +18,12 @@ _MIGRATION_REFUSAL = (
     "Pending RetroDECK migration. Open the Tender menu (QAM) to migrate or dismiss.",
     {},
 )
+_FOLDER_MESSAGE = "Tender's folder at /run/media/deck/SD/Tender cannot be reached: the drive is not connected."
+_FOLDER_REFUSAL = (
+    "folder_unreachable",
+    _FOLDER_MESSAGE,
+    {"folder": "/run/media/deck/SD/Tender", "state": "drive_not_mounted"},
+)
 _SYNC_REFUSAL = ("sync_active", "A library sync is in progress — wait for it to finish or cancel it first.", {})
 _PRUNE_REFUSAL = (
     "prune_active",
@@ -46,9 +52,31 @@ class _Condition:
         return self.holds
 
 
+class _FolderCondition:
+    """The folder rule's reading: a fresh refusal while the folder is unreachable, counting how often it was asked."""
+
+    def __init__(self, *, holds: bool = False) -> None:
+        self.holds = holds
+        self.asked = 0
+
+    def __call__(self) -> Refused | None:
+        self.asked += 1
+        if not self.holds:
+            return None
+        return Refused(
+            "folder_unreachable", _FOLDER_MESSAGE, folder="/run/media/deck/SD/Tender", state="drive_not_mounted"
+        )
+
+
 class _Rules:
     def __init__(
-        self, *, update: bool = False, migration: bool = False, sync: bool = False, cleanup: bool = False
+        self,
+        *,
+        update: bool = False,
+        folder: bool = False,
+        migration: bool = False,
+        sync: bool = False,
+        cleanup: bool = False,
     ) -> None:
         self.logger = _RecordingLogger()
         self.conflicts = PruneConflicts(
@@ -59,11 +87,13 @@ class _Rules:
         if cleanup:
             self.conflicts.register_run("held-run")
         self.update = _Condition(holds=update)
+        self.folder = _FolderCondition(holds=folder)
         self.migration = _Condition(holds=migration)
         self.sync = _Condition(holds=sync)
         self.rules = ConflictRuleSet(
             prune_conflicts=self.conflicts,
             update_in_progress=self.update,
+            folder_unreachable=self.folder,
             migration_pending=self.migration,
             sync_in_flight=self.sync,
         )
@@ -104,6 +134,17 @@ async def test_an_update_in_progress_does_not_refuse_a_use_case_that_names_only_
     assert rules.update.asked == 0
 
 
+async def test_an_unreachable_folder_refuses_a_use_case_that_names_the_folder_rule():
+    assert _said(await _refusal(_Rules(folder=True).rules, folder=True)) == _FOLDER_REFUSAL
+
+
+async def test_an_unreachable_folder_does_not_refuse_a_use_case_that_does_not_name_the_folder_rule():
+    rules = _Rules(folder=True)
+
+    assert await _refusal(rules.rules, update=True, migration=True, sync=True, prune=True) is None
+    assert rules.folder.asked == 0
+
+
 async def test_a_pending_migration_refuses_a_use_case_that_names_the_migration_rule():
     assert _said(await _refusal(_Rules(migration=True).rules, migration=True)) == _MIGRATION_REFUSAL
 
@@ -117,15 +158,16 @@ async def test_a_running_cleanup_refuses_a_use_case_that_names_the_prune_rule():
 
 
 async def test_no_condition_holding_lets_the_block_run():
-    assert await _refusal(_Rules().rules, update=True, migration=True, sync=True, prune=True) is None
+    assert await _refusal(_Rules().rules, update=True, folder=True, migration=True, sync=True, prune=True) is None
 
 
 async def test_a_condition_the_use_case_does_not_name_is_never_asked():
-    rules = _Rules(update=True, migration=True, sync=True, cleanup=True)
+    rules = _Rules(update=True, folder=True, migration=True, sync=True, cleanup=True)
 
     assert await _refusal(rules.rules) is None
 
     assert rules.update.asked == 0
+    assert rules.folder.asked == 0
     assert rules.migration.asked == 0
     assert rules.sync.asked == 0
     assert rules.conflicts.conflicting_operations == 0
@@ -146,13 +188,25 @@ async def test_each_refusal_is_a_fresh_exception():
 
 
 async def test_an_update_in_progress_answers_before_every_other_rule():
-    rules = _Rules(update=True, migration=True, sync=True, cleanup=True)
+    rules = _Rules(update=True, folder=True, migration=True, sync=True, cleanup=True)
 
-    refusal = await _refusal(rules.rules, update=True, migration=True, sync=True, prune=True)
+    refusal = await _refusal(rules.rules, update=True, folder=True, migration=True, sync=True, prune=True)
 
     assert _said(refusal) == _UPDATE_REFUSAL
+    assert rules.folder.asked == 0
     assert rules.migration.asked == 0
     assert rules.sync.asked == 0
+
+
+async def test_an_unreachable_folder_answers_before_a_migration_a_sync_and_a_running_cleanup():
+    rules = _Rules(folder=True, migration=True, sync=True, cleanup=True)
+
+    refusal = await _refusal(rules.rules, update=True, folder=True, migration=True, sync=True, prune=True)
+
+    assert _said(refusal) == _FOLDER_REFUSAL
+    assert rules.migration.asked == 0
+    assert rules.sync.asked == 0
+    assert rules.conflicts.conflicting_operations == 0
 
 
 async def test_a_pending_migration_answers_before_a_sync_in_flight_and_a_running_cleanup():
@@ -175,6 +229,7 @@ async def test_a_sync_in_flight_answers_before_a_running_cleanup():
     ("condition", "named"),
     [
         ({"update": True}, {"update": True, "prune": True}),
+        ({"folder": True}, {"folder": True, "prune": True}),
         ({"migration": True}, {"migration": True, "prune": True}),
         ({"sync": True}, {"sync": True, "prune": True}),
         ({"cleanup": True}, {"prune": True}),
@@ -418,6 +473,7 @@ async def test_the_rules_are_asked_while_the_reservation_is_held():
     rules.rules = ConflictRuleSet(
         prune_conflicts=rules.conflicts,
         update_in_progress=rules.update,
+        folder_unreachable=rules.folder,
         migration_pending=rules.migration,
         sync_in_flight=sync_in_flight,
     )
@@ -434,6 +490,14 @@ async def test_an_update_in_progress_answers_the_start_before_a_pending_migratio
     assert rules.migration.asked == 0
 
 
+async def test_an_unreachable_folder_answers_the_start_after_an_update_and_before_a_pending_migration():
+    rules = _Rules(folder=True, migration=True)
+
+    assert _said(await _start_refusal(rules.rules, update=True, folder=True, migration=True)) == _FOLDER_REFUSAL
+    assert rules.update.asked == 1
+    assert rules.migration.asked == 0
+
+
 async def test_a_pending_migration_answers_the_start_before_a_sync_in_flight():
     rules = _Rules(migration=True, sync=True)
 
@@ -445,12 +509,12 @@ async def test_a_sync_in_flight_refuses_the_start():
     assert _said(await _start_refusal(_Rules(sync=True).rules, migration=True, sync=True)) == _SYNC_REFUSAL
 
 
-@pytest.mark.parametrize("condition", [{"update": True}, {"migration": True}, {"sync": True}])
+@pytest.mark.parametrize("condition", [{"update": True}, {"folder": True}, {"migration": True}, {"sync": True}])
 async def test_a_refused_start_gives_its_reservation_back_before_it_raises(condition):
     rules = _Rules(**condition)
 
     with pytest.raises(Refused):
-        async with rules.rules.hold_start("start_prune", update=True, migration=True, sync=True):
+        async with rules.rules.hold_start("start_prune", update=True, folder=True, migration=True, sync=True):
             pass
 
     assert rules.conflicts.cleanup_running is False
@@ -490,6 +554,7 @@ async def test_a_rule_that_raises_gives_the_reservation_back():
     rules.rules = ConflictRuleSet(
         prune_conflicts=rules.conflicts,
         update_in_progress=rules.update,
+        folder_unreachable=rules.folder,
         migration_pending=migration_pending,
         sync_in_flight=rules.sync,
     )

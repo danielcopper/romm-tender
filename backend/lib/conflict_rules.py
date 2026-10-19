@@ -34,11 +34,13 @@ class ConflictRuleSet:
         *,
         prune_conflicts: PruneConflicts,
         update_in_progress: Callable[[], bool],
+        folder_unreachable: Callable[[], Refused | None],
         migration_pending: Callable[[], bool],
         sync_in_flight: Callable[[], bool],
     ) -> None:
         self._prune_conflicts = prune_conflicts
         self._update_in_progress = update_in_progress
+        self._folder_unreachable = folder_unreachable
         self._migration_pending = migration_pending
         self._sync_in_flight = sync_in_flight
 
@@ -48,6 +50,7 @@ class ConflictRuleSet:
         label: str,
         *,
         update: bool = False,
+        folder: bool = False,
         migration: bool = False,
         sync: bool = False,
         prune: bool = False,
@@ -62,7 +65,7 @@ class ConflictRuleSet:
         install pressed while it waited for the lock saw no operation, and
         would otherwise stop this process under the block.
         """
-        self._refuse_on_first_rule(update=update, migration=migration, sync=sync)
+        self._refuse_on_first_rule(update=update, folder=folder, migration=migration, sync=sync)
         if not prune:
             yield
             return
@@ -79,7 +82,13 @@ class ConflictRuleSet:
 
     @contextlib.asynccontextmanager
     async def hold_start(
-        self, label: str, *, update: bool = False, migration: bool = False, sync: bool = False
+        self,
+        label: str,
+        *,
+        update: bool = False,
+        folder: bool = False,
+        migration: bool = False,
+        sync: bool = False,
     ) -> AsyncGenerator[None]:
         """Reserve a cleanup's exclusive start for *label*, then check the named rules, and hold the reservation.
 
@@ -88,7 +97,7 @@ class ConflictRuleSet:
         endpoint from that moment on, so a sync cannot start between the sync
         rule's answer and the reservation. A reservation refused while an
         operation or a lease is held raises ``operation_active``; an update,
-        migration or sync refusal, like anything else a rule raises, gives the
+        folder, migration or sync refusal, like anything else a rule raises, gives the
         reservation back before it propagates, so a refused start leaves no
         claim. Otherwise the reservation is given back when the block ends,
         however it ends.
@@ -97,7 +106,7 @@ class ConflictRuleSet:
         if message is not None:
             raise Refused("operation_active", message)
         try:
-            self._refuse_on_first_rule(update=update, migration=migration, sync=sync)
+            self._refuse_on_first_rule(update=update, folder=folder, migration=migration, sync=sync)
         except BaseException:
             self._prune_conflicts.release_reservation()
             raise
@@ -106,9 +115,13 @@ class ConflictRuleSet:
         finally:
             self._prune_conflicts.release_reservation()
 
-    def _refuse_on_first_rule(self, *, update: bool, migration: bool, sync: bool) -> None:
+    def _refuse_on_first_rule(self, *, update: bool, folder: bool, migration: bool, sync: bool) -> None:
         if update and self._update_in_progress():
             raise Refused("blocked_by_update", UPDATE_MESSAGE)
+        if folder:
+            refusal = self._folder_unreachable()
+            if refusal is not None:
+                raise refusal
         if migration and self._migration_pending():
             raise Refused("blocked_by_migration", MIGRATION_MESSAGE)
         if sync and self._sync_in_flight():

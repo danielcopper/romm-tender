@@ -60,6 +60,7 @@ class Application:
         steps = StartupSteps(self._logger, report_failure)
         services = self.services
         steps.run("note_update_outcome", services.update_outcome_service.note_start)
+        steps.run("create_tender_folder", services.tender_folder_service.create_at_start)
         # The one edge between steps; why it exists is bootstrap/startup.py's.
         if steps.run("detect_retrodeck_path_change", services.migration_service.detect_retrodeck_path_change):
             steps.run("report_missing_installs", services.startup_healing_service.report_missing_installs)

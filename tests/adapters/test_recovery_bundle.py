@@ -23,7 +23,9 @@ if TYPE_CHECKING:
 
 
 def _adapter(tmp_path) -> RecoveryBundleAdapter:
-    return RecoveryBundleAdapter(user_home=str(tmp_path), package_name="romm tender/", version="1.2.3")
+    folder = tmp_path / "Tender"
+    folder.mkdir(exist_ok=True)
+    return RecoveryBundleAdapter(folder=lambda: str(folder), version="1.2.3")
 
 
 def _create_layout(adapter: RecoveryBundleAdapter) -> None:
@@ -117,19 +119,26 @@ def test_seals_verified_bundle_with_generated_destinations(tmp_path):
     assert "README.txt" in (sealed / "checksums.sha256").read_text()
 
 
-def test_the_recovery_root_is_named_after_the_package(tmp_path):
-    """The folder the user finds their bundles in follows ``PACKAGE_NAME``.
+def test_the_recovery_root_is_recovery_inside_tenders_folder_as_it_stands_at_each_call(tmp_path):
+    """The root follows the folder the settings name now, not the one they named at construction."""
+    folders = [str(tmp_path / "first" / "Tender")]
+    adapter = RecoveryBundleAdapter(folder=lambda: folders[0], version="1.2.3")
+    assert adapter.root() == str(tmp_path / "first" / "Tender" / "recovery")
 
-    Two names rather than one: the program's own name is what a literal here
-    would spell, so a test using only that would pass either way. The name
-    reaches this adapter from ``domain/identity.py`` through bootstrap, and that
-    same constant also builds the outgoing User-Agent — so a literal is free to
-    drift away from the package, and the drift lands on the one surface a
-    destructive cleanup leaves behind.
-    """
-    for package_name in ("romm-tender", "some-other-program"):
-        adapter = RecoveryBundleAdapter(user_home=str(tmp_path), package_name=package_name, version="1.2.3")
-        assert adapter.root() == str(tmp_path / f"{package_name}-recovery")
+    folders[0] = str(tmp_path / "second" / "Tender")
+
+    assert adapter.root() == str(tmp_path / "second" / "Tender" / "recovery")
+
+
+def test_a_seal_never_creates_tenders_folder(tmp_path):
+    """Creating the folder is its owner's, who writes its id file with it; a seal finds it or fails."""
+    folder = tmp_path / "Tender"
+    adapter = RecoveryBundleAdapter(folder=lambda: str(folder), version="1.2.3")
+
+    with pytest.raises(FileNotFoundError):
+        adapter.seal_bundle("TestGame_2026-07-24_nofold", _snapshot(), [], _readme_context(), "none\n")
+
+    assert not folder.exists()
 
 
 def test_the_root_readme_headline_is_the_display_name_and_its_underline_fits(tmp_path):
@@ -429,7 +438,7 @@ def test_new_recovery_directories_fsync_each_parent(tmp_path, monkeypatch):
     adapter.seal_bundle("TestGame_2026-07-24_newparents", _snapshot(), [], _readme_context(), "playtime")
 
     root = Path(adapter.root())
-    assert tmp_path.stat().st_ino in synced
+    assert root.parent.stat().st_ino in synced
     assert root.stat().st_ino in synced
     assert (root / "staging").stat().st_ino in synced
     assert (root / "bundles").stat().st_ino in synced
@@ -744,7 +753,7 @@ class TestCooperativeAbort:
                 lambda: True,
             )
 
-        recovery_root = tmp_path / "romm-tender-recovery"
+        recovery_root = tmp_path / "Tender" / "recovery"
         assert list((recovery_root / "bundles").iterdir()) == [], "no bundle is published"
         assert list((recovery_root / "staging").iterdir()) == [], "staging is cleaned up"
 
@@ -772,7 +781,7 @@ class TestCooperativeAbort:
             )
 
         assert checks["count"] > 3, "the abort was polled repeatedly, not once up front"
-        recovery_root = tmp_path / "romm-tender-recovery"
+        recovery_root = tmp_path / "Tender" / "recovery"
         assert list((recovery_root / "bundles").iterdir()) == []
         assert list((recovery_root / "staging").iterdir()) == []
 

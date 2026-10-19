@@ -1,23 +1,27 @@
 """What an endpoint answers while a conflict rule it names holds, and which rule answers first.
 
-Five conditions refuse an endpoint before it does anything: an update being
-installed (``blocked_by_update``), a pending RetroDECK migration
+Six conditions refuse an endpoint before it does anything: an update being
+installed (``blocked_by_update``), Tender's folder unreachable
+(``folder_unreachable``), a pending RetroDECK migration
 (``blocked_by_migration``), a library sync in flight (``sync_active``), a
 removed-game cleanup holding its run claim (``prune_active``), and — for
 ``start_prune`` alone — another local-data operation still running or holding a
 lease (``operation_active``). Where more than one applies, they are asked in the
-order exclusive start, update, migration, sync, prune active.
+order exclusive start, update, folder, migration, sync, prune active. No
+endpoint names the folder rule yet; ``FOLDER`` keeps the list for the first
+that does.
 
-Every test here but the nine at the bottom drives ``harness.endpoints.<endpoint>``
+Every test here but the eleven at the bottom drives ``harness.endpoints.<endpoint>``
 with frontend-shaped arguments and reads the answer, so it holds wherever the
-rules are enforced. Five of those nine, the ``test_*_names_every_endpoint_*``
+rules are enforced. Six of those eleven, the ``test_*_names_every_endpoint_*``
 tests, read where each rule is declared instead, to keep each list from falling
 behind an endpoint that gains or loses a rule: the ``hold("<endpoint>", …)`` or
 ``hold_start("<endpoint>", …)`` call at the entry of the use case it calls
 (``tests/_conflict_rules.py``). Three more read the source the same way to keep
 the update rule wherever the migration rule is — at every call site, and at
 every direct migration check outside the rules — and nowhere else without it
-but the sites ``UPDATE_ONLY`` pins. The last,
+but the sites ``UPDATE_ONLY`` pins, and one guards that read against finding
+nothing. The last,
 ``test_every_endpoint_with_a_rule_has_its_arguments``, reads only the lists.
 Outside this module, ``tests/test_endpoints.py``'s ``TestMigrationRuleCoverage``
 reads the migration rule the same way.
@@ -77,6 +81,7 @@ _ARGS: dict[str, tuple[Any, ...]] = {
     "adopt_existing_rom": (41, None, None),
     "apply_sgdb_game_id": (41, 7),
     "apply_steam_input_setting": (),
+    "choose_tender_place": (None,),
     "cleanup_orphaned_grid_images": ([], False),
     "clear_game_core": (41,),
     "clear_sync_cache": (),
@@ -145,12 +150,14 @@ _ARGS: dict[str, tuple[Any, ...]] = {
     "test_connection": (),
     "uninstall_all_roms": (),
     "update_save_sync_settings": (_SAVE_SYNC_SETTINGS,),
+    "use_recorded_tender_folder": ("/run/media/deck/SD/Tender",),
 }
 
 PRUNE_ACTIVE = (
     "adopt_existing_rom",
     "apply_sgdb_game_id",
     "apply_steam_input_setting",
+    "choose_tender_place",
     "cleanup_orphaned_grid_images",
     "clear_game_core",
     "clear_sync_cache",
@@ -206,6 +213,7 @@ PRUNE_ACTIVE = (
     "sync_rom_saves",
     "test_connection",
     "uninstall_all_roms",
+    "use_recorded_tender_folder",
 )
 
 MIGRATION = (
@@ -264,6 +272,8 @@ SYNC_ACTIVE = (
 )
 
 EXCLUSIVE_START = ("start_prune",)
+
+FOLDER: tuple[str, ...] = ()
 
 # Refused while an update is being installed, beside every endpoint a pending
 # migration refuses: work that would start after the press. The migration
@@ -537,6 +547,14 @@ def test_the_read_behind_the_direct_check_sees_the_checks_it_is_about():
     }
 
 
+def test_the_folder_matrix_names_every_endpoint_with_the_rule():
+    """Holds ``FOLDER`` equal to the endpoints whose use case's ``hold`` or ``hold_start`` names the folder rule.
+
+    Reads where the rule is declared, not behaviour.
+    """
+    assert set(FOLDER) == endpoints_with_rule("folder")
+
+
 def test_the_sync_active_matrix_names_every_endpoint_with_the_rule():
     """Holds ``SYNC_ACTIVE`` equal to the endpoints whose use case's ``hold`` or ``hold_start`` names the sync rule.
 
@@ -554,4 +572,4 @@ def test_the_exclusive_start_names_every_endpoint_that_takes_it():
 
 
 def test_every_endpoint_with_a_rule_has_its_arguments():
-    assert set(_ARGS) == set(PRUNE_ACTIVE) | set(MIGRATION) | set(SYNC_ACTIVE) | set(EXCLUSIVE_START)
+    assert set(_ARGS) == set(PRUNE_ACTIVE) | set(MIGRATION) | set(SYNC_ACTIVE) | set(EXCLUSIVE_START) | set(FOLDER)

@@ -253,6 +253,28 @@ class Endpoints:
     async def move_emulator_source(self, kind, direction):
         return await self._services.emulator_sources_service.move_emulator_source(kind, direction)
 
+    # ── Tender's folder delegation to TenderFolderService ──────────────
+
+    @route
+    async def get_tender_folder(self):
+        return await self._services.tender_folder_service.get_tender_folder()
+
+    @route
+    async def check_tender_place(self, path):
+        return await self._services.tender_folder_service.check_tender_place(path)
+
+    @route
+    async def choose_tender_place(self, path):
+        return await self._services.tender_folder_service.choose_tender_place(path)
+
+    @route
+    async def use_recorded_tender_folder(self, folder):
+        return await self._services.tender_folder_service.use_recorded_tender_folder(folder)
+
+    @route
+    async def forget_tender_folder_records(self, folder):
+        return await self._services.tender_folder_service.forget_tender_folder_records(folder)
+
     # ── Disc picker delegation to DiscService ──────────────
 
     @route

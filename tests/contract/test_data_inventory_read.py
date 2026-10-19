@@ -27,9 +27,9 @@ async def test_an_untouched_install_reports_every_population_as_empty(harness):
         "recovery_root": harness.app.services.data_inventory_service._recovery_inventory.root(),
         "recovery_bundle_list": [],
     }
-    # The real adapter's root, derived from the package name rather than spelled
-    # by either side of the wire.
-    assert result["recovery_root"].endswith("-recovery")
+    # The real adapter's root, ``recovery/`` inside Tender's folder at its
+    # default place, rather than spelled by either side of the wire.
+    assert result["recovery_root"] == str(harness.tmp_path / "home" / "Tender" / "recovery")
 
 
 async def test_it_counts_the_installed_rows_and_sums_the_size_romm_reported(harness):
@@ -65,7 +65,9 @@ async def test_a_sealed_bundle_is_counted_and_measured_on_disk(harness):
     source_root.mkdir()
     (source_root / "rom.gba").write_bytes(b"r" * 2048)
     # The very adapter the read is wired to, so the bundle it counts is the
-    # bundle this test sealed.
+    # bundle this test sealed — into Tender's folder, made ready as a cleanup
+    # makes it ready before it seals.
+    harness.app.services.tender_folder_service.do_prepare_for_write()
     recovery = harness.app.services.data_inventory_service._recovery_inventory
     sealed = recovery.seal_bundle(
         "Game_2026-07-24_abc123",

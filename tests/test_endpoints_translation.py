@@ -1267,6 +1267,7 @@ def _dispatcher_over_cleanup(uow_factory: Any, events: FakeEventSink) -> tuple[C
             uow_factory=uow_factory,
             romm_api=MagicMock(),
             recovery_store=MagicMock(),
+            prepare_folder=MagicMock(),
             prune_artifacts=MagicMock(),
             steam_recovery=MagicMock(),
             retrodeck_folders=FakeRetroDeckFolders(),

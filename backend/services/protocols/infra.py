@@ -343,7 +343,7 @@ class PruneRunClaim(Protocol):
 class ConflictRules(Protocol):
     """The conflict rules a use case checks at its entry, in their pinned order.
 
-    ``hold(label, update=…, migration=…, sync=…, prune=…)`` raises the
+    ``hold(label, update=…, folder=…, migration=…, sync=…, prune=…)`` raises the
     ``Refused`` of the first named rule that holds, so the block does not run;
     with ``prune`` the block runs under an operation named *label*. *label* is
     the endpoint's name. ``hold_until_done`` holds an operation named *label*
@@ -355,7 +355,7 @@ class ConflictRules(Protocol):
     ``release_lease`` gives one back by token. ``emit_under_lease`` emits an
     event through *emit_with* under a lease it takes, and gives the lease back
     when the emit raises or nobody heard it. ``hold_start(label, update=…,
-    migration=…, sync=…)`` is a cleanup's exclusive start: it reserves the
+    folder=…, migration=…, sync=…)`` is a cleanup's exclusive start: it reserves the
     start first, then checks the named rules, refusing as ``hold`` does, and
     holds the reservation for the block. ``renew_lease`` extends a live lease by token,
     ``wait_for_lease_end`` returns once a lease is released, disowned or past
@@ -369,13 +369,20 @@ class ConflictRules(Protocol):
         label: str,
         *,
         update: bool = False,
+        folder: bool = False,
         migration: bool = False,
         sync: bool = False,
         prune: bool = False,
     ) -> AbstractAsyncContextManager[None]: ...
 
     def hold_start(
-        self, label: str, *, update: bool = False, migration: bool = False, sync: bool = False
+        self,
+        label: str,
+        *,
+        update: bool = False,
+        folder: bool = False,
+        migration: bool = False,
+        sync: bool = False,
     ) -> AbstractAsyncContextManager[None]: ...
 
     async def hold_until_done(self, task: asyncio.Task[Any], label: str) -> None: ...

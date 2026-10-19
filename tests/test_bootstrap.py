@@ -88,6 +88,7 @@ from services.saves import SaveService
 from services.shortcut_artwork import ShortcutArtworkService
 from services.shortcut_file import ShortcutFileService
 from services.steamgrid import SteamGridService
+from services.tender_folder import TenderFolderService
 from services.update_check import UpdateCheckService
 from services.update_outcome import UpdateOutcomeService
 from services.update_output import UpdateOutputService
@@ -243,10 +244,9 @@ class TestBootstrap:
         The two assertions above spell the program's own name and version, so a
         literal ``"romm-tender/0.33.0"`` in bootstrap would satisfy them; this
         one asks with a name and a version the program will never carry, so only
-        a read of the constants can answer it. What it protects: bootstrap
-        spends the same name on the recovery root the cleanup writes its bundles
-        into, so a literal here is free to drift away from it, and the drift
-        shows up on a server's token list rather than in CI.
+        a read of the constants can answer it. What it protects: a literal here
+        is free to drift away from the package, and the drift shows up on a
+        server's token list rather than in CI.
         """
         monkeypatch.setattr("bootstrap.adapters.PACKAGE_NAME", "not-the-programs-name")
         monkeypatch.setattr("bootstrap.adapters.VERSION", "9.9.9")
@@ -256,19 +256,13 @@ class TestBootstrap:
         assert result.adapters.http_adapter._user_agent == "not-the-programs-name/9.9.9"
         assert result.adapters.sgdb_adapter._user_agent == "not-the-programs-name/9.9.9"
 
-    def test_the_recovery_root_is_named_after_the_same_constant(self, tmp_path, monkeypatch):
-        """The UA and the recovery root are one name, so they cannot drift apart.
-
-        A recovery folder is named after whatever wrote it and a server reading
-        a User-Agent is told which package is calling — the same answer, spent
-        twice. Asked with a name the program will never carry, because the real
-        one is what ``sanitize_package_name`` would produce either way.
-        """
+    def test_the_recovery_root_lies_in_tenders_folder_whatever_the_package_is_called(self, tmp_path, monkeypatch):
+        """The package name reaches the User-Agent alone; the bundles lie in ``recovery/`` inside Tender's folder."""
         monkeypatch.setattr("bootstrap.adapters.PACKAGE_NAME", "not-the-programs-name")
 
         result = _bootstrap_for(tmp_path)
 
-        assert result.adapters.recovery_store.root().endswith("/not-the-programs-name-recovery")
+        assert result.adapters.recovery_store.root() == str(tmp_path / "home" / "Tender" / "recovery")
 
 
 class TestTheCacheRootAndTheDataRootStayApart:
@@ -638,6 +632,7 @@ class TestWireServices:
             "resolve_upload_conflict": _GAVEL,
             "compute_sync_action": _GAVEL.compute_sync_action,
             "recovery_store": MagicMock(),
+            "tender_folder": MagicMock(),
             "prune_artifacts": MagicMock(),
             "steam_recovery": MagicMock(),
             "latest_release": FakeLatestRelease(),
@@ -710,6 +705,7 @@ class TestWireServices:
                 game_process=deps["game_process"],
                 resolve_upload_conflict=deps["resolve_upload_conflict"],
                 compute_sync_action=deps["compute_sync_action"],
+                tender_folder=deps["tender_folder"],
                 recovery_store=deps["recovery_store"],
                 recovery_inventory=deps["recovery_store"],
                 prune_artifacts=deps["prune_artifacts"],
@@ -825,11 +821,12 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(fields(result)) == 36
+        assert len(fields(result)) == 37
         assert all(getattr(result, field.name) is not None for field in fields(result))
         assert isinstance(result.prune_conflicts, PruneConflicts)
         assert isinstance(result.core_service, CoreService)
         assert isinstance(result.emulator_sources_service, EmulatorSourcesService)
+        assert isinstance(result.tender_folder_service, TenderFolderService)
         assert isinstance(result.disc_service, DiscService)
         assert isinstance(result.version_switch_service, VersionSwitchService)
         assert isinstance(result.prune_service, PruneService)
