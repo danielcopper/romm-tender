@@ -3580,6 +3580,21 @@ class TestASingleZipsUnpackedFolder:
 
         assert result["status"] == "match"
 
+    async def test_check_against_server_ignores_folder_entries_and_finders_folder(self, h):
+        members = {
+            "Game/Game.cue": b"FILE",
+            "Game/Game.bin": b"\x07" * 64,
+            "Extras/": b"",
+            "__MACOSX/Game/._Game.cue": b"fork",
+        }
+        h.stage_detail(_archived_detail(archive=_zip_bytes(members), members=members, state_members=True))
+        h.store.files[f"{self._FOLDER}/Game.cue"] = b"FILE"
+        h.store.files[f"{self._FOLDER}/Game.bin"] = b"\x07" * 64
+
+        result = await h.service.verify_existing_content(_ROM_ID, self._FOLDER)
+
+        assert result["status"] == "match"
+
     async def test_without_a_listing_the_folder_cannot_be_confirmed(self, h):
         members = {"Game.cue": b"FILE", "Game.bin": b"\x07" * 64}
         h.stage_detail(_archived_detail(archive=_zip_bytes(members), members=members))

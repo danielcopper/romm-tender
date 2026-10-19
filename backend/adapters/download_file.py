@@ -20,6 +20,7 @@ import zlib
 from typing import TYPE_CHECKING
 
 from domain.rom_candidates import DIR, FILE, LINK, Kind
+from domain.served_shape import unpacked_name
 from lib.path_safety import safe_path_component
 
 if TYPE_CHECKING:
@@ -343,6 +344,7 @@ class DownloadFileAdapter:
         safe_root: str,
         progress_callback: Callable[[int, int], None] | None = None,
         strip_prefix: str = "",
+        ignored_top_folders: frozenset[str] = frozenset(),
     ) -> None:
         """Extract *archive_path* into *dest_dir* with ZIP-slip protection.
 
@@ -350,8 +352,10 @@ class DownloadFileAdapter:
         and verifies that every ZIP member resolves within both before
         writing any byte. Raises ``ValueError`` on any escape attempt.
 
-        *strip_prefix* comes off the front of every member name that starts
-        with it, and the check above runs on the stripped name.
+        Every member lands where ``unpacked_name`` (``domain/served_shape.py``)
+        places it for *strip_prefix* and *ignored_top_folders* — the wrapper and
+        any separator after it off, nothing for a member under an ignored folder
+        or for the wrapper's own entry — and the check above runs on that name.
 
         When *progress_callback* is supplied it is invoked with
         ``(extracted, total)`` uncompressed byte counts after each chunk
@@ -365,8 +369,11 @@ class DownloadFileAdapter:
         if not (real_dest == real_safe or real_dest.startswith(real_safe + os.sep)):
             raise ValueError(f"Extract directory would be outside safe root: {dest_dir}")
         with zipfile.ZipFile(archive_path, "r") as zf:
-            members = zf.infolist()
-            placed = {member.filename: member.filename.removeprefix(strip_prefix) for member in members}
+            placed = {
+                member.filename: unpacked_name(member.filename, strip_prefix, ignored_top_folders)
+                for member in zf.infolist()
+            }
+            members = [member for member in zf.infolist() if placed[member.filename]]
             for member in members:
                 member_path = os.path.realpath(os.path.join(real_dest, placed[member.filename]))
                 if not (member_path == real_dest or member_path.startswith(real_dest + os.sep)):

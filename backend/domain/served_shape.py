@@ -34,6 +34,43 @@ ZIP_EXT = ".zip"
 _SEPARATORS = frozenset("/\\")
 _FIRST_FOLDER = re.compile(r"[^/\\]+[/\\]")
 
+# macOS Finder puts the resource forks of a folder it compresses under a
+# top-level ``__MACOSX/`` folder; no emulator reads them, so they are neither
+# counted nor unpacked.
+IGNORED_TOP_FOLDERS: frozenset[str] = frozenset({"__MACOSX"})
+
+
+def _top_folder(name: str) -> str:
+    return re.split(r"[/\\]", name, maxsplit=1)[0]
+
+
+def _counted(member_names: Iterable[str]) -> list[str]:
+    """The member names that say something about the content.
+
+    A directory-only entry (a name ending in a separator) is left out: RomM's
+    listing may carry one where the local central-directory read skips it, and
+    both must find the same wrapper. So is everything under
+    ``IGNORED_TOP_FOLDERS``.
+    """
+    return [
+        name
+        for name in member_names
+        if name and name[-1] not in _SEPARATORS and _top_folder(name) not in IGNORED_TOP_FOLDERS
+    ]
+
+
+def unpacked_name(name: str, prefix: str, ignored: frozenset[str] = IGNORED_TOP_FOLDERS) -> str:
+    """Where member *name* lands in the folder a zip wrapped in *prefix* unpacks into, or ``""`` for nowhere.
+
+    The wrapper and any separator left after it come off, so ``Game//Game.bin``
+    lands as ``Game.bin``; a member under one of the *ignored* top folders and
+    the wrapper's own entry land nowhere. With no prefix and nothing ignored —
+    a multi-file ROM's zip — every name lands as it is.
+    """
+    if _top_folder(name) in ignored:
+        return ""
+    return name.removeprefix(prefix).lstrip("/\\") if prefix else name
+
 
 def is_zip_name(name: str) -> bool:
     """Whether *name* is a ``.zip`` by its extension, case-folded."""
@@ -45,11 +82,13 @@ def wrapper_prefix(member_names: Iterable[str]) -> str:
 
     A zip made by compressing a folder holds that folder and nothing beside it
     (``Game/Game.cue``, ``Game/Game.bin``); its content is read, and unpacked,
-    as if the folder were not there. ``""`` where any member sits at the top
-    level, where the members start in different folders, and for no members.
+    as if the folder were not there. Directory-only entries and macOS Finder's
+    ``__MACOSX/`` folder do not count (:func:`_counted`). ``""`` where a counted
+    member sits at the top level, where they start in different folders, and
+    for none.
     """
     prefixes = set()
-    for name in member_names:
+    for name in _counted(member_names):
         match = _FIRST_FOLDER.match(name)
         if match is None:
             return ""
@@ -63,9 +102,10 @@ def holds_disc_image(member_names: Iterable[str]) -> bool:
     True when a member at the archive's top level is a disc image
     (``DISC_IMAGE_EXTENSIONS``), its extension compared case-folded; for an
     archive wrapped in one folder (:func:`wrapper_prefix`) the top level is that
-    folder's. ``.bin`` and ``.img`` are no disc images: a ``.bin`` is a
-    cartridge on some systems and a disc track on others, and an ``.img`` is a
-    disc only beside the ``.ccd`` that describes it.
+    folder's, and macOS Finder's ``__MACOSX/`` folder is ignored. ``.bin`` and
+    ``.img`` are no disc images: a ``.bin`` is a cartridge on some systems and a
+    disc track on others, and an ``.img`` is a disc only beside the ``.ccd``
+    that describes it.
 
     Two roads not taken. An ``.m3u`` does not count, because floppy systems
     (C64, MSX, Amiga, Atari ST, PC-98) list their disks in one, and those
@@ -74,20 +114,20 @@ def holds_disc_image(member_names: Iterable[str]) -> bool:
     starts from the zip, which DOSBox Pure reads whole, while an unpacked copy
     would launch from the CD image, and DOSBox Pure would mount only the CD.
     """
-    names = list(member_names)
+    names = _counted(member_names)
     prefix = wrapper_prefix(names)
     return any(
         not _SEPARATORS & set(name) and os.path.splitext(name)[1].casefold() in DISC_IMAGE_EXTENSIONS
-        for name in (full.removeprefix(prefix) for full in names)
+        for name in (unpacked_name(full, prefix) for full in names)
     )
 
 
 def unpacked_manifest(manifest: tuple[ServerFile, ...]) -> tuple[ServerFile, ...]:
     """The manifest a folder unpacked from a single zip is held to: each listed member as a loose file.
 
-    A member lands at its path inside the zip, less the folder the zip may wrap
-    everything in (:func:`wrapper_prefix`), so that path is where it belongs in
-    the folder, and its size and digests are the member's. A zip whose members
+    A member lands where :func:`unpacked_name` places it — its path inside the
+    zip, less the folder the zip may wrap everything in — so that path is where
+    it belongs in the folder, and its size and digests are the member's. A zip whose members
     RomM does not list contributes nothing: without the listing nothing says
     which file in the folder its one digest belongs to, nor whether it covers
     one member or all of them — an empty manifest is the caller's "cannot be
@@ -96,9 +136,10 @@ def unpacked_manifest(manifest: tuple[ServerFile, ...]) -> tuple[ServerFile, ...
     unpacked: list[ServerFile] = []
     for entry in manifest:
         prefix = wrapper_prefix(member.name for member in entry.members)
+        counted = set(_counted(member.name for member in entry.members))
         for member in entry.members:
-            rel_path = member.name.removeprefix(prefix)
-            if not rel_path:
+            rel_path = unpacked_name(member.name, prefix)
+            if member.name not in counted or not rel_path:
                 continue
             unpacked.append(
                 ServerFile(

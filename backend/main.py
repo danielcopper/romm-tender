@@ -544,12 +544,13 @@ class Endpoints:
         user chose Download over it: with ``replace_existing`` it is removed and
         its saves carried to the canonical name, which is what that dialog's
         second confirmation promises — except for a game served as a folder or
-        as a single zip that may be unpacked, whose launch file, and so the
-        name its saves need, is not known before the download. ``collision_choice`` answers the save
-        collision that carry can raise. ``page_saw_candidate`` reports what the
-        game page told the user, so a page that found a copy can never end in a
-        silent download. ``confirmed_paths`` lists the occupied paths whose
-        dialogs the user answered with Replace, for a game that claims two.
+        as a single zip that may be unpacked, whose launch file, and so the name
+        its saves need, is not known before the download. ``collision_choice``
+        answers the save collision that carry can raise. ``page_saw_candidate``
+        reports what the game page told the user, so a page that found a copy
+        can never end in a silent download. ``confirmed_paths`` lists the
+        occupied paths whose dialogs the user answered with Replace, for a game
+        that claims two.
         """
         return await self._services.download_service.start_download(
             rom_id, replace_existing, candidate_path, collision_choice, page_saw_candidate, confirmed_paths

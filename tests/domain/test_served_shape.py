@@ -35,6 +35,10 @@ class TestHoldsDiscImage:
             ["Game/Game.cue", "Game/Game (Track 1).bin"],
             ["Game/Game.rvz"],
             ["Game\\Game.cue", "Game\\Game.bin"],
+            ["Game//Game.cue", "Game//Game.bin"],
+            ["Game/Game.cue", "Game/Game.bin", "Extras/"],
+            ["Game/Game.cue", "Game/Game.bin", "__MACOSX/Game/._Game.cue"],
+            ["Game.cue", "Game.bin", "__MACOSX/._Game.cue"],
         ],
         ids=[
             "cue set",
@@ -49,6 +53,10 @@ class TestHoldsDiscImage:
             "cue set in a wrapper folder",
             "rvz in a wrapper folder",
             "wrapper folder named with a backslash",
+            "doubled separator after the wrapper",
+            "wrapper beside an empty folder entry",
+            "wrapper made by macos finder",
+            "loose set beside finder's folder",
         ],
     )
     def test_a_disc_set_is_unpacked(self, names):
@@ -70,6 +78,8 @@ class TestHoldsDiscImage:
             ["Game/GAME.EXE", "Game/cd/game.cue", "Game/cd/game.bin"],
             ["Game/Game.gba"],
             ["Game/Game.cue", "Other/Other.cue"],
+            ["Game.gba", "__MACOSX/._Game.gba"],
+            ["__MACOSX/Game/._Game.cue"],
             [],
         ],
         ids=[
@@ -86,6 +96,8 @@ class TestHoldsDiscImage:
             "dos game with its cd in a wrapper folder",
             "cartridge in a wrapper folder",
             "two folders are no wrapper",
+            "cartridge beside finder's folder",
+            "only finder's folder",
             "empty",
         ],
     )
@@ -107,8 +119,22 @@ class TestWrapperPrefix:
             (["Game/Game.cue", "Other/Other.cue"], ""),
             (["Game.rvz"], ""),
             ([], ""),
+            (["Game/Game.cue", "Extras/"], "Game/"),
+            (["Game/Game.cue", "Extras\\"], "Game/"),
+            (["Game/Game.cue", "__MACOSX/Game/._Game.cue"], "Game/"),
         ],
-        ids=["one folder", "its own entry", "backslash", "a file beside it", "two folders", "one file", "empty"],
+        ids=[
+            "one folder",
+            "its own entry",
+            "backslash",
+            "a file beside it",
+            "two folders",
+            "one file",
+            "empty",
+            "an empty folder entry beside it",
+            "a backslash folder entry beside it",
+            "finder's folder beside it",
+        ],
     )
     def test_the_one_folder_around_everything(self, names, prefix):
         assert wrapper_prefix(names) == prefix
@@ -160,6 +186,11 @@ class TestServedShapes:
             "has_nested_single_file": True,
             "files": [{"file_name": "Game.zip", "archive_members": [{"name": "Game.rvz", "size": 1}]}],
         }
+
+        assert served_shapes(detail) == frozenset({FILE, DIR})
+
+    def test_a_wrapped_listing_with_an_empty_folder_entry_is_both(self):
+        detail = _single_zip(files=_listed(("Game/Game.cue", 80), ("Game/Game.bin", 9000), ("Extras/", 0)))
 
         assert served_shapes(detail) == frozenset({FILE, DIR})
 
@@ -295,3 +326,21 @@ class TestUnpackedManifest:
             ("Game.cue", "Game.cue"),
             ("Game.bin", "tracks/Game.bin"),
         ]
+
+    def test_folder_entries_and_finders_folder_are_held_to_nothing(self):
+        manifest = server_manifest(
+            {
+                "files": [
+                    {
+                        "file_name": "Game.zip",
+                        "archive_members": [
+                            {"name": "Game/Game.cue", "size": 80, "md5_hash": "aa"},
+                            {"name": "Extras/", "size": 0},
+                            {"name": "__MACOSX/Game/._Game.cue", "size": 4, "md5_hash": "cc"},
+                        ],
+                    }
+                ]
+            }
+        )
+
+        assert [f.rel_path for f in unpacked_manifest(manifest)] == ["Game.cue"]

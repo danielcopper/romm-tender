@@ -1048,3 +1048,56 @@ class TestExtractingWithoutTheWrapperFolder:
 
         assert not (tmp_path / "evil.txt").exists()
         assert list(dest.iterdir()) == []
+
+    def test_a_wrapper_entry_named_with_a_backslash_places_nothing(self, tmp_path):
+        # zipfile reads only a trailing "/" as a directory, so "Game\\" is a file entry here.
+        archive = tmp_path / "Game.zip"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr(zipfile.ZipInfo("Game\\"), b"")
+            zf.writestr(zipfile.ZipInfo("Game\\Game.cue"), b"FILE")
+        dest = tmp_path / "out"
+        dest.mkdir()
+
+        DownloadFileAdapter().extract_zip(str(archive), str(dest), str(tmp_path), strip_prefix="Game\\")
+
+        assert [p.name for p in dest.iterdir()] == ["Game.cue"]
+
+    def test_a_doubled_separator_after_the_wrapper_still_lands_at_the_top(self, tmp_path):
+        archive = tmp_path / "Game.zip"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("Game//Game.bin", b"\x01" * 16)
+        dest = tmp_path / "out"
+        dest.mkdir()
+
+        DownloadFileAdapter().extract_zip(str(archive), str(dest), str(tmp_path), strip_prefix="Game/")
+
+        assert (dest / "Game.bin").read_bytes() == b"\x01" * 16
+
+    def test_an_ignored_top_folder_is_not_unpacked(self, tmp_path):
+        archive = tmp_path / "Game.zip"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("Game/Game.cue", b"FILE")
+            zf.writestr("__MACOSX/Game/._Game.cue", b"fork")
+        dest = tmp_path / "out"
+        dest.mkdir()
+
+        DownloadFileAdapter().extract_zip(
+            str(archive), str(dest), str(tmp_path), strip_prefix="Game/", ignored_top_folders=frozenset({"__MACOSX"})
+        )
+
+        assert [p.name for p in dest.iterdir()] == ["Game.cue"]
+
+    def test_without_a_prefix_or_ignored_folders_every_name_lands_as_it_is(self, tmp_path):
+        archive = tmp_path / "Game.zip"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("Game/Game.cue", b"FILE")
+            zf.writestr("__MACOSX/Game/._Game.cue", b"fork")
+        dest = tmp_path / "out"
+        dest.mkdir()
+
+        DownloadFileAdapter().extract_zip(str(archive), str(dest), str(tmp_path))
+
+        assert sorted(p.relative_to(dest).as_posix() for p in dest.rglob("*") if p.is_file()) == [
+            "Game/Game.cue",
+            "__MACOSX/Game/._Game.cue",
+        ]

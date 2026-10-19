@@ -340,6 +340,7 @@ class DownloadFileStore(Protocol):
         safe_root: str,
         progress_callback: Callable[[int, int], None] | None = None,
         strip_prefix: str = "",
+        ignored_top_folders: frozenset[str] = frozenset(),
     ) -> None:
         """Extract *archive_path* into *dest_dir* with ZIP-slip protection.
 
@@ -348,10 +349,11 @@ class DownloadFileStore(Protocol):
         via ``os.path.realpath`` and verify that every member resolves
         within *safe_root* before extracting.
 
-        *strip_prefix* is removed from the front of every member name before
-        it is placed — the one folder a zip wraps its whole content in
-        (``wrapper_prefix``, ``domain/served_shape.py``) — and the slip check
-        runs on the stripped name, where the member actually lands.
+        *strip_prefix* is the one folder a zip wraps its whole content in
+        (``wrapper_prefix``) and *ignored_top_folders* the top-level folders
+        left out (``IGNORED_TOP_FOLDERS``); each member lands where
+        ``unpacked_name`` (``domain/served_shape.py``) places it for the two,
+        and the slip check runs on that name, where the member actually lands.
 
         When *progress_callback* is supplied it is invoked with
         ``(extracted, total)`` uncompressed byte counts as members stream

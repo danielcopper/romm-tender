@@ -1558,17 +1558,18 @@ ROM has `len(files) == 1` and correctly stays on the flat single-file path.
 inside a zip — RetroArch hands a core only the member it claims, so a Saturn `.cue` inside a zip finds none of its
 `.bin` tracks — and Dolphin reads no zip at all. So once a single file named `.zip` is downloaded, its own central
 directory is read (no decompression) and the zip is unpacked when a member at its top level is a disc image, the top
-level of a zip that holds nothing but one folder being that folder's (`holds_disc_image` and `wrapper_prefix`,
-`domain/served_shape.py`; the first also says why an `.m3u` and a disc image in a subfolder do not count); a file that
-does not open as a zip is kept as it is. A wrapped zip's content is unpacked without the wrapper folder (`extract_zip`'s
-`strip_prefix`, the ZIP-slip check judging the stripped name), so it lands — and collapses for ES-DE — as an unwrapped
-zip's would. From there it takes the multi-file path step for step — `DownloadUnpacker.unpack_and_record` is the one
-implementation both call: bounded by the system's own ROM folder, unpacked into
-`<roms>/<system>/<resolve_extract_dir_name>`, PS3-healed, the M3U and launch-file rules, the ES-DE collapse rename,
-recorded with `file_path=<launch file>` and `rom_dir=<folder>`, the zip removed. Only the multi-file path URL-decodes
-the unpacked names: RomM writes them encoded into the zip it builds, while a user's own zip holds the names its maker
-chose. Whatever sat at the zip's own path — a replaced file, or this ROM's earlier copy — goes only once that install is
-recorded.
+level of a zip that holds nothing but one folder being that folder's, and macOS Finder's `__MACOSX/` folder ignored
+(`holds_disc_image` and `wrapper_prefix`, `domain/served_shape.py`; the first also says why an `.m3u` and a disc image
+in a subfolder do not count, and directory-only entries count on neither RomM's listing nor the local one); a file that
+does not open as a zip is kept as it is. A wrapped zip's content is unpacked without the wrapper folder and without
+`__MACOSX/` (`extract_zip`'s `strip_prefix` and `ignored_top_folders`, each member placed by `unpacked_name` and the
+ZIP-slip check judging that name), so it lands — and collapses for ES-DE — as an unwrapped zip's would. From there it
+takes the multi-file path step for step — `DownloadUnpacker.unpack_and_record` is the one implementation both call:
+bounded by the system's own ROM folder, unpacked into `<roms>/<system>/<resolve_extract_dir_name>`, PS3-healed, the M3U
+and launch-file rules, the ES-DE collapse rename, recorded with `file_path=<launch file>` and `rom_dir=<folder>`, the
+zip removed. Only the multi-file path URL-decodes the unpacked names: RomM writes them encoded into the zip it builds,
+while a user's own zip holds the names its maker chose. Whatever sat at the zip's own path — a replaced file, or this
+ROM's earlier copy — goes only once that install is recorded.
 
 The question "what does this game become on disk" is asked of one function, `served_shapes` (`domain/served_shape.py`),
 and every site that needs the answer asks it: the download's target gate claims both paths for a single zip — the zip
@@ -1646,11 +1647,10 @@ also **suppresses M3U generation** and **heals a `.txt`-suffixed `PS3_DISC.SFB`*
 `DISC_IMAGE_EXTENSIONS` — so the emulator can switch discs, **and** for **single-disc bin/cue** ROMs — exactly one
 `.cue` — so the extract dir is renamed after a game-named playlist rather than a generically-named cue (`disc1.cue/`).
 Every other single disc gets no playlist: bin/cue systems read a one-entry playlist, iso-based GameCube/Wii do not
-launch from one reliably, and whether a single `.gdi`, `.ccd`, `.toc` or `.mds` does is unmeasured. Two descriptors of
-one disc (a `.cue` beside a `.ccd`) count once (`one_descriptor_per_disc`). A disc made of tracks launches from its
-descriptor: `detect_launch_file` takes a `.cue` before the WiiU, PS3 and 3DS rules, and `.gdi`, `.ccd`, `.toc`, `.mds`,
-in that order, after them — those extensions also name files inside a game's own data, such as a PS3 dump's `levels.toc`
-— and all of them ahead of the largest-file fallback, which would otherwise pick a track.
+launch from one reliably, and whether a single `.gdi`, `.ccd`, `.toc` or `.mds` does is unmeasured. A disc made of
+tracks launches from its descriptor: `detect_launch_file` takes a `.cue` before the WiiU, PS3 and 3DS rules, and `.gdi`,
+`.ccd`, `.toc`, `.mds`, in that order, after them — those extensions also name files inside a game's own data, such as a
+PS3 dump's `levels.toc` — and all of them ahead of the largest-file fallback, which would otherwise pick a track.
 
 **M3U is platform-gated on ES-DE's own extension list** ([ADR-0013](../adr/0013-platform-gated-m3u-via-es-systems.md)).
 The file-count rule above only runs when the ROM's system actually supports `.m3u`. RomM bundles a platform-blind `.m3u`

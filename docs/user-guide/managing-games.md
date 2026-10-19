@@ -539,9 +539,10 @@ tracks, and Dolphin (Wii and GameCube) reads no zip at all. Tender looks inside 
 disc image at its top level — a `.cue` with its tracks, a Dreamcast `.gdi` set, a Wii or GameCube `.rvz`, `.wbfs`,
 `.iso` and the like — is unpacked, and the zip is removed afterwards. A zip that holds nothing but one folder, the way
 compressing a folder makes one, counts that folder's top level instead, and its content is unpacked without the folder
-around it. Anything else stays the zip it is: a cartridge ROM, an arcade romset, a floppy game with its `.m3u`, a DOS
-game whose CD image sits in a folder below that top level, a lone `.bin`, an `.img` without its `.ccd`. Nothing in those
-says the zip has to be unpacked, and the emulators for most of them read the zip as it is.
+around it; the `__MACOSX` folder macOS Finder adds beside it is ignored and not unpacked. Anything else stays the zip it
+is: a cartridge ROM, an arcade romset, a floppy game with its `.m3u`, a DOS game whose CD image sits in a folder below
+that top level, a lone `.bin`, an `.img` without its `.ccd`. Nothing in those says the zip has to be unpacked, and the
+emulators for most of them read the zip as it is.
 
 After the byte transfer finishes, the download button and the QAM queue show a brief **Extracting…** phase with its own
 progress (the percentage climbs back from 0 as the archive unpacks — a large Switch or disc image takes a moment). The
@@ -576,12 +577,13 @@ folder, so they need no playlist either way.
 
 **Space for unpacking.** An unpacked game needs room for the zip and for what comes out of it at the same time. Where
 your server lists what is inside a single zip — libraries rescanned since RomM 4.9.0 — the check before the download
-counts both for a zip it lists with a disc image at that top level; otherwise it counts the zip alone. Once the download
-is complete, Tender checks again against the size the zip itself states, for a single zip and a multi-file download
-alike. When the storage is too full, the download fails with **Not enough space to unpack**, nothing is installed, and
-the downloaded zip is kept: free some space and press **Download** again, and Tender unpacks the zip it already has
-instead of downloading it again. The kept zip does not survive a restart of Tender (rebooting the Deck, say) — Tender
-clears unfinished downloads when it starts, so the next download fetches the game again.
+counts both for a zip it lists with a disc image at its top level (or at its one folder's, as above); otherwise it
+counts the zip alone. Once the download is complete, Tender checks again against the size the zip itself states, for a
+single zip and a multi-file download alike. When the storage is too full, the download fails with **Not enough space to
+unpack**, nothing is installed, and the downloaded zip is kept: free some space and press **Download** again, and Tender
+unpacks the zip it already has instead of downloading it again. The kept zip does not survive a restart of Tender
+(rebooting the Deck, say) — Tender clears unfinished downloads when it starts, so the next download fetches the game
+again.
 
 !!! note "Known limitation"
 

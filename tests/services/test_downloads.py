@@ -6875,6 +6875,34 @@ class TestASingleZipHoldingADisc:
         assert installed.rom_dir == str(folder)
         assert installed.file_path == str(folder / "Game.rvz")
 
+    async def test_a_zip_made_by_macos_finder_unpacks_without_its_resource_forks(self, downloads, roms):
+        members = {f"Game/{name}": data for name, data in _SATURN_SET.items()}
+        members["__MACOSX/Game/._Game.cue"] = b"fork"
+
+        await self._download(downloads, roms, members)
+
+        folder = roms / "saturn" / "Game.m3u"
+        installed = downloads.uow.rom_installs.get(77)
+        assert installed is not None
+        assert installed.rom_dir == str(folder)
+        assert sorted(p.name for p in folder.iterdir()) == [
+            "Game (Track 1).bin",
+            "Game (Track 2).bin",
+            "Game.cue",
+            "Game.m3u",
+        ]
+
+    async def test_a_wrapper_beside_an_empty_folder_entry_still_unpacks_flat(self, downloads, roms):
+        members = {f"Game/{name}": data for name, data in _SATURN_SET.items()}
+        members["Extras/"] = b""
+
+        await self._download(downloads, roms, members)
+
+        installed = downloads.uow.rom_installs.get(77)
+        assert installed is not None
+        assert installed.file_path == str(roms / "saturn" / "Game.m3u" / "Game.m3u")
+        assert (roms / "saturn" / "Game.m3u" / "Game.cue").exists()
+
     async def test_a_dos_game_in_a_wrapper_folder_with_its_cd_is_kept(self, downloads, roms):
         members = {"Game/GAME.EXE": b"MZ", "Game/cd/game.cue": b"FILE", "Game/cd/game.bin": b"\x00" * 64}
 
