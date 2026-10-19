@@ -75,6 +75,16 @@ export const SELECTION_ACCENT = "#1a9fff";
  *  like a focused Field Steam draws. */
 export const FOCUSED_ROW_FILL = "#3d4450";
 
+// A table row whose control holds focus: a fill, and a marker as wide as a list
+// row's, drawn as an inset shadow so it takes no width from the row's first
+// cell. The unfocused row keeps an empty fill so the two states differ only in
+// paint, never in layout.
+export const FOCUSED_ROW: CSSProperties = {
+  background: FOCUSED_ROW_FILL,
+  boxShadow: `inset ${ROW_MARKER_WIDTH}px 0 0 ${SELECTION_ACCENT}`,
+};
+export const UNFOCUSED_ROW: CSSProperties = { background: "transparent", boxShadow: "none" };
+
 /** The horizontal gutter a pane's content sits in — what `SectionTitle` and
  *  `Muted` are padded by, so a table lines up with the section it sits under. */
 export const PANE_GUTTER = "16px";

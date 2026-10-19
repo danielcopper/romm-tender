@@ -17,9 +17,8 @@ import {
   PANE_GUTTER,
   PaneTableHeader,
   PaneTableRow,
-  FOCUSED_ROW_FILL,
-  ROW_MARKER_WIDTH,
-  SELECTION_ACCENT,
+  FOCUSED_ROW,
+  UNFOCUSED_ROW,
   SECONDARY_FONT,
 } from "../layout/pane";
 import { ENTRY_FOCUS_DELAY_MS, placeEntryFocus } from "../../utils/entryFocus";
@@ -50,15 +49,6 @@ const OWNED_COLUMNS = "minmax(0, 1fr) 72px 40px 52px 56px";
 const OWNERLESS_COLUMNS = "minmax(0, 1fr) 40px 52px 56px";
 
 const NUMBER: CSSProperties = { textAlign: "right" };
-
-// A marker as wide as a list row's, drawn as an inset shadow so it takes no
-// width from the row's first cell. The unfocused row keeps an empty fill so the
-// two states differ only in paint, never in layout.
-const FOCUSED_ROW: CSSProperties = {
-  background: FOCUSED_ROW_FILL,
-  boxShadow: `inset ${ROW_MARKER_WIDTH}px 0 0 ${SELECTION_ACCENT}`,
-};
-const UNFOCUSED_ROW: CSSProperties = { background: "transparent", boxShadow: "none" };
 
 /**
  * The Sync cell's toggle without the row padding and the focus fill its Field
