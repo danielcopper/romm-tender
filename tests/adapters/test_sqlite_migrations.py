@@ -84,8 +84,9 @@ def _set_user_version(db_path: str, version: int) -> None:
 # + 023_add_rom_install_launchable + 024_add_answered_save_directories
 # + 025_add_platform_skip_revoked + 026_add_rom_has_file_on_disk
 # + 027_add_artwork_slot_outcomes + 028_widen_artwork_slot_outcomes_to_the_icon
-# + 029_add_rom_delivered_through + 030_add_rom_gone_from_romm).
-_SHIPPED_VERSION = 30
+# + 029_add_rom_delivered_through + 030_add_rom_gone_from_romm
+# + 031_add_platform_skip_fetch_start_and_checksum).
+_SHIPPED_VERSION = 31
 
 # Tables after every shipped migration: the v1 set plus 006's play-session outbox,
 # 012's per-platform completion stamp, 019's per-collection completion stamp,
@@ -805,14 +806,17 @@ class Test012PlatformSyncState:
 
         assert _user_version(db_path) == _SHIPPED_VERSION
         assert "platform_sync_state" in _tables(db_path)
-        # fetch_id is added by 020 (#1504) and skip_revoked by 025; after a full
-        # apply the table carries both.
+        # fetch_id is added by 020 (#1504), skip_revoked by 025, and
+        # fetch_started_at and rom_id_checksum by 031; after a full apply the
+        # table carries all four.
         assert _columns(db_path, "platform_sync_state") == {
             "platform_slug",
             "completed_at",
             "rom_count",
             "fetch_id",
             "skip_revoked",
+            "fetch_started_at",
+            "rom_id_checksum",
         }
 
     def test_table_absent_before_012(self, tmp_path: Path):
@@ -2088,3 +2092,47 @@ class Test030AddRomGoneFromRomm:
                 )
         finally:
             conn.close()
+
+
+class Test031AddPlatformSkipFetchStartAndChecksum:
+    """031 — adds the nullable fetch_started_at and rom_id_checksum to platform_sync_state, no backfill (#2469)."""
+
+    def test_adds_both_columns_to_platform_sync_state_only(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+
+        apply_migrations(db_path)
+
+        assert {"fetch_started_at", "rom_id_checksum"} <= _columns(db_path, "platform_sync_state")
+        assert not {"fetch_started_at", "rom_id_checksum"} & _columns(db_path, "collection_sync_state")
+
+    def test_both_absent_before_031(self, tmp_path: Path):
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 30)))
+
+        assert _user_version(db_path) == 30
+        assert not {"fetch_started_at", "rom_id_checksum"} & _columns(db_path, "platform_sync_state")
+
+    def test_an_existing_stamp_reads_null_across_the_migration_and_keeps_the_rest(self, tmp_path: Path):
+        """No backfill: an upgraded stamp records neither, so its platform is fetched in full once."""
+        db_path = str(tmp_path / "romm_sync.db")
+        apply_migrations(db_path, str(_only_migrations_through(tmp_path, 30)))
+        conn = sqlite3.connect(db_path, isolation_level=None)
+        try:
+            conn.execute(
+                "INSERT INTO platform_sync_state (platform_slug, completed_at, rom_count, fetch_id, skip_revoked) "
+                "VALUES ('n64', '2026-10-15T10:00:00+00:00', 3, 'run-1', 0)"
+            )
+        finally:
+            conn.close()
+
+        assert apply_migrations(db_path) == _SHIPPED_VERSION
+
+        conn = sqlite3.connect(db_path)
+        try:
+            row = conn.execute(
+                "SELECT completed_at, rom_count, fetch_id, skip_revoked, fetch_started_at, rom_id_checksum "
+                "FROM platform_sync_state WHERE platform_slug = 'n64'"
+            ).fetchone()
+        finally:
+            conn.close()
+        assert row == ("2026-10-15T10:00:00+00:00", 3, "run-1", 0, None, None)

@@ -328,8 +328,8 @@ reattach those values to a newly created shortcut.
 A user can delete a RomM shortcut through **Steam's own UI** (remove from library), which Tender never observes. The
 `roms` row keeps its now-dead `shortcut_app_id`, so `get_app_id_rom_id_map` keeps serving it (playtime writes and
 launch-options bakes aim at a Steam app that no longer exists) and the **incremental skip never recreates it**: the skip
-counts bound `roms` rows, not live Steam shortcuts, so the platform reports "unchanged" forever. The game stays gone
-until a server-side change or a Force Full Sync (`#1046`).
+reads RomM's answer and rebuilds the platform from its bound `roms` rows, not from live Steam shortcuts, so the platform
+reports "unchanged" forever. The game stays gone until a server-side change or a Force Full Sync (`#1046`).
 
 The fix is a **frontend-assisted reconcile at sync start**, because only the frontend can read Steam's shortcut store.
 It runs **before** the sync builds its work queue — so the unbind lands before the incremental-skip decision — on both
@@ -354,9 +354,9 @@ the skip-preview (`start_sync`) and preview (`sync_preview`) paths:
    in the live set — clearing only the binding (`Rom.unbind_shortcut`, ADR-0007), never deleting the row or its per-ROM
    children. An empty live set is the correct "they're all gone" signal and unbinds every binding.
 
-Once a row is unbound, the fetcher's incremental baseline (`_read_incremental_baseline`, which reconstructs only rows
-with a non-NULL `shortcut_app_id`) no longer counts it, so `unit.rom_count == registry_count` fails and the platform
-falls through to a full fetch that recreates the shortcut. The unbind is reversible by design — the next sync re-binds.
+The reconcile revokes the skip of every platform it unbinds a row on (`PlatformSyncStateRepository.revoke_skip`, in the
+same write UoW as the unbind), so the platform falls through to a full fetch that recreates the shortcut. The unbind is
+reversible by design — the next sync re-binds.
 
 This is **eager (sync-start) reconciliation of the Steam-shortcut binding**, distinct from `#951`'s lazy on-access
 reconciliation of the `rom_installs` (on-disk install) view: a different aggregate, a different cost driver, and —

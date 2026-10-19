@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { libretroEmu, standaloneEmu } from "../test-utils/coreFixtures";
+import { libretroEmu, sharedBy, standaloneEmu } from "../test-utils/coreFixtures";
 import { emulatorClause, type EmulatorClauseSource } from "./emulatorClause";
 
 const known = (overrides: Partial<EmulatorClauseSource>): EmulatorClauseSource => ({
@@ -46,6 +46,11 @@ describe("emulatorClause", () => {
       text: "no emulator",
       gamesCannotStart: true,
     });
+  });
+
+  it("names an emulator stored under one of several labels by every label its entry carries", () => {
+    const emulators = [sharedBy(libretroEmu("pcsx2_libretro", "LRPS2", true), ["LRPS2", "PCSX2"])];
+    expect(emulatorClause(known({ emulators, active_core_label: "PCSX2" }))?.text).toBe("LRPS2 / PCSX2");
   });
 
   it("says nothing where there is no answer yet", () => {

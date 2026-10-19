@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+import sys
 from collections import OrderedDict
 from typing import TYPE_CHECKING
 
@@ -147,6 +148,9 @@ class HostServer:
         # None until the injector is wired: nothing has looked at Steam's context then.
         self._reload_outlook: Callable[[], Awaitable[ReloadOutlook]] | None = None
         self._stranded_sessions: OrderedDict[str, ReloadOutlook] = OrderedDict()
+        # What a stop closes by hand where ``asyncio.Server`` has no ``close_clients()``.
+        self._clients: set[asyncio.StreamWriter] = set()
+        self._closing_clients_by_hand = False
 
     @property
     def port(self) -> int:
@@ -244,22 +248,48 @@ class HostServer:
             self._panel_present.clear()
         if self._server is not None:
             # A connection accepted in the previous tick is still a pending task
-            # building its transport; the yield lets it attach, so close_clients()
+            # building its transport; the yield lets it attach, so the close below
             # reaches it. One whose accept lands in this same iteration can still
             # be abandoned half-made, and CPython 3.13 then raises one harmless
             # unraisable ``TypeError`` when the collector reaches that transport.
             await asyncio.sleep(0)
             self._server.close()
-            # On 3.13 ``wait_closed`` waits for every client, so an accepted
+            # From 3.12.1 ``wait_closed`` waits for every client, so an accepted
             # connection that never sends its request head would hold it open.
-            self._server.close_clients()
+            if sys.version_info >= (3, 13):
+                self._server.close_clients()
+            else:
+                self._close_clients_by_hand()
             with contextlib.suppress(Exception):
                 await self._server.wait_closed()
             self._server = None
 
+    def _close_clients_by_hand(self) -> None:
+        """Close every socket being served, and each one whose handler starts after this.
+
+        ``asyncio.Server.close_clients()`` is new in 3.13. Without it this server
+        reaches only the sockets its handler has begun to serve, and one
+        accepted in the tick before the stop is attached to the listener before
+        its handler runs — so that handler closes its socket on arrival.
+        """
+        self._closing_clients_by_hand = True
+        for writer in self._clients:
+            writer.close()
+
     # -- request handling ------------------------------------------------------
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        """Serve one accepted socket, held among the clients while it is served."""
+        if self._closing_clients_by_hand:
+            writer.close()
+            return
+        self._clients.add(writer)
+        try:
+            await self._serve(reader, writer)
+        finally:
+            self._clients.discard(writer)
+
+    async def _serve(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         """Serve one accepted socket: read the head, admit it, route it."""
         try:
             head = await self._read_head(reader)

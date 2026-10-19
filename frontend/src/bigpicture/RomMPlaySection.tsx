@@ -29,6 +29,7 @@ import { DiscSelector } from "./DiscSelector";
 import { VersionPicker } from "./VersionPicker";
 import { VanishedVersionBanner } from "./VanishedVersionBanner";
 import { WarningCard } from "./WarningCard";
+import { useTriggerHandler } from "./emulatorStepping";
 import { SgdbGamePickerModalContent } from "./SgdbGamePickerModal";
 import { applyArtwork, cancelArtworkApply } from "../utils/artwork";
 import { useAutoArtwork } from "../utils/autoArtwork";
@@ -58,6 +59,7 @@ import {
   releasePruneLeasesByOwner,
 } from "../utils/pruneLease";
 import { executeGameCoreChange } from "../utils/coreOverride";
+import { emulatorName } from "../utils/emulatorEntries";
 import { useGamePlaytime } from "../utils/playtimeReconcile";
 import { buildEmulatorMenu } from "../utils/emulatorMenu";
 import { formatBytes } from "../utils/formatters";
@@ -150,6 +152,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // Subscribe to version error — re-renders when global state changes
   const versionError = useVersionError();
   const migration = useMigrationStatus();
+  const onTrigger = useTriggerHandler();
 
   // Every field the game page's surfaces share — rom identity, install state,
   // save sync, BIOS, core selection — comes from the per-appId store, which owns
@@ -593,6 +596,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     await executeGameCoreChange({
       romId,
       coreLabel,
+      coreName: emulatorName(detail.emulators, coreLabel),
       leaseOwner: `game-detail:${appId}`,
       onSuccess: () => refreshCoreDisplay(platformSlug),
       logTag: "handleChangeGameCore",
@@ -821,13 +825,13 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     );
   }
 
-  // BIOS warning. What decides it is one question with two established
-  // absences behind it (`extractBiosInfo`): a file the launching emulator
-  // requires is not on disk, or the console cannot start without one of the
-  // images that emulator declares and none of them is there. Everything else
-  // the BIOS answer says — a platform whose emulators could not be asked,
-  // optional files nobody launching this game needs — is non-actionable here
-  // and lives in the BIOS tab.
+  // BIOS warning. What decides it is the backend's level `missing` — the
+  // resolver's verdict, not met (`extractBiosInfo`): a file the launching
+  // emulator requires is not met, or the console cannot start without one of
+  // the images that emulator declares and none of those images is met.
+  // Everything else the BIOS answer says — a platform whose emulators could
+  // not be asked, optional files nobody launching this game needs — is
+  // non-actionable here and lives in the BIOS tab.
   //
   // One appearance, always red. This badge is not rendering the four-valued
   // verdict — the BIOS tab is, off `biosColorForLevel` — it is a warning that
@@ -865,6 +869,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
       data-romm="true"
       className={`romm-play-section-row ${basicAppDetailsSectionStylerClasses?.PlaySection || ""}`.trim()}
       flow-children="right"
+      onButtonDown={onTrigger}
       style={{
         display: "flex",
         alignItems: "center",

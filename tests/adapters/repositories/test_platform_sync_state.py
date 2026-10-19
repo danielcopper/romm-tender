@@ -26,6 +26,31 @@ class TestRoundTrip:
         assert loaded.rom_count == 2091
         assert loaded.skip_revoked is False
 
+    def test_the_fetch_start_and_the_checksum_read_back(self, uow: SqliteUnitOfWork):
+        stamp = PlatformSyncState.stamp(
+            platform_slug="n64",
+            at="2026-10-19T12:30:00+00:00",
+            rom_count=3,
+            fetch_id="run-1",
+            fetch_started_at="2026-10-19T12:00:00+00:00",
+            rom_id_checksum="ab" * 32,
+        )
+        uow.platform_sync_state.save(stamp)
+
+        loaded = uow.platform_sync_state.get("n64")
+        assert loaded == stamp
+        assert loaded is not None
+        assert loaded.fetch_started_at == "2026-10-19T12:00:00+00:00"
+        assert loaded.rom_id_checksum == "ab" * 32
+
+    def test_a_stamp_without_them_reads_back_none(self, uow: SqliteUnitOfWork):
+        uow.platform_sync_state.save(_stamp("n64", at="2026-03-01T12:00:00+00:00"))
+
+        loaded = uow.platform_sync_state.get("n64")
+        assert loaded is not None
+        assert loaded.fetch_started_at is None
+        assert loaded.rom_id_checksum is None
+
 
 class TestMiss:
     def test_get_absent_returns_none(self, uow: SqliteUnitOfWork):

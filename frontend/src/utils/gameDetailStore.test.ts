@@ -119,6 +119,8 @@ const coreInfo: CoreInfo = {
   emulators: [
     {
       label: "Snes9x",
+      labels: ["Snes9x"],
+      name: "Snes9x",
       kind: "libretro",
       core_so: "snes9x.so",
       emulator: "snes9x.so",
@@ -144,6 +146,8 @@ const laterCoreInfo: CoreInfo = {
   emulators: [
     {
       label: "Genesis Plus GX",
+      labels: ["Genesis Plus GX"],
+      name: "Genesis Plus GX",
       kind: "libretro",
       core_so: "genesis_plus_gx.so",
       emulator: "genesis_plus_gx.so",
@@ -1951,7 +1955,7 @@ describe("gameDetailStore", () => {
             required_count: 3,
             required_downloaded: 1,
           },
-          bios_level: "partial",
+          bios_level: "missing",
           bios_label: "1/3",
         }),
       );

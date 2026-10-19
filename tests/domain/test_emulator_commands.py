@@ -22,6 +22,7 @@ from domain.emulator_commands import (
     label_to_invocation,
     option_to_invocation,
     options_to_payload,
+    resolve_firmware_option,
     resolve_platform_label,
     select_default_option,
 )
@@ -35,6 +36,12 @@ PS2_PCSX2_BATCH = "%EMULATOR_PCSX2% -batch %ROM%"
 PS3_RPCS3_DIRECTORY = "%EMULATOR_RPCS3% --no-gui %ROM%"
 PS3_RPCS3_SHORTCUT = "%ENABLESHORTCUTS% %EMULATOR_OS-SHELL% %ROM%"
 PS3_RPCS3_GAME_SERIAL = "%EMULATOR_RPCS3% --no-gui %RPCS3_GAMEID%:%INJECT%=%BASENAME%.ps3"
+PS2_PCSX2_LIBRETRO = "%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcsx2_libretro.so %ROM%"
+PS2_PCEE2_LIBRETRO = "%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/pcee2_libretro.so %ROM%"
+SYMBIAN_EKA2L1_RH29 = '%EMULATOR_EKA2L1% --fullscreen --device RH-29 --run "%BASENAME%"'
+SYMBIAN_EKA2L1_RM84 = '%EMULATOR_EKA2L1% --fullscreen --device RM-84 --run "%BASENAME%"'
+SYMBIAN_EKA2L1_RM507 = '%EMULATOR_EKA2L1% --fullscreen --device RM-507 --run "%BASENAME%"'
+SYMBIAN_EKA2L1_CUSTOM = '%EMULATOR_EKA2L1% --fullscreen --device %INJECT%=%BASENAME%.device --run "%BASENAME%"'
 XEMU_INJECT_WITH_ROM = "%INJECT%=%BASENAME%.esprefix %EMULATOR_XEMU% -dvd_path %ROM%"
 VITA3K_INJECT_NO_ROM = "%EMULATOR_VITA3K% -r %INJECT%=%BASENAME%.psvita"
 ARCADE_MAME_STANDALONE = (
@@ -232,6 +239,28 @@ class TestLabelToInvocation:
         assert label_to_invocation(self.OPTIONS, "Not A Real Emulator") is None
 
 
+class TestResolveFirmwareOption:
+    """The emulator a platform's BIOS answer is about."""
+
+    def test_the_pick_where_there_is_one(self):
+        options = [
+            classify_command("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT),
+            classify_command("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY),
+        ]
+        option = resolve_firmware_option(options, None)
+        assert option is not None
+        assert option.label == "RPCS3 Directory (Standalone)"
+
+    def test_the_emulator_retrodeck_declares_first_where_nothing_bakes(self):
+        """RetroDECK's plain launch starts its first declared emulator, installed or not."""
+        first = downgrade_if_not_installed(classify_command("MAME (Standalone)", ARCADE_MAME_STANDALONE), False)
+        options = [first, classify_command("MAME - Current", APPLE2_MAME_LIBRETRO_QUOTED)]
+        assert resolve_firmware_option(options, "MAME - Current") is first
+
+    def test_none_where_no_emulator_is_listed(self):
+        assert resolve_firmware_option([], None) is None
+
+
 class TestResolvePlatformLabel:
     """The platform-layer label two services render — one rule, one place."""
 
@@ -275,6 +304,8 @@ class TestOptionsToPayload:
         assert payload == [
             {
                 "label": "RPCS3 Shortcut (Standalone)",
+                "labels": ["RPCS3 Shortcut (Standalone)"],
+                "name": "RPCS3 Shortcut (Standalone)",
                 "kind": "standalone",
                 "core_so": None,
                 "emulator": None,
@@ -284,6 +315,8 @@ class TestOptionsToPayload:
             },
             {
                 "label": "RPCS3 Game Serial (Standalone)",
+                "labels": ["RPCS3 Game Serial (Standalone)"],
+                "name": "RPCS3 Game Serial (Standalone)",
                 "kind": "standalone",
                 "core_so": None,
                 "emulator": None,
@@ -293,6 +326,8 @@ class TestOptionsToPayload:
             },
             {
                 "label": "RPCS3 Directory (Standalone)",
+                "labels": ["RPCS3 Directory (Standalone)"],
+                "name": "RPCS3 Directory (Standalone)",
                 "kind": "standalone",
                 "core_so": None,
                 "emulator": None,
@@ -340,6 +375,62 @@ class TestOptionsToPayload:
     def test_command_text_not_leaked(self):
         payload = options_to_payload([classify_command("PCSX2 (Standalone)", PS2_PCSX2_BATCH)])
         assert "command" not in payload[0]
+
+    def test_labels_that_run_one_command_are_one_entry_named_by_every_label(self):
+        """RetroDECK's PlayStation 2 list, in its own order: LRPS2 and PCSX2 start the same core."""
+        payload = options_to_payload(
+            [
+                classify_command("PCEE2", PS2_PCEE2_LIBRETRO, emulator="pcee2_libretro.so"),
+                classify_command("LRPS2", PS2_PCSX2_LIBRETRO, emulator="pcsx2_libretro.so"),
+                classify_command("PCSX2", PS2_PCSX2_LIBRETRO, emulator="pcsx2_libretro.so"),
+                classify_command("PCSX2 (Standalone)", PS2_PCSX2_BATCH, emulator="PCSX2"),
+            ]
+        )
+
+        assert [(e["label"], e["labels"], e["name"]) for e in payload] == [
+            ("PCEE2", ["PCEE2"], "PCEE2"),
+            ("LRPS2", ["LRPS2", "PCSX2"], "LRPS2 / PCSX2"),
+            ("PCSX2 (Standalone)", ["PCSX2 (Standalone)"], "PCSX2 (Standalone)"),
+        ]
+
+    def test_the_merged_entry_is_the_default_where_any_of_its_labels_is(self):
+        payload = options_to_payload(
+            [
+                classify_command("LRPS2", PS2_PCSX2_LIBRETRO, emulator="pcsx2_libretro.so"),
+                classify_command("PCSX2", PS2_PCSX2_LIBRETRO, emulator="pcsx2_libretro.so"),
+            ]
+        )
+
+        assert [(e["name"], e["is_default"], e["bakeable"]) for e in payload] == [("LRPS2 / PCSX2", True, True)]
+
+    def test_one_emulator_launched_different_ways_stays_one_entry_per_way(self):
+        """RPCS3's four PS3 labels run three commands: only Directory and ISO are one choice."""
+        payload = options_to_payload(
+            [
+                classify_command("RPCS3 Shortcut (Standalone)", PS3_RPCS3_SHORTCUT, emulator="RPCS3"),
+                classify_command("RPCS3 Game Serial (Standalone)", PS3_RPCS3_GAME_SERIAL, emulator="RPCS3"),
+                classify_command("RPCS3 Directory (Standalone)", PS3_RPCS3_DIRECTORY, emulator="RPCS3"),
+                classify_command("RPCS3 ISO (Standalone)", PS3_RPCS3_DIRECTORY, emulator="RPCS3"),
+            ]
+        )
+
+        assert [e["name"] for e in payload] == [
+            "RPCS3 Shortcut (Standalone)",
+            "RPCS3 Game Serial (Standalone)",
+            "RPCS3 Directory (Standalone) / RPCS3 ISO (Standalone)",
+        ]
+
+    def test_one_emulator_s_device_variants_stay_apart(self):
+        """EKA2L1's four Symbian labels each start a different device."""
+        labels = [
+            ("EKA2L1 [Nokia N-Gage] (Standalone)", SYMBIAN_EKA2L1_RH29),
+            ("EKA2L1 [Nokia N70] (Standalone)", SYMBIAN_EKA2L1_RM84),
+            ("EKA2L1 [Nokia N97] (Standalone)", SYMBIAN_EKA2L1_RM507),
+            ("EKA2L1 [Custom device] (Standalone)", SYMBIAN_EKA2L1_CUSTOM),
+        ]
+        payload = options_to_payload([classify_command(label, text, emulator="EKA2L1") for label, text in labels])
+
+        assert [e["labels"] for e in payload] == [[label] for label, _ in labels]
 
 
 class TestClassificationInvariants:

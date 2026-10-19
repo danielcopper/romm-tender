@@ -159,6 +159,11 @@ export interface ControllerGlyphProps {
  */
 export const GLYPH_BUTTON_B = 1;
 
+/** The values Steam's glyph component wants for **L2** and **R2**, in the same enum:
+ *  `LeftTrigger=14`, `RightTrigger=15`. */
+export const GLYPH_TRIGGER_LEFT = 14;
+export const GLYPH_TRIGGER_RIGHT = 15;
+
 const isMemoComponent = (value: unknown): boolean =>
   typeof value === "object" && value !== null && (value as { $$typeof?: symbol }).$$typeof === Symbol.for("react.memo");
 

@@ -36,8 +36,15 @@ def _catalogue(
     *placements: FirmwarePlacement,
     unread: frozenset[str] = frozenset(),
     resolved: bool = True,
+    answered: tuple[str, ...] = (),
 ) -> FirmwareCatalogue:
-    return FirmwareCatalogue(placements=placements, unread_emulators=unread, resolved=resolved)
+    """*answered* are the emulators the answer holds an entry for."""
+    return FirmwareCatalogue(
+        placements=placements,
+        unread_emulators=unread,
+        resolved=resolved,
+        emulator_verdicts={emulator: CoreFirmwareVerdict(declaration="read") for emulator in answered},
+    )
 
 
 class TestRequiredByAny:
@@ -81,8 +88,17 @@ class TestClassifyWanted:
 
 class TestReadingCompleteFor:
     def test_a_launching_emulator_that_was_read_is_complete(self):
-        catalogue = _catalogue(unread=frozenset({"fbalpha_libretro.so"}))
+        catalogue = _catalogue(unread=frozenset({"fbalpha_libretro.so"}), answered=("mgba_libretro.so",))
         assert catalogue.reading_complete_for("mgba_libretro.so") is True
+
+    def test_a_launching_emulator_the_answer_holds_no_entry_for_is_never_complete(self):
+        """An emulator missing from the answer counts as not read.
+
+        Read as complete, every library file nobody declared would classify
+        ``not_needed`` beside a header that says nothing could be established.
+        """
+        catalogue = _catalogue(answered=("snes9x_libretro.so",))
+        assert catalogue.reading_complete_for("mgba_libretro.so") is False
 
     def test_an_unread_launching_emulator_blocks_completeness(self):
         catalogue = _catalogue(unread=frozenset({"fbalpha_libretro.so"}))
@@ -94,11 +110,11 @@ class TestReadingCompleteFor:
         A platform offering four emulators used to lose its whole answer to any
         one of them being unreadable, whichever one the game launches with.
         """
-        catalogue = _catalogue(unread=frozenset({"gearlynx_libretro.so"}))
+        catalogue = _catalogue(unread=frozenset({"gearlynx_libretro.so"}), answered=("mednafen_psx_libretro.so",))
         assert catalogue.reading_complete_for("mednafen_psx_libretro.so") is True
 
     def test_a_standalone_emulator_is_asked_about_like_any_other(self):
-        catalogue = _catalogue(unread=frozenset({"PCSX2"}))
+        catalogue = _catalogue(unread=frozenset({"PCSX2"}), answered=("DUCKSTATION", "PCSX2"))
 
         assert catalogue.reading_complete_for("DUCKSTATION") is True
         assert catalogue.reading_complete_for("PCSX2") is False
@@ -115,18 +131,12 @@ class TestReadingCompleteFor:
 
     def test_an_unresolved_reading_is_never_complete(self):
         """An emulator that would otherwise be complete, so the ``resolved`` gate is what answers."""
-        catalogue = _catalogue(resolved=False)
+        catalogue = _catalogue(resolved=False, answered=("mgba_libretro.so",))
         assert catalogue.reading_complete_for("mgba_libretro.so") is False
 
 
 class TestCoresNeedingASystemImage:
-    """Which cores declare for a console that will not start without an image.
-
-    The per-core half read over every core at once, for a surface that lists
-    several emulators beside one file and has to say which of them are in that
-    state. ``verdict_for`` answers the same question one core at a time, and the
-    two must not be able to disagree about a core.
-    """
+    """Which cores declare for a console that will not start without an image, asked one core at a time."""
 
     @staticmethod
     def _with(**verdicts: str | None) -> FirmwareCatalogue:
@@ -147,31 +157,20 @@ class TestCoresNeedingASystemImage:
             mgba_libretro=SYSTEM_FIRMWARE_OPEN,
         )
 
-        assert catalogue.emulators_needing_a_system_image() == frozenset({"swanstation_libretro"})
+        named = {emulator for emulator, verdict in catalogue.emulator_verdicts.items() if verdict.system_needs_an_image}
+        assert named == {"swanstation_libretro"}
 
     def test_a_core_the_table_says_nothing_about_is_left_out(self):
-        """An absent entry is an unasked question, and this set answers only where something was recorded."""
+        """An absent entry is an unasked question, and only a recorded state names a core."""
         catalogue = self._with(swanstation_libretro=None)
 
-        assert catalogue.emulators_needing_a_system_image() == frozenset()
+        verdict = catalogue.verdict_for("swanstation_libretro")
+        assert verdict is not None
+        assert verdict.system_needs_an_image is False
         assert catalogue.verdict_for("gpsp_libretro") is None
 
     def test_a_reading_that_did_not_happen_names_nobody(self):
-        assert _catalogue(resolved=False).emulators_needing_a_system_image() == frozenset()
-
-    def test_it_agrees_with_the_per_core_answer_for_every_core(self):
-        """One question, two shapes — asked over all cores or one at a time."""
-        catalogue = self._with(
-            swanstation_libretro=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
-            pcsx_rearmed_libretro=SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
-        )
-
-        named = catalogue.emulators_needing_a_system_image()
-
-        for emulator in ("swanstation_libretro", "pcsx_rearmed_libretro"):
-            verdict = catalogue.verdict_for(emulator)
-            assert verdict is not None
-            assert (emulator in named) is verdict.system_needs_an_image
+        assert _catalogue(resolved=False).verdict_for("swanstation_libretro") is None
 
 
 class TestOneOfGroups:

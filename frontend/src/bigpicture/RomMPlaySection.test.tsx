@@ -11,12 +11,13 @@
 // `testAppId` per test (incremented in `beforeEach`) — Option A in the playbook.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, act, waitFor } from "@testing-library/react";
+import { render, act, fireEvent, waitFor } from "@testing-library/react";
 import { createElement, type ComponentProps, type ReactElement } from "react";
 import { RomMPlaySection } from "./RomMPlaySection";
 import * as backend from "../api/backend";
 import { _resetSharedReadsForTests } from "../api/sharedReads";
 import { showContextMenu, showModal } from "@decky/ui";
+import { EmulatorStepScope, useStepOnTriggers } from "./emulatorStepping";
 import { HostTransportError, toaster } from "../api/host";
 import { setStrandedAnswer } from "../test-utils/stranded-panel";
 import {
@@ -36,6 +37,7 @@ import * as saveStatusUtils from "../utils/saveStatus";
 import * as formatters from "../utils/formatters";
 import { getGameDetail } from "../utils/gameDetailStore";
 import { resetBoundAvailability } from "../utils/vanishedBinding";
+import { libretroEmu, sharedBy } from "../test-utils/coreFixtures";
 import { BIOS_MISSING_RED } from "../utils/biosColor";
 import { useVersionError } from "../utils/connectionState";
 import { useMigrationStatus } from "../utils/migrationStore";
@@ -209,7 +211,20 @@ vi.mock("@decky/ui", async () => {
         },
         children as never,
       ),
-    Focusable: (p: AnyProps) => ce("div", p, p.children as never),
+    GamepadButton: { TRIGGER_LEFT: 7, TRIGGER_RIGHT: 8 },
+    // `onButtonDown` is Steam's, not the DOM's: it rides a "decky-button-down"
+    // listener, as in the global stub, rather than reaching the div as a prop.
+    Focusable: ({ onButtonDown, ...p }: AnyProps & { onButtonDown?: (e: Event) => void }) =>
+      ce(
+        "div",
+        {
+          ...p,
+          ref: (el: HTMLDivElement | null) => {
+            if (el && onButtonDown) el.addEventListener("decky-button-down", onButtonDown);
+          },
+        },
+        p.children as never,
+      ),
     Menu: (p: AnyProps & { label?: string }) =>
       ce("div", { "data-testid": "menu", "data-menu-label": p.label }, p.children as never),
     MenuItem: ({
@@ -461,6 +476,28 @@ describe("RomMPlaySection", () => {
       await flushAsync();
       expect(queryByTestId("play-button")).not.toBeNull();
       expect(capturedPlayButton[0]?.appId).toBe(testAppId);
+    });
+
+    it("hands L2 and R2 from the play row to the BIOS tab's emulator selector", async () => {
+      const step = vi.fn();
+      const Selector = () => {
+        useStepOnTriggers(step);
+        return null;
+      };
+      const { container } = render(
+        <EmulatorStepScope>
+          {() => (
+            <>
+              <Selector />
+              <RomMPlaySection appId={testAppId} />
+            </>
+          )}
+        </EmulatorStepScope>,
+      );
+      await flushAsync();
+      const row = container.querySelector(".romm-play-section-row") as HTMLElement;
+      fireEvent(row, new CustomEvent("decky-button-down", { detail: { button: 7 }, bubbles: true }));
+      expect(step).toHaveBeenCalledWith(-1);
     });
   });
 
@@ -2400,6 +2437,8 @@ describe("RomMPlaySection", () => {
         emulators: [
           {
             label: "Snes9x",
+            labels: ["Snes9x"],
+            name: "Snes9x",
             kind: "libretro",
             core_so: "snes9x.so",
             emulator: "snes9x.so",
@@ -2409,6 +2448,8 @@ describe("RomMPlaySection", () => {
           },
           {
             label: "BlastEm",
+            labels: ["BlastEm"],
+            name: "BlastEm",
             kind: "libretro",
             core_so: "blastem.so",
             emulator: "blastem.so",
@@ -2472,6 +2513,8 @@ describe("RomMPlaySection", () => {
         emulators: [
           {
             label: "Snes9x",
+            labels: ["Snes9x"],
+            name: "Snes9x",
             kind: "libretro",
             core_so: "snes9x.so",
             emulator: "snes9x.so",
@@ -2481,6 +2524,8 @@ describe("RomMPlaySection", () => {
           },
           {
             label: "BlastEm",
+            labels: ["BlastEm"],
+            name: "BlastEm",
             kind: "libretro",
             core_so: "blastem.so",
             emulator: "blastem.so",
@@ -3683,6 +3728,8 @@ describe("RomMPlaySection", () => {
         emulators: [
           {
             label: "Snes9x",
+            labels: ["Snes9x"],
+            name: "Snes9x",
             kind: "libretro",
             core_so: "snes9x.so",
             emulator: "snes9x.so",
@@ -3692,6 +3739,8 @@ describe("RomMPlaySection", () => {
           },
           {
             label: "BlastEm",
+            labels: ["BlastEm"],
+            name: "BlastEm",
             kind: "libretro",
             core_so: "blastem.so",
             emulator: "blastem.so",
@@ -3711,6 +3760,8 @@ describe("RomMPlaySection", () => {
         emulators: [
           {
             label: "Snes9x",
+            labels: ["Snes9x"],
+            name: "Snes9x",
             kind: "libretro",
             core_so: "snes9x.so",
             emulator: "snes9x.so",
@@ -3720,6 +3771,8 @@ describe("RomMPlaySection", () => {
           },
           {
             label: "BlastEm",
+            labels: ["BlastEm"],
+            name: "BlastEm",
             kind: "libretro",
             core_so: "blastem.so",
             emulator: "blastem.so",
@@ -3831,6 +3884,36 @@ describe("RomMPlaySection", () => {
       });
       expect(vi.mocked(setLaunchOptionsConfirmed)).not.toHaveBeenCalled();
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body: "Core set to BlastEm" }));
+    });
+
+    it("stores the first label of an entry several labels share, and names all of them in its toast", async () => {
+      await setupCoreAction();
+      vi.mocked(playSectionUtils.extractCoreInfo).mockReturnValue({
+        activeCoreLabel: "Snes9x",
+        activeCoreIsDefault: true,
+        emulatorDataAvailable: true,
+        emulatorDataReason: null,
+        emulatorSource: { kind: "retrodeck", starts_games: true },
+        emulatorPlatformSystem: null,
+        emulators: [
+          sharedBy(libretroEmu("snes9x", "Snes9x", true), ["Snes9x"]),
+          sharedBy(libretroEmu("blastem", "BlastEm"), ["BlastEm", "BlastEm Next"]),
+        ],
+        platformCoreLabel: null,
+        hasGameOverride: false,
+      });
+      vi.mocked(backend.setGameCore).mockResolvedValue({ success: true });
+      render(<RomMPlaySection appId={testAppId} />);
+      await flushAsync();
+      const coreItems = await openCoreMenuAndGetItems(testAppId);
+      vi.mocked(toaster.toast).mockClear();
+      await act(async () => {
+        await coreItems[BLASTEM_IDX]!.props.onClick?.();
+      });
+      expect(vi.mocked(backend.setGameCore)).toHaveBeenCalledWith(expect.anything(), "BlastEm");
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "Core set to BlastEm / BlastEm Next" }),
+      );
     });
 
     it("core_unavailable: {success:false} → toasts result.message", async () => {
@@ -3958,6 +4041,8 @@ describe("RomMPlaySection", () => {
         emulators: [
           {
             label: "Snes9x",
+            labels: ["Snes9x"],
+            name: "Snes9x",
             kind: "libretro",
             core_so: "snes9x.so",
             emulator: "snes9x.so",
@@ -3967,6 +4052,8 @@ describe("RomMPlaySection", () => {
           },
           {
             label: "BlastEm",
+            labels: ["BlastEm"],
+            name: "BlastEm",
             kind: "libretro",
             core_so: "blastem.so",
             emulator: "blastem.so",
@@ -3988,6 +4075,8 @@ describe("RomMPlaySection", () => {
         emulators: [
           {
             label: "Snes9x",
+            labels: ["Snes9x"],
+            name: "Snes9x",
             kind: "libretro",
             core_so: "snes9x.so",
             emulator: "snes9x.so",
@@ -3997,6 +4086,8 @@ describe("RomMPlaySection", () => {
           },
           {
             label: "BlastEm",
+            labels: ["BlastEm"],
+            name: "BlastEm",
             kind: "libretro",
             core_so: "blastem.so",
             emulator: "blastem.so",
@@ -4175,6 +4266,8 @@ describe("RomMPlaySection", () => {
       emulators: [
         {
           label: "Snes9x",
+          labels: ["Snes9x"],
+          name: "Snes9x",
           kind: "libretro",
           core_so: "snes9x.so",
           emulator: "snes9x.so",
@@ -4184,6 +4277,8 @@ describe("RomMPlaySection", () => {
         },
         {
           label: "BlastEm",
+          labels: ["BlastEm"],
+          name: "BlastEm",
           kind: "libretro",
           core_so: "blastem.so",
           emulator: "blastem.so",
@@ -4283,6 +4378,8 @@ describe("RomMPlaySection", () => {
         emulators: [
           {
             label: "Snes9x",
+            labels: ["Snes9x"],
+            name: "Snes9x",
             kind: "libretro",
             core_so: "snes9x.so",
             emulator: "snes9x.so",
@@ -4292,6 +4389,8 @@ describe("RomMPlaySection", () => {
           },
           {
             label: "BlastEm",
+            labels: ["BlastEm"],
+            name: "BlastEm",
             kind: "libretro",
             core_so: "blastem.so",
             emulator: "blastem.so",
@@ -4438,6 +4537,8 @@ describe("RomMPlaySection", () => {
         emulators: [
           {
             label: "Snes9x",
+            labels: ["Snes9x"],
+            name: "Snes9x",
             kind: "libretro",
             core_so: "snes9x.so",
             emulator: "snes9x.so",
@@ -4447,6 +4548,8 @@ describe("RomMPlaySection", () => {
           },
           {
             label: "BlastEm",
+            labels: ["BlastEm"],
+            name: "BlastEm",
             kind: "libretro",
             core_so: "blastem.so",
             emulator: "blastem.so",
@@ -4483,6 +4586,8 @@ describe("RomMPlaySection", () => {
         emulators: [
           {
             label: "Snes9x",
+            labels: ["Snes9x"],
+            name: "Snes9x",
             kind: "libretro",
             core_so: "snes9x.so",
             emulator: "snes9x.so",
@@ -4492,6 +4597,8 @@ describe("RomMPlaySection", () => {
           },
           {
             label: "BlastEm",
+            labels: ["BlastEm"],
+            name: "BlastEm",
             kind: "libretro",
             core_so: "blastem.so",
             emulator: "blastem.so",
@@ -4526,6 +4633,8 @@ describe("RomMPlaySection", () => {
         emulators: [
           {
             label: "Snes9x",
+            labels: ["Snes9x"],
+            name: "Snes9x",
             kind: "libretro",
             core_so: "snes9x.so",
             emulator: "snes9x.so",
@@ -4535,6 +4644,8 @@ describe("RomMPlaySection", () => {
           },
           {
             label: "BlastEm",
+            labels: ["BlastEm"],
+            name: "BlastEm",
             kind: "libretro",
             core_so: "blastem.so",
             emulator: "blastem.so",
@@ -4567,6 +4678,8 @@ describe("RomMPlaySection", () => {
         emulators: [
           {
             label: "Snes9x",
+            labels: ["Snes9x"],
+            name: "Snes9x",
             kind: "libretro",
             core_so: "snes9x.so",
             emulator: "snes9x.so",
@@ -4576,6 +4689,8 @@ describe("RomMPlaySection", () => {
           },
           {
             label: "BlastEm",
+            labels: ["BlastEm"],
+            name: "BlastEm",
             kind: "libretro",
             core_so: "blastem.so",
             emulator: "blastem.so",
@@ -4604,6 +4719,8 @@ describe("RomMPlaySection", () => {
         emulators: [
           {
             label: "Snes9x",
+            labels: ["Snes9x"],
+            name: "Snes9x",
             kind: "libretro",
             core_so: "snes9x.so",
             emulator: "snes9x.so",
@@ -4613,6 +4730,8 @@ describe("RomMPlaySection", () => {
           },
           {
             label: "BlastEm",
+            labels: ["BlastEm"],
+            name: "BlastEm",
             kind: "libretro",
             core_so: "blastem.so",
             emulator: "blastem.so",
@@ -4645,6 +4764,8 @@ describe("RomMPlaySection", () => {
         emulators: [
           {
             label: "Snes9x",
+            labels: ["Snes9x"],
+            name: "Snes9x",
             kind: "libretro",
             core_so: "snes9x.so",
             emulator: "snes9x.so",
@@ -4654,6 +4775,8 @@ describe("RomMPlaySection", () => {
           },
           {
             label: "BlastEm",
+            labels: ["BlastEm"],
+            name: "BlastEm",
             kind: "libretro",
             core_so: "blastem.so",
             emulator: "blastem.so",
@@ -4928,6 +5051,8 @@ describe("RomMPlaySection", () => {
         emulators: [
           {
             label: "OnlyOne",
+            labels: ["OnlyOne"],
+            name: "OnlyOne",
             kind: "libretro",
             core_so: "x.so",
             emulator: "x.so",

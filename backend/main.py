@@ -323,12 +323,12 @@ class Endpoints:
         return await self._services.firmware_service.download_all_firmware(platform_slug, rom_id)
 
     @route
-    async def download_required_firmware(self, platform_slug):
-        return await self._services.firmware_service.download_required_firmware(platform_slug)
+    async def download_required_firmware(self, platform_slug, emulator):
+        return await self._services.firmware_service.download_required_firmware(platform_slug, emulator)
 
     @route
-    async def download_platform_firmware_file(self, platform_slug, file_name):
-        return await self._services.firmware_service.download_platform_firmware_file(platform_slug, file_name)
+    async def download_platform_firmware_file(self, platform_slug, file_name, emulator):
+        return await self._services.firmware_service.download_platform_firmware_file(platform_slug, file_name, emulator)
 
     @route
     async def check_platform_bios(self, platform_slug):

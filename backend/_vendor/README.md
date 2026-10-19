@@ -142,8 +142,12 @@ registered and why, and what a copy that does not load costs, is
 - **Upstream:** <https://github.com/rogdham/backports.zstd>, released on PyPI as `backports.zstd`
 - **Version:** 1.7.0 — PyPI's
   `backports_zstd-1.7.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl`
-  (`sha256:f3f4887a8a1fd1290017fe5a1d29a7d1dc5c57f9477fbd64f119316a7e3ae769`, the digest PyPI publishes for that file).
-  The release requires `>=3.10,<3.14`, and the `cp313` build is the one for the system Python Tender runs on.
+  (`sha256:f3f4887a8a1fd1290017fe5a1d29a7d1dc5c57f9477fbd64f119316a7e3ae769`) and
+  `backports_zstd-1.7.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl`
+  (`sha256:470895d0bcddc850766e593d1b26764fb138c2feed149f515a2627ef9587d54c`), the digests PyPI publishes for those
+  files. The release requires `>=3.10,<3.14`. The two wheels differ only in the compiled `_zstd` module, so the tree is
+  the `cp313` wheel's plus the `cp312` wheel's `_zstd.cpython-312-x86_64-linux-gnu.so`, and the interpreter loads the
+  one built for it: `cp312` on 3.12, `cp313` on 3.13.
 - **License:** PSF-2.0 — see [`backports/zstd/LICENSE.txt`](backports/zstd/LICENSE.txt). The compiled extension carries
   the zstd library, whose BSD licence upstream ships beside it as
   [`backports/zstd/LICENSE_zstd.txt`](backports/zstd/LICENSE_zstd.txt). Both are the wheel's `dist-info/licenses/`
@@ -158,7 +162,7 @@ registered and why, and what a copy that does not load costs, is
   [`tests/test_vendored_backports_zstd.py`](../../tests/test_vendored_backports_zstd.py) fails on any absolute
   self-import left.
 - **Manifest:** `backports.SHA256SUMS`, **generated here** from the tree as we ship it, as for `vdf`: it pins the
-  patched copy against later edits and says nothing about upstream identity; the wheel digest above is what ties it to
+  patched copy against later edits and says nothing about upstream identity; the wheel digests above are what tie it to
   1.7.0.
 
 The wheel's `dist-info` is not vendored. Its `_cffi/` fallback is inert: the `_zstd_cffi` module it imports is not in
@@ -166,20 +170,26 @@ the wheel, so where the compiled `_zstd` does not load there is no codec.
 
 ### How to update backports
 
-1. Find the `cp313-cp313-manylinux…x86_64` wheel of the new version and the digest PyPI publishes for it, then download
-   it, check it and unpack it:
+1. Find the `cp313-cp313-manylinux…x86_64` and `cp312-cp312-manylinux…x86_64` wheels of the new version and the digests
+   PyPI publishes for them, then download each, check it and unpack it — the `cp313` one into `/tmp/zstd`, the `cp312`
+   one the same way into `/tmp/zstd312`:
 
    ```sh
    curl -sS https://pypi.org/pypi/backports.zstd/<version>/json | python3 -c 'import json, sys
    for f in json.load(sys.stdin)["urls"]:
-       if "cp313-cp313-manylinux" in f["filename"] and "x86_64" in f["filename"]:
-           print(f["digests"]["sha256"], f["filename"], f["url"])'
+       name = f["filename"]
+       if ("cp313-cp313-manylinux" in name or "cp312-cp312-manylinux" in name) and "x86_64" in name:
+           print(f["digests"]["sha256"], name, f["url"])'
    mkdir /tmp/zstd && cd /tmp/zstd && curl -sSO <url> && echo '<sha256>  <filename>' | sha256sum -c \
        && unzip -q -d u <filename>
    ```
 
+   `diff -r /tmp/zstd/u/backports /tmp/zstd312/u/backports` should name the two `_zstd.cpython-31x-x86_64-linux-gnu.so`
+   files and nothing else; if it names anything more, the two builds can no longer share one tree.
+
 2. Delete `backend/_vendor/backports/` and copy `/tmp/zstd/u/backports/` in its place, leaving out any `__pycache__`.
-   Copy `LICENSE.txt` and `LICENSE_zstd.txt` from `/tmp/zstd/u/backports_zstd-<version>.dist-info/licenses/` into
+   Copy `/tmp/zstd312/u/backports/zstd/_zstd.cpython-312-x86_64-linux-gnu.so` beside the `cp313` one. Copy `LICENSE.txt`
+   and `LICENSE_zstd.txt` from `/tmp/zstd/u/backports_zstd-<version>.dist-info/licenses/` into
    `backend/_vendor/backports/zstd/`.
 3. Reapply the patch:
 
@@ -196,8 +206,8 @@ the wheel, so where the compiled `_zstd` does not load there is no codec.
    `sed` reports nothing when a line does not match, so run `tests/test_vendored_backports_zstd.py` next: it names every
    absolute self-import the rule missed, and imports the copy where the interpreter can load it.
 4. Bump the **Version** bullet above and the **Local patches** counts, and the values
-   `tests/test_vendored_backports_zstd.py` holds the copy to: the version and the wheel digest it looks for in this
-   entry, and the extension module's file name, which carries the `cp313` tag.
+   `tests/test_vendored_backports_zstd.py` holds the copy to: the version and the two wheel digests it looks for in this
+   entry, and the builds whose extension modules it expects, named by their `cp312` and `cp313` tags.
 5. Regenerate the manifest from the patched tree with the command under [Manifests](#manifests), then re-run the gate:
    `python scripts/check_vendored_trees.py`.
 
@@ -232,25 +242,28 @@ load under the device's Python costs the icon downscale and nothing else.
 
 A vendored copy loads under the interpreter the service unit starts — `/usr/bin/python3`, or whatever `TENDER_PYTHON`
 named when `install.sh` wrote the unit — and not under the Python the venv, `mise run test`, basedpyright and the
-linters run, which is the version the toolchain pins (`mise.toml`, and every workflow's `setup-python` but
-`test-3.14`'s). `install.sh` refuses an interpreter older than that one, but nothing keeps the two equal: an OS update
-moves the system Python without a commit here. A vendored package's assumptions about the standard library are therefore
-proven only against the Pythons CI runs (the pinned one and 3.14,
-[`docs/contributing/dependency-management.md`](../../docs/contributing/dependency-management.md)), and surface on a
-device — when the backend starts, or the first time a question reaches the assumption.
+linters run, which is the version the toolchain pins (`mise.toml`, and every workflow's `setup-python` but `test-3.12`'s
+and `test-3.13`'s). `install.sh` refuses an interpreter older than 3.12 and has no ceiling, so nothing keeps the two
+equal: the system Python is any version from 3.12 up, and an OS update moves it without a commit here. A vendored
+package's assumptions about the standard library are therefore proven only against the Pythons CI runs
+([`docs/contributing/dependency-management.md`](../../docs/contributing/dependency-management.md) names them), and
+surface on a device — when the backend starts, or the first time a question reaches the assumption.
 
 A compiled extension module built for one CPython minor version's ABI does not fit this model — a `cp313-cp313` wheel
 does not load under 3.14, so a copy vendored for today's system Python stops loading when an OS update moves it, the
 very event vendoring exists to survive. A stable-ABI (`abi3`) build is the exception. [`backports`](#backports) is a
-compiled copy without one — upstream ships per-version builds only (1.7.0: cp310–cp313, no abi3, no cp314) — so its
-`cp313` copy stops loading on the day the system Python reaches 3.14; how the wiring meets that is
+compiled copy without one — upstream ships per-version builds only (1.7.0: cp310–cp313, no abi3, no cp314) — so it
+carries one build per Python it is meant to load under, `cp312` and `cp313`, and stops loading on the day the system
+Python reaches 3.14; how the wiring meets that is
 [`docs/architecture/backend-architecture.md`](../../docs/architecture/backend-architecture.md#composition-root-bootstrap)'s.
 
 Neither artifact can see any of this, and each says less than it looks like it does. The checksum gate says the copy is
 the bytes we pinned; it never imports anything. What says the copy imports is the test suite — most directly
-[`tests/test_vendored_atlas.py`](../../tests/test_vendored_atlas.py), whose whole job that is, and alongside it every
-test that reaches the firmware adapter — and all of it only under the Pythons CI runs. What that makes of vendoring or
-bumping a package is [`.claude/rules/vendored-assets.md`](../../.claude/rules/vendored-assets.md)'s.
+[`tests/test_vendored_atlas.py`](../../tests/test_vendored_atlas.py) and
+[`tests/test_vendored_backports_zstd.py`](../../tests/test_vendored_backports_zstd.py), whose whole job that is, and
+alongside it every test that reaches the firmware adapter — and all of it only under the Pythons CI runs. What that
+makes of vendoring or bumping a package is
+[`.claude/rules/vendored-assets.md`](../../.claude/rules/vendored-assets.md)'s.
 
 ## Formatters and vendored copies
 

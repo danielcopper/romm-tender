@@ -20,27 +20,20 @@ if TYPE_CHECKING:
 
 
 def count_rows_for_skip(rows: Sequence[Rom], fetch_id: str | None) -> int:
-    """Count the rows the skip may compare against the server's ROM count.
+    """Count the rows the stamp's fetch returned, which the skip requires to be more than none.
 
     Every fetched sibling persists (ADR-0021), so bound and unbound rows count
-    alike. What must NOT count is a row for a rom_id the server has since
-    dropped: RomM re-creating a ROM under a new id leaves the old row behind
-    unbound, and ADR-0007 keeps it forever as an identity anchor, so counting it
-    means the platform can never satisfy the condition again (#1504). When the
-    stamp names a fetch generation, only the rows carrying it count — a row the
-    last complete fetch returned has that generation, a superseded row keeps an
-    older one — which excludes exactly the dropped ids while deleting nothing.
+    alike. A row for a rom_id the server has since dropped is not among them:
+    RomM re-creating a ROM under a new id leaves the old row behind unbound, and
+    ADR-0007 keeps it forever as an identity anchor (#1504). When the stamp names
+    a fetch generation, only the rows carrying it count — a row the last complete
+    fetch returned has that generation, a superseded row keeps an older one —
+    which excludes exactly the dropped ids while deleting nothing.
 
-    A stamp with **no** generation (``fetch_id`` falsy) predates this contract
-    and cannot say what its fetch saw, so every row counts, exactly as before
-    #1504. That legacy path is deliberately permissive rather than refusing to
-    count: a platform with no superseded rows keeps skipping straight through
-    the upgrade instead of paying a forced re-fetch, and a platform that DOES
-    carry them already fails the count today, so it full-fetches until both
-    sides are re-stamped. That re-stamp lands on the next sync that APPLIES
-    something, not simply the next sync — the generation is written by the
-    apply's commit, and a run whose library-wide delta is empty stops at the
-    preview and reaches no commit.
+    A stamp with **no** generation (``fetch_id`` falsy) cannot say what its fetch
+    saw, so every row counts. No such stamp reaches the skip's decision: it
+    predates migration 031 too, so it carries no checksum and the gate refuses
+    it first (``domain/platform_skip.stamp_can_match``).
     """
     if not fetch_id:
         return len(rows)
@@ -57,32 +50,14 @@ def backfill_needed(rows: Sequence[Rom], fetch_id: str | None) -> bool:
     and no fetch will ever fill its key in — letting it force a backfill would
     wedge the platform into a full fetch on every sync, forever.
 
-    A stamp with **no** generation (``fetch_id`` falsy) predates the contract and
-    cannot say what its fetch saw, so every NULL-key row still forces the fetch,
-    exactly as before — the same deliberately permissive legacy path
-    :func:`count_rows_for_skip` takes, here erring towards fetching rather than
-    skipping.
+    A stamp with **no** generation (``fetch_id`` falsy) cannot say what its fetch
+    saw, so every NULL-key row forces the fetch, erring towards fetching rather
+    than skipping. As for :func:`count_rows_for_skip`, no such stamp reaches the
+    skip's decision.
     """
     if not fetch_id:
         return any(rom.sibling_group_key is None for rom in rows)
     return any(rom.sibling_group_key is None and rom.last_fetch_id == fetch_id for rom in rows)
-
-
-def bound_row_not_returned(rows: Sequence[Rom], fetch_id: str | None) -> bool:
-    """Whether a bound row among *rows* is one the stamp's fetch did not return.
-
-    True when a row carrying a ``shortcut_app_id`` has a ``last_fetch_id`` other
-    than *fetch_id*, a NULL one included. Why the incremental skip must not
-    rebuild such a row is in ``docs/architecture/backend-architecture.md``,
-    "Incremental skip".
-
-    A stamp with **no** generation (``fetch_id`` falsy) predates the contract and
-    cannot say what its fetch saw, so the answer is False — the same legacy path
-    :func:`count_rows_for_skip` takes.
-    """
-    if not fetch_id:
-        return False
-    return any(rom.shortcut_app_id is not None and rom.last_fetch_id != fetch_id for rom in rows)
 
 
 def prune_candidate_ids(rows: Sequence[Rom], stamp: PlatformSyncState | None) -> set[int]:

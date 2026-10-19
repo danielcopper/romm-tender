@@ -294,6 +294,7 @@ class SyncOrchestrator:
             collection_memberships: dict[tuple[str, str], CollectionMembership] = {}
             synced_rom_ids: set[int] = set()
             skipped_rom_ids: set[int] = set()
+            full_fetched_platforms: dict[str, list[dict[str, Any]]] = {}
 
             total_units = len(work_queue)
             for unit_index, unit in enumerate(work_queue, 1):
@@ -313,6 +314,7 @@ class SyncOrchestrator:
                     synced_rom_ids,
                     collection_memberships,
                     skipped_rom_ids=skipped_rom_ids,
+                    full_fetched_platforms=full_fetched_platforms,
                     progress_step=unit_index,
                     progress_total_steps=total_units,
                 )
@@ -338,15 +340,18 @@ class SyncOrchestrator:
             registry, last_synced_platforms, last_synced_collections = await self._loop.run_in_executor(
                 None, self._local_library_reader.do_read_preview_baseline, slug_to_name
             )
-            # Enabled platforms lacking a completion stamp (#1416): a
-            # late-ack-recovered platform is complete but unstamped, so the
-            # wholesale-skip gate full-fetches it forever and its run status
-            # never heals. Counted here (side-effect-free read) so the preview
-            # can still offer Apply on an otherwise-empty delta — the apply's
-            # 0-delta empty final chunk re-writes the stamp and records a fresh
-            # SyncRun (the one-time re-walk ADR-0023 intends).
+            # Enabled platforms whose skip only a fresh stamp can restore: no
+            # stamp (#1416 — a late-ack-recovered platform is complete but
+            # unstamped), or a full fetch here whose answer the stamp does not
+            # match (#743). Without an apply the gate full-fetches them forever.
+            # Counted here (side-effect-free read) so the preview can still offer
+            # Apply on an otherwise-empty delta — the apply's 0-delta empty final
+            # chunk re-writes the stamp and records a fresh SyncRun.
             restamp_platform_count = await self._loop.run_in_executor(
-                None, self._local_library_reader.do_count_unstamped_platforms, set(slug_to_name)
+                None,
+                self._local_library_reader.do_count_platforms_to_restamp,
+                set(slug_to_name),
+                full_fetched_platforms,
             )
             # Collapse to one entry per sibling group (ADR-0021) so the preview
             # counts games, not individual dumps: a multi-version game becomes one
@@ -530,6 +535,7 @@ class SyncOrchestrator:
         collection_memberships: dict[tuple[str, str], CollectionMembership],
         *,
         skipped_rom_ids: set[int],
+        full_fetched_platforms: dict[str, list[dict[str, Any]]],
         progress_step: int = 0,
         progress_total_steps: int = 0,
     ) -> None:
@@ -541,7 +547,9 @@ class SyncOrchestrator:
         name in the value), so same-named collections never overwrite each other
         (#1503). ``all_roms`` is extended in both cases, and ``skipped_rom_ids``
         too with the ROMs of a unit the fetcher reports as skipped, platform or
-        collection alike — the units the apply will skip.
+        collection alike — the units the apply will skip. A platform unit the
+        fetcher did not skip lands in ``full_fetched_platforms`` under its slug,
+        so the restamp count can judge its stamp against what the fetch returned.
         Mutates the passed-in accumulators in place. ``progress_step`` /
         ``progress_total_steps`` thread the unit's coarse position into the
         fetcher's per-page ``fetching`` frames (on top of the per-unit frame
@@ -554,6 +562,8 @@ class SyncOrchestrator:
             for rom in unit_roms:
                 platform_rom_ids.add(rom["id"])
                 synced_rom_ids.add(rom["id"])
+            if not skipped and unit.slug:
+                full_fetched_platforms[unit.slug] = unit_roms
         else:
             unit_roms, all_collection_rom_ids, skipped = await self._collection_fetcher.fetch_collection_unit(
                 unit, synced_rom_ids, progress_step=progress_step, progress_total_steps=progress_total_steps
@@ -1033,6 +1043,10 @@ class SyncOrchestrator:
         # the source of truth, no per-collection "last_sync" gate today).
         # The unit's coarse step/total is threaded so the fetcher's per-page
         # ``fetching`` frames keep the bar's position.
+        # A platform's fetch start, read before the skip check so it is never
+        # later than the walk's first page; the final chunk's stamp records it
+        # as the next skip's reference (#743 D1).
+        fetch_started_at = self._clock.now().isoformat() if unit.type == "platform" else None
         if unit.type == "platform":
             unit_roms, skipped = await self._sync_platform_unit(
                 unit,
@@ -1209,6 +1223,7 @@ class SyncOrchestrator:
             confirmed_cover_sources=confirmed_cover_sources,
             cover_refreshes=cover_refreshes,
             collection_member_ids=collection_member_ids,
+            fetch_started_at=fetch_started_at,
         )
         return len(skip_ids) + applied_count
 

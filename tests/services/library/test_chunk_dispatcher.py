@@ -95,6 +95,52 @@ class TestApplyChunking:
         assert commit_rows == [[1, 2], [3, 4], [5]]
 
     @pytest.mark.asyncio
+    async def test_the_final_chunk_s_stamp_checksums_every_chunk_s_ids(self, library, fake_romm_api, monkeypatch):
+        """The stamp the final chunk carries names the whole fetch, not that chunk's rows (#743 D2)."""
+        from domain.platform_skip import rom_id_checksum
+        from services.library import chunk_dispatcher
+
+        _use_fake_romm(library, fake_romm_api)
+        monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
+
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[{"id": i, "name": f"Game {i}"} for i in range(1, 6)],
+        )
+
+        stamps = []
+
+        async def capture_commit(
+            _rid_to_aid, chunk_rows, platform_stamp=None, collection_stamp=None, fetch_id=None, delivered_through=None
+        ):
+            stamps.append(platform_stamp)
+
+        library.sync._reporter.commit_unit_results = capture_commit  # type: ignore[method-assign]
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+        library.sync._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        library.sync._box.sync_state = SyncState.RUNNING
+        library.sync._box.current_sync_id = "run-chunk"
+
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=5)
+        await library.sync._orchestrator._sync_one_unit(
+            unit,
+            sources=library.emulator_sources.read(),
+            unit_index=0,
+            total_units=1,
+            synced_rom_ids=set(),
+            collection_memberships={},
+            platform_rom_ids=set(),
+        )
+
+        assert len(stamps) == 3
+        assert stamps[:2] == [None, None]
+        assert stamps[2] is not None
+        assert stamps[2].rom_id_checksum == rom_id_checksum(range(1, 6))
+
+    @pytest.mark.asyncio
     async def test_small_unit_emits_exactly_one_chunk(self, library, fake_romm_api, emit):
         """A unit under the chunk size emits a single chunk — regression guard that
         the chunk fields collapse to the today's one-shot behaviour."""

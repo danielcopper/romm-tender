@@ -26,6 +26,7 @@
 
 import type { FC, ReactNode } from "react";
 import { DialogButton, Focusable, ToggleField } from "@decky/ui";
+import { EmulatorStepScope } from "../emulatorStepping";
 import { ListDetail, type ListDetailItem } from "../layout/ListDetail";
 import { ROW_CONTENT_INSET, ROW_MARKER_GAP, ROW_MARKER_WIDTH, SELECTION_ACCENT } from "../layout/pane";
 import { LoadingRow } from "../LoadingRow";
@@ -38,7 +39,7 @@ import type { PlatformRow, PlatformsPageState } from "./usePlatformsPage";
  * What the row's dot means, in words — its `title`.
  *
  * **The BIOS states are not this surface's to word.** `utils/biosSummary.ts`
- * holds all seven, and this is the third surface to read it. It worded them for
+ * holds every one, and this is the third surface to read it. It worded them for
  * itself until it drifted: the list went on saying an emulator "requires none of
  * the files it names" after the other two had moved to naming the declaration,
  * so one platform was described in two vocabularies a keypress apart — the exact
@@ -50,13 +51,11 @@ import type { PlatformRow, PlatformsPageState } from "./usePlatformsPage";
  * to land; a tooltip has no heading and has room for the longer form, and the
  * pane it is meant to agree with shows both.
  *
- * What stays here are the three answers that are not BIOS states at all — they
+ * What stays here are the two answers that are not BIOS states at all — they
  * are about the READ, which the module has no input for and no business knowing.
  * Each is taken off the STATE rather than off the payload being absent:
- * `firmware` is non-null in the `answered` state alone, so all three of these
- * share `firmware === null` and a truthiness test cannot tell them apart —
- * saying one thing about a row still waiting and a row whose read settled
- * nothing is how a reader takes an answer where none has arrived. A failed
+ * `firmware` is non-null in the `answered` state alone, so both of these share
+ * `firmware === null` and a truthiness test cannot tell them apart. A failed
  * RE-read keeps the answer it could not replace and the dot goes on showing it,
  * so only a failure with nothing behind it is worded as one — the pane is where
  * a kept answer is flagged as possibly out of date.
@@ -65,8 +64,10 @@ function biosTooltip(row: PlatformRow): string {
   if (row.firmwareState === "pending") return "Checking this platform's BIOS files…";
   if (row.firmwareState === "failed") return "Could not read this platform's BIOS state";
   const firmware = row.firmware;
-  if (!firmware) return "Nothing is known about this platform's BIOS files";
-  return biosSummary(firmware, firmware.files, firmware.bios_level ?? null).sentence;
+  // `answered` is the one state left, and it always holds an entry: this only
+  // narrows the type.
+  if (firmware === null) return "";
+  return biosSummary(firmware, firmware.files, firmware.bios_level ?? null, row.name || null).sentence;
 }
 
 const GroupHeading: FC<{ title: string; count: number }> = ({ title, count }) => (
@@ -220,17 +221,24 @@ export const PlatformsTab: FC<{ state: PlatformsPageState }> = ({ state }) => {
     </>
   );
 
+  // L2 and R2 step the shown platform's emulator selector wherever focus is on
+  // this page, the list included.
   return (
-    <ListDetail
-      items={items}
-      listHeader={listHeader}
-      selectedId={state.selectedSlug}
-      onSelect={state.select}
-      renderDetail={(slug) => {
-        const row = slug === null ? undefined : state.rows.get(slug);
-        if (!row) return <div style={{ padding: "16px", color: "#8f98a0" }}>Pick a platform on the left.</div>;
-        return <PlatformDetail row={row} state={state} />;
-      }}
-    />
+    <EmulatorStepScope>
+      {(onButtonDown) => (
+        <ListDetail
+          items={items}
+          listHeader={listHeader}
+          selectedId={state.selectedSlug}
+          onSelect={state.select}
+          onButtonDown={onButtonDown}
+          renderDetail={(slug) => {
+            const row = slug === null ? undefined : state.rows.get(slug);
+            if (!row) return <div style={{ padding: "16px", color: "#8f98a0" }}>Pick a platform on the left.</div>;
+            return <PlatformDetail row={row} state={state} />;
+          }}
+        />
+      )}
+    </EmulatorStepScope>
   );
 };

@@ -18,6 +18,18 @@ once for each panel bundle.
 `dist/` sits at the repository root rather than under `frontend/`, because it is the seam between the two halves: the
 backend serves it as `<code_dir>/dist` and must not reach into the frontend's directory to find it.
 
+### The desktop dev build (dev build only)
+
+`pnpm -C frontend build:desktop` (`frontend/rollup.desktop.config.js`) runs the same three builds with sourcemaps, and
+gives the two builds of the panel one more transform (`insertDesktopSurfaceStart`,
+`frontend/scripts/start-desktop-surface.mjs`): it rewrites `src/index.tsx` as it is bundled to import `./desktop` and
+call `startDesktopSurface()` right after the panel's own `disownStrandedPruneLeases();`. That is the **only** way the
+desktop surface (`frontend/src/desktop/`) reaches a bundle — `pnpm build`, `build:dev`, CI, `mise run dev` and the
+release tarball all ship without it. The transform anchors on that one literal statement, and fails the build rather
+than finish it without the surface: when `index.tsx` holds the statement other than exactly once, and when a build of
+the panel never reaches `src/index.tsx` at all. Nothing stops the surface: a JS-context rebuild, not a teardown call, is
+what ends the panel, so the transform adds no stop call.
+
 ## Why two copies of the panel
 
 `@decky/ui` is not a component library. Almost every member is a search predicate over Steam's own minified bundle, and

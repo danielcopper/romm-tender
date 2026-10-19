@@ -71,6 +71,10 @@ class FakeRommApi:
         # In-memory seeded data — tests mutate these directly.
         self.platforms: list[dict[str, Any]] = []
         self.roms: dict[int, dict[str, Any]] = {}
+        # ROMs hidden from this user, as RomM's per-user ``rom_user.hidden`` or an
+        # admin hide does: left out of the platform list and the skip probe while
+        # ``roms`` keeps them, and none of the hides moves their ``updated_at``.
+        self.hidden_rom_ids: set[int] = set()
         self.firmware_files: list[dict[str, Any]] = []
         self.collections: list[dict[str, Any]] = []
         self.virtual_collections: dict[str, list[dict[str, Any]]] = {}
@@ -144,7 +148,7 @@ class FakeRommApi:
         self.get_rom_once_side_effect: Exception | None = None
         self.get_rom_once_side_effect_by_id: dict[int, Exception] = {}
         self.list_roms_side_effect: Exception | None = None
-        self.list_roms_updated_after_side_effect: Exception | None = None
+        self.list_roms_newest_first_side_effect: Exception | None = None
         self.list_collections_side_effect: Exception | None = None
         self.list_virtual_collections_side_effect: Exception | None = None
         # Per-type failure injection: raise only for a specific virtual type
@@ -311,28 +315,32 @@ class FakeRommApi:
     def list_roms(self, platform_id: int, limit: int = LIST_PAGE_SIZE, offset: int = 0) -> dict[str, Any]:
         self._log("list_roms", (platform_id,), {"limit": limit, "offset": offset})
         self._check_fail(self.list_roms_side_effect)
-        items = [r for r in self.roms.values() if r.get("platform_id") == platform_id]
-        return self._paginate(items, limit, offset)
-
-    def list_roms_updated_after(
-        self,
-        platform_id: int,
-        updated_after: str,
-        limit: int = 1,
-        offset: int = 0,
-    ) -> dict[str, Any]:
-        self._log(
-            "list_roms_updated_after",
-            (platform_id, updated_after),
-            {"limit": limit, "offset": offset},
-        )
-        self._check_fail(self.list_roms_updated_after_side_effect)
         items = [
             r
             for r in self.roms.values()
-            if r.get("platform_id") == platform_id and (r.get("updated_at") or "") > updated_after
+            if r.get("platform_id") == platform_id and r.get("id") not in self.hidden_rom_ids
         ]
         return self._paginate(items, limit, offset)
+
+    def list_roms_newest_first(self, platform_id: int) -> dict[str, Any]:
+        """RomM's skip-probe answer: the newest ``updated_at`` first, ``limit=1``, and every visible id.
+
+        A ROM in ``hidden_rom_ids`` is left out of both, as RomM's visibility
+        filter leaves a hidden ROM out of the list and its id index.
+        """
+        self._log("list_roms_newest_first", (platform_id,))
+        self._check_fail(self.list_roms_newest_first_side_effect)
+        items = [
+            r
+            for r in self.roms.values()
+            if r.get("platform_id") == platform_id and r.get("id") not in self.hidden_rom_ids
+        ]
+        newest = sorted(items, key=lambda r: r.get("updated_at") or "", reverse=True)
+        return {
+            "items": [dict(r) for r in newest[:1]],
+            "total": len(items),
+            "rom_id_index": [r["id"] for r in items],
+        }
 
     @staticmethod
     def _on_platforms(items: list[dict[str, Any]], platform_ids: Sequence[int] | None) -> list[dict[str, Any]]:

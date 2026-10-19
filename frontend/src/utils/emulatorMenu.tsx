@@ -7,12 +7,18 @@
  * the un-bakeable ones shown disabled with a short reason. The frontend owns the
  * reason copy; the backend only ships the reason slug. Keys are the emulator
  * LABEL (not `core_so`), since a standalone emulator has no core.
+ *
+ * An entry can carry several labels — every label that runs its launch command
+ * — and is named by all of them. A pick stores the entry's first label, and a
+ * stored label marks its entry whichever of the entry's labels it is
+ * (`utils/emulatorEntries.ts`).
  */
 
 import type { ReactNode } from "react";
 import { Menu, MenuItem, MenuSeparator } from "@decky/ui";
 import type { AnsweringSource, EmulatorDataReason, EmulatorOption, PlatformSystemAnswer } from "../types";
 import { emulatorDataReasonSentence } from "./emulatorSourceWording";
+import { emulatorName, entryForLabel } from "./emulatorEntries";
 
 /** Map a backend un-bakeable reason slug to short menu copy. */
 export function reasonCopy(reason: string | null): string {
@@ -48,7 +54,7 @@ export interface EmulatorMenuConfig {
    * is itself the clear-to-empty-label action.
    */
   followSystem?: { hasGameOverride: boolean; onFollowSystem: () => void };
-  /** Called with the picked emulator LABEL when a bakeable entry is chosen. */
+  /** Called with the chosen entry's first LABEL — the one a pick stores — when a bakeable entry is chosen. */
   onPick: (label: string) => void;
 }
 
@@ -62,7 +68,7 @@ function emulatorEntryLabel(e: EmulatorOption, isActive: boolean, isPlatformCore
   const defaultMark = e.is_default ? " (default)" : "";
   const systemMark = isPlatformCore ? " (system)" : "";
   const activeMark = isActive ? " ✓" : "";
-  return `${e.label}${defaultMark}${systemMark}${activeMark}`;
+  return `${e.name}${defaultMark}${systemMark}${activeMark}`;
 }
 
 /** Build the `<Menu>` element for `showContextMenu`. */
@@ -79,10 +85,12 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     );
   }
 
-  const defaultLabel = emulators.find((e) => e.is_default)?.label ?? null;
+  const defaultEntry = emulators.find((e) => e.is_default);
   // The active emulator is "the default" when nothing overrides it (no active
-  // label, or it equals the default) — the checkmark then sits on the default.
-  const activeIsDefault = !activeLabel || activeLabel === defaultLabel;
+  // label, or one of the default entry's labels) — the checkmark then sits on
+  // the default.
+  const activeIsDefault = !activeLabel || (defaultEntry?.labels.includes(activeLabel) ?? false);
+  const platformCore = entryForLabel(emulators, platformCoreLabel);
 
   const children: ReactNode[] = [
     <MenuItem key="compat" disabled={true}>
@@ -96,8 +104,9 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
     // override when set, else the es_systems default. ✓ sits here when the game
     // already follows the system (no per-game pin). "System Override" stays
     // distinct from the "(default)" marker so the menu never shows two defaults.
-    const fallbackLabel = platformCoreLabel ?? defaultLabel ?? null;
-    const fallbackSuffix = fallbackLabel ? ` (${fallbackLabel})` : "";
+    const fallbackName =
+      platformCoreLabel !== null ? emulatorName(emulators, platformCoreLabel) : (defaultEntry?.name ?? null);
+    const fallbackSuffix = fallbackName ? ` (${fallbackName})` : "";
     const followsSystemMark = followSystem.hasGameOverride ? "" : " ✓";
     children.push(
       <MenuItem key="follow-system" onClick={followSystem.onFollowSystem}>
@@ -110,13 +119,13 @@ export function buildEmulatorMenu(config: EmulatorMenuConfig): ReactNode {
   for (const e of emulators) {
     const key = `emu-${e.label}`;
     if (!e.bakeable) {
-      children.push(<MenuItem key={key} disabled={true}>{`${e.label} — ${reasonCopy(e.reason)}`}</MenuItem>);
+      children.push(<MenuItem key={key} disabled={true}>{`${e.name} — ${reasonCopy(e.reason)}`}</MenuItem>);
       continue;
     }
     // The active marker sits on the ACTIVE emulator: the default-marked entry
-    // when nothing overrides, otherwise the one whose label matches the active.
-    const isActive = activeIsDefault ? e.is_default : activeLabel === e.label;
-    const isPlatformCore = platformCoreLabel !== null && e.label === platformCoreLabel;
+    // when nothing overrides, otherwise the one listing the active label.
+    const isActive = activeIsDefault ? e.is_default : e.labels.includes(activeLabel);
+    const isPlatformCore = platformCore === e;
     children.push(
       <MenuItem key={key} onClick={() => onPick(e.label)}>
         {emulatorEntryLabel(e, isActive, isPlatformCore)}

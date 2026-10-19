@@ -105,7 +105,7 @@ def _no_zstd_registration() -> Iterator[None]:
     """Start and end every test with no zstd codec registered with the vendored resolver.
 
     The registration is process-global and ``bootstrap()`` makes one on Python
-    3.13, so without this a test that builds the backend would hand its codec
+    3.12 and 3.13, so without this a test that builds the backend would hand its codec
     to every later test on the same worker.
     """
     from _vendor import atlas

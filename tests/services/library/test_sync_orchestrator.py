@@ -99,18 +99,36 @@ def _seed_completed_run(library, *, at, platforms=None, collections=None, run_id
         library.uow.sync_runs.save(run)
 
 
-def _seed_platform_stamp(library, slug, *, at, rom_count, fetch_id=None):
+def _seed_platform_stamp(library, slug, *, at, rom_count, fetch_id=None, rom_ids=(), fetch_started_at=None):
     """Persist a per-platform completion stamp (ADR-0023) into the shared UoW.
 
     ``fetch_id`` is the generation the stamp's fetch marked its rows with (#1504);
-    ``None`` is a stamp written before that contract.
+    ``None`` lets a test's rows carry none, since every row then counts. That
+    pairing is a test convenience: production writes a generation on every stamp
+    with a checksum, and a stamp without one predates the checksum. ``rom_ids``
+    are the ids the stamp's fetch returned, whose checksum the skip compares
+    RomM's id set with — none by default, which is what the fake serves for a
+    platform it holds no ROMs for. ``fetch_started_at`` defaults to ``at``.
     """
+    from domain.platform_skip import rom_id_checksum
     from domain.platform_sync_state import PlatformSyncState
 
     with library.uow:
         library.uow.platform_sync_state.save(
-            PlatformSyncState.stamp(platform_slug=slug, at=at, rom_count=rom_count, fetch_id=fetch_id)
+            PlatformSyncState.stamp(
+                platform_slug=slug,
+                at=at,
+                rom_count=rom_count,
+                fetch_id=fetch_id,
+                fetch_started_at=fetch_started_at or at,
+                rom_id_checksum=rom_id_checksum(rom_ids),
+            )
         )
+
+
+# Before every seeded stamp's reference (fetch start 2025-01-01 less ten minutes)
+# and the harness clock's: a ROM RomM last updated then leaves the skip standing.
+_OLD_UPDATED_AT = "2024-06-01T00:00:00+00:00"
 
 
 class _ClockAdvancingSleeper:
@@ -705,11 +723,11 @@ class TestPreviewRestampPlatformCount:
             platform_id=1,
             name="N64",
             slug="n64",
-            roms=[{"id": 10, "name": "Keep", "fs_name": "keep.z64"}],
+            roms=[{"id": 10, "name": "Keep", "fs_name": "keep.z64", "updated_at": _OLD_UPDATED_AT}],
         )
         library.settings["enabled_platforms"] = {"1": True}
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="Keep", fs_name="keep.z64")
-        _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00", rom_count=1)
+        _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00", rom_count=1, rom_ids=(10,))
 
         result = await library.sync.sync_preview()
 
@@ -725,7 +743,11 @@ class TestPreviewRestampPlatformCount:
         # is counted (the count is not a whole-library boolean).
         self._preview_setup(library, fake_romm_api)
         _seed_platform(
-            fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A", "fs_name": "a.z64"}]
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[{"id": 10, "name": "A", "fs_name": "a.z64", "updated_at": _OLD_UPDATED_AT}],
         )
         _seed_platform(
             fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 20, "name": "B", "fs_name": "b.gba"}]
@@ -734,7 +756,7 @@ class TestPreviewRestampPlatformCount:
         _seed_rom_row(library, 10, app_id=1010, platform_slug="n64", name="A", fs_name="a.z64")
         _seed_rom_row(library, 20, app_id=2020, platform_slug="gba", name="B", fs_name="b.gba")
         # Only n64 carries a stamp; gba is the unstamped late-ack survivor.
-        _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00", rom_count=1)
+        _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00", rom_count=1, rom_ids=(10,))
 
         result = await library.sync.sync_preview()
 
@@ -2836,8 +2858,20 @@ class TestDoSyncPerUnit:
             name="N64",
             slug="n64",
             roms=[
-                {"id": 10, "name": "Zelda (USA)", "igdb_id": 100, "fs_name_no_ext": "zelda_usa"},
-                {"id": 11, "name": "Zelda (JP)", "igdb_id": 100, "fs_name_no_ext": "zelda_jp"},
+                {
+                    "id": 10,
+                    "name": "Zelda (USA)",
+                    "igdb_id": 100,
+                    "fs_name_no_ext": "zelda_usa",
+                    "updated_at": _OLD_UPDATED_AT,
+                },
+                {
+                    "id": 11,
+                    "name": "Zelda (JP)",
+                    "igdb_id": 100,
+                    "fs_name_no_ext": "zelda_jp",
+                    "updated_at": _OLD_UPDATED_AT,
+                },
             ],
         )
         # The collection holds ONLY the unbound sibling.
@@ -2846,7 +2880,7 @@ class TestDoSyncPerUnit:
         library.settings["enabled_collections"] = {"standard": {"7": True}}
 
         _seed_completed_run(library, at="2025-01-01T00:00:00Z")
-        _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00Z", rom_count=2)
+        _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00Z", rom_count=2, rom_ids=(10, 11))
         # Install first so the binding survives the _seed_rom_row overwrite.
         _seed_install(library, 10, file_path="/roms/n64/zelda_usa.z64", platform_slug="n64")
         _seed_rom_row(
@@ -5610,14 +5644,15 @@ class TestPlatformListingThatIsNotAList:
 
 
 class TestStoppedRunLeavesNoHiddenStaleRow:
-    """A platform holding a bound version its stamping fetch did not return is fetched whole (#2084).
+    """A bound version its stamping fetch did not return no longer holds its platform's skip (#743 D10).
 
-    A run that commits a platform writes its completion stamp with the platform's
-    new count and generation. A bound version the stamping fetch did not return
-    stays bound — the stale removal keeps a version gone from a platform it read
-    whole — so the next run must full-fetch that platform instead of rebuilding
-    the version from the bound rows as if RomM had returned it. That full fetch is
-    what lets the same dump under a reissued id take the binding.
+    A run that commits a platform writes its completion stamp with the checksum of
+    the ids its fetch returned. A bound version that fetch did not return stays
+    bound — the stale removal keeps a version gone from a platform it read whole,
+    and a stopped run removes nothing — and the checksum already records its
+    absence, so the next run skips the unchanged platform, keeps the version bound
+    and removes nothing. A reissued id changes the id set and forces the full fetch
+    the same-dump move needs (``test_fetcher.py``, ``test_a_reissued_id_forces_a_full_fetch``).
     """
 
     @staticmethod
@@ -5627,9 +5662,22 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
 
         # RomM serves A and B; V (rom 3) was deleted since the last completed fetch.
         _seed_platform(
-            fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[
+                {"id": 1, "name": "A", "updated_at": _OLD_UPDATED_AT},
+                {"id": 2, "name": "B", "updated_at": _OLD_UPDATED_AT},
+            ],
         )
-        _seed_platform(fake_romm_api, platform_id=2, name="GBA", slug="gba", roms=[{"id": 20, "name": "Z"}])
+        _seed_platform(
+            fake_romm_api,
+            platform_id=2,
+            name="GBA",
+            slug="gba",
+            roms=[{"id": 20, "name": "Z", "updated_at": _OLD_UPDATED_AT}],
+        )
         library.settings["enabled_platforms"] = {"1": True, "2": True}
         _seed_platform_stamp(library, "n64", at="2025-01-01T00:00:00", rom_count=3, fetch_id="run-0")
         for rom_id, name in ((1, "A"), (2, "B"), (3, "V")):
@@ -5661,7 +5709,7 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
         assert (stamp.rom_count, stamp.fetch_id) == (2, "run-1")
 
     @pytest.mark.asyncio
-    async def test_next_completed_run_fetches_the_platform_whole_and_keeps_the_vanished_version(
+    async def test_next_completed_run_skips_the_platform_and_keeps_the_vanished_version(
         self, library, fake_romm_api, emit
     ):
         await self._stop_after_applying_n64(library, fake_romm_api)
@@ -5676,7 +5724,7 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
 
         run_2 = emit.call_args_list[run_2_starts_at:]
         applied_units = {c.args[1]["unit_name"] for c in run_2 if c.args and c.args[0] == "sync_apply_unit"}
-        assert "N64" in applied_units
+        assert "N64" not in applied_units
         stale_events = [c.args[1] for c in run_2 if c.args and c.args[0] == "sync_stale"]
         assert [event["remove"] for event in stale_events] == [[]]
         with library.uow as uow:
@@ -5684,19 +5732,167 @@ class TestStoppedRunLeavesNoHiddenStaleRow:
             assert uow.roms.get(1).shortcut_app_id == 5001
 
     @pytest.mark.asyncio
-    async def test_preview_after_the_stop_fetches_the_platform_whole_and_counts_no_removal(
-        self, library, fake_romm_api
-    ):
-        """The preview full-fetches N64 too, and a version gone from it is no removal."""
+    async def test_preview_after_the_stop_skips_the_platform_and_counts_no_removal(self, library, fake_romm_api):
+        """The preview skips N64 too, and a version gone from it is no removal."""
         await self._stop_after_applying_n64(library, fake_romm_api)
         fake_romm_api.call_log.clear()
 
         result = await library.sync.sync_preview()
 
         assert result["success"] is True
-        assert ("list_roms", (1,)) in [(name, args) for name, args, _kwargs in fake_romm_api.call_log]
+        assert ("list_roms", (1,)) not in [(name, args) for name, args, _kwargs in fake_romm_api.call_log]
         assert result["summary"]["remove_count"] == 0
         assert all(row["remove_count"] == 0 for row in result["summary"]["platform_breakdown"])
+
+
+class TestOnlyAFreshStampRestoresTheSkip:
+    """A full fetch whose stamp no longer matches RomM offers Apply, re-stamps, and skips next sync (#743).
+
+    Each case is a round: the sync after the change fetches the platform in full,
+    the preview offers Apply through ``restamp_platform_count`` even with no
+    shortcut to change, the apply writes a stamp recording the fetch's start and
+    id checksum, and the sync after that skips the platform.
+    """
+
+    @staticmethod
+    def _seed_n64(library, fake_romm_api, *, roms):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[
+                {"id": rom_id, "name": f"G{rom_id}", "fs_name": f"g{rom_id}.z64", "updated_at": _OLD_UPDATED_AT}
+                for rom_id in roms
+            ],
+        )
+        library.settings["enabled_platforms"] = {"1": True}
+        for rom_id in roms:
+            _seed_rom_row(
+                library, rom_id, app_id=5000 + rom_id, platform_slug="n64", name=f"G{rom_id}", fs_name=f"g{rom_id}.z64"
+            )
+        library.sync._cover_preparer._download_artwork = AsyncMock(return_value={})
+
+    @staticmethod
+    async def _apply(library, run_id, wait=_fake_wait_set_event):
+        box = library.sync._box
+        library.sync._chunk_dispatcher._wait_for_unit_complete = wait
+        box.sync_state = SyncState.RUNNING
+        box.current_sync_id = run_id
+        await library.sync._orchestrator._do_sync_per_unit()
+
+    @staticmethod
+    def _walked_n64(fake_romm_api) -> bool:
+        return ("list_roms", (1,)) in [(name, args) for name, args, _kwargs in fake_romm_api.call_log]
+
+    @staticmethod
+    def _stamp(library):
+        with library.uow as uow:
+            return uow.platform_sync_state.get("n64")
+
+    @pytest.mark.asyncio
+    async def test_a_hidden_rom_with_a_shortcut_is_fetched_in_full_once_then_skipped(
+        self, library, fake_romm_api, emit
+    ):
+        from domain.platform_skip import rom_id_checksum
+
+        self._seed_n64(library, fake_romm_api, roms=(1, 2))
+        await self._apply(library, "run-1")
+        assert self._stamp(library).rom_id_checksum == rom_id_checksum([1, 2])
+
+        # Hidden in RomM: gone from the list and the id index, no updated_at moved.
+        fake_romm_api.hidden_rom_ids = {2}
+        fake_romm_api.call_log.clear()
+        preview = await library.sync.sync_preview()
+
+        assert self._walked_n64(fake_romm_api)
+        summary = preview["summary"]
+        assert summary["restamp_platform_count"] == 1
+        assert (summary["new_count"], summary["changed_count"], summary["remove_count"]) == (0, 0, 0)
+
+        apply_starts_at = len(emit.call_args_list)
+        await self._apply(library, "run-2")
+
+        applied = {
+            c.args[1]["unit_name"] for c in emit.call_args_list[apply_starts_at:] if c.args[0] == "sync_apply_unit"
+        }
+        assert applied == {"N64"}
+        stamp = self._stamp(library)
+        assert stamp.rom_id_checksum == rom_id_checksum([1])
+        with library.uow as uow:
+            assert uow.roms.get(2).shortcut_app_id == 5002
+
+        fake_romm_api.call_log.clear()
+        preview = await library.sync.sync_preview()
+
+        assert not self._walked_n64(fake_romm_api)
+        assert preview["summary"]["restamp_platform_count"] == 0
+
+        next_starts_at = len(emit.call_args_list)
+        await self._apply(library, "run-3")
+        assert not [c for c in emit.call_args_list[next_starts_at:] if c.args[0] == "sync_apply_unit"]
+        assert not self._walked_n64(fake_romm_api)
+
+    @pytest.mark.asyncio
+    async def test_a_stamp_without_a_checksum_is_fetched_in_full_once_then_skipped(self, library, fake_romm_api, emit):
+        """Every stamp after the upgrade to migration 031: one full fetch and one Apply, then the skip again."""
+        from domain.platform_sync_state import PlatformSyncState
+
+        self._seed_n64(library, fake_romm_api, roms=(1, 2))
+        with library.uow as uow:
+            uow.platform_sync_state.save(
+                PlatformSyncState.stamp(
+                    platform_slug="n64", at="2025-01-01T00:00:00+00:00", rom_count=2, fetch_id="run-0"
+                )
+            )
+
+        preview = await library.sync.sync_preview()
+
+        assert self._walked_n64(fake_romm_api)
+        summary = preview["summary"]
+        assert summary["restamp_platform_count"] == 1
+        assert (summary["new_count"], summary["changed_count"], summary["remove_count"]) == (0, 0, 0)
+
+        await self._apply(library, "run-1")
+
+        stamp = self._stamp(library)
+        assert stamp.rom_id_checksum is not None
+        assert stamp.fetch_started_at == "2026-01-01T00:00:00+00:00"
+
+        fake_romm_api.call_log.clear()
+        preview = await library.sync.sync_preview()
+
+        assert not self._walked_n64(fake_romm_api)
+        assert preview["summary"]["restamp_platform_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_a_rom_edited_while_the_run_applied_is_fetched_in_full_next_sync(self, library, fake_romm_api):
+        """#743 Done when: the stamp's reference is its fetch's start, not the run's end.
+
+        The apply takes half an hour on the clock; RomM records an edit twenty
+        minutes in, after N64's fetch started and before its final chunk
+        committed. The next sync fetches N64 in full.
+        """
+        self._seed_n64(library, fake_romm_api, roms=(1, 2))
+        clock = library.sync._orchestrator._clock
+
+        async def an_edit_lands_during_the_apply(_unit, event):
+            clock.advance(1200)
+            fake_romm_api.roms[1]["updated_at"] = clock.now().isoformat()
+            clock.advance(600)
+            event.set()
+            return {}
+
+        await self._apply(library, "run-1", wait=an_edit_lands_during_the_apply)
+        stamp = self._stamp(library)
+        assert stamp.fetch_started_at == "2026-01-01T00:00:00+00:00"
+        assert stamp.completed_at == "2026-01-01T00:30:00+00:00"
+
+        fake_romm_api.call_log.clear()
+        await self._apply(library, "run-2")
+
+        assert self._walked_n64(fake_romm_api)
 
 
 class TestPlatformTurnedOffAndBackOn:
@@ -6220,7 +6416,7 @@ class TestRegression738CacheCorruption:
         # A prior completed run + matching roms count drive the incremental skip.
         _seed_completed_run(library, at="2025-01-01T00:00:00Z")
         # Server reports the platform exists with 3 ROMs and ZERO updates.
-        # No ROMs seeded on the fake → list_roms_updated_after returns total=0.
+        # No ROMs seeded on the fake → the probe answers no ROM and no id.
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
         library.settings["enabled_platforms"] = {"1": True}
 

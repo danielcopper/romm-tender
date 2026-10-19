@@ -2,8 +2,9 @@
  * The pieces a wide page's detail pane is built from: the type scale it sets
  * secondary lines in, the colours it says things with, the two button shapes,
  * the table every page with more than two facts per row draws, and the small
- * components every pane repeats — a section title, a muted line, a row of
- * buttons, and the two lines that report an action.
+ * components every pane repeats — a section title, a sub-heading inside a
+ * section, a muted line, a row of buttons, and the two lines that report an
+ * action.
  *
  * They are here rather than on a page because the next pane is written against
  * the same scale: a second literal for the same size is how two panes drift
@@ -318,6 +319,15 @@ export const SectionTitle: FC<{ title: string; note?: string; noteColor?: string
       {title.toUpperCase()}
     </span>
     {note && <span style={{ fontSize: SECONDARY_FONT, color: noteColor ?? MUTED }}>{note}</span>}
+  </div>
+);
+
+/** A heading inside a section, smaller and quieter than {@link SectionTitle}, so
+ *  what stands under it reads as part of that section rather than as one of its
+ *  own. */
+export const SubHeading: FC<{ title: string }> = ({ title }) => (
+  <div style={{ fontSize: SECONDARY_FONT, letterSpacing: "0.5px", color: MUTED, padding: "10px 16px 2px" }}>
+    {title.toUpperCase()}
   </div>
 );
 

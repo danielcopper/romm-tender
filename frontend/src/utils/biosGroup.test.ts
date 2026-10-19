@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BIOS_GROUP_PHRASES, groupBlock, oneOfRowLine, oneOfWords, regionNames } from "./biosGroup";
+import { BIOS_GROUP_PHRASES, groupBlock, needWords, regionNames } from "./biosGroup";
 import { componentSources } from "../test-utils/componentSources";
 import type { OneOfGroupVerdict } from "../types";
 
@@ -20,23 +20,58 @@ describe("the region names", () => {
 });
 
 describe("a file's place in a group", () => {
-  it("names the discs it is for on an emulator's line", () => {
-    expect(oneOfWords({ regions: ["ntsc-u"], every_region: false })).toBe("for USA discs");
-    expect(oneOfWords({ regions: ["ntsc-j", "pal"], every_region: false })).toBe("for Japan and Europe discs");
+  it("names the discs an option is for and never whether it is in place — the mark and the dot say that", () => {
+    // Every verdict and every check an option can carry: the line is its need,
+    // so it reads the same whatever the file turned out to be.
+    const one_of = { regions: ["ntsc-u"], every_region: false };
+    for (const satisfied of [true, false, null]) {
+      for (const checked of [null, "mismatch", "refused", "unread"] as const) {
+        const row = { wanted: "optional" as const, required_by_active: false, one_of, satisfied, checked };
+        expect(needWords(row)).toBe("one of these · for USA discs");
+      }
+    }
+  });
+});
+
+describe("a row's need, under its name", () => {
+  it("says required for a file the shown emulator requires", () => {
+    expect(needWords({ wanted: "needed", required_by_active: true })).toBe("required");
   });
 
-  it("says the emulator boots it for every region where it serves them all", () => {
-    expect(oneOfWords({ regions: ["ntsc-j", "ntsc-u", "pal"], every_region: true })).toBe("boots it for every region");
+  it("says optional for a file the shown emulator declares and does not require", () => {
+    expect(needWords({ wanted: "optional", required_by_active: false })).toBe("optional");
   });
 
-  it("adds whether it is in place on the row's line, and nothing where that is not settled", () => {
-    const membership = { regions: ["ntsc-u"], every_region: false };
-    expect(oneOfRowLine(membership, true)).toBe("for USA discs · ✓ in place");
-    expect(oneOfRowLine(membership, false)).toBe("for USA discs · ✗ missing");
-    expect(oneOfRowLine(membership, null)).toBe("for USA discs");
-    expect(oneOfRowLine({ regions: ["ntsc-u", "pal"], every_region: true }, true)).toBe(
-      "for every region · ✓ in place",
-    );
+  it("says one of these and the discs it is for, for an option of the emulator's group", () => {
+    const one_of = { regions: ["ntsc-u"], every_region: false };
+    expect(needWords({ wanted: "optional", required_by_active: false, one_of })).toBe("one of these · for USA discs");
+    expect(
+      needWords({
+        wanted: "optional",
+        required_by_active: false,
+        one_of: { regions: ["ntsc-j", "pal"], every_region: false },
+      }),
+    ).toBe("one of these · for Japan and Europe discs");
+    expect(
+      needWords({
+        wanted: "optional",
+        required_by_active: false,
+        one_of: { regions: ["ntsc-j", "ntsc-u", "pal"], every_region: true },
+      }),
+    ).toBe("one of these · for every region");
+  });
+
+  it("says required for a file the emulator requires, even where it is also an option of a group", () => {
+    const one_of = { regions: ["ntsc-u"], every_region: false };
+    expect(needWords({ wanted: "needed", required_by_active: true, one_of })).toBe("required");
+  });
+
+  it("says not required for a file the emulator was read for and does not declare", () => {
+    expect(needWords({ wanted: "not_needed", required_by_active: false })).toBe("not required");
+  });
+
+  it("says the need was not established where nothing could answer for the file", () => {
+    expect(needWords({ wanted: "unknown", required_by_active: false })).toBe("need not established");
   });
 });
 
@@ -63,6 +98,19 @@ describe("the group's block on the game page", () => {
       { text: "Japan · scph5500.bin · missing ← this game's region", tone: "missing" },
       { text: "USA · scph5501.bin · in place", tone: "here" },
       { text: "Europe · scph5502.bin · missing", tone: "other" },
+    ]);
+  });
+
+  it("words an option that is there but not met by the resolver's check of its file", () => {
+    const checked = { "scph5500.bin": "mismatch", "scph5502.bin": "refused" } as const;
+    const block = groupBlock(beetle(["ntsc-j"], ["ntsc-j"]), "Beetle PSX", (name) =>
+      name in checked ? checked[name as keyof typeof checked] : null,
+    );
+
+    expect(block.lines.map((line) => line.text)).toEqual([
+      "Japan · scph5500.bin · wrong file ← this game's region",
+      "USA · scph5501.bin · in place",
+      "Europe · scph5502.bin · refused",
     ]);
   });
 

@@ -11,7 +11,7 @@ vi.mock("@decky/ui", () => ({
 }));
 
 import { buildEmulatorMenu, reasonCopy, type EmulatorMenuConfig } from "./emulatorMenu";
-import { libretroEmu, standaloneEmu } from "../test-utils/coreFixtures";
+import { libretroEmu, sharedBy, standaloneEmu } from "../test-utils/coreFixtures";
 
 // The builder returns a <Menu> element; walk its child MenuItem elements without
 // rendering (the @decky/ui Menu/MenuItem are stubs). A MenuItem carries its label
@@ -195,5 +195,60 @@ describe("buildEmulatorMenu", () => {
   it("omits the follow-system item on the platform detail (no followSystem)", () => {
     const menu = buildEmulatorMenu(baseConfig());
     expect(items(menu).some((i) => i.text.startsWith("Use System Override"))).toBe(false);
+  });
+});
+
+describe("an entry several labels share", () => {
+  // RetroDECK lists pcsx2_libretro.so under one command as LRPS2 and as PCSX2.
+  const shared = sharedBy(libretroEmu("pcsx2_libretro", "LRPS2"), ["LRPS2", "PCSX2"]);
+  const standalone = standaloneEmu("PCSX2 (Standalone)", true);
+  const config = (overrides: Partial<EmulatorMenuConfig> = {}) =>
+    baseConfig({ emulators: [standalone, shared], ...overrides });
+
+  it("shows it once, named by every label", () => {
+    const texts = items(buildEmulatorMenu(config())).map((item) => item.text);
+
+    expect(texts).toContain("LRPS2 / PCSX2");
+    expect(texts.filter((text) => text.includes("LRPS2") || text === "PCSX2")).toEqual(["LRPS2 / PCSX2"]);
+  });
+
+  it("stores its first label when it is chosen", () => {
+    const onPick = vi.fn();
+    const entry = items(buildEmulatorMenu(config({ onPick }))).find((item) => item.text === "LRPS2 / PCSX2");
+
+    entry!.onClick!();
+
+    expect(onPick).toHaveBeenCalledWith("LRPS2");
+  });
+
+  it("shows it chosen for a game stored under its second label", () => {
+    const texts = items(buildEmulatorMenu(config({ activeLabel: "PCSX2" }))).map((item) => item.text);
+
+    expect(texts).toContain("LRPS2 / PCSX2 ✓");
+    expect(texts).toContain("PCSX2 (Standalone) (default)");
+  });
+
+  it("marks it the default where its stored label is the second one", () => {
+    const sharedDefault = { ...shared, is_default: true };
+    const texts = items(buildEmulatorMenu(baseConfig({ emulators: [sharedDefault], activeLabel: "PCSX2" }))).map(
+      (item) => item.text,
+    );
+
+    expect(texts).toContain("LRPS2 / PCSX2 (default) ✓");
+  });
+
+  it("marks it the system's pick, by its whole name, for a platform stored under its second label", () => {
+    const texts = items(
+      buildEmulatorMenu(
+        config({
+          platformCoreLabel: "PCSX2",
+          activeLabel: "PCSX2",
+          followSystem: { hasGameOverride: false, onFollowSystem: vi.fn() },
+        }),
+      ),
+    ).map((item) => item.text);
+
+    expect(texts).toContain("Use System Override (LRPS2 / PCSX2) ✓");
+    expect(texts).toContain("LRPS2 / PCSX2 (system) ✓");
   });
 });

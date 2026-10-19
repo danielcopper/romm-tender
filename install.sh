@@ -1141,7 +1141,7 @@ preflight() {
     case "$status" in
         0) ;;
         "$PYTHON_MISSING") abort "no Python at $PYTHON" "install python3, or point TENDER_PYTHON at one" ;;
-        *) abort "$PYTHON is older than 3.13" "Tender needs Python 3.13 or newer" ;;
+        *) abort "$PYTHON is older than 3.12" "Tender needs Python 3.12 or newer" ;;
     esac
     row_add "$CHECKING" "$found"
     check_user_manager
@@ -1164,7 +1164,7 @@ preflight() {
 # interpreter than the one just approved, and the unit runs exactly this path.
 check_python() {
     [ -x "$PYTHON" ] || return "$PYTHON_MISSING"
-    "$PYTHON" -c 'import sys; print("python %d.%d" % sys.version_info[:2]); sys.exit(0 if sys.version_info >= (3, 13) else 1)' ||
+    "$PYTHON" -c 'import sys; print("python %d.%d" % sys.version_info[:2]); sys.exit(0 if sys.version_info >= (3, 12) else 1)' ||
         return "$PYTHON_TOO_OLD"
 }
 

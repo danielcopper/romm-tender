@@ -22,7 +22,7 @@ from host.inject.recovery import RUNNING_APPS_EXPRESSION, ListedApp
 from host.inject.reload_limit import RELOAD_LIMIT_FILENAME, RELOAD_WINDOW_SECONDS
 from host.inject.watchdog import INJECT_FORCE, INJECT_OFF, WATCHDOG_FILENAME, CrashWatchdog, Fingerprint
 from host.protocol import ReloadOutlook
-from tests.host.conftest import close_listener, free_port
+from tests.host.conftest import close_at_once, close_listener, free_port
 from tests.host.inject.fake_debugger import FakeDebugger, FakePage, FakeTarget, refuse
 
 LOGGER = logging.getLogger("test_injector")
@@ -339,7 +339,7 @@ class TestInstallingTheGlobals:
         assert GLOBALS_BUNDLE in carried["urls"][carried["globals_at"]]
 
     async def test_beside_decky_there_is_no_such_address_and_it_says_so(self, injecting):
-        loader = await asyncio.start_server(lambda r, w: None, host="127.0.0.1", port=0)
+        loader = await asyncio.start_server(close_at_once, host="127.0.0.1", port=0)
         port = loader.sockets[0].getsockname()[1]
         try:
             running = await injecting(page=a_page(decky_is_serving=True), decky_port=port)
@@ -468,7 +468,7 @@ class TestWhenSomethingUnexpectedGoesWrong:
 
 class TestBesideDeckyLoader:
     async def test_it_loads_the_coexistence_panel_and_never_the_globals(self, injecting):
-        loader = await asyncio.start_server(lambda r, w: None, host="127.0.0.1", port=0)
+        loader = await asyncio.start_server(close_at_once, host="127.0.0.1", port=0)
         port = loader.sockets[0].getsockname()[1]
         try:
             running = await injecting(page=a_page(decky_is_serving=True), decky_port=port)

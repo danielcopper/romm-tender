@@ -18,54 +18,45 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from domain.platform_skip import stamp_can_match
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
+
+    from domain.platform_sync_state import PlatformSyncState
 
 
 def predict_unit_skip(
     *,
-    stamp_completed_at: str | None,
-    stamp_rom_count: int | None,
-    unit_rom_count: int,
+    stamp: PlatformSyncState | None,
     fetched_count: int,
     registry_count: int,
     needs_backfill: bool,
-    bound_row_not_returned: bool,
 ) -> bool:
     """Predict whether the wholesale-skip gate will skip a platform unit.
 
     Replays the gate's LOCAL conditions only: a completion stamp exists
-    (truthy ``completed_at``, non-``None`` ``rom_count``), the stamped ROM
-    count still matches the server's ``rom_count`` for the unit, rows are
-    persisted and at least one is bound, no ``sibling_group_key`` backfill
-    is pending, no bound row is one the stamp's fetch did not return
-    (``domain/fetch_generation.bound_row_not_returned``), and the count of
-    rows carrying the stamp's fetch generation matches the server count.
-    ``fetched_count`` is that generation-filtered count
-    (``domain/fetch_generation.count_rows_for_skip``), not every persisted
-    row: a row for a rom_id the server dropped is retained (ADR-0007) but
-    does not count (#1504). The gate's server-delta check
-    (``list_roms_updated_after``) is deliberately NOT replayed — no network
-    at plan time — so a platform whose rows changed server-side since the
-    stamp may be predicted as a skip that the fetch then refuses; the
-    estimate reads short, the apply stays correct.
+    (the caller passes ``stamp_for_skip``'s answer) and records the fetch
+    start and the id checksum the gate compares RomM's answer with
+    (``domain/platform_skip.stamp_can_match``), rows carrying the stamp's
+    fetch generation are persisted (``fetched_count``,
+    ``domain/fetch_generation.count_rows_for_skip``) and at least one row
+    is bound, and no ``sibling_group_key`` backfill is pending. The gate's
+    one request (``domain/platform_skip.probe_verdict``) is
+    deliberately NOT replayed — no network at plan time — so a platform
+    with a ROM updated, added, removed or hidden since the stamp may be
+    predicted as a skip that the fetch then refuses; the estimate reads
+    short, the apply stays correct.
 
     A Force Full Sync needs no special case: ``clear_sync_cache`` deletes
-    every stamp before the run starts, so ``stamp_completed_at`` reads
-    ``None`` at plan time and no skip is predicted.
+    every stamp before the run starts, so ``stamp`` reads ``None`` at plan
+    time and no skip is predicted.
 
     Estimate-only (ADR-0023): the return value prices the plan payload and
     must never feed the actual skip decision.
     """
     return (
-        bool(stamp_completed_at)
-        and stamp_rom_count is not None
-        and stamp_rom_count == unit_rom_count
-        and fetched_count > 0
-        and fetched_count == unit_rom_count
-        and registry_count > 0
-        and not needs_backfill
-        and not bound_row_not_returned
+        stamp is not None and stamp_can_match(stamp) and fetched_count > 0 and registry_count > 0 and not needs_backfill
     )
 
 

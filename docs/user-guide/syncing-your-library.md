@@ -105,7 +105,14 @@ time** line, shown as "up to X min".
 
 Cover changes count too: if you replaced a game's cover on the server but nothing else changed, the page reads "No
 shortcut changes — N cover updates" in place of the table and still offers **Apply Sync** — applying refreshes those
-tiles without touching the shortcuts. Only when there is truly nothing to do does it read "Everything is up to date."
+tiles without touching the shortcuts. A platform Tender has to read in full again although none of its shortcuts change
+reads "No shortcut changes — recording what RomM has now." and offers **Apply Sync** as well: applying records what RomM
+serves on that platform, so the next sync can skip it again. You see it once after the update that introduced this
+check, while every platform is read in full one time; after a game was hidden or deleted in RomM; after a game was
+changed in RomM in a way none of its shortcuts shows, such as a metadata edit or a rescan, since the last sync or
+shortly before it; and after a sync that stopped before it finished. With **Skip preview** on there is no preview to
+show it in: the sync records what RomM has now by itself. Only when there is truly nothing to do does the page read
+"Everything is up to date."
 
 A preview stays good for **30 minutes**, and it belongs to Tender rather than to the page you are looking at: you can
 leave for the settings or a submenu, come back, and the same preview is still there with **Apply Sync** ready. That
@@ -514,8 +521,10 @@ it left the collection and its shortcut is removed; if RomM answers that it is g
 stays, and the next sync asks again. A game RomM answered as gone then appears under **Data Management › Gone from
 RomM**, until a sync or the cleanup finds it on RomM again. Tender remembers whether a game last came in through its
 platform or through a collection; a game it has no such record for yet, as after the update that added it, is judged by
-the collections' last completed sync instead. A platform that holds a version gone from RomM is read in full on every
-sync while that version stays bound, so it does not skip the way an unchanged platform does.
+the collections' last completed sync instead. A version gone from RomM stays bound, and does not keep its platform from
+skipping: the next sync reads the platform in full and records what RomM has now, as
+[Time estimate and progress](#time-estimate-and-progress) describes, and later syncs skip the platform again while
+nothing on it changes.
 
 Sync itself never purges a retained local ROM row, installed content, saves, or playtime solely because RomM stopped
 returning that id. Removing that state requires the separate confirmed

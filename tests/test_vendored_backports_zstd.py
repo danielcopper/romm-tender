@@ -7,9 +7,9 @@ patch makes every such import relative (``backend/_vendor/README.md``,
 ``backports``), and a re-copy that forgets it fails here rather than as a
 codec that silently never registers on a device.
 
-The import half runs only where the backport can load at all: it is a
-``cp313`` build, and upstream refuses every interpreter from 3.14 on, where the
-standard library's ``compression.zstd`` is the codec instead.
+The import half runs only where the backport can load at all: it carries the
+``cp312`` and the ``cp313`` build, and upstream refuses every interpreter from
+3.14 on, where the standard library's ``compression.zstd`` is the codec instead.
 """
 
 from __future__ import annotations
@@ -24,7 +24,8 @@ import pytest
 VENDOR_DIR = pathlib.Path(__file__).resolve().parent.parent / "backend" / "_vendor"
 TREE = VENDOR_DIR / "backports"
 
-LOADS_HERE = sys.version_info[:2] == (3, 13)
+BUILDS = ("312", "313")
+LOADS_HERE = f"{sys.version_info.major}{sys.version_info.minor}" in BUILDS
 
 
 def _absolute_self_imports(path: pathlib.Path) -> list[str]:
@@ -53,11 +54,12 @@ def test_the_manifest_pins_the_extension_and_both_licences_and_the_provenance_na
 
     assert {
         "backports/zstd/__init__.py",
-        "backports/zstd/_zstd.cpython-313-x86_64-linux-gnu.so",
+        *(f"backports/zstd/_zstd.cpython-{build}-x86_64-linux-gnu.so" for build in BUILDS),
         "backports/zstd/LICENSE.txt",
         "backports/zstd/LICENSE_zstd.txt",
     } <= pinned
     assert "**Version:** 1.7.0" in provenance
+    assert "sha256:470895d0bcddc850766e593d1b26764fb138c2feed149f515a2627ef9587d54c" in provenance
     assert "sha256:f3f4887a8a1fd1290017fe5a1d29a7d1dc5c57f9477fbd64f119316a7e3ae769" in provenance
 
 
@@ -70,12 +72,13 @@ def test_no_absolute_self_import_is_left_in_the_vendored_tree() -> None:
     assert left == []
 
 
-@pytest.mark.skipif(not LOADS_HERE, reason="the vendored build is cp313; upstream refuses every other interpreter")
-def test_the_copy_imports_under_vendor_with_its_compiled_extension() -> None:
+@pytest.mark.skipif(not LOADS_HERE, reason="the vendored builds are cp312 and cp313; upstream refuses every other")
+def test_the_copy_imports_under_vendor_with_the_extension_built_for_this_python() -> None:
     codec = importlib.import_module("_vendor.backports.zstd")
+    build = f"{sys.version_info.major}{sys.version_info.minor}"
 
     assert codec._zstd.__name__ == "_vendor.backports.zstd._zstd"
     assert codec._zstd.__file__ is not None
-    assert codec._zstd.__file__.endswith(".so")
+    assert pathlib.Path(codec._zstd.__file__).name == f"_zstd.cpython-{build}-x86_64-linux-gnu.so"
     assert codec.decompress(codec.compress(b"sealed catalogue" * 4)) == b"sealed catalogue" * 4
     assert "backports" not in sys.modules

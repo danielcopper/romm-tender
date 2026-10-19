@@ -181,17 +181,13 @@ class RommRomReader(Protocol):
         """
         ...
 
-    def list_roms_updated_after(
-        self,
-        platform_id: int,
-        updated_after: str,
-        limit: int = 1,
-        offset: int = 0,
-    ) -> dict[str, Any]:
-        """List ROMs updated after a given timestamp.
+    def list_roms_newest_first(self, platform_id: int) -> dict[str, Any]:
+        """The platform's most recently updated ROM and its whole visible id set, in one request.
 
-        Used for incremental sync to detect changes since last sync.
-        Returns paginated response filtered by updated_after parameter.
+        Returns RomM's list answer for the platform ordered by ``updated_at``
+        descending with ``limit=1``: ``items`` holds at most that one ROM, and
+        ``rom_id_index`` every id the platform's filtered list holds. The
+        platform incremental skip's probe (``domain/platform_skip.py``).
         """
         ...
 
@@ -205,8 +201,7 @@ class RommRomReader(Protocol):
     ) -> dict[str, Any]:
         """List a collection's ROMs updated after a given timestamp.
 
-        The collection sibling of :meth:`list_roms_updated_after` (#742):
-        combines the kind-routed collection filter (``collection_id``,
+        The collection skip's probe (#742): combines the kind-routed collection filter (``collection_id``,
         ``smart_collection_id`` or ``virtual_collection_id`` for ``kind``
         ``"standard"``, ``"smart"`` or ``"virtual"``) with ``updated_after``, so
         the incremental-skip gate can detect a member ROM's content change with a

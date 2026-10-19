@@ -294,17 +294,32 @@ def resolve_platform_option(options: list[EmulatorOption], override: str | None)
     the caller bakes the plain RetroDECK launch and RetroDECK resolves the
     emulator itself, so the games still start.
 
-    **One pick, because a platform's surfaces must not be able to answer for two
+    **One pick, because a surface must not be able to answer for two
     emulators.** The option is returned rather than one projection of it so that
-    the name a pane displays (:func:`resolve_platform_label`) and the identity
-    its BIOS answers are joined and scoped on (``EmulatorOption.emulator``, the
-    one field that names a standalone emulator, where ``core_so`` is ``None`` for
-    every standalone pick) come off the same choice. Resolving them separately is
-    what let a pane name PCSX ReARMed and judge the platform by the system
-    default beside it.
+    the name a surface displays and the identity it scopes on
+    (``EmulatorOption.emulator``, the one field that names a standalone emulator,
+    where ``core_so`` is ``None`` for every standalone pick) come off the same
+    choice. Resolving them separately is what let a pane name PCSX ReARMed and
+    judge the platform by the system default beside it. The BIOS answers take
+    this pick through :func:`resolve_firmware_option`, which goes one rung
+    further where it is ``None``.
     """
     pinned = _pinned_option(options, override) if override is not None else None
     return pinned if pinned is not None else select_default_option(options)
+
+
+def resolve_firmware_option(options: list[EmulatorOption], override: str | None) -> EmulatorOption | None:
+    """Return the emulator a platform's BIOS answer is about, or ``None``.
+
+    The pick (:func:`resolve_platform_option`) where there is one. Where nothing
+    is bakeable the platform's games launch through RetroDECK's plain launch,
+    which starts the emulator RetroDECK declares first — installed or not —
+    unless an alternative emulator is set in ES-DE; that first entry is the one
+    the answer is about, since an emulator that is not installed still declares
+    the firmware it would need. ``None`` only where no emulator is
+    listed at all.
+    """
+    return resolve_platform_option(options, override) or (options[0] if options else None)
 
 
 def resolve_platform_label(options: list[EmulatorOption], override: str | None) -> str | None:
@@ -321,31 +336,67 @@ def resolve_platform_label(options: list[EmulatorOption], override: str | None) 
 def options_to_payload(options: list[EmulatorOption]) -> list[dict[str, Any]]:
     """Project options into the frontend emulator-picker payload.
 
-    Each entry is ``{label, kind, core_so, emulator, is_default, bakeable,
-    reason}``. ``is_default`` marks the single option
-    :func:`select_default_option` picks (the first bakeable one); ``bakeable`` is
-    ``True`` only for a fully bakeable option (``needs_setup`` reads as
-    ``bakeable: False`` with its ``reason`` — ``"inject"`` or ``"not_installed"``
-    — so the picker can disable it with a distinct message). The raw ``command``
-    text is intentionally dropped from the wire payload.
+    One entry per launch command (:func:`same_command_groups`): RetroDECK lists
+    ``pcsx2_libretro.so`` as LRPS2 and as PCSX2 under one command, and two
+    labels that start the same thing are one choice. Each entry is ``{label,
+    labels, name, kind, core_so, emulator, is_default, bakeable, reason}``.
+    ``labels`` are every label of the group in declared order and ``name`` is
+    them joined " / ", what a surface prints; ``label`` is the first of them,
+    the one a pick stores, and an override stored under any of ``labels`` reads
+    as this entry. The other fields are the group's first option's, which its
+    members share because they share the command. ``is_default`` marks the group
+    holding the single option :func:`select_default_option` picks (the first
+    bakeable one); ``bakeable`` is ``True`` only for a fully bakeable option
+    (``needs_setup`` reads as ``bakeable: False`` with its ``reason`` —
+    ``"inject"`` or ``"not_installed"`` — so the picker can disable it with a
+    distinct message). The raw ``command`` text is intentionally dropped from
+    the wire payload.
 
     ``emulator`` is the identity, and it travels beside ``core_so`` rather than
     replacing it because the two answer different questions: ``core_so`` is the
     libretro core a surface may still need to name, the identity is what a
     firmware row's per-emulator entries are keyed on. Without it on the wire a
     surface holding both answers has nothing to join them by for a standalone
-    emulator, and two labels of one emulator look like two emulators.
+    emulator. It is not what entries are grouped by: one emulator can be
+    launched several ways (RPCS3 by game serial, or by its folder or ISO), and
+    each way is its own choice.
     """
     default = select_default_option(options)
-    return [
-        {
-            "label": option.label,
-            "kind": option.kind,
-            "core_so": option.core_so,
-            "emulator": option.emulator,
-            "is_default": option is default,
-            "bakeable": option.status == "bakeable",
-            "reason": option.reason,
-        }
-        for option in options
-    ]
+    payload: list[dict[str, Any]] = []
+    for group in same_command_groups(options):
+        first = group[0]
+        labels = list(dict.fromkeys(option.label for option in group))
+        payload.append(
+            {
+                "label": first.label,
+                "labels": labels,
+                "name": " / ".join(labels),
+                "kind": first.kind,
+                "core_so": first.core_so,
+                "emulator": first.emulator,
+                "is_default": any(option is default for option in group),
+                "bakeable": first.status == "bakeable",
+                "reason": first.reason,
+            }
+        )
+    return payload
+
+
+def same_command_groups(options: list[EmulatorOption]) -> list[list[EmulatorOption]]:
+    """*options* grouped by identical command text, each group where its first member stands.
+
+    The command is compared as :func:`classify_command` keeps it, stripped and
+    otherwise verbatim, so two labels share a group only where they start
+    exactly the same thing. An option with no command text gets a group of its own.
+    """
+    groups: dict[str, list[EmulatorOption]] = {}
+    ordered: list[list[EmulatorOption]] = []
+    for option in options:
+        group = groups.get(option.command) if option.command else None
+        if group is None:
+            group = []
+            ordered.append(group)
+            if option.command:
+                groups[option.command] = group
+        group.append(option)
+    return ordered

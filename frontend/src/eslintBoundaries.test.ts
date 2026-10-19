@@ -13,8 +13,8 @@
  * resolves its zones against `process.cwd()`, not ESLint's `cwd` option
  * (`lib/rules/no-restricted-paths.js` in eslint-plugin-import-x). What they
  * import must exist, because `no-restricted-paths` skips an import it cannot
- * resolve: `desktop/` holds no module, so the fixtures reaching into it import
- * its README, the one file it does hold.
+ * resolve, so the fixtures reaching into `desktop/` import its README, a file
+ * that stays there whatever modules come and go beside it.
  *
  * `no-cycle` opens the imported file from disk to read ITS imports, so the cycle
  * pair cannot be text. It is written into a throwaway project under the OS temp

@@ -4,6 +4,7 @@ import logging
 import os
 import sqlite3
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -4880,21 +4881,44 @@ class TestProgressCallbackEvictionSafe:
 
 
 class _FinishedWorkerExecutor(concurrent.futures.Executor):
-    """Runs each job before ``submit`` returns, so its future is already done when the loop chains it.
+    """Runs each job before ``submit`` returns, and holds what the job queues for the loop until :meth:`release`.
 
-    CPython's ``asyncio.futures._chain_future`` (3.13) copies a finished concurrent future's state onto the
-    asyncio future on the spot when it is chained on the running loop, so the ``await`` does not yield — while
-    a progress tick the worker queued with ``call_soon_threadsafe`` is still waiting in the loop's ready queue.
-    On a real worker thread that happens only when the job ends before the loop thread chains it.
+    A progress tick a worker queues with ``call_soon_threadsafe`` outlives the download only where the job's
+    future settles ahead of it. From 3.13 ``asyncio.futures._chain_future`` copies a finished concurrent future's
+    state onto the asyncio future on the spot when it is chained on the running loop, so the ``await`` does not
+    yield while the tick waits in the ready queue; 3.12 queues that copy behind the ticks the job queued first.
+    On a real worker thread the 3.13 case needs the job to end before the loop thread chains it. Holding the
+    ticks until the download ended gives every version that case.
     """
+
+    def __init__(self, loop: asyncio.AbstractEventLoop) -> None:
+        self._loop = loop
+        self._call_soon_threadsafe = loop.call_soon_threadsafe
+        self._held: list[tuple[Callable[..., object], tuple[Any, ...]]] = []
+        self._in_job = False
+
+    def call_soon_threadsafe(self, callback: Callable[..., object], *args: Any, context: Any = None) -> Any:
+        if not self._in_job:
+            return self._call_soon_threadsafe(callback, *args, context=context)
+        self._held.append((callback, args))
+        return None
 
     def submit(self, fn, /, *args, **kwargs):
         future: concurrent.futures.Future[Any] = concurrent.futures.Future()
+        self._in_job = True
         try:
             future.set_result(fn(*args, **kwargs))
         except Exception as e:
             future.set_exception(e)
+        finally:
+            self._in_job = False
         return future
+
+    def release(self) -> None:
+        """Queue every tick held so far on the loop, in the order the jobs queued them."""
+        held, self._held = self._held, []
+        for callback, args in held:
+            self._loop.call_soon(callback, *args)
 
 
 class TestAProgressTickAfterTheDownloadEnded:
@@ -4904,8 +4928,10 @@ class TestAProgressTickAfterTheDownloadEnded:
     async def finished_workers(self, monkeypatch):
         loop = asyncio.get_running_loop()
         run_in_executor = loop.run_in_executor
-        executor = _FinishedWorkerExecutor()
+        executor = _FinishedWorkerExecutor(loop)
         monkeypatch.setattr(loop, "run_in_executor", lambda _executor, fn, *args: run_in_executor(executor, fn, *args))
+        monkeypatch.setattr(loop, "call_soon_threadsafe", executor.call_soon_threadsafe)
+        return executor
 
     @staticmethod
     async def _drain():
@@ -4919,9 +4945,8 @@ class TestAProgressTickAfterTheDownloadEnded:
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
 
-    @pytest.mark.usefixtures("finished_workers")
     @pytest.mark.asyncio
-    async def test_a_completed_multi_file_download_stays_completed(self, downloads, tmp_path, emit):
+    async def test_a_completed_multi_file_download_stays_completed(self, downloads, tmp_path, emit, finished_workers):
         import zipfile as zf
         from unittest.mock import patch
 
@@ -4954,6 +4979,7 @@ class TestAProgressTickAfterTheDownloadEnded:
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.service._do_download(75, rom_detail, target_path, "psx", "FF9.zip")
+        finished_workers.release()
         await self._drain()
 
         assert [c.args[0] for c in emit.call_args_list] == ["download_complete"]
@@ -4961,9 +4987,8 @@ class TestAProgressTickAfterTheDownloadEnded:
         assert entry["status"] == "completed"
         assert entry["progress"] == 1.0
 
-    @pytest.mark.usefixtures("finished_workers")
     @pytest.mark.asyncio
-    async def test_a_failed_download_keeps_its_progress(self, downloads, tmp_path, emit):
+    async def test_a_failed_download_keeps_its_progress(self, downloads, tmp_path, emit, finished_workers):
         from unittest.mock import patch
 
         self._wire_paths(downloads, tmp_path)
@@ -4987,6 +5012,7 @@ class TestAProgressTickAfterTheDownloadEnded:
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
+        finished_workers.release()
         await self._drain()
 
         assert [c.args[0] for c in emit.call_args_list] == ["download_failed"]
@@ -4994,9 +5020,8 @@ class TestAProgressTickAfterTheDownloadEnded:
         assert entry["status"] == "failed"
         assert entry["progress"] == 0
 
-    @pytest.mark.usefixtures("finished_workers")
     @pytest.mark.asyncio
-    async def test_a_late_resumability_verdict_is_not_applied(self, downloads, tmp_path, emit):
+    async def test_a_late_resumability_verdict_is_not_applied(self, downloads, tmp_path, emit, finished_workers):
         from unittest.mock import patch
 
         self._wire_paths(downloads, tmp_path)
@@ -5028,6 +5053,7 @@ class TestAProgressTickAfterTheDownloadEnded:
 
         with patch.object(downloads.romm_api, "download_rom_content", side_effect=fake_download):
             await downloads.service._do_download(73, rom_detail, target_path, "gba", "Game.gba")
+        finished_workers.release()
         await self._drain()
 
         assert [c.args[0] for c in emit.call_args_list] == ["download_complete"]

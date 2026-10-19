@@ -19,7 +19,7 @@ import type {
   PlatformFirmwareStatus,
   FirmwareDownloadResult,
   BiosLevel,
-  SystemImage,
+  EmulatorAnswer,
   OneOfGroupVerdict,
   BiosStatus,
   BiosFileStatus,
@@ -158,30 +158,23 @@ export function isRenameCollisions(value: object): value is RenameCollisionsResu
  * alone (#1660).
  */
 export interface BiosAnswer {
-  bios_status?: {
-    needs_bios?: boolean;
-    platform_slug: string;
-    server_count: number;
-    local_count: number;
-    ratio_server_count?: number;
-    ratio_local_count?: number;
-    all_downloaded: boolean;
-    required_count?: number;
-    required_downloaded?: number;
-    required_withheld?: number;
-    /** The one-of groups among `required_count` that are covered for some
-     *  regions only — not met and not absent, so the badge leaves them out. */
-    required_partial?: number;
-    /** The console's own firmware demand on the launching core — see
-     *  {@link SystemImage}. Read by the play row's badge, which cannot rely on
-     *  the counts for it: whether any of the images is marked required is the
-     *  core author's choice, and over one PlayStation the deployed catalogue
-     *  goes both ways. */
-    system_image?: SystemImage;
-    one_of_groups?: OneOfGroupVerdict[];
-    cached_at?: number;
-    files?: BiosFileStatus[];
-  } | null;
+  bios_status?:
+    | ({
+        needs_bios?: boolean;
+        platform_slug: string;
+        server_count: number;
+        local_count: number;
+        ratio_server_count?: number;
+        ratio_local_count?: number;
+        all_downloaded: boolean;
+        required_count?: number;
+        required_downloaded?: number;
+        required_withheld?: number;
+        one_of_groups?: OneOfGroupVerdict[];
+        cached_at?: number;
+        files?: BiosFileStatus[];
+      } & EmulatorAnswer)
+    | null;
   bios_level?: BiosLevel | null;
   bios_label?: string | null;
   bios_status_unknown?: boolean;
@@ -646,9 +639,9 @@ export const removeSgdbApiKey = endpoint<[], { success: boolean; message: string
 export const verifySgdbApiKey = endpoint<[string], { success: boolean; message: string }>("verify_sgdb_api_key");
 export const saveSteamInputSetting = endpoint<[string], { success: boolean }>("save_steam_input_setting");
 export const applySteamInputSetting = endpoint<[], { success: boolean; message: string }>("apply_steam_input_setting");
-// Which platforms the BIOS page can speak for — not what it will say about any
-// of them. The state costs a live per-system reading, so it is asked for one
-// platform at a time below, in the order the page's own list is in.
+// Whether RomM's firmware listing could be read — nothing about any platform.
+// A platform's state costs a live per-system reading, so it is asked for one
+// platform at a time below, for every platform the page's own list shows.
 export const getFirmwareStatus = endpoint<[], FirmwareStatus>("get_firmware_status");
 export const getPlatformFirmwareStatus = endpoint<[string], PlatformFirmwareStatus>("get_platform_firmware_status");
 // The ROM is the game whose page started the download, whose install record names
@@ -656,15 +649,19 @@ export const getPlatformFirmwareStatus = endpoint<[string], PlatformFirmwareStat
 export const downloadAllFirmware = endpoint<[string, number | null], FirmwareDownloadResult | EndpointFailure>(
   "download_all_firmware",
 );
-export const downloadRequiredFirmware = endpoint<[string], FirmwareDownloadResult | EndpointFailure>(
+// The emulator is the identity the page shows — the files land where IT opens
+// them; `null` places them for the platform's own pick.
+export const downloadRequiredFirmware = endpoint<[string, string | null], FirmwareDownloadResult | EndpointFailure>(
   "download_required_firmware",
 );
 // One row's Download button (#164). Addressed by file name within the platform,
-// like the two bulk buttons beside it — never by RomM's firmware id, which the
-// status row may have been holding since before the listing moved on.
-export const downloadPlatformFirmwareFile = endpoint<[string, string], FirmwareDownloadResult | EndpointFailure>(
-  "download_platform_firmware_file",
-);
+// like the two bulk downloads — never by RomM's firmware id, which the status
+// row may have been holding since before the listing moved on. The emulator is
+// the one the page shows, as for `downloadRequiredFirmware`.
+export const downloadPlatformFirmwareFile = endpoint<
+  [string, string, string | null],
+  FirmwareDownloadResult | EndpointFailure
+>("download_platform_firmware_file");
 export const checkPlatformBios = endpoint<[string], BiosStatus>("check_platform_bios");
 export const getBiosStatus = endpoint<[number], BiosAnswer>("get_bios_status");
 /**
@@ -719,9 +716,7 @@ export const clearGameCore = endpoint<[number], GameCoreApplyResult>("clear_game
 export const getPlatformCoreInfo = endpoint<[number], CoreInfo>("get_platform_core_info");
 // The platform-keyed twin (#1815): the Library page's Platforms detail asks it
 // once per selected platform. Distinct from getPlatformCoreInfo, which layers a
-// ROM's own pin on top and so cannot answer for a platform with no synced ROM;
-// distinct from the emulator fields on getFirmwareStatus, which cover only the
-// platforms that payload has something to say about.
+// ROM's own pin on top and so cannot answer for a platform with no synced ROM.
 export const getSystemCoreInfo = endpoint<[string], SystemCoreInfo>("get_system_core_info");
 
 /** Every detected emulator source, in the user's order, with its health and its switch. */

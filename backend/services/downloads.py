@@ -686,9 +686,9 @@ class DownloadService:
     def _live_entry(self, rom_id) -> dict[str, Any] | None:
         # Every applier the worker queues with ``call_soon_threadsafe`` reads the entry
         # here. None for an evicted entry (never resurrected) and for an ended one: a
-        # callback queued before the end can run after the terminal frame, because
-        # asyncio settles an executor future that finished before the loop chained it
-        # without yielding (``asyncio.futures._chain_future``).
+        # callback queued before the end can run after the terminal frame, because from
+        # 3.13 asyncio settles an executor future that finished before the loop chained
+        # it without yielding (``asyncio.futures._chain_future``).
         entry = self._download_queue.get(rom_id)
         return None if entry is None or entry.get("status") in _TERMINAL_DOWNLOAD_STATUSES else entry
 

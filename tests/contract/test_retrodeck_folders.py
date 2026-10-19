@@ -116,7 +116,7 @@ _PRESSES: dict[str, Callable[[Any], Awaitable[dict[str, Any]]]] = {
     "start_download": lambda harness: harness.endpoints.start_download(8),
     "adopt_existing_rom": lambda harness: harness.endpoints.adopt_existing_rom(8, None, None),
     "download_platform_firmware_file": lambda harness: harness.endpoints.download_platform_firmware_file(
-        "dc", "dc_boot.bin"
+        "dc", "dc_boot.bin", None
     ),
     "download_all_firmware": lambda harness: harness.endpoints.download_all_firmware("dc", None),
     "remove_rom": lambda harness: harness.endpoints.remove_rom(_ROM_ID),
@@ -219,7 +219,7 @@ async def test_switched_off_a_download_says_so_where_a_question_raises(harness, 
         monkeypatch.setattr(RetroDeck, raising, _raises)
 
     game = await harness.endpoints.start_download(8)
-    bios = await harness.endpoints.download_platform_firmware_file("dc", "dc_boot.bin")
+    bios = await harness.endpoints.download_platform_firmware_file("dc", "dc_boot.bin", None)
     removal = await harness.endpoints.remove_rom(_ROM_ID)
 
     assert game["reason"] == "retrodeck_switched_off"

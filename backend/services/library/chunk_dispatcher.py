@@ -36,12 +36,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.collection_sync_state import CollectionSyncState
+from domain.platform_skip import rom_id_checksum
 from domain.platform_sync_state import PlatformSyncState
 from domain.session_budget import CLIFF_KB, EFFECTIVE_CEILING_KB
 from domain.sync_chunking import build_unit_chunks, wire_shortcuts
 
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Iterable
 
     from domain.rom import DeliveryRoute
     from domain.work_unit import WorkUnit
@@ -127,6 +129,7 @@ class ChunkDispatcher:
         confirmed_cover_sources: dict[int, str],
         cover_refreshes: list[dict[str, int]] | None = None,
         collection_member_ids: list[int] | None = None,
+        fetch_started_at: str | None = None,
     ) -> int:
         """Emit → wait → commit the unit's DELTA shortcuts one durable chunk at a time.
 
@@ -146,7 +149,9 @@ class ChunkDispatcher:
         in-session tile refreshes (the grid files are already updated; a Steam
         restart shows the rest), never to a run pause. ``confirmed_cover_sources``
         is the unit's ``rom_id → applied cover source`` map — the third of the
-        whole-unit staging dicts the reporter's commit reads. Returns the running
+        whole-unit staging dicts the reporter's commit reads. ``fetch_started_at``
+        is when a platform unit's fetch started, which its final chunk's stamp
+        records beside the checksum of ``unit_roms``' ids. Returns the running
         count of shortcuts applied — a cancel or heartbeat timeout returns early
         with the chunks committed so far.
         """
@@ -286,7 +291,9 @@ class ChunkDispatcher:
                 self._abandon_active_chunk(chunk_rows)
                 return applied_count
 
-            platform_stamp = self._build_final_platform_stamp(unit, chunk_index, chunk_count, fetch_id)
+            platform_stamp = self._build_final_platform_stamp(
+                unit, chunk_index, chunk_count, fetch_id, fetch_started_at, roms_by_id.keys()
+            )
             collection_stamp = self._build_final_collection_stamp(unit, chunk_index, chunk_count, collection_member_ids)
 
             # Per-chunk commit: the reporter upserts every fetched ROM of this
@@ -305,9 +312,8 @@ class ChunkDispatcher:
                 collection_stamp=collection_stamp,
                 # The fetch generation for a PLATFORM unit's rows (#1504), passed on
                 # EVERY chunk so the whole unit shares the generation the final
-                # chunk's stamp records. A collection unit passes None — it spans
-                # platforms, and re-marking a foreign platform's row would drop it
-                # from that platform's counted rows.
+                # chunk's stamp records. A collection unit passes None; why is
+                # docs/architecture/database-design.md, the `Rom` row's `last_fetch_id`.
                 fetch_id=fetch_id,
                 delivered_through=self._delivery_route(unit),
             )
@@ -384,7 +390,13 @@ class ChunkDispatcher:
         return "platform" if unit.type == "platform" else "collection"
 
     def _build_final_platform_stamp(
-        self, unit: WorkUnit, chunk_index: int, chunk_count: int, fetch_id: str | None = None
+        self,
+        unit: WorkUnit,
+        chunk_index: int,
+        chunk_count: int,
+        fetch_id: str | None = None,
+        fetch_started_at: str | None = None,
+        fetched_rom_ids: Iterable[int] = (),
     ) -> PlatformSyncState | None:
         """Build the completion stamp for a platform unit's FINAL chunk, else ``None``.
 
@@ -395,7 +407,9 @@ class ChunkDispatcher:
         advances). A collection unit is stamped by
         :meth:`_build_final_collection_stamp`. A cancel or heartbeat timeout
         mid-unit returns before the final chunk, so an incomplete platform is
-        never stamped (ADR-0023 / #1025).
+        never stamped (ADR-0023 / #1025). *fetched_rom_ids* are the ids the
+        unit's fetch returned, whose checksum the next skip compares RomM's id
+        set with.
         """
         if unit.type == "platform" and unit.slug and chunk_index == chunk_count - 1:
             return PlatformSyncState.stamp(
@@ -403,6 +417,8 @@ class ChunkDispatcher:
                 at=self._clock.now().isoformat(),
                 rom_count=unit.rom_count,
                 fetch_id=fetch_id,
+                fetch_started_at=fetch_started_at,
+                rom_id_checksum=rom_id_checksum(fetched_rom_ids),
             )
         return None
 

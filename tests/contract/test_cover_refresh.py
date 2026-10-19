@@ -61,7 +61,12 @@ def _ack_with(bindings):
     return _wait
 
 
-def _seed_library(harness, *, cover: str, updated_at: str | None = None) -> None:
+# Before the harness clock less the skip's ten-minute margin: a ROM RomM last
+# updated then leaves the platform's skip standing.
+_OLD_UPDATED_AT = "2025-06-01T00:00:00+00:00"
+
+
+def _seed_library(harness, *, cover: str, updated_at: str = _OLD_UPDATED_AT) -> None:
     """Seed one platform with one ROM carrying *cover* as its cover source."""
     harness.romm.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
     rom = {
@@ -72,9 +77,8 @@ def _seed_library(harness, *, cover: str, updated_at: str | None = None) -> None
         "platform_name": "N64",
         "platform_slug": "n64",
         "path_cover_large": cover,
+        "updated_at": updated_at,
     }
-    if updated_at is not None:
-        rom["updated_at"] = updated_at
     harness.romm.roms[10] = rom
     harness.settings["enabled_platforms"] = {"1": True}
 
@@ -244,9 +248,10 @@ async def test_cover_only_change_flows_from_preview_to_apply_via_endpoints(harne
     assert summary["new_count"] == 0
     assert summary["changed_count"] == 0
     assert summary["remove_count"] == 0
-    # The seeding run stamped the platform, so a cover-only change reports no
-    # re-stamp — Apply is offered on the cover work alone (#1416 regression pin).
-    assert summary["restamp_platform_count"] == 0
+    # The cover change moved the ROM's updated_at past the reference the seeding
+    # run's stamp records, so that stamp can no longer skip the platform: the
+    # preview counts the re-stamp the apply will write (#743).
+    assert summary["restamp_platform_count"] == 1
     # The preview stayed read-only: no cover download, fingerprint unchanged.
     assert _download_cover_urls(harness)[downloads_before:] == []
     with harness.uow_factory() as uow:

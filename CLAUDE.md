@@ -53,6 +53,8 @@ is invisible at the citation site), so reach it through the page that owns the t
 - Emulator and core selection — [core-emulator-selection.md](docs/architecture/core-emulator-selection.md)
 - RetroArch/ES-DE config parsing — [config-source-parsers.md](docs/architecture/config-source-parsers.md)
 - Steam Remote Play — [steam-remote-play.md](docs/architecture/steam-remote-play.md)
+- The desktop surface's changes to Steam's page in the desktop client (dev build only) —
+  [desktop-dom-architecture.md](docs/architecture/desktop-dom-architecture.md)
 - **End-user-facing behavior and UI** — setup, configuration, syncing, save-sync, BIOS, troubleshooting —
   `docs/user-guide/`
 - Dev setup, dependency management, frontend loop — `docs/contributing/`
@@ -95,6 +97,10 @@ new code in it.
   constraint the code cannot express. A fact has one home, and how a value was arrived at goes in the commit rather than
   the file. Re-read the comment on the line you touch — a stale one is worse than none, because it is believed and
   nothing in the toolchain contradicts it. **No mechanical check exists.**
+- `desktop-dom.md` — every change the desktop surface makes to Steam's page goes through the restoration ledger, or
+  leaving the page leaves it behind; and a selector never names a hashed class. Both are in the register below, with
+  what checks them; the file's other rules — Steam's part hidden only behind a drawn view, every failure logged — have
+  no check.
 
 ## Documentation
 
@@ -238,16 +244,20 @@ locally with `mise run docs`.
   (7.46 MiB), so a 4 MiB cap would have refused it silently.
 - **No `BIsModOrShortcut` bypass**: the bypass counter was removed deliberately. Shortcuts return `true` (natural
   state); we own the game detail UI. Do not reintroduce a bypass.
-- **`instanceof` against a DOM global is false in QAM code**: the panel's code runs in the **SharedJSContext** window
-  while the nodes it renders belong to the QAM view's own document — two realms, confirmed live (the two documents do
-  not share a URL, and neither can see the other's elements). What is **measured** is the `instanceof`: such a test is
-  false for **every** node such code will ever see, so a guard written that way rejects everything and the feature is
-  simply inert. Whether a constructor that takes the node as an argument — `new ResizeObserver(...)`,
-  `new MutationObserver(...)` — also misbehaves across realms is **not** established here in either direction; those are
-  named because taking the constructor from the node costs a property read, so the question need not be answered. Take
-  the constructor from the node — `el.ownerDocument.defaultView` — as `WidePage` and `ScrollRegion` do. **The frontend
-  suite cannot see this**: happy-dom has one realm, so the wrong global and the right one are the same object and every
-  test passes.
+- **`instanceof` against a DOM global is false in QAM and desktop-client code**: the panel's code runs in the
+  **SharedJSContext** window while the nodes it renders belong to another document — the QAM view's own, or, for the
+  desktop surface (dev build only), the desktop client's window (#1866). Two realms, confirmed live for the QAM view
+  (the two documents do not share a URL, and neither can see the other's elements). What is **measured** is the
+  `instanceof`: such a test is false for **every** node such code will ever see, so a guard written that way rejects
+  everything and the feature is simply inert. Whether a constructor that takes the node as an argument —
+  `new ResizeObserver(...)`, `new MutationObserver(...)` — also misbehaves across realms is **not** established here in
+  either direction; those are named because taking the constructor from the node costs a property read, so the question
+  need not be answered. Take the constructor from the node — `el.ownerDocument.defaultView` — as `WidePage` and
+  `ScrollRegion` do, or from the window the code was handed, as the desktop surface's navigation watcher does. **The
+  frontend suite cannot see the `instanceof` half**: two happy-dom windows answer it alike. A `MutationObserver` taken
+  from the wrong window it CAN see — each happy-dom `Window` has its own, and a document's `defaultView` is its window —
+  but not a `ResizeObserver`, which every happy-dom `Window` shares (`new Window().ResizeObserver` is the same class
+  twice), and neither over a document built with `createHTMLDocument`, whose `defaultView` is null.
 - **The Python CI runs is not the Python a device runs** — what that makes of a change under `_vendor/` is
   [`.claude/rules/vendored-assets.md`](.claude/rules/vendored-assets.md)'s, which loads only once a file there is read.
 - **An empty collection in a resolver answer is a statement about PROVENANCE, never about need** — and Python spells it
@@ -585,6 +595,24 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `test_sync_orchestrator.py::TestPlatformTurnedOffAndBackOn`. Prompt-only: a new skip-side reader calling
   `platform_sync_state.get` raw, the recovery snapshot's raw read (no test pins it), and `has_any`'s query agreeing with
   `stamp_for_skip` — the query and the helper are each pinned alone and nothing joins them
+- **A platform's completion stamp records what the skip compares RomM's answer with, and the gate and the preview's
+  re-stamp count read it through one comparison: the checksum is over exactly the ids of the unit's full fetch
+  (`ChunkDispatcher._build_final_platform_stamp`, over every chunk's ROMs), `fetch_started_at` is Tender's clock read
+  before the skip request (`SyncOrchestrator`), the ten-minute margin is applied when the stamp is read and never stored
+  (`domain/platform_skip.py::skip_reference`), and the gate's `probe_verdict` and the count's `restamp_due` both decide
+  through `domain/platform_skip.py::_compare`** — test + prompt-only —
+  `tests/services/library/test_sync_orchestrator.py::TestOnlyAFreshStampRestoresTheSkip`
+  (`test_a_hidden_rom_with_a_shortcut_is_fetched_in_full_once_then_skipped`: the checksum names the fetched ids and not
+  a bound row RomM no longer returns; `test_a_rom_edited_while_the_run_applied_is_fetched_in_full_next_sync` and
+  `test_a_stamp_without_a_checksum_is_fetched_in_full_once_then_skipped`: the stamp stores the fetch's start unmargined,
+  not the run's end),
+  `tests/services/library/test_chunk_dispatcher.py::TestApplyChunking::test_the_final_chunk_s_stamp_checksums_every_chunk_s_ids`
+  for a unit applied in more than one chunk, and for the margin `tests/domain/test_platform_skip.py::TestSkipReference`
+  and
+  `tests/services/library/test_fetcher.py::TestIncrementalSkipFromPlatformStamp::test_the_reference_is_the_fetch_start_less_the_margin`.
+  Prompt-only: the clock read before the skip request rather than after it (the test clock does not move across the
+  request), and the two deciders sharing `_compare` — `TestProbeVerdict` and `TestRestampDue` in
+  `tests/domain/test_platform_skip.py` pin each alone and nothing joins them
 - **Where the library sync or the version picker's default resolves a representative, neither RomM's main-sibling leg
   nor the ranking picks a member RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the
   sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is
@@ -626,20 +654,28 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `SyncReporter._names_with_bound_platforms_kept`
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py`,
-  `tests/domain/test_firmware_wants.py` and `tests/services/test_firmware.py::TestCheckPlatformBiosUnknown`;
+  `tests/domain/test_firmware_wants.py` and `tests/services/test_firmware.py::TestCheckPlatformBiosUnknown` (which pins
+  that a launching emulator missing from the answer counts as not read, #2190 D4, for its rows as for the level);
   prompt-only: no caller folds the two values back together, and the reading is scoped to the launching emulator —
   `reading_complete_for` refuses `None`, an unread emulator the platform also offers deliberately does not withhold the
   answer, `declaration="packaged"` with an empty requirement list counts as unread, and a `retroarch-foreign-core` entry
   declares nothing and so adds nothing, while any other entry with no identity still contributes its declared files,
   unowned
-- **A firmware row the RomM library does not hold (`on_server: False`) counts towards readiness, and never towards a
-  download affordance or a progress ratio** — test + prompt-only — `tests/services/test_firmware.py` and
-  `frontend/src/bigpicture/library/PlatformsTab.test.tsx`; prompt-only: the three axes stay apart — readiness
-  (`domain/bios_status.py::count_required`, every required row), the progress ratio
+- **A firmware row the RomM library does not hold (`on_server: False`) counts in the launching emulator's required
+  counts, and never towards a download affordance or a progress ratio** — test + prompt-only —
+  `tests/services/test_firmware.py` and `frontend/src/bigpicture/library/PlatformsTab.test.tsx`; prompt-only: the three
+  axes stay apart — the required counts a sentence words (`domain/bios_status.py::count_required`, every required row;
+  the colour is the resolver's verdict and no count's), the progress ratio
   (`services/firmware/status.py::_bios_aggregates`, `on_server` rows only, and the stated pair only those with a
   verdict) and the download affordance (`isFetchable`, `frontend/src/utils/biosFetchable.ts`). The platform detail and
   the game page's BIOS tab call `isFetchable`, never a copy, while the game page's row-visibility rule stays its own;
   display-only readers (the On-disk `⊘` mark, `rowBelongsOnThisPage`) neither count nor gate
+- **No download lands in a place the resolver could not look at (`firmware-path-inaccessible`)** — test + prompt-only —
+  `FirmwarePlacement.place_unreadable` is the one reading; `tests/domain/test_firmware_groups.py` (`fetched_as_required`
+  leaves it out of `Download required`), `tests/services/test_firmware.py::TestAPlaceThatCouldNotBeLookedAt` (the batch
+  passes it over, the per-row endpoint refuses it with `place_unreadable`), and
+  `frontend/src/utils/biosFetchable.test.ts` with `PlatformsTab.test.tsx` (`isFetchable` offers no button); prompt-only:
+  a new download path checks the same property, and the frontend's copy of the caveat code agrees with the backend's
 - **No BIOS answer outlives the page that asked for it** — test + prompt-only —
   `tests/services/test_game_detail.py::TestGetCachedGameDetailCarriesNoBiosAnswer` and the two contract cases in
   `tests/contract/test_game_detail_read.py`; prompt-only: no stored or cached BIOS answer is added back (`BiosChecker`
@@ -818,67 +854,80 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   prompt-only
 - **Server-supplied path components pass `safe_join` (`lib/path_safety.py`)** — test + prompt-only — traversal tests per
   path builder; new call sites are prompt-only
-- **A firmware row's presence comes from the resolver wherever the resolver declared it; Tender's own filesystem probe
-  covers only three leftovers** — prompt-only — `services/firmware/demand.py::FirmwareDemand.is_downloaded` is the
-  single crossing point, and nothing enforces it. The three leftovers: a library file with no placement in the
-  platform's catalogue, a placement Tender cannot honour, and the already-there check before a download (the batch and
-  the per-row fetch). Where no BIOS download may land — anything that refuses one, so that `FirmwareDemand.status_root`
-  answers `None` — the probe looks nowhere, and a row only it could answer has its verdict withheld rather than read as
-  absent (#2244 D11). `present is None` reads as absent, except in the `RomM library files` ratio, which leaves a row
-  whose verdict was withheld out (`ratio_server_count`, #2285 D3). A withheld verdict is not an absence: its cause is
-  read off the row's caveat codes and a declared file's `checked`, never off the verdict, and nothing checks that a
-  consumer keeps `checked`'s values apart — a file the emulator read and did not recognise is never worded "could not be
-  checked", and `refused` is not a withheld verdict
-- **A firmware row's verdict is `BiosFileEntry.satisfied`, and for a folder declaration it is what the folder HOLDS —
-  never that the folder is there** — test + prompt-only —
-  `tests/services/test_firmware.py::TestAFolderRequirementIsAnsweredByItsContents`,
-  `tests/domain/test_firmware_wants.py` and `tests/adapters/test_atlas_firmware.py`; prompt-only: no consumer reads
-  `downloaded` for a folder row or folds a `None` verdict into `False`. With no check at all: a folder declaration
-  (`declared_kind`) is never offered as a download — `FirmwareDownloader.download_firmware(firmware_id)` does not refuse
-  one yet
-- **The console's own firmware demand is a value of its own (`system_image`) and is never folded into a count, and the
-  resolver's `system_firmware: null` reaches it as a claim about nothing; it answers only for a launching emulator that
-  states no one-of group** — test + prompt-only — `tests/domain/test_bios_status.py` (`TestClassifySystemImage`,
-  `TestTheVerdictOverTheSystemImage`), `tests/services/test_firmware.py::TestTheConsolesOwnFirmwareDemand`,
-  `frontend/src/bigpicture/BiosTab.test.tsx`, `frontend/src/bigpicture/library/PlatformsTab.test.tsx`, and the wording
-  locks `frontend/src/utils/biosSummary.test.ts` / `frontend/src/utils/biosHeldRatio.test.ts` over
-  `frontend/src/test-utils/componentSources.ts`. Prompt-only: demand comes from the resolver's packaged table
-  (`system_firmware`), presence from our rows, never from `requirements_met`; every surface words these states through
-  `frontend/src/utils/biosSummary.ts`, sole holder of their order (`"absent"` before `bios_level` `unknown`; given
-  `required_withheld` and `"unsettled"` both, the withheld row); `PlatformDetail`'s `nothingEstablished` excludes
-  `"unsettled"` as it does `required_withheld`, and decides wording alone; the play-row badge
-  (`frontend/src/utils/playSection.ts::extractBiosInfo`) rises on `"absent"`, never on `"unsettled"`; a new wording, or
-  one in a `.ts` helper (`frontend/src/bigpicture/panelState.ts`), escapes the locks. Where the launching emulator
-  states a one-of group, `classify_system_image` answers `not_demanded` and the group speaks instead
+- **A firmware row's verdict is the resolver's wherever an emulator declared the file, and its presence the resolver's
+  wherever it placed the file under this root; Tender's own filesystem probe covers only three leftovers** — prompt-only
+  — `domain/bios_status.py::_row_verdict` and `services/firmware/demand.py::FirmwareDemand.is_downloaded` are the two
+  crossing points, and nothing enforces either. The three leftovers, for presence: a library file with no placement in
+  the platform's catalogue (whose verdict is that presence, it being no requirement), a placement Tender cannot honour,
+  and the already-there check before a download (the batch and the per-row fetch). Where no BIOS download may land —
+  anything that refuses one, so that `FirmwareDemand.status_root` answers `None` — the probe looks nowhere, and a row
+  only it could answer has its verdict withheld rather than read as absent (#2244 D11). `present is None` leaves
+  `downloaded` false and the verdict withheld — a place the resolver could not look at is never missing (#2190 D3) — and
+  the `RomM library files` ratio leaves a row whose verdict was withheld out (`ratio_server_count`, #2285 D3). A
+  withheld verdict is not an absence: its cause is read off the row's caveat codes and a declared file's `checked`,
+  never off the verdict, and nothing checks that a consumer keeps `checked`'s values apart — a file the emulator read
+  and did not recognise is never worded "could not be checked", and `refused` is not a withheld verdict
+- **A firmware row's verdict is `BiosFileEntry.satisfied` — the resolver's per-file verdict at the place the launching
+  emulator opens it, never presence — and for a folder declaration it is what the folder HOLDS** — test + prompt-only —
+  `tests/services/test_firmware.py::TestAFolderRequirementIsAnsweredByItsContents` and
+  `::TestTheRowsVerdictIsTheResolvers`, `tests/domain/test_firmware_wants.py` and
+  `tests/adapters/test_atlas_firmware.py`; prompt-only: no consumer reads `downloaded` as a verdict or folds a `None`
+  verdict into `False`. With no check at all: a folder declaration (`declared_kind`) is never offered as a download —
+  `FirmwareDownloader.download_firmware(firmware_id)` does not refuse one yet
+- **Every BIOS colour is the resolver's verdict for the launching emulator (`requirements_met`), never a count of rows;
+  the exceptions are a one-of group whose verdict is open because of the disc's region alone (the platform page's amber)
+  and, on a game's page, the image serving the game's own region (`game_region_level`) — each read off the resolver's
+  own statements** — test + prompt-only — `tests/domain/test_bios_status.py` (`TestTheLevelIsTheResolversVerdict`,
+  `TestTheRegionDecides`), `tests/services/test_firmware.py` (`TestTheRegionRuleOnThePlatform`,
+  `TestTheGamePageReadsItsOwnRegion`, `TestTheConsolesOwnFirmwareDemand`),
+  `tests/contract/test_bios_search_found_nothing_read.py` (a not-met verdict with no row is sent to both reads),
+  `frontend/src/utils/playSection.test.ts`, `frontend/src/bigpicture/BiosTab.test.tsx` and
+  `frontend/src/bigpicture/library/PlatformsTab.test.tsx`. Prompt-only: no surface computes a colour —
+  `domain/bios_status.py::compute_bios_level` is the one place a level is made, and `region_decides` counts nothing of
+  its own; the console's need for an image reaches a surface only as words under a red verdict (`console_needs_image`,
+  from the resolver's `system_firmware` and its world-knowledge mark), whether its image is shown absent only from the
+  resolver's `system_firmware_met`, and which image is in place only from the row verdicts; every surface words the
+  states through `frontend/src/utils/biosSummary.ts`, sole holder of their order; the play-row badge
+  (`frontend/src/utils/playSection.ts::extractBiosInfo`) rises on `bios_level` `missing` alone; a new wording, or one in
+  a `.ts` helper (`frontend/src/bigpicture/panelState.ts`), escapes the wording locks
+  (`frontend/src/utils/biosSummary.test.ts` over `frontend/src/test-utils/componentSources.ts`)
 - **A one-of group is ONE requirement, judged by the regions its options serve — and an option never makes its row
   required** — test + prompt-only — `tests/domain/test_firmware_groups.py` (with an invented console in
   `TestAnyConsoleIsJudgedTheSameWay`), `tests/adapters/test_atlas_firmware.py::TestOneOfGroups`,
   `tests/domain/test_bios_status.py::TestAOneOfGroupIsOneRequirement`, `tests/services/test_firmware.py`
   (`TestAOneOfGroupIsOneRequirement`, the group cases of `TestOnePlatformOneEmulator` / `TestOneRomOneEmulator` /
-  `TestDownloadRequiredFirmware`), and `frontend/src/utils/biosSummary.test.ts` / `biosGroup.test.ts` /
-  `playSection.test.ts` pin that `required` comes off plain declarations only, that a group counts once and only `met`
-  counts as held, that the badge leaves `required_partial` out, that `Download required`'s count and its download are
-  one set (`fetched_as_required`), that the game page judges the ROM's own console regions (`console_regions_of`), and
-  that an invented console is judged by the same rules. Prompt-only: each of those at a NEW site — a consumer reading an
-  option's `need` as `required`, a second download rule, a judging that names a console, an emulator or a region; the
-  state never travels as a colour; `unknown` is never read as `met` or `unmet`; which caveats name a group's other
-  regions is `adapters/atlas_firmware.py::_UNCHECKED_REGION_CODES`'s. Unseen by every test: a region whose every name
-  the resolver refused carries neither an option nor such a caveat, so a group can read `met` over it — the resolver
-  names it only in the group's `core-mode-unestablished` caveat's `unstated`, which Tender does not read; reading it is
-  #2190's (D11)
+  `TestDownloadRequiredFirmware`), and `frontend/src/utils/biosSummary.test.ts` / `biosGroup.test.ts` pin that
+  `required` comes off plain declarations only, that a group counts once and only `met` counts as held, that
+  `Download required`'s count and its download are one set (`fetched_as_required`), that the game page judges the ROM's
+  own console regions (`console_regions_of`), and that an invented console is judged by the same rules. Prompt-only:
+  each of those at a NEW site — a consumer reading an option's `need` as `required`, a second download rule, a judging
+  that names a console, an emulator or a region; the state never travels as a colour; `unknown` is never read as `met`
+  or `unmet`; which caveats name a group's other regions is `adapters/atlas_firmware.py::_UNCHECKED_REGION_CODES`'s, and
+  the regions it carries no option for are read off its `core-mode-unestablished` caveat's `unstated` alone
+  (`_unstated_regions`, pinned with the rest in `TestOneOfGroups` and `TestARegionTheGroupStatesNothingFor`)
 - **Which emulator a set of answers is about is ONE pick per scope — a platform's, and a ROM's — and every answer in
   that scope is a projection of it** — test + prompt-only — `tests/services/test_firmware.py`
   (`TestOnePlatformOneEmulator`,
   `TestDownloadRequiredFirmware::test_it_fetches_what_the_platforms_own_pick_calls_required`,
-  `TestTheAnswerNamesTheEmulatorItJudgedBy`, `TestOneRomOneEmulator`); prompt-only: every platform site resolves through
-  `domain/emulator_commands.py::resolve_platform_option`, `.label` and `.emulator` come off one call, the key is the
+  `TestTheAnswerNamesTheEmulatorItJudgedBy`, `TestOneRomOneEmulator`, `TestEachEmulatorsOwnPlace`); prompt-only: every
+  platform BIOS site resolves through `domain/emulator_commands.py::resolve_firmware_option` (the platform's core read
+  names the bake pick alone, `resolve_platform_label`), `.label` and `.emulator` come off one call, the key is the
   emulator identity and never `.core_so`, and both game-page services ask `ActiveCoreReader.active_emulator_for_rom`,
-  never `active_core_for_rom`; the one-of groups an answer judges are that same pick's (`groups_for(identity)`). Tests
-  on the bare `FakeCoreInfoProvider` exercise a weaker default than the live adapter
+  never `active_core_for_rom` — and so does the game page's "Download BIOS" (`download_all_firmware` with a `rom_id`,
+  `TestEachEmulatorsOwnPlace::test_a_game_page_download_places_for_the_games_own_pick`); the one-of groups an answer
+  judges are that same pick's (`groups_for(identity)`), and so are the rows and where a download lands
+  (`FirmwareCatalogue.placements_for(identity)`, #2190 D2/D9); every other emulator's answer is an entry of its own
+  (`emulator_tabs`) the BIOS tables' emulator selector shows, which never changes the level, the header's counts or the
+  badge — on the platform page `Download required` and a row's own download place for the emulator shown (`emulator`,
+  `None` for the pick; an identity the answer holds no verdict for is refused `emulator_unknown`,
+  `TestEachEmulatorsOwnPlace::test_download_required_fetches_for_the_shown_emulator`,
+  `::test_the_per_row_download_fetches_for_the_shown_emulator`,
+  `::test_an_emulator_the_answer_does_not_hold_is_refused`), while `Download all` places for the pick. Tests on the bare
+  `FakeCoreInfoProvider` exercise a weaker default than the live adapter
 - **A platform's BIOS answer is asked for one platform at a time, and a row that has not got one yet is never rendered
   as a row nothing could be established for** — test + prompt-only —
   `frontend/src/bigpicture/library/PlatformsTab.test.tsx` and `tests/contract/test_firmware_status_read.py`;
-  prompt-only: no state-bearing field returns to the overview payload, no rendering path reads `firmware === null`
+  prompt-only: no platform-bearing field returns to the overview payload, no rendering path reads `firmware === null`
   instead of `firmwareState`, a later failure never takes back an answer already held (`firmwareStale` beside the
   state), and the `alive` guard in `usePlatformsPage`'s `accept` (no write after unmount) is unpinned
 - **The whole-machine firmware inventory is never asked with content verification, and the per-platform reading is never
@@ -1044,6 +1093,19 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   the `display: contents` wrapper around the selected row, never on the row; and a wide page that opens on a non-first
   row without `ListDetail` places the mark itself, the same way, and gives that row `preferredFocus` too, only while
   `EntryPreferenceContext` holds
+- **Every change the desktop surface's navigation watcher makes to Steam's page goes through the restoration ledger, and
+  is given back on leaving the page whenever the ledger holds anything — a pass that threw partway included** (dev build
+  only) — test + prompt-only — `frontend/src/desktop/navigationWatcher.test.ts`, "every change it makes is given back":
+  the `style` attribute of every element on a page, recorded before the watcher starts, is what it was after passes from
+  Steam's mutations and from a change to the set of RomM shortcuts, a scroll and a resize, and leaving the page, with
+  both views handed and with none; and "gives back what a pass changed before it threw" for a pass that threw partway.
+  Prompt-only: a write to anything but `style` — a class, another attribute, a node moved — and a change to an element
+  the test's page does not hold
+- **No code under `frontend/src/desktop/` names one of Steam's minified class hashes** (dev build only) — check —
+  `frontend/eslint.config.js` (`no-restricted-syntax` over string literals, regex literals and template parts,
+  `NO_CLASS_HASHES`; test files left out), kept live by `frontend/src/eslintNoClassHashes.test.ts`. Unseen by it: a hash
+  with no digit, no capital or no small letter in it, one shorter than twelve characters, and one built at run time.
+  This list is the one home of what the check misses; the config, the rules file and the long form point here
 
 When a change applies a guard / sanitize / backup / grouping pattern, sweep for sibling sites of the same pattern — the
 register is what that sweep checks against.
