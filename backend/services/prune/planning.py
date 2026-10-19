@@ -153,6 +153,15 @@ class GroupPlanner:
                 "another_version_gone",
                 "Another version of this game is gone from RomM too. Scan again to review it.",
             )
+        if candidate_ids == group_ids and proof.live_ids:
+            # The preview offered every version, so the dialog showed the game as
+            # gone entirely: it is removed whole or not at all.
+            return self._results.group_result(
+                rows,
+                "skipped",
+                "version_back_on_romm",
+                "A version of this game is back on RomM. Scan again to review it.",
+            )
 
         delete_ids = selected_prune_ids(
             group_ids=sorted(group_ids),

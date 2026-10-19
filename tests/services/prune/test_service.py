@@ -548,7 +548,7 @@ async def test_stale_preview_refuses_start_after_local_change(harness):
 @pytest.mark.parametrize(
     "outcome,reason",
     [
-        ({"id": 1}, "options_excluded"),
+        ({"id": 1}, "version_back_on_romm"),
         ({"id": 99}, "liveness_uncertain"),
         ({}, "liveness_uncertain"),
         (RommConnectionError("offline"), "liveness_uncertain"),

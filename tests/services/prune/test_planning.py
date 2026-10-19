@@ -103,11 +103,13 @@ class _StubProbe:
         self.probe_many = probe
 
 
-async def _plan(rows: list[Rom], statuses: dict[int, str], **kwargs: Any):
+async def _plan(rows: list[Rom], statuses: dict[int, str], *, candidates: set[int] | None = None, **kwargs: Any):
+    """Plan *rows* as a preview offering *candidates* would have it planned — every row unless named."""
     options = kwargs.pop("options", None) or _options()
     planner, _ = _planner(rows, statuses, **kwargs)
     ledger = MutationLedger(rows)
-    return await planner.plan("run-1", rows, {row.rom_id for row in rows}, options, 1, 1, ledger), ledger
+    offered = {row.rom_id for row in rows} if candidates is None else candidates
+    return await planner.plan("run-1", rows, offered, options, 1, 1, ledger), ledger
 
 
 class TestRefusals:
@@ -168,6 +170,7 @@ class TestRefusals:
         result, _ = await _plan(
             rows,
             {1: "live", 2: "uncertain"},
+            candidates={2},
             options=_options(remove_rows=False, remove_fully_vanished=False),
         )
         assert not isinstance(result, GroupPlan)
@@ -178,6 +181,33 @@ class TestRefusals:
         result, _ = await _plan(rows, {1: "vanished"}, drifted=True, options=_options(create_recovery_bundle=False))
         assert not isinstance(result, GroupPlan)
         assert result["reason"] == "unsynced_saves"
+
+
+class TestAGameShownAsGoneEntirely:
+    """A game whose every version the preview offered is removed whole or not at all."""
+
+    @pytest.mark.parametrize("remove_fully_vanished", [True, False])
+    async def test_a_version_back_on_romm_leaves_the_whole_game(self, remove_fully_vanished):
+        rows = [_rom(1), _rom(2), _rom(3)]
+        result, _ = await _plan(
+            rows,
+            {1: "vanished", 2: "live", 3: "vanished"},
+            options=_options(remove_fully_vanished=remove_fully_vanished),
+        )
+
+        assert not isinstance(result, GroupPlan)
+        assert (result["status"], result["reason"], result["message"]) == (
+            "skipped",
+            "version_back_on_romm",
+            "A version of this game is back on RomM. Scan again to review it.",
+        )
+
+    async def test_a_game_the_preview_offered_in_part_still_loses_its_gone_versions(self):
+        rows = [_rom(1), _rom(2), _rom(3)]
+        plan, _ = await _plan(rows, {1: "vanished", 2: "live", 3: "vanished"}, candidates={1, 3})
+
+        assert isinstance(plan, GroupPlan)
+        assert plan.delete_ids == {1, 3}
 
 
 class TestPlans:
@@ -196,7 +226,7 @@ class TestPlans:
     async def test_a_vanished_bound_row_with_a_live_sibling_is_kept_where_it_is(self):
         """The shortcut is the game while it has a live version; only the user moves it."""
         rows = [_rom(1, app_id=0x8001), _rom(2, main=True), _rom(3)]
-        plan, _ = await _plan(rows, {1: "vanished", 2: "live", 3: "vanished"})
+        plan, _ = await _plan(rows, {1: "vanished", 2: "live", 3: "vanished"}, candidates={1, 3})
 
         assert isinstance(plan, GroupPlan)
         assert plan.delete_ids == {3}, "the bound row is spared, the other confirmed-gone row is not"
@@ -204,7 +234,7 @@ class TestPlans:
 
     async def test_sparing_the_bound_row_can_leave_nothing_to_do(self):
         rows = [_rom(1, app_id=0x8001), _rom(2, main=True)]
-        result, _ = await _plan(rows, {1: "vanished", 2: "live"})
+        result, _ = await _plan(rows, {1: "vanished", 2: "live"}, candidates={1})
 
         assert not isinstance(result, GroupPlan)
         assert (result["reason"], result["message"]) == (
