@@ -1101,23 +1101,25 @@ describe("RemovedGamesCleanup", () => {
       };
 
       expect(modal.getByTestId("cleanup-header").style.gridTemplateColumns).toBe(
-        "minmax(0, 3fr) minmax(0, 2fr) 64px 120px",
+        "minmax(0, 3fr) minmax(0, 2fr) 64px 72px",
       );
       for (const text of ["Moon Patrol", "Moon Patrol (USA) (Proto 2).zip", "Gone from RomM · your shortcut"]) {
         expect(cutsShort(modal.getAllByText(text)[0]!), text).toBe(false);
       }
     });
 
-    it("sets what happens smaller than the names, and keeps the row switch's label on one line", async () => {
+    it("sets what happens and a version's name smaller than the game's name, and leaves the row switch unlabelled", async () => {
       const modal = await open(threeGames);
       const moon = rowFor(modal, "Moon Patrol (USA) (Proto 2).zip");
 
       expect(within(moon).getByText("Removed, file deleted").style.fontSize).toBe(SECONDARY_FONT);
-      expect(within(moon).getByText("Switch on “Back up” to keep a copy.").style.fontSize).toBe(NOTE_FONT);
+      expect(within(moon).getByText("Switch on “Back up file” to keep a copy.").style.fontSize).toBe(NOTE_FONT);
       expect(within(rowFor(modal, "Moon Patrol")).getByText("Game removed, with its shortcut").style.fontSize).toBe(
         SECONDARY_FONT,
       );
-      expect(within(moon).getByText("Back up").style.whiteSpace).toBe("nowrap");
+      expect(within(moon).getByText("Moon Patrol (USA) (Proto 2).zip").style.fontSize).toBe(SECONDARY_FONT);
+      expect(within(rowFor(modal, "Moon Patrol")).getByText("Moon Patrol").style.fontSize).toBe("13px");
+      expect(within(moon).getByTestId("toggle").textContent).toBe("");
     });
 
     it("groups the list by game, says what happens to each game and version, and follows the options", async () => {
@@ -1258,7 +1260,6 @@ describe("RemovedGamesCleanup", () => {
       const [only, ...others] = within(modal.getByTestId("cleanup-table")).getAllByTestId("toggle");
       expect(others).toHaveLength(0);
       expect(rowFor(modal, "Moon Patrol (USA) (Proto 2).zip").contains(only!)).toBe(true);
-      expect(only!.textContent).toContain("Back up");
       expect(rowFor(modal, "Rally Cup (Europe).zip").textContent).toContain("On RomM · your shortcut");
       expect(rowFor(modal, "Island Hopper (Netherlands).gba").textContent).toContain("Gone from RomM · your shortcut");
       expect(rowFor(modal, "Rally Cup (USA).zip").textContent).not.toContain("your shortcut");
@@ -1317,7 +1318,7 @@ describe("RemovedGamesCleanup", () => {
     it("says a backed-up version goes into the backup, a file deleted how to keep it, and why a version is kept", async () => {
       const modal = await open(threeGames);
       const moonVersion = () => rowFor(modal, "Moon Patrol (USA) (Proto 2).zip");
-      expect(moonVersion().textContent).toContain("Switch on “Back up” to keep a copy.");
+      expect(moonVersion().textContent).toContain("Switch on “Back up file” to keep a copy.");
       expect(rowFor(modal, "Island Hopper (Netherlands).gba").textContent).toContain(
         "Switch to another version first, then this one can be removed.",
       );
@@ -1330,7 +1331,7 @@ describe("RemovedGamesCleanup", () => {
       fireEvent.click(optionToggleFor(modal, OPTION_LABELS.recovery));
       expect(moonVersion().textContent).toContain("Removed, file deleted");
       // With the backup off the switch is disabled, so nothing points at it.
-      expect(moonVersion().textContent).not.toContain("Switch on “Back up”");
+      expect(moonVersion().textContent).not.toContain("Switch on “Back up file”");
     });
 
     it("keeps the shortcut's reason where an option would keep the version too", async () => {

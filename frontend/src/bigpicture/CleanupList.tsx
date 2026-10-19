@@ -29,7 +29,7 @@ export function formatBytes(bytes: number): string {
 }
 
 /** Game and versions, What happens, Downloaded, Back up file. */
-const COLUMNS = "minmax(0, 3fr) minmax(0, 2fr) 64px 120px";
+const COLUMNS = "minmax(0, 3fr) minmax(0, 2fr) 64px 72px";
 
 /** The pane's register without its gutter: the dialog body is padded already. */
 const REGISTER: TableRegister = { rowPadding: "4px 0", headerPadding: "0 0 4px", rule: true };
@@ -46,6 +46,9 @@ const OUTCOME: CSSProperties = { fontSize: SECONDARY_FONT, fontWeight: 600 };
 const OUTCOME_WHY: CSSProperties = { color: MUTED, fontSize: NOTE_FONT };
 
 const VERSION_INSET = "12px";
+
+/** A game's name heads its row a step above its versions' names, which are set in {@link SECONDARY_FONT}. */
+const GAME_NAME_FONT = "13px";
 
 const KEPT_BLUE = "#66c0f4";
 const REMOVED_LIGHT = "#c7d5e0";
@@ -111,7 +114,7 @@ function whatHappens(
   return {
     text: "Removed, file deleted",
     color: RED,
-    why: backup.recovery ? [...why, "Switch on “Back up” to keep a copy."] : why,
+    why: backup.recovery ? [...why, "Switch on “Back up file” to keep a copy."] : why,
   };
 }
 
@@ -134,7 +137,7 @@ const GameRow: FC<{ game: CleanupGame }> = ({ game }) => {
         {
           content: (
             <>
-              <div style={{ fontWeight: 700 }}>{game.name}</div>
+              <div style={{ fontSize: GAME_NAME_FONT, fontWeight: 700 }}>{game.name}</div>
               <div style={SECONDARY}>{gameLine(game)}</div>
             </>
           ),
@@ -153,8 +156,8 @@ const VersionRow: FC<{ version: CleanupVersion; backup: CleanupListBackup }> = (
   const backUp: TableCell = version.deletesFile
     ? {
         content: (
+          // The column's header names the switch; a label beside it had no room.
           <ToggleField
-            label={<span style={{ whiteSpace: "nowrap" }}>Back up</span>}
             checked={backup.isBackedUp(item.rom_id)}
             disabled={backup.runInFlight || !backup.recovery}
             bottomSeparator="none"
@@ -176,7 +179,7 @@ const VersionRow: FC<{ version: CleanupVersion; backup: CleanupListBackup }> = (
         {
           content: (
             <div style={{ paddingLeft: VERSION_INSET }}>
-              <div>{versionName(version)}</div>
+              <div style={{ fontSize: SECONDARY_FONT }}>{versionName(version)}</div>
               <div style={SECONDARY}>{whereLine(version)}</div>
             </div>
           ),

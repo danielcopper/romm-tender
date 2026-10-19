@@ -2367,16 +2367,17 @@ rescan, and says so where the others say where they are. More than two other ver
 versions, all on RomM · Show_, a button that opens them in place; the version a shortcut is on is never folded. Every
 row stays listed with either option off. **Nothing in the list is cut short**: a game's name and a version's name and
 where it is wrap onto a further line where they do not fit. Game and versions takes three fifths of the width the two
-text columns share, and What happens sets its outcomes and reasons a size smaller, so the names have the room. **The
-Back up switch appears only on a row whose downloaded file the run would delete**, labelled on one line, and is that
-row's focus stop, since a second stop on the row would be a dead step in front of it; every other version row is a stop
-itself, so the list can be walked. With **Back up before removing** off the switches are off and disabled. A switch the
-reader turned on stays on while an option takes its row out of the run, but only a file the run deletes is counted or
-staged. A row's warning — the preview's own — is a line under it, inside the row. **The dialog is revealed at both
-edges**: focus reaching the first option scrolls it to its top, so the summary comes back, and focus reaching the last
-row scrolls it to its end, so that row's own lines and the note after the list are not left under the view. Steam
-scrolls only far enough to reveal the focused control, which is why both are needed. The suite pins that each scroll is
-asked for; whether it lands where it should is device-only.
+text columns share, and What happens sets its outcomes and reasons a size smaller, so the names have the room. A game's
+name is bold and one step above its versions' names, which take the version rows' smaller size. **The Back up switch
+appears only on a row whose downloaded file the run would delete**, under the column's header **Back up file** and with
+no label of its own, and is that row's focus stop, since a second stop on the row would be a dead step in front of it;
+every other version row is a stop itself, so the list can be walked. With **Back up before removing** off the switches
+are off and disabled. A switch the reader turned on stays on while an option takes its row out of the run, but only a
+file the run deletes is counted or staged. A row's warning — the preview's own — is a line under it, inside the row.
+**The dialog is revealed at both edges**: focus reaching the first option scrolls it to its top, so the summary comes
+back, and focus reaching the last row scrolls it to its end, so that row's own lines and the note after the list are not
+left under the view. Steam scrolls only far enough to reveal the focused control, which is why both are needed. The
+suite pins that each scroll is asked for; whether it lands where it should is device-only.
 
 **Recovery bundles are listed and nothing here removes them.** The row states how many are sealed and what they cost, so
 the disk they take stops being invisible, and the pane lists them under that total as a table — Game, Sealed, Size —

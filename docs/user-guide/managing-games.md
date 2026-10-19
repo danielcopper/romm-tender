@@ -170,8 +170,8 @@ shortcut**, or **Game removed** for a game that has no Steam shortcut. Its versi
 RomM included. Each version row shows its file name, where it is (**Gone from RomM** or **On RomM**, plus **your
 shortcut** on the version a Steam shortcut is on), and what happens to it:
 
-- **Removed**, or **Removed, file deleted** where its downloaded files go with it. A removed version whose **Back up**
-  switch is on says _A copy of its file goes into the backup first._
+- **Removed**, or **Removed, file deleted** where its downloaded files go with it. A removed version whose **Back up
+  file** switch is on says _A copy of its file goes into the backup first._
 - **Kept**, with the reason: _Switch to another version first, then this one can be removed._ where a shortcut is on it
   (the cleanup never moves a shortcut onto another version — switch in the version list, and the gone version is then an
   ordinary one), or which option keeps it.
@@ -211,8 +211,8 @@ The confirmation options apply to this run only:
   under `~/romm-tender-recovery/bundles/` before anything changes. Leaving it on is what makes whole-game removal
   reversible by hand; turning it off asks you to confirm separately, with **I understand there is no recovery bundle**
   under it, and switches every file backup off.
-- **Back up downloaded game files too** switches on the **Back up** switch of every row whose downloaded file the run
-  would delete; each row keeps its own switch, which shows only on such a row. Under it a line states the space this
+- **Back up downloaded game files too** switches on the **Back up file** switch of every row whose downloaded file the
+  run would delete; each row keeps its own switch, which shows only on such a row. Under it a line states the space this
   needs, _Selected: X of Y · Z free_ — the files whose backup is on, of every file the run would delete, against the
   free space at the recovery folder — and selecting more than is free blocks confirmation. When the run would delete no
   downloaded file the option cannot be switched and says _No downloaded file would be deleted, so there is nothing to
