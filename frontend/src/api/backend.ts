@@ -320,9 +320,15 @@ export const getSyncRuns = endpoint<[], SyncRunsAnswer>("get_sync_runs");
  * `pageSawCandidate` is not an answer but a report — whether the game page told
  * this user a copy was on the device. The backend's last check is a backstop
  * over it, so a page that found a copy can never end in a silent download.
+ *
+ * `confirmedPaths` lists every `target_occupied` path whose dialog the user
+ * answered with Replace. A game served as a single zip claims two paths — the
+ * zip and the folder it is unpacked into — and each occupied one gets a dialog
+ * of its own; the backend refuses again for one not yet listed and removes
+ * nothing until every occupied path is.
  */
 export const startDownload = endpoint<
-  [number, boolean, string | null, CollisionChoice | null, boolean],
+  [number, boolean, string | null, CollisionChoice | null, boolean, (string[] | null)?],
   | BackendResult
   | TargetOccupiedResult
   | CandidatesFoundResult

@@ -142,6 +142,7 @@ async function download(
   replaceExisting: boolean,
   discardPath: string | undefined,
   collisionChoice: CollisionChoice | null,
+  confirmedPaths?: string[],
 ): Promise<AdoptionOutcome> {
   const { romId, dialogs, hooks } = flow;
   hooks.setBusy(true);
@@ -150,13 +151,16 @@ async function download(
     // `replace`, which is the user's answer to a refusal the page's report
     // already produced — reporting it again would ask the backstop to fire on
     // an answer it just received.
-    const result = await startDownload(
+    const answers = [
       romId,
       replaceExisting,
       discardPath ?? null,
       collisionChoice,
       !replaceExisting && flow.pageSawCandidate,
-    );
+    ] as const;
+    const result = await (confirmedPaths === undefined
+      ? startDownload(...answers)
+      : startDownload(...answers, confirmedPaths));
     if (isRenameCollisions(result)) {
       // Carrying the discarded candidate's saves would land on names that are
       // taken. Nothing has been removed or moved; the one answer covers the
@@ -164,7 +168,7 @@ async function download(
       hooks.setBusy(false);
       const answer = await dialogs.showCollisions(result.collisions);
       if (answer === "cancel") return "cancelled";
-      return await download(flow, replaceExisting, discardPath, answer);
+      return await download(flow, replaceExisting, discardPath, answer, confirmedPaths);
     }
     if (isTargetOccupied(result)) {
       // Nothing was written and no transfer started — the backend refused so
@@ -173,7 +177,7 @@ async function download(
       // it; adopt and replace each re-claim busy on their own path.
       hooks.setTargetOccupied(true);
       hooks.setBusy(false);
-      return await resolveOccupiedTarget(flow, result);
+      return await resolveOccupiedTarget(flow, result, confirmedPaths ?? []);
     }
     if (isCandidatesFound(result)) {
       // Same refusal contract, different subject: the target path was free and
@@ -213,13 +217,21 @@ async function download(
   }
 }
 
+// Replace names the path this dialog showed, on top of those already answered:
+// a game served as a single zip can be in the way twice — the zip and the
+// folder it unpacks into — and the backend refuses again, with the next path,
+// until every one in the way has been answered, removing nothing before then.
+// Cancel on a later dialog therefore leaves the earlier one's copy too. Adopt
+// names the shown path for the same reason: with both there, it is the only
+// way the backend knows which one the user meant.
 async function resolveOccupiedTarget(
   flow: DownloadWithAdoption,
   occupied: TargetOccupiedResult,
+  confirmedPaths: string[],
 ): Promise<AdoptionOutcome> {
   const choice = await flow.dialogs.showExisting(flow.romId, occupied);
-  if (choice === "replace") return download(flow, true, undefined, null);
-  if (choice === "adopt") return adopt(flow, undefined, null);
+  if (choice === "replace") return download(flow, true, undefined, null, [...confirmedPaths, occupied.existing.path]);
+  if (choice === "adopt") return adopt(flow, occupied.existing.path, null);
   return "cancelled";
 }
 

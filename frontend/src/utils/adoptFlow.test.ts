@@ -212,7 +212,7 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
   });
 
-  it("replace re-sends with the replace flag and names nothing", async () => {
+  it("replace re-sends with the replace flag and the path it showed", async () => {
     vi.mocked(backend.startDownload).mockResolvedValueOnce(OCCUPIED).mockResolvedValueOnce(STARTED);
     const { flow, dialogs } = makeFlow({ pageSawCandidate: true });
     dialogs.showExisting.mockResolvedValue("replace");
@@ -222,7 +222,7 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
     // The re-send is an answer, so it never reports what the page saw.
     expect(vi.mocked(backend.startDownload).mock.calls).toEqual([
       [ROM_ID, false, null, null, true],
-      [ROM_ID, true, null, null, false],
+      [ROM_ID, true, null, null, false, ["/roms/n64/game.z64"]],
     ]);
   });
 
@@ -240,7 +240,7 @@ describe("runDownloadWithAdoption — content at the game's own location", () =>
       globalThis.removeEventListener("romm_data_changed", dataChanged);
     }
 
-    expect(vi.mocked(backend.adoptExistingRom).mock.calls).toEqual([[ROM_ID, null, null]]);
+    expect(vi.mocked(backend.adoptExistingRom).mock.calls).toEqual([[ROM_ID, "/roms/n64/game.z64", null]]);
     expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, ADOPTED.launch_options);
     expect(vi.mocked(backend.releasePruneConflictLease)).toHaveBeenCalledWith("adopt-token");
     expect(log).toEqual([
@@ -642,5 +642,59 @@ describe("comparisonForCandidate", () => {
 
   it("always offers the candidate, because the search only ever returns a usable shape", () => {
     expect(comparisonForCandidate(base, { name: "Game (USA).sfc", size_bytes: 2048 }).adoptable).toBe(true);
+  });
+});
+
+describe("runDownloadWithAdoption — a single zip and its folder both in the way", () => {
+  const ZIP_OCCUPIED: TargetOccupiedResult = {
+    ...OCCUPIED,
+    existing: { name: "Game.zip", path: "/roms/saturn/Game.zip", kind: "file", size_bytes: 2048, modified_at: 0 },
+  };
+  const FOLDER_OCCUPIED: TargetOccupiedResult = {
+    ...OCCUPIED,
+    existing: { name: "Game", path: "/roms/saturn/Game", kind: "dir", size_bytes: 4096, modified_at: 0 },
+  };
+
+  it("asks about each one in its own dialog and names both once both are answered", async () => {
+    vi.mocked(backend.startDownload)
+      .mockResolvedValueOnce(ZIP_OCCUPIED)
+      .mockResolvedValueOnce(FOLDER_OCCUPIED)
+      .mockResolvedValueOnce(STARTED);
+    const { flow, dialogs } = makeFlow();
+    dialogs.showExisting.mockResolvedValue("replace");
+
+    await expect(runDownloadWithAdoption(flow)).resolves.toBe("download_started");
+
+    expect(dialogs.showExisting.mock.calls).toEqual([
+      [ROM_ID, ZIP_OCCUPIED],
+      [ROM_ID, FOLDER_OCCUPIED],
+    ]);
+    expect(vi.mocked(backend.startDownload).mock.calls).toEqual([
+      [ROM_ID, false, null, null, false],
+      [ROM_ID, true, null, null, false, ["/roms/saturn/Game.zip"]],
+      [ROM_ID, true, null, null, false, ["/roms/saturn/Game.zip", "/roms/saturn/Game"]],
+    ]);
+  });
+
+  it("sends nothing more when the second dialog is cancelled", async () => {
+    vi.mocked(backend.startDownload).mockResolvedValueOnce(ZIP_OCCUPIED).mockResolvedValueOnce(FOLDER_OCCUPIED);
+    const { flow, dialogs } = makeFlow();
+    dialogs.showExisting.mockResolvedValueOnce("replace").mockResolvedValueOnce("cancel");
+
+    await expect(runDownloadWithAdoption(flow)).resolves.toBe("cancelled");
+
+    expect(vi.mocked(backend.startDownload)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(backend.adoptExistingRom)).not.toHaveBeenCalled();
+  });
+
+  it("adopts the folder the second dialog showed", async () => {
+    vi.mocked(backend.startDownload).mockResolvedValueOnce(ZIP_OCCUPIED).mockResolvedValueOnce(FOLDER_OCCUPIED);
+    vi.mocked(backend.adoptExistingRom).mockResolvedValue(ADOPTED);
+    const { flow, dialogs } = makeFlow();
+    dialogs.showExisting.mockResolvedValueOnce("replace").mockResolvedValueOnce("adopt");
+
+    await expect(runDownloadWithAdoption(flow)).resolves.toBe("adopted");
+
+    expect(vi.mocked(backend.adoptExistingRom).mock.calls).toEqual([[ROM_ID, "/roms/saturn/Game", null]]);
   });
 });
