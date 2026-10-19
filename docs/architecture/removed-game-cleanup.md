@@ -180,11 +180,11 @@ the page carries a `candidate_total` beside `total`, and the dialog leads with t
 
 Each row also carries what the dialog predicts its outcome from: `gone_from_romm` (above), `bound` (a Steam shortcut is
 on that version, beside the group's `bound_count`) and `fs_name_no_ext` (its file name without the extension, the stem
-the sync rebinds onto the same dump by). It also carries `is_main_sibling` (RomM marks it its group's main version),
-which the dialog names a game without a shortcut by. The dialog renders every row with either option on or off and says
-per row what the run would do; the run's own check still decides, and never removes more than that prediction (above).
-Every page is still fetched, and the completeness gate before confirmation is unchanged. What the dialog shows is
-[QAM Panel](qam-panel.md#data-management), "The removed-games review".
+the sync rebinds onto the same dump by). It also carries `is_main_sibling` (the group's default version, as the last
+library sync stored it), which the dialog names a game without a shortcut by. The dialog renders every row with either
+option on or off and says per row what the run would do; the run's own check still decides, and never removes more than
+that prediction (above). Every page is still fetched, and the completeness gate before confirmation is unchanged. What
+the dialog shows is [QAM Panel](qam-panel.md#data-management), "The removed-games review".
 
 Cleanup deliberately does **not** clear the platform's `platform_sync_state` completion stamp, nor revoke its skip. It
 does not need to. The incremental skip compares RomM's visible id set with the checksum the stamp recorded

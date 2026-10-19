@@ -940,7 +940,7 @@ export interface PrunePreviewItem {
   bound_count: number;
   /** A Steam shortcut is on this version. */
   bound: boolean;
-  /** RomM marks this version its group's main sibling. */
+  /** The group's default version in RomM, as the last library sync stored it. */
   is_main_sibling: boolean;
   candidate: boolean;
   /**
