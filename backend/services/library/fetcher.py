@@ -21,7 +21,7 @@ from domain.collection_listing import collection_entry
 from domain.collection_owner import listing_is_own
 from domain.fetch_generation import backfill_needed, count_rows_for_skip
 from domain.platform_prefs import materialize_enabled_platforms, resolve_sync_enabled
-from domain.platform_skip import probe_says_unchanged, stamp_can_match
+from domain.platform_skip import probe_verdict, stamp_can_match
 from domain.platform_sync_state import stamp_for_skip
 from domain.platform_system import platform_ids_by_slug
 from domain.skip_prediction import collapsed_shortcut_count, new_shortcut_count, predict_unit_skip
@@ -78,10 +78,10 @@ class _PlanEstimate(NamedTuple):
 class _SkipBaseline(NamedTuple):
     """One platform's locally persisted inputs to the incremental-skip gate.
 
-    ``fetched_count`` and ``needs_backfill`` are scoped to the completion
-    stamp's fetch generation: a row the server has dropped can neither be
-    re-counted nor re-fetched, so it may never hold the platform's skip off
-    forever (#1504).
+    ``fetched_count`` and ``needs_backfill`` read only the rows carrying the
+    completion stamp's fetch generation: a row for a rom_id the server has
+    dropped is never fetched again, so no fetch can fill in its group key, and
+    it may never hold the platform's skip off forever (#1504).
     """
 
     stamp: PlatformSyncState | None
@@ -708,7 +708,7 @@ class LibraryFetcher:
         its shortcuts) when the platform is unchanged: one request
         (``list_roms_newest_first``) answers no ROM updated after the stamp's
         reference and a visible id set whose checksum is the stamp's
-        (``domain/platform_skip.probe_says_unchanged``, #743 D1-D3). The stamp
+        (``domain/platform_skip.probe_verdict``, #743 D1-D3). The stamp
         (``PlatformSyncState``) is the **sole** skip authority — it exists iff
         the platform's most recent apply attempt ran to completion (cleared at
         apply start, rewritten by the final chunk; ADR-0023), and it reads as
@@ -782,7 +782,8 @@ class LibraryFetcher:
             )
             return None
 
-        if probe_says_unchanged(stamp, probe):
+        verdict = probe_verdict(stamp, probe)
+        if verdict.unchanged:
             self._logger.info(
                 f"Per-unit skip: {platform_name} unchanged "
                 f"({fetched_count} ROMs from the last fetch, {registry_count} shortcuts"
@@ -791,7 +792,7 @@ class LibraryFetcher:
             return self._decorate_reconstructed(reconstructed, platform_name, platform_slug, int(unit.id))
 
         self._logger.info(
-            f"Per-unit fetch {platform_name}: RomM reports a ROM updated since the last fetch or another set of ROMs "
+            f"Per-unit fetch {platform_name}: {verdict.reason} "
             f"(from-last-fetch={fetched_count} shortcuts={registry_count}"
             f"{self._superseded_note(persisted_count, fetched_count)}) — full fetch"
         )

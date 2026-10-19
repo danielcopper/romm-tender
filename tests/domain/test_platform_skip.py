@@ -10,7 +10,7 @@ import pytest
 from domain.platform_skip import (
     SKIP_REFERENCE_MARGIN,
     parse_romm_timestamp,
-    probe_says_unchanged,
+    probe_verdict,
     restamp_due,
     rom_id_checksum,
     skip_reference,
@@ -104,38 +104,38 @@ class TestStampCanMatch:
         assert stamp_can_match(_stamp(started=None)) is False
 
 
-class TestProbeSaysUnchanged:
+class TestProbeVerdict:
     def test_nothing_newer_and_the_same_ids_match(self):
-        assert probe_says_unchanged(_stamp(), _answer("2026-10-19T11:00:00+00:00", [3, 1, 2])) is True
+        assert probe_verdict(_stamp(), _answer("2026-10-19T11:00:00+00:00", [3, 1, 2])).unchanged is True
 
     def test_a_rom_updated_exactly_at_the_reference_matches(self):
-        assert probe_says_unchanged(_stamp(), _answer(_REFERENCE, [1, 2, 3])) is True
+        assert probe_verdict(_stamp(), _answer(_REFERENCE, [1, 2, 3])).unchanged is True
 
     def test_a_rom_updated_one_second_after_the_reference_does_not_match(self):
-        assert probe_says_unchanged(_stamp(), _answer("2026-10-19T11:50:01+00:00", [1, 2, 3])) is False
+        assert probe_verdict(_stamp(), _answer("2026-10-19T11:50:01+00:00", [1, 2, 3])).unchanged is False
 
     def test_a_rom_updated_after_the_fetch_started_does_not_match(self):
         """The fetch-to-completion window (#743 D1): an edit after the fetch began, before the run ended."""
-        assert probe_says_unchanged(_stamp(), _answer("2026-10-19T12:20:00+00:00", [1, 2, 3])) is False
+        assert probe_verdict(_stamp(), _answer("2026-10-19T12:20:00+00:00", [1, 2, 3])).unchanged is False
 
     def test_a_hidden_rom_does_not_match(self):
         """A hide moves no ``updated_at``; only the id set shows it."""
-        assert probe_says_unchanged(_stamp(), _answer("2026-10-19T11:00:00+00:00", [1, 2])) is False
+        assert probe_verdict(_stamp(), _answer("2026-10-19T11:00:00+00:00", [1, 2])).unchanged is False
 
     def test_as_many_added_as_removed_does_not_match(self):
-        assert probe_says_unchanged(_stamp(), _answer("2026-10-19T11:00:00+00:00", [1, 2, 4])) is False
+        assert probe_verdict(_stamp(), _answer("2026-10-19T11:00:00+00:00", [1, 2, 4])).unchanged is False
 
     def test_a_stamp_without_a_checksum_never_matches(self):
-        assert probe_says_unchanged(_stamp(checksum=None), _answer("2026-10-19T11:00:00+00:00", [1, 2, 3])) is False
+        assert probe_verdict(_stamp(checksum=None), _answer("2026-10-19T11:00:00+00:00", [1, 2, 3])).unchanged is False
 
     def test_a_stamp_without_a_fetch_start_never_matches(self):
-        assert probe_says_unchanged(_stamp(started=None), _answer("2026-10-19T11:00:00+00:00", [1, 2, 3])) is False
+        assert probe_verdict(_stamp(started=None), _answer("2026-10-19T11:00:00+00:00", [1, 2, 3])).unchanged is False
 
     def test_an_empty_platform_matches_a_stamp_of_no_ids(self):
-        assert probe_says_unchanged(_stamp(ids=()), _answer(None, [])) is True
+        assert probe_verdict(_stamp(ids=()), _answer(None, [])).unchanged is True
 
     def test_an_emptied_platform_does_not_match(self):
-        assert probe_says_unchanged(_stamp(), _answer(None, [])) is False
+        assert probe_verdict(_stamp(), _answer(None, [])).unchanged is False
 
     @pytest.mark.parametrize(
         "answer",
@@ -153,7 +153,39 @@ class TestProbeSaysUnchanged:
         ],
     )
     def test_an_answer_it_cannot_read_does_not_match(self, answer):
-        assert probe_says_unchanged(_stamp(), answer) is False
+        assert probe_verdict(_stamp(), answer).unchanged is False
+        assert probe_verdict(_stamp(), answer).reason == "RomM's answer could not be read"
+
+
+class TestProbeVerdictReason:
+    """The reason the sync log gives for a skip or a full fetch."""
+
+    def test_a_newer_rom_names_its_updated_at_and_the_reference(self):
+        verdict = probe_verdict(_stamp(), _answer("2026-10-19T11:50:01+00:00", [1, 2, 3]))
+        assert verdict.reason == (
+            "newest updated_at 2026-10-19T11:50:01+00:00 is after the reference 2026-10-19T11:50:00+00:00; "
+            "3 visible ids, checksum matches the stamp's"
+        )
+
+    def test_another_id_set_names_its_size_and_the_checksum_differing(self):
+        verdict = probe_verdict(_stamp(), _answer("2026-10-19T11:00:00+00:00", [1, 2]))
+        assert verdict.reason == (
+            "newest updated_at 2026-10-19T11:00:00+00:00 is not after the reference 2026-10-19T11:50:00+00:00; "
+            "2 visible ids, checksum differs from the stamp's"
+        )
+
+    def test_a_repeated_id_counts_once(self):
+        verdict = probe_verdict(_stamp(), _answer("2026-10-19T11:00:00+00:00", [1, 2, 2, 3]))
+        assert verdict.unchanged is True
+        assert verdict.reason.endswith("; 3 visible ids, checksum matches the stamp's")
+
+    def test_a_platform_with_no_roms_says_so(self):
+        verdict = probe_verdict(_stamp(), _answer(None, []))
+        assert verdict.reason == "no visible ROMs; 0 visible ids, checksum differs from the stamp's"
+
+    def test_a_stamp_it_cannot_compare_says_so(self):
+        verdict = probe_verdict(_stamp(checksum=None), _answer("2026-10-19T11:00:00+00:00", [1, 2, 3]))
+        assert verdict.reason == "the stamp records no fetch start or checksum"
 
 
 def _rom(rom_id: int, updated_at: str | None = "2026-10-19T11:00:00+00:00") -> dict[str, Any]:
@@ -184,3 +216,9 @@ class TestRestampDue:
 
     def test_an_empty_fetch_matching_a_stamp_of_no_ids_is_not_due(self):
         assert restamp_due(_stamp(ids=()), []) is False
+
+    @pytest.mark.parametrize(
+        "rom", [{"updated_at": "2026-10-19T11:00:00+00:00"}, {"id": "3", "updated_at": "2026-10-19T11:00:00+00:00"}]
+    )
+    def test_a_rom_without_an_int_id_is_due(self, rom):
+        assert restamp_due(_stamp(), [_rom(1), _rom(2), rom]) is True

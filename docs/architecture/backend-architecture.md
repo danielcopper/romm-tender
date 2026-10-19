@@ -985,14 +985,15 @@ fetch that stamped it. The gate then sends **one request per platform**, `GET /a
 `updated_at` descending with `limit=1` (`RommApiAdapter.list_roms_newest_first`), with no `updated_after` and RomM's id
 index left on. Its first item's `updated_at` says whether any ROM changed since the reference, and its `rom_id_index`,
 which RomM builds from the whole filtered result, is the platform's visible id set. The platform skips only when no ROM
-is newer than the reference **and** the id set's checksum equals the stamp's
-(`domain/platform_skip.py::probe_says_unchanged`). An answer that establishes neither — no id index, an id that is not
-an integer, a first item without a readable `updated_at` — is a full fetch, and so is a stamp without a checksum or a
-fetch start, which is every stamp written before migration `031`. RomM's platform `rom_count` is no longer compared with
-anything: it counts hidden ROMs, so after a hide it never again matched what a fetch returned, and the platform
-full-fetched on every sync. The stamp still records it, for removed-game discovery. The local guards stand before the
-request: rows carrying the stamp's generation, at least one bound row, and no `sibling_group_key` backfill pending for a
-row of that generation.
+is newer than the reference **and** the id set's checksum equals the stamp's (`domain/platform_skip.py::probe_verdict`).
+An answer the gate cannot read — no id index, an id that is not an integer, a first item without a readable `updated_at`
+— establishes nothing and is a full fetch, and so is a stamp without a checksum or a fetch start, which is every stamp
+written before migration `031`. The verdict carries its reason into the sync log: the newest `updated_at` against the
+reference and the number of visible ids with whether their checksum matched, or that the answer could not be read.
+RomM's platform `rom_count` is no longer compared with anything: it counts hidden ROMs, so after a hide it never again
+matched what a fetch returned, and the platform full-fetched on every sync. The stamp still records it, for removed-game
+discovery. The local guards stand before the request: rows carrying the stamp's generation, at least one bound row, and
+no `sibling_group_key` backfill pending for a row of that generation.
 
 **Which RomM changes move `updated_at`, and which only the id set shows** (read at RomM 5.3.0). RomM stamps
 `roms.updated_at` on the application side — `default` and `onupdate` of `utc_now` on its base model

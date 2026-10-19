@@ -42,7 +42,7 @@ def predict_unit_skip(
     fetch generation are persisted (``fetched_count``,
     ``domain/fetch_generation.count_rows_for_skip``) and at least one row
     is bound, and no ``sibling_group_key`` backfill is pending. The gate's
-    one request (``domain/platform_skip.probe_says_unchanged``) is
+    one request (``domain/platform_skip.probe_verdict``) is
     deliberately NOT replayed — no network at plan time — so a platform
     with a ROM updated, added, removed or hidden since the stamp may be
     predicted as a skip that the fetch then refuses; the estimate reads

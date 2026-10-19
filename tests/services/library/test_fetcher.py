@@ -1143,7 +1143,7 @@ class TestIncrementalSkipFromPlatformStamp:
     A run that durably synced a platform but was cancelled/crashed before the
     whole run finished leaves NO completed ``SyncRun`` (so the library-wide
     ``last_sync`` never advances) but DOES leave a per-platform stamp. The skip
-    reads that stamp's ``completed_at`` as the platform's effective ``last_sync``.
+    compares RomM's answer with that stamp's fetch start and checksum.
     """
 
     @pytest.mark.asyncio
@@ -1221,6 +1221,43 @@ class TestIncrementalSkipFromPlatformStamp:
         result = await library.sync._fetcher._try_unit_incremental_skip(unit)
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_the_full_fetch_log_says_which_rom_was_newer_than_the_reference(
+        self, library, fake_romm_api, logger, caplog
+    ):
+        _wire_fake(library, fake_romm_api)
+        uow = library.uow
+        _seed_platform_stamp(
+            uow, "n64", at="2025-06-01T00:00:00", rom_count=1, rom_ids=(10,), fetch_started_at="2025-05-31T23:00:00"
+        )
+        _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
+        fake_romm_api.roms[10] = {"id": 10, "platform_id": 1, "updated_at": "2025-05-31T23:30:00+00:00"}
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            await library.sync._fetcher._try_unit_incremental_skip(unit)
+
+        assert (
+            "Per-unit fetch N64: newest updated_at 2025-05-31T23:30:00+00:00 is after the reference "
+            "2025-05-31T22:50:00+00:00; 1 visible ids, checksum matches the stamp's"
+        ) in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_the_full_fetch_log_says_when_the_answer_could_not_be_read(
+        self, library, fake_romm_api, logger, caplog
+    ):
+        _wire_fake(library, fake_romm_api)
+        uow = library.uow
+        _seed_platform_stamp(uow, "n64", at="2025-01-01T00:00:00", rom_count=1, rom_ids=(10,))
+        _seed_persisted_rom(uow, 10, app_id=1001, group_key="igdb:100:1")
+        fake_romm_api.roms[10] = {"id": 10, "platform_id": 1}
+        unit = WorkUnit(type="platform", id=1, name="N64", slug="n64", rom_count=1)
+
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            await library.sync._fetcher._try_unit_incremental_skip(unit)
+
+        assert "Per-unit fetch N64: RomM's answer could not be read (" in caplog.text
 
     @pytest.mark.asyncio
     async def test_a_rom_with_no_readable_updated_at_is_fetched_in_full(self, library, fake_romm_api):

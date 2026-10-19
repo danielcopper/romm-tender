@@ -12,6 +12,7 @@ docs/architecture/backend-architecture.md, "Incremental skip".
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -22,9 +23,7 @@ if TYPE_CHECKING:
 
     from domain.platform_sync_state import PlatformSyncState
 
-# Covers a device clock ahead of the server's and RomM's whole-second
-# timestamps (#743 D1); the price is one more full fetch of a platform edited
-# within this window before the fetch that stamped it.
+# #743 D1; what it covers and what it costs is docs/architecture/backend-architecture.md, "Incremental skip".
 SKIP_REFERENCE_MARGIN = timedelta(minutes=10)
 
 
@@ -49,7 +48,7 @@ def parse_romm_timestamp(value: object) -> datetime | None:
 
 
 def skip_reference(stamp: PlatformSyncState) -> datetime | None:
-    """The instant a ROM updated after makes the stamp's platform changed, or ``None`` when the stamp records none."""
+    """The stamp's fetch start less the margin, or ``None`` without one: a ROM updated after it means a change."""
     started = parse_romm_timestamp(stamp.fetch_started_at)
     return started - SKIP_REFERENCE_MARGIN if started is not None else None
 
@@ -59,16 +58,34 @@ def stamp_can_match(stamp: PlatformSyncState) -> bool:
     return skip_reference(stamp) is not None and bool(stamp.rom_id_checksum)
 
 
-def _matches(stamp: PlatformSyncState, newest_updated_at: datetime | None, rom_ids: Iterable[int]) -> bool:
+@dataclass(frozen=True)
+class ProbeVerdict:
+    """Whether RomM's answer matches a stamp, and what decided it, worded for the sync log."""
+
+    unchanged: bool
+    reason: str
+
+
+_UNREADABLE = ProbeVerdict(unchanged=False, reason="RomM's answer could not be read")
+
+
+def _compare(stamp: PlatformSyncState, newest_updated_at: datetime | None, rom_ids: Iterable[int]) -> ProbeVerdict:
     reference = skip_reference(stamp)
     if reference is None or not stamp.rom_id_checksum:
-        return False
-    if newest_updated_at is not None and newest_updated_at > reference:
-        return False
-    return rom_id_checksum(rom_ids) == stamp.rom_id_checksum
+        return ProbeVerdict(unchanged=False, reason="the stamp records no fetch start or checksum")
+    newer = newest_updated_at is not None and newest_updated_at > reference
+    if newest_updated_at is None:
+        updated = "no visible ROMs"
+    else:
+        relation = "is after" if newer else "is not after"
+        updated = f"newest updated_at {newest_updated_at.isoformat()} {relation} the reference {reference.isoformat()}"
+    distinct = set(rom_ids)
+    same_ids = rom_id_checksum(distinct) == stamp.rom_id_checksum
+    ids = f"{len(distinct)} visible ids, checksum {'matches' if same_ids else 'differs from'} the stamp's"
+    return ProbeVerdict(unchanged=same_ids and not newer, reason=f"{updated}; {ids}")
 
 
-def probe_says_unchanged(stamp: PlatformSyncState, answer: object) -> bool:
+def probe_verdict(stamp: PlatformSyncState, answer: object) -> ProbeVerdict:
     """Whether RomM's skip-probe answer matches *stamp*: nothing updated after its reference, the same id set.
 
     *answer* is RomM's ``/api/roms`` list answer for one platform ordered by
@@ -79,39 +96,43 @@ def probe_says_unchanged(stamp: PlatformSyncState, answer: object) -> bool:
     not match. A platform with no ROMs answers no items and an empty index.
     """
     if not isinstance(answer, dict):
-        return False
+        return _UNREADABLE
     items: Any = answer.get("items")
     rom_ids: Any = answer.get("rom_id_index")
     if not isinstance(items, list) or not isinstance(rom_ids, list):
-        return False
+        return _UNREADABLE
     if any(type(rom_id) is not int for rom_id in rom_ids):
-        return False
+        return _UNREADABLE
     newest = None
     if items:
         first: Any = items[0]
         newest = parse_romm_timestamp(first.get("updated_at")) if isinstance(first, dict) else None
         if newest is None:
-            return False
-    return _matches(stamp, newest, rom_ids)
+            return _UNREADABLE
+    return _compare(stamp, newest, rom_ids)
 
 
 def restamp_due(stamp: PlatformSyncState | None, fetched_roms: Sequence[Mapping[str, Any]]) -> bool:
-    """Whether re-stamping a platform from *fetched_roms*, a full fetch of it, would let its next sync skip.
+    """Whether *stamp* fails to match *fetched_roms*, a full fetch of its platform, so only a fresh stamp lets it skip.
 
     True for no stamp (the caller passes ``stamp_for_skip``'s answer, so a
     revoked one too), a stamp with no checksum or no fetch start, a checksum
     other than the fetched ids', and a fetched ROM updated after the stamp's
     reference — every way the skip refuses a stamp that a fresh one would cure.
     A fetched ROM without a readable ``updated_at`` cannot be cleared, so it
-    counts as updated.
+    counts as updated, and one without an int ``id`` cannot be checked against
+    the checksum, so it counts as another id set.
     """
     if stamp is None:
         return True
     newest: datetime | None = None
+    rom_ids: list[int] = []
     for rom in fetched_roms:
         updated = parse_romm_timestamp(rom.get("updated_at"))
-        if updated is None:
+        rom_id = rom.get("id")
+        if updated is None or type(rom_id) is not int:
             return True
+        rom_ids.append(rom_id)
         if newest is None or updated > newest:
             newest = updated
-    return not _matches(stamp, newest, (int(rom["id"]) for rom in fetched_roms))
+    return not _compare(stamp, newest, rom_ids).unchanged
