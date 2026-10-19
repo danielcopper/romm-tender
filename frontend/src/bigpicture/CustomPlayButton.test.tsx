@@ -4780,7 +4780,7 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
 
     expect(vi.mocked(backend.startDownload).mock.calls).toEqual([
       [42, false, null, null, false],
-      [42, true, null, null, false],
+      [42, true, null, null, false, ["/roms/n64/game.z64"]],
     ]);
   });
 
@@ -4819,9 +4819,9 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
       btn.click();
     });
 
-    // Null candidate path and null collision answer: content at the game's own
-    // location, with no rename and so nothing to collide.
-    expect(vi.mocked(backend.adoptExistingRom)).toHaveBeenCalledWith(42, null, null);
+    // The shown path as the candidate and a null collision answer: content at the
+    // game's own location, with no rename and so nothing to collide.
+    expect(vi.mocked(backend.adoptExistingRom)).toHaveBeenCalledWith(42, "/roms/n64/game.z64", null);
     expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(100, 'flatpak run … "/roms/n64/game.z64"');
     // The lease the backend issued for this Steam write is given back, not held
     // to its TTL — the bound branch is the only one that ever receives one.
