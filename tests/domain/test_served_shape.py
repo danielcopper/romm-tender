@@ -9,12 +9,14 @@ import pytest
 from domain.rom_adoption import ServerFile, server_manifest
 from domain.rom_candidates import DIR, FILE
 from domain.served_shape import (
+    IGNORED_TOP_FOLDERS,
     holds_disc_image,
     is_zip_name,
     listed_unpacked_bytes,
     replace_covers,
     served_shapes,
     unpacked_manifest,
+    unpacked_name,
     wrapper_prefix,
 )
 
@@ -344,3 +346,21 @@ class TestUnpackedManifest:
         )
 
         assert [f.rel_path for f in unpacked_manifest(manifest)] == ["Game.cue"]
+
+
+class TestUnpackedName:
+    """Where one member lands (#910)."""
+
+    def test_the_wrapper_and_a_doubled_separator_come_off(self):
+        assert unpacked_name("Game//Game.bin", "Game/") == "Game.bin"
+
+    @pytest.mark.parametrize("name", ["Extras\\", "Game/", "Game/sub/"], ids=["backslash entry", "wrapper", "nested"])
+    def test_a_folder_entry_lands_nowhere_under_a_prefix(self, name):
+        assert unpacked_name(name, "Game/") == ""
+
+    def test_an_ignored_folder_lands_nowhere_when_asked(self):
+        assert unpacked_name("__MACOSX/Game/._Game.cue", "Game/", IGNORED_TOP_FOLDERS) == ""
+
+    @pytest.mark.parametrize("name", ["__MACOSX/Game/._Game.cue", "Extras\\", "Game/Game.cue"])
+    def test_by_default_without_a_prefix_every_name_lands_as_it_is(self, name):
+        assert unpacked_name(name, "") == name

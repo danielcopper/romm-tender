@@ -539,10 +539,10 @@ tracks, and Dolphin (Wii and GameCube) reads no zip at all. Tender looks inside 
 disc image at its top level — a `.cue` with its tracks, a Dreamcast `.gdi` set, a Wii or GameCube `.rvz`, `.wbfs`,
 `.iso` and the like — is unpacked, and the zip is removed afterwards. A zip that holds nothing but one folder, the way
 compressing a folder makes one, counts that folder's top level instead, and its content is unpacked without the folder
-around it; the `__MACOSX` folder macOS Finder adds beside it is ignored and not unpacked. Anything else stays the zip it
-is: a cartridge ROM, an arcade romset, a floppy game with its `.m3u`, a DOS game whose CD image sits in a folder below
-that top level, a lone `.bin`, an `.img` without its `.ccd`. Nothing in those says the zip has to be unpacked, and the
-emulators for most of them read the zip as it is.
+around it. In either case the `__MACOSX` folder macOS Finder adds to a zip it makes is ignored and not unpacked.
+Anything else stays the zip it is: a cartridge ROM, an arcade romset, a floppy game with its `.m3u`, a DOS game whose CD
+image sits in a folder below that top level, a lone `.bin`, an `.img` without its `.ccd`. Nothing in those says the zip
+has to be unpacked, and the emulators for most of them read the zip as it is.
 
 After the byte transfer finishes, the download button and the QAM queue show a brief **Extracting…** phase with its own
 progress (the percentage climbs back from 0 as the archive unpacks — a large Switch or disc image takes a moment). The

@@ -353,9 +353,8 @@ class DownloadFileAdapter:
         writing any byte. Raises ``ValueError`` on any escape attempt.
 
         Every member lands where ``unpacked_name`` (``domain/served_shape.py``)
-        places it for *strip_prefix* and *ignored_top_folders* — the wrapper and
-        any separator after it off, nothing for a member under an ignored folder
-        or for the wrapper's own entry — and the check above runs on that name.
+        places it for *strip_prefix* and *ignored_top_folders*, and the check
+        above runs on that name.
 
         When *progress_callback* is supplied it is invoked with
         ``(extracted, total)`` uncompressed byte counts after each chunk

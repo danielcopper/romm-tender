@@ -1561,15 +1561,15 @@ directory is read (no decompression) and the zip is unpacked when a member at it
 level of a zip that holds nothing but one folder being that folder's, and macOS Finder's `__MACOSX/` folder ignored
 (`holds_disc_image` and `wrapper_prefix`, `domain/served_shape.py`; the first also says why an `.m3u` and a disc image
 in a subfolder do not count, and directory-only entries count on neither RomM's listing nor the local one); a file that
-does not open as a zip is kept as it is. A wrapped zip's content is unpacked without the wrapper folder and without
-`__MACOSX/` (`extract_zip`'s `strip_prefix` and `ignored_top_folders`, each member placed by `unpacked_name` and the
-ZIP-slip check judging that name), so it lands — and collapses for ES-DE — as an unwrapped zip's would. From there it
-takes the multi-file path step for step — `DownloadUnpacker.unpack_and_record` is the one implementation both call:
-bounded by the system's own ROM folder, unpacked into `<roms>/<system>/<resolve_extract_dir_name>`, PS3-healed, the M3U
-and launch-file rules, the ES-DE collapse rename, recorded with `file_path=<launch file>` and `rom_dir=<folder>`, the
-zip removed. Only the multi-file path URL-decodes the unpacked names: RomM writes them encoded into the zip it builds,
-while a user's own zip holds the names its maker chose. Whatever sat at the zip's own path — a replaced file, or this
-ROM's earlier copy — goes only once that install is recorded.
+does not open as a zip is kept as it is. Every single zip is unpacked without `__MACOSX/`, and a wrapped one without its
+wrapper folder too (`extract_zip`'s `ignored_top_folders` and `strip_prefix`, each member placed by `unpacked_name` and
+the ZIP-slip check judging that name), so a wrapped zip lands — and collapses for ES-DE — as an unwrapped zip's would.
+From there it takes the multi-file path step for step — `DownloadUnpacker.unpack_and_record` is the one implementation
+both call: bounded by the system's own ROM folder, unpacked into `<roms>/<system>/<resolve_extract_dir_name>`,
+PS3-healed, the M3U and launch-file rules, the ES-DE collapse rename, recorded with `file_path=<launch file>` and
+`rom_dir=<folder>`, the zip removed. Only the multi-file path URL-decodes the unpacked names: RomM writes them encoded
+into the zip it builds, while a user's own zip holds the names its maker chose. Whatever sat at the zip's own path — a
+replaced file, or this ROM's earlier copy — goes only once that install is recorded.
 
 The question "what does this game become on disk" is asked of one function, `served_shapes` (`domain/served_shape.py`),
 and every site that needs the answer asks it: the download's target gate claims both paths for a single zip — the zip

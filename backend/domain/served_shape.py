@@ -34,9 +34,11 @@ ZIP_EXT = ".zip"
 _SEPARATORS = frozenset("/\\")
 _FIRST_FOLDER = re.compile(r"[^/\\]+[/\\]")
 
-# macOS Finder puts the resource forks of a folder it compresses under a
-# top-level ``__MACOSX/`` folder; no emulator reads them, so they are neither
-# counted nor unpacked.
+# macOS Finder's Compress (Archive Utility, which zips as ``ditto -c -k
+# --sequesterRsrc`` does — see ``man ditto``) stores each file's resource fork
+# and extended attributes as an AppleDouble ``._<name>`` file under a top-level
+# ``__MACOSX/`` folder. No emulator reads them, so they are neither counted nor
+# unpacked from a single zip.
 IGNORED_TOP_FOLDERS: frozenset[str] = frozenset({"__MACOSX"})
 
 
@@ -59,17 +61,23 @@ def _counted(member_names: Iterable[str]) -> list[str]:
     ]
 
 
-def unpacked_name(name: str, prefix: str, ignored: frozenset[str] = IGNORED_TOP_FOLDERS) -> str:
+def unpacked_name(name: str, prefix: str, ignored: frozenset[str] = frozenset()) -> str:
     """Where member *name* lands in the folder a zip wrapped in *prefix* unpacks into, or ``""`` for nowhere.
 
     The wrapper and any separator left after it come off, so ``Game//Game.bin``
-    lands as ``Game.bin``; a member under one of the *ignored* top folders and
-    the wrapper's own entry land nowhere. With no prefix and nothing ignored —
-    a multi-file ROM's zip — every name lands as it is.
+    lands as ``Game.bin``. Nowhere: a member under one of the *ignored* top
+    folders, and — with a prefix — a directory-only entry, the wrapper's own
+    included, which would otherwise land as an empty file where its name ends
+    in a ``\\``. With no prefix and nothing ignored, the default and a
+    multi-file ROM's zip, every name lands as it is.
     """
     if _top_folder(name) in ignored:
         return ""
-    return name.removeprefix(prefix).lstrip("/\\") if prefix else name
+    if not prefix:
+        return name
+    if name[-1:] in _SEPARATORS:
+        return ""
+    return name.removeprefix(prefix).lstrip("/\\")
 
 
 def is_zip_name(name: str) -> bool:

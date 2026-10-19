@@ -6892,16 +6892,25 @@ class TestASingleZipHoldingADisc:
             "Game.m3u",
         ]
 
-    async def test_a_wrapper_beside_an_empty_folder_entry_still_unpacks_flat(self, downloads, roms):
+    async def test_a_wrapper_beside_a_backslash_folder_entry_unpacks_flat_without_it(self, downloads, roms):
+        # zipfile reads only a trailing "/" as a directory, so the local listing
+        # keeps "Extras\\" as a member — it must neither hide the wrapper nor land
+        # as an empty file in the game's folder.
         members = {f"Game/{name}": data for name, data in _SATURN_SET.items()}
-        members["Extras/"] = b""
+        members["Extras\\"] = b""
 
         await self._download(downloads, roms, members)
 
+        folder = roms / "saturn" / "Game.m3u"
         installed = downloads.uow.rom_installs.get(77)
         assert installed is not None
-        assert installed.file_path == str(roms / "saturn" / "Game.m3u" / "Game.m3u")
-        assert (roms / "saturn" / "Game.m3u" / "Game.cue").exists()
+        assert installed.file_path == str(folder / "Game.m3u")
+        assert sorted(p.name for p in folder.iterdir()) == [
+            "Game (Track 1).bin",
+            "Game (Track 2).bin",
+            "Game.cue",
+            "Game.m3u",
+        ]
 
     async def test_a_dos_game_in_a_wrapper_folder_with_its_cd_is_kept(self, downloads, roms):
         members = {"Game/GAME.EXE": b"MZ", "Game/cd/game.cue": b"FILE", "Game/cd/game.bin": b"\x00" * 64}
