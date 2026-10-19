@@ -551,8 +551,8 @@ class LibraryFetcher:
         (``predict_unit_skip`` — a stamp present and not revoked
         (``stamp_for_skip``) that records what the gate compares RomM's answer
         with, rows carrying the stamp's fetch generation, bound rows, no
-        group-key backfill pending) and derive the persisted post-collapse shortcut count
-        (``collapsed_shortcut_count`` over the rows' sibling-group keys + bound
+        group-key backfill pending) and derive the persisted post-collapse
+        shortcut count (``collapsed_shortcut_count`` over the rows' sibling-group keys + bound
         flags). The collapsed count is emitted ONLY for slugs that carry a
         ``PlatformSyncState`` completion stamp the gate would read (#1412): such a
         stamp stands only while the local mirror is complete, so without it a
@@ -627,8 +627,7 @@ class LibraryFetcher:
 
         * ``stamp`` — the platform's completion stamp (``PlatformSyncState``),
           or ``None`` when there is no stamp or its skip was revoked
-          (``stamp_for_skip``). The
-          stamp is the **sole** skip authority
+          (``stamp_for_skip``). The stamp is the **sole** skip authority
           (ADR-0023): it exists iff the platform's most recent apply attempt
           ran to completion, a property no run-scoped ``last_sync`` can carry —
           a completed run says nothing about a platform whose shortcuts were
