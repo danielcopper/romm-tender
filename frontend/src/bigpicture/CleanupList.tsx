@@ -50,7 +50,7 @@ const GAME_OUTCOME: Record<GameOutcome, { text: string; color: string }> = {
   stays: { text: "Game stays", color: GREEN },
   nothing_removed: { text: "Nothing removed", color: KEPT_BLUE },
   removed_with_shortcut: { text: "Game removed, with its shortcut", color: RED },
-  removed: { text: "Game removed", color: RED },
+  removed: { text: "Game removed", color: REMOVED_LIGHT },
 };
 
 const KEPT_REASON: Record<KeptReason, string> = {

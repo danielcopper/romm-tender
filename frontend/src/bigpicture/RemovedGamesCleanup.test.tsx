@@ -1353,8 +1353,13 @@ describe("RemovedGamesCleanup", () => {
       expect(counts(modal)).toEqual(["1 version removed", "1 version kept because a shortcut is on it"]);
     });
 
-    it("draws what is lost in red, what is kept in blue and what is untouched in green", async () => {
-      const modal = await open(threeGames);
+    it("draws what is lost or leaves Steam in red, a record alone in light, what is kept in blue and what stays in green", async () => {
+      const modal = await open({
+        ...threeGames,
+        total: 11,
+        candidate_total: 4,
+        items: [...threeGames.items!, version(61, "Lone Star (USA).zip", "Lone Star", 1)],
+      });
       const colourOf = (row: HTMLElement, text: string): string =>
         within(row)
           .getAllByText(text)
@@ -1372,7 +1377,9 @@ describe("RemovedGamesCleanup", () => {
       expect(colourOf(rowFor(modal, "Moon Patrol (USA) (Proto 2).zip"), "Removed, file deleted")).toBe(asCss(RED));
       expect(colourOf(rowFor(modal, "Moon Patrol"), "Game removed, with its shortcut")).toBe(asCss(RED));
       expect([asCss(RED), asCss(GREEN)]).not.toContain(blue);
-      expect(colourOf(rowFor(modal, "Rally Cup (USA).zip"), "Removed")).not.toBe(asCss(RED));
+      const light = colourOf(rowFor(modal, "Rally Cup (USA).zip"), "Removed");
+      expect([asCss(RED), asCss(GREEN), blue]).not.toContain(light);
+      expect(colourOf(rowFor(modal, "Lone Star"), "Game removed")).toBe(light);
     });
 
     it("keeps a gone version other than the one chosen from the trash icon, from the row's own field", async () => {
