@@ -667,6 +667,133 @@ class TestGetVersionList:
         assert by_id[1]["is_default"] is False
 
 
+def _default_rom_id(result: dict[str, Any]) -> int | None:
+    return next((v["rom_id"] for v in result["versions"] if v["is_default"]), None)
+
+
+class TestTheDefaultReadsTheLiveMainVersionFlag:
+    """The Default badge takes each version's main-version flag from the bound ROM's live answer (#743 D4).
+
+    Every member shares one region, so without a flag the ranking picks rom 1
+    (``game_1`` sorts first); the stored flag names rom 2 throughout.
+    """
+
+    @staticmethod
+    def _seed_group(uow: FakeUnitOfWork) -> None:
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID, regions=("USA",))
+        _seed_rom(uow, rom_id=2, app_id=None, regions=("USA",), is_main_sibling=True)
+        _seed_rom(uow, rom_id=3, app_id=None, regions=("USA",))
+
+    def test_a_pick_made_in_romm_since_the_last_sync_moves_the_default(self, event_loop, service, uow, romm):
+        self._seed_group(uow)
+        romm.roms[1] = {
+            "id": 1,
+            "rom_user": {"is_main_sibling": False},
+            "sibling_roms": [{"id": 2, "is_main_sibling": False}, {"id": 3, "is_main_sibling": True}],
+        }
+
+        assert _default_rom_id(_run(event_loop, service.get_version_list(_APP_ID))) == 3
+
+    def test_a_pick_of_the_bound_version_is_read_off_its_own_rom_user(self, event_loop, service, uow, romm):
+        self._seed_group(uow)
+        romm.roms[1] = {
+            "id": 1,
+            "rom_user": {"is_main_sibling": True},
+            "sibling_roms": [{"id": 2, "is_main_sibling": False}, {"id": 3, "is_main_sibling": False}],
+        }
+
+        assert _default_rom_id(_run(event_loop, service.get_version_list(_APP_ID))) == 1
+
+    def test_a_pick_taken_back_in_romm_leaves_the_ranking_to_decide(self, event_loop, service, uow, romm):
+        self._seed_group(uow)
+        romm.roms[1] = {
+            "id": 1,
+            "rom_user": {"is_main_sibling": False},
+            "sibling_roms": [{"id": 2, "is_main_sibling": False}, {"id": 3, "is_main_sibling": False}],
+        }
+
+        assert _default_rom_id(_run(event_loop, service.get_version_list(_APP_ID))) == 1
+
+    def test_a_stub_without_the_flag_keeps_its_members_stored_flag(self, event_loop, service, uow, romm):
+        self._seed_group(uow)
+        romm.roms[1] = {"id": 1, "rom_user": {"is_main_sibling": False}, "sibling_roms": [{"id": 2}, {"id": 3}]}
+
+        assert _default_rom_id(_run(event_loop, service.get_version_list(_APP_ID))) == 2
+
+    def test_a_member_absent_from_the_live_answer_keeps_its_stored_flag(self, event_loop, service, uow, romm):
+        self._seed_group(uow)
+        romm.roms[1] = {
+            "id": 1,
+            "rom_user": {"is_main_sibling": False},
+            "sibling_roms": [{"id": 3, "is_main_sibling": False}],
+        }
+        romm.roms[2] = {"id": 2}
+
+        assert _default_rom_id(_run(event_loop, service.get_version_list(_APP_ID))) == 2
+
+    def test_a_bound_answer_without_a_rom_user_keeps_the_bound_versions_stored_flag(
+        self, event_loop, service, uow, romm
+    ):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID, regions=("USA",), is_main_sibling=True)
+        _seed_rom(uow, rom_id=2, app_id=None, regions=("USA",))
+        romm.roms[1] = {"id": 1, "sibling_roms": [{"id": 2, "is_main_sibling": False}]}
+
+        assert _default_rom_id(_run(event_loop, service.get_version_list(_APP_ID))) == 1
+
+    def test_a_failed_live_fetch_leaves_the_stored_flags_to_decide(self, event_loop, service, uow, romm):
+        self._seed_group(uow)
+        romm.get_rom_simple_side_effect = ConnectionError("down")
+
+        result = _run(event_loop, service.get_version_list(_APP_ID))
+
+        assert result["server_query_failed"] is True
+        assert _default_rom_id(result) == 2
+
+    def test_a_vanished_bound_version_leaves_the_stored_flags_to_decide(self, event_loop, service, uow, romm):
+        self._seed_group(uow)
+        romm.get_rom_simple_side_effect = RommNotFoundError("HTTP 404: Not Found")
+
+        result = _run(event_loop, service.get_version_list(_APP_ID))
+
+        assert result["bound_vanished"] is True
+        assert _default_rom_id(result) == 2
+
+    def test_a_server_only_version_takes_its_flag_from_its_stub(self, event_loop, service, uow, romm):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID, regions=("USA",))
+        romm.roms[1] = {
+            "id": 1,
+            "rom_user": {"is_main_sibling": False},
+            "sibling_roms": [{"id": 5, "fs_name_no_ext": "game_9", "is_main_sibling": True}],
+        }
+        romm.roms[5] = {"id": 5, "platform_id": 57, "regions": ["USA"], "rom_user": {"is_main_sibling": False}}
+
+        assert _default_rom_id(_run(event_loop, service.get_version_list(_APP_ID))) == 5
+
+    def test_a_server_only_stub_without_the_flag_falls_back_to_its_detail(self, event_loop, service, uow, romm):
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID, regions=("USA",))
+        romm.roms[1] = {
+            "id": 1,
+            "rom_user": {"is_main_sibling": False},
+            "sibling_roms": [{"id": 5, "fs_name_no_ext": "game_9"}],
+        }
+        romm.roms[5] = {"id": 5, "platform_id": 57, "regions": ["USA"], "rom_user": {"is_main_sibling": True}}
+
+        assert _default_rom_id(_run(event_loop, service.get_version_list(_APP_ID))) == 5
+
+    def test_the_live_flag_is_not_written_to_the_stored_row(self, event_loop, service, uow, romm):
+        self._seed_group(uow)
+        romm.roms[1] = {
+            "id": 1,
+            "rom_user": {"is_main_sibling": True},
+            "sibling_roms": [{"id": 2, "is_main_sibling": False}, {"id": 3, "is_main_sibling": False}],
+        }
+
+        _run(event_loop, service.get_version_list(_APP_ID))
+
+        with uow as u:
+            assert [u.roms.get(rom_id).is_main_sibling for rom_id in (1, 2, 3)] == [False, True, False]
+
+
 # ── switch_version ───────────────────────────────────────────────────────
 
 
