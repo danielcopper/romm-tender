@@ -68,3 +68,31 @@ class TestStop:
         gc.collect()
 
         assert [repr(entry.exc_value) for entry in unraisable] == []
+
+
+class TestClosingByHand:
+    """The close a stop makes where ``asyncio.Server`` has no ``close_clients()``, run on every version."""
+
+    async def test_a_connection_being_served_is_closed(self, tmp_path):
+        server = _server(str(tmp_path))
+        await server.start()
+        reader, writer = await asyncio.open_connection("127.0.0.1", server.port)
+        try:
+            # The handler is waiting for a request head that never comes.
+            await asyncio.sleep(0.1)
+            server._close_clients_by_hand()
+            assert await asyncio.wait_for(reader.read(), STOP_BOUND_SECONDS) == b""
+        finally:
+            writer.close()
+            await server.stop()
+
+    async def test_a_handler_that_starts_after_it_closes_its_own_socket(self, tmp_path):
+        server = _server(str(tmp_path))
+        await server.start()
+        server._close_clients_by_hand()
+        reader, writer = await asyncio.open_connection("127.0.0.1", server.port)
+        try:
+            assert await asyncio.wait_for(reader.read(), STOP_BOUND_SECONDS) == b""
+        finally:
+            writer.close()
+            await server.stop()
