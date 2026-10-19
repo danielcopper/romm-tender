@@ -86,7 +86,7 @@ def _compare(stamp: PlatformSyncState, newest_updated_at: datetime | None, rom_i
 
 
 def probe_verdict(stamp: PlatformSyncState, answer: object) -> ProbeVerdict:
-    """Whether RomM's skip-probe answer matches *stamp*: nothing updated after its reference, the same id set.
+    """Judge RomM's skip-probe answer against *stamp*: unchanged when nothing updated after its reference, same ids.
 
     *answer* is RomM's ``/api/roms`` list answer for one platform ordered by
     ``updated_at`` descending with ``limit=1``: ``items[0]`` is the most
