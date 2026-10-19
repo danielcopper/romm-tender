@@ -20,23 +20,45 @@ Four more places sit outside those folders, because none of them holds anything 
 
 Your **games** are not in any of them. Downloaded ROMs, BIOS files and save files live in RetroDECK's own folders,
 exactly as before, and nothing on this page moves them. The one folder outside RetroDECK's that can hold copies of them
-is the recovery folder below.
+is Tender's own folder below.
 
-## The recovery folder
+## Tender's folder
 
-`~/romm-tender-recovery/` is Tender's too, and it holds things of yours: the recovery bundles **Clean Up Removed RomM
-Games** seals before it removes anything, so that what the bundle recorded can be put back by hand. What a bundle holds
-and how to restore from it is under
-[Cleaning up versions removed from RomM](managing-games.md#cleaning-up-versions-removed-from-romm).
+`Tender/` is the folder Tender keeps its own files in, and it holds things of yours. Today that is `recovery/`: the
+recovery bundles **Clean Up Removed RomM Games** seals before it removes anything, so that what the bundle recorded can
+be put back by hand. What a bundle holds and how to restore from it is under
+[Cleaning up versions removed from RomM](managing-games.md#cleaning-up-versions-removed-from-romm). Later versions keep
+the game library, the firmware store, saves and save states beside it.
 
-It sits directly in your home directory on purpose. It is the one folder you are meant to open in a file manager, and a
-folder under `~/.local` is hidden there by default.
+It lies in `~/Tender` unless you choose another place under **Settings › Tender folder**: the internal storage, the root
+of any writable drive mounted under `/run/media/<user>/` (an SD card, a USB drive), or a folder you type in. Tender
+always puts its folder `Tender/` inside the place you choose. A place inside or above an emulator source's ROM folder is
+refused, and so is one inside a system's folder, even where that folder is a link to another drive. Choosing a place
+switches where Tender keeps its files from then on; it does not move what is already in the old folder, and leaves that
+folder where it is unless it holds nothing but Tender's own `.tender-folder` file.
 
-Tender never removes a bundle, and uninstalling Tender leaves the folder where it is.
+Tender creates the folder when it starts, when it is missing and its drive is there, and whenever you choose a place. It
+writes a `.tender-folder` file into every folder it creates. It never removes a bundle, and uninstalling Tender leaves
+the folder where it is.
 
-Bundles that versions 0.30 to 0.32 sealed sit in `~/decky-romm-sync-recovery/` instead, are not counted on the Data
-Management page, and are yours to keep or delete — [Recovery bundles](troubleshooting.md#recovery-bundles) has the
-details.
+### When the folder cannot be reached
+
+Once Tender has recorded something it keeps there, the folder must be reachable: its drive connected, the folder present
+and writable. While it is not, Main says so — naming the folder and the reason — and removes nothing. Its two ways out
+are **Choose another place**, which opens the setting, and **Forget what is recorded there**, which, after asking,
+forgets what Tender recorded under that folder and deletes no file. With nothing recorded there, no notice is shown: a
+missing folder is simply created again the next time Tender writes into it, and a write to a drive that is gone is
+refused with the reason.
+
+If your settings are reset while Tender's files are recorded in another folder than the one they name, Main says that
+too, removes nothing, and offers **Use that folder** — which points the setting back at it — or **Forget what is
+recorded there**.
+
+### Older recovery folders
+
+Bundles that versions up to 0.33 sealed sit in `~/romm-tender-recovery/`, and those of versions 0.30 to 0.32 in
+`~/decky-romm-sync-recovery/`. Both stay where they are, are not counted on the Data Management page, and are yours to
+keep or delete — [Recovery bundles](troubleshooting.md#recovery-bundles) has the details.
 
 ## What an update keeps
 
@@ -109,8 +131,8 @@ and logs the program, database and cache folders, so the **last** `host: code �
 thing. Look for the last one rather than the first: the log is appended to across runs, so the top of the file belongs
 to an older start.
 
-The recovery folder follows none of the `TENDER_*` or `XDG_*` variables: it is always `romm-tender-recovery` directly in
-your home directory, wherever the folders above have gone.
+Tender's folder follows none of the `TENDER_*` or `XDG_*` variables: it lies where **Settings › Tender folder** says,
+`~/Tender` unless you chose another place, wherever the folders above have gone.
 
 ## Coming from an older version
 

@@ -208,7 +208,8 @@ The confirmation options apply to this run only:
   can be rebuilt by hand. Switch it off to limit the run to individual versions of games that still exist; the list
   still shows every game, and those games read **Nothing removed**.
 - **Back up before removing** is on. It seals saves, playtime and the shortcut's Steam details in a recovery bundle
-  under `~/romm-tender-recovery/bundles/` before anything changes. Leaving it on is what makes whole-game removal
+  under `recovery/bundles/` in Tender's folder before anything changes — where that folder lies is
+  [Where your data lives](where-your-data-lives.md#tenders-folder). Leaving it on is what makes whole-game removal
   reversible by hand; turning it off asks you to confirm separately, with **I understand there is no recovery bundle**
   under it, and switches every file backup off.
 - **Back up downloaded game files too** switches on the **Back up file** switch of every row whose downloaded file the

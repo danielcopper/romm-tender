@@ -418,12 +418,16 @@ recovery off requires a separate acknowledgement toggle before the run can start
 ROM, and the selected size against every deleted file's and the free space, and blocks confirmation when space is
 insufficient.
 
-The root is `~/<package-name>-recovery`, with the package name taken from `PACKAGE_NAME` (`domain/identity.py`) and
-path-sanitized (today: `~/romm-tender-recovery`). Reading free space must not create that layout — a read-only preview
-stats the nearest existing parent, and the directories appear only when a bundle is actually written. The root's own
-`README.txt`, which explains what the folder is, is written by the same layout-creating step for the same reason: the
-only moment the root is known to be wanted is the one that creates it. It is best-effort, because a bundle must never
-fail to seal over its folder's signpost.
+The root is `recovery/` inside Tender's folder (`adapters/recovery_bundle.py`, `RECOVERY_FOLDER_NAME`), asked at every
+call, so it follows the place **Settings › Tender folder** names; bundles an older version sealed under
+`~/romm-tender-recovery/` are left where they are and not counted. The folder itself is never created by the bundle
+adapter: before each seal the cleanup has the folder's owner make it ready (`TenderFolderService.do_prepare_for_write`),
+which creates a missing folder with its id file, or refuses with `folder_unreachable` where its drive is gone or it
+cannot be written — that group then fails with `recovery_failed` and the reason, and nothing of it is removed. Reading
+free space must not create that layout — a read-only preview stats the nearest existing parent, and the directories
+appear only when a bundle is actually written. The root's own `README.txt`, which explains what the folder is, is
+written by the same layout-creating step for the same reason: the only moment the root is known to be wanted is the one
+that creates it. It is best-effort, because a bundle must never fail to seal over its folder's signpost.
 
 A bundle records the complete pre-cascade state in lossless JSON: the ROM aggregate, install and metadata state,
 save-sync baselines and files, playtime including pending sessions, completion stamps, Tender's cache files, and

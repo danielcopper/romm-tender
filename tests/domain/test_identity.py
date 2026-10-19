@@ -143,8 +143,7 @@ class TestTheDisplayName:
 class TestTheIdentifierStaysInSeparatePlaces:
     """``PACKAGE_NAME`` and ``APP_DIR_NAME`` spell one string and answer two questions; ``DB_FILENAME`` a third.
 
-    ``PACKAGE_NAME`` names the package a server is told about and the recovery
-    folder a bundle is written into; ``APP_DIR_NAME`` names the directories the
+    ``PACKAGE_NAME`` names the package a server is told about; ``APP_DIR_NAME`` names the directories the
     user's own library lives in, and ``DB_FILENAME`` the file it is in there.
     The first is free to be renamed with the package. The other two are not: a
     rename moves every user's library on the next start, or leaves it under a

@@ -38,10 +38,10 @@ reading of Steam (`SteamInterfaceReader`) — and what the host needs from the `
 `BackendBuild`: the dispatcher, the identity and `shutdown`.
 
 What `bootstrap()` does NOT read is the program's own name and version: they are constants in `domain/identity.py`,
-imported directly, and the outgoing User-Agent and the recovery root's name are composed from them. No seam, adapter or
-Protocol stands between the two. The road not taken is a reader — a manifest under `directories.code_dir`, parsed at
-boot behind a Protocol — and what it costs is a failure mode: a read has to answer something when the file is missing,
-and the fallback it answers with travels all the way out to a server's token list. A constant cannot be missing.
+imported directly, and the outgoing User-Agent is composed from them. No seam, adapter or Protocol stands between the
+two. The road not taken is a reader — a manifest under `directories.code_dir`, parsed at boot behind a Protocol — and
+what it costs is a failure mode: a read has to answer something when the file is missing, and the fallback it answers
+with travels all the way out to a server's token list. A constant cannot be missing.
 
 **`run()` is synchronous, and that is load-bearing.** Everything it does is path and environment work that belongs
 before a loop exists — and the admission token has to be minted before the first log line, since the formatter that

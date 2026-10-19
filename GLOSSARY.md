@@ -73,7 +73,9 @@ The program has two names, and they are not interchangeable. The **display name*
 a toast's sender, the label on the Client API Token in their RomM account, the client a registered device is listed
 under, the headline of a README they open by hand. The **identifier** is `romm-tender`: the one a machine spends —
 folder names, the outgoing `User-Agent`, the `localStorage` breadcrumb key. A new string picks by its reader, never by
-which one looks better in place.
+which one looks better in place. Folder names take the identifier where the folder is hidden — Tender's directories
+under `~/.config`, `~/.local` and the rest; the one folder a user is meant to open, **Tender's folder**, takes the
+display name (`Tender/`).
 
 Both live in `backend/domain/identity.py`, beside `VERSION` — which is the release this is, not a name at all. Three
 constants in one module is not a fold: they are three different values, so no edit to one reproduces another by
@@ -88,8 +90,7 @@ the rule under it are one thing, so the headline is interpolated and the underli
 The identifier has **four** homes, separate because they answer four questions that must stay free to disagree:
 
 - `APP_DIR_NAME` (`domain/user_data_location.py`) — the name every directory the program derives for itself carries.
-- `PACKAGE_NAME` (`domain/identity.py`) — the recovery root and the `User-Agent`, both through bootstrap, and nothing
-  else.
+- `PACKAGE_NAME` (`domain/identity.py`) — the `User-Agent`, through bootstrap, and nothing else.
 - `SESSION_BREADCRUMB_KEY` (`frontend/src/utils/sessionManager.ts`) — the `localStorage` key naming the open-session
   breadcrumb, so a rename orphans every row written under the old one.
 - `DB_FILENAME` (`bootstrap/adapters.py`) — the name of the database file in the data root, so a rename that no start-up
@@ -133,14 +134,12 @@ installed, and the bin root is shared with every other program the user installe
 name of ours. The bin root has no XDG variable either: the basedir spec names the path, so its ladder is
 `TENDER_BIN_DIR` and then the built-in default. Every reader takes the seven off the one `AppDirectories` the entry
 point resolved, which reaches `bootstrap()` as an argument and the services as `WiringConfig.directories`; apart from
-the recovery root, nothing composes a directory of its own from a home or a folder name. `resolve_directories` has
-exactly one caller (`main.py`), and `config_root` / `data_root` have none left.
+Tender's folder, nothing composes a directory of its own from a home or a folder name. `resolve_directories` has exactly
+one caller (`main.py`), and `config_root` / `data_root` have none left.
 
-One folder named after the program is written outside the seven: the root of the [recovery bundles](#recovery-bundle),
-directly under the home directory, its name built from `PACKAGE_NAME` (see
-[the identifier's homes](#display-name-tender-vs-identifier-romm-tender)). It is not a root resolved from the
-environment, and it sits where it does because it is the one folder a user is meant to open in a file manager — a folder
-under `~/.local` is hidden there by default.
+One folder named after the program is written outside the seven: [Tender's folder](#tenders-folder), `~/Tender` unless
+the user chose another place. It is not a root resolved from the environment, and it sits where it does because it is
+the one folder a user is meant to open in a file manager — a folder under `~/.local` is hidden there by default.
 
 _Avoid_: **Decky-assigned directory** — those were named after the folder Decky Loader installed Tender into, which is
 what made the data move on a rename, and nothing derives a directory from a folder name any more. Also avoid: plugin
@@ -1081,6 +1080,23 @@ collection's listing carried, and it has no revoked state. What sets it and whic
 A checksum-verified, atomically sealed pre-mutation snapshot created by explicit Prune. It records the affected local
 aggregate state and selected/mandatory recoverable files for manual recovery; it is not a database export or an
 automatic restore point. Finalization revalidates both the sealed bytes and their source state before deleting anything.
+Bundles are sealed into `recovery/` inside [Tender's folder](#tenders-folder); they are not **records** in that entry's
+sense — Tender lists them from the folder and keeps no record of them.
+
+### Tender's folder
+
+`Tender/`, the one folder Tender keeps its own files in, inside a **place** the user chooses: no choice is the internal
+default, the home folder (`~/Tender`); a choice holds the place and the **mount point** it lay on, stored in
+`settings.json` under `tender_folder` (`domain/tender_folder.py`). Its subfolders belong to the stores that write them —
+`recovery/` today. Every folder Tender creates carries `.tender-folder`, holding the id Tender keeps in `kv_config`.
+
+Something **recorded under** a folder is what a store keeps a path of there — a download, a firmware file, a save; each
+store answers for itself which folders it holds records under, and forgets its records under one when the user asks
+(`TenderFolderRecordReader`). The folder is **unreachable** only while something is recorded under it and its drive is
+not mounted (told by the mount point), the folder is missing, or it cannot be written. With nothing recorded there it is
+never unreachable: a missing folder is created again by the next write, and a write to a drive that is gone is refused
+on its own. A **drive** is a writable mount directly under `/run/media/<user>/`. _Avoid_: **library folder** for the
+whole of it — the game library is one store inside it.
 
 ### Action token
 
@@ -1113,13 +1129,15 @@ and they are asked in this order:
 
 1. **Update** — an **install attempt** holds the update rule (`blocked_by_update`). Every endpoint that names the
    migration rule names this one too, and so does the migration itself (`migrate_retrodeck_files`).
-2. **Migration** — a RetroDECK home migration is pending (`blocked_by_migration`).
-3. **Sync** — a library sync is in flight, running or cancelling (`sync_active`).
-4. **Prune** — a removed-game cleanup is running (`prune_active`). An endpoint that names this rule holds an
+2. **Folder** — [Tender's folder](#tenders-folder) is unreachable (`folder_unreachable`, with its `state`). No endpoint
+   names it yet; each store that keeps files there names it at its own entry points.
+3. **Migration** — a RetroDECK home migration is pending (`blocked_by_migration`).
+4. **Sync** — a library sync is in flight, running or cancelling (`sync_active`).
+5. **Prune** — a removed-game cleanup is running (`prune_active`). An endpoint that names this rule holds an
    **operation** named after itself for as long as its call runs (see **Prune conflicts**).
 
 The first named rule that holds refuses the call before its work runs, and a refused call holds nothing. A cleanup's
-exclusive start is asked before all four. A use case asks its endpoint's rules at its entry, so the endpoint only calls
+exclusive start is asked before all five. A use case asks its endpoint's rules at its entry, so the endpoint only calls
 it.
 
 **`<verb>_unchecked`** — the service method an endpoint calls, without that endpoint's rules, for a peer service that

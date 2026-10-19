@@ -229,13 +229,12 @@ locally with `mise run docs`.
   UA with 403, and GitHub's API refuses a request with no UA at all. The three adapters that talk to a server off this
   machine (`adapters/romm/http.py`, `adapters/steamgriddb.py`, `adapters/github_releases.py`) take a `user_agent: str`
   ctor param; bootstrap threads `<package name>/<version>`, both halves from `domain/identity.py` — no hardcoded name
-  and no hardcoded version at the format site, so the UA and the recovery root come from that one module rather than
-  from two literals that could drift (the root additionally through `sanitize_package_name`, which is the identity for a
-  name shaped like this one). Those two are everything `PACKAGE_NAME` reaches; the folder the program ships as is not
-  decided by it. **The UA has no fallback and no failure mode**: both halves are constants, so a UA naming anything but
-  this program is a code change, never a deployment accident. `VERSION` is machine-stamped by release-please
-  (`x-release-please-version` on its line) and never edited by hand. `adapters/renderer_gc.py` also speaks HTTP — to
-  Steam's debugger on `localhost` — and takes none.
+  and no hardcoded version at the format site, so the UA comes from that one module rather than from two literals that
+  could drift. The UA is everything `PACKAGE_NAME` reaches; neither the folder the program ships as nor the recovery
+  bundles' root (`recovery/` inside Tender's folder) is decided by it. **The UA has no fallback and no failure mode**:
+  both halves are constants, so a UA naming anything but this program is a code change, never a deployment accident.
+  `VERSION` is machine-stamped by release-please (`x-release-please-version` on its line) and never edited by hand.
+  `adapters/renderer_gc.py` also speaks HTTP — to Steam's debugger on `localhost` — and takes none.
 - **Large payloads**: two caps, and they fail differently — `host/dispatch.py` refuses an encoded answer over ~12 MiB as
   an ordinary error for that one call, while `host/connection.py` closes the socket on a frame over 16 MiB, which
   rejects every call in flight with it. So a bulk payload is chunked rather than sent: per-item endpoints, and bulk
@@ -491,6 +490,17 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `DB_FILENAME` to be string literals (a transform over `PACKAGE_NAME` fails too); the reverse fold through an aliased
   import and the third home, the frontend's `SESSION_BREADCRUMB_KEY`, are prompt-only. The four homes are listed in
   `backend/domain/identity.py`'s module docstring
+- **Tender's folder is unreachable only while a store has recorded something under it; only its owner,
+  `services/tender_folder.py`, creates it, writing its `.tender-folder` id file into every folder it creates; and every
+  write into it is made ready through `TenderFolderService.do_prepare_for_write`, which refuses `folder_unreachable`
+  where the drive is gone, the folder cannot be written, or it is missing while something is recorded under it** — test
+  - prompt-only — `tests/services/test_tender_folder.py` (`TestTheState`, `TestCreatingTheFolder`,
+    `TestPreparingAWrite`, `TestTheFolderRule`), `tests/domain/test_tender_folder.py::TestReachability`,
+    `tests/adapters/test_recovery_bundle.py::test_a_seal_never_creates_tenders_folder` and
+    `tests/services/prune/test_service.py::test_a_bundle_on_a_folder_that_cannot_be_reached_fails_its_group_with_the_reason`.
+    Prompt-only: a new store that writes into the folder calls `do_prepare_for_write` first, answers
+    `TenderFolderRecordReader` and joins the `records` tuple in `bootstrap/services.py`; a use case that touches the
+    folder's files names the folder rule (`folder=True`); no store counts a recovery bundle as a record
 - **No name in the code calls Tender a plugin; a third-party name that must keep the word is excepted by name, whole,
   with its reason** — check — `frontend/eslint.config.js` (`no-restricted-syntax` over every identifier in every file
   ESLint lints, tests and config files included; exceptions `NAMES_NOT_ABOUT_TENDER`), kept live by

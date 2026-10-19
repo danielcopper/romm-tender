@@ -223,6 +223,28 @@ Format: **invariant** — tier — enforced by.
   same class, parses `bootstrap/adapters.py` and fails unless `DB_FILENAME` is a string literal, so
   `f"{PACKAGE_NAME}.db"`, which reproduces today's value exactly, fails too. The rule is also stated at `APP_DIR_NAME`
   and at `DB_FILENAME` themselves, because a diff that folds either opens neither the docstring nor this file
+- **Tender's folder is unreachable only while a store has recorded something under it; only its owner creates it, with
+  its id file; and every write into it is made ready through `TenderFolderService.do_prepare_for_write`** — test +
+  prompt-only — the folder (`domain/tender_folder.py`, `services/tender_folder.py`) lies on a drive that can be taken
+  out, and the two ways of being wrong about that cost differently. Calling a folder with nothing recorded under it
+  unreachable would put a notice on Main and pause work for a drive the user has simply not inserted yet, so the
+  condition counts only where a store answers that it recorded something there (`TenderFolderRecordReader`); with
+  nothing recorded, a missing folder is created again by the next write. Writing into a place without asking would land
+  on the internal drive under an empty mount folder, or fail half-way, so every write goes through
+  `do_prepare_for_write`, which creates a missing folder only where nothing is recorded under it and refuses
+  `folder_unreachable` where the drive is gone (told by the stored mount point) or the folder cannot be written.
+  Creating the folder is the owner's alone because the owner writes `.tender-folder` into every folder it creates,
+  holding the id it keeps in `kv_config`: the recovery bundle adapter opens the folder it is handed and never creates it
+  (`tests/adapters/test_recovery_bundle.py::test_a_seal_never_creates_tenders_folder`), and the cleanup asks the owner
+  before each seal
+  (`tests/services/prune/test_service.py::test_a_bundle_on_a_folder_that_cannot_be_reached_fails_its_group_with_the_reason`).
+  `tests/services/test_tender_folder.py` pins the rest: `TestTheState` (unreachable only with records, for each of the
+  three conditions), `TestCreatingTheFolder` (start, id file, a drive that is gone, a recorded folder),
+  `TestPreparingAWrite` and `TestTheFolderRule`. Prompt-only: no store records anything under the folder yet, so a new
+  store that writes there must call `do_prepare_for_write` first, answer `TenderFolderRecordReader` and join the
+  `records` tuple in `bootstrap/services.py`, and a use case that touches the folder's files names the folder rule
+  (`folder=True`); a recovery bundle is never a record — Tender lists bundles from the folder and keeps no record of
+  them
 - **No name in the code calls Tender a plugin; a third-party name that must keep the word is excepted by name, whole,
   with its reason** — check — Tender stopped being a Decky Loader plugin when the backend began hosting itself, and a
   name that still says "plugin" teaches its reader the old model: that something loads Tender and owns its life cycle,

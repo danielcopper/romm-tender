@@ -8,8 +8,7 @@ and the fourth says which servers it will talk to at all.
   headline of a file they open by hand.
   Never a path component, a header value, a storage key or a folder.
 - :data:`PACKAGE_NAME` is what a MACHINE reads about who is calling — the
-  outgoing User-Agent, and the name of the recovery root a bundle is written
-  into.
+  outgoing User-Agent.
 - :data:`VERSION` is which RELEASE this is. Five consumers today, and the list
   is meant as one: the other half of that User-Agent, the ``plugin_version``
   recorded in a recovery bundle's manifest, the running version the update
@@ -33,10 +32,9 @@ one, because it answers four questions that have to stay free to disagree:
   follow :data:`PACKAGE_NAME`: were it read from either, editing one line would
   move every user's library on the next start, with nothing failing and nothing
   said.
-- :data:`PACKAGE_NAME` reaches the recovery root and the outgoing User-Agent
-  through bootstrap, and those two SHOULD follow the package — a recovery
-  folder is named after whatever wrote it, and a server reading a User-Agent is
-  being told which package is calling.
+- :data:`PACKAGE_NAME` reaches the outgoing User-Agent through bootstrap, and
+  that SHOULD follow the package — a server reading a User-Agent is being told
+  which package is calling.
 - ``frontend/src/utils/sessionManager.ts``'s ``SESSION_BREADCRUMB_KEY`` names
   the ``localStorage`` row that carries the open play sessions across a reload.
   It is a key over persisted state, so it follows nothing either: a rename is a
@@ -50,9 +48,8 @@ one, because it answers four questions that have to stay free to disagree:
 
 Fold any two together and one question's answer starts deciding another's, in
 whichever direction the fold happened to point — and each of those failures is
-silent: a library the program cannot find, a recovery folder that no longer
-matches the package that wrote it, a running game whose session is forgotten at
-the next reload.
+silent: a library the program cannot find, a server told about a package that
+is not calling, a running game whose session is forgotten at the next reload.
 
 **Several constants in one module is not a fold.** They are different values,
 so no edit to one can reproduce another by accident. The identically

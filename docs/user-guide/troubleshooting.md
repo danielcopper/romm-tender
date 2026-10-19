@@ -756,8 +756,9 @@ check also verifies the same server/user namespace captured by the preview. Canc
 those actions. This reciprocal block prevents newly downloaded content or recovered state from appearing after recovery
 was captured and then being removed by finalization.
 
-Recovery bundles are under `~/romm-tender-recovery/bundles/`. Older bundles sealed under
-`~/decky-romm-sync-recovery/bundles/` stay where they are — nothing moves them, and both folders are yours to keep or
+Recovery bundles are under `recovery/bundles/` in Tender's folder — `~/Tender/recovery/bundles/` unless you chose
+another place under **Settings › Tender folder**. Older bundles sealed under `~/romm-tender-recovery/bundles/` or
+`~/decky-romm-sync-recovery/bundles/` stay where they are — nothing moves them, and those folders are yours to keep or
 delete. A directory appears there only after every required copy and checksum succeeds, directory durability succeeds
 where supported, and the staging directory is atomically sealed. A post-rename durability failure preserves the
 directory with a `.durability-uncertain` suffix instead of making it look successfully sealed. Before the Steam action
@@ -852,8 +853,8 @@ Tender shows extra warnings if RetroDECK is not whitelisted, since removing it w
 
 ### Recovery bundles
 
-The row counts the snapshots the cleanup sealed under `~/romm-tender-recovery/bundles/`, and states the disk they take.
-Below that total the pane lists each bundle with the game it holds, the day (UTC) it was sealed as its folder name
+The row counts the snapshots the cleanup sealed under `recovery/bundles/` in Tender's folder, and states the disk they
+take. Below that total the pane lists each bundle with the game it holds, the day (UTC) it was sealed as its folder name
 carries it, and its size, newest first. The game is spelled the way the bundle's folder spells it — `Shenmue-II` for
 Shenmue II — so it matches what you see in a file manager. A folder whose name is not in the shape Tender writes — one
 you renamed, or one ending `.durability-uncertain` because its seal could not be confirmed — is listed under its folder
@@ -861,8 +862,9 @@ name, with no day, at the bottom. **Nothing on this page removes one** — they 
 file manager. What a bundle holds is under
 [Cleaning up versions removed from RomM](managing-games.md#cleaning-up-versions-removed-from-romm).
 
-The count covers that folder only. Bundles an older version sealed under `~/decky-romm-sync-recovery/bundles/` are still
-on your disk and are **not** counted here, so a device carrying those has more than this row reports.
+The count covers that folder only. Bundles an older version sealed under `~/romm-tender-recovery/bundles/` or
+`~/decky-romm-sync-recovery/bundles/` are still on your disk and are **not** counted here, so a device carrying those
+has more than this row reports.
 
 ### Per-platform removals moved
 
