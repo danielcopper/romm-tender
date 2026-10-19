@@ -469,9 +469,9 @@ Enumerating a ROM's discs needs two different facts kept separate:
 
 - **Disc identity is format-semantic and hardcoded** — `domain/disc_formats.py` defines `DISC_IMAGE_EXTENSIONS`, the
   irreducible set of launchable disc-image containers: the single-file images and the descriptors of a multi-track set,
-  listed under **Disc** in [GLOSSARY.md](../../GLOSSARY.md#disc). A track file (`.bin`, `.raw`, `.img`, `.sub`, `.mdf`)
-  is a **sidecar** (owned by its descriptor, never launched directly) and an `.m3u` is a **playlist**; both are excluded
-  simply by not being in the set. The disc unit is the image or the descriptor itself, never a track.
+  listed in GLOSSARY.md → Disc. A track file (`.bin`, `.raw`, `.img`, `.sub`, `.mdf`) is a **sidecar** (owned by its
+  descriptor, never launched directly) and an `.m3u` is a **playlist**; both are excluded simply by not being in the
+  set. The disc unit is the image or the descriptor itself, never a track.
 - **The per-system accept-list is a capability and read live** —
   `AtlasCatalogueAdapter.get_supported_extensions(system)` (`adapters/atlas_catalogue.py`) returns the system's
   es_systems `<extension>` set, lowercased, threaded into the resolver through the `SystemSupportedExtensionsFn`
