@@ -169,13 +169,16 @@ class AdoptionRenamer:
         moved = frozenset(outcome["moved"])
         return (stopped, tuple(pair for pair in to_move if pair.target in moved), quarantined)
 
-    def discarded_save_pairs(self, rom_id: int, target: Target, source_path: str) -> tuple[RenamePair, ...]:
+    def discarded_save_pairs(
+        self, rom_id: int, target: Target, source_path: str, *, may_unpack: bool
+    ) -> tuple[RenamePair, ...]:
         """The save and savestate pairs a discarded candidate leaves behind, ROM excluded.
 
         The ROM itself is being deleted rather than renamed, so its pair is
         dropped and only what RetroArch named after it travels.
 
-        Empty for a **multi-file** ROM, and that is a limit rather than an
+        Empty for a **multi-file** ROM, and for one whose download *may_unpack*
+        (a single zip, ``served_shapes``), and that is a limit rather than an
         oversight. A directory ROM's saves are named after the launch file
         *inside* it, and the launch file the download will produce sits in an
         archive that has not been fetched yet — so the name those saves would have
@@ -183,7 +186,7 @@ class AdoptionRenamer:
         launch name would strand them under a name nothing reads, which is worse
         than leaving them where they are: untouched, and still findable.
         """
-        if target.is_multi:
+        if target.is_multi or may_unpack:
             self._logger.info(
                 f"Leaving rom {rom_id}'s saves under their current names: the downloaded directory's "
                 f"launch file is not known until it is extracted"

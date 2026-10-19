@@ -1,11 +1,11 @@
 """What a download does once its bytes are on disk: keep the file, or unpack it into a folder.
 
-A multi-file ROM always arrives as a zip and is unpacked; a single file is kept
-as it is unless it is a zip holding a disc image (``domain/served_shape.py``),
-which is unpacked by exactly the same steps. Either way the folder ends up with
-its playlist, its launch file and its ES-DE name, and is recorded as the
-install. A download that recorded nothing leaves its partial files and the
-folders it created here too, to be removed.
+A multi-file ROM arrives as a zip and is always unpacked. A single file is kept
+as it is, unless it is a zip that holds a disc image (``holds_disc_image``,
+``domain/served_shape.py``); that zip is unpacked by the same steps. An
+unpacked folder gets its playlist, its launch file and its ES-DE name, and is
+recorded as the install. Removing what a download that recorded nothing left
+behind — its partial files and the folders it created — is here too.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.disc_formats import DISC_IMAGE_EXTENSIONS
+from domain.disc_selection import one_descriptor_per_disc
 from domain.disk_space import NotEnoughSpaceToUnpack, unpack_space_verdict
 from domain.retrodeck_folders import EveryFolderRefused, FolderRefused, folder_of
 from domain.rom_candidates import DIR
@@ -52,7 +53,7 @@ class DownloadUnpackerConfig:
 
 
 class DownloadUnpacker:
-    """Turns a finished transfer into a recorded install. Every method blocks; the download service offloads them."""
+    """Turns a finished transfer into a recorded install. Every method blocks; the service calls each off the loop."""
 
     def __init__(self, *, config: DownloadUnpackerConfig) -> None:
         self._download_file_store = config.download_file_store
@@ -64,12 +65,15 @@ class DownloadUnpacker:
     def kept_download_complete(self, target_path: str, rom_detail: dict[str, Any]) -> bool:
         """Whether a zip this ROM downloads already sits whole in its partial file.
 
-        A failed unpack keeps the downloaded zip for a retry, and the retry
-        unpacks it rather than fetching it again. Whole means it opens as a zip:
-        the central directory sits at its end, so a transfer cut short has none.
-        A single file must also be exactly the size RomM states, because a resume
-        of a whole file asks for a range past its end, which a server refuses.
-        Only a zip qualifies — any other single file is no archive to open.
+        The download service asks before every transfer and unpacks a whole one
+        without fetching it: a failed unpack keeps the downloaded zip for a
+        retry, and a download paused after its last byte has nothing left to
+        fetch — a resume would ask for a range past its end, which a server
+        refuses. Whole means it opens as a zip: the central directory sits at its
+        end, so a transfer cut short has none. A single zip must also be exactly
+        the size RomM states, so that a whole zip of something else under this
+        name is fetched again rather than unpacked as this game. Only a zip
+        qualifies — any other single file is no archive to open.
         """
         if is_multi_file_download(rom_detail):
             path = target_path + ZIP_TMP_EXT
@@ -104,6 +108,7 @@ class DownloadUnpacker:
             members=self._download_file_store.list_archive_members(archive),
             progress_callback=progress_callback,
             reserved_bytes=reserved_bytes,
+            decode_names=True,
         )
 
     def finish_single(
@@ -141,6 +146,7 @@ class DownloadUnpacker:
                 members=members,
                 progress_callback=progress_callback,
                 reserved_bytes=reserved_bytes,
+                decode_names=False,
             )
             if error is None:
                 self._remove_replaced_file(target_path)
@@ -161,8 +167,7 @@ class DownloadUnpacker:
         """The members of a downloaded single zip that is to be unpacked, or ``None`` to keep it as it is.
 
         The zip's own central directory decides (:func:`holds_disc_image`); a
-        file that does not open as a zip is kept, as every single file was before
-        a zip could be unpacked. One more case keeps it: RomM listed members
+        file that does not open as a zip is kept as it is. One more case keeps it: RomM listed members
         that named no disc image, so the target gate never asked about the
         folder this would unpack into, and something already sits there. Nothing
         is unpacked over content nobody was asked about.
@@ -198,6 +203,7 @@ class DownloadUnpacker:
         members: tuple[ArchiveMemberInfo, ...] | None,
         progress_callback: ProgressCallback,
         reserved_bytes: int,
+        decode_names: bool,
     ) -> tuple[str | None, str | None]:
         """Unpack the downloaded *archive* into *extract_dir* and record the folder as the install.
 
@@ -209,7 +215,10 @@ class DownloadUnpacker:
 
         *members* is what the archive's central directory lists, and decides
         whether its contents fit (*reserved_bytes* being what other downloads
-        have claimed). Too little space raises :class:`NotEnoughSpaceToUnpack`
+        have claimed and not yet written). *decode_names* URL-decodes the
+        unpacked names, which only RomM's own zip of a multi-file ROM needs: it
+        writes them encoded, while a user's zip holds the names its maker chose,
+        a literal ``%20`` included. Too little space raises :class:`NotEnoughSpaceToUnpack`
         before anything is written, with the archive left where it is for a
         retry. ``None`` — a file that would not open as a zip — skips the check,
         and the extraction then raises. Any failure from the first directory it
@@ -239,16 +248,15 @@ class DownloadUnpacker:
             # AND that extract_dir itself resolves within the system's folder.
             self._download_file_store.extract_zip(archive, extract_dir, folder, progress_callback=progress_callback)
             self._download_file_store.remove_file(archive)
-            self._download_file_store.decode_url_encoded_names(extract_dir)
+            if decode_names:
+                self._download_file_store.decode_url_encoded_names(extract_dir)
             # Heal a folder-boot disc dump whose PS3_DISC.SFB ships .txt-suffixed,
             # before launch detection reads the layout (ADR-0019 / #1212).
             self.heal_ps3_sfb(extract_dir)
             # Whether ES-DE lists .m3u for this system (gates both M3U generation and
             # launch-file selection so a RomM-bundled .m3u is ignored on Switch/Xbox).
             m3u_supported = self._m3u_support(system)
-            # Auto-generate M3U if missing and multiple disc files exist
             self.generate_m3u(extract_dir, rom_detail, m3u_supported)
-            # Detect launch file: prefer M3U > a track descriptor > largest file
             launch_file = self.detect_launch_file(extract_dir, m3u_supported)
             # ES-DE collapses a multi-file dir into one game entry only when the
             # dir is named after the launch file *including* the extension. The
@@ -292,9 +300,8 @@ class DownloadUnpacker:
 
         *extract_dir_name* is the same ROM-identity-derived base name extraction
         created the staging dir under (the download service's
-        ``_resolve_safe_extract_dir_name``), so
-        cleanup targets exactly that dir rather than re-deriving it from a stale
-        source. A single zip's is not removed here: whether it was unpacked at
+        ``_resolve_safe_extract_dir_name``), so cleanup targets exactly that dir
+        rather than re-deriving it from a stale source. A single zip's is not removed here: whether it was unpacked at
         all is known only inside the unpack, which removes its own directory on
         failure, and a folder of that name it never created is not this
         download's to delete.
@@ -314,8 +321,9 @@ class DownloadUnpacker:
         Each removal is independent so one failure doesn't block the other, and a
         missing partial is not an error. The bare ``target_path`` is NEVER touched
         — only the transient transfer artifacts. Shared by
-        ``_cleanup_partial_download`` (running-cancel / failure) and the
-        paused-cancel path, which has no live task in scope to name the extension.
+        :meth:`remove_partial_download` (running-cancel / failure) and the
+        download service's paused-cancel path, which has no live task in scope
+        to name the extension.
         """
         for path in (target_path + ZIP_TMP_EXT, target_path + TMP_EXT):
             try:
@@ -401,11 +409,11 @@ class DownloadUnpacker:
         if any(path.lower().endswith(".m3u") for path, _size in all_files):
             return
 
-        # Collect disc files (the DISC_IMAGE_EXTENSIONS set; search recursively).
+        # Collect disc files (the DISC_IMAGE_EXTENSIONS set; search recursively), one per disc.
         disc_suffixes = tuple(DISC_IMAGE_EXTENSIONS)
-        disc_files = [
-            os.path.relpath(path, extract_dir) for path, _size in all_files if path.lower().endswith(disc_suffixes)
-        ]
+        disc_files = one_descriptor_per_disc(
+            [os.path.relpath(path, extract_dir) for path, _size in all_files if path.lower().endswith(disc_suffixes)]
+        )
 
         if not needs_m3u(disc_files, m3u_supported):
             return

@@ -91,7 +91,7 @@ def unpack_space_verdict(*, unpacked_size: int, free_space: int, reserved_bytes:
 
 
 class NotEnoughSpaceToUnpack(Exception):
-    """A completed download whose contents do not fit on the card.
+    """A completed download whose contents do not fit on its drive.
 
     Distinct from every other failure because of what it keeps: the downloaded
     file stays where it is, so a retry once space is freed unpacks it without

@@ -322,10 +322,9 @@ export const getSyncRuns = endpoint<[], SyncRunsAnswer>("get_sync_runs");
  * over it, so a page that found a copy can never end in a silent download.
  *
  * `confirmedPaths` lists every `target_occupied` path whose dialog the user
- * answered with Replace. A game served as a single zip claims two paths — the
- * zip and the folder it is unpacked into — and each occupied one gets a dialog
- * of its own; the backend refuses again for one not yet listed and removes
- * nothing until every occupied path is.
+ * answered with Replace. A game served as a single zip can be in the way at two
+ * paths — the zip and the folder it is unpacked into; what the backend removes
+ * for which list is its `replace_covers` (`backend/domain/served_shape.py`).
  */
 export const startDownload = endpoint<
   [number, boolean, string | null, CollisionChoice | null, boolean, (string[] | null)?],

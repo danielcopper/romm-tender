@@ -3407,7 +3407,12 @@ class TestASingleZipsUnpackedFolder:
 
         with pytest.raises(TargetOccupied):
             await h.service.check_download_target(
-                _single_file_detail(name="Game.zip"), self._ZIP, replace=True, resume=True, folder_path=self._FOLDER
+                _single_file_detail(name="Game.zip"),
+                self._ZIP,
+                replace=True,
+                resume=True,
+                folder_path=self._FOLDER,
+                confirmed_paths=[self._ZIP, self._FOLDER],
             )
 
         assert f"{self._FOLDER}/Game.cue" in h.store.files
@@ -3494,6 +3499,32 @@ class TestASingleZipsUnpackedFolder:
         assert await self._gate(h, replace=True, confirmed_paths=confirmed) is None
 
         assert f"{self._FOLDER}/Game.cue" not in h.store.files
+
+    async def test_a_file_at_the_folders_path_is_removed_once_confirmed(self, h):
+        h.store.files[self._FOLDER] = b"a file named like the folder"
+
+        assert await self._gate(h, replace=True, confirmed_paths=[self._FOLDER]) is None
+
+        assert self._FOLDER not in h.store.files
+
+    async def test_downloading_over_a_namesake_carries_no_saves_while_the_launch_file_is_unknown(self, h):
+        h.system_extensions = {"snes": frozenset({".zip"})}
+        candidate = "/roms/snes/Game (U).zip"
+        h.store.files[candidate] = b"the user's zip"
+        h.store.files["/saves/snes/Game (U).srm"] = b"battery"
+
+        result = await h.service.check_download_target(
+            _single_file_detail(name="Game.zip"),
+            self._ZIP,
+            replace=True,
+            candidate_path=candidate,
+            folder_path=self._FOLDER,
+        )
+
+        assert result is None
+        assert candidate not in h.store.files
+        assert h.store.files["/saves/snes/Game (U).srm"] == b"battery"
+        assert "/saves/snes/Game.srm" not in h.store.files
 
     async def test_adopting_from_the_folders_dialog_takes_the_folder_beside_a_zip(self, h):
         h.seed_rom()

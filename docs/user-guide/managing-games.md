@@ -409,10 +409,13 @@ One case the dialog cannot help with: the folder or file in the way is the wrong
 server serves a single file, or the reverse. The dialog says so and only offers replace or cancel.
 
 A disc game your server keeps as a single zip has two right shapes: the zip itself, and the folder unpacking it produces
-(see [Multi-Disc and Multi-File Games](#multi-disc-and-multi-file-games)). So a folder you or an earlier download
-unpacked is the same game, and the dialog offers to use it. **Check Against Server** compares such a folder against the
-files your server lists inside the zip; a server that lists none (one not rescanned since RomM 4.9.0) cannot confirm it.
-Only a zip your server lists as holding no disc image has the one shape, the zip.
+(see [Multi-Disc and Multi-File Games](#multi-disc-and-multi-file-games)). So a folder you unpacked yourself, under the
+name the zip unpacks into, is the same game, and the dialog offers to use it. A folder an earlier download unpacked
+carries its launch file's name (`<Game>.m3u/`, say) and is found the way any copy under another name is — see
+[When the same game is on your device under a different name](#when-the-same-game-is-on-your-device-under-a-different-name).
+**Check Against Server** compares such a folder against the files your server lists inside the zip; a server that lists
+none (one not rescanned since RomM 4.9.0) cannot confirm it. Only a zip your server lists as holding no disc image at
+its top level has the one shape, the zip.
 
 When both are on your device — the zip and an unpacked folder — each gets a dialog of its own, one after the other.
 **Use These Files** in either dialog uses the copy that dialog shows. **Download Instead** in the first one opens the
@@ -511,7 +514,8 @@ paused download stays in the active list, not the finished one).
 Resume is only available for **single-file ROMs on a direct connection** — the server has to support resuming a transfer
 from where it left off. Two cases can't resume, so they show only **Cancel** (no Pause/Resume):
 
-- **Multi-file ROMs** (multi-disc or bin/cue titles downloaded as a single ZIP), and
+- **Multi-file ROMs** (games your server stores as several files — multi-disc or bin/cue titles — and sends as one ZIP
+  it builds for the download; a game your server keeps as one zip resumes like any single file), and
 - **Servers behind Cloudflare** (the Cloudflare Tunnel doesn't honour partial-content requests).
 
 In those cases, cancelling and starting over is the only option — but a fresh download is safe, as cancelling never
@@ -529,11 +533,14 @@ Some games ship as more than one file — multi-disc PS1 titles, a base game plu
 downloads these as a single ZIP, which Tender extracts automatically. You just download and play; the layout is handled
 for you.
 
-A disc game your server keeps as **one `.zip`** is unpacked the same way, because an emulator cannot mount a disc from
-inside a zip: a Saturn `.cue` with its `.bin` tracks, a Dreamcast `.gdi` set, a Wii or GameCube `.rvz`, `.wbfs`, `.iso`
-and the like. Tender looks inside the zip once it has arrived; one that holds a disc image or an `.m3u` playlist is
-unpacked, and the zip is removed afterwards. A zip holding anything else — a cartridge ROM, an arcade romset, a lone
-`.bin`, an `.img` without its `.ccd` — stays the zip it is, because those emulators read it as it is.
+A disc game your server keeps as **one `.zip`** is unpacked the same way, because many emulators cannot mount a disc
+from inside a zip: RetroArch hands its core only one file out of the zip, so a Saturn `.cue` finds none of its `.bin`
+tracks, and Dolphin (Wii and GameCube) reads no zip at all. Tender looks inside the zip once it has arrived; one with a
+disc image at the top of the zip — a `.cue` with its tracks, a Dreamcast `.gdi` set, a Wii or GameCube `.rvz`, `.wbfs`,
+`.iso` and the like — is unpacked, and the zip is removed afterwards. Anything else stays the zip it is: a cartridge
+ROM, an arcade romset, a floppy game with its `.m3u`, a DOS game whose CD image sits in a folder inside the zip, a lone
+`.bin`, an `.img` without its `.ccd`. Nothing in those says the zip has to be unpacked, and the emulators for most of
+them read the zip as it is.
 
 After the byte transfer finishes, the download button and the QAM queue show a brief **Extracting…** phase with its own
 progress (the percentage climbs back from 0 as the archive unpacks — a large Switch or disc image takes a moment). The
@@ -554,8 +561,9 @@ single disc in any format but `.cue` gets no generated playlist. Tender decides 
 supported-extension list, so a game only ever gets an `.m3u` on a system where ES-DE (and the emulator behind it)
 actually understands one.
 
-A disc made of tracks launches from the file that lists them — the `.cue`, `.gdi`, `.ccd`, `.toc` or `.mds` — and never
-from one of the tracks.
+A disc made of tracks that gets no playlist launches from the file that describes its tracks — the `.cue`, `.gdi`,
+`.ccd`, `.toc` or `.mds` — and never from one of the tracks. A disc dumped with both a `.cue` and a `.ccd` counts as one
+disc.
 
 **Cartridge and folder systems get no playlist.** Switch (`.nsp`), Xbox 360 (`.iso`), and other systems with no disc
 concept collapse to their real game file instead — the folder is named after the cartridge/disc image (`<Game>.nsp/`,
@@ -567,18 +575,19 @@ folder, so they need no playlist either way.
 
 **Space for unpacking.** An unpacked game needs room for the zip and for what comes out of it at the same time. Where
 your server lists what is inside a single zip — libraries rescanned since RomM 4.9.0 — the check before the download
-counts both; otherwise it counts the zip alone. Once the download is complete, Tender checks again against the size the
-zip itself states, for a single zip and a multi-file download alike. When the card is too full, the download fails with
-**Not enough space to unpack**, nothing is installed, and the downloaded zip is kept: free some space and press
-**Download** again, and Tender unpacks the zip it already has instead of downloading it again. The kept zip does not
-survive a restart of Tender (rebooting the Deck, say) — Tender clears unfinished downloads when it starts, so the next
-download fetches the game again.
+counts both for a zip with a disc image at its top; otherwise it counts the zip alone. Once the download is complete,
+Tender checks again against the size the zip itself states, for a single zip and a multi-file download alike. When the
+storage is too full, the download fails with **Not enough space to unpack**, nothing is installed, and the downloaded
+zip is kept: free some space and press **Download** again, and Tender unpacks the zip it already has instead of
+downloading it again. The kept zip does not survive a restart of Tender (rebooting the Deck, say) — Tender clears
+unfinished downloads when it starts, so the next download fetches the game again.
 
 !!! note "Known limitation"
 
     Games installed **before** this version keep their old folder layout, so ES-DE may still show them as a folder plus
     loose files — or, on cartridge systems, as a stray `.m3u`. A disc game downloaded as a single zip before this version
-    stays a zip. The fix only affects new downloads; re-download the game to get the single clean ES-DE entry.
+    stays a zip, which an emulator that cannot mount a disc from a zip does not start. The fix only affects new downloads;
+    re-download the game to get the single clean ES-DE entry, and an unpacked disc where the zip held one.
 
 ### When a download has nothing launchable
 

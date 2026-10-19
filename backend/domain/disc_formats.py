@@ -16,7 +16,7 @@ per-system capability list (which of these a given emulator can actually
 launch) is read from es_systems and intersected with this set at enumeration
 time — it is NOT hardcoded here. See ADR-0014.
 
-No I/O, no service/adapter/lib imports. A constant only.
+No I/O, no service/adapter/lib imports. Constants only.
 """
 
 from __future__ import annotations
@@ -41,3 +41,9 @@ DISC_IMAGE_EXTENSIONS: frozenset[str] = frozenset(
         ".pbp",
     }
 )
+
+# The descriptors of a multi-track disc, in the order one is preferred where two
+# describe the same disc (a ``.cue`` and a ``.ccd`` beside one ``.img``): each
+# lists its disc's track files, or — ``.ccd`` and ``.mds`` — pairs with them by
+# sharing their basename, and the tracks are never launched themselves.
+TRACK_DESCRIPTORS: tuple[str, ...] = (".cue", ".gdi", ".ccd", ".toc", ".mds")

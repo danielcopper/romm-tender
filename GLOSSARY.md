@@ -439,8 +439,8 @@ The two path fields on `RomInstall` (`domain/rom_install.py`) answer different q
   single `.zip` unpacked into a folder (**served shape**). **NULL for single-file ROMs** kept as they arrived, which
   live as a bare file directly in the shared `<roms>/<system>/` directory and own no dedicated folder.
 
-Single-file vs multi-file is **read from `rom_dir` presence** — never re-derived from the file's parent directory, never
-stored as a separate boolean ([ADR-0008](docs/adr/0008-rom-install-launch-file-and-rom-dir.md)). Migration moves
+Folder-backed vs bare file is **read from `rom_dir` presence** — never re-derived from the file's parent directory,
+never stored as a separate boolean ([ADR-0008](docs/adr/0008-rom-install-launch-file-and-rom-dir.md)). Migration moves
 `rom_dir` whole when set, else the file; uninstall removes `rom_dir` whole when set, else the file. A future per-file
 `RomFile[]` model — one row per physical file, each tagged with a RomM `category` (`game` / `dlc` / `update` / `mod` /
 …) — is the planned shape for the multi-file features in
@@ -526,24 +526,25 @@ single-file-vs-folder question the server answers, and the two are different jud
 
 ### Served shape
 
-What a download of a ROM becomes on disk: a **file**, a **folder**, or either. A ROM RomM stores as several files is a
+What a download of a ROM becomes on disk: a **file**, a **folder**, or both. A ROM RomM stores as several files is a
 folder (it arrives as a zip and is unpacked), and one stored as a single file is a file — except a single `.zip` that
-may hold a disc image, which is both: the file it arrives as and the folder it is unpacked into once the zip's own
-directory has been read. It is a file only when RomM lists its members (`archive_members`) and none is a disc image.
-Decided by `served_shapes` (`domain/served_shape.py`); which sites ask it is
+may hold a disc image at its top level, which is both: the file it arrives as and the folder it is unpacked into once
+the zip's own directory has been read. It is a file only when RomM lists its members (`archive_members`) and none at the
+top level is a disc image. Decided by `served_shapes` (`domain/served_shape.py`); which sites ask it is
 [backend-architecture.md](docs/architecture/backend-architecture.md#downloadservice-notes)'s.
 
 ### Unusable namesake
 
 An entry whose **normalized name** equals the ROM's but which cannot become its install: the other **shape** — a
-directory where RomM serves a single file, or a loose file where it serves a folder — or any `link`. It is deliberately
-**not** an adoption candidate: nothing about it can be taken over, so it is never offered, ranked or renamed. It is
-still reported, because the alternative is a download that silently produces a second copy of the game beside it. The
-dialog's two exits are download-anyway (the server's copy lands beside it, under the server's name) and cancel; neither
-touches the entry. The two reasons are not one reason: a wrong shape is wrong only against what the server sends, so
-that refusal names the served shape, while a `link` is unusable on its own terms and naming a shape beside it would
-suggest the other shape would have taken it. _Avoid_: mismatched candidate, unusable candidate — the whole point is that
-it is not one.
+directory where RomM serves a single file, or a loose file where it serves a folder — or any `link`. A single `.zip`
+that may be unpacked has both shapes (**served shape**), so for it only a `link` is unusable. It is deliberately **not**
+an adoption candidate: nothing about it can be taken over, so it is never offered, ranked or renamed. It is still
+reported, because the alternative is a download that silently produces a second copy of the game beside it. The dialog's
+two exits are download-anyway (the server's copy lands beside it, under the server's name) and cancel; neither touches
+the entry. The two reasons are not one reason: a wrong shape is wrong only against what the server sends, so that
+refusal names the served shape, while a `link` is unusable on its own terms and naming a shape beside it would suggest
+the other shape would have taken it. _Avoid_: mismatched candidate, unusable candidate — the whole point is that it is
+not one.
 
 ### Library
 
@@ -886,21 +887,22 @@ RetroDECK resolve its own command ([ADR-0020](docs/adr/0020-live-es-systems-emul
 The launchable unit of a multi-disc ROM: a single-disc **container** file the emulator opens directly — a single-file
 image (`.chd`, `.iso`, `.cdi`, `.gcm`, `.rvz`, `.wbfs`, `.wia`, `.gcz`, `.ciso`, `.cso`, `.pbp`) or the descriptor of a
 multi-track set (`.cue`, `.gdi`, `.ccd`, `.toc`, `.mds`) — `DISC_IMAGE_EXTENSIONS`, `domain/disc_formats.py`. A disc is
-**not** a track file its descriptor references (`.bin`, `.raw`, `.img`, `.sub`, `.mdf` — raw track data, never launched
-directly) and **not** the `.m3u` playlist (which points at several discs). When a bin/cue PS1 game ships both files, the
-disc is the `.cue`, never the `.bin`. The foil to **disc-image format** (the file-shape category) and **selected disc**
-(the user's per-game pick among the discs).
+**not** one of its track files (`.bin`, `.raw`, `.img`, `.sub`, `.mdf` — raw track data, never launched directly: a
+`.cue`, `.gdi` or `.toc` lists them, a `.ccd` or `.mds` pairs with them by sharing their basename) and **not** the
+`.m3u` playlist (which points at several discs); two descriptors of the same disc are one disc. When a bin/cue PS1 game
+ships both files, the disc is the `.cue`, never the `.bin`. The foil to **disc-image format** (the file-shape category)
+and **selected disc** (the user's per-game pick among the discs).
 
 ### Disc-image format
 
 The format-semantic, emulator-independent category "this file shape is a launchable disc image" — the hardcoded set
-`DISC_IMAGE_EXTENSIONS` (`domain/disc_formats.py`), the formats **disc** lists. The same set decides whether a single
-`.zip` is unpacked: one holding a disc image or an `.m3u` is (`holds_disc_image`, `domain/served_shape.py`). It answers
-_is this a disc image?_, which es_systems cannot: es_systems is a flat per-system accept-list with no per-token role
-metadata, so it can say a system _accepts_ `.cue` but never that `.cue` is a disc while `.bin` is its sidecar. The set
-is intersected with the system's **live** es_systems accept-list at enumeration time, so the hardcoded knowledge
-supplies disc _identity_ and es_systems supplies per-system _capability_ — two different questions with two different
-owners ([ADR-0014](docs/adr/0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md)).
+`DISC_IMAGE_EXTENSIONS` (`domain/disc_formats.py`), the formats **disc** lists. Whether a single `.zip` is unpacked is
+asked of the same set (**served shape**). It answers _is this a disc image?_, which es_systems cannot: es_systems is a
+flat per-system accept-list with no per-token role metadata, so it can say a system _accepts_ `.cue` but never that
+`.cue` is a disc while `.bin` is its sidecar. The set is intersected with the system's **live** es_systems accept-list
+at enumeration time, so the hardcoded knowledge supplies disc _identity_ and es_systems supplies per-system _capability_
+— two different questions with two different owners
+([ADR-0014](docs/adr/0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md)).
 
 ### Selected disc
 

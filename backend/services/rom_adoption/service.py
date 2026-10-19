@@ -54,7 +54,7 @@ from domain.rom_files import (
     resolve_local_file_name,
     synthetic_rom_name,
 )
-from domain.served_shape import served_shapes
+from domain.served_shape import replace_covers, served_shapes
 from lib.background_tasks import BackgroundTasks
 from lib.errors import Refused, RommApiError, classify_error, romm_error_log_level
 from lib.path_safety import PathTraversalError, coerce_safe_component, is_inside_folder, safe_join
@@ -268,11 +268,10 @@ class RomAdoptionService:
         """Synchronous body of the download-target gate. Runs on an executor thread.
 
         *folder_path* is the second place a single zip that may be unpacked
-        claims, the folder it would become; each path is asked about as a path
-        of its own shape, and which of them *replace* covers is
-        :meth:`_replace_covers`'s. Nothing is removed until every occupied path
-        is covered, so a dialog cancelled after another was confirmed leaves
-        both copies as they were.
+        claims, the folder it would become, and each path is described as what
+        it is. Which occupied paths *replace* covers is ``replace_covers``'s
+        (``domain/served_shape.py``); one it does not cover is refused, and
+        nothing is cleared before every occupied path is covered.
         """
         claimed = [checked_path] if folder_path is None else [checked_path, folder_path]
         described = [(path, self._download_file_store.describe_path(path)) for path in claimed]
@@ -286,10 +285,11 @@ class RomAdoptionService:
             # precisely what the user declined, so searching again would refuse
             # the transfer they started with no exit but Cancel.
             #
-            # This is NOT the reason ``_replace_existing`` is dropped for a
-            # replace of a directory. There the answer is *spent*: the directory
-            # has already been removed, so anything at that path now is content
-            # the user has never seen and the gate must ask about it. Here nothing
+            # This is NOT the reason ``_replace_existing`` is dropped for a ROM
+            # served only as a folder, nor why a resume never covers the folder
+            # of one served in both shapes. There the answer is *spent*: the
+            # directory has already been removed, so anything at that path now is
+            # content the user has never seen and the gate must ask about it. Here nothing
             # was consumed. Two different reasons, and neither generalises to the
             # other.
             if not resume:
@@ -298,7 +298,7 @@ class RomAdoptionService:
                 )
             return None
         occupied = [(path, existing) for path, existing in found if not self._is_own_install(rom_detail, path)]
-        covered = self._replace_covers(
+        covered = replace_covers(
             [path for path, _existing in occupied],
             replace=replace,
             resume=resume,
@@ -317,39 +317,13 @@ class RomAdoptionService:
                     served_dir=path == folder_path or FILE not in served_shapes(rom_detail),
                 )
         for path, existing in occupied:
-            self._clear_for_replace(rom_detail, path, is_dir=existing["kind"] == DIR)
+            self._clear_for_replace(
+                rom_detail,
+                path,
+                is_dir=existing["kind"] == DIR,
+                own_file_path=path == checked_path and FILE in served_shapes(rom_detail),
+            )
         return None
-
-    @staticmethod
-    def _replace_covers(
-        occupied: list[str],
-        *,
-        replace: bool,
-        resume: bool,
-        folder_path: str | None,
-        confirmed_paths: list[str] | None,
-    ) -> frozenset[str]:
-        """The occupied paths the user's replace answer may remove.
-
-        A download that claims one path asks about it alone, so *replace* covers
-        it. One that claims two — a single zip and the folder it would become —
-        shows each in a dialog of its own, so a path is covered only where the
-        user chose to replace exactly it: listed in *confirmed_paths*, or, for an
-        answer that names none, the one path occupied. On a resume the folder
-        is never covered: a replace of a folder removed it before the transfer,
-        so whatever sits there now is content nobody was shown; the zip's answer
-        is still live, because a file is removed only once its replacement is
-        installed.
-        """
-        if not replace:
-            return frozenset()
-        if folder_path is None:
-            return frozenset(occupied)
-        if resume:
-            return frozenset(occupied) - {folder_path}
-        if confirmed_paths is not None:
-            return frozenset(occupied) & frozenset(os.path.normpath(str(p)) for p in confirmed_paths)
-        return frozenset(occupied) if len(occupied) == 1 else frozenset()
 
     # ── Candidate search ────────────────────────────────────────────
 
@@ -398,16 +372,19 @@ class RomAdoptionService:
             return False
         return checked_path in (install.rom_dir, install.file_path)
 
-    def _clear_for_replace(self, rom_detail: dict[str, Any], checked_path: str, *, is_dir: bool) -> None:
+    def _clear_for_replace(
+        self, rom_detail: dict[str, Any], checked_path: str, *, is_dir: bool, own_file_path: bool
+    ) -> None:
         """Remove what occupies *checked_path* so the download starts on clean ground.
 
         A directory always goes: ``make_dirs`` is ``exist_ok=True`` and the
         extract would otherwise merge into whatever is already there, leaving a
         hybrid that a later uninstall deletes whole — the user chose replace, not
         merge. A file goes only when a *directory* is about to take its place; a
-        single-file download leaves it, because ``os.replace`` swaps the new
-        bytes in atomically and a delete-then-fetch would leave the user with
-        neither copy if the transfer failed.
+        file at the path the download itself writes (*own_file_path*) stays,
+        because ``os.replace`` swaps the new bytes in atomically — or an unpacked
+        zip removes it once installed — and a delete-then-fetch would leave the
+        user with neither copy if the transfer failed.
 
         That last carve-out is specific to content sitting **at the target path**,
         which is why :meth:`_discard_candidate` removes its subject through
@@ -417,7 +394,7 @@ class RomAdoptionService:
         system = self._download_system(rom_detail)
         if isinstance(system, FolderRefused):
             raise system
-        if not is_dir and FILE in served_shapes(rom_detail):
+        if not is_dir and own_file_path:
             if not is_inside_folder(checked_path, self._rom_folder(system)):
                 raise Refused("unsafe_replace_target", _UNSAFE_REPLACE_MESSAGE)
             return
@@ -505,7 +482,10 @@ class RomAdoptionService:
             return None
         rom_id = int(rom_detail.get("id") or 0)
         stopped, carried, quarantined = self._renamer.move_planned(
-            self._renamer.discarded_save_pairs(rom_id, target, source_path), collision_choice
+            self._renamer.discarded_save_pairs(
+                rom_id, target, source_path, may_unpack=DIR in served_shapes(rom_detail)
+            ),
+            collision_choice,
         )
         if stopped is not None:
             return stopped

@@ -122,8 +122,9 @@ class CandidateSearch:
         """Raise the most specific refusal this search finds for a download.
 
         *folder_path* is the folder a single zip that may be unpacked would
-        become, which this download claims beside *checked_path*; both shapes
-        are then the served one (``served_shapes``).
+        become, which this download claims beside *checked_path*. Such a ROM is
+        served in both shapes (``served_shapes``), so a namesake of either kind
+        is a candidate.
 
         Returning means proceed, which is every ordinary download. Three
         refusals, and the order is the point — a user meets the specific

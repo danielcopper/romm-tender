@@ -228,9 +228,10 @@ def unpacked_manifest(manifest: tuple[ServerFile, ...]) -> tuple[ServerFile, ...
 
     A member lands at its own path inside the zip, so that path is where it
     belongs in the folder, and its size and digests are the member's. A zip
-    whose members RomM does not list contributes nothing: its one digest
-    describes the archive's content as a whole, which no single loose file
-    reproduces — an empty manifest is the caller's "cannot be confirmed".
+    whose members RomM does not list contributes nothing: without the listing
+    nothing says which file in the folder its one digest belongs to, nor whether
+    it covers one member or all of them — an empty manifest is the caller's
+    "cannot be confirmed".
     """
     return tuple(
         ServerFile(

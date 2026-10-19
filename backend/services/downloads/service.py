@@ -1,10 +1,11 @@
 """DownloadService — ROM download orchestration.
 
-Owns every step between a frontend download request and a ROM
-landing on disk: disk-space pre-flight, single-file and multi-file
-downloads, ZIP extraction, and partial-download cleanup.
-Raw filesystem I/O flows through the ``DownloadFileStore`` Protocol;
-HTTP traffic flows through ``RommRomReader``.
+Owns every step between a frontend download request and a finished transfer:
+the occupancy gate, the disk-space pre-flight, the bounded queue, the transfer
+itself, pause, resume and cancel. What a finished transfer becomes — a file
+kept as it is or a folder unpacked from a zip, and the cleanup after a failure —
+is ``unpack.py``'s. Raw filesystem I/O flows through the ``DownloadFileStore``
+Protocol; HTTP traffic flows through ``RommRomReader``.
 """
 
 from __future__ import annotations
@@ -413,15 +414,19 @@ class DownloadService:
 
         try:
             self._download_file_store.make_dirs(roms_dir)
-            # A download kept whole after a failed unpack is not fetched again, so
-            # only what the unpack still needs is weighed — as for a resume.
-            kept = resume or self._unpacker().kept_download_complete(target_path, rom_detail)
+            # A zip already whole on disk is not fetched again (see
+            # ``kept_download_complete``), so only what the unpack still needs is
+            # weighed — as for a resume.
+            kept = resume or await self._loop.run_in_executor(
+                None, self._unpacker().kept_download_complete, target_path, rom_detail
+            )
+            already_on_disk = self._partial_tmp_size(target_path, rom_detail) if kept else 0
             verdict = disk_space_verdict(
                 file_size=file_size,
                 free_space=self._download_file_store.disk_free(roms_dir),
                 reserved_bytes=sum(self._reserved_bytes.values()),
                 multi_file=is_multi_file_download(rom_detail),
-                already_on_disk=self._partial_tmp_size(target_path, rom_detail) if kept else 0,
+                already_on_disk=already_on_disk,
                 unpacked_size=listed_unpacked_bytes(rom_detail),
             )
         except OSError as e:
@@ -466,14 +471,20 @@ class DownloadService:
             "resumable": resumable,
             # The user's replace answer, carried across a pause so a resumed
             # replace-download is not refused by the very file it is replacing.
-            # Kept only where the answer is still LIVE: a replace of a file
-            # deliberately deletes nothing (``os.replace`` is atomic, and an
-            # unpacked zip removes it only once installed), so the original is
-            # still there and still the content the user was shown. A replace of
-            # a directory already removed it, so the answer is spent — anything at
-            # that path now is content the user has never seen, and the gate must
-            # ask about it rather than delete it.
+            # Kept only where the download writes a file of its own, because only
+            # there is the answer still LIVE: a replaced file goes only once its
+            # replacement is installed (``os.replace``, or an unpacked zip's own
+            # removal), so it is still there and still what the user was shown. A
+            # ROM served only as a folder had its directory removed at the start,
+            # so the answer is spent — anything at that path now is content the
+            # user has never seen, and the gate must ask about it rather than
+            # delete it. The paths the user confirmed go with it; which of them a
+            # resume still covers is ``replace_covers``'s.
             "_replace_existing": replace_existing and FILE in served_shapes(rom_detail),
+            "_confirmed_paths": answer.get("confirmed_paths"),
+            # What this download found on disk when it was admitted, which its
+            # reservation already left out (``_bytes_reserved_by_others``).
+            "_on_disk_at_start": already_on_disk,
         }
         self._download_tasks[rom_id] = task
         # Reserve this download's required bytes so a concurrent sibling's
@@ -549,7 +560,11 @@ class DownloadService:
         return safe
 
     def _unpacker(self) -> DownloadUnpacker:
-        """The post-processing over this service's seams as they stand now."""
+        """The post-processing over this service's seams.
+
+        Built per call, so a seam rebound on this service after construction is
+        the one it uses.
+        """
         return DownloadUnpacker(
             config=DownloadUnpackerConfig(
                 download_file_store=self._download_file_store,
@@ -587,7 +602,7 @@ class DownloadService:
         )
 
     def _post_download_single_io(self, rom_id, rom_detail, target_path, system, extract_dir_name="", reserved_bytes=0):
-        """Sync helper for _do_download single-file — rename + DB persist in executor.
+        """Sync helper for _do_download single-file — rename or unpack, then DB persist, in executor.
 
         Returns ``(path, error)`` as ``DownloadUnpacker.finish_single`` does; a
         zip holding a disc image is unpacked into *extract_dir_name* beside
@@ -686,6 +701,8 @@ class DownloadService:
         extracting = phase == "extracting"
         if extracting:
             entry["status"] = "extracting"
+        else:
+            entry["_transferred"] = done
         entry.update(
             {
                 "progress": progress,
@@ -874,8 +891,11 @@ class DownloadService:
 
             async with self._download_semaphore:
                 self._download_queue[rom_id]["status"] = "downloading"
-                # A zip kept whole after a failed unpack is unpacked as it is.
-                kept = self._unpacker().kept_download_complete(target_path, rom_detail)
+                # A zip already whole on disk — kept after a failed unpack, or paused
+                # after its last byte — is unpacked without a transfer.
+                kept = await self._loop.run_in_executor(
+                    None, self._unpacker().kept_download_complete, target_path, rom_detail
+                )
                 if kept:
                     self._logger.info(f"Unpacking the download already on disk for {rom_name}")
 
@@ -1043,20 +1063,23 @@ class DownloadService:
             self._prune_download_queue()
 
     def _bytes_reserved_by_others(self, rom_id: int) -> int:
-        """What every other in-flight download has claimed — read on the loop, where the claims change."""
-        return sum(reserved for other, reserved in self._reserved_bytes.items() if other != rom_id)
+        """What other downloads have claimed and not yet written, which free space does not lack yet.
 
-    def _maybe_heal_ps3_sfb_io(self, extract_dir: str) -> None:
-        """``DownloadUnpacker.heal_ps3_sfb`` over this service's seams."""
-        self._unpacker().heal_ps3_sfb(extract_dir)
+        Read on the loop, where both change; what is written is
+        :meth:`_written_since_admitted`.
+        """
+        return sum(
+            max(reserved - self._written_since_admitted(other), 0)
+            for other, reserved in self._reserved_bytes.items()
+            if other != rom_id
+        )
 
-    def _maybe_generate_m3u_io(self, extract_dir: str, rom_detail: dict[str, Any], m3u_supported: bool) -> None:
-        """``DownloadUnpacker.generate_m3u`` over this service's seams."""
-        self._unpacker().generate_m3u(extract_dir, rom_detail, m3u_supported)
-
-    def _collect_and_detect_launch_file(self, extract_dir: str, m3u_supported: bool) -> str:
-        """``DownloadUnpacker.detect_launch_file`` over this service's seams."""
-        return self._unpacker().detect_launch_file(extract_dir, m3u_supported)
+    def _written_since_admitted(self, rom_id: int) -> int:
+        """Bytes *rom_id*'s download has put on disk since admitted: its transfer, and what it has unpacked so far."""
+        entry = self._download_queue.get(rom_id) or {}
+        transferred = max(entry.get("_transferred", 0) - entry.get("_on_disk_at_start", 0), 0)
+        unpacked = entry.get("bytes_downloaded", 0) if entry.get("status") == "extracting" else 0
+        return transferred + unpacked
 
     def _cleanup_partial_download(self, target_path, has_multiple, extract_dir_name, final_path=None):
         """``DownloadUnpacker.remove_partial_download`` over this service's seams."""
@@ -1168,7 +1191,9 @@ class DownloadService:
                 self.evict(rom_id)
                 raise Refused("superseded", "Another version is now active")
             replace_existing = bool(entry.get("_replace_existing"))
-            result = await self._begin_download(rom_id, resume=True, replace_existing=replace_existing)
+            result = await self._begin_download(
+                rom_id, resume=True, replace_existing=replace_existing, confirmed_paths=entry.get("_confirmed_paths")
+            )
             await self._hold_until_started_task_done(result, rom_id, "resume_download")
             return result
 

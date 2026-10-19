@@ -144,13 +144,10 @@ class DownloadTargetGateFn(Protocol):
     *folder_path* is the second path a download claims when the ROM is served
     in both shapes (``domain/served_shape.py``) — a single zip that may be
     unpacked claims the file it arrives as at *checked_path* and the folder it
-    would become here — and ``None`` otherwise. Where both are claimed, *replace*
-    removes only what the user was shown: *confirmed_paths* lists each path a
-    dialog showed and the user chose to replace, an occupied path missing from
-    it is refused with ``TargetOccupied`` for its own dialog, and nothing is
-    removed until every occupied path is in it. A *replace* without the list
-    covers an occupied path only where it is the one occupied, and on a resume
-    covers *checked_path* alone. A ROM that claims one path ignores the list.
+    would become here — and ``None`` otherwise. *confirmed_paths* lists each
+    path whose dialog the user answered with replace. Which occupied paths
+    *replace* covers — and so which are refused with ``TargetOccupied`` instead —
+    is ``replace_covers``'s (``domain/served_shape.py``).
 
     *page_saw_candidate* is not an answer but a report — what the game page told
     the user before they pressed. The search's last check is a backstop over it,

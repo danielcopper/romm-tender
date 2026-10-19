@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from domain.disc_formats import DISC_IMAGE_EXTENSIONS
-from domain.disc_selection import Disc, default_descriptor, enumerate_discs, resolve_launch_path
+from domain.disc_selection import (
+    Disc,
+    default_descriptor,
+    enumerate_discs,
+    one_descriptor_per_disc,
+    resolve_launch_path,
+)
 
 _PSX_DIR = "/roms/psx/Final Fantasy VII"
 
@@ -181,13 +187,13 @@ class TestDefaultDescriptor:
 class TestDiscImageExtensionsConstant:
     def test_enumerate_default_set_is_the_constant(self):
         # No supported list -> exactly the disc-image set is the accept set.
-        files = [_p(f"x{ext}") for ext in DISC_IMAGE_EXTENSIONS]
+        files = [_p(f"x{ext[1:]}{ext}") for ext in DISC_IMAGE_EXTENSIONS]
         discs = enumerate_discs(files, None)
-        assert {d.filename for d in discs} == {f"x{ext}" for ext in DISC_IMAGE_EXTENSIONS}
+        assert {d.filename for d in discs} == {f"x{ext[1:]}{ext}" for ext in DISC_IMAGE_EXTENSIONS}
 
 
 class TestTheNewDiscFormats:
-    """The picker offers the formats ``DISC_IMAGE_EXTENSIONS`` grew by wherever the system accepts them (#910 D4)."""
+    """The picker offers the disc formats beyond cue, chd and iso wherever the system accepts them (#910 D4)."""
 
     def test_two_gamecube_rvz_discs_are_two_discs(self):
         supported = frozenset({".ciso", ".gcm", ".gcz", ".iso", ".m3u", ".rvz", ".wbfs", ".wia"})
@@ -206,3 +212,35 @@ class TestTheNewDiscFormats:
     def test_track_files_are_no_discs(self):
         files = [_p("Game.img"), _p("Game.sub"), _p("Game.mdf"), _p("Game.raw"), _p("Game.bin")]
         assert enumerate_discs(files, None) == []
+
+
+class TestOneDescriptorPerDisc:
+    """Two descriptors of the same disc are one disc (#910)."""
+
+    def test_a_cue_beside_a_ccd_of_the_same_name_is_one_disc(self):
+        assert one_descriptor_per_disc(["Game.ccd", "Game.cue", "Game.img"]) == ["Game.cue", "Game.img"]
+
+    def test_the_names_are_compared_case_folded(self):
+        assert one_descriptor_per_disc(["GAME.CCD", "game.cue"]) == ["game.cue"]
+
+    def test_descriptors_in_different_folders_are_different_discs(self):
+        assert one_descriptor_per_disc(["a/Game.cue", "b/Game.ccd"]) == ["a/Game.cue", "b/Game.ccd"]
+
+    def test_different_stems_are_different_discs(self):
+        paths = ["Game (Disc 1).cue", "Game (Disc 2).ccd"]
+
+        assert one_descriptor_per_disc(paths) == paths
+
+    def test_the_picker_offers_one_disc_for_a_cue_and_its_ccd(self):
+        files = [_p("Game (Disc 1).cue"), _p("Game (Disc 1).ccd"), _p("Game (Disc 1).img"), _p("Game (Disc 2).cue")]
+
+        discs = enumerate_discs(files, None)
+
+        assert [d.filename for d in discs] == ["Game (Disc 1).cue", "Game (Disc 2).cue"]
+
+    def test_where_the_system_takes_no_cue_its_ccd_is_the_disc(self):
+        files = [_p("Game (Disc 1).cue"), _p("Game (Disc 1).ccd"), _p("Game (Disc 2).ccd")]
+
+        discs = enumerate_discs(files, frozenset({".ccd", ".m3u"}))
+
+        assert [d.filename for d in discs] == ["Game (Disc 1).ccd", "Game (Disc 2).ccd"]

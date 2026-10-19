@@ -10,16 +10,13 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from domain.disc_formats import TRACK_DESCRIPTORS
+
 # The suffix a single-file download — a ROM's or a firmware file's — is written
 # under until it is whole, and the one a download RomM serves as a ZIP is written
 # under before it is extracted.
 TMP_EXT = ".tmp"
 ZIP_TMP_EXT = ".zip.tmp"
-
-# The descriptors of a multi-track disc set, in the order a launch file is
-# picked from them: each names the track files beside it, which are never
-# launched themselves.
-_TRACK_DESCRIPTORS: tuple[str, ...] = (".cue", ".gdi", ".ccd", ".toc", ".mds")
 
 
 def is_multi_file_download(rom_detail: dict[str, Any]) -> bool:
@@ -62,8 +59,12 @@ def needs_m3u(disc_files: list[str], m3u_supported: bool) -> bool:
     images of any format in ``DISC_IMAGE_EXTENSIONS``, so the emulator can switch
     discs) and for **single-disc bin/cue** ROMs (exactly one ``.cue`` — so the
     extract dir can be named after a game-named playlist for ES-DE collapse).
-    Every other single disc gets no M3U: bin/cue systems read a one-entry
-    playlist, while iso-based GameCube/Wii do not launch from one reliably.
+    Every other single disc gets no M3U, for a reason that is not in the code:
+    the systems that use bin/cue read a one-entry playlist, iso-based
+    GameCube/Wii do not launch from one reliably, and for a single ``.gdi``,
+    ``.ccd``, ``.toc`` or ``.mds`` it has not been established either way.
+    Two descriptors of the same disc (a ``.cue`` beside a ``.ccd``) count once
+    — the caller reduces them with ``one_descriptor_per_disc``.
 
     Parameters
     ----------
@@ -104,12 +105,18 @@ def detect_launch_file(files: list[tuple[str, int]], m3u_supported: bool) -> str
     1. M3U playlist — only when *m3u_supported* (platform-gated; otherwise a
        RomM-bundled ``.m3u`` is skipped so selection falls through to the real
        game file)
-    2. A multi-track set's descriptor: .cue > .gdi > .ccd > .toc > .mds
+    2. CUE sheet
     3. WiiU: .rpx (loadiine format in code/ subdirectory)
     4. WiiU disc images: .wud, .wux, .wua
     5. PS3: EBOOT.BIN
     6. 3DS: .3ds > .cia > .cxi
-    7. Largest file by size
+    7. Any other multi-track descriptor: .gdi > .ccd > .toc > .mds
+    8. Largest file by size
+
+    The other descriptors come after the platform rules because their
+    extensions also name files inside a game's own data — a PS3 dump can carry a
+    ``levels.toc`` under ``USRDIR`` — and a layout one of those rules recognises
+    launches from it, never from such a file.
 
     Parameters
     ----------
@@ -131,10 +138,8 @@ def detect_launch_file(files: list[tuple[str, int]], m3u_supported: bool) -> str
 
     paths = [path for path, _size in files]
 
-    # Prefer M3U > a multi-track set's descriptor — but only honor .m3u on
-    # platforms that support it. The descriptor, never the largest track, is
-    # what an emulator opens.
-    for ext in (".m3u", *_TRACK_DESCRIPTORS) if m3u_supported else _TRACK_DESCRIPTORS:
+    # Prefer M3U > CUE — but only honor .m3u on platforms that support it.
+    for ext in (".m3u", ".cue") if m3u_supported else (".cue",):
         matches = [p for p in paths if p.lower().endswith(ext)]
         if matches:
             return matches[0]
@@ -157,6 +162,12 @@ def detect_launch_file(files: list[tuple[str, int]], m3u_supported: bool) -> str
 
     # 3DS: prefer .3ds > .cia > .cxi
     for ext in (".3ds", ".cia", ".cxi"):
+        matches = [p for p in paths if p.lower().endswith(ext)]
+        if matches:
+            return matches[0]
+
+    # The descriptor, never the largest track, is what an emulator opens.
+    for ext in (descriptor for descriptor in TRACK_DESCRIPTORS if descriptor != ".cue"):
         matches = [p for p in paths if p.lower().endswith(ext)]
         if matches:
             return matches[0]

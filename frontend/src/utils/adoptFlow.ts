@@ -217,13 +217,12 @@ async function download(
   }
 }
 
-// Replace names the path this dialog showed, on top of those already answered:
-// a game served as a single zip can be in the way twice — the zip and the
-// folder it unpacks into — and the backend refuses again, with the next path,
-// until every one in the way has been answered, removing nothing before then.
-// Cancel on a later dialog therefore leaves the earlier one's copy too. Adopt
-// names the shown path for the same reason: with both there, it is the only
-// way the backend knows which one the user meant.
+// Replace names the path this dialog showed on top of those already answered,
+// and a further refusal opens the next dialog with that list: a game served as
+// a single zip can be in the way twice — the zip and the folder it unpacks
+// into. What the backend removes for a list is its `replace_covers`. Adopt
+// names the shown path, because with two copies there it is the only way the
+// backend knows which one the user meant.
 async function resolveOccupiedTarget(
   flow: DownloadWithAdoption,
   occupied: TargetOccupiedResult,

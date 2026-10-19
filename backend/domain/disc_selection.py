@@ -22,7 +22,7 @@ import os
 import re
 from dataclasses import dataclass
 
-from domain.disc_formats import DISC_IMAGE_EXTENSIONS
+from domain.disc_formats import DISC_IMAGE_EXTENSIONS, TRACK_DESCRIPTORS
 
 # Disc-number tag inside a basename: "(Disc 1)", "[Disk 02]", "(Disc 1 of 2)".
 # Case-insensitive; tolerates leading zeros so "Disc 01" and "Disc 1" agree.
@@ -55,6 +55,30 @@ def _parse_disc_number(basename: str) -> int | None:
     return int(match.group(1)) if match is not None else None
 
 
+def one_descriptor_per_disc(paths: list[str]) -> list[str]:
+    """*paths* with every descriptor dropped that another one in its directory already describes.
+
+    A disc dumped with two descriptors — ``Game.cue`` and ``Game.ccd`` beside
+    one ``Game.img`` — is one disc, so of the descriptors that share a directory
+    and a stem (compared case-folded) only the one first in
+    ``TRACK_DESCRIPTORS`` is kept. Anything that is no descriptor is kept as it
+    is, and the order of what is kept does not change.
+    """
+    rank = {extension: position for position, extension in enumerate(TRACK_DESCRIPTORS)}
+
+    def key(path: str) -> tuple[str, str]:
+        return (os.path.dirname(path), os.path.splitext(os.path.basename(path))[0].casefold())
+
+    def extension(path: str) -> str:
+        return os.path.splitext(path)[1].lower()
+
+    preferred: dict[tuple[str, str], int] = {}
+    for path in paths:
+        if extension(path) in rank:
+            preferred[key(path)] = min(preferred.get(key(path), len(rank)), rank[extension(path)])
+    return [path for path in paths if extension(path) not in rank or rank[extension(path)] == preferred[key(path)]]
+
+
 def enumerate_discs(files: list[str], supported_extensions: frozenset[str] | None) -> list[Disc]:
     """Enumerate the launchable discs among *files*, in disc order.
 
@@ -62,7 +86,8 @@ def enumerate_discs(files: list[str], supported_extensions: frozenset[str] | Non
     ----------
     files:
         Absolute paths to every file in the ROM's install directory (a flat,
-        already-recursive listing). Non-disc files are ignored.
+        already-recursive listing). Non-disc files are ignored, and two
+        descriptors of one disc are one disc (:func:`one_descriptor_per_disc`).
     supported_extensions:
         The live per-system extension accept-list from es_systems
         (lowercased), intersected with :data:`DISC_IMAGE_EXTENSIONS` so a disc
@@ -80,11 +105,10 @@ def enumerate_discs(files: list[str], supported_extensions: frozenset[str] | Non
     """
     effective = (DISC_IMAGE_EXTENSIONS & supported_extensions) if supported_extensions else DISC_IMAGE_EXTENSIONS
 
+    launchable = [path for path in files if os.path.splitext(path)[1].lower() in effective]
     candidates: list[tuple[int | float, str, str, int | None]] = []
-    for path in files:
+    for path in one_descriptor_per_disc(launchable):
         basename = os.path.basename(path)
-        if os.path.splitext(basename)[1].lower() not in effective:
-            continue
         number = _parse_disc_number(basename)
         sort_number: int | float = number if number is not None else _UNPARSED_ORDER
         candidates.append((sort_number, basename.lower(), path, number))

@@ -703,10 +703,10 @@ page.
 
 ### Download failed with "Not enough space to unpack"
 
-**Fix**: The game arrived as a zip that Tender unpacks, and its contents do not fit beside it. Free space on the card
-and press **Download** again: the zip is kept, so the retry unpacks it without downloading it again — unless Tender has
-restarted in between, which clears the kept zip. See [Managing Games](managing-games.md#multi-disc-and-multi-file-games)
-for what is unpacked.
+**Fix**: The game arrived as a zip that Tender unpacks, and its contents do not fit beside it. Free space on the drive
+the game goes to and press **Download** again: the zip is kept, so the retry unpacks it without downloading it again —
+unless Tender has restarted in between, which clears the kept zip. See
+[Managing Games](managing-games.md#multi-disc-and-multi-file-games) for what is unpacked.
 
 ### Download refused before it starts
 

@@ -424,7 +424,7 @@ emulator** through the same `ActiveCoreResolver.active_emulator_for_rom` seam an
 | Bake site                                            | When it runs                             | How it resolves the emulator                                                             |
 | ---------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `ShortcutLaunchResolver` → `do_build_core_overrides` | every sync (preview + apply)             | each ROM through `active_emulator_for_rom` → `{rom_id: EmulatorInvocation}` for the bake |
-| `DownloadService` → `_resolve_bound_app_id`          | on download-complete (install/reinstall) | the ROM through `active_emulator_for_rom` in the same flow                               |
+| `RomInstallRecorder` → `do_resolve_launch_bake`      | on download-complete (install/reinstall) | the ROM through `active_emulator_for_rom` in the same flow                               |
 | `MigrationService` → `_build_relaunch_items`         | on RetroDECK-home migration              | each relocated ROM through `active_emulator_for_rom`                                     |
 
 The download-complete bake is the one that re-applies a pin after reinstall — the exact path `roms` storage was chosen
@@ -555,7 +555,7 @@ resolver yields the **path**, `ActiveCoreResolver` yields the **`EmulatorInvocat
 | Bake site                                                                        | How it resolves the disc path                                                             |
 | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `ShortcutLaunchResolver` (`do_scan_installed_paths` / `do_read_installed_paths`) | each installed ROM through `resolve_for_install` → `{rom_id: bake_path}` for the bake     |
-| `DownloadService._resolve_bound_app_id`                                          | the freshly-installed ROM through `resolve_for_install` → re-applies the pin on reinstall |
+| `RomInstallRecorder.do_resolve_launch_bake`                                      | the freshly-installed ROM through `resolve_for_install` → re-applies the pin on reinstall |
 | `MigrationService._build_relaunch_items`                                         | each relocated ROM through `resolve_for_install` against the moved install directory      |
 
 ### The picker use cases

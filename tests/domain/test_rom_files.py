@@ -618,3 +618,22 @@ class TestNeedsM3uOverTheNewFormats:
     @pytest.mark.parametrize("disc", ["Game.gdi", "Game.ccd", "Game.toc", "Game.mds", "Game.rvz"])
     def test_one_disc_in_any_format_but_cue_gets_none(self, disc):
         assert needs_m3u([disc], m3u_supported=True) is False
+
+
+class TestThePlatformRulesComeBeforeTheOtherDescriptors:
+    """A ``.toc``, ``.ccd``, ``.mds`` or ``.gdi`` inside a game's own data never outranks its platform's launch file."""
+
+    def test_a_ps3_dump_with_a_toc_in_its_data_launches_its_eboot(self):
+        root = "/roms/ps3/Game"
+        files = [
+            (f"{root}/PS3_DISC.SFB", 1),
+            (f"{root}/PS3_GAME/USRDIR/EBOOT.BIN", 100),
+            (f"{root}/PS3_GAME/USRDIR/Data/Win32/levels.toc", 10_000),
+        ]
+
+        assert detect_launch_file(files, m3u_supported=False) == f"{root}/PS3_GAME/USRDIR/EBOOT.BIN"
+
+    def test_a_3ds_game_beside_a_mds_launches_the_3ds(self):
+        files = [("/roms/n3ds/x/Game.3ds", 100), ("/roms/n3ds/x/data.mds", 10_000)]
+
+        assert detect_launch_file(files, m3u_supported=False) == "/roms/n3ds/x/Game.3ds"
