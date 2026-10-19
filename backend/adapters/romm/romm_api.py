@@ -53,8 +53,7 @@ _MAX_PLAY_SESSION_PAGES = 50
 # both are turned off to skip that server-side work. Appended to every
 # list-endpoint query string. The id index (``with_rom_id_index``) stays on even
 # where it goes unread: RomM takes ``total`` from it, and without it runs a count
-# query of its own, measured slower on a live server (a median 228 ms per page
-# with the index, 705 ms without; #743 D5).
+# query of its own, measured slower on a live server (#743 D5).
 _LIST_AGGREGATIONS_DISABLED = "&with_char_index=false&with_filter_values=false"
 
 # RomM orders ``/api/roms`` by ``name_sort_key`` unless told otherwise (5.3.0
@@ -65,9 +64,8 @@ _LIST_AGGREGATIONS_DISABLED = "&with_char_index=false&with_filter_values=false"
 # the single-request probes do not page and go without it.
 _WALK_ORDER = "&order_by=id"
 
-# The platform skip's probe: the most recently updated ROM first. RomM resolves
-# ``order_by=updated_at`` to ``Rom.updated_at`` (5.3.0
-# ``handler/database/roms_handler.py``).
+# The platform skip's probe: the most recently updated ROM first. What RomM
+# sorts by is docs/architecture/backend-architecture.md, "Incremental skip".
 _NEWEST_FIRST = "&order_by=updated_at&order_dir=desc"
 
 # The ``/api/roms`` filter each collection kind is listed by.

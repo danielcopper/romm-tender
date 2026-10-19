@@ -58,7 +58,7 @@ class PlatformSyncState:
         """Record that ``platform_slug`` fully synced at ISO timestamp ``at``.
 
         ``rom_count`` is the server's platform ROM count the completing run
-        planned with. The skip no longer reads it; removed-game discovery reads
+        planned with. The skip does not read it; removed-game discovery reads
         a zero as an empty completed fetch (``domain/fetch_generation.py``).
 
         ``fetch_started_at`` (ISO, Tender's clock) and ``rom_id_checksum``
@@ -71,8 +71,9 @@ class PlatformSyncState:
         and removed-game discovery read exactly the rows the fetch returned
         rather than every row of the platform — a row for a rom_id the server
         dropped keeps an older generation, while staying on disk (ADR-0007,
-        #1504). ``None`` is "unknown" (a stamp written before this contract): it
-        cannot say what its fetch returned, so every row counts.
+        #1504). ``None`` is "unknown" (a stamp written before migration 020): it
+        cannot say what its fetch returned, so discovery finds no candidates
+        under it, and it predates ``rom_id_checksum`` too, so it never skips.
         """
         if not platform_slug:
             raise ValueError("platform_slug is required")

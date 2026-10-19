@@ -821,7 +821,9 @@ def _seed_platform_stamp(uow, slug, *, at, rom_count, fetch_id=None, rom_ids=(),
     """Persist a per-platform completion stamp (ADR-0023) so the skip can honor it.
 
     ``fetch_id`` is the generation the stamp's fetch marked its rows with (#1504);
-    ``None`` is the pre-020 stamp the skip falls back to counting every row for.
+    ``None`` lets a test's rows carry none, since every row then counts. That
+    pairing is a test convenience: production writes a generation on every stamp
+    with a checksum, and a stamp without one predates the checksum.
     ``rom_ids`` are the ids the stamp's fetch returned, whose checksum the skip
     compares RomM's id set with — none by default, which is what the fake serves
     for a platform it holds no ROMs for. ``fetch_started_at`` defaults to ``at``.

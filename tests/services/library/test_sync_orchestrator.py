@@ -103,10 +103,12 @@ def _seed_platform_stamp(library, slug, *, at, rom_count, fetch_id=None, rom_ids
     """Persist a per-platform completion stamp (ADR-0023) into the shared UoW.
 
     ``fetch_id`` is the generation the stamp's fetch marked its rows with (#1504);
-    ``None`` is a stamp written before that contract. ``rom_ids`` are the ids the
-    stamp's fetch returned, whose checksum the skip compares RomM's id set with —
-    none by default, which is what the fake serves for a platform it holds no ROMs
-    for. ``fetch_started_at`` defaults to ``at``.
+    ``None`` lets a test's rows carry none, since every row then counts. That
+    pairing is a test convenience: production writes a generation on every stamp
+    with a checksum, and a stamp without one predates the checksum. ``rom_ids``
+    are the ids the stamp's fetch returned, whose checksum the skip compares
+    RomM's id set with — none by default, which is what the fake serves for a
+    platform it holds no ROMs for. ``fetch_started_at`` defaults to ``at``.
     """
     from domain.platform_skip import rom_id_checksum
     from domain.platform_sync_state import PlatformSyncState

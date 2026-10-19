@@ -23,15 +23,17 @@ def count_rows_for_skip(rows: Sequence[Rom], fetch_id: str | None) -> int:
     """Count the rows the stamp's fetch returned, which the skip requires to be more than none.
 
     Every fetched sibling persists (ADR-0021), so bound and unbound rows count
-    alike. What must NOT count is a row for a rom_id the server has since
-    dropped: RomM re-creating a ROM under a new id leaves the old row behind
-    unbound, and ADR-0007 keeps it forever as an identity anchor (#1504). When
-    the stamp names a fetch generation, only the rows carrying it count — a row
-    the last complete fetch returned has that generation, a superseded row keeps
-    an older one — which excludes exactly the dropped ids while deleting nothing.
+    alike. A row for a rom_id the server has since dropped is not among them:
+    RomM re-creating a ROM under a new id leaves the old row behind unbound, and
+    ADR-0007 keeps it forever as an identity anchor (#1504). When the stamp names
+    a fetch generation, only the rows carrying it count — a row the last complete
+    fetch returned has that generation, a superseded row keeps an older one —
+    which excludes exactly the dropped ids while deleting nothing.
 
-    A stamp with **no** generation (``fetch_id`` falsy) predates this contract
-    and cannot say what its fetch saw, so every row counts.
+    A stamp with **no** generation (``fetch_id`` falsy) cannot say what its fetch
+    saw, so every row counts. No such stamp reaches the skip's decision: it
+    predates migration 031 too, so it carries no checksum and the gate refuses
+    it first (``domain/platform_skip.stamp_can_match``).
     """
     if not fetch_id:
         return len(rows)
@@ -48,11 +50,10 @@ def backfill_needed(rows: Sequence[Rom], fetch_id: str | None) -> bool:
     and no fetch will ever fill its key in — letting it force a backfill would
     wedge the platform into a full fetch on every sync, forever.
 
-    A stamp with **no** generation (``fetch_id`` falsy) predates the contract and
-    cannot say what its fetch saw, so every NULL-key row still forces the fetch,
-    exactly as before — the same deliberately permissive legacy path
-    :func:`count_rows_for_skip` takes, here erring towards fetching rather than
-    skipping.
+    A stamp with **no** generation (``fetch_id`` falsy) cannot say what its fetch
+    saw, so every NULL-key row forces the fetch, erring towards fetching rather
+    than skipping. As for :func:`count_rows_for_skip`, no such stamp reaches the
+    skip's decision.
     """
     if not fetch_id:
         return any(rom.sibling_group_key is None for rom in rows)

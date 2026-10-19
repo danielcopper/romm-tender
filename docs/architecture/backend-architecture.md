@@ -890,11 +890,12 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
   holds. The **backfill gate reads the stamp's fetch generation**: a NULL `sibling_group_key` forces a full fetch only
   on a row the last complete fetch returned, because a row for a `rom_id` the server has since dropped (retained per
   ADR-0007 — nothing is deleted) is never returned again and no fetch could ever fill its key in — letting it demand one
-  would wedge the platform into a full fetch on every sync, forever (#1504). A stamp with no generation predates the
-  contract and backfills for every row. Artwork downloads only for the emitted representatives (+ grandfathered bound
-  siblings), never eager sibling covers. Steam-collection membership resolves each RomM collection `rom_id` with a
-  **group fallback** — an unbound sibling maps to its group's bound sibling's appId — so collecting or favouriting any
-  version puts the game's single shortcut in the collection.
+  would wedge the platform into a full fetch on every sync, forever (#1504). A stamp with no generation predates
+  migration `031` too, so it carries no checksum and its platform is fetched in full before the backfill gate is asked.
+  Artwork downloads only for the emitted representatives (+ grandfathered bound siblings), never eager sibling covers.
+  Steam-collection membership resolves each RomM collection `rom_id` with a **group fallback** — an unbound sibling maps
+  to its group's bound sibling's appId — so collecting or favouriting any version puts the game's single shortcut in the
+  collection.
 
 **Same-named collections union into one Steam collection (#1503).** RomM enforces name uniqueness only per-table and
 per-`(name, user_id)`, so two enabled collections can share a display name — a standard collection and a smart/virtual
@@ -982,25 +983,28 @@ platform, and `rom_id_checksum`, a checksum of the sorted ids that fetch returne
 (`SKIP_REFERENCE_MARGIN`), not `completed_at`: an edit RomM records after the fetch began but before the final chunk
 committed is newer than the reference, so the next sync sees it. The margin covers a device clock ahead of the server's
 and RomM's whole-second timestamps; its price is one more full fetch of a platform edited within ten minutes before the
-fetch that stamped it. The gate then sends **one request per platform**, `GET /api/roms` for the platform ordered by
-`updated_at` descending with `limit=1` (`RommApiAdapter.list_roms_newest_first`), with no `updated_after` and RomM's id
-index left on. Its first item's `updated_at` says whether any ROM changed since the reference, and its `rom_id_index`,
-which RomM builds from the whole filtered result, is the platform's visible id set. The platform skips only when no ROM
-is newer than the reference **and** the id set's checksum equals the stamp's (`domain/platform_skip.py::probe_verdict`).
-An answer the gate cannot read — no id index, an id that is not an integer, a first item without a readable `updated_at`
-— establishes nothing and is a full fetch, and so is a stamp without a checksum or a fetch start, which is every stamp
-written before migration `031`. The verdict carries its reason into the sync log: the newest `updated_at` against the
-reference and the number of visible ids with whether their checksum matched, or that the answer could not be read.
-RomM's platform `rom_count` is no longer compared with anything: it counts hidden ROMs, so after a hide it never again
-matched what a fetch returned, and the platform full-fetched on every sync. The stamp still records it, for removed-game
-discovery. The local guards stand before the request: rows carrying the stamp's generation, at least one bound row, and
-no `sibling_group_key` backfill pending for a row of that generation.
+fetch that stamped it. A server clock more than ten minutes ahead of Tender's is not covered: a ROM RomM updates then
+stays newer than each new stamp's reference, so its platform is fetched in full, and the preview offers the re-stamp
+Apply, on every sync until Tender's clock has passed that `updated_at` by the margin. The gate then sends **one request
+per platform**, `GET /api/roms` for the platform ordered by `updated_at` descending with `limit=1`
+(`RommApiAdapter.list_roms_newest_first`), with no `updated_after` and RomM's id index left on. Its first item's
+`updated_at` says whether any ROM changed since the reference, and its `rom_id_index`, which RomM builds from the whole
+filtered result, is the platform's visible id set. The platform skips only when no ROM is newer than the reference
+**and** the id set's checksum equals the stamp's (`domain/platform_skip.py::probe_verdict`). An answer the gate cannot
+read — no id index, an id that is not an integer, a first item without a readable `updated_at` — establishes nothing and
+is a full fetch, and so is a stamp without a checksum or a fetch start, which is every stamp written before migration
+`031`. The verdict carries its reason into the sync log: the newest `updated_at` against the reference and the number of
+visible ids with whether their checksum matched, or that the answer could not be read. RomM's platform `rom_count` is no
+longer compared with anything: it counts hidden ROMs, so after a hide it never again matched what a fetch returned, and
+the platform full-fetched on every sync. The stamp still records it, for removed-game discovery. The local guards stand
+before the request: rows carrying the stamp's generation, at least one bound row, and no `sibling_group_key` backfill
+pending for a row of that generation.
 
 **Which RomM changes move `updated_at`, and which only the id set shows** (read at RomM 5.3.0). RomM stamps
 `roms.updated_at` on the application side — `default` and `onupdate` of `utc_now` on its base model
 (`backend/models/base.py`), with no database trigger or `ON UPDATE` clause behind it — so a change moves it exactly when
-it goes through an ORM write of the ROM row. That covers every field Tender stores, since all of them are columns of the
-ROM row:
+it goes through an ORM write of the ROM row. That covers every field Tender stores but one, since all the others are
+columns of the ROM row; the exception is the main-version flag, which RomM keeps per user on `rom_user`:
 
 | RomM change                                                                  | Moves `roms.updated_at` | What the skip sees           |
 | ---------------------------------------------------------------------------- | ----------------------- | ---------------------------- |
@@ -1008,7 +1012,7 @@ ROM row:
 | A scan, quick or complete, that writes the ROM (metadata, cover, files)      | yes                     | a newer `updated_at`         |
 | A ROM added or deleted                                                       | added: yes; deleted: —  | another id set               |
 | A user hiding a ROM (`rom_user.hidden`)                                      | no                      | another id set               |
-| An admin hide, or an age limit (RomM 5.4)                                    | no                      | another id set               |
+| An admin or group hide, or an age limit (RomM 5.4)                           | no                      | another id set               |
 | A main-version pick (`rom_user.is_main_sibling`, `PUT /api/roms/{id}/props`) | no                      | nothing                      |
 | A raw SQL `UPDATE` of `roms`                                                 | no                      | nothing (none found in RomM) |
 

@@ -514,8 +514,10 @@ it left the collection and its shortcut is removed; if RomM answers that it is g
 stays, and the next sync asks again. A game RomM answered as gone then appears under **Data Management › Gone from
 RomM**, until a sync or the cleanup finds it on RomM again. Tender remembers whether a game last came in through its
 platform or through a collection; a game it has no such record for yet, as after the update that added it, is judged by
-the collections' last completed sync instead. A platform that holds a version gone from RomM is read in full on every
-sync while that version stays bound, so it does not skip the way an unchanged platform does.
+the collections' last completed sync instead. A version gone from RomM stays bound, and does not keep its platform from
+skipping: the next sync reads the platform in full and, with nothing else to change, offers an Apply that only records
+what RomM has now ("No shortcut changes — recording what RomM has now."); once that is applied, later syncs skip the
+platform again while nothing on it changes.
 
 Sync itself never purges a retained local ROM row, installed content, saves, or playtime solely because RomM stopped
 returning that id. Removing that state requires the separate confirmed
