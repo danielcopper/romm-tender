@@ -40,9 +40,10 @@ art** (so two regions of the same game are told apart at a glance; a version who
 icon), with markers for:
 
 - **✓ (active)** — the version currently bound to the shortcut. This is exactly what the Download button will fetch.
-- **Default** — the version Tender would pick on its own, following RomM's "SET DEFAULT" choice (`is_main_sibling`) and,
-  failing that, your [Preferred region](configuration.md) setting. It's a suggestion, not a lock. A "SET DEFAULT" made
-  in RomM shows here the next time you open the list, without a sync, as long as RomM can be reached.
+- **Default** — the version Tender would pick on its own, following the default version you chose in RomM
+  (`is_main_sibling`) and, failing that, your [Preferred region](configuration.md) setting. It's a suggestion, not a
+  lock. A default version you choose in RomM shows here the next time you open the game's page, without a sync, as long
+  as RomM can be reached.
 - **Downloaded** — a version you already have on disk.
 - **not synced** — a version RomM has that isn't in your local library yet. Selecting it records it on the spot — unless
   it's dimmed as a conflicting metadata match (see below).

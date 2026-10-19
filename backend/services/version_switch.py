@@ -292,12 +292,11 @@ class VersionSwitchService:
 
     @staticmethod
     def _live_main_flags(bound_rom_id: int, bound_detail: Any, stubs: list[dict[str, Any]]) -> dict[int, bool]:
-        """Each version's main-version flag as the bound ROM's live answer states it.
+        """Each version's ``is_main_sibling`` as the bound ROM's live answer states it.
 
         The bound version's comes from its own ``rom_user``, every direct
         sibling's from its ``sibling_roms`` stub (:func:`main_sibling_flag`). A
-        version the answer states nothing about is left out, so the caller keeps
-        the flag it already had for it.
+        version the answer states nothing about is left out.
         """
         stated = {int(stub["id"]): main_sibling_flag(stub) for stub in stubs}
         rom_user = bound_detail.get("rom_user") if isinstance(bound_detail, Mapping) else None
@@ -329,11 +328,10 @@ class VersionSwitchService:
 
         The picker's default badge ranks over the WHOLE group, so a not-yet-synced
         sibling needs its ``regions`` / ``revision`` / ``tags`` to rank correctly —
-        the slim ``sibling_roms`` stub carries none of them, only its main-version
-        flag.
-        Groups are small (RomM caps siblings low), so the extra reads fan out on
-        the executor. A failed fetch is skipped: that stub simply ranks with only
-        its label, never failing the whole call.
+        the slim ``sibling_roms`` stub carries only its id, its names and its
+        ``is_main_sibling``. Groups are small (RomM caps siblings low), so the
+        extra reads fan out on the executor. A failed fetch is skipped rather
+        than failing the whole call.
         """
         if not stubs:
             return {}
@@ -554,13 +552,17 @@ class VersionSwitchService:
         the ``active`` flag). Ranks only over the caller's candidates: switchable,
         live versions with a file on RomM. A cross-group RomM sibling, a retained
         vanished row and a version RomM holds no file for must not win the Default
-        badge. A server-only stub with no fetched detail ranks with only its
-        label. Each version's ``is_main_sibling`` is the one *live_main_flags*
+        badge. Each version's ``is_main_sibling`` is the one *live_main_flags*
         states for it; a version it leaves out keeps what was known before — a
-        local member its stored flag, a server-only stub its fetched detail's.
-        The live flag is never written to the stored row: the picker reads it,
-        the library sync owns the row. Returns ``None`` when no candidate remains or the chain cannot
-        decide, so the badge is simply absent rather than the call failing.
+        local member its stored flag, a server-only stub its fetched detail's;
+        a stub with no fetched detail ranks with only its label and the flag the
+        stub states, if any. The live flags are not written back to the stored
+        rows, although that would make them fresher: this read persists nothing
+        it learns, its liveness verdicts included, and leaves each row's flag to
+        whatever writes the row — a library sync, or the persist of a
+        server-only switch target. Returns ``None`` when no candidate remains or
+        the chain cannot decide, so the badge is simply absent rather than the
+        call failing.
         """
         ranking: list[dict[str, Any]] = [
             {
