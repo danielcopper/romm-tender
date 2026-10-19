@@ -595,6 +595,22 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `test_sync_orchestrator.py::TestPlatformTurnedOffAndBackOn`. Prompt-only: a new skip-side reader calling
   `platform_sync_state.get` raw, the recovery snapshot's raw read (no test pins it), and `has_any`'s query agreeing with
   `stamp_for_skip` — the query and the helper are each pinned alone and nothing joins them
+- **A platform's completion stamp records what the skip compares RomM's answer with, and the gate and the preview's
+  re-stamp count read it through one comparison: the checksum is over exactly the ids of the unit's full fetch
+  (`ChunkDispatcher._build_final_platform_stamp`, over every chunk's ROMs), `fetch_started_at` is Tender's clock read
+  before the skip request (`SyncOrchestrator`), the ten-minute margin is applied when the stamp is read and never stored
+  (`domain/platform_skip.py::skip_reference`), and the gate's `probe_verdict` and the count's `restamp_due` both decide
+  through `domain/platform_skip.py::_compare`** — test + prompt-only —
+  `tests/services/library/test_sync_orchestrator.py::TestOnlyAFreshStampRestoresTheSkip`
+  (`test_a_hidden_rom_with_a_shortcut_is_fetched_in_full_once_then_skipped`: the checksum names the fetched ids and not
+  a bound row RomM no longer returns; `test_a_rom_edited_while_the_run_applied_is_fetched_in_full_next_sync` and
+  `test_a_stamp_without_a_checksum_is_fetched_in_full_once_then_skipped`: the stamp stores the fetch's start unmargined,
+  not the run's end), and for the margin `tests/domain/test_platform_skip.py::TestSkipReference` and
+  `tests/services/library/test_fetcher.py::TestIncrementalSkipFromPlatformStamp::test_the_reference_is_the_fetch_start_less_the_margin`.
+  Prompt-only: the checksum of a unit applied in more than one chunk (every test above applies a single chunk, so a
+  checksum over the final chunk's ROMs alone passes them), the clock read before the skip request rather than after it
+  (the test clock does not move across the request), and the two deciders sharing `_compare` — `TestProbeVerdict` and
+  `TestRestampDue` in `tests/domain/test_platform_skip.py` pin each alone and nothing joins them
 - **Where the library sync or the version picker's default resolves a representative, neither RomM's main-sibling leg
   nor the ranking picks a member RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the
   sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is

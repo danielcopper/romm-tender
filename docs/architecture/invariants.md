@@ -441,6 +441,34 @@ Format: **invariant** — tier — enforced by.
   so moving it behind the helper would drop a revoked stamp from a sealed bundle unnoticed; and `has_any`'s
   `WHERE skip_revoked = 0` and `stamp_for_skip` state the one rule twice — each is pinned alone and nothing holds them
   equal
+- **A platform's completion stamp records what the skip compares RomM's answer with, and the gate and the preview's
+  re-stamp count read it through one comparison: the checksum is over exactly the ids of the unit's full fetch
+  (`ChunkDispatcher._build_final_platform_stamp`, over every chunk's ROMs), `fetch_started_at` is Tender's clock read
+  before the skip request (`SyncOrchestrator`), the ten-minute margin is applied when the stamp is read and never stored
+  (`domain/platform_skip.py::skip_reference`), and the gate's `probe_verdict` and the count's `restamp_due` both decide
+  through `domain/platform_skip.py::_compare`** — test + prompt-only — the checksum by
+  `tests/services/library/test_sync_orchestrator.py::TestOnlyAFreshStampRestoresTheSkip::test_a_hidden_rom_with_a_shortcut_is_fetched_in_full_once_then_skipped`,
+  whose second apply has no shortcut to change and still stamps the ids its fetch returned, leaving out the hidden ROM
+  that stays bound; the stored fetch start by that class's
+  `test_a_rom_edited_while_the_run_applied_is_fetched_in_full_next_sync` (the fetch's start, not the run's end, and an
+  edit between the two is seen next sync) and `test_a_stamp_without_a_checksum_is_fetched_in_full_once_then_skipped`;
+  the margin by `tests/domain/test_platform_skip.py::TestSkipReference` and, through the gate,
+  `tests/services/library/test_fetcher.py::TestIncrementalSkipFromPlatformStamp::test_the_reference_is_the_fetch_start_less_the_margin`.
+  The rule spans three modules, each holding one part: the dispatcher writes the checksum at the final chunk, the
+  orchestrator reads the clock and hands it down, and `domain/platform_skip.py` holds the margin and the comparison. Why
+  the stamp records a fetch start and a checksum rather than a completion time and a count, and what the margin covers,
+  are in [Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental
+  skip"; do not restate them here. **Each wrong turn is silent.** A checksum over anything but the full fetch's ids —
+  the final chunk's ROMs, or the bound rows the skip rebuilds from — never equals RomM's id index again, so the platform
+  is fetched in full and offered the re-stamp Apply on every sync. A clock read later than the walk's start records a
+  start after ROMs the walk has already read; once that gap is longer than the margin, an edit RomM makes to such a ROM
+  inside it is older than the next stamp's reference, and the next skip misses it. A margin stored in the stamp is fixed
+  into every row: a later change to it leaves the stamps already written at the old one, and a reader that subtracts it
+  as well applies it twice. Two deciders that stop sharing one comparison disagree about a stamp: the preview offers an
+  Apply that leaves the next sync fetching in full, or offers none to a platform the gate will keep refusing. **What
+  nothing checks**: every test above applies a platform in a single chunk, so a checksum over the final chunk's ROMs
+  alone passes them; the test clock does not move across the skip request, so a clock read after it passes too; and
+  `TestProbeVerdict` and `TestRestampDue` pin each decider alone, so nothing holds them to one comparison
 - **Where the library sync or the version picker's default resolves a representative, neither RomM's main-sibling leg
   nor the ranking picks a member RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the
   sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is
