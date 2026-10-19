@@ -81,7 +81,8 @@ def _compare(stamp: PlatformSyncState, newest_updated_at: datetime | None, rom_i
         updated = f"newest updated_at {newest_updated_at.isoformat()} {relation} the reference {reference.isoformat()}"
     distinct = set(rom_ids)
     same_ids = rom_id_checksum(distinct) == stamp.rom_id_checksum
-    ids = f"{len(distinct)} visible ids, checksum {'matches' if same_ids else 'differs from'} the stamp's"
+    noun = "visible id" if len(distinct) == 1 else "visible ids"
+    ids = f"{len(distinct)} {noun}, checksum {'matches' if same_ids else 'differs from'} the stamp's"
     return ProbeVerdict(unchanged=same_ids and not newer, reason=f"{updated}; {ids}")
 
 

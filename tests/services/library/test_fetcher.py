@@ -1242,7 +1242,7 @@ class TestIncrementalSkipFromPlatformStamp:
 
         assert (
             "Per-unit fetch N64: newest updated_at 2025-05-31T23:30:00+00:00 is after the reference "
-            "2025-05-31T22:50:00+00:00; 1 visible ids, checksum matches the stamp's"
+            "2025-05-31T22:50:00+00:00; 1 visible id, checksum matches the stamp's"
         ) in caplog.text
 
     @pytest.mark.asyncio
