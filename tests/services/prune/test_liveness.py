@@ -405,7 +405,7 @@ class TestLiveRomIds:
 
 
 class TestGoneRomIds:
-    """What the run marks outside its candidates: only a 404 that stood (#2431 D5)."""
+    """What the run marks: only a 404 that stood (#2431 D5, widened by #2432 D20)."""
 
     async def test_a_404_a_control_vouched_for_is_recorded(self):
         prober, _ = _prober({7: RommNotFoundError("gone"), 99: {"id": 99}}, controls=[99])
