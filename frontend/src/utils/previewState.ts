@@ -31,10 +31,12 @@ export function previewHasChanges(preview: SyncPreview): boolean {
     // empty shortcut delta with pending cover updates must still offer Apply —
     // the old "no changes" short-circuit stranded changed covers forever.
     (s.cover_refresh_count ?? 0) > 0 ||
-    // Platforms owed a fresh stamp (#1416, #743): a late-ack-recovered platform,
-    // or one whose stamp no longer matches RomM, needs a 0-delta apply run to
-    // re-stamp itself, so offer Apply even when every change count is zero.
-    (s.restamp_platform_count ?? 0) > 0
+    // Platforms and collections owed a fresh stamp (#1416, #743, #2477): a
+    // late-ack-recovered platform, or a unit whose stamp no longer matches RomM,
+    // needs a 0-delta apply run to re-stamp itself, so offer Apply even when
+    // every change count is zero.
+    (s.restamp_platform_count ?? 0) > 0 ||
+    (s.restamp_collection_count ?? 0) > 0
   );
 }
 

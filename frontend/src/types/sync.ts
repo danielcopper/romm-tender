@@ -347,6 +347,15 @@ export interface SyncPreviewSummary {
    * interrupted" lingers. Absent on older backends (treat as 0).
    */
   restamp_platform_count?: number;
+  /**
+   * Enabled collections the preview could not skip whose apply will stamp them
+   * (#2477): a stamp that is missing, records no fetch start or checksum, or no
+   * longer matches the listing or the probe, on a collection with members and a
+   * recordable `updated_at`. Read exactly as `restamp_platform_count` is: a
+   * restamp-only preview must still offer Apply, or such a collection is
+   * fetched in full on every sync. Absent on older backends (treat as 0).
+   */
+  restamp_collection_count?: number;
   /** Scope of the run — how many platforms this sync spans (always shown, independent of diffs). */
   sync_platform_count?: number;
   /** Scope of the run — how many collections this sync spans. */

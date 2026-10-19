@@ -172,7 +172,7 @@ function previewMovesACollection(summary: SyncPreview["summary"]): boolean {
  * spend it. Two of the three such previews can be named: a collection that
  * moved, and cover work. **The collection wins where a preview is both**,
  * because it is the one whose result the reader will see in Steam. What is left
- * keeps the plain invitation: a platform re-stamp, which has nothing a reader
+ * keeps the plain invitation: a re-stamp, which has nothing a reader
  * would recognise to name, and a genuinely empty delta, which has nothing at
  * all. Neither may be called cover work, and the page behind the slot is where
  * it is said which of them it is.

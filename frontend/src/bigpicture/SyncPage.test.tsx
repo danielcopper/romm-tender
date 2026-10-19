@@ -556,6 +556,7 @@ describe("SyncPage", () => {
         summary({ platform_collection_diff: { has_changes: true, added_count: 1, removed_count: 0 } }),
         summary({ cover_refresh_count: 3 }),
         summary({ restamp_platform_count: 1 }),
+        summary({ restamp_collection_count: 1 }),
       ];
       for (const leg of legs) {
         resetPendingPreviewStoreForTests();
@@ -644,6 +645,13 @@ describe("SyncPage", () => {
 
     it("names the re-stamp work behind an empty delta (#1416, #743)", async () => {
       adoptPreview(preview({ summary: summary({ restamp_platform_count: 2 }) }));
+      const { container } = await renderPage();
+      expect(container.textContent).toContain("No shortcut changes — recording what RomM has now.");
+      expect(buttonByExactText(container, "Apply Sync")?.disabled).toBe(false);
+    });
+
+    it("names a collection's re-stamp work as it does a platform's (#2477)", async () => {
+      adoptPreview(preview({ summary: summary({ restamp_collection_count: 1 }) }));
       const { container } = await renderPage();
       expect(container.textContent).toContain("No shortcut changes — recording what RomM has now.");
       expect(buttonByExactText(container, "Apply Sync")?.disabled).toBe(false);
