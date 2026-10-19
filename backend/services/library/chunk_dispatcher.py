@@ -312,9 +312,8 @@ class ChunkDispatcher:
                 collection_stamp=collection_stamp,
                 # The fetch generation for a PLATFORM unit's rows (#1504), passed on
                 # EVERY chunk so the whole unit shares the generation the final
-                # chunk's stamp records. A collection unit passes None — it spans
-                # platforms, and re-marking a foreign platform's row would drop it
-                # from that platform's counted rows.
+                # chunk's stamp records. A collection unit passes None; why is
+                # docs/architecture/database-design.md, the `Rom` row's `last_fetch_id`.
                 fetch_id=fetch_id,
                 delivered_through=self._delivery_route(unit),
             )
