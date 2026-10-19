@@ -701,6 +701,13 @@ reachable, try cancelling and restarting the download from the game detail page.
 network interruption, or the ROM being unavailable on the server. Failed downloads can be retried from the game detail
 page.
 
+### Download failed with "Not enough space to unpack"
+
+**Fix**: The game arrived as a zip that Tender unpacks, and its contents do not fit beside it. Free space on the card
+and press **Download** again: the zip is kept, so the retry unpacks it without downloading it again — unless Tender has
+restarted in between, which clears the kept zip. See [Managing Games](managing-games.md#multi-disc-and-multi-file-games)
+for what is unpacked.
+
 ### Download refused before it starts
 
 **Fix**: The refusal says why. A download goes only into RetroDECK's folders, so it needs RetroDECK installed and

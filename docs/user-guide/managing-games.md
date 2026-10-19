@@ -408,6 +408,17 @@ comparison in front of you.
 One case the dialog cannot help with: the folder or file in the way is the wrong shape for the game — a folder where the
 server serves a single file, or the reverse. The dialog says so and only offers replace or cancel.
 
+A disc game your server keeps as a single zip has two right shapes: the zip itself, and the folder unpacking it produces
+(see [Multi-Disc and Multi-File Games](#multi-disc-and-multi-file-games)). So a folder you or an earlier download
+unpacked is the same game, and the dialog offers to use it. **Check Against Server** compares such a folder against the
+files your server lists inside the zip; a server that lists none (one not rescanned since RomM 4.9.0) cannot confirm it.
+Only a zip your server lists as holding no disc image has the one shape, the zip.
+
+When both are on your device — the zip and an unpacked folder — each gets a dialog of its own, one after the other.
+**Use These Files** in either dialog uses the copy that dialog shows. **Download Instead** in the first one opens the
+second, and nothing is deleted until you have chosen **Download Instead** in both: **Cancel** in the second dialog
+leaves both copies as they are, including the one you already agreed to replace.
+
 ### When the same game is on your device under a different name
 
 Your copy is rarely named the way your server names it. `Example Quest - Second Journey (U).zip` and
@@ -518,35 +529,56 @@ Some games ship as more than one file — multi-disc PS1 titles, a base game plu
 downloads these as a single ZIP, which Tender extracts automatically. You just download and play; the layout is handled
 for you.
 
+A disc game your server keeps as **one `.zip`** is unpacked the same way, because an emulator cannot mount a disc from
+inside a zip: a Saturn `.cue` with its `.bin` tracks, a Dreamcast `.gdi` set, a Wii or GameCube `.rvz`, `.wbfs`, `.iso`
+and the like. Tender looks inside the zip once it has arrived; one that holds a disc image or an `.m3u` playlist is
+unpacked, and the zip is removed afterwards. A zip holding anything else — a cartridge ROM, an arcade romset, a lone
+`.bin`, an `.img` without its `.ccd` — stays the zip it is, because those emulators read it as it is.
+
 After the byte transfer finishes, the download button and the QAM queue show a brief **Extracting…** phase with its own
 progress (the percentage climbs back from 0 as the archive unpacks — a large Switch or disc image takes a moment). The
 extraction can't be cancelled, so the cancel/pause controls are replaced by a spinner until it's done; the game then
-flips to **Installed** as usual. Single-file ROMs download as a bare file and skip this phase entirely.
+flips to **Installed** as usual. A single file that is not unpacked downloads as a bare file and skips this phase
+entirely.
 
 Tender gives the extracted game its own folder and names that folder after the real **launch file** (including the
 extension, e.g. `Example Quest - Second Journey (USA).m3u/` or `Example Quest (USA).iso/`) so that ES-DE collapses it
 into a single game entry instead of showing a folder plus loose files.
 
 **Disc switching only applies to systems whose emulator supports it.** For the disc-swapping consoles — PS1, Saturn,
-Sega CD, PC Engine CD, Dreamcast, GameCube, Wii, and the like — a game with two or more `.cue`, `.chd` or `.iso` discs,
-or with one `.cue` disc, gets a game-named `.m3u` playlist so you can flip between discs in-game, and the folder is
-named after that playlist. Discs in any other format get no generated playlist, which includes GameCube and Wii games in
-`.rvz`, `.gcz`, `.ciso` or `.wbfs`. Tender decides this by reading ES-DE's own per-system supported-extension list, so a
-game only ever gets an `.m3u` on a system where ES-DE (and the emulator behind it) actually understands one.
+Sega CD, PC Engine CD, Dreamcast, GameCube, Wii, and the like — a game with two or more discs, or with one `.cue` disc,
+gets a game-named `.m3u` playlist so you can flip between discs in-game, and the folder is named after that playlist. A
+disc is any disc image Tender recognises: `.cue`, `.gdi`, `.ccd`, `.toc` and `.mds` for a disc made of tracks, and
+`.chd`, `.iso`, `.cdi`, `.gcm`, `.rvz`, `.wbfs`, `.wia`, `.gcz`, `.ciso`, `.cso` and `.pbp` for one in a single file. A
+single disc in any format but `.cue` gets no generated playlist. Tender decides this by reading ES-DE's own per-system
+supported-extension list, so a game only ever gets an `.m3u` on a system where ES-DE (and the emulator behind it)
+actually understands one.
+
+A disc made of tracks launches from the file that lists them — the `.cue`, `.gdi`, `.ccd`, `.toc` or `.mds` — and never
+from one of the tracks.
 
 **Cartridge and folder systems get no playlist.** Switch (`.nsp`), Xbox 360 (`.iso`), and other systems with no disc
 concept collapse to their real game file instead — the folder is named after the cartridge/disc image (`<Game>.nsp/`,
 `<Game>.iso/`) and the game launches straight from it. RomM bundles a generic `.m3u` into every multi-file ZIP, but
 Tender ignores it on these systems rather than launching from a file the emulator can't read.
 
-Single-file titles (most `.chd`/`.iso` games on disc-image systems) download as a bare file with no folder, so they need
-no playlist either way.
+Single-file titles that are not a zip (most `.chd`/`.iso` games on disc-image systems) download as a bare file with no
+folder, so they need no playlist either way.
+
+**Space for unpacking.** An unpacked game needs room for the zip and for what comes out of it at the same time. Where
+your server lists what is inside a single zip — libraries rescanned since RomM 4.9.0 — the check before the download
+counts both; otherwise it counts the zip alone. Once the download is complete, Tender checks again against the size the
+zip itself states, for a single zip and a multi-file download alike. When the card is too full, the download fails with
+**Not enough space to unpack**, nothing is installed, and the downloaded zip is kept: free some space and press
+**Download** again, and Tender unpacks the zip it already has instead of downloading it again. The kept zip does not
+survive a restart of Tender (rebooting the Deck, say) — Tender clears unfinished downloads when it starts, so the next
+download fetches the game again.
 
 !!! note "Known limitation"
 
     Games installed **before** this version keep their old folder layout, so ES-DE may still show them as a folder plus
-    loose files — or, on cartridge systems, as a stray `.m3u`. The fix only affects new downloads; re-download the game
-    to get the single clean ES-DE entry.
+    loose files — or, on cartridge systems, as a stray `.m3u`. A disc game downloaded as a single zip before this version
+    stays a zip. The fix only affects new downloads; re-download the game to get the single clean ES-DE entry.
 
 ### When a download has nothing launchable
 
@@ -580,9 +612,10 @@ picked.
 ### What "All discs" means
 
 On the **disc-swapping consoles** (PS1, Saturn, Sega CD, PC Engine CD, Dreamcast, GameCube, Wii, and the like) a
-multi-disc game whose discs are `.cue`, `.chd` or `.iso` images gets a generated `.m3u` playlist, so the dropdown's
-default entry is **All discs (m3u)** — it launches through the playlist and lets you flip between discs **inside the
-emulator**, no relaunch needed. You can still pick a single disc from the same dropdown to jump straight to it.
+multi-disc game gets a generated `.m3u` playlist (see
+[Multi-Disc and Multi-File Games](#multi-disc-and-multi-file-games) for the disc formats), so the dropdown's default
+entry is **All discs (m3u)** — it launches through the playlist and lets you flip between discs **inside the emulator**,
+no relaunch needed. You can still pick a single disc from the same dropdown to jump straight to it.
 
 On systems with **no playlist concept**, there's no in-emulator disc switching, so the dropdown defaults to **Disc 1**
 and switching discs means picking a different disc here and relaunching. Either way, the picker works the same.

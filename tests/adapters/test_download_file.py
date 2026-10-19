@@ -985,3 +985,31 @@ class TestProtocolMethodCount:
         # All listed methods are implemented on the concrete adapter.
         for name in method_names:
             assert hasattr(DownloadFileAdapter(), name), f"missing {name}"
+
+
+class TestAMemberWithABadChecksum:
+    """``zipfile`` checks each member's CRC-32 as it is read to its end, and the extraction lets that through."""
+
+    def test_the_extraction_raises(self, tmp_path):
+        archive = tmp_path / "Game.zip"
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_STORED) as zf:
+            zf.writestr("Game.cue", b"FILE")
+            zf.writestr("Game.bin", b"ABCD" * 64)
+        archive.write_bytes(archive.read_bytes().replace(b"ABCDABCD", b"ABCEABCD", 1))
+        dest = tmp_path / "out"
+        dest.mkdir()
+
+        with pytest.raises(zipfile.BadZipFile, match="Bad CRC-32"):
+            DownloadFileAdapter().extract_zip(str(archive), str(dest), str(tmp_path))
+
+    def test_its_central_directory_still_lists_it(self, tmp_path):
+        # Which is why the unpack decides on the listing and only the read finds the damage.
+        archive = tmp_path / "Game.zip"
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_STORED) as zf:
+            zf.writestr("Game.bin", b"ABCD" * 64)
+        archive.write_bytes(archive.read_bytes().replace(b"ABCDABCD", b"ABCEABCD", 1))
+
+        members = DownloadFileAdapter().list_archive_members(str(archive))
+
+        assert members is not None
+        assert [m["name"] for m in members] == ["Game.bin"]

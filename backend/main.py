@@ -530,7 +530,13 @@ class Endpoints:
 
     @route
     async def start_download(
-        self, rom_id, replace_existing=False, candidate_path=None, collision_choice=None, page_saw_candidate=False
+        self,
+        rom_id,
+        replace_existing=False,
+        candidate_path=None,
+        collision_choice=None,
+        page_saw_candidate=False,
+        confirmed_paths=None,
     ):
         """Start a download, refusing when this game is already on the device.
 
@@ -540,10 +546,11 @@ class Endpoints:
         second confirmation promises. ``collision_choice`` answers the save
         collision that carry can raise. ``page_saw_candidate`` reports what the
         game page told the user, so a page that found a copy can never end in a
-        silent download.
+        silent download. ``confirmed_paths`` lists the occupied paths whose
+        dialogs the user answered with Replace, for a game that claims two.
         """
         return await self._services.download_service.start_download(
-            rom_id, replace_existing, candidate_path, collision_choice, page_saw_candidate
+            rom_id, replace_existing, candidate_path, collision_choice, page_saw_candidate, confirmed_paths
         )
 
     @route

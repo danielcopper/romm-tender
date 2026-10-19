@@ -146,8 +146,9 @@ class RomRemovalService:
     ) -> MutationOutcome:
         """Delete ROM files for an install record. Handles both single-file and multi-file ROMs.
 
-        A multi-file ROM owns a dedicated per-ROM directory (``rom_dir`` is set)
-        and is removed whole. A single-file ROM has no ``rom_dir`` (``None``) —
+        A folder-backed ROM — a multi-file one, or a single zip unpacked into a
+        folder — owns a dedicated per-ROM directory (``rom_dir`` is set) and is
+        removed whole. A single-file ROM has no ``rom_dir`` (``None``) —
         it lives as a bare file in its system's shared folder, which must
         **never** be removed — so only the launch file itself is deleted.
         ``is_inside_folder`` stays the path-containment guard before any

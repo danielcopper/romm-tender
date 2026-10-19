@@ -17,6 +17,7 @@ from domain.rom_adoption import (
     server_manifest,
     sizes_agree,
     unadoptable_reason,
+    unpacked_manifest,
     unpacked_member,
     verification_status,
 )
@@ -716,3 +717,40 @@ class TestVerificationStatus:
             )
         }
         assert verification_status((entry,), local, ()) == "match"
+
+
+class TestUnpackedManifest:
+    """What a folder unpacked from a single zip is held to (#910 D5)."""
+
+    def test_each_listed_member_becomes_a_loose_file_at_its_own_path(self):
+        manifest = server_manifest(
+            {
+                "files": [
+                    {
+                        "file_name": "Game.zip",
+                        "md5_hash": "zipcontent",
+                        "archive_members": [
+                            {"name": "Game.cue", "size": 80, "md5_hash": "AA", "crc_hash": "11"},
+                            {"name": "tracks/Game.bin", "size": 9000, "md5_hash": "bb", "crc_hash": "22"},
+                        ],
+                    }
+                ]
+            }
+        )
+
+        assert unpacked_manifest(manifest) == (
+            ServerFile(name="Game.cue", size_bytes=80, algorithm="md5", digest="aa", rel_path="Game.cue", crc32="11"),
+            ServerFile(
+                name="Game.bin",
+                size_bytes=9000,
+                algorithm="md5",
+                digest="bb",
+                rel_path="tracks/Game.bin",
+                crc32="22",
+            ),
+        )
+
+    def test_a_zip_without_a_listing_holds_the_folder_to_nothing(self):
+        manifest = server_manifest({"files": [{"file_name": "Game.zip", "md5_hash": "zipcontent"}]})
+
+        assert unpacked_manifest(manifest) == ()

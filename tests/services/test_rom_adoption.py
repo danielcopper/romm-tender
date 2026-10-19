@@ -3375,3 +3375,178 @@ class TestAdoptCandidateCollisions:
         # included. `Game (U).state` in the unmoved list does not contain it.
         assert "Game.state" not in result.message
         assert result.set_aside == ["Game.srm"]
+
+
+# ── a single zip that may be unpacked ────────────────────────────────────
+
+
+class TestASingleZipsUnpackedFolder:
+    """A single zip that may be unpacked is served as the zip and as its folder (#910 D5).
+
+    ``_single_file_detail(name="Game.zip")`` states no ``archive_members``, so
+    both shapes stand; the folder it would become is ``/roms/snes/Game``.
+    """
+
+    _ZIP = "/roms/snes/Game.zip"
+    _FOLDER = "/roms/snes/Game"
+
+    async def test_the_folder_at_the_extract_path_is_the_occupied_target_and_adoptable(self, h):
+        h.store.files[f"{self._FOLDER}/Game.cue"] = b"FILE"
+
+        with pytest.raises(TargetOccupied) as refused:
+            await h.service.check_download_target(
+                _single_file_detail(name="Game.zip"), self._ZIP, replace=False, folder_path=self._FOLDER
+            )
+
+        assert refused.value.details["existing"]["path"] == self._FOLDER
+        assert refused.value.details["adoptable"] is True
+
+    async def test_a_resumed_replace_does_not_clear_a_folder_that_appeared_since(self, h):
+        h.store.files[self._ZIP] = b"the file the replace was answered for"
+        h.store.files[f"{self._FOLDER}/Game.cue"] = b"new"
+
+        with pytest.raises(TargetOccupied):
+            await h.service.check_download_target(
+                _single_file_detail(name="Game.zip"), self._ZIP, replace=True, resume=True, folder_path=self._FOLDER
+            )
+
+        assert f"{self._FOLDER}/Game.cue" in h.store.files
+        assert self._ZIP in h.store.files
+
+    async def test_adopting_the_folder_records_it_with_its_launch_file(self, h):
+        h.seed_rom()
+        h.stage_detail(_single_file_detail(name="Game.zip"))
+        h.store.files[f"{self._FOLDER}/Game.cue"] = b"FILE"
+        h.store.files[f"{self._FOLDER}/Game.bin"] = b"\x00" * 64
+
+        result = await h.service.adopt_existing_rom(_ROM_ID, None, None)
+
+        assert result["success"] is True
+        assert result["rom_dir"] == self._FOLDER
+        assert result["file_path"] == f"{self._FOLDER}/Game.cue"
+
+    async def test_a_folder_under_another_name_is_renamed_to_the_folder_not_the_zip(self, h):
+        h.seed_rom()
+        h.stage_detail(_single_file_detail(name="Game.zip"))
+        h.store.files["/roms/snes/Game (USA).m3u/Game.cue"] = b"FILE"
+
+        result = await h.service.adopt_existing_rom(_ROM_ID, "/roms/snes/Game (USA).m3u", None)
+
+        assert result["success"] is True
+        assert ("/roms/snes/Game (USA).m3u", self._FOLDER) in h.move.moves
+        assert result["rom_dir"] == self._FOLDER
+
+    async def _gate(self, h, *, replace, confirmed_paths=None):
+        return await h.service.check_download_target(
+            _single_file_detail(name="Game.zip"),
+            self._ZIP,
+            replace=replace,
+            folder_path=self._FOLDER,
+            confirmed_paths=confirmed_paths,
+        )
+
+    def _occupy_both(self, h):
+        h.store.files[self._ZIP] = b"the user's zip"
+        h.store.files[f"{self._FOLDER}/Game.cue"] = b"FILE"
+
+    async def test_both_occupied_are_refused_one_dialog_after_the_other(self, h):
+        self._occupy_both(h)
+
+        with pytest.raises(TargetOccupied) as first:
+            await self._gate(h, replace=False)
+        with pytest.raises(TargetOccupied) as second:
+            await self._gate(h, replace=True, confirmed_paths=[self._ZIP])
+
+        assert first.value.details["existing"]["path"] == self._ZIP
+        assert second.value.details["existing"]["path"] == self._FOLDER
+        assert f"{self._FOLDER}/Game.cue" in h.store.files
+        assert self._ZIP in h.store.files
+
+    async def test_replace_confirmed_for_both_clears_the_folder_and_leaves_the_zip_for_the_finalize(self, h):
+        self._occupy_both(h)
+
+        assert await self._gate(h, replace=True, confirmed_paths=[self._ZIP, self._FOLDER]) is None
+
+        assert f"{self._FOLDER}/Game.cue" not in h.store.files
+        assert self._ZIP in h.store.files
+
+    async def test_the_folder_confirmed_alone_removes_nothing_while_the_zip_is_unanswered(self, h):
+        self._occupy_both(h)
+
+        with pytest.raises(TargetOccupied) as refused:
+            await self._gate(h, replace=True, confirmed_paths=[self._FOLDER])
+
+        assert refused.value.details["existing"]["path"] == self._ZIP
+        assert f"{self._FOLDER}/Game.cue" in h.store.files
+
+    async def test_a_replace_naming_no_path_covers_both_never(self, h):
+        self._occupy_both(h)
+
+        with pytest.raises(TargetOccupied):
+            await self._gate(h, replace=True)
+
+        assert f"{self._FOLDER}/Game.cue" in h.store.files
+
+    @pytest.mark.parametrize("confirmed", [None, ["/roms/snes/Game"]], ids=["bare replace", "confirmed"])
+    async def test_one_occupied_path_is_replaced_as_before(self, h, confirmed):
+        h.store.files[f"{self._FOLDER}/Game.cue"] = b"FILE"
+
+        assert await self._gate(h, replace=True, confirmed_paths=confirmed) is None
+
+        assert f"{self._FOLDER}/Game.cue" not in h.store.files
+
+    async def test_adopting_from_the_folders_dialog_takes_the_folder_beside_a_zip(self, h):
+        h.seed_rom()
+        h.stage_detail(_single_file_detail(name="Game.zip"))
+        self._occupy_both(h)
+
+        result = await h.service.adopt_existing_rom(_ROM_ID, self._FOLDER, None)
+
+        assert result["success"] is True
+        assert result["rom_dir"] == self._FOLDER
+        assert self._ZIP in h.store.files
+
+    async def test_the_zip_itself_is_still_adopted_as_a_file(self, h):
+        h.seed_rom()
+        h.stage_detail(_single_file_detail(name="Game.zip"))
+        h.store.files[self._ZIP] = b"zip"
+
+        result = await h.service.adopt_existing_rom(_ROM_ID, None, None)
+
+        assert result["success"] is True
+        assert result["file_path"] == self._ZIP
+        assert result["rom_dir"] is None
+
+    async def test_check_against_server_holds_the_folder_to_the_listed_members(self, h):
+        members = {"Game.cue": b"FILE", "Game.bin": b"\x07" * 64}
+        h.stage_detail(_archived_detail(archive=_zip_bytes(members), members=members, state_members=True))
+        for name, data in members.items():
+            h.store.files[f"{self._FOLDER}/{name}"] = data
+
+        result = await h.service.verify_existing_content(_ROM_ID, self._FOLDER)
+
+        assert result["status"] == "match"
+
+    async def test_a_member_that_differs_in_the_folder_is_named(self, h):
+        members = {"Game.cue": b"FILE", "Game.bin": b"\x07" * 64}
+        h.stage_detail(_archived_detail(archive=_zip_bytes(members), members=members, state_members=True))
+        h.store.files[f"{self._FOLDER}/Game.cue"] = b"FILE"
+        h.store.files[f"{self._FOLDER}/Game.bin"] = b"\x08" * 64
+
+        result = await h.service.verify_existing_content(_ROM_ID, self._FOLDER)
+
+        assert result["status"] == "mismatch"
+        assert [d["name"] for d in result["differences"]] == ["Game.bin"]
+
+    async def test_without_a_listing_the_folder_cannot_be_confirmed(self, h):
+        members = {"Game.cue": b"FILE", "Game.bin": b"\x07" * 64}
+        h.stage_detail(_archived_detail(archive=_zip_bytes(members), members=members))
+        for name, data in members.items():
+            h.store.files[f"{self._FOLDER}/{name}"] = data
+
+        result = await h.service.verify_existing_content(_ROM_ID, self._FOLDER)
+
+        assert result["status"] == "unverifiable"
+        assert result["message"] == (
+            "The server does not list what is inside this game's zip, so a folder cannot be confirmed against it"
+        )

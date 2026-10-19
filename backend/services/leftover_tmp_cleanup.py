@@ -3,9 +3,11 @@
 A single-file download writes its bytes to a ``.tmp`` beside its target and
 renames it into place once it is whole, and a BIOS download does the same under
 the BIOS directory; a download RomM serves as a ZIP is written to a
-``.zip.tmp``, which is extracted and then removed. A backend that stopped
-mid-transfer leaves that partial behind; this service removes every one it finds
-under RetroDECK's ROM and BIOS folders when the backend starts — the folders the
+``.zip.tmp``, which is extracted and then removed, and so is a single zip's
+``.tmp`` that holds a disc image. A backend that stopped mid-transfer leaves
+that partial behind, and a download that failed for too little space to unpack
+keeps its whole one for a retry; this service removes every one it finds under
+RetroDECK's ROM and BIOS folders when the backend starts — the folders the
 resolver names, and none the resolver only assumed (``RetroDeckFolders``).
 """
 
@@ -78,9 +80,10 @@ class LeftoverTmpCleanupService:
         """Remove leftover .tmp and .zip.tmp files from ROM and BIOS directories on startup.
 
         This also deletes the ``.tmp`` of a download paused before the backend
-        stopped. The in-memory download queue does not survive a restart either,
-        so a paused download could not have been resumed across one regardless;
-        the next download starts from scratch.
+        stopped, and the zip a download kept after too little space to unpack
+        it. The in-memory download queue does not survive a restart either, so a
+        paused download could not have been resumed across one regardless; the
+        next download starts from scratch.
         """
         cleaned = self._clean_rom_tmp_files() + self._clean_bios_tmp_files()
         if cleaned:

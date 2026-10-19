@@ -35,12 +35,14 @@ from domain.rom_candidates import (
     normalize_rom_name,
     rank_candidates,
 )
-from domain.rom_files import is_multi_file_download, resolve_local_file_name
+from domain.rom_files import resolve_local_file_name
+from domain.served_shape import served_shapes
 
 if TYPE_CHECKING:
     import logging
     from collections.abc import Sequence
 
+    from domain.rom_candidates import Kind
     from services.protocols import (
         DebugLogger,
         DownloadFileStore,
@@ -114,8 +116,14 @@ class CandidateSearch:
 
     # ── The Download click's half ───────────────────────────────────
 
-    def refuse_if_found(self, rom_detail: dict[str, Any], checked_path: str, *, page_saw_candidate: bool) -> None:
+    def refuse_if_found(
+        self, rom_detail: dict[str, Any], checked_path: str, *, page_saw_candidate: bool, folder_path: str | None = None
+    ) -> None:
         """Raise the most specific refusal this search finds for a download.
+
+        *folder_path* is the folder a single zip that may be unpacked would
+        become, which this download claims beside *checked_path*; both shapes
+        are then the served one (``served_shapes``).
 
         Returning means proceed, which is every ordinary download. Three
         refusals, and the order is the point — a user meets the specific
@@ -138,13 +146,14 @@ class CandidateSearch:
         incoming_name = os.path.basename(checked_path)
         incoming_size = rom_detail.get("fs_size_bytes", 0)
         wanted = self._wanted_names(rom_detail, incoming_name)
-        served_dir = is_multi_file_download(rom_detail)
+        served = served_shapes(rom_detail)
+        claimed = {checked_path} if folder_path is None else {checked_path, folder_path}
         matches = self._matches(
             self._local_entries(platform_dir),
             system=system,
             wanted=wanted,
-            covered=self._installed_paths() | {checked_path},
-            served_dir=served_dir,
+            covered=self._installed_paths() | claimed,
+            served=served,
         )
         self._log_debug(
             f"adopt search: dir={platform_dir} names={sorted(wanted)} "
@@ -162,7 +171,7 @@ class CandidateSearch:
             self._logger.info(f"Refusing rom {rom_id}: {len(matches.unusable)} same-named entr(ies) cannot be adopted")
             raise UnusableNamesake(
                 matches.unusable,
-                served_dir=served_dir,
+                served_dir=FILE not in served,
                 incoming_name=incoming_name,
                 incoming_size=incoming_size,
             )
@@ -299,18 +308,17 @@ class CandidateSearch:
         system: str,
         wanted: frozenset[str],
         covered: frozenset[str],
-        served_dir: bool,
+        served: frozenset[Kind],
     ) -> _Matches:
         """Split every namesake into the two things the chain answers with.
 
-        The served kind is a file or a directory and never a link, so an entry
-        matching it is by construction one an install row may point at — no
+        A served shape is a file or a directory and never a link, so an entry
+        matching one is by construction one an install row may point at — no
         second test needed, and no way for a symlink to reach the offerable side.
         """
         found = self._named(entries, system=system, wanted=wanted, covered=covered)
-        served_kind = DIR if served_dir else FILE
-        offerable = tuple(entry for entry in found if entry.kind == served_kind)
-        return _Matches(offerable=offerable, unusable=tuple(entry for entry in found if entry.kind != served_kind))
+        offerable = tuple(entry for entry in found if entry.kind in served)
+        return _Matches(offerable=offerable, unusable=tuple(entry for entry in found if entry.kind not in served))
 
     def _rank(self, matches: tuple[LocalEntry, ...], rom_detail: dict[str, Any]):
         """Order what matched by the evidence each entry supports without a byte being read."""

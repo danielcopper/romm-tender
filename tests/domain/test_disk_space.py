@@ -5,7 +5,7 @@ are the boundary (exactly enough is enough) and every claim that must be counted
 against the free space the store reported.
 """
 
-from domain.disk_space import disk_space_verdict
+from domain.disk_space import NotEnoughSpaceToUnpack, disk_space_verdict, unpack_space_verdict
 
 _MB = 1024 * 1024
 _HEADROOM = 100 * _MB
@@ -92,3 +92,43 @@ class TestDiskSpaceVerdict:
     def test_the_needed_figure_is_stated_in_the_unit_the_refusal_uses(self):
         verdict = disk_space_verdict(file_size=500 * _MB, free_space=0, reserved_bytes=0, multi_file=False)
         assert verdict.needed_mb == 600
+
+
+class TestASingleZipThatWillBeUnpacked:
+    def test_its_listed_contents_are_counted_with_it(self):
+        verdict = disk_space_verdict(
+            file_size=300 * _MB, free_space=699 * _MB, reserved_bytes=0, multi_file=False, unpacked_size=300 * _MB
+        )
+        assert verdict.fits is False
+        assert verdict.needed_bytes == 600 * _MB + _HEADROOM
+
+    def test_a_kept_zip_needs_only_its_contents(self):
+        verdict = disk_space_verdict(
+            file_size=300 * _MB,
+            free_space=400 * _MB,
+            reserved_bytes=0,
+            multi_file=False,
+            already_on_disk=300 * _MB,
+            unpacked_size=300 * _MB,
+        )
+        assert verdict.fits is True
+        assert verdict.needed_bytes == 300 * _MB + _HEADROOM
+
+
+class TestUnpackSpaceVerdict:
+    def test_the_contents_and_the_headroom_must_fit(self):
+        verdict = unpack_space_verdict(unpacked_size=500 * _MB, free_space=600 * _MB, reserved_bytes=0)
+        assert verdict.fits is True
+
+    def test_one_byte_short_does_not_fit(self):
+        verdict = unpack_space_verdict(unpacked_size=500 * _MB, free_space=600 * _MB - 1, reserved_bytes=0)
+        assert verdict.fits is False
+
+    def test_what_other_downloads_claimed_is_not_free(self):
+        verdict = unpack_space_verdict(unpacked_size=500 * _MB, free_space=900 * _MB, reserved_bytes=400 * _MB)
+        assert verdict.fits is False
+        assert verdict.free_mb == 500
+
+    def test_the_failure_states_both_figures(self):
+        verdict = unpack_space_verdict(unpacked_size=500 * _MB, free_space=200 * _MB, reserved_bytes=0)
+        assert str(NotEnoughSpaceToUnpack(verdict)) == "Not enough space to unpack (200MB free, need 600MB)"

@@ -158,11 +158,11 @@ class RomInstallRepository(Protocol):
     """Persistence seam for the ``RomInstall`` aggregate (installed-ROM file records)."""
 
     def get(self, rom_id: int) -> RomInstall | None:
-        """Return the install record for *rom_id*, or ``None``. (downloads.py, game_detail.py, saves/rom_info.py)"""
+        """Return the install record for *rom_id*, or ``None``. (downloads/, game_detail.py, saves/rom_info.py)"""
         ...
 
     def save(self, install: RomInstall) -> None:
-        """Upsert the install record. (downloads.py)"""
+        """Upsert the install record. (downloads/)"""
         ...
 
     def delete(self, rom_id: int) -> None:

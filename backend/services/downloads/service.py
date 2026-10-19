@@ -15,29 +15,26 @@ from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, Any, Literal
 
-from domain.disc_formats import DISC_IMAGE_EXTENSIONS
-from domain.disk_space import disk_space_verdict
+from domain.disk_space import NotEnoughSpaceToUnpack, disk_space_verdict
 from domain.download_frames import cancelled_frame, failed_frame
 from domain.emulator_sources import RETRODECK
-from domain.retrodeck_folders import GAME_DOWNLOAD, EveryFolderRefused, FolderRefused, folder_of
+from domain.retrodeck_folders import GAME_DOWNLOAD, FolderRefused
+from domain.rom_candidates import DIR, FILE
 from domain.rom_file import NO_FILE_ON_ROMM_MESSAGE, NoFileOnRomm, has_file_on_romm
 from domain.rom_files import (
     TMP_EXT,
     ZIP_TMP_EXT,
-    build_m3u_content,
-    detect_launch_file,
-    es_de_collapse_rename,
-    folder_boot_layout_root,
     is_multi_file_download,
-    needs_m3u,
     resolve_extract_dir_name,
     resolve_local_file_name,
     synthetic_rom_name,
 )
+from domain.served_shape import is_zip_name, listed_unpacked_bytes, served_shapes
 from domain.sibling_supersede import supersede_siblings
 from lib.background_tasks import BackgroundTasks
 from lib.errors import NotInstalled, Refused
 from lib.path_safety import coerce_safe_component
+from services.downloads.unpack import DownloadUnpacker, DownloadUnpackerConfig
 
 if TYPE_CHECKING:
     import logging
@@ -208,7 +205,13 @@ class DownloadService:
             del self._download_queue[rid]
 
     async def start_download(
-        self, rom_id, replace_existing=False, candidate_path=None, collision_choice=None, page_saw_candidate=False
+        self,
+        rom_id,
+        replace_existing=False,
+        candidate_path=None,
+        collision_choice=None,
+        page_saw_candidate=False,
+        confirmed_paths=None,
     ):
         """Start a download, refusing when this game is already on disk.
 
@@ -227,8 +230,12 @@ class DownloadService:
                 raise Refused("already_downloading", "Already downloading")
             # The page's report rides with the user's answers because the gate reads
             # them together, but it is added apart from them to keep the difference
-            # visible: the two above are choices the user made, this one is not.
-            answer = {"candidate_path": candidate_path, "collision_choice": collision_choice}
+            # visible: those above are choices the user made, this one is not.
+            answer = {
+                "candidate_path": candidate_path,
+                "collision_choice": collision_choice,
+                "confirmed_paths": confirmed_paths,
+            }
             answer["page_saw_candidate"] = page_saw_candidate
             result = await self._begin_download(rom_id, resume=False, replace_existing=bool(replace_existing), **answer)
             await self._hold_until_started_task_done(result, rom_id, "start_download")
@@ -367,11 +374,21 @@ class DownloadService:
             # — at the path this download would claim, or beside it under another
             # name — and let the user decide what happens to it: adopt, replace,
             # or (where nothing can be adopted) accept a second copy (ADR-0028).
-            # A multi-file ROM claims its extract directory, not the archive name.
-            checked_path = target_path
-            if is_multi_file_download(rom_detail):
-                checked_path = os.path.join(roms_dir, self._resolve_safe_extract_dir_name(rom_detail))
-            gated = await self._target_gate(rom_detail, checked_path, replace=replace_existing, resume=resume, **answer)
+            # A multi-file ROM claims its extract directory, not the archive name,
+            # and a single zip that may be unpacked claims both.
+            shapes = served_shapes(rom_detail)
+            folder_path = None
+            if DIR in shapes:
+                folder_path = os.path.join(roms_dir, self._resolve_safe_extract_dir_name(rom_detail))
+            checked_path = target_path if FILE in shapes or folder_path is None else folder_path
+            gated = await self._target_gate(
+                rom_detail,
+                checked_path,
+                replace=replace_existing,
+                resume=resume,
+                folder_path=folder_path if FILE in shapes else None,
+                **answer,
+            )
         except OSError as e:
             self._logger.error(f"Failed to prepare download for ROM {rom_id}: {e}")
             raise Refused("download_start_failed", _START_FAILED_MESSAGE) from e
@@ -396,12 +413,16 @@ class DownloadService:
 
         try:
             self._download_file_store.make_dirs(roms_dir)
+            # A download kept whole after a failed unpack is not fetched again, so
+            # only what the unpack still needs is weighed — as for a resume.
+            kept = resume or self._unpacker().kept_download_complete(target_path, rom_detail)
             verdict = disk_space_verdict(
                 file_size=file_size,
                 free_space=self._download_file_store.disk_free(roms_dir),
                 reserved_bytes=sum(self._reserved_bytes.values()),
                 multi_file=is_multi_file_download(rom_detail),
-                already_on_disk=self._partial_tmp_size(target_path, rom_detail) if resume else 0,
+                already_on_disk=self._partial_tmp_size(target_path, rom_detail) if kept else 0,
+                unpacked_size=listed_unpacked_bytes(rom_detail),
             )
         except OSError as e:
             self._logger.error(f"Failed to prepare download for ROM {rom_id}: {e}")
@@ -445,13 +466,14 @@ class DownloadService:
             "resumable": resumable,
             # The user's replace answer, carried across a pause so a resumed
             # replace-download is not refused by the very file it is replacing.
-            # Kept only where the answer is still LIVE: a single-file replace
-            # deliberately deletes nothing (``os.replace`` is atomic), so the
-            # original is still there and still the content the user was shown. A
-            # multi-file replace already removed its directory, so the answer is
-            # spent — anything at that path now is content the user has never
-            # seen, and the gate must ask about it rather than delete it.
-            "_replace_existing": replace_existing and not is_multi_file_download(rom_detail),
+            # Kept only where the answer is still LIVE: a replace of a file
+            # deliberately deletes nothing (``os.replace`` is atomic, and an
+            # unpacked zip removes it only once installed), so the original is
+            # still there and still the content the user was shown. A replace of
+            # a directory already removed it, so the answer is spent — anything at
+            # that path now is content the user has never seen, and the gate must
+            # ask about it rather than delete it.
+            "_replace_existing": replace_existing and FILE in served_shapes(rom_detail),
         }
         self._download_tasks[rom_id] = task
         # Reserve this download's required bytes so a concurrent sibling's
@@ -508,7 +530,7 @@ class DownloadService:
         return self._download_file_store.file_size(target_path + tmp_ext)
 
     def _resolve_safe_extract_dir_name(self, rom_detail: dict[str, Any]) -> str:
-        """Resolve the sanitized base name for a multi-file ROM's extract dir.
+        """Resolve the sanitized base name for the extract dir an unpacked ROM lands in.
 
         Names the directory after the ROM's identity via
         ``resolve_extract_dir_name`` (never ``files[0]``), then coerces the
@@ -526,102 +548,60 @@ class DownloadService:
             self._logger.warning(f"Sanitized extract dir name from '{raw}' to '{safe}'")
         return safe
 
-    def _post_download_multi_io(self, rom_id, rom_detail, target_path, file_name, system, extract_dir_name):
+    def _unpacker(self) -> DownloadUnpacker:
+        """The post-processing over this service's seams as they stand now."""
+        return DownloadUnpacker(
+            config=DownloadUnpackerConfig(
+                download_file_store=self._download_file_store,
+                retrodeck_folders=self._retrodeck_folders,
+                install_recorder=self._install_recorder,
+                m3u_support=self._m3u_support,
+                logger=self._logger,
+            )
+        )
+
+    def _extract_progress(self, rom_id, rom_detail, file_name):
+        """The ``extracting`` phase's progress callback for this download."""
+        rom_name = rom_detail.get("name", file_name)
+        platform_name = rom_detail.get("platform_name", rom_detail.get("platform_slug", ""))
+        return self._make_progress_callback(rom_id, rom_name, platform_name, file_name, phase="extracting")
+
+    def _post_download_multi_io(
+        self, rom_id, rom_detail, target_path, file_name, system, extract_dir_name, reserved_bytes=0
+    ):
         """Sync helper for _do_download multi-file — extraction + renames in executor.
 
         *extract_dir_name* is the ROM-identity-derived, sanitized base name for
         the extract directory (``_resolve_safe_extract_dir_name``) — never a
-        name derived from ``files[0]``. Returns ``(launch_file, error)``.
-        ``error`` is a string when the RomM data fails the ``RomInstall``
-        invariant — the extracted directory is removed and nothing is
-        persisted — otherwise ``None``.
+        name derived from ``files[0]``. Returns ``(launch_file, error)`` as
+        ``DownloadUnpacker.unpack_and_record`` does.
         """
-        extract_dir = os.path.join(os.path.dirname(target_path), extract_dir_name)
-        # The removal's bound, the system's own folder, which no switch changes:
-        # a download that started still extracts after RetroDECK is switched off.
-        folders = self._retrodeck_folders.rom_folders([system])
-        if isinstance(folders, EveryFolderRefused):
-            raise folders
-        folder = folder_of(folders, system)
-        if isinstance(folder, FolderRefused):
-            raise ValueError(f"No ROM folder to extract {extract_dir} inside: {folder.message}")
-        self._download_file_store.make_dirs(extract_dir)
-        tmp_zip = target_path + ZIP_TMP_EXT
-        # ZIP-slip protection: adapter validates members resolve within extract_dir
-        # AND that extract_dir itself resolves within the system's folder.
-        rom_name = rom_detail.get("name", file_name)
-        platform_name = rom_detail.get("platform_name", rom_detail.get("platform_slug", ""))
-        extract_cb = self._make_progress_callback(rom_id, rom_name, platform_name, file_name, phase="extracting")
-        self._download_file_store.extract_zip(tmp_zip, extract_dir, folder, progress_callback=extract_cb)
-        self._download_file_store.remove_file(tmp_zip)
-        self._download_file_store.decode_url_encoded_names(extract_dir)
-        # Heal a folder-boot disc dump whose PS3_DISC.SFB ships .txt-suffixed,
-        # before launch detection reads the layout (ADR-0019 / #1212).
-        self._maybe_heal_ps3_sfb_io(extract_dir)
-        # Whether ES-DE lists .m3u for this system (gates both M3U generation and
-        # launch-file selection so a RomM-bundled .m3u is ignored on Switch/Xbox).
-        m3u_supported = self._m3u_support(system)
-        # Auto-generate M3U if missing and multiple disc files exist
-        self._maybe_generate_m3u_io(extract_dir, rom_detail, m3u_supported)
-        # Detect launch file: prefer M3U > CUE > largest file
-        launch_file = self._collect_and_detect_launch_file(extract_dir, m3u_supported)
-        # ES-DE collapses a multi-file dir into one game entry only when the
-        # dir is named after the launch file *including* the extension. The
-        # launch file is only known after extraction (the M3U may be
-        # auto-generated above), so the rename happens here, last of all the
-        # filesystem work, so a later failure cleans up the renamed dir.
-        extract_dir, launch_file = self._maybe_es_de_collapse_io(extract_dir, launch_file)
-
-        return self._install_recorder.do_record_install(
-            rom_id=rom_id,
-            rom_detail=rom_detail,
-            file_path=launch_file,
-            rom_dir=extract_dir,
-            system=system,
-            cleanup=lambda: self._download_file_store.remove_tree(extract_dir),
+        return self._unpacker().finish_multi(
+            rom_id,
+            rom_detail,
+            target_path,
+            os.path.join(os.path.dirname(target_path), extract_dir_name),
+            system,
+            progress_callback=self._extract_progress(rom_id, rom_detail, file_name),
+            reserved_bytes=reserved_bytes,
         )
 
-    def _maybe_es_de_collapse_io(self, extract_dir: str, launch_file: str) -> tuple[str, str]:
-        """Rename *extract_dir* after the launch file so ES-DE collapses it to one entry.
-
-        Returns ``(rom_dir, launch_file)`` — the renamed pair when the move
-        applied, or the originals unchanged. Moves the *whole* directory
-        (never just the launch file — ADR-0008). Skips the move when
-        ``es_de_collapse_rename`` reports no rename is needed, and on
-        collision: if the target already exists the staging dir is kept and a
-        warning is logged rather than clobbering or merging an existing dir.
-        """
-        rename = es_de_collapse_rename(extract_dir, launch_file)
-        if rename is None:
-            return (extract_dir, launch_file)
-        new_rom_dir, new_launch_file = rename
-        if self._download_file_store.exists(new_rom_dir):
-            self._logger.warning(
-                "ES-DE collapse rename skipped: target '%s' already exists; keeping staging dir '%s'",
-                new_rom_dir,
-                extract_dir,
-            )
-            return (extract_dir, launch_file)
-        self._download_file_store.move_dir(extract_dir, new_rom_dir)
-        return (new_rom_dir, new_launch_file)
-
-    def _post_download_single_io(self, rom_id, rom_detail, target_path, system):
+    def _post_download_single_io(self, rom_id, rom_detail, target_path, system, extract_dir_name="", reserved_bytes=0):
         """Sync helper for _do_download single-file — rename + DB persist in executor.
 
-        Returns ``(target_path, error)``. ``error`` is a string when the RomM
-        data fails the ``RomInstall`` invariant — the renamed file is removed
-        and nothing is persisted — otherwise ``None``.
+        Returns ``(path, error)`` as ``DownloadUnpacker.finish_single`` does; a
+        zip holding a disc image is unpacked into *extract_dir_name* beside
+        *target_path*.
         """
-        tmp_path = target_path + TMP_EXT
-        self._download_file_store.rename(tmp_path, target_path)
-
-        return self._install_recorder.do_record_install(
-            rom_id=rom_id,
-            rom_detail=rom_detail,
-            file_path=target_path,
-            rom_dir=None,
-            system=system,
-            cleanup=lambda: self._download_file_store.remove_file(target_path),
+        file_name = os.path.basename(target_path)
+        return self._unpacker().finish_single(
+            rom_id,
+            rom_detail,
+            target_path,
+            os.path.join(os.path.dirname(target_path), extract_dir_name) if extract_dir_name else None,
+            system,
+            progress_callback=self._extract_progress(rom_id, rom_detail, file_name),
+            reserved_bytes=reserved_bytes,
         )
 
     def _make_progress_callback(
@@ -853,9 +833,10 @@ class DownloadService:
         # Name the extract dir from the ROM's identity, not files[0] (which may be
         # an arbitrary inner asset for a nested-single folder game). Computed once
         # here and threaded to both the extraction and the cleanup so the dir a
-        # failure tears down matches the dir extraction created. Only multi-file
-        # ROMs own a dedicated dir, so single-file skips the derivation.
-        extract_dir_name = self._resolve_safe_extract_dir_name(rom_detail) if has_multiple else ""
+        # failure tears down matches the dir extraction created. Only a download
+        # that may be unpacked — a multi-file ROM or a single zip — gets one.
+        may_unpack = has_multiple or is_zip_name(target_path)
+        extract_dir_name = self._resolve_safe_extract_dir_name(rom_detail) if may_unpack else ""
         progress_callback = self._make_progress_callback(rom_id, rom_name, platform_name, file_name, control)
         on_meta = self._make_on_meta(rom_id, rom_name, platform_name, file_name)
         # Tracks the resolved launch path once extraction returns it, so a
@@ -893,22 +874,27 @@ class DownloadService:
 
             async with self._download_semaphore:
                 self._download_queue[rom_id]["status"] = "downloading"
+                # A zip kept whole after a failed unpack is unpacked as it is.
+                kept = self._unpacker().kept_download_complete(target_path, rom_detail)
+                if kept:
+                    self._logger.info(f"Unpacking the download already on disk for {rom_name}")
 
                 if has_multiple:
                     # Multi-file ROM: API returns ZIP, download to temp then extract
                     tmp_zip = target_path + ZIP_TMP_EXT
-                    await self._loop.run_in_executor(
-                        None,
-                        partial(
-                            self._romm_api.download_rom_content,
-                            rom_id,
-                            file_name,
-                            tmp_zip,
-                            progress_callback,
-                            resume=resume,
-                            on_meta=on_meta,
-                        ),
-                    )
+                    if not kept:
+                        await self._loop.run_in_executor(
+                            None,
+                            partial(
+                                self._romm_api.download_rom_content,
+                                rom_id,
+                                file_name,
+                                tmp_zip,
+                                progress_callback,
+                                resume=resume,
+                                on_meta=on_meta,
+                            ),
+                        )
                     post_io_future = self._loop.run_in_executor(
                         None,
                         self._post_download_multi_io,
@@ -918,6 +904,7 @@ class DownloadService:
                         file_name,
                         system,
                         extract_dir_name,
+                        self._bytes_reserved_by_others(rom_id),
                     )
                     # Shield the commit await: a cancel here must propagate to this
                     # coroutine WITHOUT cancelling the underlying future, so
@@ -929,20 +916,28 @@ class DownloadService:
                     final_path, post_io_error = await asyncio.shield(post_io_future)
                 else:
                     tmp_path = target_path + TMP_EXT
-                    await self._loop.run_in_executor(
-                        None,
-                        partial(
-                            self._romm_api.download_rom_content,
-                            rom_id,
-                            file_name,
-                            tmp_path,
-                            progress_callback,
-                            resume=resume,
-                            on_meta=on_meta,
-                        ),
-                    )
+                    if not kept:
+                        await self._loop.run_in_executor(
+                            None,
+                            partial(
+                                self._romm_api.download_rom_content,
+                                rom_id,
+                                file_name,
+                                tmp_path,
+                                progress_callback,
+                                resume=resume,
+                                on_meta=on_meta,
+                            ),
+                        )
                     post_io_future = self._loop.run_in_executor(
-                        None, self._post_download_single_io, rom_id, rom_detail, target_path, system
+                        None,
+                        self._post_download_single_io,
+                        rom_id,
+                        rom_detail,
+                        target_path,
+                        system,
+                        extract_dir_name,
+                        self._bytes_reserved_by_others(rom_id),
                     )
                     # Shielded so a racing cancel leaves the future intact for
                     # ``_reconcile_post_io`` to re-await (see the multi-file branch).
@@ -1025,7 +1020,10 @@ class DownloadService:
         except Exception as e:
             self._download_queue[rom_id]["status"] = "failed"
             self._download_queue[rom_id]["error"] = str(e)
-            self._cleanup_partial_download(target_path, has_multiple, extract_dir_name, final_path)
+            # Too little space to unpack keeps the download whole for a retry;
+            # nothing was extracted yet, so there is nothing else to remove.
+            if not isinstance(e, NotEnoughSpaceToUnpack):
+                self._cleanup_partial_download(target_path, has_multiple, extract_dir_name, final_path)
             self._logger.error(f"Download failed for {rom_name}: {e}")
             await self._emit("download_failed", failed_frame(rom_id, rom_name, platform_name, str(e)))
 
@@ -1044,129 +1042,29 @@ class DownloadService:
                 del self._control_tokens[rom_id]
             self._prune_download_queue()
 
-    def _maybe_heal_ps3_sfb_io(self, extract_dir: str) -> None:
-        """Copy a folder-boot dump's ``PS3_DISC.SFB.txt`` back to ``PS3_DISC.SFB``.
+    def _bytes_reserved_by_others(self, rom_id: int) -> int:
+        """What every other in-flight download has claimed — read on the loop, where the claims change."""
+        return sum(reserved for other, reserved in self._reserved_bytes.items() if other != rom_id)
 
-        RPCS3 identifies a disc-dump folder by a ``PS3_DISC.SFB`` at the game
-        root; some RomM dumps ship it renamed ``PS3_DISC.SFB.txt`` and never
-        boot until it is restored (verified on-device, #1212). Only for a
-        folder-boot layout (:func:`folder_boot_layout_root` locates the game
-        root) and only the exact ``.txt`` → real-name case: when the ``.txt``
-        exists and the real name does not, a copy is written (the original is
-        kept). Any other shape — real SFB already present, no ``.txt``, no
-        folder-boot layout — is left untouched. Scoped to this one known dump
-        quirk, not a general renamer.
-        """
-        all_files = self._download_file_store.scan_files_with_sizes(extract_dir)
-        root = folder_boot_layout_root([path for path, _size in all_files])
-        if root is None:
-            return
-        sfb = os.path.join(root, "PS3_DISC.SFB")
-        sfb_txt = os.path.join(root, "PS3_DISC.SFB.txt")
-        if self._download_file_store.exists(sfb_txt) and not self._download_file_store.exists(sfb):
-            self._download_file_store.copy_file(sfb_txt, sfb)
-            self._logger.info("healed PS3_DISC.SFB from .txt-suffixed dump: %s", sfb)
+    def _maybe_heal_ps3_sfb_io(self, extract_dir: str) -> None:
+        """``DownloadUnpacker.heal_ps3_sfb`` over this service's seams."""
+        self._unpacker().heal_ps3_sfb(extract_dir)
 
     def _maybe_generate_m3u_io(self, extract_dir: str, rom_detail: dict[str, Any], m3u_supported: bool) -> None:
-        """Auto-generate a game-named M3U playlist when one is warranted (see ``needs_m3u``).
-
-        Writes ``<fs_name_no_ext>.m3u`` when the platform supports ``.m3u``, no
-        M3U already exists, and the disc files warrant one: multi-disc ROMs (any
-        of cue/chd/iso) for disc switching, or a single-disc bin/cue ROM so the
-        extract dir collapses to a game-named entry in ES-DE. When the platform
-        does not support ``.m3u`` (per ES-DE's ``es_systems.xml``), no playlist
-        is generated.
-        """
-        if not m3u_supported:
-            return
-
-        all_files = self._download_file_store.scan_files_with_sizes(extract_dir)
-        # A folder-boot dump (PS3 — …/PS3_GAME/USRDIR/EBOOT.BIN) launches the game
-        # directory directly (ADR-0019), never a playlist — and its many payload
-        # files must never be misread as "discs". Suppress the M3U outright even
-        # though ES-DE lists .m3u for the platform. (#1212)
-        if folder_boot_layout_root([path for path, _size in all_files]) is not None:
-            return
-        # Check if an M3U already exists (search recursively)
-        if any(path.lower().endswith(".m3u") for path, _size in all_files):
-            return
-
-        # Collect disc files (the DISC_IMAGE_EXTENSIONS set; search recursively).
-        disc_suffixes = tuple(DISC_IMAGE_EXTENSIONS)
-        disc_files = [
-            os.path.relpath(path, extract_dir) for path, _size in all_files if path.lower().endswith(disc_suffixes)
-        ]
-
-        if not needs_m3u(disc_files, m3u_supported):
-            return
-
-        rom_name = rom_detail.get("fs_name_no_ext", rom_detail.get("name", "playlist"))
-        m3u_path = os.path.join(extract_dir, f"{rom_name}.m3u")
-        self._download_file_store.write_text_atomic(m3u_path, build_m3u_content(disc_files))
-        self._logger.info(f"Auto-generated M3U playlist: {m3u_path}")
+        """``DownloadUnpacker.generate_m3u`` over this service's seams."""
+        self._unpacker().generate_m3u(extract_dir, rom_detail, m3u_supported)
 
     def _collect_and_detect_launch_file(self, extract_dir: str, m3u_supported: bool) -> str:
-        """Find the best launch file in an extracted multi-file ROM directory.
-
-        *m3u_supported* gates whether a ``.m3u`` (including a RomM-bundled one)
-        may be chosen as the launch file — see ``detect_launch_file``.
-        """
-        all_files = self._download_file_store.scan_files_with_sizes(extract_dir)
-        result = detect_launch_file(all_files, m3u_supported)
-        return result if result is not None else extract_dir
+        """``DownloadUnpacker.detect_launch_file`` over this service's seams."""
+        return self._unpacker().detect_launch_file(extract_dir, m3u_supported)
 
     def _cleanup_partial_download(self, target_path, has_multiple, extract_dir_name, final_path=None):
-        """Clean up partial download files. Each step is independent so one failure doesn't block others.
-
-        Only ever called for a download that did NOT commit an install (the
-        failure path and the cancel-without-commit path); a cancel that loses the
-        race to a committed install routes to ``_finalize_download_complete``
-        instead and never reaches here.
-
-        Removes ONLY the transient transfer artifacts (``.zip.tmp`` / ``.tmp``)
-        and, for a multi-file ROM, the extract dir(s) this download created. The
-        bare ``target_path`` is NEVER removed: a single-file transfer writes to
-        ``target_path + .tmp`` and only renames to ``target_path`` on success, so
-        deleting the bare path would destroy a PRE-EXISTING install (a re-download
-        that fails mid-stream) or a just-committed one (a cancel race).
-
-        For a multi-file ROM the extract dir may have been renamed for ES-DE
-        collapse after extraction. *final_path* (the resolved launch file,
-        ``None`` until extraction returns it) lets cleanup tear down whichever
-        of the two dir names exists — the staging name *and* the renamed dir
-        (``os.path.dirname(final_path)``) — so no failure path orphans a dir.
-
-        *extract_dir_name* is the same ROM-identity-derived base name extraction
-        created the staging dir under (``_resolve_safe_extract_dir_name``), so
-        cleanup targets exactly that dir rather than re-deriving it from a stale
-        source (unused for single-file ROMs, which own no dir).
-        """
-        self._remove_partial_tmp_files(target_path)
-        if has_multiple:
-            staging_dir = os.path.join(os.path.dirname(target_path), extract_dir_name)
-            dirs_to_remove = {staging_dir}
-            if final_path:
-                dirs_to_remove.add(os.path.dirname(final_path))
-            for extract_dir in dirs_to_remove:
-                try:
-                    self._download_file_store.remove_tree(extract_dir)
-                except Exception as e:
-                    self._logger.warning(f"Cleanup failed for directory {extract_dir}: {e}")
+        """``DownloadUnpacker.remove_partial_download`` over this service's seams."""
+        self._unpacker().remove_partial_download(target_path, has_multiple, extract_dir_name, final_path)
 
     def _remove_partial_tmp_files(self, target_path: str) -> None:
-        """Remove the ``.zip.tmp`` and ``.tmp`` partials for *target_path*.
-
-        Each removal is independent so one failure doesn't block the other, and a
-        missing partial is not an error. The bare ``target_path`` is NEVER touched
-        — only the transient transfer artifacts. Shared by
-        ``_cleanup_partial_download`` (running-cancel / failure) and the
-        paused-cancel path, which has no live task in scope to name the extension.
-        """
-        for path in (target_path + ZIP_TMP_EXT, target_path + TMP_EXT):
-            try:
-                self._download_file_store.remove_file(path)
-            except Exception as e:
-                self._logger.warning(f"Cleanup failed for {path}: {e}")
+        """``DownloadUnpacker.remove_partial_tmp_files`` over this service's seams."""
+        self._unpacker().remove_partial_tmp_files(target_path)
 
     def cancel_download(self, rom_id):
         """Cancel a download, whether it is running or paused.

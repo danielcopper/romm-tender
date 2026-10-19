@@ -33,7 +33,7 @@ transactions actually held the lock.
 The established fix is the same for both: snapshot the rows a seam needs
 *inside* one short UoW, close it, then call the seam *outside* any open UoW
 (``services/relaunch_options_resolver.py``, ``services/cores.py``,
-``services/disc.py``, ``services/downloads.py``,
+``services/disc.py``, ``services/downloads/service.py``,
 ``services/library/shortcut_launch_resolver.py`` are the reference shape).
 Re-read anything the write then depends on: the second transaction runs on its
 own connection, so the snapshot may have gone stale.

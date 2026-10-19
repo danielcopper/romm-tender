@@ -3,8 +3,9 @@
 Exists only while a ROM is downloaded: created on download-complete, removed on
 uninstall. References its Rom by ``rom_id``. Always carries the specific launch
 ``file_path``; ``rom_dir`` names the dedicated per-ROM directory and is set only
-for folder-backed (multi-file) ROMs — it is ``None`` for single-file ROMs, which
-live as a bare file in the shared system directory and own no folder. The
+for folder-backed ROMs (a multi-file ROM, or a single zip unpacked into a
+folder) — it is ``None`` for a single file kept as it arrived, which lives as a
+bare file in the shared system directory and owns no folder. The
 denormalized ``platform_slug``/``system`` let the home migration and the save
 answer read this record without joining the registry. ``launchable`` records whether the system
 can act on that launch file at all — a download whose content the emulator

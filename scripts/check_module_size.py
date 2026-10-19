@@ -77,13 +77,7 @@ SCOPE_DIRS = (
 # and only with the reason recorded at the entry below and argued in the PR.
 # Never taken silently: a number raised without that reasoning has retired the
 # gate, and that costs more than any module's size.
-ALLOWLIST = {
-    # Lowered 1119 → 1059 (#1171): the download and extract progress callbacks
-    # became one phase-parameterised factory. Lowered 1059 → 1056 (#2041): the
-    # start-up tmp cleanup left for its own service, which made room for the
-    # start and resume use cases to check their own conflict rules.
-    "backend/services/downloads.py": 1056,
-}
+ALLOWLIST: dict[str, int] = {}
 
 
 def in_scope() -> list[pathlib.Path]:

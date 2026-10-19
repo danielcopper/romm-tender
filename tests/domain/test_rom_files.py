@@ -2,6 +2,8 @@
 
 import os
 
+import pytest
+
 from domain.rom_files import (
     build_m3u_content,
     detect_launch_file,
@@ -579,3 +581,40 @@ class TestResolveExtractDirName:
 
     def test_missing_fs_name_and_id_uses_unknown_fallback(self):
         assert resolve_extract_dir_name({}) == "rom_unknown"
+
+
+class TestATrackSetLaunchesItsDescriptor:
+    """A disc made of tracks launches its descriptor, never its largest track (#910 D4)."""
+
+    @pytest.mark.parametrize(
+        ("descriptor", "tracks"),
+        [
+            ("Game.gdi", ["track01.bin", "track02.raw", "track03.bin"]),
+            ("Game.ccd", ["Game.img", "Game.sub"]),
+            ("Game.toc", ["Game.bin"]),
+            ("Game.mds", ["Game.mdf"]),
+        ],
+    )
+    def test_the_descriptor_beats_a_larger_track(self, descriptor, tracks):
+        files = [(f"/roms/x/{descriptor}", 10)] + [(f"/roms/x/{track}", 10_000) for track in tracks]
+
+        assert detect_launch_file(files, m3u_supported=False) == f"/roms/x/{descriptor}"
+
+    def test_a_cue_beside_a_ccd_wins(self):
+        files = [("/roms/x/Game.ccd", 10), ("/roms/x/Game.cue", 10), ("/roms/x/Game.img", 10_000)]
+
+        assert detect_launch_file(files, m3u_supported=True) == "/roms/x/Game.cue"
+
+    def test_an_m3u_still_beats_a_gdi_where_the_system_reads_one(self):
+        files = [("/roms/x/Game.gdi", 10), ("/roms/x/Game.m3u", 10), ("/roms/x/track03.raw", 10_000)]
+
+        assert detect_launch_file(files, m3u_supported=True) == "/roms/x/Game.m3u"
+
+
+class TestNeedsM3uOverTheNewFormats:
+    def test_two_rvz_discs_get_a_playlist(self):
+        assert needs_m3u(["Game (Disc 1).rvz", "Game (Disc 2).rvz"], m3u_supported=True) is True
+
+    @pytest.mark.parametrize("disc", ["Game.gdi", "Game.ccd", "Game.toc", "Game.mds", "Game.rvz"])
+    def test_one_disc_in_any_format_but_cue_gets_none(self, disc):
+        assert needs_m3u([disc], m3u_supported=True) is False

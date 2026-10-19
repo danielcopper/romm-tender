@@ -184,3 +184,25 @@ class TestDiscImageExtensionsConstant:
         files = [_p(f"x{ext}") for ext in DISC_IMAGE_EXTENSIONS]
         discs = enumerate_discs(files, None)
         assert {d.filename for d in discs} == {f"x{ext}" for ext in DISC_IMAGE_EXTENSIONS}
+
+
+class TestTheNewDiscFormats:
+    """The picker offers the formats ``DISC_IMAGE_EXTENSIONS`` grew by wherever the system accepts them (#910 D4)."""
+
+    def test_two_gamecube_rvz_discs_are_two_discs(self):
+        supported = frozenset({".ciso", ".gcm", ".gcz", ".iso", ".m3u", ".rvz", ".wbfs", ".wia"})
+        discs = enumerate_discs([_p("Game (Disc 1).rvz"), _p("Game (Disc 2).rvz")], supported)
+        assert [d.label for d in discs] == ["Disc 1", "Disc 2"]
+
+    def test_a_gdi_set_offers_its_descriptors_not_its_tracks(self):
+        files = [_p("Game (Disc 1).gdi"), _p("track01.bin"), _p("track02.raw"), _p("Game (Disc 2).gdi")]
+        discs = enumerate_discs(files, frozenset({".gdi", ".cdi", ".chd", ".m3u"}))
+        assert [d.filename for d in discs] == ["Game (Disc 1).gdi", "Game (Disc 2).gdi"]
+
+    def test_a_format_the_system_does_not_accept_is_not_offered(self):
+        discs = enumerate_discs([_p("Game (Disc 1).rvz"), _p("Game (Disc 2).rvz")], frozenset({".cue", ".chd"}))
+        assert discs == []
+
+    def test_track_files_are_no_discs(self):
+        files = [_p("Game.img"), _p("Game.sub"), _p("Game.mdf"), _p("Game.raw"), _p("Game.bin")]
+        assert enumerate_discs(files, None) == []

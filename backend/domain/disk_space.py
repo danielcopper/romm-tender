@@ -47,11 +47,14 @@ def disk_space_verdict(
     reserved_bytes: int,
     multi_file: bool,
     already_on_disk: int = 0,
+    unpacked_size: int = 0,
 ) -> DiskSpaceVerdict:
     """Decide whether *file_size* still fits once every other claim is counted.
 
     A multi-file ROM is counted **twice**: it arrives as a ZIP and is extracted
-    beside it, so both exist at once. *reserved_bytes* is what sibling downloads
+    beside it, so both exist at once. A single zip that will be unpacked is
+    counted as itself plus *unpacked_size*, the sum of the member sizes RomM
+    lists, for the same reason. *reserved_bytes* is what sibling downloads
     have claimed but not yet written — without it two concurrent pre-flights
     could each pass on space only one of them fits (#1053). *already_on_disk* is
     what a resumable transfer already wrote, which is not needed a second time,
@@ -61,10 +64,39 @@ def disk_space_verdict(
     there is nothing to weigh, and refusing on an absent number would be a claim
     Tender cannot make.
     """
-    needed = max((file_size * 2 if multi_file else file_size) + _HEADROOM_BYTES - already_on_disk, 0)
+    arriving = file_size * 2 if multi_file else file_size + unpacked_size
+    needed = max(arriving + _HEADROOM_BYTES - already_on_disk, 0)
     available = free_space - reserved_bytes
     return DiskSpaceVerdict(
         fits=not file_size or available >= needed,
         needed_bytes=needed,
         free_mb=max(available, 0) // _BYTES_PER_MB,
     )
+
+
+def unpack_space_verdict(*, unpacked_size: int, free_space: int, reserved_bytes: int) -> DiskSpaceVerdict:
+    """Decide whether a downloaded zip's contents still fit beside it.
+
+    *unpacked_size* is the uncompressed total the zip's own central directory
+    states, weighed by the rule the check before the download uses: free space
+    less what other downloads have claimed, with the same headroom left over.
+    """
+    needed = unpacked_size + _HEADROOM_BYTES
+    available = free_space - reserved_bytes
+    return DiskSpaceVerdict(
+        fits=available >= needed,
+        needed_bytes=needed,
+        free_mb=max(available, 0) // _BYTES_PER_MB,
+    )
+
+
+class NotEnoughSpaceToUnpack(Exception):
+    """A completed download whose contents do not fit on the card.
+
+    Distinct from every other failure because of what it keeps: the downloaded
+    file stays where it is, so a retry once space is freed unpacks it without
+    fetching it again.
+    """
+
+    def __init__(self, verdict: DiskSpaceVerdict) -> None:
+        super().__init__(f"Not enough space to unpack ({verdict.free_mb}MB free, need {verdict.needed_mb}MB)")

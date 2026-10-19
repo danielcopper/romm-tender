@@ -13,7 +13,29 @@ from domain.disc_formats import DISC_IMAGE_EXTENSIONS
 
 class TestDiscImageExtensions:
     def test_is_the_irreducible_disc_set(self):
-        assert frozenset({".cue", ".chd", ".iso"}) == DISC_IMAGE_EXTENSIONS
+        assert (
+            frozenset(
+                {
+                    ".cue",
+                    ".chd",
+                    ".iso",
+                    ".gdi",
+                    ".cdi",
+                    ".ccd",
+                    ".toc",
+                    ".mds",
+                    ".gcm",
+                    ".rvz",
+                    ".wbfs",
+                    ".wia",
+                    ".gcz",
+                    ".ciso",
+                    ".cso",
+                    ".pbp",
+                }
+            )
+            == DISC_IMAGE_EXTENSIONS
+        )
 
     def test_is_a_frozenset(self):
         assert isinstance(DISC_IMAGE_EXTENSIONS, frozenset)
@@ -33,15 +55,15 @@ class TestDownloadsCollectorUsesConstant:
     """The downloads m3u collector must filter on the constant, not an inline glob."""
 
     def test_collector_imports_the_constant(self):
-        from services import downloads
+        from services.downloads import unpack
 
         # The module imports the shared constant rather than redefining the set.
-        assert downloads.DISC_IMAGE_EXTENSIONS is DISC_IMAGE_EXTENSIONS
+        assert unpack.DISC_IMAGE_EXTENSIONS is DISC_IMAGE_EXTENSIONS
 
     def test_collector_source_filters_on_the_constant(self):
-        from services import downloads
+        from services.downloads.unpack import DownloadUnpacker
 
-        source = inspect.getsource(downloads.DownloadService._maybe_generate_m3u_io)
+        source = inspect.getsource(DownloadUnpacker.generate_m3u)
         # The disc filter is derived from the constant (a suffix tuple of it),
         # and the old inline tuple literal is gone.
         assert "DISC_IMAGE_EXTENSIONS" in source
