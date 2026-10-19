@@ -645,7 +645,7 @@ describe("SyncPage", () => {
     it("names the re-stamp work behind an empty delta (#1416, #743)", async () => {
       adoptPreview(preview({ summary: summary({ restamp_platform_count: 2 }) }));
       const { container } = await renderPage();
-      expect(container.textContent).toContain("No changes — recording what RomM has now.");
+      expect(container.textContent).toContain("No shortcut changes — recording what RomM has now.");
       expect(buttonByExactText(container, "Apply Sync")?.disabled).toBe(false);
     });
 

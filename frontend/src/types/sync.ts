@@ -339,10 +339,11 @@ export interface SyncPreviewSummary {
    * Enabled platforms whose skip only a fresh completion stamp can restore: no
    * stamp that may skip — none at all, or one whose skip was revoked (#1416) —
    * or one the preview's full fetch of the platform does not match (#743: no
-   * checksum, other ROM ids, a ROM updated since). Its apply is a 0-delta empty
-   * final chunk that re-writes the stamp and records a fresh run. A
-   * restamp-only preview (all other diffs zero, this > 0) must still offer
-   * Apply, or the platform is fetched in full on every sync and "Last sync:
+   * checksum or fetch start, other ROM ids, a ROM updated after the stamp's
+   * reference). For each, the apply's 0-delta empty final chunk re-writes the
+   * stamp and records a fresh run. A restamp-only preview (all other diffs
+   * zero, this > 0) must still offer Apply, or such a platform is fetched in
+   * full on every sync — and, after a late-ack recovery, "Last sync:
    * interrupted" lingers. Absent on older backends (treat as 0).
    */
   restamp_platform_count?: number;

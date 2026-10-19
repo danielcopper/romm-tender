@@ -610,10 +610,11 @@ not match that fetch (no checksum or fetch start, other ids, or a ROM updated af
 `domain/platform_skip.py::restamp_due`, [#743](https://github.com/danielcopper/romm-tender/issues/743)), through
 `LocalLibraryReader.do_count_platforms_to_restamp`, a side-effect-free read, and rides it as the additive summary field
 `restamp_platform_count` (absent/0 tolerated by old consumers). The frontend treats a restamp-only preview (all diffs
-zero, count > 0) as apply-able — "No changes — recording what RomM has now." with the normal Apply/Cancel confirm —
-mirroring the cover-only flow. One sentence serves both causes, because the summary carries one count and the apply does
-the same for each: the skip gate refuses the platform again, and the 0-delta empty final chunk writes a stamp of what
-that fetch returned and records a fresh completed `SyncRun`, healing both symptoms. The stamp write stays
+zero, count > 0) as apply-able — "No shortcut changes — recording what RomM has now." with the normal Apply/Cancel
+confirm — mirroring the cover-only flow. One sentence serves every cause, because the summary carries one count and the
+apply does the same for each: its skip gate refuses the platform as the preview's did, so the apply fetches it in full,
+and the 0-delta empty final chunk writes a stamp of what that fetch returned and records a fresh completed `SyncRun` —
+so the platform skips again, and a run status left `interrupted` by a late-ack recovery heals. The stamp write stays
 pipeline-owned: the preview only counts, it never stamps (`check_sync_lifecycle_owner` / the final-chunk-only rule).
 
 **Per-unit apply is chunked, durable per chunk

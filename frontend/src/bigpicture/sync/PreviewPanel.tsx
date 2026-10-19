@@ -83,10 +83,12 @@ function formatSyncScope(s: SyncPreviewSummary): string {
  * differently: cover work still has an Apply to press (#1386), a platform whose
  * completion stamp is missing or no longer matches RomM needs a 0-delta apply to
  * record a fresh one (#1416, #743), and a genuinely empty delta has nothing to do
- * at all. The re-stamp sentence covers both of its causes — a run that stopped
- * before stamping, and a RomM change no shortcut shows, such as a hidden game —
- * because the summary carries one count for both and the apply does the same
- * thing for each: it fetches the platform and records what RomM serves.
+ * at all. The re-stamp sentence covers every cause behind its count — a run
+ * that stopped before stamping, a skip a removal revoked, a stamp from before
+ * the checksum, and a RomM change no shortcut shows, such as a hidden game or an
+ * edit inside the stamp's margin — because the summary carries one count for
+ * all of them and the apply does the same thing for each: it fetches the
+ * platform and records what RomM serves.
  *
  * *hasChanges* is `previewHasChanges` — the same condition that arms Apply Sync
  * — and it is what decides between the last sentence and the rest, rather than
@@ -98,7 +100,7 @@ function emptyPreviewSentence(s: SyncPreviewSummary, hasChanges: boolean): strin
   if (!hasChanges) return "Everything is up to date.";
   const covers = s.cover_refresh_count ?? 0;
   if (covers > 0) return `No shortcut changes — ${pluralize(covers, "cover update")}.`;
-  if ((s.restamp_platform_count ?? 0) > 0) return "No changes — recording what RomM has now.";
+  if ((s.restamp_platform_count ?? 0) > 0) return "No shortcut changes — recording what RomM has now.";
   return "No shortcut changes — there is still something to apply.";
 }
 
