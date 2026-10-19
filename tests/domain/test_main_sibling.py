@@ -1,4 +1,4 @@
-"""Tests for domain.main_sibling — the main-version flag a RomM answer states."""
+"""Tests for domain.main_sibling — the default-version flag a RomM answer states."""
 
 from __future__ import annotations
 

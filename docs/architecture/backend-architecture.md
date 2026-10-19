@@ -1004,22 +1004,22 @@ no `sibling_group_key` backfill pending for a row of that generation.
 `roms.updated_at` on the application side — `default` and `onupdate` of `utc_now` on its base model
 (`backend/models/base.py`), with no database trigger or `ON UPDATE` clause behind it — so a change moves it exactly when
 it goes through an ORM write of the ROM row. That covers every field Tender stores but one, since all the others are
-columns of the ROM row; the exception is the main-version flag, which RomM keeps per user on `rom_user`:
+columns of the ROM row; the exception is the default-version flag, which RomM keeps per user on `rom_user`:
 
-| RomM change                                                                  | Moves `roms.updated_at` | What the skip sees           |
-| ---------------------------------------------------------------------------- | ----------------------- | ---------------------------- |
-| An edit through the API (name, file, metadata match, cover upload)           | yes                     | a newer `updated_at`         |
-| A scan, quick or complete, that writes the ROM (metadata, cover, files)      | yes                     | a newer `updated_at`         |
-| A ROM added or deleted                                                       | added: yes; deleted: —  | another id set               |
-| A user hiding a ROM (`rom_user.hidden`)                                      | no                      | another id set               |
-| An admin or group hide, or an age limit (RomM 5.4)                           | no                      | another id set               |
-| A main-version pick (`rom_user.is_main_sibling`, `PUT /api/roms/{id}/props`) | no                      | nothing                      |
-| A raw SQL `UPDATE` of `roms`                                                 | no                      | nothing (none found in RomM) |
+| RomM change                                                                     | Moves `roms.updated_at` | What the skip sees           |
+| ------------------------------------------------------------------------------- | ----------------------- | ---------------------------- |
+| An edit through the API (name, file, metadata match, cover upload)              | yes                     | a newer `updated_at`         |
+| A scan, quick or complete, that writes the ROM (metadata, cover, files)         | yes                     | a newer `updated_at`         |
+| A ROM added or deleted                                                          | added: yes; deleted: —  | another id set               |
+| A user hiding a ROM (`rom_user.hidden`)                                         | no                      | another id set               |
+| An admin or group hide, or an age limit (RomM 5.4)                              | no                      | another id set               |
+| A default-version pick (`rom_user.is_main_sibling`, `PUT /api/roms/{id}/props`) | no                      | nothing                      |
+| A raw SQL `UPDATE` of `roms`                                                    | no                      | nothing (none found in RomM) |
 
 A hide writes only the per-user `rom_user` row or the visibility rules, and the list filters the ROM out of both the
 items and the id index (`backend/handler/database/roms_handler.py`), so the checksum catches it. An add and a delete of
-equal count change the id set too. A main-version pick reaches the version picker through the bound ROM's own read when
-the game page loads the picker, not through the skip. `order_by=updated_at` resolves to `Rom.updated_at`
+equal count change the id set too. A default-version pick reaches the version picker through the bound ROM's own read
+when the game page loads the picker, not through the skip. `order_by=updated_at` resolves to `Rom.updated_at`
 (`roms_handler.py`), and the id index is built by default (`with_rom_id_index`, `backend/endpoints/roms/__init__.py`).
 Confirmed against a live server on 2026-10-19: descending order puts the newest first, the index at `limit=1` equals the
 id set of the full paged walk, `total` equals its length, and timestamps are whole seconds with `+00:00`.

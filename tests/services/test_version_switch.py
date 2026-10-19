@@ -672,11 +672,11 @@ def _default_rom_id(result: dict[str, Any]) -> int | None:
 
 
 class TestTheDefaultReadsTheLiveMainVersionFlag:
-    """The Default badge takes each version's main-version flag from the bound ROM's live answer (#743 D4).
+    """The Default badge takes each version's default-version flag from the bound ROM's live answer (#743 D4).
 
-    Every member shares one region, so without a flag the ranking orders them
-    by label: rom 1 (``game_1``), rom 3, then rom 2 (``game_8``), which the
-    stored flag names throughout.
+    ``_seed_group`` gives every member one region, so without a flag the
+    ranking orders them by label: rom 1 (``game_1``), rom 3, then rom 2
+    (``game_8``), which the stored flag names.
     """
 
     @staticmethod
