@@ -1385,8 +1385,8 @@ return raises the shortcut count without raising the header, so a pane can read 
 `Remove 4 shortcuts`. Two shapes reach it — a bound version deleted on RomM, which the stale removal keeps bound, and a
 collection-added row on an already-stamped platform, which commits with no generation, so the exclusion leaves out a row
 RomM still serves. The second heals at the platform's next commit. The first lasts until the user switches the game to
-another version or removes the gone one with this cleanup; until then later runs full-fetch that platform rather than
-skip it. The direction is a conservative under-count, which is why it is recorded rather than guarded.
+another version or removes the gone one with this cleanup. The direction is a conservative under-count, which is why it
+is recorded rather than guarded.
 
 **The BIOS ratio is not on the second line** — it was, and its width is what wrapped the line three times on a platform
 with a long name and a long core label. It is stated once instead, beside `BIOS FILES` eight pixels below, in the colour

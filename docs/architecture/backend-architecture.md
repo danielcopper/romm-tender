@@ -605,14 +605,16 @@ gate then full-fetches that platform on every future sync (no stamp = no skip au
 delta is otherwise empty — the QAM's preview would short-circuit on "no changes", so the re-walk that would re-stamp it
 never runs and the run's `interrupted` status lingers indefinitely (only an apply run records a fresh `SyncRun`).
 `sync_preview` therefore counts the enabled platforms holding no `PlatformSyncState` stamp that may skip — no stamp at
-all, or one whose skip was revoked ("Incremental skip" below) — through
-`LocalLibraryReader.do_count_unstamped_platforms`, a side-effect-free read, and rides it as the additive summary field
+all, or one whose skip was revoked ("Incremental skip" below) — and the platforms it fetched in full whose stamp does
+not match that fetch (no checksum or fetch start, other ids, or a ROM updated after the stamp's reference;
+`domain/platform_skip.py::restamp_due`, [#743](https://github.com/danielcopper/romm-tender/issues/743)), through
+`LocalLibraryReader.do_count_platforms_to_restamp`, a side-effect-free read, and rides it as the additive summary field
 `restamp_platform_count` (absent/0 tolerated by old consumers). The frontend treats a restamp-only preview (all diffs
-zero, count > 0) as apply-able — "No changes — finishing a previous sync." with the normal Apply/Cancel confirm —
-mirroring the cover-only flow. The gated apply then runs the unstamped platform (the skip gate never skips it), and its
-0-delta empty final chunk re-writes the stamp and records a fresh completed `SyncRun`, healing both symptoms. The stamp
-write stays pipeline-owned: the preview only counts unstamped platforms, it never stamps (`check_sync_lifecycle_owner` /
-the final-chunk-only rule).
+zero, count > 0) as apply-able — "No changes — recording what RomM has now." with the normal Apply/Cancel confirm —
+mirroring the cover-only flow. One sentence serves both causes, because the summary carries one count and the apply does
+the same for each: the skip gate refuses the platform again, and the 0-delta empty final chunk writes a stamp of what
+that fetch returned and records a fresh completed `SyncRun`, healing both symptoms. The stamp write stays
+pipeline-owned: the preview only counts, it never stamps (`check_sync_lifecycle_owner` / the final-chunk-only rule).
 
 **Per-unit apply is chunked, durable per chunk
 ([ADR-0023](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0023-chunked-per-unit-apply.md)).** The delta
@@ -882,17 +884,16 @@ sibling row holding `shortcut_app_id` is the group's **active version**.
 - **Grandfathering.** A group that already carries several bound shortcuts (a library synced before this model) keeps
   them all — each surviving bound sibling stays its own tracked shortcut; no new shortcut is minted for a group with a
   binding. Convergence to one-shortcut-per-group happens naturally as the user uninstalls duplicates.
-- **Downstream group semantics.** The incremental-skip gate compares RomM's platform `rom_count` against the persisted
-  rows carrying the completion stamp's **fetch generation** — bound and unbound alike, so skip parity on platforms with
-  sibling groups holds (a NULL `sibling_group_key` on such a row still forces a backfill full-fetch), while a row for a
-  `rom_id` the server has since dropped is excluded rather than inflating the count forever (#1504; the row itself is
-  retained per ADR-0007 — nothing is deleted). The **backfill gate reads the same generation**: only a row the last
-  complete fetch returned may demand a full fetch, because a dropped row is never returned again and no fetch could ever
-  fill its key in — counting it would wedge the platform into a full fetch on every sync, forever. A stamp with no
-  generation predates the contract and falls back to counting — and backfilling for — every row. Artwork downloads only
-  for the emitted representatives (+ grandfathered bound siblings), never eager sibling covers. Steam-collection
-  membership resolves each RomM collection `rom_id` with a **group fallback** — an unbound sibling maps to its group's
-  bound sibling's appId — so collecting or favouriting any version puts the game's single shortcut in the collection.
+- **Downstream group semantics.** The incremental-skip gate compares RomM's whole visible id set — every sibling, bound
+  or unbound — with the checksum the completion stamp recorded (#743), so skip parity on platforms with sibling groups
+  holds. The **backfill gate reads the stamp's fetch generation**: a NULL `sibling_group_key` forces a full fetch only
+  on a row the last complete fetch returned, because a row for a `rom_id` the server has since dropped (retained per
+  ADR-0007 — nothing is deleted) is never returned again and no fetch could ever fill its key in — letting it demand one
+  would wedge the platform into a full fetch on every sync, forever (#1504). A stamp with no generation predates the
+  contract and backfills for every row. Artwork downloads only for the emitted representatives (+ grandfathered bound
+  siblings), never eager sibling covers. Steam-collection membership resolves each RomM collection `rom_id` with a
+  **group fallback** — an unbound sibling maps to its group's bound sibling's appId — so collecting or favouriting any
+  version puts the game's single shortcut in the collection.
 
 **Same-named collections union into one Steam collection (#1503).** RomM enforces name uniqueness only per-table and
 per-`(name, user_id)`, so two enabled collections can share a display name — a standard collection and a smart/virtual
@@ -964,55 +965,99 @@ forwarded as `null` where a listing lacks it; virtual rows carry no such key, si
 
 **Incremental skip — the per-platform completion stamp is the sole authority.** A platform unit skips only when its
 `PlatformSyncState` stamp exists and its skip has not been revoked
-([ADR-0023](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0023-chunked-per-unit-apply.md)); the stamp's
-`completed_at` is the "unchanged since" reference for the `updated_after` server-delta probe. A completed `SyncRun`'s
-`last_sync` is deliberately **not** a fallback: a run-scoped timestamp cannot see a platform whose shortcuts were
-locally removed and only partially re-applied afterwards, so trusting it can silently skip a platform with missing
-shortcuts. No stamp means a full fetch — including, once, every platform's first sync after this contract shipped. The
-reporter writes the stamp when a platform work unit's **last** apply chunk commits — atomically in the same write UoW as
-the chunk's `roms` upserts — so a platform that fully synced inside a run the user later cancelled/crashed still skips
-on the next run instead of re-walking every already-applied game through CEF. All the existing guards still gate the
-skip (zero-bound-rows, the `sibling_group_key` backfill for rows carrying the stamp's generation, no bound row the
-stamp's fetch did not return, the `updated_after` server-delta check, the persisted-row count match); additionally the
-stamp's `rom_count` must still equal the server's platform `rom_count` — a server-side count change invalidates it.
+([ADR-0023](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0023-chunked-per-unit-apply.md)). A completed
+`SyncRun`'s `last_sync` is deliberately **not** a fallback: a run-scoped timestamp cannot see a platform whose shortcuts
+were locally removed and only partially re-applied afterwards, so trusting it can silently skip a platform with missing
+shortcuts. No stamp means a full fetch. The reporter writes the stamp when a platform work unit's **last** apply chunk
+commits — atomically in the same write UoW as the chunk's `roms` upserts — so a platform that fully synced inside a run
+the user later cancelled/crashed still skips on the next run instead of re-walking every already-applied game through
+CEF.
 
-**A bound row the stamp's fetch did not return forces a full fetch.** The skip rebuilds its unit from every bound row,
-and a rebuilt row counts as returned, so the run's stale-removal scan can never name one. Such a row is usually a
-version gone from RomM, and it stays bound: the stale removal keeps a bound row missing from a platform the run read
-whole (ADR-0021 §2's amendment), and a run stopped before its end — cancelled, interrupted, paused by the session
-budget, or failed — scans for none at all. The count guards cannot catch every such row either: the stamp's `rom_count`
-is the count RomM reported when the run that wrote it planned its work, so a ROM RomM dropped **before** that read is
-already left out of it. The gate therefore refuses the skip while any bound row on the platform does not carry the
-stamp's generation, a NULL one included (`domain/fetch_generation.py::bound_row_not_returned`), and full-fetches
-instead. **A version gone from RomM that stays bound therefore holds its platform's skip until the user switches to
-another version or the removed-game cleanup removes it**: the platform is fetched in full on every sync meanwhile. That
-full fetch is what lets the same-dump move see an id a re-import reissued, which a rebuilt unit never contains; an
-unchanged platform still has nothing applied again, since its entries classify as unchanged. Leaving such rows out of
-the rebuilt unit instead would decide on a stored marker rather than on RomM's answer: the generation records the last
-completed fetch, not what RomM serves now. A stamp with no generation predates the contract and cannot say what its
-fetch returned, so it skips as before.
+**The stamp records its fetch, and the skip asks RomM once whether that fetch still stands
+([#743](https://github.com/danielcopper/romm-tender/issues/743)).** Besides `completed_at`, the stamp records two things
+about the fetch that wrote it (migration `031`): `fetch_started_at`, Tender's clock when the apply began fetching the
+platform, and `rom_id_checksum`, a checksum of the sorted ids that fetch returned
+(`domain/platform_skip.py::rom_id_checksum`). The skip's reference is `fetch_started_at` less a fixed ten-minute margin
+(`SKIP_REFERENCE_MARGIN`), not `completed_at`: an edit RomM records after the fetch began but before the final chunk
+committed is newer than the reference, so the next sync sees it. The margin covers a device clock ahead of the server's
+and RomM's whole-second timestamps; its price is one more full fetch of a platform edited within ten minutes before the
+fetch that stamped it. The gate then sends **one request per platform**, `GET /api/roms` for the platform ordered by
+`updated_at` descending with `limit=1` (`RommApiAdapter.list_roms_newest_first`), with no `updated_after` and RomM's id
+index left on. Its first item's `updated_at` says whether any ROM changed since the reference, and its `rom_id_index`,
+which RomM builds from the whole filtered result, is the platform's visible id set. The platform skips only when no ROM
+is newer than the reference **and** the id set's checksum equals the stamp's
+(`domain/platform_skip.py::probe_says_unchanged`). An answer that establishes neither — no id index, an id that is not
+an integer, a first item without a readable `updated_at` — is a full fetch, and so is a stamp without a checksum or a
+fetch start, which is every stamp written before migration `031`. RomM's platform `rom_count` is no longer compared with
+anything: it counts hidden ROMs, so after a hide it never again matched what a fetch returned, and the platform
+full-fetched on every sync. The stamp still records it, for removed-game discovery. The local guards stand before the
+request: rows carrying the stamp's generation, at least one bound row, and no `sibling_group_key` backfill pending for a
+row of that generation.
+
+**Which RomM changes move `updated_at`, and which only the id set shows** (read at RomM 5.3.0). RomM stamps
+`roms.updated_at` on the application side — `default` and `onupdate` of `utc_now` on its base model
+(`backend/models/base.py`), with no database trigger or `ON UPDATE` clause behind it — so a change moves it exactly when
+it goes through an ORM write of the ROM row. That covers every field Tender stores, since all of them are columns of the
+ROM row:
+
+| RomM change                                                                  | Moves `roms.updated_at` | What the skip sees           |
+| ---------------------------------------------------------------------------- | ----------------------- | ---------------------------- |
+| An edit through the API (name, file, metadata match, cover upload)           | yes                     | a newer `updated_at`         |
+| A scan, quick or complete, that writes the ROM (metadata, cover, files)      | yes                     | a newer `updated_at`         |
+| A ROM added or deleted                                                       | added: yes; deleted: —  | another id set               |
+| A user hiding a ROM (`rom_user.hidden`)                                      | no                      | another id set               |
+| An admin hide, or an age limit (RomM 5.4)                                    | no                      | another id set               |
+| A main-version pick (`rom_user.is_main_sibling`, `PUT /api/roms/{id}/props`) | no                      | nothing                      |
+| A raw SQL `UPDATE` of `roms`                                                 | no                      | nothing (none found in RomM) |
+
+A hide writes only the per-user `rom_user` row or the visibility rules, and the list filters the ROM out of both the
+items and the id index (`backend/handler/database/roms_handler.py`), so the checksum catches it. An add and a delete of
+equal count change the id set too. A main-version pick reaches the version picker by its own request, not through the
+skip. `order_by=updated_at` resolves to `Rom.updated_at` (`roms_handler.py`), and the id index is built by default
+(`with_rom_id_index`, `backend/endpoints/roms/__init__.py`). Confirmed against a live server on 2026-10-19: descending
+order puts the newest first, the index at `limit=1` equals the id set of the full paged walk, `total` equals its length,
+and timestamps are whole seconds with `+00:00`.
+
+**A full fetch whose stamp no longer matches is re-stamped through an Apply.** The stamp is written only by an apply,
+and a hidden ROM or an `updated_at` inside the margin changes no shortcut, so a preview with nothing else to do would
+short-circuit on "no changes" and the platform would be fetched in full on every sync. The preview therefore counts such
+a platform in `restamp_platform_count` (below, "Unstamped-platform re-run"), and the gated apply's 0-delta final chunk
+writes the fresh stamp.
+
+**A bound row the stamp's fetch did not return no longer holds the skip
+([#743](https://github.com/danielcopper/romm-tender/issues/743) D10).** Such a row is a version gone from RomM —
+deleted, or hidden — and it stays bound: the stale removal keeps a bound row missing from a platform the run read whole
+(ADR-0021 §2's amendment), and a run stopped before its end scans for none at all. The skip rebuilds its unit from every
+bound row, so a rebuilt unit carries it as if RomM had returned it, and the run's stale-removal scan never names it —
+which the keep rule would not act on anyway. Before the checksum the gate full-fetched while any bound row lacked the
+stamp's generation, because its count guards could miss such a row and a full fetch was the only way to see an id a
+re-import reissued. The checksum answers both: it records that the stamp's fetch did not return the row, and any change
+to the visible id set since — a reissued id included — forces the full fetch the same-dump move needs. With an equal
+checksum and nothing newer there is nothing for a full fetch to learn, so the platform skips. The row stays bound and
+still shows in the removed-game cleanup's list ([Removed-game cleanup](removed-game-cleanup.md#discovery)), which reads
+the generations, not the skip.
 
 The stamp's contract is **a stamp may authorise a skip ⟺ the platform's most recent apply attempt ran to completion, and
 neither a local removal nor a stale removal on a run that did not process the platform has unbound one of its rows
 since**, so a stale stamp can never skip a half-mirrored platform. Because unbinding keeps the `roms` row (ADR-0007), a
-platform's persisted-row count survives a partial re-apply or a local removal, so a stamp still able to skip with a
-matching `rom_count` would otherwise let the skip drop the un-recreated games (the #1025 silent gap). Two rules keep the
-contract true. The orchestrator **deletes the stamp at a platform unit's apply start** (once the fetch succeeded and the
-apply is about to emit its first chunk) and only the final chunk re-writes it, so an apply interrupted by a crash /
-cancel / heartbeat-timeout before the final chunk leaves none. The local removals and the stale removal on an
-unprocessed platform **revoke the stamp's skip** (`PlatformSyncStateRepository.revoke_skip`, the `skip_revoked` column
-of migration `025`) in the same write UoW as the unbind: the **local destructive flows** — "Remove all shortcuts" and
-per-platform removals (via `report_removal_results`) plus the Steam-UI-deletion reconcile (`reconcile_live_shortcuts`) —
-for every platform they touch, and the reporter's server-side **stale removal** for every platform the run did not
-process that it unbinds a row on. A platform the run did not process is one that was not among its platform units: its
-sync is turned off, or RomM no longer lists it. Where an enabled collection keeps one of that platform's games bound, a
-stamp still able to skip would let the platform skip once it is processed again: the bound rows keep the zero-bound
-guard quiet, and the unbound rows still carry the stamp's generation, so they still count towards the skip, which
-rebuilds the unit from the bound rows alone and never re-creates the unbound games' shortcuts. On a platform the run
-processed, skipped or fetched alike, the stale removal leaves the skip, because nothing the skip reads changes: a
-skipped platform's rebuilt rows are all among the rows the run returned, so none of them is stale, and a fetched
-platform was stamped by that run with a generation no stale row carries. Removed-game cleanup's own unbinds leave the
-skip too; why is under [Removed-game cleanup](removed-game-cleanup.md#discovery).
+platform's persisted rows survive a partial re-apply or a local removal while RomM's id set stays what the stamp
+recorded, so a stamp still able to skip would otherwise let the skip drop the un-recreated games (the #1025 silent gap).
+Two rules keep the contract true. The orchestrator **deletes the stamp at a platform unit's apply start** (once the
+fetch succeeded and the apply is about to emit its first chunk) and only the final chunk re-writes it, so an apply
+interrupted by a crash / cancel / heartbeat-timeout before the final chunk leaves none. The local removals and the stale
+removal on an unprocessed platform **revoke the stamp's skip** (`PlatformSyncStateRepository.revoke_skip`, the
+`skip_revoked` column of migration `025`) in the same write UoW as the unbind: the **local destructive flows** — "Remove
+all shortcuts" and per-platform removals (via `report_removal_results`) plus the Steam-UI-deletion reconcile
+(`reconcile_live_shortcuts`) — for every platform they touch, and the reporter's server-side **stale removal** for every
+platform the run did not process that it unbinds a row on. A platform the run did not process is one that was not among
+its platform units: its sync is turned off, or RomM no longer lists it. Where an enabled collection keeps one of that
+platform's games bound, a stamp still able to skip would let the platform skip once it is processed again: the bound
+rows keep the zero-bound guard quiet, and RomM's id set still matches the stamp's checksum, so the skip rebuilds the
+unit from the bound rows alone and never re-creates the unbound games' shortcuts. On a platform the run processed,
+skipped or fetched alike, the stale removal leaves the skip, because nothing the skip reads changes: a skipped
+platform's rebuilt rows are all among the rows the run returned, so none of them is stale, and a fetched platform was
+stamped by that run with a generation no stale row carries. Removed-game cleanup's own unbinds leave the skip too; why
+is under [Removed-game cleanup](removed-game-cleanup.md#discovery).
 
 **A revoked stamp is kept rather than deleted, because the skip is not its only reader.** Removed-game discovery
 ([Removed-game cleanup](removed-game-cleanup.md#discovery)), its canary ids (`PruneRegistry.canary_rom_ids`) and the
@@ -1275,16 +1320,16 @@ plan (per-unit weights + planned totals, via `sync_plan`) and the applying frame
 - **The plan is skip-aware (#1382).** At plan time the fetcher stamps every platform `WorkUnit` with two estimate-only
   riders read in one short UoW (`_read_plan_estimates` + the pure `domain/skip_prediction.py`): `predicted_skip` —
   whether the wholesale incremental-skip gate is expected to skip the platform, replaying the gate's **local**
-  conditions only (completion stamp present, the stamped count and the count of rows carrying the stamp's fetch
-  generation both match the server's `rom_count`, bound rows exist, no sibling-group-key backfill pending for a row of
-  that generation, no bound row the stamp's fetch did not return; the gate's `list_roms_updated_after` server check is
-  deliberately not replayed — no network at plan time) — and `collapsed_count`, the persisted post-collapse shortcut
-  count, mirroring the collapse's lane selection (ADR-0021): `max(1, bound rows)` per sibling group — so a grandfathered
-  legacy group with multiple independently-bound duplicates (§5) prices one shortcut per bound sibling, not one per
-  group — plus one per keyless row. Both of **those two** ride the `sync_plan` payload conditionally-present (absent on
-  collections, never-synced platforms, and failed reads); `collapsed_count` is additionally **gated on the platform's
-  completion stamp** (#1412) — a never-synced platform holds only PARTIAL collection-sibling rows (ADR-0021), so an
-  ungated count would weight the ETA below the true work, and without a stamp the frontend falls back to the raw
+  conditions only (a completion stamp present that records a fetch start and an id checksum, rows carrying the stamp's
+  fetch generation, bound rows, no sibling-group-key backfill pending for a row of that generation; the gate's one
+  request, `list_roms_newest_first`, is deliberately not replayed — no network at plan time, so a platform RomM changed
+  since the stamp is predicted as a skip the fetch then refuses) — and `collapsed_count`, the persisted post-collapse
+  shortcut count, mirroring the collapse's lane selection (ADR-0021): `max(1, bound rows)` per sibling group — so a
+  grandfathered legacy group with multiple independently-bound duplicates (§5) prices one shortcut per bound sibling,
+  not one per group — plus one per keyless row. Both of **those two** ride the `sync_plan` payload conditionally-present
+  (absent on collections, never-synced platforms, and failed reads); `collapsed_count` is additionally **gated on the
+  platform's completion stamp** (#1412) — a never-synced platform holds only PARTIAL collection-sibling rows (ADR-0021),
+  so an ungated count would weight the ETA below the true work, and without a stamp the frontend falls back to the raw
   `rom_count`. The payload's `total_roms` stays the raw pre-collapse total (backward compat); an additive
   `total_estimated_items` sums `0` for predicted skips, else `collapsed_count ?? rom_count`. A third rider,
   `bound_count` (#1511), counts the unit's known ROMs that already carry a `shortcut_app_id`, and is the one rider that
