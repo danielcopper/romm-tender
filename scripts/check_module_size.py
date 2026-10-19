@@ -70,11 +70,8 @@ SCOPE_DIRS = (
     "backend/services",
 )
 
-# The modules that were already over the threshold when this gate landed, each
-# pinned at its size then. None is left: every one has dropped back under the
-# threshold and come out. Nothing is ever added — a module that crosses the
-# threshold is split, never listed — and the empty list stays so the checks
-# against it keep their meaning.
+# Nothing is ever added: a module that crosses the threshold is split, never
+# listed. The empty list stays so the checks against it keep their meaning.
 ALLOWLIST: dict[str, int] = {}
 
 

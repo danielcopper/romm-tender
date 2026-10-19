@@ -342,12 +342,16 @@ class DownloadFileAdapter:
         dest_dir: str,
         safe_root: str,
         progress_callback: Callable[[int, int], None] | None = None,
+        strip_prefix: str = "",
     ) -> None:
         """Extract *archive_path* into *dest_dir* with ZIP-slip protection.
 
         Resolves both *dest_dir* and *safe_root* via ``os.path.realpath``
         and verifies that every ZIP member resolves within both before
         writing any byte. Raises ``ValueError`` on any escape attempt.
+
+        *strip_prefix* comes off the front of every member name that starts
+        with it, and the check above runs on the stripped name.
 
         When *progress_callback* is supplied it is invoked with
         ``(extracted, total)`` uncompressed byte counts after each chunk
@@ -362,14 +366,15 @@ class DownloadFileAdapter:
             raise ValueError(f"Extract directory would be outside safe root: {dest_dir}")
         with zipfile.ZipFile(archive_path, "r") as zf:
             members = zf.infolist()
+            placed = {member.filename: member.filename.removeprefix(strip_prefix) for member in members}
             for member in members:
-                member_path = os.path.realpath(os.path.join(real_dest, member.filename))
+                member_path = os.path.realpath(os.path.join(real_dest, placed[member.filename]))
                 if not (member_path == real_dest or member_path.startswith(real_dest + os.sep)):
                     raise ValueError(f"ZIP member {member.filename} would extract outside target directory")
             total = sum(member.file_size for member in members)
             extracted = 0
             for member in members:
-                target = os.path.join(real_dest, member.filename)
+                target = os.path.join(real_dest, placed[member.filename])
                 if member.is_dir():
                     os.makedirs(target, exist_ok=True)
                     continue

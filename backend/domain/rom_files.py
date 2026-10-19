@@ -59,11 +59,9 @@ def needs_m3u(disc_files: list[str], m3u_supported: bool) -> bool:
     images of any format in ``DISC_IMAGE_EXTENSIONS``, so the emulator can switch
     discs) and for **single-disc bin/cue** ROMs (exactly one ``.cue`` — so the
     extract dir can be named after a game-named playlist for ES-DE collapse).
-    Every other single disc gets no M3U, for a reason that is not in the code:
-    the systems that use bin/cue read a one-entry playlist, iso-based
-    GameCube/Wii do not launch from one reliably, and for a single ``.gdi``,
-    ``.ccd``, ``.toc`` or ``.mds`` it has not been established either way.
-    Two descriptors of the same disc (a ``.cue`` beside a ``.ccd``) count once
+    Every other single disc gets no M3U; why is
+    docs/architecture/backend-architecture.md, "M3U generation rule". Two
+    descriptors of the same disc (a ``.cue`` beside a ``.ccd``) count once
     — the caller reduces them with ``one_descriptor_per_disc``.
 
     Parameters

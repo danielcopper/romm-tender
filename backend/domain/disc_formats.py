@@ -42,8 +42,7 @@ DISC_IMAGE_EXTENSIONS: frozenset[str] = frozenset(
     }
 )
 
-# The descriptors of a multi-track disc, in the order one is preferred where two
-# describe the same disc (a ``.cue`` and a ``.ccd`` beside one ``.img``): each
-# lists its disc's track files, or — ``.ccd`` and ``.mds`` — pairs with them by
-# sharing their basename, and the tracks are never launched themselves.
+# The descriptors of a multi-track disc (GLOSSARY.md, "Disc"), in the order one
+# is preferred where two describe the same disc — a ``.cue`` and a ``.ccd``
+# beside one ``.img``.
 TRACK_DESCRIPTORS: tuple[str, ...] = (".cue", ".gdi", ".ccd", ".toc", ".mds")

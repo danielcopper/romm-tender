@@ -424,7 +424,7 @@ class DownloadService:
             verdict = disk_space_verdict(
                 file_size=file_size,
                 free_space=self._download_file_store.disk_free(roms_dir),
-                reserved_bytes=sum(self._reserved_bytes.values()),
+                reserved_bytes=self._bytes_reserved_by_others(rom_id),
                 multi_file=is_multi_file_download(rom_detail),
                 already_on_disk=already_on_disk,
                 unpacked_size=listed_unpacked_bytes(rom_detail),

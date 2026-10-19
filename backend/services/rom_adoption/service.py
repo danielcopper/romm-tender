@@ -43,7 +43,6 @@ from domain.rom_adoption import (
     server_manifest,
     unadoptable_reason,
     unconfirmed_reason,
-    unpacked_manifest,
     verification_status,
 )
 from domain.rom_candidates import DIR, FILE
@@ -54,7 +53,7 @@ from domain.rom_files import (
     resolve_local_file_name,
     synthetic_rom_name,
 )
-from domain.served_shape import replace_covers, served_shapes
+from domain.served_shape import replace_covers, served_shapes, unpacked_manifest
 from lib.background_tasks import BackgroundTasks
 from lib.errors import Refused, RommApiError, classify_error, romm_error_log_level
 from lib.path_safety import PathTraversalError, coerce_safe_component, is_inside_folder, safe_join
@@ -288,10 +287,10 @@ class RomAdoptionService:
             # This is NOT the reason ``_replace_existing`` is dropped for a ROM
             # served only as a folder, nor why a resume never covers the folder
             # of one served in both shapes. There the answer is *spent*: the
-            # directory has already been removed, so anything at that path now is
-            # content the user has never seen and the gate must ask about it. Here nothing
-            # was consumed. Two different reasons, and neither generalises to the
-            # other.
+            # directory has already been removed, so anything at that path now
+            # is content the user has never seen and the gate must ask about it.
+            # Here nothing was consumed. Two different reasons, and neither
+            # generalises to the other.
             if not resume:
                 self._search.refuse_if_found(
                     rom_detail, checked_path, page_saw_candidate=page_saw_candidate, folder_path=folder_path

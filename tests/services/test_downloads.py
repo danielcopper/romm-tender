@@ -130,14 +130,15 @@ def _seed_group_member(
 
 
 def _hops_answering(answer: Any) -> AsyncMock:
-    """An executor stand-in whose every hop answers *answer*, but for the download's platform question.
+    """An executor stand-in whose every hop answers *answer*, but for two questions about this machine.
 
-    That one runs inline: it answers the platform's system, which a stubbed
-    ROM read has nothing to say about.
+    Those run inline: the platform's system, and whether a whole download
+    already sits on disk — neither is something a stubbed ROM read can answer.
     """
 
     async def hop(_executor: Any, fn: Any, *args: Any) -> Any:
-        return fn(*args) if getattr(fn, "__name__", "") == "_download_platform_io" else answer
+        inline = getattr(fn, "__name__", "") in {"_download_platform_io", "kept_download_complete"}
+        return fn(*args) if inline else answer
 
     return AsyncMock(side_effect=hop)
 
@@ -6850,6 +6851,40 @@ class TestASingleZipHoldingADisc:
         assert installed.file_path == target
         assert installed.rom_dir is None
 
+    async def test_a_set_in_a_wrapper_folder_unpacks_flat_and_collapses(self, downloads, roms):
+        wrapped = {f"Game/{name}": data for name, data in _SATURN_SET.items()}
+
+        target, _detail, _fetched = await self._download(downloads, roms, wrapped)
+
+        folder = roms / "saturn" / "Game.m3u"
+        installed = downloads.uow.rom_installs.get(77)
+        assert installed is not None
+        assert installed.rom_dir == str(folder)
+        assert installed.file_path == str(folder / "Game.m3u")
+        assert (folder / "Game.m3u").read_text() == "Game.cue\n"
+        assert (folder / "Game (Track 2).bin").exists()
+        assert not (folder / "Game").exists()
+        assert not os.path.exists(target)
+
+    async def test_an_rvz_in_a_wrapper_folder_launches_from_the_collapsed_folder(self, downloads, roms):
+        await self._download(downloads, roms, {"Game/Game.rvz": b"\x00" * 400}, system="wii")
+
+        folder = roms / "wii" / "Game.rvz"
+        installed = downloads.uow.rom_installs.get(77)
+        assert installed is not None
+        assert installed.rom_dir == str(folder)
+        assert installed.file_path == str(folder / "Game.rvz")
+
+    async def test_a_dos_game_in_a_wrapper_folder_with_its_cd_is_kept(self, downloads, roms):
+        members = {"Game/GAME.EXE": b"MZ", "Game/cd/game.cue": b"FILE", "Game/cd/game.bin": b"\x00" * 64}
+
+        target, _detail, _fetched = await self._download(downloads, roms, members, system="dos")
+
+        installed = downloads.uow.rom_installs.get(77)
+        assert installed is not None
+        assert installed.file_path == target
+        assert installed.rom_dir is None
+
     async def test_a_members_name_is_kept_as_the_zip_spells_it(self, downloads, roms):
         members = {"Game.cue": b'FILE "Track%2001.bin" BINARY\n', "Track%2001.bin": b"\x01" * 64}
 
@@ -7057,6 +7092,32 @@ class TestTooLittleSpaceToUnpack:
         assert threads
         assert threading.get_ident() not in threads
 
+    async def test_the_starts_kept_check_runs_off_the_loop(self, downloads, roms, monkeypatch):
+        from unittest.mock import patch
+
+        from services.downloads.unpack import DownloadUnpacker
+
+        payload = _zip_bytes(_SATURN_SET)
+        detail = _single_zip_detail(payload)
+        _seed_rom(downloads.uow, 77, platform_slug="saturn")
+        downloads.adoption._retrodeck_folders = downloads.service._retrodeck_folders
+        downloads.service._tasks.spawn = lambda coro, _name: coro.close()
+        threads: list[int] = []
+        real = DownloadUnpacker.kept_download_complete
+
+        def recording(self, *args):
+            threads.append(threading.get_ident())
+            return real(self, *args)
+
+        monkeypatch.setattr(DownloadUnpacker, "kept_download_complete", recording)
+
+        with patch.object(downloads.romm_api, "get_rom", return_value=detail):
+            result = await downloads.service.start_download(77)
+
+        assert result["success"] is True
+        assert threads
+        assert threading.get_ident() not in threads
+
     async def test_a_resume_of_a_whole_tmp_asks_for_no_range(self, downloads, roms, emit):
         from unittest.mock import patch
 
@@ -7146,6 +7207,19 @@ class TestTheSpaceCheckBeforeTheDownload:
 
         assert refused.value.reason == "insufficient_space"
         assert "need 700MB" in refused.value.message
+
+    async def test_a_nearly_finished_download_claims_only_what_it_has_still_to_write(self, downloads, tmp_path):
+        # 500 MiB free after another download wrote 400 MiB of its 410 MiB claim:
+        # 10 MiB of it are still to come, which leaves room for this 300 MiB zip.
+        downloads.service._reserved_bytes[99] = 410 * 1024 * 1024
+        downloads.service._download_queue[99] = {"rom_id": 99, "status": "downloading"}
+        downloads.service._apply_progress(
+            "downloading", 99, "Other", "", "other.zip", 97, 400 * 1024 * 1024, 410 * 1024 * 1024
+        )
+
+        result = await self._start(downloads, tmp_path, self._detail(None))
+
+        assert result["success"] is True
 
     @pytest.mark.parametrize(
         "members",

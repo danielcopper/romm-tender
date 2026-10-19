@@ -6,8 +6,17 @@ from typing import Any
 
 import pytest
 
+from domain.rom_adoption import ServerFile, server_manifest
 from domain.rom_candidates import DIR, FILE
-from domain.served_shape import holds_disc_image, is_zip_name, listed_unpacked_bytes, replace_covers, served_shapes
+from domain.served_shape import (
+    holds_disc_image,
+    is_zip_name,
+    listed_unpacked_bytes,
+    replace_covers,
+    served_shapes,
+    unpacked_manifest,
+    wrapper_prefix,
+)
 
 
 class TestHoldsDiscImage:
@@ -23,8 +32,24 @@ class TestHoldsDiscImage:
             ["Game.img", "Game.ccd", "Game.sub"],
             ["Game.m3u", "Game (Disc 1).chd"],
             ["Game.iso", "extras/manual.iso"],
+            ["Game/Game.cue", "Game/Game (Track 1).bin"],
+            ["Game/Game.rvz"],
+            ["Game\\Game.cue", "Game\\Game.bin"],
         ],
-        ids=["cue set", "gdi set", "rvz", "wbfs", "chd", "isos", "img with ccd", "chd beside an m3u", "top and nested"],
+        ids=[
+            "cue set",
+            "gdi set",
+            "rvz",
+            "wbfs",
+            "chd",
+            "isos",
+            "img with ccd",
+            "chd beside an m3u",
+            "top and nested",
+            "cue set in a wrapper folder",
+            "rvz in a wrapper folder",
+            "wrapper folder named with a backslash",
+        ],
     )
     def test_a_disc_set_is_unpacked(self, names):
         assert holds_disc_image(names) is True
@@ -40,7 +65,11 @@ class TestHoldsDiscImage:
             ["Game.m3u"],
             ["Game.m3u", "Game (Disk 1).d64", "Game (Disk 2).d64"],
             ["GAME.EXE", "cd/game.cue", "cd/game.bin"],
-            ["nested/Game.cue", "nested/Game.bin"],
+            ["Game/disc/Game.cue", "Game/disc/Game.bin"],
+            ["GAME.EXE", "cd\\game.cue", "cd\\game.bin"],
+            ["Game/GAME.EXE", "Game/cd/game.cue", "Game/cd/game.bin"],
+            ["Game/Game.gba"],
+            ["Game/Game.cue", "Other/Other.cue"],
             [],
         ],
         ids=[
@@ -52,7 +81,11 @@ class TestHoldsDiscImage:
             "m3u alone",
             "floppy m3u",
             "dos game with its cd",
-            "nested cue",
+            "cue two folders deep",
+            "a folder named with a backslash",
+            "dos game with its cd in a wrapper folder",
+            "cartridge in a wrapper folder",
+            "two folders are no wrapper",
             "empty",
         ],
     )
@@ -61,6 +94,24 @@ class TestHoldsDiscImage:
 
     def test_an_upper_case_extension_counts(self):
         assert holds_disc_image(["GAME.CUE", "GAME.BIN"]) is True
+
+
+class TestWrapperPrefix:
+    @pytest.mark.parametrize(
+        ("names", "prefix"),
+        [
+            (["Game/Game.cue", "Game/Game.bin"], "Game/"),
+            (["Game/", "Game/Game.cue"], "Game/"),
+            (["Game\\Game.cue"], "Game\\"),
+            (["Game/Game.cue", "readme.txt"], ""),
+            (["Game/Game.cue", "Other/Other.cue"], ""),
+            (["Game.rvz"], ""),
+            ([], ""),
+        ],
+        ids=["one folder", "its own entry", "backslash", "a file beside it", "two folders", "one file", "empty"],
+    )
+    def test_the_one_folder_around_everything(self, names, prefix):
+        assert wrapper_prefix(names) == prefix
 
 
 class TestIsZipName:
@@ -186,3 +237,61 @@ class TestReplaceCovers:
     @pytest.mark.parametrize("confirmed", [[_FOLDER], None], ids=["only the folder confirmed", "nothing named"])
     def test_a_resume_does_not_cover_a_zip_the_start_never_confirmed(self, confirmed):
         assert _covers([_ZIP], resume=True, confirmed=confirmed) == frozenset()
+
+
+class TestUnpackedManifest:
+    """What a folder unpacked from a single zip is held to (#910 D5)."""
+
+    def test_each_listed_member_becomes_a_loose_file_at_its_own_path(self):
+        manifest = server_manifest(
+            {
+                "files": [
+                    {
+                        "file_name": "Game.zip",
+                        "md5_hash": "zipcontent",
+                        "archive_members": [
+                            {"name": "Game.cue", "size": 80, "md5_hash": "AA", "crc_hash": "11"},
+                            {"name": "tracks/Game.bin", "size": 9000, "md5_hash": "bb", "crc_hash": "22"},
+                        ],
+                    }
+                ]
+            }
+        )
+
+        assert unpacked_manifest(manifest) == (
+            ServerFile(name="Game.cue", size_bytes=80, algorithm="md5", digest="aa", rel_path="Game.cue", crc32="11"),
+            ServerFile(
+                name="Game.bin",
+                size_bytes=9000,
+                algorithm="md5",
+                digest="bb",
+                rel_path="tracks/Game.bin",
+                crc32="22",
+            ),
+        )
+
+    def test_a_zip_without_a_listing_holds_the_folder_to_nothing(self):
+        manifest = server_manifest({"files": [{"file_name": "Game.zip", "md5_hash": "zipcontent"}]})
+
+        assert unpacked_manifest(manifest) == ()
+
+    def test_a_wrapper_folder_is_left_out_of_every_path(self):
+        manifest = server_manifest(
+            {
+                "files": [
+                    {
+                        "file_name": "Game.zip",
+                        "archive_members": [
+                            {"name": "Game/", "size": 0},
+                            {"name": "Game/Game.cue", "size": 80, "md5_hash": "aa"},
+                            {"name": "Game/tracks/Game.bin", "size": 9000, "md5_hash": "bb"},
+                        ],
+                    }
+                ]
+            }
+        )
+
+        assert [(f.name, f.rel_path) for f in unpacked_manifest(manifest)] == [
+            ("Game.cue", "Game.cue"),
+            ("Game.bin", "tracks/Game.bin"),
+        ]

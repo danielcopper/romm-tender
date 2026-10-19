@@ -79,7 +79,8 @@ def unpack_space_verdict(*, unpacked_size: int, free_space: int, reserved_bytes:
 
     *unpacked_size* is the uncompressed total the zip's own central directory
     states, weighed by the rule the check before the download uses: free space
-    less what other downloads have claimed, with the same headroom left over.
+    less what other downloads have claimed and not yet written, with the same
+    headroom left over.
     """
     needed = unpacked_size + _HEADROOM_BYTES
     available = free_space - reserved_bytes

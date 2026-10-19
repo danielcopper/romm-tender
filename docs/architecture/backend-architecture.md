@@ -1557,15 +1557,18 @@ ROM has `len(files) == 1` and correctly stays on the flat single-file path.
 **A single zip holding a disc is unpacked like a multi-file ROM.** Many emulators cannot mount a multi-track disc from
 inside a zip — RetroArch hands a core only the member it claims, so a Saturn `.cue` inside a zip finds none of its
 `.bin` tracks — and Dolphin reads no zip at all. So once a single file named `.zip` is downloaded, its own central
-directory is read (no decompression) and the zip is unpacked when a member at its top level is a disc image
-(`holds_disc_image`, `domain/served_shape.py`, which also says why an `.m3u` and a disc image in a subfolder do not
-count); a file that does not open as a zip is kept as it is. From there it takes the multi-file path step for step —
-`DownloadUnpacker.unpack_and_record` is the one implementation both call: bounded by the system's own ROM folder,
-unpacked into `<roms>/<system>/<resolve_extract_dir_name>`, PS3-healed, the M3U and launch-file rules, the ES-DE
-collapse rename, recorded with `file_path=<launch file>` and `rom_dir=<folder>`, the zip removed. Only the multi-file
-path URL-decodes the unpacked names: RomM writes them encoded into the zip it builds, while a user's own zip holds the
-names its maker chose. Whatever sat at the zip's own path — a replaced file, or this ROM's earlier copy — goes only once
-that install is recorded.
+directory is read (no decompression) and the zip is unpacked when a member at its top level is a disc image, the top
+level of a zip that holds nothing but one folder being that folder's (`holds_disc_image` and `wrapper_prefix`,
+`domain/served_shape.py`; the first also says why an `.m3u` and a disc image in a subfolder do not count); a file that
+does not open as a zip is kept as it is. A wrapped zip's content is unpacked without the wrapper folder (`extract_zip`'s
+`strip_prefix`, the ZIP-slip check judging the stripped name), so it lands — and collapses for ES-DE — as an unwrapped
+zip's would. From there it takes the multi-file path step for step — `DownloadUnpacker.unpack_and_record` is the one
+implementation both call: bounded by the system's own ROM folder, unpacked into
+`<roms>/<system>/<resolve_extract_dir_name>`, PS3-healed, the M3U and launch-file rules, the ES-DE collapse rename,
+recorded with `file_path=<launch file>` and `rom_dir=<folder>`, the zip removed. Only the multi-file path URL-decodes
+the unpacked names: RomM writes them encoded into the zip it builds, while a user's own zip holds the names its maker
+chose. Whatever sat at the zip's own path — a replaced file, or this ROM's earlier copy — goes only once that install is
+recorded.
 
 The question "what does this game become on disk" is asked of one function, `served_shapes` (`domain/served_shape.py`),
 and every site that needs the answer asks it: the download's target gate claims both paths for a single zip — the zip
@@ -1578,26 +1581,26 @@ covered again and the zip only where the start confirmed it. That rule is `repla
 every other home of it names only its own part. Adopt from such a dialog names the path it showed, and "Download
 Instead" over a namesake of a ROM that may unpack carries no saves, because the launch file they would be renamed after
 is not known until the zip is unpacked. A folder adopted for a single zip is held to RomM's `archive_members` as loose
-files (`unpacked_manifest`, `domain/rom_adoption.py`); with none listed it cannot be confirmed. Where RomM listed
-members that named no disc but the downloaded zip does hold one, the gate never asked about the folder, so the zip is
-kept as it is if something already sits there.
+files, less a wrapper folder (`unpacked_manifest`, `domain/served_shape.py`); with none listed it cannot be confirmed.
+Where RomM listed members that named no disc but the downloaded zip does hold one, the gate never asked about the
+folder, so the zip is kept as it is if something already sits there.
 
-**Space for unpacking is checked twice.** Before the download, a single zip whose listed members name a disc image is
-counted as itself plus their sizes (`disk_space_verdict`'s `unpacked_size`); a zip whose members RomM does not list, or
-lists without a disc image, is counted alone. After the download, before anything is written, the uncompressed total the
-zip's own central directory states — for a single zip and a multi-file download alike — is weighed against free space
-less what other downloads have claimed and not yet written, with the same headroom (`unpack_space_verdict`,
-`domain/disk_space.py`; what another download has written is its transfer since it was admitted plus what it has
-unpacked so far, `DownloadService._bytes_reserved_by_others`). Too little raises `NotEnoughSpaceToUnpack`: the download
-fails with "Not enough space to unpack", nothing is recorded, and the downloaded `.tmp` / `.zip.tmp` is **kept**. Before
-every transfer the service asks whether that file is already whole (`kept_download_complete`, off the event loop) — it
-opens as a zip, and a single `.tmp` is exactly RomM's stated size — and a whole one skips the transfer and goes straight
-to the unpack, its pre-flight discounting the kept bytes. Skipping is what spares a resume of a whole file the range
-past its end that a server answers with 416; the size check keeps a whole zip of something else under this name from
-being unpacked as this game. The start-up sweep (`LeftoverTmpCleanupService`) still removes every `.tmp` and `.zip.tmp`,
-so a kept file does not survive a backend restart. A member whose CRC-32 does not match fails the unpack (`zipfile`
-raises when the member is read to its end); the unpack removes the folder it created and the archive is removed with the
-other partial files.
+**Space for unpacking is checked twice.** Before the download, a single zip whose listed members name a disc image at
+the top level `holds_disc_image` reads is counted as itself plus their sizes (`disk_space_verdict`'s `unpacked_size`); a
+zip whose members RomM does not list, or lists without a disc image, is counted alone. After the download, before
+anything is written, the uncompressed total the zip's own central directory states — for a single zip and a multi-file
+download alike — is weighed against free space less what other downloads have claimed and not yet written, with the same
+headroom (`unpack_space_verdict`, `domain/disk_space.py`; what another download has written is its transfer since it was
+admitted plus what it has unpacked so far, `DownloadService._bytes_reserved_by_others`). Too little raises
+`NotEnoughSpaceToUnpack`: the download fails with "Not enough space to unpack", nothing is recorded, and the downloaded
+`.tmp` / `.zip.tmp` is **kept**. Before every transfer the service asks whether that file is already whole
+(`kept_download_complete`, off the event loop) — it opens as a zip, and a single `.tmp` is exactly RomM's stated size —
+and a whole one skips the transfer and goes straight to the unpack, its pre-flight discounting the kept bytes. Skipping
+is what spares a resume of a whole file the range past its end that a server answers with 416; the size check keeps a
+whole zip of something else under this name from being unpacked as this game. The start-up sweep
+(`LeftoverTmpCleanupService`) still removes every `.tmp` and `.zip.tmp`, so a kept file does not survive a backend
+restart. A member whose CRC-32 does not match fails the unpack (`zipfile` raises when the member is read to its end);
+the unpack removes the folder it created and the archive is removed with the other partial files.
 
 **ES-DE directory-collapse rename**: a multi-file ROM is extracted into a staging folder named after the **ROM's
 identity** — `fs_name_no_ext`, falling back to `splitext(fs_name)` (`resolve_extract_dir_name` in `domain/rom_files.py`)
@@ -1643,9 +1646,11 @@ also **suppresses M3U generation** and **heals a `.txt`-suffixed `PS3_DISC.SFB`*
 `DISC_IMAGE_EXTENSIONS` — so the emulator can switch discs, **and** for **single-disc bin/cue** ROMs — exactly one
 `.cue` — so the extract dir is renamed after a game-named playlist rather than a generically-named cue (`disc1.cue/`).
 Every other single disc gets no playlist: bin/cue systems read a one-entry playlist, iso-based GameCube/Wii do not
-launch from one reliably, and whether a single `.gdi`, `.ccd`, `.toc` or `.mds` does is unmeasured. A disc made of
-tracks launches from its descriptor — `detect_launch_file` prefers `.cue`, `.gdi`, `.ccd`, `.toc`, `.mds` in that order
-over the largest-file fallback, which would otherwise pick a track.
+launch from one reliably, and whether a single `.gdi`, `.ccd`, `.toc` or `.mds` does is unmeasured. Two descriptors of
+one disc (a `.cue` beside a `.ccd`) count once (`one_descriptor_per_disc`). A disc made of tracks launches from its
+descriptor: `detect_launch_file` takes a `.cue` before the WiiU, PS3 and 3DS rules, and `.gdi`, `.ccd`, `.toc`, `.mds`,
+in that order, after them — those extensions also name files inside a game's own data, such as a PS3 dump's `levels.toc`
+— and all of them ahead of the largest-file fallback, which would otherwise pick a track.
 
 **M3U is platform-gated on ES-DE's own extension list** ([ADR-0013](../adr/0013-platform-gated-m3u-via-es-systems.md)).
 The file-count rule above only runs when the ROM's system actually supports `.m3u`. RomM bundles a platform-blind `.m3u`
@@ -1734,9 +1739,10 @@ drops it once the entry has been evicted or its status is terminal.
 `asyncio.Semaphore(2)` around the transfer + post-IO critical section. `start_download` enters the queue with status
 **`queued`** and reserves the download's required bytes in `_reserved_bytes[rom_id]`; `_do_download` flips the status to
 `downloading` only once it acquires the semaphore (emitting a `download_progress` `status: "queued"` frame first if it
-has to wait), and releases the reservation in its `finally`. The disk pre-flight accounts for siblings' outstanding
-reservations (`free_space - sum(reserved) < required`) so two concurrent downloads that each fit alone but not together
-can't both pass — the second is refused with `insufficient_space`.
+has to wait), and releases the reservation in its `finally`. The disk pre-flight subtracts what siblings have reserved
+and not yet written (`DownloadService._bytes_reserved_by_others`, the same figure the check before unpacking uses; free
+space already lacks what they wrote) so two concurrent downloads that each fit alone but not together can't both pass —
+the second is refused with `insufficient_space`.
 
 **Cancel reaches the UI and never destroys a live install**: cancelling a download emits a terminal `download_progress`
 `status: "cancelled"` frame so the frontend resets the button out of its downloading state (the cancel path used to be

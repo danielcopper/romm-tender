@@ -1013,3 +1013,38 @@ class TestAMemberWithABadChecksum:
 
         assert members is not None
         assert [m["name"] for m in members] == ["Game.bin"]
+
+
+class TestExtractingWithoutTheWrapperFolder:
+    """``strip_prefix`` leaves the one folder a zip wraps everything in out of every placed path (#910)."""
+
+    def test_the_content_lands_at_the_top(self, tmp_path):
+        archive = tmp_path / "Game.zip"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("Game/", b"")
+            zf.writestr("Game/Game.cue", b"FILE")
+            zf.writestr("Game/tracks/Game.bin", b"\x01" * 16)
+        dest = tmp_path / "out"
+        dest.mkdir()
+
+        DownloadFileAdapter().extract_zip(str(archive), str(dest), str(tmp_path), strip_prefix="Game/")
+
+        assert sorted(p.relative_to(dest).as_posix() for p in dest.rglob("*")) == [
+            "Game.cue",
+            "tracks",
+            "tracks/Game.bin",
+        ]
+
+    def test_the_slip_check_judges_the_stripped_name(self, tmp_path):
+        archive = tmp_path / "Game.zip"
+        with zipfile.ZipFile(archive, "w") as zf:
+            zf.writestr("Game/Game.cue", b"FILE")
+            zf.writestr("Game/../evil.txt", b"x")
+        dest = tmp_path / "out"
+        dest.mkdir()
+
+        with pytest.raises(ValueError, match="outside target directory"):
+            DownloadFileAdapter().extract_zip(str(archive), str(dest), str(tmp_path), strip_prefix="Game/")
+
+        assert not (tmp_path / "evil.txt").exists()
+        assert list(dest.iterdir()) == []

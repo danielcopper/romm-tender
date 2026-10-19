@@ -3405,7 +3405,7 @@ class TestASingleZipsUnpackedFolder:
         h.store.files[self._ZIP] = b"the file the replace was answered for"
         h.store.files[f"{self._FOLDER}/Game.cue"] = b"new"
 
-        with pytest.raises(TargetOccupied):
+        with pytest.raises(TargetOccupied) as refused:
             await h.service.check_download_target(
                 _single_file_detail(name="Game.zip"),
                 self._ZIP,
@@ -3415,6 +3415,7 @@ class TestASingleZipsUnpackedFolder:
                 confirmed_paths=[self._ZIP, self._FOLDER],
             )
 
+        assert refused.value.details["existing"]["path"] == self._FOLDER
         assert f"{self._FOLDER}/Game.cue" in h.store.files
         assert self._ZIP in h.store.files
 
@@ -3568,6 +3569,16 @@ class TestASingleZipsUnpackedFolder:
 
         assert result["status"] == "mismatch"
         assert [d["name"] for d in result["differences"]] == ["Game.bin"]
+
+    async def test_check_against_server_holds_an_unwrapped_folder_to_the_wrapped_listing(self, h):
+        members = {"Game/Game.cue": b"FILE", "Game/Game.bin": b"\x07" * 64}
+        h.stage_detail(_archived_detail(archive=_zip_bytes(members), members=members, state_members=True))
+        h.store.files[f"{self._FOLDER}/Game.cue"] = b"FILE"
+        h.store.files[f"{self._FOLDER}/Game.bin"] = b"\x07" * 64
+
+        result = await h.service.verify_existing_content(_ROM_ID, self._FOLDER)
+
+        assert result["status"] == "match"
 
     async def test_without_a_listing_the_folder_cannot_be_confirmed(self, h):
         members = {"Game.cue": b"FILE", "Game.bin": b"\x07" * 64}

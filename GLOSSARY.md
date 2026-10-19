@@ -528,9 +528,10 @@ single-file-vs-folder question the server answers, and the two are different jud
 
 What a download of a ROM becomes on disk: a **file**, a **folder**, or both. A ROM RomM stores as several files is a
 folder (it arrives as a zip and is unpacked), and one stored as a single file is a file — except a single `.zip` that
-may hold a disc image at its top level, which is both: the file it arrives as and the folder it is unpacked into once
-the zip's own directory has been read. It is a file only when RomM lists its members (`archive_members`) and none at the
-top level is a disc image. Decided by `served_shapes` (`domain/served_shape.py`); which sites ask it is
+may hold a disc image at its top level (or, for a zip that holds nothing but one folder, at that folder's top level),
+which is both: the file it arrives as and the folder it is unpacked into once the zip's own directory has been read. It
+is a file only when RomM lists its members (`archive_members`) and none at that top level is a disc image. Decided by
+`served_shapes` (`domain/served_shape.py`); which sites ask it is
 [backend-architecture.md](docs/architecture/backend-architecture.md#downloadservice-notes)'s.
 
 ### Unusable namesake

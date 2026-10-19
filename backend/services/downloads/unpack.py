@@ -29,7 +29,7 @@ from domain.rom_files import (
     is_multi_file_download,
     needs_m3u,
 )
-from domain.served_shape import holds_disc_image, is_zip_name, served_shapes
+from domain.served_shape import holds_disc_image, is_zip_name, served_shapes, wrapper_prefix
 
 if TYPE_CHECKING:
     import logging
@@ -109,6 +109,7 @@ class DownloadUnpacker:
             progress_callback=progress_callback,
             reserved_bytes=reserved_bytes,
             decode_names=True,
+            strip_prefix="",
         )
 
     def finish_single(
@@ -147,6 +148,7 @@ class DownloadUnpacker:
                 progress_callback=progress_callback,
                 reserved_bytes=reserved_bytes,
                 decode_names=False,
+                strip_prefix=wrapper_prefix(member["name"] for member in members),
             )
             if error is None:
                 self._remove_replaced_file(target_path)
@@ -167,10 +169,11 @@ class DownloadUnpacker:
         """The members of a downloaded single zip that is to be unpacked, or ``None`` to keep it as it is.
 
         The zip's own central directory decides (:func:`holds_disc_image`); a
-        file that does not open as a zip is kept as it is. One more case keeps it: RomM listed members
-        that named no disc image, so the target gate never asked about the
-        folder this would unpack into, and something already sits there. Nothing
-        is unpacked over content nobody was asked about.
+        file that does not open as a zip is kept as it is. One more case keeps
+        it: RomM listed members that named no disc image, so the target gate
+        never asked about the folder this would unpack into, and something
+        already sits there. Nothing is unpacked over content nobody was asked
+        about.
         """
         members = self._download_file_store.list_archive_members(archive)
         if members is None or not holds_disc_image(member["name"] for member in members):
@@ -204,6 +207,7 @@ class DownloadUnpacker:
         progress_callback: ProgressCallback,
         reserved_bytes: int,
         decode_names: bool,
+        strip_prefix: str,
     ) -> tuple[str | None, str | None]:
         """Unpack the downloaded *archive* into *extract_dir* and record the folder as the install.
 
@@ -218,13 +222,17 @@ class DownloadUnpacker:
         have claimed and not yet written). *decode_names* URL-decodes the
         unpacked names, which only RomM's own zip of a multi-file ROM needs: it
         writes them encoded, while a user's zip holds the names its maker chose,
-        a literal ``%20`` included. Too little space raises :class:`NotEnoughSpaceToUnpack`
-        before anything is written, with the archive left where it is for a
-        retry. ``None`` — a file that would not open as a zip — skips the check,
-        and the extraction then raises. Any failure from the first directory it
-        creates onward removes that directory again, under whichever name it
-        has by then; a member whose CRC-32 does not match is one, raised by
-        ``zipfile`` when the member is read to its end.
+        a literal ``%20`` included. *strip_prefix* is the folder a user's zip
+        wraps all of its content in (``wrapper_prefix``), which is left out so
+        the content lands as an unwrapped zip's would, and the ES-DE collapse
+        finds its launch file at the top. Too little space raises
+        :class:`NotEnoughSpaceToUnpack` before anything is written, with the
+        archive left where it is for a retry. ``None`` — a file that would not
+        open as a zip — skips the check, and the extraction then raises. Any
+        failure from the first directory it creates onward removes that
+        directory again, under whichever name it has by then; a member whose
+        CRC-32 does not match is one, raised by ``zipfile`` when the member is
+        read to its end.
         """
         # The removal's bound, the system's own folder, which no switch changes:
         # a download that started still extracts after RetroDECK is switched off.
@@ -246,7 +254,9 @@ class DownloadUnpacker:
         try:
             # ZIP-slip protection: adapter validates members resolve within extract_dir
             # AND that extract_dir itself resolves within the system's folder.
-            self._download_file_store.extract_zip(archive, extract_dir, folder, progress_callback=progress_callback)
+            self._download_file_store.extract_zip(
+                archive, extract_dir, folder, progress_callback=progress_callback, strip_prefix=strip_prefix
+            )
             self._download_file_store.remove_file(archive)
             if decode_names:
                 self._download_file_store.decode_url_encoded_names(extract_dir)
@@ -301,10 +311,10 @@ class DownloadUnpacker:
         *extract_dir_name* is the same ROM-identity-derived base name extraction
         created the staging dir under (the download service's
         ``_resolve_safe_extract_dir_name``), so cleanup targets exactly that dir
-        rather than re-deriving it from a stale source. A single zip's is not removed here: whether it was unpacked at
-        all is known only inside the unpack, which removes its own directory on
-        failure, and a folder of that name it never created is not this
-        download's to delete.
+        rather than re-deriving it from a stale source. A single zip's is not
+        removed here: whether it was unpacked at all is known only inside the
+        unpack, which removes its own directory on failure, and a folder of that
+        name it never created is not this download's to delete.
         """
         self.remove_partial_tmp_files(target_path)
         if has_multiple:

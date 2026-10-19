@@ -223,30 +223,6 @@ def server_manifest(rom_detail: dict[str, Any]) -> tuple[ServerFile, ...]:
     return tuple(manifest)
 
 
-def unpacked_manifest(manifest: tuple[ServerFile, ...]) -> tuple[ServerFile, ...]:
-    """The manifest a folder unpacked from a single zip is held to: each listed member as a loose file.
-
-    A member lands at its own path inside the zip, so that path is where it
-    belongs in the folder, and its size and digests are the member's. A zip
-    whose members RomM does not list contributes nothing: without the listing
-    nothing says which file in the folder its one digest belongs to, nor whether
-    it covers one member or all of them — an empty manifest is the caller's
-    "cannot be confirmed".
-    """
-    return tuple(
-        ServerFile(
-            name=member.name.rsplit("/", 1)[-1],
-            size_bytes=member.size_bytes,
-            algorithm=member.algorithm,
-            digest=member.digest,
-            rel_path=member.name,
-            crc32=member.crc32,
-        )
-        for entry in manifest
-        for member in entry.members
-    )
-
-
 def _archive_members(entry: dict[str, Any]) -> tuple[ServerMember, ...]:
     """Reduce one file entry's ``archive_members`` to what a member check needs.
 
