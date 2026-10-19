@@ -1039,14 +1039,14 @@ class TestAFreshInstall:
 
 
 class TestThePreflight:
-    def test_a_python_older_than_3_13_is_refused(self, machine):
-        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_PYTHON_VERSION="3.12")
+    def test_a_python_older_than_3_12_is_refused(self, machine):
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_PYTHON_VERSION="3.11")
 
         assert result.returncode == 1
-        assert "older than 3.13" in result.stderr
+        assert "older than 3.12" in result.stderr
         assert not machine.code.exists()
 
-    @pytest.mark.parametrize("version", ["3.13", "3.14"])
+    @pytest.mark.parametrize("version", ["3.12", "3.13", "3.14"])
     def test_a_python_at_or_above_the_floor_is_accepted(self, machine, version):
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_PYTHON_VERSION=version)
 
