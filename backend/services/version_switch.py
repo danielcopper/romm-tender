@@ -29,9 +29,11 @@ RomM and SQLite as one unit.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from domain.main_sibling import main_sibling_flag
 from domain.rom import Rom
 from domain.rom_file import NO_FILE_ON_ROMM_MESSAGE, NoFileOnRomm, has_file_on_romm
 from domain.shortcut_data import extract_version_metadata
@@ -233,6 +235,7 @@ class VersionSwitchService:
                 detail_by_id={},
                 stub_local_group_keys={},
                 vanished_ids=vanished_ids,
+                live_main_flags={},
                 bound_vanished=True,
                 server_query_failed=False,
             )
@@ -244,6 +247,7 @@ class VersionSwitchService:
                 detail_by_id={},
                 stub_local_group_keys={},
                 vanished_ids=set(),
+                live_main_flags={},
                 bound_vanished=False,
                 server_query_failed=True,
             )
@@ -263,6 +267,7 @@ class VersionSwitchService:
             detail_by_id=detail_by_id,
             stub_local_group_keys=stub_local_group_keys,
             vanished_ids=vanished_ids,
+            live_main_flags=self._live_main_flags(local.bound_rom_id, bound_detail, stubs),
             bound_vanished=False,
             server_query_failed=False,
         )
@@ -284,6 +289,19 @@ class VersionSwitchService:
             if rom_id > 0:
                 stubs.append(stub)
         return stubs
+
+    @staticmethod
+    def _live_main_flags(bound_rom_id: int, bound_detail: Any, stubs: list[dict[str, Any]]) -> dict[int, bool]:
+        """Each version's ``is_main_sibling`` as the bound ROM's live answer states it.
+
+        The bound version's comes from its own ``rom_user``, every direct
+        sibling's from its ``sibling_roms`` stub (:func:`main_sibling_flag`). A
+        version the answer states nothing about is left out.
+        """
+        stated = {int(stub["id"]): main_sibling_flag(stub) for stub in stubs}
+        rom_user = bound_detail.get("rom_user") if isinstance(bound_detail, Mapping) else None
+        stated[bound_rom_id] = main_sibling_flag(rom_user)
+        return {rom_id: flag for rom_id, flag in stated.items() if flag is not None}
 
     async def _probe_vanished(self, rom_ids: set[int]) -> set[int]:
         """Return ids whose single-attempt exact-ROM probe produced a typed 404."""
@@ -309,11 +327,11 @@ class VersionSwitchService:
         """Fetch each server-only sibling's full dims concurrently (best-effort).
 
         The picker's default badge ranks over the WHOLE group, so a not-yet-synced
-        sibling needs its ``regions`` / ``revision`` / ``tags`` / ``is_main_sibling``
-        to rank correctly — the slim ``sibling_roms`` stub carries none of them.
-        Groups are small (RomM caps siblings low), so the extra reads fan out on
-        the executor. A failed fetch is skipped: that stub simply ranks with only
-        its label, never failing the whole call.
+        sibling needs its ``regions`` / ``revision`` / ``tags`` to rank correctly —
+        the slim ``sibling_roms`` stub carries only its id, its names and its
+        ``is_main_sibling``. Groups are small (RomM caps siblings low), so the
+        extra reads fan out on the executor. A failed fetch is skipped rather
+        than failing the whole call.
         """
         if not stubs:
             return {}
@@ -396,6 +414,7 @@ class VersionSwitchService:
         detail_by_id: dict[int, dict[str, Any]],
         stub_local_group_keys: dict[int, str | None],
         vanished_ids: set[int],
+        live_main_flags: Mapping[int, bool],
         bound_vanished: bool,
         server_query_failed: bool,
     ) -> dict[str, Any]:
@@ -460,7 +479,9 @@ class VersionSwitchService:
         default_candidate_ids = {
             e["rom_id"] for e in entries if e["switchable"] and not e["vanished"] and not e["no_file"]
         }
-        default_rom_id = self._resolve_default(local, server_only_stubs, detail_by_id, default_candidate_ids)
+        default_rom_id = self._resolve_default(
+            local, server_only_stubs, detail_by_id, default_candidate_ids, live_main_flags
+        )
         for e in entries:
             e["active"] = e["rom_id"] == local.bound_rom_id
             e["is_default"] = e["rom_id"] == default_rom_id
@@ -520,6 +541,7 @@ class VersionSwitchService:
         server_only_stubs: list[dict[str, Any]],
         detail_by_id: dict[int, dict[str, Any]],
         candidate_ids: set[int],
+        live_main_flags: Mapping[int, bool],
     ) -> int | None:
         """The version the resolution chain would pick as the group's default.
 
@@ -530,14 +552,22 @@ class VersionSwitchService:
         the ``active`` flag). Ranks only over the caller's candidates: switchable,
         live versions with a file on RomM. A cross-group RomM sibling, a retained
         vanished row and a version RomM holds no file for must not win the Default
-        badge. A server-only stub with no fetched detail ranks with only its
-        label. Returns ``None`` when no candidate remains or the chain cannot
-        decide, so the badge is simply absent rather than the call failing.
+        badge. Each version's ``is_main_sibling`` is the one *live_main_flags*
+        states for it; a version it leaves out keeps what was known before — a
+        local member its stored flag, a server-only stub its fetched detail's;
+        a stub with no fetched detail ranks with only its label and the flag the
+        stub states, if any. The live flags are not written back to the stored
+        rows, although that would make them fresher: this read persists nothing
+        it learns, its liveness verdicts included, and leaves each row's flag to
+        whatever writes the row — a library sync, or the persist of a
+        server-only switch target. Returns ``None`` when no candidate remains or
+        the chain cannot decide, so the badge is simply absent rather than the
+        call failing.
         """
         ranking: list[dict[str, Any]] = [
             {
                 "rom_id": m.rom_id,
-                "is_main_sibling": m.is_main_sibling,
+                "is_main_sibling": live_main_flags.get(m.rom_id, m.is_main_sibling),
                 "regions": m.regions,
                 "revision": m.revision,
                 "tags": m.tags,
@@ -555,7 +585,7 @@ class VersionSwitchService:
             ranking.append(
                 {
                     "rom_id": rom_id,
-                    "is_main_sibling": bool(meta.get("is_main_sibling")),
+                    "is_main_sibling": live_main_flags.get(rom_id, bool(meta.get("is_main_sibling"))),
                     "regions": list(meta.get("regions") or []),
                     "revision": str(meta.get("revision") or ""),
                     "tags": list(meta.get("tags") or []),

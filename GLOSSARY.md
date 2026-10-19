@@ -397,8 +397,9 @@ solo groups). Key derivation: `domain/sibling_group.py`, persisted as `roms.sibl
 
 - **Active version** — the sibling currently bound to the group's Steam shortcut (`roms.shortcut_app_id`); the one that
   installs, launches, and syncs saves. Binding = active version (ADR-0021).
-- **Default version** — RomM's per-user `is_main_sibling` ("SET DEFAULT" in RomM's Switch-version UI). Optional;
-  respected read-only as a preselect, never written back.
+- **Default version** — RomM's per-user `is_main_sibling`, which a user sets with the "Set as default version" toggle in
+  the header of a game's page in RomM (the "Set default" button under the file info in RomM's older interface).
+  Optional; respected read-only as a preselect, never written back.
 - **Switch version** — the user-facing control (named after RomM's) that changes the active version within a group;
   rendered only when the group has more than one version (#1297/#1298).
 - **Reachable** — a version in Steam through its group: any member of a group that holds a binding. The whole group
