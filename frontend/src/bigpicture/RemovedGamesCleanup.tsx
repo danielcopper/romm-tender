@@ -956,9 +956,6 @@ export const RemovedGamesCleanupSection: FC<{ onScanRead?: (read: PageRead<numbe
   // stays live during exactly the window where a second scan would collide.
   const runActive = complete === null && pruneState.runId !== null;
   const cancelling = runActive && cancelRequestedFor !== null && cancelRequestedFor === pruneState.runId;
-  const runLabel = progress
-    ? `${stageLabel(progress.stage)} · ${progress.current} of ${progress.total} · ${progress.name}`
-    : "Cleanup starting...";
   return (
     <PanelSection title="Removed RomM Games">
       <PanelSectionRow>
@@ -979,7 +976,11 @@ export const RemovedGamesCleanupSection: FC<{ onScanRead?: (read: PageRead<numbe
       {runActive && (
         <>
           <PanelSectionRow>
-            {progress ? <CleanupProgress progress={progress} /> : <Field label={runLabel} description={CANCEL_HINT} />}
+            {progress ? (
+              <CleanupProgress progress={progress} />
+            ) : (
+              <Field label="Cleanup starting..." description={CANCEL_HINT} />
+            )}
           </PanelSectionRow>
           {progress?.bundle_path && (
             <PanelSectionRow>
