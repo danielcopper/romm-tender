@@ -71,6 +71,12 @@ function isReplaced(item: PrunePreviewItem, group: readonly PrunePreviewItem[]):
   );
 }
 
+/** The game's name: the version a shortcut is on, else RomM's main sibling, else the first row. */
+function gameName(group: readonly PrunePreviewItem[]): string {
+  const named = group.find((item) => item.bound) ?? group.find((item) => item.is_main_sibling) ?? group[0]!;
+  return named.name || named.fs_name || `ROM ${named.rom_id}`;
+}
+
 function planGame(group: PrunePreviewItem[], options: CleanupOptions): CleanupGame {
   const first = group[0]!;
   const size = first.group_size;
@@ -96,7 +102,7 @@ function planGame(group: PrunePreviewItem[], options: CleanupOptions): CleanupGa
   if (wholeGame && anyRemoved) outcome = first.bound_count > 0 ? "removed_with_shortcut" : "removed";
   return {
     groupId: first.group_id,
-    name: first.name || first.fs_name || `ROM ${first.rom_id}`,
+    name: gameName(group),
     platformSlug: first.platform_slug,
     size,
     goneCount,

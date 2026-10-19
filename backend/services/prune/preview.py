@@ -74,6 +74,7 @@ def _preview_entry(
         "group_size": group_size,
         "bound_count": bound_count,
         "bound": row.shortcut_app_id is not None,
+        "is_main_sibling": row.is_main_sibling,
         "candidate": candidate,
         "gone_from_romm": gone,
         "installed": install is not None,

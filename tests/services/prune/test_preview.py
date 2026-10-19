@@ -30,7 +30,7 @@ class _Paths:
         return {system: f"/roms/{system}" for system in systems}
 
 
-def _rom(rom_id: int, *, name: str, group: str, fetch_id: str | None) -> Rom:
+def _rom(rom_id: int, *, name: str, group: str, fetch_id: str | None, main: bool = False) -> Rom:
     row = Rom.synced(
         rom_id=rom_id,
         platform_slug="dc",
@@ -38,7 +38,7 @@ def _rom(rom_id: int, *, name: str, group: str, fetch_id: str | None) -> Rom:
         fs_name=f"{name}.chd",
         shortcut_app_id=None,
         synced_at="now",
-        version=VersionMetadata(sibling_group_key=group),
+        version=VersionMetadata(sibling_group_key=group, is_main_sibling=main),
     )
     if fetch_id is not None:
         row.record_fetch_generation(fetch_id)
@@ -271,6 +271,21 @@ def test_a_row_carries_its_file_name_without_its_extension() -> None:
         4376: "Game B",
         25136: "Game B",
     }
+
+
+def test_a_row_says_whether_it_is_its_groups_main_sibling() -> None:
+    uow = FakeUnitOfWork()
+    with uow:
+        uow.roms.save(_rom(4375, name="Game A (Japan)", group="igdb:1217:53", fetch_id="old"))
+        uow.roms.save(_rom(25135, name="Game A (USA)", group="igdb:1217:53", fetch_id="current", main=True))
+        uow.platform_sync_state.save(
+            PlatformSyncState.stamp(platform_slug="dc", at="now", rom_count=1, fetch_id="current")
+        )
+    builder = _builder(uow)
+
+    page = builder.page(builder.build("preview", "bulk", None), 0, 50)
+
+    assert {item["rom_id"]: item["is_main_sibling"] for item in page["items"]} == {4375: False, 25135: True}
 
 
 def test_the_trash_icon_offers_its_version_as_gone_while_its_platforms_last_fetch_still_holds_it() -> None:

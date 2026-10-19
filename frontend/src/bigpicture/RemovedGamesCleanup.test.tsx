@@ -37,6 +37,7 @@ const preview: backend.PrunePreviewResult = {
       group_size: 1,
       bound_count: 0,
       bound: false,
+      is_main_sibling: false,
       candidate: true,
       gone_from_romm: true,
       installed: true,
@@ -1044,6 +1045,40 @@ describe("RemovedGamesCleanup", () => {
       await openRemovedGamesCleanupModal(romId);
       return render(shownModal());
     }
+
+    it.each([
+      {
+        rule: "the version a shortcut is on, over a gone version sorted first and over the main sibling",
+        bound: 202,
+        main: 203,
+        title: "Madagascar (USA)",
+      },
+      {
+        rule: "RomM's main sibling where no shortcut is on a version",
+        bound: null,
+        main: 203,
+        title: "Madagascar (Europe)",
+      },
+      { rule: "the first row where neither is set", bound: null, main: null, title: "Madagascar (Japan)" },
+    ])("names the game after $rule", async ({ bound, main, title }) => {
+      const row = (romId: number, region: string, overrides: Partial<backend.PrunePreviewItem> = {}) =>
+        version(romId, `Madagascar (${region}).zip`, "Madagascar", 3, {
+          name: `Madagascar (${region})`,
+          bound: romId === bound,
+          bound_count: bound === null ? 0 : 1,
+          is_main_sibling: romId === main,
+          ...overrides,
+        });
+      const modal = await open({
+        ...preview,
+        total: 3,
+        candidate_total: 1,
+        items: [row(201, "Japan"), row(202, "USA", onRomm), row(203, "Europe", onRomm)],
+      });
+
+      const gameLine = modal.getByText("gba · 1 of 3 versions gone");
+      expect(gameLine.previousElementSibling!.textContent).toBe(title);
+    });
 
     it("groups the list by game, says what happens to each game and version, and follows the options", async () => {
       const modal = await open(threeGames);
