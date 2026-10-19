@@ -674,14 +674,15 @@ def _default_rom_id(result: dict[str, Any]) -> int | None:
 class TestTheDefaultReadsTheLiveMainVersionFlag:
     """The Default badge takes each version's main-version flag from the bound ROM's live answer (#743 D4).
 
-    Every member shares one region, so without a flag the ranking picks rom 1
-    (``game_1`` sorts first); the stored flag names rom 2 throughout.
+    Every member shares one region, so without a flag the ranking orders them
+    by label: rom 1 (``game_1``), rom 3, then rom 2 (``game_8``), which the
+    stored flag names throughout.
     """
 
     @staticmethod
     def _seed_group(uow: FakeUnitOfWork) -> None:
         _seed_rom(uow, rom_id=1, app_id=_APP_ID, regions=("USA",))
-        _seed_rom(uow, rom_id=2, app_id=None, regions=("USA",), is_main_sibling=True)
+        _seed_rom(uow, rom_id=2, app_id=None, fs_name="game_8.sfc", regions=("USA",), is_main_sibling=True)
         _seed_rom(uow, rom_id=3, app_id=None, regions=("USA",))
 
     def test_a_pick_made_in_romm_since_the_last_sync_moves_the_default(self, event_loop, service, uow, romm):
@@ -734,7 +735,7 @@ class TestTheDefaultReadsTheLiveMainVersionFlag:
     def test_a_bound_answer_without_a_rom_user_keeps_the_bound_versions_stored_flag(
         self, event_loop, service, uow, romm
     ):
-        _seed_rom(uow, rom_id=1, app_id=_APP_ID, regions=("USA",), is_main_sibling=True)
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID, fs_name="game_8.sfc", regions=("USA",), is_main_sibling=True)
         _seed_rom(uow, rom_id=2, app_id=None, regions=("USA",))
         romm.roms[1] = {"id": 1, "sibling_roms": [{"id": 2, "is_main_sibling": False}]}
 
