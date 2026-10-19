@@ -132,11 +132,11 @@ const READING = { state: "reading" } as const;
 const FAILED = { state: "failed" } as const;
 
 /**
- * A population figure that costs a round trip: not asked until the reader
- * presses for it, then read like any other figure.
+ * A population figure that costs a scan on the device: not asked until the
+ * reader presses for it, then read like any other figure.
  *
- * Focus selects on this layout, so a figure fetched on selection would put a
- * round trip under every row the stick passes.
+ * Focus selects on this layout, so a figure read on selection would run a scan
+ * under every row the stick passes.
  */
 export type ScannedCount = { state: "not-asked" } | PageRead<number>;
 

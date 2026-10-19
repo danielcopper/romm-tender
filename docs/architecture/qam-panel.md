@@ -2352,10 +2352,10 @@ with its platform, how many of its versions are gone and its outcome: _Game stay
 with its shortcut_, or _Game removed_ for a game without a shortcut. Its versions follow — the gone ones, then the one a
 shortcut is on, then the others on RomM — each with its file name, where it is (_Gone from RomM_, _On RomM_, _your
 shortcut_ on the version a shortcut is on) and its outcome: _Removed_, _Removed, file deleted_, _Kept_ with its reason,
-or _Stays_ for a version on RomM. An outcome is red where something is lost or leaves Steam, blue where it is kept and
-green where it is untouched. The outcomes follow the options. They are predicted in the panel
-(`bigpicture/cleanupPlan.ts`) from the preview's per-row fields — `gone_from_romm`, `bound`, `candidate` and
-`fs_name_no_ext` — and the run's own check still decides; the run never removes more than the prediction
+or _Stays_ for a version on RomM. An outcome is red where something is lost or leaves Steam, light where only Tender's
+own record of a version goes, blue where it is kept, and green where it stays. The outcomes follow the options. They are
+predicted in the panel (`bigpicture/cleanupPlan.ts`) from the preview's per-row fields — `gone_from_romm`, `bound`,
+`candidate` and `fs_name_no_ext` — and the run's own check still decides; the run never removes more than the prediction
 ([Removed-game cleanup](removed-game-cleanup.md#discovery)). Where two reasons keep a version, the shortcut's wins, also
 over the trash icon's _Only the version you chose is removed here._, since nothing else in the dialog would remove it. A
 gone version beside a version on RomM with the same file name less its extension is an old entry RomM replaced in a

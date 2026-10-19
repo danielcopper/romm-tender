@@ -2,11 +2,8 @@
  * What a removed-game cleanup would do to each game and version, predicted from
  * the preview's rows and the dialog's options.
  *
- * The run's own check against RomM still decides, and it never removes a
- * version this does not predict removed: it keeps a candidate RomM still serves,
- * skips a game found gone whole that holds a version the preview did not offer,
- * and removes a game the preview offered whole either whole or not at all
- * (`services/prune/planning.py`).
+ * The run's own check still decides and never removes a version this does not
+ * predict removed (docs/architecture/removed-game-cleanup.md, "Discovery").
  */
 import type { PrunePreviewItem } from "../api/backend";
 

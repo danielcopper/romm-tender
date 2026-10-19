@@ -941,7 +941,11 @@ export interface PrunePreviewItem {
   /** A Steam shortcut is on this version. */
   bound: boolean;
   candidate: boolean;
-  /** Gone from RomM by the Gone from RomM list's local rule — never asked of RomM. */
+  /**
+   * Gone from RomM by the Gone from RomM list's local rule, never asked of RomM;
+   * the version the trash icon was opened on always counts as gone
+   * (docs/architecture/removed-game-cleanup.md, "Discovery").
+   */
   gone_from_romm: boolean;
   installed: boolean;
   installed_bytes: number | null;
