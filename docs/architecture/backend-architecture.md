@@ -983,22 +983,22 @@ platform, and `rom_id_checksum`, a checksum of the sorted ids that fetch returne
 (`SKIP_REFERENCE_MARGIN`), not `completed_at`: an edit RomM records after the fetch began but before the final chunk
 committed is newer than the reference, so the next sync sees it. The margin covers a device clock ahead of the server's
 and RomM's whole-second timestamps; its price is one more full fetch of a platform edited within ten minutes before the
-fetch that stamped it. A server clock more than ten minutes ahead of Tender's is not covered: a ROM RomM updates then
-stays newer than each new stamp's reference, so its platform is fetched in full, and the preview offers the re-stamp
-Apply, on every sync until Tender's clock has passed that `updated_at` by the margin. The gate then sends **one request
-per platform**, `GET /api/roms` for the platform ordered by `updated_at` descending with `limit=1`
-(`RommApiAdapter.list_roms_newest_first`), with no `updated_after` and RomM's id index left on. Its first item's
-`updated_at` says whether any ROM changed since the reference, and its `rom_id_index`, which RomM builds from the whole
-filtered result, is the platform's visible id set. The platform skips only when no ROM is newer than the reference
-**and** the id set's checksum equals the stamp's (`domain/platform_skip.py::probe_verdict`). An answer the gate cannot
-read — no id index, an id that is not an integer, a first item without a readable `updated_at` — establishes nothing and
-is a full fetch, and so is a stamp without a checksum or a fetch start, which is every stamp written before migration
-`031`. The verdict carries its reason into the sync log: the newest `updated_at` against the reference and the number of
-visible ids with whether their checksum matched, or that the answer could not be read. RomM's platform `rom_count` is no
-longer compared with anything: it counts hidden ROMs, so after a hide it never again matched what a fetch returned, and
-the platform full-fetched on every sync. The stamp still records it, for removed-game discovery. The local guards stand
-before the request: rows carrying the stamp's generation, at least one bound row, and no `sibling_group_key` backfill
-pending for a row of that generation.
+fetch that stamped it. It covers no lead of the server's clock over Tender's: a ROM RomM updates stays newer than each
+new stamp's reference until Tender's clock has passed its `updated_at` by the margin, so its platform is fetched in
+full, and the preview offers the re-stamp Apply, on every sync in that window, and a lead lengthens the window by its
+own length. The gate then sends **one request per platform**, `GET /api/roms` for the platform ordered by `updated_at`
+descending with `limit=1` (`RommApiAdapter.list_roms_newest_first`), with no `updated_after` and RomM's id index left
+on. Its first item's `updated_at` says whether any ROM changed since the reference, and its `rom_id_index`, which RomM
+builds from the whole filtered result, is the platform's visible id set. The platform skips only when no ROM is newer
+than the reference **and** the id set's checksum equals the stamp's (`domain/platform_skip.py::probe_verdict`). An
+answer the gate cannot read — no id index, an id that is not an integer, a first item without a readable `updated_at` —
+establishes nothing and is a full fetch, and so is a stamp without a checksum or a fetch start, which is every stamp
+written before migration `031`. The verdict carries its reason into the sync log: the newest `updated_at` against the
+reference and the number of visible ids with whether their checksum matched, or that the answer could not be read.
+RomM's platform `rom_count` is no longer compared with anything: it counts hidden ROMs, so after a hide it never again
+matched what a fetch returned, and the platform full-fetched on every sync. The stamp still records it, for removed-game
+discovery. The local guards stand before the request: rows carrying the stamp's generation, at least one bound row, and
+no `sibling_group_key` backfill pending for a row of that generation.
 
 **Which RomM changes move `updated_at`, and which only the id set shows** (read at RomM 5.3.0). RomM stamps
 `roms.updated_at` on the application side — `default` and `onupdate` of `utc_now` on its base model
