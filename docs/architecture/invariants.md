@@ -470,6 +470,41 @@ Format: **invariant** — tier — enforced by.
   Apply that leaves the next sync fetching in full, or offers none to a platform the gate will keep refusing. **What
   nothing checks**: the test clock does not move across the skip request, so a clock read after it passes every test
   above; and `TestProbeVerdict` and `TestRestampDue` pin each decider alone, so nothing holds them to one comparison
+- **A collection's completion stamp records what the collection skip compares RomM's answers with, and the preview's
+  re-stamp count is that skip's own refusal: the checksum is over exactly the `rom_ids` the collection listing carried
+  (`WorkUnit.member_rom_ids`, in `ChunkDispatcher._build_final_collection_stamp`), never the stamp's `member_rom_ids`;
+  `fetch_started_at` is Tender's clock read before the unit's skip check (`SyncOrchestrator`), for a collection unit as
+  for a platform one; the margin is the platform skip's, applied when the stamp is read
+  (`domain/platform_skip.py::skip_reference`); no count is compared; and a collection is counted in
+  `restamp_collection_count` exactly when the preview's gate refused it and the apply will stamp it — it has members,
+  and `domain/collection_skip.py::recorded_updated_at` answers, the predicate the final chunk stamps by** — test +
+  prompt-only — the fetch start by
+  `tests/services/library/test_sync_orchestrator.py::TestOnlyAFreshCollectionStampRestoresTheSkip::test_a_member_edited_while_the_run_applied_is_fetched_in_full_next_sync`
+  (an edit between the fetch's start and the run's end is seen next sync) and
+  `tests/services/library/test_collection_fetcher.py::TestTryCollectionIncrementalSkip::test_the_probe_s_reference_is_the_fetch_start_less_the_margin`;
+  the listing's checksum by
+  `tests/services/library/test_chunk_dispatcher.py::TestFinalChunkCollectionStamp::test_the_final_chunk_s_stamp_records_the_fetch_start_and_the_listing_s_checksum`,
+  over a unit applied in more than one chunk, and end to end by
+  `TestOnlyAFreshCollectionStampRestoresTheSkip::test_an_own_smart_collection_whose_walk_returns_more_than_its_listing_is_skipped_once_stamped`;
+  no count by `TestTryCollectionIncrementalSkip::test_the_listing_s_rom_count_is_not_compared`; the count by
+  `TestOnlyAFreshCollectionStampRestoresTheSkip::test_a_stamp_without_a_fetch_start_is_fetched_in_full_once_then_skipped`
+  (counted, re-stamped by the Apply, then skipped and no longer counted) and
+  `::test_an_empty_collection_and_one_without_updated_at_are_not_counted`; and that a stamp the apply writes matches the
+  listing it was written from by
+  `TestFinalChunkCollectionStamp::test_the_stamp_it_writes_matches_the_listing_it_was_written_from`. The rule spans four
+  modules: the orchestrator reads the clock and counts, the dispatcher writes the stamp, the collection fetcher judges,
+  and `domain/collection_skip.py` with `domain/platform_skip.py` hold the comparisons and the margin. Why the checksum
+  covers the listing rather than the visible id set the platform's covers is in
+  [Backend Architecture](backend-architecture.md#libraryservice-decomposition-serviceslibrary), "Incremental skip"; do
+  not restate it here. **Each wrong turn is silent.** A checksum over the stamp's `member_rom_ids` holds the ids a walk
+  answered beyond the listing, so an own smart collection whose walk answers more never matches and is fetched in full,
+  and offered the re-stamp Apply, on every sync. A collection unit whose fetch start is not read records none, so its
+  stamp never skips. A count that judges the stamp a second time instead of reading the gate's answer can disagree with
+  it: the preview offers an Apply that leaves the next sync fetching in full, or none to a collection the gate keeps
+  refusing. A count that leaves out the stamp predicate offers an Apply for an empty collection or one without an
+  `updated_at`, which writes no stamp, so the offer comes back on every sync. **What nothing checks**: the test clock
+  does not move across the probe, so a clock read after it passes every test above; and nothing but review keeps the
+  count on the gate's own answer
 - **Where the library sync or the version picker's default resolves a representative, neither RomM's main-sibling leg
   nor the ranking picks a member RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the
   sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is

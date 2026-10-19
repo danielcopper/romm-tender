@@ -620,6 +620,8 @@ apply does the same for each: its skip gate refuses the platform as the preview'
 and the 0-delta empty final chunk writes a stamp of what that fetch returned and records a fresh completed `SyncRun` —
 so the platform skips again, and a run status left `interrupted` by a late-ack recovery heals. The stamp write stays
 pipeline-owned: the preview only counts, it never stamps (`check_sync_lifecycle_owner` / the final-chunk-only rule).
+Collections owed a fresh stamp ride a count of their own, `restamp_collection_count`, which the frontend reads the same
+way; what it counts is under "Incremental skip" below.
 
 **Per-unit apply is chunked, durable per chunk
 ([ADR-0023](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0023-chunked-per-unit-apply.md)).** The delta
@@ -1110,16 +1112,44 @@ so the stored set can lag the live criteria, and a live member on such a platfor
 otherwise go undelivered. Standard and virtual collections list their members live and walk only for leftovers. Under
 the `own` owner scope no foreign collection is queued.
 
-**A collection skips only when its membership and its members are unchanged.** The collection sibling of the platform
-stamp, `CollectionSyncState`, is written when any collection unit's last apply chunk commits, and the skip replays its
-`member_rom_ids` without a request beyond one `limit=1` probe. Membership is judged per kind. A standard or smart
-collection compares the listing's `updated_at` with the stamp's (RomM bumps it on any membership change and a
-smart-criteria edit), and its `rom_count` with both the stamp's and the stored member set's size. A virtual collection's
-`updated_at` says nothing — `virtual_collections` is a view — but its listed `rom_ids` are live since RomM 5.3.0's
-migration 0101, so it compares the listing's ids with the stamp's member set as sets, and its stamp stores an empty
-`updated_at`. Then, for every kind, the scoped `updated_after` probe keyed off the stamp's `completed_at` must answer
-zero; it filters with the kind's own collection parameter (`collection_id`, `smart_collection_id` or
-`virtual_collection_id`). A failed probe falls open to a fetch.
+**A collection skips by the platform skip's rules ([#2477](https://github.com/danielcopper/romm-tender/issues/2477)).**
+The collection sibling of the platform stamp, `CollectionSyncState`, is written when any collection unit's last apply
+chunk commits, and the skip replays its `member_rom_ids` without a request beyond one `limit=1` probe. Like a platform
+stamp it records the fetch that wrote it (migration `032`): `fetch_started_at`, Tender's clock read before the unit's
+skip check, and `listing_rom_id_checksum`, the platform skip's checksum over the `rom_ids` the collection listing
+carried. The checksum covers the listing's ids rather than `member_rom_ids`, which adds the ids a walk answered beyond
+them; an own smart collection whose walk answers more than its listing would otherwise never match its stamp. First the
+listing must match the stamp (`domain/collection_skip.py::membership_verdict`): every kind compares the checksum of its
+listed `rom_ids`, and a standard or smart collection also its `updated_at`, which RomM bumps on a membership change, a
+smart-criteria edit and a rename. A virtual collection's `updated_at` says nothing — `virtual_collections` is a view —
+but its listed `rom_ids` are live since RomM 5.3.0's migration 0101, and its stamp stores an empty `updated_at`. No
+count is compared. Then, for every kind, the scoped `updated_after` probe keyed off `fetch_started_at` less the platform
+skip's ten-minute margin (`domain/platform_skip.py::skip_reference`) must answer a `total` of zero
+(`domain/collection_skip.py::probe_verdict`); it filters with the kind's own collection parameter (`collection_id`,
+`smart_collection_id` or `virtual_collection_id`). The reference is the fetch start for the platform's reason: an edit
+RomM records to a member after the fetch began but before the final chunk committed is newer than it. A stamp without
+both values, which is every stamp written before migration `032`, never skips. A probe that raises, or answers with
+anything but a JSON object whose `total` is an integer, falls open to a fetch. The sync log carries each refusal's
+reason.
+
+**A hidden member changes the listing's ids, not its `updated_at`** (read at RomM 5.3.1 and 5.4.0). An admin, group or
+platform hide, and in 5.4 the age limit, removes the member from the collection listing's `rom_ids` and `rom_count`
+without moving the collection's `updated_at`, so the checksum catches it, and an equal-count swap of members with it. A
+user's own hide (`rom_user.hidden`) changes neither: it drops the ROM only from `/api/roms`, where the platform skip
+sees it. The collection does not compare the id set `/api/roms` returns for it, as the platform does: that costs a
+request per collection fetch, and a user's own hide would then fetch the collection again without changing anything in
+Steam.
+
+**A collection fetched in full is re-stamped through an Apply, as a platform is.** The preview counts each collection
+whose skip it refused and whose apply will stamp it — one with members, and for a standard or smart collection an
+`updated_at` its listing carried (`domain/collection_skip.py::recorded_updated_at`, which decides what the final chunk
+stamps too) — in `restamp_collection_count`, a summary field beside `restamp_platform_count` ("Unstamped-platform
+re-run" above). Two fields rather than one, so neither names what it does not hold; the Sync page reads them alike. The
+count is the gate's own verdict from the preview's fetch, so the two cannot disagree, and a refusal for any reason
+counts, a probe that raised included: the apply fetches the collection either way and its final chunk records what RomM
+serves, built from the same listing the next gate compares. An empty collection and a standard or smart one whose
+listing carried no `updated_at` are never stamped, so they are not counted. After the upgrade to migration `032` every
+collection is fetched in full once and that Apply is offered once.
 
 **A collection stamp is deleted, not revoked, when a local removal, the stale removal or removed-game cleanup's row
 delete reaches one of its members.** A skipped collection replays its `CollectionSyncState`'s `member_rom_ids` and

@@ -613,6 +613,26 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   Prompt-only: the clock read before the skip request rather than after it (the test clock does not move across the
   request), and the two deciders sharing `_compare` — `TestProbeVerdict` and `TestRestampDue` in
   `tests/domain/test_platform_skip.py` pin each alone and nothing joins them
+- **A collection's completion stamp records what the collection skip compares RomM's answers with, and the preview's
+  re-stamp count is that skip's own refusal: the checksum is over exactly the `rom_ids` the collection listing carried
+  (`WorkUnit.member_rom_ids`, in `ChunkDispatcher._build_final_collection_stamp`), never the stamp's `member_rom_ids`;
+  `fetch_started_at` is Tender's clock read before the unit's skip check (`SyncOrchestrator`), for a collection unit as
+  for a platform one; the margin is the platform skip's, applied when the stamp is read
+  (`domain/platform_skip.py::skip_reference`); no count is compared; and a collection is counted in
+  `restamp_collection_count` exactly when the preview's gate refused it and the apply will stamp it — it has members,
+  and `domain/collection_skip.py::recorded_updated_at` answers, the predicate the final chunk stamps by** — test +
+  prompt-only — `tests/services/library/test_sync_orchestrator.py::TestOnlyAFreshCollectionStampRestoresTheSkip`
+  (`test_a_member_edited_while_the_run_applied_is_fetched_in_full_next_sync`: the stamp stores the fetch's start, not
+  the run's end; `test_a_stamp_without_a_fetch_start_is_fetched_in_full_once_then_skipped`: counted, re-stamped, then
+  skipped; `test_an_empty_collection_and_one_without_updated_at_are_not_counted`;
+  `test_an_own_smart_collection_whose_walk_returns_more_than_its_listing_is_skipped_once_stamped`: the checksum leaves
+  out the walk's extras), `tests/services/library/test_chunk_dispatcher.py::TestFinalChunkCollectionStamp` (the fetch
+  start and the listing's checksum on a unit applied in more than one chunk, and a stamp it writes matching the listing
+  it was written from), `tests/services/library/test_collection_fetcher.py::TestTryCollectionIncrementalSkip`
+  (`test_the_probe_s_reference_is_the_fetch_start_less_the_margin`, `test_the_listing_s_rom_count_is_not_compared`) and
+  `tests/domain/test_collection_skip.py`. Prompt-only: the clock read before the probe rather than after it (the test
+  clock does not move across it), and the count reading the gate's `skipped` answer from the preview's own fetch rather
+  than judging the stamp a second time
 - **Where the library sync or the version picker's default resolves a representative, neither RomM's main-sibling leg
   nor the ranking picks a member RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the
   sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is

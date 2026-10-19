@@ -1071,7 +1071,8 @@ answer with the fetch start and the checksum), and removed-game discovery reads 
 RomM's last complete fetch returned. A stamp whose skip is **revoked** (`skip_revoked`) keeps the second use and loses
 the first. It is set when games are **unbound** in a way the skip cannot see (and was set once on every stamp by the
 upgrade that introduced it), and it lasts until the platform's next apply. Distinct from deleting the stamp, which
-removes both uses. A collection's completion stamp has no revoked state. What sets it and which readers honour it:
+removes both uses. A collection's completion stamp records the same fetch start and a checksum of the ids the
+collection's listing carried, and it has no revoked state. What sets it and which readers honour it:
 [backend-architecture.md](docs/architecture/backend-architecture.md#libraryservice-decomposition-serviceslibrary),
 "Incremental skip".
 

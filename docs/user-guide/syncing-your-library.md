@@ -105,14 +105,14 @@ time** line, shown as "up to X min".
 
 Cover changes count too: if you replaced a game's cover on the server but nothing else changed, the page reads "No
 shortcut changes — N cover updates" in place of the table and still offers **Apply Sync** — applying refreshes those
-tiles without touching the shortcuts. A platform Tender has to read in full again although none of its shortcuts change
-reads "No shortcut changes — recording what RomM has now." and offers **Apply Sync** as well: applying records what RomM
-serves on that platform, so the next sync can skip it again. You see it once after the update that introduced this
-check, while every platform is read in full one time; after a game was hidden or deleted in RomM; after a game was
-changed in RomM in a way none of its shortcuts shows, such as a metadata edit or a rescan, since the last sync or
-shortly before it; and after a sync that stopped before it finished. With **Skip preview** on there is no preview to
-show it in: the sync records what RomM has now by itself. Only when there is truly nothing to do does the page read
-"Everything is up to date."
+tiles without touching the shortcuts. A platform or a collection Tender has to read in full again although none of its
+shortcuts change reads "No shortcut changes — recording what RomM has now." and offers **Apply Sync** as well: applying
+records what RomM serves on that platform or in that collection, so the next sync can skip it again. You see it once
+after each update that introduced this check, while every platform, and later every collection, is read in full one
+time; after a game was hidden or deleted in RomM; after a game was changed in RomM in a way none of its shortcuts shows,
+such as a metadata edit or a rescan, since the last sync or shortly before it; and after a sync that stopped before it
+finished. With **Skip preview** on there is no preview to show it in: the sync records what RomM has now by itself. Only
+when there is truly nothing to do does the page read "Everything is up to date."
 
 A preview stays good for **30 minutes**, and it belongs to Tender rather than to the page you are looking at: you can
 leave for the settings or a submenu, come back, and the same preview is still there with **Apply Sync** ready. That
@@ -127,12 +127,13 @@ That starting estimate is **skip-aware**: when the run is planned, Tender alread
 since their last sync and expects to skip them wholesale, so they don't inflate the number — an incremental re-sync of
 an unchanged library reads seconds, not the minutes a full first import would take. The prediction is only an estimate
 (the actual skip is decided per platform, and per collection, as the run reaches it), so a wrong guess can make the
-readout run long or short for a moment, but it never changes what the sync actually does. Collections are skipped the
-same way a platform is: if a collection's membership hasn't changed and none of its games did either, Tender skips it
-without re-listing its contents — so a large, collection-heavy library re-syncs quickly. That holds for **Franchises**
-and **IGDB collections** too. When Tender does not skip a collection, it asks RomM only for the collection's games on
-platforms you don't sync, since your enabled platforms already brought in the rest. Another user's shared smart
-collection is the exception and is read in full, because which games it holds can depend on who is asking.
+readout run long or short for a moment, but it never changes what the sync actually does. Collections are skipped by the
+same rules as a platform: if RomM still lists the same games in a collection and none of them changed since the last
+sync started reading it, Tender skips it without re-listing its contents — so a large, collection-heavy library re-syncs
+quickly. That holds for **Franchises** and **IGDB collections** too. When Tender does not skip a collection, it asks
+RomM only for the collection's games on platforms you don't sync, since your enabled platforms already brought in the
+rest. Another user's shared smart collection is the exception and is read in full, because which games it holds can
+depend on who is asking.
 
 The estimate also knows the **difference between adding a game and updating one**. Creating a shortcut is roughly three
 times the work of refreshing one that already exists, and it also has to pull down a cover; updating an existing
