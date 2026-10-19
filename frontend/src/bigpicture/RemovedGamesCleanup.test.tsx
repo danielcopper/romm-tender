@@ -101,15 +101,6 @@ function confirmButton(modal: RenderResult): HTMLButtonElement {
   return modal.getByRole("button", { name: /^Remove \d+ versions?$/ }) as HTMLButtonElement;
 }
 
-/**
- * The list's row whose first line reads `text` — a game's name or a version's file name.
- *
- * A row that carries a Back up switch is a plain element marked with the
- * list's own test id; a row with nothing to press is a focus stop, which the
- * `Focusable` stub renders under its own id. Either way it is the nearest of
- * the two above the text. Throws rather than returning nothing: a missing row
- * is the failure.
- */
 /** A colour as the DOM writes it back. */
 function asCssColour(colour: string): string {
   const probe = document.createElement("span");
@@ -117,6 +108,15 @@ function asCssColour(colour: string): string {
   return probe.style.color;
 }
 
+/**
+ * The list's row whose first line reads `text` — a game's name or a version's file name.
+ *
+ * A row that carries a Back up file switch is a plain element marked with the
+ * list's own test id; a row with nothing to press is a focus stop, which the
+ * `Focusable` stub renders under its own id. Either way it is the nearest of
+ * the two above the text. Throws rather than returning nothing: a missing row
+ * is the failure.
+ */
 function rowFor(modal: RenderResult, text: string): HTMLElement {
   const row = modal.getByText(text).closest<HTMLElement>('[data-testid^="cleanup-row-"], [data-testid="focusable"]');
   if (!row) throw new Error(`No table row for ${text}`);
@@ -124,7 +124,7 @@ function rowFor(modal: RenderResult, text: string): HTMLElement {
 }
 
 /**
- * The Back up checkbox belonging to the row of the version whose file is `gameName`.
+ * The Back up file checkbox belonging to the row of the version whose file is `gameName`.
  *
  * The dialog's option toggles and its per-row content toggles share one flat
  * `toggle-input` list, so indexing it ties every row assertion to the number of
@@ -135,7 +135,7 @@ function contentToggleFor(modal: RenderResult, gameName: string): HTMLInputEleme
   const input = rowFor(modal, gameName).querySelector<HTMLInputElement>(
     '[data-testid="toggle"] [data-testid="toggle-input"]',
   );
-  if (!input) throw new Error(`No Back up switch in the row for ${gameName}`);
+  if (!input) throw new Error(`No Back up file switch in the row for ${gameName}`);
   return input;
 }
 
@@ -813,7 +813,7 @@ describe("RemovedGamesCleanup", () => {
       );
     });
 
-    it("makes the Back up switch the stop of a row whose file goes, and every other row a stop itself", async () => {
+    it("makes the Back up file switch the stop of a row whose file goes, and every other row a stop itself", async () => {
       vi.mocked(backend.getPrunePreview).mockResolvedValue(withSibling);
       await openRemovedGamesCleanupModal();
       const modal = render(shownModal());
@@ -952,7 +952,7 @@ describe("RemovedGamesCleanup", () => {
       const modal = render(shownModal());
 
       // A title is a hover the controller cannot perform, and each row carries
-      // its own Back up switch.
+      // its own Back up file switch.
       const first = modal.getByTestId("cleanup-row-21");
       const second = modal.getByTestId("cleanup-row-22");
       expect(first.textContent).toContain("Chrono Cross (Disc 1).chd");
@@ -1087,7 +1087,7 @@ describe("RemovedGamesCleanup", () => {
       expect(gameLine.previousElementSibling!.textContent).toBe(title);
     });
 
-    it("gives the names the width and wraps every name and where-line rather than cutting it short", async () => {
+    it("gives the names the width and wraps every name, where-line and game outcome rather than cutting it short", async () => {
       const modal = await open(threeGames);
       // A controller shows no tooltip, so nothing between a line and its row may clip it.
       const cutsShort = (line: HTMLElement): boolean => {
@@ -1110,7 +1110,12 @@ describe("RemovedGamesCleanup", () => {
       expect(modal.getByTestId("cleanup-header").style.gridTemplateColumns).toBe(
         "minmax(0, 3fr) minmax(0, 2fr) 64px 72px",
       );
-      for (const text of ["Moon Patrol", "Moon Patrol (USA) (Proto 2).zip", "Gone from RomM · your shortcut"]) {
+      for (const text of [
+        "Moon Patrol",
+        "Game removed, with its shortcut",
+        "Moon Patrol (USA) (Proto 2).zip",
+        "Gone from RomM · your shortcut",
+      ]) {
         expect(cutsShort(modal.getAllByText(text)[0]!), text).toBe(false);
       }
     });
@@ -1274,7 +1279,7 @@ describe("RemovedGamesCleanup", () => {
       expect(modal.container.textContent).toContain("Selected: 0 B of 400 B · 1000 B free");
     });
 
-    it("offers the Back up switch only on a row whose file the run deletes, and marks only the shortcut's version", async () => {
+    it("offers the Back up file switch only on a row whose file the run deletes, and marks only the shortcut's version", async () => {
       const modal = await open(threeGames);
 
       // Rally Cup (Europe) is downloaded too, but stays: its file is not the run's to delete.
@@ -1462,20 +1467,17 @@ describe("RemovedGamesCleanup", () => {
           .getAllByText(text)
           .map((el) => el.style.color)
           .find(Boolean)!;
-      const asCss = (colour: string): string => {
-        const probe = document.createElement("span");
-        probe.style.color = colour;
-        return probe.style.color;
-      };
 
       const blue = colourOf(rowFor(modal, "Island Hopper"), "Nothing removed");
       expect(colourOf(rowFor(modal, "Island Hopper (Netherlands).gba"), "Kept")).toBe(blue);
-      expect(colourOf(rowFor(modal, "Rally Cup (Europe).zip"), "Stays")).toBe(asCss(GREEN));
-      expect(colourOf(rowFor(modal, "Moon Patrol (USA) (Proto 2).zip"), "Removed, file deleted")).toBe(asCss(RED));
-      expect(colourOf(rowFor(modal, "Moon Patrol"), "Game removed, with its shortcut")).toBe(asCss(RED));
-      expect([asCss(RED), asCss(GREEN)]).not.toContain(blue);
+      expect(colourOf(rowFor(modal, "Rally Cup (Europe).zip"), "Stays")).toBe(asCssColour(GREEN));
+      expect(colourOf(rowFor(modal, "Moon Patrol (USA) (Proto 2).zip"), "Removed, file deleted")).toBe(
+        asCssColour(RED),
+      );
+      expect(colourOf(rowFor(modal, "Moon Patrol"), "Game removed, with its shortcut")).toBe(asCssColour(RED));
+      expect([asCssColour(RED), asCssColour(GREEN)]).not.toContain(blue);
       const light = colourOf(rowFor(modal, "Rally Cup (USA).zip"), "Removed");
-      expect([asCss(RED), asCss(GREEN), blue]).not.toContain(light);
+      expect([asCssColour(RED), asCssColour(GREEN), blue]).not.toContain(light);
       expect(colourOf(rowFor(modal, "Lone Star"), "Game removed")).toBe(light);
     });
 

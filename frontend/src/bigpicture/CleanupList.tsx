@@ -16,6 +16,7 @@ import {
   type TableCell,
   type TableRegister,
   UNFOCUSED_ROW,
+  useFocusWithin,
 } from "./layout/pane";
 
 export function formatBytes(bytes: number): string {
@@ -40,16 +41,14 @@ const SECONDARY: CSSProperties = { color: MUTED, fontSize: SECONDARY_FONT };
 
 const NUMERIC: CSSProperties = { ...SECONDARY, fontVariantNumeric: "tabular-nums", textAlign: "right" };
 
-/** A cell of more than one line. A controller shows no tooltip, so a line that does not fit wraps rather than clips. */
+/** Wraps rather than clips: docs/architecture/qam-panel.md, "The removed-games review". */
 const LINES: CSSProperties = { minWidth: 0, overflowWrap: "anywhere" };
 
-/** What happens is set smaller than the names beside it, which get the width. */
 const OUTCOME: CSSProperties = { fontSize: SECONDARY_FONT, fontWeight: 600 };
 const OUTCOME_WHY: CSSProperties = { color: MUTED, fontSize: NOTE_FONT };
 
 const VERSION_INSET = "12px";
 
-/** A game's name heads its row a step above its versions' names, which are set in {@link SECONDARY_FONT}. */
 const GAME_NAME_FONT = "13px";
 
 const KEPT_BLUE = "#66c0f4";
@@ -146,7 +145,11 @@ const GameRow: FC<{ game: CleanupGame }> = ({ game }) => {
           clip: false,
           style: LINES,
         },
-        { content: outcome.text, style: { ...OUTCOME, gridColumn: "2 / span 3", color: outcome.color } },
+        {
+          content: outcome.text,
+          clip: false,
+          style: { ...LINES, ...OUTCOME, gridColumn: "2 / span 3", color: outcome.color },
+        },
       ]}
     />
   );
@@ -155,14 +158,12 @@ const GameRow: FC<{ game: CleanupGame }> = ({ game }) => {
 const VersionRow: FC<{ version: CleanupVersion; backup: CleanupListBackup }> = ({ version, backup }) => {
   const { item } = version;
   const happens = whatHappens(version, backup);
-  // The bare switch paints no focus fill of its own, so the row shows that it
-  // holds focus, as Library › Collections' rows do.
-  const [switchFocused, setSwitchFocused] = useState(false);
+  const { focused: switchFocused, handlers: switchFocus } = useFocusWithin();
   const backUp: TableCell = version.deletesFile
     ? {
         content: (
-          // The column's header names the switch. A ToggleField would wrap it in
-          // a Field whose box and empty label take more than the column holds.
+          // Not a ToggleField: its Field's box and empty label take more width
+          // than the column holds.
           <Toggle
             value={backup.isBackedUp(item.rom_id)}
             disabled={backup.runInFlight || !backup.recovery}
@@ -179,7 +180,7 @@ const VersionRow: FC<{ version: CleanupVersion; backup: CleanupListBackup }> = (
       columns={COLUMNS}
       register={REGISTER}
       testId={`cleanup-row-${item.rom_id}`}
-      // A row with a Back up switch is reached through it.
+      // A row with a Back up file switch is reached through it.
       focusStop={!version.deletesFile}
       {...(version.deletesFile ? { style: switchFocused ? FOCUSED_ROW : UNFOCUSED_ROW } : {})}
       cells={[
@@ -215,16 +216,7 @@ const VersionRow: FC<{ version: CleanupVersion; backup: CleanupListBackup }> = (
     </PaneTableRow>
   );
   if (!version.deletesFile) return row;
-  return (
-    <div
-      onFocus={() => setSwitchFocused(true)}
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSwitchFocused(false);
-      }}
-    >
-      {row}
-    </div>
-  );
+  return <div {...switchFocus}>{row}</div>;
 };
 
 const FoldedRow: FC<{ count: number; onShow: () => void }> = ({ count, onShow }) => (

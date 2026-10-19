@@ -71,7 +71,6 @@ function isReplaced(item: PrunePreviewItem, group: readonly PrunePreviewItem[]):
   );
 }
 
-/** The game's name: the version a shortcut is on, else RomM's main sibling, else the first row. */
 function gameName(group: readonly PrunePreviewItem[]): string {
   const named = group.find((item) => item.bound) ?? group.find((item) => item.is_main_sibling) ?? group[0]!;
   return named.name || named.fs_name || `ROM ${named.rom_id}`;
