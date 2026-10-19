@@ -245,9 +245,9 @@ named when `install.sh` wrote the unit — and not under the Python the venv, `m
 linters run, which is the version the toolchain pins (`mise.toml`, and every workflow's `setup-python` but `test-3.12`'s
 and `test-3.13`'s). `install.sh` refuses an interpreter older than 3.12 and has no ceiling, so nothing keeps the two
 equal: the system Python is any version from 3.12 up, and an OS update moves it without a commit here. A vendored
-package's assumptions about the standard library are therefore proven only against the Pythons CI runs (the pinned 3.14,
-and 3.12 and 3.13, [`docs/contributing/dependency-management.md`](../../docs/contributing/dependency-management.md)),
-and surface on a device — when the backend starts, or the first time a question reaches the assumption.
+package's assumptions about the standard library are therefore proven only against the Pythons CI runs
+([`docs/contributing/dependency-management.md`](../../docs/contributing/dependency-management.md) names them), and
+surface on a device — when the backend starts, or the first time a question reaches the assumption.
 
 A compiled extension module built for one CPython minor version's ABI does not fit this model — a `cp313-cp313` wheel
 does not load under 3.14, so a copy vendored for today's system Python stops loading when an OS update moves it, the
@@ -259,9 +259,11 @@ Python reaches 3.14; how the wiring meets that is
 
 Neither artifact can see any of this, and each says less than it looks like it does. The checksum gate says the copy is
 the bytes we pinned; it never imports anything. What says the copy imports is the test suite — most directly
-[`tests/test_vendored_atlas.py`](../../tests/test_vendored_atlas.py), whose whole job that is, and alongside it every
-test that reaches the firmware adapter — and all of it only under the Pythons CI runs. What that makes of vendoring or
-bumping a package is [`.claude/rules/vendored-assets.md`](../../.claude/rules/vendored-assets.md)'s.
+[`tests/test_vendored_atlas.py`](../../tests/test_vendored_atlas.py) and
+[`tests/test_vendored_backports_zstd.py`](../../tests/test_vendored_backports_zstd.py), whose whole job that is, and
+alongside it every test that reaches the firmware adapter — and all of it only under the Pythons CI runs. What that
+makes of vendoring or bumping a package is
+[`.claude/rules/vendored-assets.md`](../../.claude/rules/vendored-assets.md)'s.
 
 ## Formatters and vendored copies
 
