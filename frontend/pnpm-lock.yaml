@@ -23,7 +23,7 @@ importers:
         version: 16.0.3(rollup@4.63.1)
       '@rollup/rollup-linux-x64-musl':
         specifier: ^4.62.2
-        version: 4.64.3
+        version: 4.64.7
       '@size-limit/file':
         specifier: ^13.0.0
         version: 13.0.3(size-limit@13.0.3)
@@ -35,7 +35,7 @@ importers:
         version: 16.3.3(@testing-library/dom@10.4.1)(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@testing-library/user-event':
         specifier: ^14.6.1
-        version: 14.6.7(@testing-library/dom@10.4.1)
+        version: 14.6.8(@testing-library/dom@10.4.1)
       '@types/node':
         specifier: ^26.1.2
         version: 26.4.1
@@ -542,8 +542,8 @@ packages:
     os: [linux]
     libc: [musl]
 
-  '@rollup/rollup-linux-x64-musl@4.64.3':
-    resolution: {integrity: sha512-PpiKU+sWbqDGc0U0su8oXiyeyqm0UQjmaaPKHktX+DaLe6YKJwW2YVD0f2AXHdVvblZbRqpwRVClWP2F5HCqrQ==}
+  '@rollup/rollup-linux-x64-musl@4.64.7':
+    resolution: {integrity: sha512-dFVtPfjZqAnUPpPY4Bfg+87yo1IBW9HiY8iCFtg49Pn46MfZTebSHZh8PL6SOsgyt9LQP8Nj/sE6jm3aWpySmQ==}
     cpu: [x64]
     os: [linux]
 
@@ -619,8 +619,8 @@ packages:
       '@types/react-dom':
         optional: true
 
-  '@testing-library/user-event@14.6.7':
-    resolution: {integrity: sha512-MPCpX8bxe8zS+JmmTwLp8jd0dy1rAm60Te/SL8JrQM3qvQJcBOs1d7IefJMyZzqM3EWBrDn/LWDt1BCGu4ASfg==}
+  '@testing-library/user-event@14.6.8':
+    resolution: {integrity: sha512-vgSSqnANMnkcYR/vUNDbwS7aM3OErRLNUG8vCVVlj4oc6cKffUrccX7UAS5AmJQQNZTSibi9z5GvvRZ0aYgUCQ==}
     engines: {node: '>=12', npm: '>=6'}
     peerDependencies:
       '@testing-library/dom': '>=7.21.4'
@@ -2912,7 +2912,7 @@ snapshots:
   '@rollup/rollup-linux-x64-musl@4.63.1':
     optional: true
 
-  '@rollup/rollup-linux-x64-musl@4.64.3': {}
+  '@rollup/rollup-linux-x64-musl@4.64.7': {}
 
   '@rollup/rollup-openbsd-x64@4.63.1':
     optional: true
@@ -2972,7 +2972,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.18
 
-  '@testing-library/user-event@14.6.7(@testing-library/dom@10.4.1)':
+  '@testing-library/user-event@14.6.8(@testing-library/dom@10.4.1)':
     dependencies:
       '@testing-library/dom': 10.4.1
 
