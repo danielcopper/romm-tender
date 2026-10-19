@@ -101,6 +101,19 @@ def _unproven_refusal(reasons: set[str], unproven_count: int) -> tuple[str, str]
     return "liveness_uncertain", f"RomM could not confirm {unproven_count} group member(s); nothing was removed."
 
 
+def _whole_game_skip(group_ids: set[int], candidate_ids: set[int], proof: _GroupLiveness) -> tuple[str, str] | None:
+    """The ``(reason, message)`` a group is skipped with where removing it would not match what the dialog showed."""
+    if proof.fully_dead and group_ids - candidate_ids:
+        # A whole-game removal would take a version the preview never offered
+        # for removal. The run still marks it gone, so the next scan lists it.
+        return "another_version_gone", "Another version of this game is gone from RomM too. Scan again to review it."
+    if candidate_ids == group_ids and proof.live_ids:
+        # The preview offered every version, so the dialog showed the game as
+        # gone entirely: it is removed whole or not at all.
+        return "version_back_on_romm", "A version of this game is back on RomM. Scan again to review it."
+    return None
+
+
 class GroupPlanner:
     """Turn one candidate group into a plan, or into the reason there is none."""
 
@@ -144,24 +157,9 @@ class GroupPlanner:
                 {verdicts[rom_id]["reason"] for rom_id in proof.uncertain_ids}, len(proof.uncertain_ids)
             )
             return self._results.group_result(rows, "skipped", reason, message)
-        if proof.fully_dead and group_ids - candidate_ids:
-            # A whole-game removal would take a version the preview never offered
-            # for removal. The run still marks it gone, so the next scan lists it.
-            return self._results.group_result(
-                rows,
-                "skipped",
-                "another_version_gone",
-                "Another version of this game is gone from RomM too. Scan again to review it.",
-            )
-        if candidate_ids == group_ids and proof.live_ids:
-            # The preview offered every version, so the dialog showed the game as
-            # gone entirely: it is removed whole or not at all.
-            return self._results.group_result(
-                rows,
-                "skipped",
-                "version_back_on_romm",
-                "A version of this game is back on RomM. Scan again to review it.",
-            )
+        whole_game_skip = _whole_game_skip(group_ids, candidate_ids, proof)
+        if whole_game_skip is not None:
+            return self._results.group_result(rows, "skipped", *whole_game_skip)
 
         delete_ids = selected_prune_ids(
             group_ids=sorted(group_ids),
