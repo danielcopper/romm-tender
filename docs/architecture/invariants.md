@@ -451,7 +451,9 @@ Format: **invariant** — tier — enforced by.
   whose second apply has no shortcut to change and still stamps the ids its fetch returned, leaving out the hidden ROM
   that stays bound; the stored fetch start by that class's
   `test_a_rom_edited_while_the_run_applied_is_fetched_in_full_next_sync` (the fetch's start, not the run's end, and an
-  edit between the two is seen next sync) and `test_a_stamp_without_a_checksum_is_fetched_in_full_once_then_skipped`;
+  edit between the two is seen next sync) and `test_a_stamp_without_a_checksum_is_fetched_in_full_once_then_skipped`; a
+  unit applied in more than one chunk by
+  `tests/services/library/test_chunk_dispatcher.py::TestApplyChunking::test_the_final_chunk_s_stamp_checksums_every_chunk_s_ids`;
   the margin by `tests/domain/test_platform_skip.py::TestSkipReference` and, through the gate,
   `tests/services/library/test_fetcher.py::TestIncrementalSkipFromPlatformStamp::test_the_reference_is_the_fetch_start_less_the_margin`.
   The rule spans three modules, each holding one part: the dispatcher writes the checksum at the final chunk, the
@@ -466,9 +468,8 @@ Format: **invariant** — tier — enforced by.
   into every row: a later change to it leaves the stamps already written at the old one, and a reader that subtracts it
   as well applies it twice. Two deciders that stop sharing one comparison disagree about a stamp: the preview offers an
   Apply that leaves the next sync fetching in full, or offers none to a platform the gate will keep refusing. **What
-  nothing checks**: every test above applies a platform in a single chunk, so a checksum over the final chunk's ROMs
-  alone passes them; the test clock does not move across the skip request, so a clock read after it passes too; and
-  `TestProbeVerdict` and `TestRestampDue` pin each decider alone, so nothing holds them to one comparison
+  nothing checks**: the test clock does not move across the skip request, so a clock read after it passes every test
+  above; and `TestProbeVerdict` and `TestRestampDue` pin each decider alone, so nothing holds them to one comparison
 - **Where the library sync or the version picker's default resolves a representative, neither RomM's main-sibling leg
   nor the ranking picks a member RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the
   sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is

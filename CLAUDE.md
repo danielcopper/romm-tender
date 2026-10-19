@@ -605,12 +605,14 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   (`test_a_hidden_rom_with_a_shortcut_is_fetched_in_full_once_then_skipped`: the checksum names the fetched ids and not
   a bound row RomM no longer returns; `test_a_rom_edited_while_the_run_applied_is_fetched_in_full_next_sync` and
   `test_a_stamp_without_a_checksum_is_fetched_in_full_once_then_skipped`: the stamp stores the fetch's start unmargined,
-  not the run's end), and for the margin `tests/domain/test_platform_skip.py::TestSkipReference` and
+  not the run's end),
+  `tests/services/library/test_chunk_dispatcher.py::TestApplyChunking::test_the_final_chunk_s_stamp_checksums_every_chunk_s_ids`
+  for a unit applied in more than one chunk, and for the margin `tests/domain/test_platform_skip.py::TestSkipReference`
+  and
   `tests/services/library/test_fetcher.py::TestIncrementalSkipFromPlatformStamp::test_the_reference_is_the_fetch_start_less_the_margin`.
-  Prompt-only: the checksum of a unit applied in more than one chunk (every test above applies a single chunk, so a
-  checksum over the final chunk's ROMs alone passes them), the clock read before the skip request rather than after it
-  (the test clock does not move across the request), and the two deciders sharing `_compare` — `TestProbeVerdict` and
-  `TestRestampDue` in `tests/domain/test_platform_skip.py` pin each alone and nothing joins them
+  Prompt-only: the clock read before the skip request rather than after it (the test clock does not move across the
+  request), and the two deciders sharing `_compare` — `TestProbeVerdict` and `TestRestampDue` in
+  `tests/domain/test_platform_skip.py` pin each alone and nothing joins them
 - **Where the library sync or the version picker's default resolves a representative, neither RomM's main-sibling leg
   nor the ranking picks a member RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the
   sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is
