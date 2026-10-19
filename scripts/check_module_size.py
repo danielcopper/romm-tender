@@ -70,13 +70,11 @@ SCOPE_DIRS = (
     "backend/services",
 )
 
-# Modules that were already over the threshold when this gate landed, each
-# pinned at the size it had that day. Entries come out when the module drops
-# back under the threshold; numbers go down when a refactor banks real slack.
-# A number goes up only where the change adds no code — a rename, a reformat —
-# and only with the reason recorded at the entry below and argued in the PR.
-# Never taken silently: a number raised without that reasoning has retired the
-# gate, and that costs more than any module's size.
+# The modules that were already over the threshold when this gate landed, each
+# pinned at its size then. None is left: every one has dropped back under the
+# threshold and come out. Nothing is ever added — a module that crosses the
+# threshold is split, never listed — and the empty list stays so the checks
+# against it keep their meaning.
 ALLOWLIST: dict[str, int] = {}
 
 

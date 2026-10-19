@@ -46,9 +46,8 @@ utilities) / `models/` (data shapes). `import-linter` enforces direction. `[CP]`
   module but `main.py` builds the shape from a literal; `scripts/check_failure_shape.py --check` fails on one built
   anywhere else (`.claude/rules/endpoints.md`), not on a missing raise.
 - `[ours]` God-class signal: services > ~1000 LOC — decompose into sub-services with constructor injection
-  (`services/saves/` is the reference). Enforced by `scripts/check_module_size.py`: a new module may not cross the
-  threshold at all, and the modules that predate the gate are pinned at their exact size and may not grow. A pin goes up
-  only for a change that adds no code — a rename, a reformat — with the reason recorded at its `ALLOWLIST` entry.
+  (`services/saves/` is the reference). Enforced by `scripts/check_module_size.py`: no module may cross the threshold.
+  None is grandfathered any more, and nothing is ever added to its `ALLOWLIST`.
 
 ## Reference shape for new service-level work
 

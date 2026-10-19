@@ -758,9 +758,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **Services never call clocks / sleep / uuid / random directly (inject the Protocol)** — check —
   `scripts/check_cosmic_call_bans.sh`
 - **No module in `services/`, `bootstrap/`, `adapters/`, `domain/`, `lib/` or `models/` crosses the ~1000-LOC
-  decomposition threshold, and the ones already over it may not grow** — check — `scripts/check_module_size.py` (which
-  also fails until a module that shrinks under the threshold leaves the list); a grandfathered ceiling goes up only for
-  a change that adds no code, with the reason at its `ALLOWLIST` entry, and no entry is ever added to `ALLOWLIST`
+  decomposition threshold** — check — `scripts/check_module_size.py`; no module is grandfathered any more, and no entry
+  is ever added to its `ALLOWLIST`
 - **Service-independence contract list stays complete** — check — `scripts/check_service_independence_contract.py`
 - **Layer import direction (services ↛ adapters, adapters ↛ services, …)** — check — `.importlinter` (`lint-imports`)
 - **Frontend direction: `frontend/src/utils/` and `frontend/src/api/` never import either surface
