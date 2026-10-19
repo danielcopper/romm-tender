@@ -576,8 +576,10 @@ class TestBootstrapRegistersTheZstdCodec:
     standard library has no codec, once — and a copy that does not load costs
     the codec, never the start."""
 
-    @pytest.mark.skipif(sys.version_info[:2] != (3, 13), reason="the vendored build is cp313")
-    def test_on_python_3_13_the_backport_is_registered_once(self, tmp_path, monkeypatch):
+    @pytest.mark.skipif(
+        not (3, 12) <= sys.version_info[:2] <= (3, 13), reason="the vendored builds are cp312 and cp313"
+    )
+    def test_on_python_3_12_and_3_13_the_backport_is_registered_once(self, tmp_path, monkeypatch):
         registered: list[object] = []
 
         def record(provider: object) -> None:

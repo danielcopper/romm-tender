@@ -2945,11 +2945,12 @@ It also hands the resolver a zstd codec where the interpreter has none of its ow
 (`adapters/atlas_zstd.py`), once, and logs which provider a zstd image would go through. The codec has one reader —
 EmuDeck's ES-DE catalogue, sealed inside its AppImage, which without one answers `emulator-catalogue-sealed`. From
 Python 3.14 the standard library's `compression.zstd` is that codec and the resolver finds it by itself, so nothing is
-registered; on 3.13 the `backports.zstd` copy vendored under `_vendor/backports/` is registered, since the resolver
-never tries that name. A registered provider is tried before the standard library, and the `cp313` copy does not load
-from 3.14 on, which is why the registration is skipped wherever `compression.zstd` imports. A copy that does not load —
-upstream refusing the interpreter, or this machine's loader refusing the compiled extension — is no codec, never a
-failed start: the catalogue stays sealed, and the line says why.
+registered; on 3.12 and 3.13 the `backports.zstd` copy vendored under `_vendor/backports/` is registered, since the
+resolver never tries that name. A registered provider is tried before the standard library, and the copy carries only
+the `cp312` and `cp313` builds of its compiled extension, so it does not load from 3.14 on, which is why the
+registration is skipped wherever `compression.zstd` imports. A copy that does not load — upstream refusing the
+interpreter, or this machine's loader refusing the compiled extension — is no codec, never a failed start: the catalogue
+stays sealed, and the line says why.
 
 Per the process-boundary rule, adapter instantiation never happens in `main.py`, and no service wiring happens outside
 `bootstrap/`. Every module in `bootstrap/` is governed by the ~1000-LOC decomposition threshold

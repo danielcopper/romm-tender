@@ -24,7 +24,7 @@ from adapters.atlas_zstd import STANDARD_LIBRARY_CODEC, VENDORED_CODEC, register
 if TYPE_CHECKING:
     from pathlib import Path
 
-ON_PYTHON_3_13 = sys.version_info[:2] == (3, 13)
+BACKPORT_LOADS = (3, 12) <= sys.version_info[:2] <= (3, 13)
 
 # A 64-bit ELF header with one empty section header, then a squashfs 4.0 image
 # compressed with zstd that holds ES-DE's catalogue at the path EmuDeck's
@@ -61,8 +61,8 @@ def vendored_copy_does_not_load(monkeypatch: pytest.MonkeyPatch, no_standard_lib
     monkeypatch.setitem(sys.modules, f"{VENDORED_CODEC}._zstd", None)
 
 
-@pytest.mark.skipif(not ON_PYTHON_3_13, reason="the vendored build is cp313")
-class TestOnPython313:
+@pytest.mark.skipif(not BACKPORT_LOADS, reason="the vendored builds are cp312 and cp313")
+class TestWhereTheVendoredBackportLoads:
     def test_the_vendored_backport_is_registered_and_named(self, no_standard_library_codec: None) -> None:
         line = register_zstd_codec()
 
