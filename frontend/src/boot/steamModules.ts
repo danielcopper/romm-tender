@@ -69,6 +69,7 @@ import {
   Spinner,
   Tabs,
   TextField,
+  Toggle,
   ToggleField,
   showContextMenu,
 } from "@decky/ui";
@@ -238,6 +239,7 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   truthy("Spinner", "panel", () => Spinner),
   truthy("Tabs", "panel", () => Tabs),
   truthy("TextField", "panel", () => TextField),
+  truthy("Toggle", "panel", () => Toggle),
   truthy("ToggleField", "panel", () => ToggleField),
   truthy("showContextMenu", "panel", () => showContextMenu),
 

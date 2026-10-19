@@ -1,9 +1,10 @@
 import { useState, FC, type CSSProperties, type ReactNode } from "react";
-import { DialogButton, ToggleField } from "@decky/ui";
+import { DialogButton, Toggle } from "@decky/ui";
 import { scrollNearestToBottom } from "../utils/scrollHelpers";
 import type { CleanupGame, CleanupVersion, GameOutcome, KeptReason } from "./cleanupPlan";
 import {
   AMBER,
+  FOCUSED_ROW,
   GREEN,
   MUTED,
   NOTE_FONT,
@@ -14,6 +15,7 @@ import {
   SECONDARY_FONT,
   type TableCell,
   type TableRegister,
+  UNFOCUSED_ROW,
 } from "./layout/pane";
 
 export function formatBytes(bytes: number): string {
@@ -153,28 +155,33 @@ const GameRow: FC<{ game: CleanupGame }> = ({ game }) => {
 const VersionRow: FC<{ version: CleanupVersion; backup: CleanupListBackup }> = ({ version, backup }) => {
   const { item } = version;
   const happens = whatHappens(version, backup);
+  // The bare switch paints no focus fill of its own, so the row shows that it
+  // holds focus, as Library › Collections' rows do.
+  const [switchFocused, setSwitchFocused] = useState(false);
   const backUp: TableCell = version.deletesFile
     ? {
         content: (
-          // The column's header names the switch; a label beside it had no room.
-          <ToggleField
-            checked={backup.isBackedUp(item.rom_id)}
+          // The column's header names the switch. A ToggleField would wrap it in
+          // a Field whose box and empty label take more than the column holds.
+          <Toggle
+            value={backup.isBackedUp(item.rom_id)}
             disabled={backup.runInFlight || !backup.recovery}
-            bottomSeparator="none"
             onChange={(checked) => backup.onBackUp(item.rom_id, checked)}
           />
         ),
         // A control draws its focus ring outside its own box.
         clip: false,
+        style: { display: "flex", justifyContent: "flex-end" },
       }
     : { content: "—", style: NUMERIC };
-  return (
+  const row = (
     <PaneTableRow
       columns={COLUMNS}
       register={REGISTER}
       testId={`cleanup-row-${item.rom_id}`}
       // A row with a Back up switch is reached through it.
       focusStop={!version.deletesFile}
+      {...(version.deletesFile ? { style: switchFocused ? FOCUSED_ROW : UNFOCUSED_ROW } : {})}
       cells={[
         {
           content: (
@@ -206,6 +213,17 @@ const VersionRow: FC<{ version: CleanupVersion; backup: CleanupListBackup }> = (
     >
       {item.warning && <div style={{ ...SECONDARY, color: AMBER, paddingLeft: VERSION_INSET }}>{item.warning}</div>}
     </PaneTableRow>
+  );
+  if (!version.deletesFile) return row;
+  return (
+    <div
+      onFocus={() => setSwitchFocused(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setSwitchFocused(false);
+      }}
+    >
+      {row}
+    </div>
   );
 };
 

@@ -20,7 +20,7 @@ import {
   stageInstalledSelections,
   STAGE_LABELS,
 } from "./RemovedGamesCleanup";
-import { GREEN, NOTE_FONT, RED, SECONDARY_FONT } from "./layout/pane";
+import { FOCUSED_ROW_FILL, GREEN, NOTE_FONT, RED, SECONDARY_FONT } from "./layout/pane";
 
 const preview: backend.PrunePreviewResult = {
   success: true,
@@ -110,6 +110,13 @@ function confirmButton(modal: RenderResult): HTMLButtonElement {
  * the two above the text. Throws rather than returning nothing: a missing row
  * is the failure.
  */
+/** A colour as the DOM writes it back. */
+function asCssColour(colour: string): string {
+  const probe = document.createElement("span");
+  probe.style.color = colour;
+  return probe.style.color;
+}
+
 function rowFor(modal: RenderResult, text: string): HTMLElement {
   const row = modal.getByText(text).closest<HTMLElement>('[data-testid^="cleanup-row-"], [data-testid="focusable"]');
   if (!row) throw new Error(`No table row for ${text}`);
@@ -1120,6 +1127,20 @@ describe("RemovedGamesCleanup", () => {
       expect(within(moon).getByText("Moon Patrol (USA) (Proto 2).zip").style.fontSize).toBe(SECONDARY_FONT);
       expect(within(rowFor(modal, "Moon Patrol")).getByText("Moon Patrol").style.fontSize).toBe("13px");
       expect(within(moon).getByTestId("toggle").textContent).toBe("");
+    });
+
+    it("draws the row switch with no box of its own, at the end of its column, and shows its focus on the row", async () => {
+      const modal = await open(threeGames);
+      const row = modal.getByTestId("cleanup-row-51");
+      const toggle = within(row).getByTestId("toggle");
+
+      // The bare switch, with no Field around it to draw a box or take width.
+      expect(toggle.getAttribute("data-bare")).toBe("true");
+      expect(toggle.parentElement!.style.justifyContent).toBe("flex-end");
+      fireEvent.focusIn(within(toggle).getByTestId("toggle-input"));
+      expect(row.style.background).toBe(asCssColour(FOCUSED_ROW_FILL));
+      fireEvent.focusOut(within(toggle).getByTestId("toggle-input"));
+      expect(row.style.background).toBe("transparent");
     });
 
     it("groups the list by game, says what happens to each game and version, and follows the options", async () => {
