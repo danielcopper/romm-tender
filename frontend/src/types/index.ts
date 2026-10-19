@@ -18,4 +18,5 @@ export * from "./achievements";
 export * from "./migration";
 export * from "./devices";
 export * from "./emulatorSources";
+export * from "./tenderFolder";
 export * from "./navigation";

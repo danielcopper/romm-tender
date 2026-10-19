@@ -16,6 +16,7 @@ export type SettingsSection =
   | "controller"
   | "steam-library"
   | "emulator-sources"
+  | "tender-folder"
   | "updates"
   | "interface"
   | "advanced";

@@ -81,6 +81,9 @@ import { AdvancedSection } from "./settings/AdvancedSection";
 import { InterfaceSection } from "./settings/InterfaceSection";
 import { UpdatesSection } from "./settings/UpdatesSection";
 import { EmulatorSourcesSection } from "./settings/EmulatorSourcesSection";
+import { TenderFolderSection } from "./settings/TenderFolderSection";
+import { useTenderFolder } from "./useTenderFolder";
+import { TENDER_FOLDER_SECTION } from "../utils/tenderFolderWording";
 import { WithUpdateDot } from "./UpdateDot";
 import { LibrarySection, AUTO_REGION, DEFAULT_REGION_LABEL } from "./settings/LibrarySection";
 import { showPreferredRegionModal } from "./settings/PreferredRegionModal";
@@ -110,6 +113,7 @@ const SECTION_LABELS: Record<SettingsSection, string> = {
   controller: "Controller",
   "steam-library": "Steam Library",
   "emulator-sources": "Emulator sources",
+  "tender-folder": TENDER_FOLDER_SECTION,
   updates: "Updates",
   interface: "Interface",
   advanced: "Advanced",
@@ -190,6 +194,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   // Emulator sources: `undefined` until the listing answers, `null` where it failed.
   const [emulatorSources, setEmulatorSources] = useState<EmulatorSourcesListing | null | undefined>(undefined);
   const [sourcesBusy, setSourcesBusy] = useState(false);
+  const tenderFolder = useTenderFolder();
 
   useEffect(() => {
     getSettings()
@@ -735,6 +740,8 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
             }}
           />
         );
+      case "tender-folder":
+        return <TenderFolderSection folder={tenderFolder} />;
       case "updates":
         return (
           <UpdatesSection

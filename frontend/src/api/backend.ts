@@ -50,6 +50,10 @@ import type {
   MigrationStatus,
   MigrationResult,
   EmulatorSourcesListing,
+  TenderFolderRefusal,
+  TenderFolderState,
+  TenderPlaceAsks,
+  TenderPlaceRefusal,
   EmulatorSourceDirection,
   StartSourceCheck,
   RollbackStatus,
@@ -748,6 +752,27 @@ export const moveEmulatorSource = endpoint<
   [string, EmulatorSourceDirection],
   EmulatorSourcesListing | EmulatorSourceRefusal
 >("move_emulator_source");
+
+/** Tender's folder: its place, its state, the folders recorded elsewhere and the drives a place may lie on. */
+export const getTenderFolder = endpoint<[], TenderFolderState>("get_tender_folder");
+
+/** What to ask before a typed place is chosen, or why it may not be. */
+export const checkTenderPlace = endpoint<[string], TenderPlaceAsks | TenderPlaceRefusal>("check_tender_place");
+
+/** Make a place Tender's folder's place — `null` for the internal default; answers the state as it now stands. */
+export const chooseTenderPlace = endpoint<[string | null], TenderFolderState | TenderPlaceRefusal>(
+  "choose_tender_place",
+);
+
+/** Go back to a folder something is recorded under as the place; nothing is copied. */
+export const switchToRecordedTenderFolder = endpoint<[string], TenderFolderState | TenderFolderRefusal>(
+  "use_recorded_tender_folder",
+);
+
+/** Have every store forget what it recorded under a folder; no file is touched. */
+export const forgetTenderFolderRecords = endpoint<[string], TenderFolderState | TenderFolderRefusal>(
+  "forget_tender_folder_records",
+);
 
 /** One launchable disc image within a multi-disc ROM's install directory. */
 export interface Disc {

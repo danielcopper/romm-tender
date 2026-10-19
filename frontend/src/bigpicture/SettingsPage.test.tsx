@@ -11,6 +11,7 @@ import { render, fireEvent, act } from "@testing-library/react";
 import { createElement, type ComponentProps, type ReactElement } from "react";
 import { SettingsPage } from "./SettingsPage";
 import * as backend from "../api/backend";
+import { TENDER_FOLDER_AT_HOME } from "../test-utils/tenderFolder";
 import { ENTRY_STOP_ATTR } from "../utils/entryFocus";
 import type { EmulatorSourcesListing, RegisteredDevice, SettingsSection } from "../types";
 import { showModal } from "@decky/ui";
@@ -275,6 +276,7 @@ describe("SettingsPage", () => {
     vi.mocked(backend.getSettings).mockResolvedValue(defaultSettings());
     vi.mocked(backend.getKnownRegions).mockResolvedValue([]);
     vi.mocked(backend.getEmulatorSources).mockResolvedValue(TWO_SOURCES);
+    vi.mocked(backend.getTenderFolder).mockResolvedValue(TENDER_FOLDER_AT_HOME);
     vi.mocked(showPreferredRegionModal).mockResolvedValue(true);
     vi.mocked(backend.getSaveSyncSettings).mockResolvedValue(defaultSaveSyncSettings());
     vi.mocked(backend.listDevices).mockResolvedValue({ success: true, devices: [] });
@@ -1877,7 +1879,7 @@ describe("SettingsPage", () => {
   });
 
   describe("the section list", () => {
-    it("shows exactly the eight sections, in order", async () => {
+    it("shows exactly the nine sections, in order", async () => {
       const { getAllByTestId } = renderPage();
       await flushAsync();
       const labels = getAllByTestId("field").map((el) => el.textContent);
@@ -1887,6 +1889,7 @@ describe("SettingsPage", () => {
         "Controller",
         "Steam Library",
         "Emulator sources",
+        "Tender folder",
         "Updates",
         "Interface",
         "Advanced",

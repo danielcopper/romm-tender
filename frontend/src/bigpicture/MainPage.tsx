@@ -25,6 +25,8 @@ import { WarningCard } from "./WarningCard";
 import { DownloadProgressRow } from "./DownloadProgressRow";
 import { MigrationBlockedPage } from "./MigrationBlockedPage";
 import { SettingsResetBanner } from "./SettingsResetBanner";
+import { TenderFolderNotices } from "./TenderFolderNotices";
+import { useTenderFolder } from "./useTenderFolder";
 import { PlaytimeScopeBanner } from "./PlaytimeScopeBanner";
 import { UpdateNotice } from "./UpdateNotice";
 import { UpdateFailureNotice } from "./UpdateFailureNotice";
@@ -366,6 +368,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   const [sourceBanners, setSourceBanners] = useState<SourceBanner[]>([]);
   const migration = useMigrationStatus();
   const settingsReset = useSettingsResetState();
+  const tenderFolder = useTenderFolder();
   const playtimeScope = usePlaytimeScopeState();
   const downloads = useDownloads();
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -568,6 +571,10 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   return (
     <Focusable {...preferMarkedChild(preferEntry)}>
       {settingsReset.pending && <SettingsResetBanner backedUpTo={settingsReset.backedUpTo} />}
+      <TenderFolderNotices
+        folder={tenderFolder}
+        onChooseAnotherPlace={() => onNavigate({ page: "settings", section: "tender-folder" })}
+      />
       {playtimeScope.pending && (
         <PlaytimeScopeBanner onOpenConnections={() => onNavigate({ page: "settings", section: "connections" })} />
       )}

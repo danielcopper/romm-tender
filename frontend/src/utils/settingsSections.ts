@@ -10,6 +10,7 @@ export const SETTINGS_SECTIONS = [
   "controller",
   "steam-library",
   "emulator-sources",
+  "tender-folder",
   "updates",
   "interface",
   "advanced",

@@ -39,6 +39,7 @@ import { render, fireEvent, act } from "@testing-library/react";
 import { createElement, useSyncExternalStore } from "react";
 import { MainPage, ConnectionIndicator } from "./MainPage";
 import * as backend from "../api/backend";
+import { TENDER_FOLDER_AT_HOME } from "../test-utils/tenderFolder";
 import { useVersionError } from "../utils/connectionState";
 import {
   resetSyncProgressStoreForTests,
@@ -427,6 +428,7 @@ describe("MainPage", () => {
       message: "",
     });
     vi.mocked(backend.getEmulatorSources).mockResolvedValue({ sources: [HEALTHY_RETRODECK], answering: "retrodeck" });
+    vi.mocked(backend.getTenderFolder).mockResolvedValue(TENDER_FOLDER_AT_HOME);
     vi.mocked(backend.cancelSync).mockResolvedValue({
       success: true,
       message: "Cancelled",
@@ -2618,6 +2620,23 @@ describe("MainPage", () => {
       expect(buttonByExactText(container, "Dismiss")).not.toBeNull();
       fireEvent.click(buttonByExactText(container, "Open Connections")!);
       expect(onNavigate).toHaveBeenCalledWith({ page: "settings", section: "connections" });
+    });
+
+    it("the unreachable folder's Choose another place lands on Settings › Tender folder", async () => {
+      vi.mocked(backend.getTenderFolder).mockResolvedValue({
+        ...TENDER_FOLDER_AT_HOME,
+        folder: "/run/media/deck/SD/Tender",
+        condition: "drive_not_mounted",
+        unreachable: "drive_not_mounted",
+      });
+      const onNavigate = vi.fn();
+      const { container, getByTestId } = render(<MainPage onNavigate={onNavigate} />);
+      await flushAsync();
+      expect(getByTestId("tender-folder-unreachable").textContent).toContain(
+        "/run/media/deck/SD/Tender: the drive is not connected.",
+      );
+      fireEvent.click(buttonByExactText(container, "Choose another place")!);
+      expect(onNavigate).toHaveBeenCalledWith({ page: "settings", section: "tender-folder" });
     });
 
     it("the update notice's Open Updates lands on Settings › Updates", async () => {
