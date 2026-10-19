@@ -20,7 +20,7 @@ import {
   stageInstalledSelections,
   STAGE_LABELS,
 } from "./RemovedGamesCleanup";
-import { RED } from "./layout/pane";
+import { GREEN, RED } from "./layout/pane";
 
 const preview: backend.PrunePreviewResult = {
   success: true,
@@ -1311,6 +1311,70 @@ describe("RemovedGamesCleanup", () => {
       }
     });
 
+    it("offers the version the trash icon was opened on as gone, as the preview says of it", async () => {
+      // What the preview answers for a version RomM 404s while its platform's
+      // last fetch still holds it: the chosen row gone and offered, its sibling on RomM.
+      const modal = await open(
+        {
+          ...preview,
+          scope: "rom",
+          total: 2,
+          candidate_total: 1,
+          items: [version(96, "Fresh (USA).zip", "Fresh", 2), version(97, "Fresh (Japan).zip", "Fresh", 2, onRomm)],
+        },
+        96,
+      );
+
+      const chosen = rowFor(modal, "Fresh (USA).zip");
+      expect(chosen.textContent).toContain("Gone from RomM");
+      expect(chosen.textContent).toContain("Removed");
+      expect(confirmButton(modal).textContent).toBe("Remove 1 version");
+    });
+
+    it("keeps a gone version the shortcut is on in the trash icon's dialog for the shortcut's reason", async () => {
+      const modal = await open(
+        {
+          ...preview,
+          scope: "rom",
+          total: 3,
+          candidate_total: 1,
+          items: [
+            version(93, "Chosen (USA).zip", "Chosen", 3, { bound_count: 1 }),
+            version(94, "Chosen (Europe).zip", "Chosen", 3, { candidate: false, bound: true, bound_count: 1 }),
+            version(95, "Chosen (Japan).zip", "Chosen", 3, { ...onRomm, bound_count: 1 }),
+          ],
+        },
+        93,
+      );
+
+      const bound = rowFor(modal, "Chosen (Europe).zip");
+      expect(bound.textContent).toContain("Switch to another version first, then this one can be removed.");
+      expect(bound.textContent).not.toContain("Only the version you chose");
+      expect(counts(modal)).toEqual(["1 version removed", "1 version kept because a shortcut is on it"]);
+    });
+
+    it("draws what is lost in red, what is kept in blue and what is untouched in green", async () => {
+      const modal = await open(threeGames);
+      const colourOf = (row: HTMLElement, text: string): string =>
+        within(row)
+          .getAllByText(text)
+          .map((el) => el.style.color)
+          .find(Boolean)!;
+      const asCss = (colour: string): string => {
+        const probe = document.createElement("span");
+        probe.style.color = colour;
+        return probe.style.color;
+      };
+
+      const blue = colourOf(rowFor(modal, "Island Hopper"), "Nothing removed");
+      expect(colourOf(rowFor(modal, "Island Hopper (Netherlands).gba"), "Kept")).toBe(blue);
+      expect(colourOf(rowFor(modal, "Rally Cup (Europe).zip"), "Stays")).toBe(asCss(GREEN));
+      expect(colourOf(rowFor(modal, "Moon Patrol (USA) (Proto 2).zip"), "Removed, file deleted")).toBe(asCss(RED));
+      expect(colourOf(rowFor(modal, "Moon Patrol"), "Game removed, with its shortcut")).toBe(asCss(RED));
+      expect([asCss(RED), asCss(GREEN)]).not.toContain(blue);
+      expect(colourOf(rowFor(modal, "Rally Cup (USA).zip"), "Removed")).not.toBe(asCss(RED));
+    });
+
     it("keeps a gone version other than the one chosen from the trash icon, from the row's own field", async () => {
       const modal = await open(
         {
@@ -2189,6 +2253,28 @@ describe("RemovedGamesCleanup", () => {
     expect(section.container.textContent).toContain(`${STAGE_LABELS[stage]} — Removed Game`);
     // The raw slug must never reach the caption for a stage we do know.
     expect(section.container.textContent).not.toContain(stage.replace(/_/g, " ") + " — Removed Game");
+  });
+
+  it("names the running stage in words on the Confirm button", async () => {
+    await openRemovedGamesCleanupModal();
+    const modal = render(shownModal());
+    fireEvent.click(confirmButton(modal));
+    await waitFor(() => expect(modal.container.textContent).toContain("Cleanup running..."));
+
+    act(() => {
+      setPruneProgress({
+        run_id: "run-1",
+        preview_id: "preview-1",
+        current: 1,
+        total: 2,
+        stage: "creating_recovery",
+        rom_ids: [7],
+        name: "Removed Game",
+      });
+    });
+
+    expect(modal.getByRole("button", { name: "Backing up..." })).toBeTruthy();
+    expect(modal.queryByRole("button", { name: "creating recovery..." })).toBeNull();
   });
 
   it("degrades an unknown backend stage to something readable", async () => {

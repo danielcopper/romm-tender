@@ -2,10 +2,11 @@
  * What a removed-game cleanup would do to each game and version, predicted from
  * the preview's rows and the dialog's options.
  *
- * The run's own check against RomM still decides. The prediction is never
- * smaller than what a run removes: the run keeps a candidate RomM still serves,
- * and skips a game found gone whole that holds a version the preview did not
- * offer (`services/prune/planning.py`).
+ * The run's own check against RomM still decides, and it never removes a
+ * version this does not predict removed: it keeps a candidate RomM still serves,
+ * skips a game found gone whole that holds a version the preview did not offer,
+ * and removes a game the preview offered whole either whole or not at all
+ * (`services/prune/planning.py`).
  */
 import type { PrunePreviewItem } from "../api/backend";
 
@@ -58,9 +59,9 @@ function groupsInOrder(items: readonly PrunePreviewItem[]): PrunePreviewItem[][]
 function versionOutcome(item: PrunePreviewItem, wholeGame: boolean, options: CleanupOptions): VersionOutcome {
   if (!item.gone_from_romm) return { kind: "stays" };
   if (wholeGame) return options.removeDeadGames ? { kind: "removed" } : { kind: "kept", reason: "remove_games_off" };
-  if (!item.candidate) return { kind: "kept", reason: "only_chosen" };
-  // The shortcut's reason wins over an option's: turning the option on would not remove this version.
+  // The shortcut's reason wins over every other: nothing else in this dialog would remove this version.
   if (item.bound) return { kind: "kept", reason: "shortcut" };
+  if (!item.candidate) return { kind: "kept", reason: "only_chosen" };
   if (!options.removeRows) return { kind: "kept", reason: "remove_rows_off" };
   return { kind: "removed" };
 }

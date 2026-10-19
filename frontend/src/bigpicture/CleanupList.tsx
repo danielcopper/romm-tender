@@ -5,8 +5,8 @@ import type { CleanupGame, CleanupVersion, GameOutcome, KeptReason } from "./cle
 import {
   AMBER,
   CELL_CLIP,
+  GREEN,
   MUTED,
-  PALE_GREEN,
   PaneTableHeader,
   PaneTableRow,
   RED,
@@ -43,9 +43,12 @@ const LINES: CSSProperties = { minWidth: 0, overflow: "hidden" };
 
 const VERSION_INSET = "12px";
 
+const KEPT_BLUE = "#66c0f4";
+const REMOVED_LIGHT = "#c7d5e0";
+
 const GAME_OUTCOME: Record<GameOutcome, { text: string; color: string }> = {
-  stays: { text: "Game stays", color: PALE_GREEN },
-  nothing_removed: { text: "Nothing removed", color: AMBER },
+  stays: { text: "Game stays", color: GREEN },
+  nothing_removed: { text: "Nothing removed", color: KEPT_BLUE },
   removed_with_shortcut: { text: "Game removed, with its shortcut", color: RED },
   removed: { text: "Game removed", color: RED },
 };
@@ -93,13 +96,13 @@ function whatHappens(
 ): { text: string; color: string; why: string[] } {
   const { item, outcome } = version;
   if (outcome.kind === "stays") {
-    return { text: "Stays", color: PALE_GREEN, why: item.installed ? ["Its files stay on this device."] : [] };
+    return { text: "Stays", color: GREEN, why: item.installed ? ["Its files stay on this device."] : [] };
   }
-  if (outcome.kind === "kept") return { text: "Kept", color: AMBER, why: [KEPT_REASON[outcome.reason]] };
+  if (outcome.kind === "kept") return { text: "Kept", color: KEPT_BLUE, why: [KEPT_REASON[outcome.reason]] };
   const why = version.replaced ? [REPLACED_SAVES] : [];
-  if (!version.deletesFile) return { text: "Removed", color: "#c7d5e0", why };
+  if (!version.deletesFile) return { text: "Removed", color: REMOVED_LIGHT, why };
   if (backup.isBackedUp(item.rom_id)) {
-    return { text: "Removed", color: "#c7d5e0", why: [...why, "A copy of its file goes into the backup first."] };
+    return { text: "Removed", color: REMOVED_LIGHT, why: [...why, "A copy of its file goes into the backup first."] };
   }
   return {
     text: "Removed, file deleted",

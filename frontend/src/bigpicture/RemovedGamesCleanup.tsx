@@ -334,7 +334,7 @@ export async function stageInstalledSelections(
 /** What the Confirm button says: pressed, then the run's current stage, then how many versions it removes. */
 function confirmButtonLabel(starting: boolean, progress: PruneProgress | null, versionsRemoved: number): string {
   if (starting) return "Starting...";
-  if (progress) return `${progress.stage.replace(/_/g, " ")}...`;
+  if (progress) return `${stageLabel(progress.stage)}...`;
   return `Remove ${versionsRemoved} ${plural(versionsRemoved, "version", "versions")}`;
 }
 
@@ -958,7 +958,7 @@ export const RemovedGamesCleanupSection: FC<{ onScanRead?: (read: PageRead<numbe
   const runActive = complete === null && pruneState.runId !== null;
   const cancelling = runActive && cancelRequestedFor !== null && cancelRequestedFor === pruneState.runId;
   const runLabel = progress
-    ? `${progress.stage.replace(/_/g, " ")} · ${progress.current} of ${progress.total} · ${progress.name}`
+    ? `${stageLabel(progress.stage)} · ${progress.current} of ${progress.total} · ${progress.name}`
     : "Cleanup starting...";
   return (
     <PanelSection title="Removed RomM Games">
