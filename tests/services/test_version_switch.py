@@ -696,7 +696,10 @@ class TestTheDefaultReadsTheLiveMainVersionFlag:
         assert _default_rom_id(_run(event_loop, service.get_version_list(_APP_ID))) == 3
 
     def test_a_pick_of_the_bound_version_is_read_off_its_own_rom_user(self, event_loop, service, uow, romm):
-        self._seed_group(uow)
+        # The bound version sorts last here, so only its own flag can make it the default.
+        _seed_rom(uow, rom_id=1, app_id=_APP_ID, fs_name="game_9.sfc", regions=("USA",))
+        _seed_rom(uow, rom_id=2, app_id=None, fs_name="game_8.sfc", regions=("USA",), is_main_sibling=True)
+        _seed_rom(uow, rom_id=3, app_id=None, regions=("USA",))
         romm.roms[1] = {
             "id": 1,
             "rom_user": {"is_main_sibling": True},
