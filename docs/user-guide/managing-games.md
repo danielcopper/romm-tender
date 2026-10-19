@@ -163,12 +163,12 @@ no version would be removed it says _If you clean up now: nothing is removed._, 
 keeps, and the confirm button cannot be pressed.
 
 Under that come the four options in one column, then **Cancel** and the confirm button, which names its count — **Remove
-3 versions** — in red, last. Last comes the list, grouped by game. Each game is a row of its own: its name, its platform
-and how many of its versions are gone (_1 of 2 versions gone_, _every version gone_), and what happens to it as a whole
-— **Game stays**, **Nothing removed**, **Game removed, with its shortcut**, or **Game removed** for a game that has no
-Steam shortcut. Its versions follow underneath, the ones still on RomM included. Each version row shows its file name,
-where it is (**Gone from RomM** or **On RomM**, plus **your shortcut** on the version a Steam shortcut is on), and what
-happens to it:
+3 versions** — in red, last. Last comes the list, grouped by game. Each game is a row of its own: its name (the name it
+has in Steam, where it has a shortcut), its platform and how many of its versions are gone (_1 of 2 versions gone_,
+_every version gone_), and what happens to it as a whole — **Game stays**, **Nothing removed**, **Game removed, with its
+shortcut**, or **Game removed** for a game that has no Steam shortcut. Its versions follow underneath, the ones still on
+RomM included. Each version row shows its file name, where it is (**Gone from RomM** or **On RomM**, plus **your
+shortcut** on the version a Steam shortcut is on), and what happens to it:
 
 - **Removed**, or **Removed, file deleted** where its downloaded files go with it. A removed version whose **Back up**
   switch is on says _A copy of its file goes into the backup first._

@@ -749,7 +749,9 @@ holding a button must not hide the overflow its focus ring is drawn in.
 spills across the track beside it — on the Deck a platform name and its note ran into the New column's digit. The clip
 (`overflow: hidden`, `text-overflow: ellipsis`, `white-space: nowrap`, `min-width: 0`) belongs on the **cell**, because
 a grid item is blockified and those properties apply to it, where an inline `span` nested inside it is not and the same
-three do nothing at all. What the clip takes away is handed back in a `title`, note included.
+three do nothing at all. What the clip takes away is handed back in a `title`, note included. The removed-games review's
+list wraps its names instead, because what it says matters before anything is removed and a controller shows no tooltip
+([Data Management](#data-management), "The removed-games review").
 
 ### Destructive actions
 
@@ -2348,8 +2350,10 @@ loaded, so after the list it would be a list's length from the press it unblocks
 **The list is grouped by game and says what a run would do, not only where a version is.** It is a table (Game and
 versions, What happens, Downloaded, Back up file) with a line under it saying that Downloaded is the game files of that
 version on this device and a file is deleted only where the row says so. Each game is a row of its own, a focus stop,
-with its platform, how many of its versions are gone and its outcome: _Game stays_, _Nothing removed_, _Game removed,
-with its shortcut_, or _Game removed_ for a game without a shortcut. Its versions follow — the gone ones, then the one a
+with its name, its platform, how many of its versions are gone and its outcome. The name is that of the version a Steam
+shortcut is on, the name the game has in Steam; with no shortcut, that of the version RomM marks as the group's main one
+(`is_main_sibling`); otherwise the first version's. The outcome is _Game stays_, _Nothing removed_, _Game removed, with
+its shortcut_, or _Game removed_ for a game without a shortcut. Its versions follow — the gone ones, then the one a
 shortcut is on, then the others on RomM — each with its file name, where it is (_Gone from RomM_, _On RomM_, _your
 shortcut_ on the version a shortcut is on) and its outcome: _Removed_, _Removed, file deleted_, _Kept_ with its reason,
 or _Stays_ for a version on RomM. An outcome is red where something is lost or leaves Steam, light where only Tender's
@@ -2361,15 +2365,18 @@ over the trash icon's _Only the version you chose is removed here._, since nothi
 gone version beside a version on RomM with the same file name less its extension is an old entry RomM replaced in a
 rescan, and says so where the others say where they are. More than two other versions on RomM fold into one row, _N more
 versions, all on RomM · Show_, a button that opens them in place; the version a shortcut is on is never folded. Every
-row stays listed with either option off. **The Back up switch appears only on a row whose downloaded file the run would
-delete**, labelled, and is that row's focus stop, since a second stop on the row would be a dead step in front of it;
-every other version row is a stop itself, so the list can be walked. With **Back up before removing** off the switches
-are off and disabled. A switch the reader turned on stays on while an option takes its row out of the run, but only a
-file the run deletes is counted or staged. A row's warning — the preview's own — is a line under it, inside the row.
-**The dialog is revealed at both edges**: focus reaching the first option scrolls it to its top, so the summary comes
-back, and focus reaching the last row scrolls it to its end, so that row's own lines and the note after the list are not
-left under the view. Steam scrolls only far enough to reveal the focused control, which is why both are needed. The
-suite pins that each scroll is asked for; whether it lands where it should is device-only.
+row stays listed with either option off. **Nothing in the list is cut short**: a game's name and a version's name and
+where it is wrap onto a further line where they do not fit. Game and versions takes three fifths of the width the two
+text columns share, and What happens sets its outcomes and reasons a size smaller, so the names have the room. **The
+Back up switch appears only on a row whose downloaded file the run would delete**, labelled on one line, and is that
+row's focus stop, since a second stop on the row would be a dead step in front of it; every other version row is a stop
+itself, so the list can be walked. With **Back up before removing** off the switches are off and disabled. A switch the
+reader turned on stays on while an option takes its row out of the run, but only a file the run deletes is counted or
+staged. A row's warning — the preview's own — is a line under it, inside the row. **The dialog is revealed at both
+edges**: focus reaching the first option scrolls it to its top, so the summary comes back, and focus reaching the last
+row scrolls it to its end, so that row's own lines and the note after the list are not left under the view. Steam
+scrolls only far enough to reveal the focused control, which is why both are needed. The suite pins that each scroll is
+asked for; whether it lands where it should is device-only.
 
 **Recovery bundles are listed and nothing here removes them.** The row states how many are sealed and what they cost, so
 the disk they take stops being invisible, and the pane lists them under that total as a table — Game, Sealed, Size —

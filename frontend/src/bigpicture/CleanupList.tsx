@@ -4,9 +4,9 @@ import { scrollNearestToBottom } from "../utils/scrollHelpers";
 import type { CleanupGame, CleanupVersion, GameOutcome, KeptReason } from "./cleanupPlan";
 import {
   AMBER,
-  CELL_CLIP,
   GREEN,
   MUTED,
+  NOTE_FONT,
   PaneTableHeader,
   PaneTableRow,
   RED,
@@ -29,7 +29,7 @@ export function formatBytes(bytes: number): string {
 }
 
 /** Game and versions, What happens, Downloaded, Back up file. */
-const COLUMNS = "minmax(0, 1fr) minmax(0, 1fr) 64px 96px";
+const COLUMNS = "minmax(0, 3fr) minmax(0, 2fr) 64px 120px";
 
 /** The pane's register without its gutter: the dialog body is padded already. */
 const REGISTER: TableRegister = { rowPadding: "4px 0", headerPadding: "0 0 4px", rule: true };
@@ -38,8 +38,12 @@ const SECONDARY: CSSProperties = { color: MUTED, fontSize: SECONDARY_FONT };
 
 const NUMERIC: CSSProperties = { ...SECONDARY, fontVariantNumeric: "tabular-nums", textAlign: "right" };
 
-/** A cell of more than one line: each line clips on its own. */
-const LINES: CSSProperties = { minWidth: 0, overflow: "hidden" };
+/** A cell of more than one line. A controller shows no tooltip, so a line that does not fit wraps rather than clips. */
+const LINES: CSSProperties = { minWidth: 0, overflowWrap: "anywhere" };
+
+/** What happens is set smaller than the names beside it, which get the width. */
+const OUTCOME: CSSProperties = { fontSize: SECONDARY_FONT, fontWeight: 600 };
+const OUTCOME_WHY: CSSProperties = { color: MUTED, fontSize: NOTE_FONT };
 
 const VERSION_INSET = "12px";
 
@@ -130,15 +134,14 @@ const GameRow: FC<{ game: CleanupGame }> = ({ game }) => {
         {
           content: (
             <>
-              <div style={{ ...CELL_CLIP, fontWeight: 700 }}>{game.name}</div>
-              <div style={{ ...CELL_CLIP, ...SECONDARY }}>{gameLine(game)}</div>
+              <div style={{ fontWeight: 700 }}>{game.name}</div>
+              <div style={SECONDARY}>{gameLine(game)}</div>
             </>
           ),
-          title: `${game.name} · ${gameLine(game)}`,
           clip: false,
           style: LINES,
         },
-        { content: outcome.text, style: { gridColumn: "2 / span 3", color: outcome.color, fontWeight: 600 } },
+        { content: outcome.text, style: { ...OUTCOME, gridColumn: "2 / span 3", color: outcome.color } },
       ]}
     />
   );
@@ -151,7 +154,7 @@ const VersionRow: FC<{ version: CleanupVersion; backup: CleanupListBackup }> = (
     ? {
         content: (
           <ToggleField
-            label="Back up"
+            label={<span style={{ whiteSpace: "nowrap" }}>Back up</span>}
             checked={backup.isBackedUp(item.rom_id)}
             disabled={backup.runInFlight || !backup.recovery}
             bottomSeparator="none"
@@ -173,20 +176,19 @@ const VersionRow: FC<{ version: CleanupVersion; backup: CleanupListBackup }> = (
         {
           content: (
             <div style={{ paddingLeft: VERSION_INSET }}>
-              <div style={CELL_CLIP}>{versionName(version)}</div>
-              <div style={{ ...CELL_CLIP, ...SECONDARY }}>{whereLine(version)}</div>
+              <div>{versionName(version)}</div>
+              <div style={SECONDARY}>{whereLine(version)}</div>
             </div>
           ),
-          title: `ROM ${item.rom_id} · ${versionName(version)}`,
           clip: false,
           style: LINES,
         },
         {
           content: (
             <>
-              <div style={{ color: happens.color, fontWeight: 600 }}>{happens.text}</div>
+              <div style={{ ...OUTCOME, color: happens.color }}>{happens.text}</div>
               {happens.why.map((line) => (
-                <div key={line} style={SECONDARY}>
+                <div key={line} style={OUTCOME_WHY}>
                   {line}
                 </div>
               ))}

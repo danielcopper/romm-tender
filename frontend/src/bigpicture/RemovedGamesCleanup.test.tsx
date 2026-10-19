@@ -20,7 +20,7 @@ import {
   stageInstalledSelections,
   STAGE_LABELS,
 } from "./RemovedGamesCleanup";
-import { GREEN, RED } from "./layout/pane";
+import { GREEN, NOTE_FONT, RED, SECONDARY_FONT } from "./layout/pane";
 
 const preview: backend.PrunePreviewResult = {
   success: true,
@@ -1078,6 +1078,46 @@ describe("RemovedGamesCleanup", () => {
 
       const gameLine = modal.getByText("gba · 1 of 3 versions gone");
       expect(gameLine.previousElementSibling!.textContent).toBe(title);
+    });
+
+    it("gives the names the width and wraps every name and where-line rather than cutting it short", async () => {
+      const modal = await open(threeGames);
+      // A controller shows no tooltip, so nothing between a line and its row may clip it.
+      const cutsShort = (line: HTMLElement): boolean => {
+        for (
+          let el: HTMLElement | null = line;
+          el && !el.matches('[data-testid="cleanup-table"]');
+          el = el.parentElement
+        ) {
+          if (
+            el.style.textOverflow === "ellipsis" ||
+            el.style.whiteSpace === "nowrap" ||
+            el.style.overflow === "hidden"
+          ) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      expect(modal.getByTestId("cleanup-header").style.gridTemplateColumns).toBe(
+        "minmax(0, 3fr) minmax(0, 2fr) 64px 120px",
+      );
+      for (const text of ["Moon Patrol", "Moon Patrol (USA) (Proto 2).zip", "Gone from RomM · your shortcut"]) {
+        expect(cutsShort(modal.getAllByText(text)[0]!), text).toBe(false);
+      }
+    });
+
+    it("sets what happens smaller than the names, and keeps the row switch's label on one line", async () => {
+      const modal = await open(threeGames);
+      const moon = rowFor(modal, "Moon Patrol (USA) (Proto 2).zip");
+
+      expect(within(moon).getByText("Removed, file deleted").style.fontSize).toBe(SECONDARY_FONT);
+      expect(within(moon).getByText("Switch on “Back up” to keep a copy.").style.fontSize).toBe(NOTE_FONT);
+      expect(within(rowFor(modal, "Moon Patrol")).getByText("Game removed, with its shortcut").style.fontSize).toBe(
+        SECONDARY_FONT,
+      );
+      expect(within(moon).getByText("Back up").style.whiteSpace).toBe("nowrap");
     });
 
     it("groups the list by game, says what happens to each game and version, and follows the options", async () => {
