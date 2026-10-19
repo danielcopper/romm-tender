@@ -194,8 +194,7 @@ dialog's counts: a version it finds still on RomM is kept, and where it finds ev
 holds a version the dialog did not offer for removal, it leaves the whole game as it is and says _Another version of
 this game is gone from RomM too. Scan again to review it._ A game the dialog showed as gone entirely is removed whole or
 not at all: where the check finds one of its versions on RomM again, the run leaves it as it is and says _A version of
-this game is back on RomM. Scan again to review it._ Either way the next scan lists every version the run found gone,
-the one the trash icon was opened on included.
+this game is back on RomM. Scan again to review it._ Either way the next scan lists every version the run found gone.
 
 The confirmation options apply to this run only:
 
