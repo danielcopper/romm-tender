@@ -322,13 +322,7 @@ class FakeSaveApi:
     def list_roms(self, platform_id: int, limit: int = 50, offset: int = 0) -> dict[str, Any]:
         raise NotImplementedError
 
-    def list_roms_updated_after(
-        self,
-        platform_id: int,
-        updated_after: str,
-        limit: int = 1,
-        offset: int = 0,
-    ) -> dict[str, Any]:
+    def list_roms_newest_first(self, platform_id: int) -> dict[str, Any]:
         raise NotImplementedError
 
     def download_rom_content(

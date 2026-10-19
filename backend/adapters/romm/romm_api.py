@@ -49,9 +49,12 @@ _logger = logging.getLogger(__name__)
 _MAX_PLAY_SESSION_PAGES = 50
 
 # RomM computes an unused character index and a filter-values aggregation on
-# every ``/api/roms`` list request unless disabled. Tender reads only
-# ``items`` / ``total`` from the list endpoints, so both are turned off to skip
-# that server-side work. Appended to every list-endpoint query string.
+# every ``/api/roms`` list request unless disabled. Tender reads neither, so
+# both are turned off to skip that server-side work. Appended to every
+# list-endpoint query string. The id index (``with_rom_id_index``) stays on even
+# where it goes unread: RomM takes ``total`` from it, and without it runs a count
+# query of its own, measured slower on a live server (a median 228 ms per page
+# with the index, 705 ms without; #743 D5).
 _LIST_AGGREGATIONS_DISABLED = "&with_char_index=false&with_filter_values=false"
 
 # RomM orders ``/api/roms`` by ``name_sort_key`` unless told otherwise (5.3.0
@@ -59,8 +62,13 @@ _LIST_AGGREGATIONS_DISABLED = "&with_char_index=false&with_filter_values=false"
 # every later page when a concurrent scan inserts a ROM earlier in name order: one
 # row comes back twice and another not at all. In ``id`` order a new ROM appends
 # at the end. Appended to every ``/api/roms`` walk that pages with ``offset``;
-# the ``updated_after`` probes read only ``total`` and go without it.
+# the single-request probes do not page and go without it.
 _WALK_ORDER = "&order_by=id"
+
+# The platform skip's probe: the most recently updated ROM first. RomM resolves
+# ``order_by=updated_at`` to ``Rom.updated_at`` (5.3.0
+# ``handler/database/roms_handler.py``).
+_NEWEST_FIRST = "&order_by=updated_at&order_dir=desc"
 
 # The ``/api/roms`` filter each collection kind is listed by.
 _COLLECTION_FILTER = {
@@ -173,17 +181,9 @@ class RommApiAdapter:
             f"{_WALK_ORDER}{_LIST_AGGREGATIONS_DISABLED}"
         )
 
-    def list_roms_updated_after(
-        self,
-        platform_id: int,
-        updated_after: str,
-        limit: int = 1,
-        offset: int = 0,
-    ) -> dict[str, Any]:
-        quoted_after = urllib.parse.quote(updated_after)
+    def list_roms_newest_first(self, platform_id: int) -> dict[str, Any]:
         return self._client.request(
-            f"/api/roms?platform_ids={platform_id}&limit={limit}&offset={offset}"
-            f"&updated_after={quoted_after}{_LIST_AGGREGATIONS_DISABLED}"
+            f"/api/roms?platform_ids={platform_id}&limit=1{_NEWEST_FIRST}{_LIST_AGGREGATIONS_DISABLED}"
         )
 
     def download_rom_content(

@@ -199,8 +199,8 @@ class ShortcutRemovalService:
 
         # Unbind the removed ROMs — clear the Steam link, keep the row (ADR-0007) —
         # and revoke the skip (ADR-0023) of every platform this removal touched.
-        # Unbinding keeps the row, so the platform's persisted-row count is
-        # unchanged and a stamp that may still skip would let the next sync's
+        # Unbinding keeps the row and changes nothing RomM answers, so a stamp
+        # that may still skip would let the next sync's
         # incremental-skip gate skip the platform wholesale and never recreate the
         # removed shortcuts (the #1025 silent-gap class). Both bulk flows — Data
         # Management's remove-all and the per-platform removal on the Library
@@ -265,11 +265,11 @@ class ShortcutRemovalService:
         launcher, plus every entry Steam did not answer for in time. Each
         bound ROM (``shortcut_app_id`` not NULL) whose appId is **not** in that
         set lost its Steam shortcut out-of-band — unbind it (ADR-0007: clear the
-        link, keep the row and its per-ROM children), so the next sync's
-        incremental skip no longer counts it and the unit re-fetches to recreate
-        the shortcut. Returns the count unbound. Defensive ``int`` coercion: the
-        frontend may serialize appIds as strings, and a non-numeric entry is
-        dropped (it can never match a numeric ``shortcut_app_id``).
+        link, keep the row and its per-ROM children) and revoke its platform's
+        skip, so the next sync re-fetches the unit to recreate the shortcut.
+        Returns the count unbound. Defensive ``int`` coercion: the frontend may
+        serialize appIds as strings, and a non-numeric entry is dropped (it can
+        never match a numeric ``shortcut_app_id``).
         """
         live: set[int] = set()
         for raw in live_app_ids:
@@ -290,13 +290,13 @@ class ShortcutRemovalService:
                 rom.unbind_shortcut()
                 uow.roms.save(rom)
                 unbound += 1
-            # A shortcut deleted through Steam's own UI leaves the row's persisted
-            # count unchanged, so its platform's completion stamp (ADR-0023) would
+            # A shortcut deleted through Steam's own UI changes nothing the skip
+            # reads from RomM, so its platform's completion stamp (ADR-0023) would
             # still let the next sync skip the platform and never recreate the
             # shortcut — the same silent-gap class as the bulk removals (#1025).
             # Revoke the skip of every platform we unbound here, in the same
             # write UoW, so the platform full-fetches and recreates the shortcut
-            # (completing the #1046 recovery under the persisted-count skip).
+            # (completing the #1046 recovery).
             for slug in touched_slugs:
                 uow.platform_sync_state.revoke_skip(slug)
             uow.collection_sync_state.delete_intersecting(unbound_ids)

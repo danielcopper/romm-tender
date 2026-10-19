@@ -1,0 +1,22 @@
+-- =============================================================================
+-- 031_add_platform_skip_fetch_start_and_checksum.sql — what the platform skip
+-- compares RomM's answer with
+-- #2469 (#743 D1, D2)
+-- =============================================================================
+--
+--   * platform_sync_state.fetch_started_at — when the completing apply's fetch
+--     of the platform started, on Tender's clock (ISO). The skip's reference is
+--     this minus a fixed margin, no longer completed_at.
+--   * platform_sync_state.rom_id_checksum — sha256 hex of the sorted ROM ids
+--     that fetch returned (domain/platform_skip.py::rom_id_checksum).
+--
+-- No backfill: neither value can be recovered from what a stamp already holds.
+-- A stamp without both never skips, so every platform is fetched in full once
+-- after the upgrade, and the preview offers Apply for it even with nothing else
+-- to do; that apply re-stamps the platform with both.
+--
+-- Transaction-safe DDL only — the runner (adapters/sqlite_migrations.py) wraps
+-- BEGIN/COMMIT and stamps PRAGMA user_version = 31.
+-- -----------------------------------------------------------------------------
+ALTER TABLE platform_sync_state ADD COLUMN fetch_started_at TEXT;
+ALTER TABLE platform_sync_state ADD COLUMN rom_id_checksum TEXT;

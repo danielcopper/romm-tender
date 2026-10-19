@@ -2,19 +2,28 @@
 
 import pytest
 
+from domain.platform_sync_state import PlatformSyncState
 from domain.skip_prediction import collapsed_shortcut_count, new_shortcut_count, predict_unit_skip
+
+
+def _stamp(*, started: str | None = "2025-01-01T00:00:00+00:00", checksum: str | None = "c" * 64) -> PlatformSyncState:
+    return PlatformSyncState.stamp(
+        platform_slug="n64",
+        at="2025-01-01T00:30:00+00:00",
+        rom_count=3,
+        fetch_id="run-1",
+        fetch_started_at=started,
+        rom_id_checksum=checksum,
+    )
 
 
 def _kwargs(**overrides):
     """A baseline input set that predicts a skip; each test flips one field."""
     base = {
-        "stamp_completed_at": "2025-01-01T00:00:00",
-        "stamp_rom_count": 3,
-        "unit_rom_count": 3,
+        "stamp": _stamp(),
         "fetched_count": 3,
         "registry_count": 1,
         "needs_backfill": False,
-        "bound_row_not_returned": False,
     }
     base.update(overrides)
     return base
@@ -26,29 +35,18 @@ class TestPredictUnitSkip:
     def test_predicts_skip_when_all_local_conditions_hold(self):
         assert predict_unit_skip(**_kwargs()) is True
 
-    def test_no_stamp_completed_at_predicts_full_fetch(self):
-        assert predict_unit_skip(**_kwargs(stamp_completed_at=None)) is False
+    def test_no_stamp_predicts_full_fetch(self):
+        assert predict_unit_skip(**_kwargs(stamp=None)) is False
 
-    def test_empty_stamp_completed_at_predicts_full_fetch(self):
-        """A falsy (empty-string) stamp timestamp counts as no stamp — mirrors the gate."""
-        assert predict_unit_skip(**_kwargs(stamp_completed_at="")) is False
+    def test_a_stamp_without_a_checksum_predicts_full_fetch(self):
+        """Every stamp migration 031 upgraded records none, and the gate never skips over one."""
+        assert predict_unit_skip(**_kwargs(stamp=_stamp(checksum=None))) is False
 
-    def test_none_stamp_rom_count_predicts_full_fetch(self):
-        assert predict_unit_skip(**_kwargs(stamp_rom_count=None)) is False
-
-    def test_stamp_count_mismatch_predicts_full_fetch(self):
-        assert predict_unit_skip(**_kwargs(stamp_rom_count=2)) is False
+    def test_a_stamp_without_a_fetch_start_predicts_full_fetch(self):
+        assert predict_unit_skip(**_kwargs(stamp=_stamp(started=None))) is False
 
     def test_zero_countable_rows_predicts_full_fetch(self):
-        assert (
-            predict_unit_skip(**_kwargs(fetched_count=0, registry_count=0, stamp_rom_count=0, unit_rom_count=0))
-            is False
-        )
-
-    def test_fetched_count_mismatch_predicts_full_fetch(self):
-        """The gate's final line also requires server rom_count == the rows carrying
-        the stamp's fetch generation (#1504), not every persisted row."""
-        assert predict_unit_skip(**_kwargs(fetched_count=2)) is False
+        assert predict_unit_skip(**_kwargs(fetched_count=0, registry_count=0)) is False
 
     def test_zero_bound_rows_predicts_full_fetch(self):
         """Unbind-only rows (mass delete, ADR-0007) mirror nothing — the gate re-fetches."""
@@ -56,11 +54,6 @@ class TestPredictUnitSkip:
 
     def test_needs_backfill_predicts_full_fetch(self):
         assert predict_unit_skip(**_kwargs(needs_backfill=True)) is False
-
-    def test_bound_row_not_returned_predicts_full_fetch(self):
-        """The gate full-fetches a platform holding a bound row its stamp's fetch
-        did not return, so the estimate must not price that platform as a skip."""
-        assert predict_unit_skip(**_kwargs(bound_row_not_returned=True)) is False
 
 
 class TestCollapsedShortcutCount:

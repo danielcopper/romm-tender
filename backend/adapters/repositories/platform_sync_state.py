@@ -17,7 +17,7 @@ from domain.platform_sync_state import PlatformSyncState
 if TYPE_CHECKING:
     import sqlite3
 
-_COLUMNS = "platform_slug, completed_at, rom_count, fetch_id, skip_revoked"
+_COLUMNS = "platform_slug, completed_at, rom_count, fetch_id, skip_revoked, fetch_started_at, rom_id_checksum"
 
 
 def _row_to_state(row: sqlite3.Row) -> PlatformSyncState:
@@ -27,6 +27,8 @@ def _row_to_state(row: sqlite3.Row) -> PlatformSyncState:
         rom_count=row["rom_count"],
         fetch_id=row["fetch_id"],
         skip_revoked=bool(row["skip_revoked"]),
+        fetch_started_at=row["fetch_started_at"],
+        rom_id_checksum=row["rom_id_checksum"],
     )
 
 
@@ -42,8 +44,16 @@ class SqlitePlatformSyncStateRepository(BaseRepository):
 
     def save(self, state: PlatformSyncState) -> None:
         self._conn.execute(
-            f"INSERT OR REPLACE INTO platform_sync_state ({_COLUMNS}) VALUES (?, ?, ?, ?, ?)",
-            (state.platform_slug, state.completed_at, state.rom_count, state.fetch_id, int(state.skip_revoked)),
+            f"INSERT OR REPLACE INTO platform_sync_state ({_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                state.platform_slug,
+                state.completed_at,
+                state.rom_count,
+                state.fetch_id,
+                int(state.skip_revoked),
+                state.fetch_started_at,
+                state.rom_id_checksum,
+            ),
         )
 
     def delete(self, platform_slug: str) -> None:

@@ -19,8 +19,9 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 from domain.collection_listing import collection_entry
 from domain.collection_owner import listing_is_own
-from domain.fetch_generation import backfill_needed, bound_row_not_returned, count_rows_for_skip
+from domain.fetch_generation import backfill_needed, count_rows_for_skip
 from domain.platform_prefs import materialize_enabled_platforms, resolve_sync_enabled
+from domain.platform_skip import probe_says_unchanged, stamp_can_match
 from domain.platform_sync_state import stamp_for_skip
 from domain.platform_system import platform_ids_by_slug
 from domain.skip_prediction import collapsed_shortcut_count, new_shortcut_count, predict_unit_skip
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable, Collection
 
+    from domain.platform_sync_state import PlatformSyncState
     from domain.sync_diff import RomAnswer
     from services.library._fetch_pages import EmitProgressFn
     from services.library._state import LibrarySyncStateBox
@@ -76,19 +78,17 @@ class _PlanEstimate(NamedTuple):
 class _SkipBaseline(NamedTuple):
     """One platform's locally persisted inputs to the incremental-skip gate.
 
-    Every field that judges the local mirror against the server
-    (``fetched_count``, ``needs_backfill``) is scoped to the completion stamp's
-    fetch generation: a row the server has dropped can neither be re-counted nor
-    re-fetched, so it may never hold the platform's skip off forever (#1504).
+    ``fetched_count`` and ``needs_backfill`` are scoped to the completion
+    stamp's fetch generation: a row the server has dropped can neither be
+    re-counted nor re-fetched, so it may never hold the platform's skip off
+    forever (#1504).
     """
 
-    stamp_completed_at: str | None
-    stamp_rom_count: int | None
+    stamp: PlatformSyncState | None
     reconstructed_roms: list[dict[str, Any]]
     fetched_count: int
     persisted_count: int
     needs_backfill: bool
-    bound_row_not_returned: bool
 
 
 @dataclass(frozen=True)
@@ -549,10 +549,9 @@ class LibraryFetcher:
 
         Per unit slug: replay the wholesale-skip gate's LOCAL conditions
         (``predict_unit_skip`` — a stamp present and not revoked
-        (``stamp_for_skip``), the stamped count and the count of rows carrying
-        the stamp's fetch generation both match the server count, bound rows
-        exist, no group-key backfill pending, no bound row the stamp's fetch did
-        not return) and derive the persisted post-collapse shortcut count
+        (``stamp_for_skip``) that records what the gate compares RomM's answer
+        with, rows carrying the stamp's fetch generation, bound rows, no
+        group-key backfill pending) and derive the persisted post-collapse shortcut count
         (``collapsed_shortcut_count`` over the rows' sibling-group keys + bound
         flags). The collapsed count is emitted ONLY for slugs that carry a
         ``PlatformSyncState`` completion stamp the gate would read (#1412): such a
@@ -573,7 +572,7 @@ class LibraryFetcher:
         rows and the server count as they stand, not the completeness of the
         mirror: a bound row genuinely has a Steam shortcut whether or not the
         platform's mirror is complete, and a ROM the mirror holds no row for
-        genuinely has to be created. The gate's server-delta check (``list_roms_updated_after``) is
+        genuinely has to be created. The gate's one request (``list_roms_newest_first``) is
         deliberately NOT replayed — no network at plan time.
 
         A Force Full Sync clears every stamp before the run, so its plan predicts
@@ -601,16 +600,13 @@ class LibraryFetcher:
                 bound_count = sum(1 for rom in all_rows if rom.shortcut_app_id is not None)
                 fetch_id = stamp.fetch_id if stamp is not None else None
                 predicted = predict_unit_skip(
-                    stamp_completed_at=stamp.completed_at if stamp is not None else None,
-                    stamp_rom_count=stamp.rom_count if stamp is not None else None,
-                    unit_rom_count=unit.rom_count,
+                    stamp=stamp,
                     # The same fetch-generation count and backfill gate the real
                     # gate uses (#1504), so the estimate keeps replaying the
                     # gate's local conditions.
                     fetched_count=count_rows_for_skip(all_rows, fetch_id),
                     registry_count=bound_count,
                     needs_backfill=backfill_needed(all_rows, fetch_id),
-                    bound_row_not_returned=bound_row_not_returned(all_rows, fetch_id),
                 )
                 collapsed = (
                     collapsed_shortcut_count(
@@ -629,9 +625,9 @@ class LibraryFetcher:
     def _read_incremental_baseline(self, platform_slug: str) -> _SkipBaseline:
         """Read the incremental-skip baseline for *platform_slug* from SQLite.
 
-        * ``stamp_completed_at`` / ``stamp_rom_count`` — the platform's
-          completion stamp (``PlatformSyncState``), or ``None``/``None`` when
-          there is no stamp or its skip was revoked (``stamp_for_skip``). The
+        * ``stamp`` — the platform's completion stamp (``PlatformSyncState``),
+          or ``None`` when there is no stamp or its skip was revoked
+          (``stamp_for_skip``). The
           stamp is the **sole** skip authority
           (ADR-0023): it exists iff the platform's most recent apply attempt
           ran to completion, a property no run-scoped ``last_sync`` can carry —
@@ -642,13 +638,12 @@ class LibraryFetcher:
           like a RomM list response (thin — no ``metadatum``, so the skip-guard
           keeps them out of the metadata stamp). This is the shortcut set the
           skip reconstructs as the unit's ROMs.
-        * ``fetched_count`` — the rows the skip may count against RomM's
-          platform ``rom_count`` (``count_rows_for_skip``, #1504): those carrying
-          the stamp's ``fetch_id`` generation, so a row for a rom_id the server
-          dropped stays on disk (ADR-0007) without holding the platform below
-          its server count forever. Bound and unbound rows count alike — only
-          the generation decides. Falls back to every row for a stamp written
-          before the generation contract.
+        * ``fetched_count`` — the rows the stamp's fetch returned
+          (``count_rows_for_skip``, #1504): those carrying the stamp's
+          ``fetch_id`` generation, so a row for a rom_id the server dropped stays
+          on disk (ADR-0007) without counting. Bound and unbound rows count
+          alike — only the generation decides. Falls back to every row for a
+          stamp written before the generation contract.
         * ``persisted_count`` — every persisted row for the platform,
           superseded ones included. Reporting only: it makes the "N persisted,
           M from the last fetch" divergence visible in the log.
@@ -658,9 +653,6 @@ class LibraryFetcher:
           gated for the same reason ``fetched_count`` is: a dropped row is never
           returned again, so no fetch can ever backfill it. Falls back to every
           row for a stamp written before the generation contract.
-        * ``bound_row_not_returned`` — a bound row does not carry the stamp's
-          generation, a NULL one included (``bound_row_not_returned``). False for
-          a stamp written before the generation contract.
 
         Only one short read UoW is opened.
         """
@@ -684,13 +676,11 @@ class LibraryFetcher:
         ]
         fetch_id = stamp.fetch_id if stamp is not None else None
         return _SkipBaseline(
-            stamp_completed_at=stamp.completed_at if stamp is not None else None,
-            stamp_rom_count=stamp.rom_count if stamp is not None else None,
+            stamp=stamp,
             reconstructed_roms=reconstructed,
             fetched_count=count_rows_for_skip(all_rows, fetch_id),
             persisted_count=len(all_rows),
             needs_backfill=backfill_needed(all_rows, fetch_id),
-            bound_row_not_returned=bound_row_not_returned(all_rows, fetch_id),
         )
 
     @staticmethod
@@ -716,29 +706,23 @@ class LibraryFetcher:
         """Per-unit incremental-skip pre-check for a platform unit.
 
         Returns the roms-reconstructed ROM list (the platform's bound rows =
-        its shortcuts) when the platform is unchanged: the server reports zero
-        rows updated after the platform's completion stamp AND the unit's
-        ``rom_count`` matches the count of persisted rows carrying the stamp's
-        fetch generation. The stamp (``PlatformSyncState``) is the **sole** skip
-        authority — it exists iff the platform's most recent apply attempt ran to
-        completion (cleared at apply start, rewritten by the final chunk;
-        ADR-0023), and it reads as absent once a local removal, or a stale
-        removal on a run that did not process the platform, revoked its skip. A
-        completed-run ``last_sync`` is deliberately NOT a fallback: it cannot see
-        a locally-removed-then-partially-reapplied platform, so trusting it can
-        skip a platform with missing shortcuts.
-        Group-aware sync persists every sibling (ADR-0021), so bound and unbound
-        rows count alike — only the generation decides, which keeps skip parity on
-        platforms holding sibling groups while excluding a row for a rom_id the
-        server has since dropped (#1504; such a row is retained per ADR-0007 and
-        would otherwise inflate the count — or demand a backfill no fetch can
-        deliver — forever). Returns ``None`` to fall through to a full paginated
-        fetch — no stamp (including every platform's first sync after this
-        contract shipped — a one-time re-walk) or a revoked one, no rows carrying
-        the stamp's generation, an un-backfilled row from that generation, a
-        bound row the stamp's fetch did not return, a stamped ROM count that no
-        longer matches the server, the delta check raised, or the server reports
-        changes.
+        its shortcuts) when the platform is unchanged: one request
+        (``list_roms_newest_first``) answers no ROM updated after the stamp's
+        reference and a visible id set whose checksum is the stamp's
+        (``domain/platform_skip.probe_says_unchanged``, #743 D1-D3). The stamp
+        (``PlatformSyncState``) is the **sole** skip authority — it exists iff
+        the platform's most recent apply attempt ran to completion (cleared at
+        apply start, rewritten by the final chunk; ADR-0023), and it reads as
+        absent once a local removal, or a stale removal on a run that did not
+        process the platform, revoked its skip. A completed-run ``last_sync`` is
+        deliberately NOT a fallback: it cannot see a locally-removed-then-
+        partially-reapplied platform, so trusting it can skip a platform with
+        missing shortcuts.
+        Returns ``None`` to fall through to a full paginated fetch — no stamp or
+        a revoked one, a stamp without a fetch start or a checksum (every stamp
+        written before migration 031 — a one-time re-walk), no rows carrying
+        the stamp's generation, no bound row, an un-backfilled row from that
+        generation, the request raised, or its answer does not match the stamp.
 
         This gate is the SOLE skip authority (ADR-0023). The plan-time
         ``predicted_skip`` rider (``_read_plan_estimates`` /
@@ -750,16 +734,17 @@ class LibraryFetcher:
         platform_slug = unit.slug
 
         baseline = await self._loop.run_in_executor(None, self._read_incremental_baseline, platform_slug)
-        stamp_completed_at = baseline.stamp_completed_at
-        stamp_rom_count = baseline.stamp_rom_count
+        stamp = baseline.stamp
         reconstructed = baseline.reconstructed_roms
         fetched_count = baseline.fetched_count
         persisted_count = baseline.persisted_count
-        needs_backfill = baseline.needs_backfill
         registry_count = len(reconstructed)
 
-        if not stamp_completed_at or stamp_rom_count is None:
+        if stamp is None:
             self._logger.info(f"Per-unit fetch {platform_name}: no completion stamp — full fetch")
+            return None
+        if not stamp_can_match(stamp):
+            self._logger.info(f"Per-unit fetch {platform_name}: stamp records no fetch start or checksum — full fetch")
             return None
         if fetched_count == 0:
             return None
@@ -784,49 +769,21 @@ class LibraryFetcher:
         # ROM *the server still returns* forces a full fetch — the commit then
         # persists every sibling's group key + version dimensions. Once every
         # such row carries a key this is a no-op and the skip resumes.
-        if needs_backfill:
+        if baseline.needs_backfill:
             self._logger.info(f"Per-unit fetch {platform_name}: version-metadata backfill needed — full fetch")
             return None
 
-        if baseline.bound_row_not_returned:
-            self._logger.info(f"Per-unit fetch {platform_name}: a bound row the last fetch did not return — full fetch")
-            return None
-
-        # Stamp-count guard (ADR-0023): the server ROM count the stamping run
-        # planned with must still equal the unit's current ``rom_count``. A server-side
-        # count change since the stamp invalidates it — the platform must
-        # re-fetch to reconcile.
-        if stamp_rom_count != unit.rom_count:
-            self._logger.info(
-                f"Per-unit fetch {platform_name}: stamped rom_count {stamp_rom_count} "
-                f"!= server {unit.rom_count} — full fetch"
-            )
-            return None
-
         try:
-            # Typed ``object`` so the isinstance guard below is genuine
-            # narrowing — the RomM API return type is a JSON-shape promise
-            # the server can break.
-            delta_resp: object = await self._loop.run_in_executor(
-                None,
-                self._romm_api.list_roms_updated_after,
-                int(unit.id),
-                stamp_completed_at,
-                1,
-                0,
-            )
+            # Typed ``object``: the RomM API return type is a JSON-shape promise
+            # the server can break, and the verdict reads it defensively.
+            probe: object = await self._loop.run_in_executor(None, self._romm_api.list_roms_newest_first, int(unit.id))
         except Exception as e:
             self._logger.warning(
                 f"Per-unit incremental check failed for {platform_name}, falling back to full fetch: {e}"
             )
             return None
 
-        # The row-count condition counts only the rows the last COMPLETE fetch
-        # returned (#1504). Rows for rom_ids the server has since dropped stay on
-        # disk as identity anchors (ADR-0007) but carry an older fetch generation,
-        # so they no longer hold the platform below its server count forever.
-        server_total = delta_resp.get("total", 0) if isinstance(delta_resp, dict) else 0
-        if server_total == 0 and unit.rom_count == fetched_count:
+        if probe_says_unchanged(stamp, probe):
             self._logger.info(
                 f"Per-unit skip: {platform_name} unchanged "
                 f"({fetched_count} ROMs from the last fetch, {registry_count} shortcuts"
@@ -835,9 +792,9 @@ class LibraryFetcher:
             return self._decorate_reconstructed(reconstructed, platform_name, platform_slug, int(unit.id))
 
         self._logger.info(
-            f"Per-unit fetch {platform_name}: {server_total} updated, "
-            f"server={unit.rom_count} from-last-fetch={fetched_count} shortcuts={registry_count}"
-            f"{self._superseded_note(persisted_count, fetched_count)} — full fetch"
+            f"Per-unit fetch {platform_name}: RomM reports a ROM updated since the last fetch or another set of ROMs "
+            f"(from-last-fetch={fetched_count} shortcuts={registry_count}"
+            f"{self._superseded_note(persisted_count, fetched_count)}) — full fetch"
         )
         return None
 
@@ -857,10 +814,9 @@ class LibraryFetcher:
     ) -> tuple[list[dict[str, Any]], bool]:
         """Fetch ROMs for a single platform unit.
 
-        Tries the incremental-skip path first: if the platform's
-        ``rom_count`` matches the registry's count for that platform
-        and no rows have ``updated_after`` last_sync, the registry is
-        used to reconstruct the ROM list (avoids re-paginating).
+        Tries the incremental-skip path first (``_try_unit_incremental_skip``):
+        when RomM's answer matches the platform's completion stamp, the
+        registry is used to reconstruct the ROM list (avoids re-paginating).
 
         Returns ``(unit_roms, skipped)`` where ``skipped`` is True when
         the incremental check succeeded. Callers use ``skipped=True`` as

@@ -7,9 +7,8 @@ library-wide ``last_sync`` only when the *whole* run finishes; a run that
 committed every chunk of platforms A, B, C but was cancelled during platform D
 never completes, so ``last_sync`` stays put and the next sync re-walks A, B, C
 from zero. This stamp is the per-platform checkpoint that survives that
-cancellation: the skip reads ``completed_at`` as the platform's own effective
-``last_sync`` and ``rom_count`` as the server count the completing run planned
-with (a later server-side count change invalidates the stamp).
+cancellation: the skip compares RomM's answer with the completing fetch's
+``fetch_started_at`` and ``rom_id_checksum`` (``domain/platform_skip.py``).
 
 Keyed by ``platform_slug``. A thin record built whole and upserted — never a
 partial field mutation — so it carries a single ``stamp`` constructor and no
@@ -42,30 +41,51 @@ class PlatformSyncState:
     rom_count: int
     fetch_id: str | None = None
     skip_revoked: bool = False
+    fetch_started_at: str | None = None
+    rom_id_checksum: str | None = None
 
     @classmethod
-    def stamp(cls, *, platform_slug: str, at: str, rom_count: int, fetch_id: str | None = None) -> PlatformSyncState:
+    def stamp(
+        cls,
+        *,
+        platform_slug: str,
+        at: str,
+        rom_count: int,
+        fetch_id: str | None = None,
+        fetch_started_at: str | None = None,
+        rom_id_checksum: str | None = None,
+    ) -> PlatformSyncState:
         """Record that ``platform_slug`` fully synced at ISO timestamp ``at``.
 
         ``rom_count`` is the server's platform ROM count the completing run
-        planned with — the skip re-checks it against the live count and
-        invalidates the stamp on any change.
+        planned with. The skip no longer reads it; removed-game discovery reads
+        a zero as an empty completed fetch (``domain/fetch_generation.py``).
+
+        ``fetch_started_at`` (ISO, Tender's clock) and ``rom_id_checksum``
+        (``domain/platform_skip.rom_id_checksum`` over the ids that fetch
+        returned) are what the skip compares RomM's answer with; a stamp
+        without both never skips.
 
         ``fetch_id`` is the generation marker every row of that completing fetch
-        carries (``Rom.record_fetch_generation``), so the skip can count exactly
-        the rows the fetch returned rather than every row of the platform — a row
-        for a rom_id the server dropped keeps an older generation and stops
-        counting, while staying on disk (ADR-0007, #1504). ``None`` is "unknown"
-        (a stamp written before this contract): it cannot say what its fetch
-        returned, so the skip counts every row (the pre-#1504 behavior) until an
-        apply commit re-stamps both sides — a preview-only run (empty
-        library-wide delta) reaches no commit and leaves them unchanged.
+        carries (``Rom.record_fetch_generation``), so the skip's backfill gate
+        and removed-game discovery read exactly the rows the fetch returned
+        rather than every row of the platform — a row for a rom_id the server
+        dropped keeps an older generation, while staying on disk (ADR-0007,
+        #1504). ``None`` is "unknown" (a stamp written before this contract): it
+        cannot say what its fetch returned, so every row counts.
         """
         if not platform_slug:
             raise ValueError("platform_slug is required")
         if rom_count < 0:
             raise ValueError("rom_count must be non-negative")
-        return cls(platform_slug=platform_slug, completed_at=at, rom_count=rom_count, fetch_id=fetch_id)
+        return cls(
+            platform_slug=platform_slug,
+            completed_at=at,
+            rom_count=rom_count,
+            fetch_id=fetch_id,
+            fetch_started_at=fetch_started_at,
+            rom_id_checksum=rom_id_checksum,
+        )
 
 
 def stamp_for_skip(stamp: PlatformSyncState | None) -> PlatformSyncState | None:

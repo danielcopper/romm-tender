@@ -37,7 +37,7 @@ touch the same tables through the same repositories:
 * ``_clear_platform_stamp_io`` **writes**. That alone rules it out of a
   read-only module, and it belongs with the apply pipeline that performs it
   rather than with the projections a run reasons about.
-  :meth:`LocalLibraryReader.do_count_unstamped_platforms` reads the same table and
+  :meth:`LocalLibraryReader.do_count_platforms_to_restamp` reads the same table and
   answers a question the caller weighs; the delete is a step the pipeline takes.
   *When* it is taken — after the fetch, after the artwork, after the cancel
   guard, before the first chunk, so a crash in between leaves no stamp
@@ -58,12 +58,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.platform_names import decode_platform_names
+from domain.platform_skip import restamp_due
 from domain.platform_sync_state import stamp_for_skip
 from domain.sibling_resolution import reachable_rom_ids
 from domain.sync_diff import StaleRow, select_stale_removals
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
+    from collections.abc import Collection, Mapping, Sequence
 
     from domain.work_unit import WorkUnit
     from services.protocols import UnitOfWorkFactory
@@ -134,20 +135,30 @@ class LocalLibraryReader:
             last_collections = list(latest.collections_completed or []) if latest is not None else []
         return registry, last_platforms, last_collections
 
-    def do_count_unstamped_platforms(self, platform_slugs: set[str]) -> int:
-        """Count enabled platform slugs without a ``PlatformSyncState`` stamp that may skip.
+    def do_count_platforms_to_restamp(
+        self, platform_slugs: set[str], full_fetched: Mapping[str, Sequence[Mapping[str, Any]]]
+    ) -> int:
+        """Count enabled platform slugs whose wholesale skip only a fresh ``PlatformSyncState`` stamp can restore.
 
         A platform lacking a completion stamp, or holding one whose skip was
-        revoked (``stamp_for_skip``), has no wholesale-skip authority —
-        ``LibraryFetcher._try_unit_incremental_skip`` full-fetches it — so its
-        apply runs even at a zero shortcut delta and the empty final chunk
-        re-writes the stamp (the one-time re-walk ADR-0023 intends after a
-        late-ack recovery leaves a platform complete-but-unstamped). Surfaced as
+        revoked (``stamp_for_skip``), has no wholesale-skip authority. One the
+        preview fetched in full (*full_fetched*, slug → the ROMs that fetch
+        returned) counts too when its stamp does not match that fetch
+        (``domain/platform_skip.restamp_due``): no checksum or fetch start, other
+        ids, or a ROM updated after its reference. Either way
+        ``LibraryFetcher._try_unit_incremental_skip`` full-fetches it on every
+        sync until an apply re-stamps it, so its apply runs even at a zero
+        shortcut delta and the empty final chunk re-writes the stamp. Surfaced as
         the preview's ``restamp_platform_count`` so the frontend still offers
-        Apply on an otherwise-empty delta (#1416). One short read UoW.
+        Apply on an otherwise-empty delta (#1416, #743). One short read UoW.
         """
         with self._uow_factory() as uow:
-            return sum(1 for slug in platform_slugs if stamp_for_skip(uow.platform_sync_state.get(slug)) is None)
+            return sum(
+                1
+                for slug in platform_slugs
+                if (stamp := stamp_for_skip(uow.platform_sync_state.get(slug))) is None
+                or (slug in full_fetched and restamp_due(stamp, full_fetched[slug]))
+            )
 
     def do_read_apply_registry(self, unit: WorkUnit) -> dict[str, dict[str, Any]]:
         """Read the bound-row registry the per-unit group collapse diffs against.

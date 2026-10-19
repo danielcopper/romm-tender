@@ -134,6 +134,13 @@ class TestListRoms:
             "/api/roms?platform_ids=5&limit=500&offset=0&order_by=id&with_char_index=false&with_filter_values=false"
         )
 
+    def test_the_walk_keeps_romm_s_id_index(self):
+        """RomM takes ``total`` from the index, and counts slower without it (#743 D5)."""
+        api, client = _make_api()
+        client.request.return_value = {"items": [], "total": 0}
+        api.list_roms(5)
+        assert "with_rom_id_index" not in client.request.call_args[0][0]
+
 
 class TestDownloadSave:
     def test_uses_content_endpoint(self):
@@ -562,39 +569,32 @@ class TestGetCurrentUser:
         assert result["username"] == "admin"
 
 
-class TestListRomsUpdatedAfter:
-    def test_url_encodes_updated_after(self):
-        api, client = _make_api()
-        client.request.return_value = {"items": [], "total": 0}
-        api.list_roms_updated_after(5, "2024-01-15T10:30:00+00:00")
-        url = client.request.call_args[0][0]
-        # Colons and plus sign must be encoded
-        assert "updated_after=2024-01-15T10%3A30%3A00%2B00%3A00" in url
-        assert "platform_ids=5" in url
-        # The count probe keeps its limit=1 and rides the same aggregation-off flags.
-        assert "limit=1" in url
-        assert "with_char_index=false" in url
-        assert "with_filter_values=false" in url
+class TestListRomsNewestFirst:
+    """The platform skip's one request (#743 D3)."""
 
-    def test_includes_pagination(self):
+    def test_query_string_is_pinned(self):
         api, client = _make_api()
-        client.request.return_value = {"items": [], "total": 0}
-        api.list_roms_updated_after(3, "2024-01-01", limit=10, offset=5)
-        url = client.request.call_args[0][0]
-        assert "limit=10" in url
-        assert "offset=5" in url
-        assert "with_char_index=false" in url
-        assert "with_filter_values=false" in url
-
-    def test_query_string_is_pinned_without_order_by(self):
-        """The probe reads only ``total`` from one row, so it carries no walk order."""
-        api, client = _make_api()
-        client.request.return_value = {"items": [], "total": 0}
-        api.list_roms_updated_after(5, "2024-01-15T10:30:00+00:00")
+        client.request.return_value = {"items": [], "total": 0, "rom_id_index": []}
+        api.list_roms_newest_first(5)
         client.request.assert_called_once_with(
-            "/api/roms?platform_ids=5&limit=1&offset=0&updated_after=2024-01-15T10%3A30%3A00%2B00%3A00"
+            "/api/roms?platform_ids=5&limit=1&order_by=updated_at&order_dir=desc"
             "&with_char_index=false&with_filter_values=false"
         )
+
+    def test_asks_for_neither_a_time_filter_nor_an_index_turned_off(self):
+        """``updated_after`` would narrow the id index to the ROMs updated since; the index must stay the whole set."""
+        api, client = _make_api()
+        client.request.return_value = {"items": [], "total": 0, "rom_id_index": []}
+        api.list_roms_newest_first(5)
+        url = client.request.call_args[0][0]
+        assert "updated_after" not in url
+        assert "with_rom_id_index" not in url
+
+    def test_returns_romm_s_answer_unchanged(self):
+        api, client = _make_api()
+        answer = {"items": [{"id": 3, "updated_at": "2026-10-19T08:00:00+00:00"}], "total": 2, "rom_id_index": [3, 4]}
+        client.request.return_value = answer
+        assert api.list_roms_newest_first(5) == answer
 
 
 class TestListCollectionRomsUpdatedAfter:
