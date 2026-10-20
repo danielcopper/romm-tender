@@ -850,10 +850,8 @@ class DownloadService:
         # Name the extract dir from the ROM's identity, not files[0] (which may be
         # an arbitrary inner asset for a nested-single folder game). Computed once
         # here and threaded to both the extraction and the cleanup so the dir a
-        # failure tears down matches the dir extraction created. Only a download
-        # that may be unpacked — a multi-file ROM or a single zip — gets one.
-        may_unpack = has_multiple or is_zip_name(target_path)
-        extract_dir_name = self._resolve_safe_extract_dir_name(rom_detail) if may_unpack else ""
+        # failure tears down matches the dir extraction created.
+        extract_dir_name = self._extract_dir_name(rom_detail, target_path)
         progress_callback = self._make_progress_callback(rom_id, rom_name, platform_name, file_name, control)
         on_meta = self._make_on_meta(rom_id, rom_name, platform_name, file_name)
         # Tracks the resolved launch path once extraction returns it, so a
@@ -891,30 +889,11 @@ class DownloadService:
 
             async with self._download_semaphore:
                 self._download_queue[rom_id]["status"] = "downloading"
-                # A zip already whole on disk — kept after a failed unpack, or paused
-                # after its last byte — is unpacked without a transfer.
-                kept = await self._loop.run_in_executor(
-                    None, self._unpacker().kept_download_complete, target_path, rom_detail
-                )
-                if kept:
-                    self._logger.info(f"Unpacking the download already on disk for {rom_name}")
+                fetch = partial(self._fetch_unless_whole, rom_id, rom_detail, file_name, target_path, progress_callback)
 
                 if has_multiple:
                     # Multi-file ROM: API returns ZIP, download to temp then extract
-                    tmp_zip = target_path + ZIP_TMP_EXT
-                    if not kept:
-                        await self._loop.run_in_executor(
-                            None,
-                            partial(
-                                self._romm_api.download_rom_content,
-                                rom_id,
-                                file_name,
-                                tmp_zip,
-                                progress_callback,
-                                resume=resume,
-                                on_meta=on_meta,
-                            ),
-                        )
+                    await fetch(target_path + ZIP_TMP_EXT, resume=resume, on_meta=on_meta)
                     post_io_future = self._loop.run_in_executor(
                         None,
                         self._post_download_multi_io,
@@ -935,20 +914,7 @@ class DownloadService:
                     # → torn down (#1049).
                     final_path, post_io_error = await asyncio.shield(post_io_future)
                 else:
-                    tmp_path = target_path + TMP_EXT
-                    if not kept:
-                        await self._loop.run_in_executor(
-                            None,
-                            partial(
-                                self._romm_api.download_rom_content,
-                                rom_id,
-                                file_name,
-                                tmp_path,
-                                progress_callback,
-                                resume=resume,
-                                on_meta=on_meta,
-                            ),
-                        )
+                    await fetch(target_path + TMP_EXT, resume=resume, on_meta=on_meta)
                     post_io_future = self._loop.run_in_executor(
                         None,
                         self._post_download_single_io,
@@ -1040,10 +1006,7 @@ class DownloadService:
         except Exception as e:
             self._download_queue[rom_id]["status"] = "failed"
             self._download_queue[rom_id]["error"] = str(e)
-            # Too little space to unpack keeps the download whole for a retry;
-            # nothing was extracted yet, so there is nothing else to remove.
-            if not isinstance(e, NotEnoughSpaceToUnpack):
-                self._cleanup_partial_download(target_path, has_multiple, extract_dir_name, final_path)
+            self._cleanup_failed_download(e, target_path, has_multiple, extract_dir_name, final_path)
             self._logger.error(f"Download failed for {rom_name}: {e}")
             await self._emit("download_failed", failed_frame(rom_id, rom_name, platform_name, str(e)))
 
@@ -1061,6 +1024,42 @@ class DownloadService:
                 self._reserved_bytes.pop(rom_id, None)
                 del self._control_tokens[rom_id]
             self._prune_download_queue()
+
+    async def _fetch_unless_whole(
+        self, rom_id, rom_detail, file_name, target_path, progress_callback, partial_path, *, resume, on_meta
+    ) -> None:
+        """Transfer this download into *partial_path*, unless it already sits whole there.
+
+        A zip already whole on disk — kept after a failed unpack, or paused after
+        its last byte — is unpacked without a transfer (``kept_download_complete``).
+        """
+        if await self._loop.run_in_executor(None, self._unpacker().kept_download_complete, target_path, rom_detail):
+            self._logger.info(f"Unpacking the download already on disk for {rom_detail.get('name', file_name)}")
+            return
+        await self._loop.run_in_executor(
+            None,
+            partial(
+                self._romm_api.download_rom_content,
+                rom_id,
+                file_name,
+                partial_path,
+                progress_callback,
+                resume=resume,
+                on_meta=on_meta,
+            ),
+        )
+
+    def _extract_dir_name(self, rom_detail: dict[str, Any], target_path: str) -> str:
+        """The extract dir's name where a download may be unpacked — a multi-file ROM or a single zip — else ``""``."""
+        may_unpack = is_multi_file_download(rom_detail) or is_zip_name(target_path)
+        return self._resolve_safe_extract_dir_name(rom_detail) if may_unpack else ""
+
+    def _cleanup_failed_download(self, error, target_path, has_multiple, extract_dir_name, final_path) -> None:
+        """Remove what a failed download left behind (``_cleanup_partial_download``)."""
+        # Too little space to unpack keeps the download whole for a retry; nothing
+        # was extracted yet, so there is nothing else to remove.
+        if not isinstance(error, NotEnoughSpaceToUnpack):
+            self._cleanup_partial_download(target_path, has_multiple, extract_dir_name, final_path)
 
     def _bytes_reserved_by_others(self, rom_id: int) -> int:
         """What other downloads have claimed and not yet written, which free space does not lack yet.

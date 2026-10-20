@@ -96,6 +96,15 @@ def build_m3u_content(disc_files: list[str]) -> str:
     return "\n".join(sorted_files) + "\n"
 
 
+def _first_by_extension(paths: list[str], extensions: tuple[str, ...]) -> str | None:
+    """The first of *paths* ending in the first of *extensions* any of them ends in, case-folded."""
+    for ext in extensions:
+        matches = [p for p in paths if p.lower().endswith(ext)]
+        if matches:
+            return matches[0]
+    return None
+
+
 def detect_launch_file(files: list[tuple[str, int]], m3u_supported: bool) -> str | None:
     """Pick the best launch file from a list of (path, size) tuples.
 
@@ -165,10 +174,9 @@ def detect_launch_file(files: list[tuple[str, int]], m3u_supported: bool) -> str
             return matches[0]
 
     # The descriptor, never the largest track, is what an emulator opens.
-    for ext in (descriptor for descriptor in TRACK_DESCRIPTORS if descriptor != ".cue"):
-        matches = [p for p in paths if p.lower().endswith(ext)]
-        if matches:
-            return matches[0]
+    descriptor = _first_by_extension(paths, tuple(ext for ext in TRACK_DESCRIPTORS if ext != ".cue"))
+    if descriptor is not None:
+        return descriptor
 
     # Largest file by pre-computed size
     return max(files, key=lambda t: t[1])[0]
