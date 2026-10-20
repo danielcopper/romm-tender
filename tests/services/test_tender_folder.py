@@ -255,7 +255,10 @@ class TestPreparingAWrite:
         finally:
             rig.home.chmod(0o700)
 
-        assert refused.value.details["state"] in {"folder_missing", "folder_not_writable"}
+        assert refused.value.details == {"folder": str(rig.home / "Tender"), "state": "folder_not_writable"}
+        assert refused.value.message == (
+            f"Tender's folder at {rig.home / 'Tender'} cannot be reached: the folder cannot be written to."
+        )
 
     def test_a_missing_folder_something_is_recorded_under_is_not_created_again(self, tmp_path):
         rig = _Rig(tmp_path, _Records(str(tmp_path / "home" / "Tender")))

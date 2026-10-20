@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from domain.tender_folder import (
     FOLDER_MISSING,
     FOLDER_NAME,
+    FOLDER_NOT_WRITABLE,
     PLACE_SETTING,
     drive_below,
     drive_not_mounted,
@@ -177,7 +178,7 @@ class TenderFolderService:
                 self._store.create_folder(place.place, place.folder, self._folder_id_io())
             except OSError as exc:
                 self._log_debug(f"[folder] could not create {place.folder}: {exc!r}")
-                condition = self._store.condition(place) or FOLDER_MISSING
+                condition = FOLDER_NOT_WRITABLE
             else:
                 condition = self._store.condition(place)
             if condition is None:
