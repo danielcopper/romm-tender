@@ -491,16 +491,17 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   import and the third home, the frontend's `SESSION_BREADCRUMB_KEY`, are prompt-only. The four homes are listed in
   `backend/domain/identity.py`'s module docstring
 - **Tender's folder is unreachable only while a store has recorded something under it; only its owner,
-  `services/tender_folder.py`, creates it, writing its `.tender-folder` id file into every folder it creates; and every
-  write into it is made ready through `TenderFolderService.do_prepare_for_write`, which refuses `folder_unreachable`
-  where the drive is gone, the folder cannot be written, or it is missing while something is recorded under it** — test
-  - prompt-only — `tests/services/test_tender_folder.py` (`TestTheState`, `TestCreatingTheFolder`,
-    `TestPreparingAWrite`, `TestTheFolderRule`), `tests/domain/test_tender_folder.py::TestReachability`,
-    `tests/adapters/test_recovery_bundle.py::test_a_seal_never_creates_tenders_folder` and
-    `tests/services/prune/test_service.py::test_a_bundle_on_a_folder_that_cannot_be_reached_fails_its_group_with_the_reason`.
-    Prompt-only: a new store that writes into the folder calls `do_prepare_for_write` first, answers
-    `TenderFolderRecordReader` and joins the `records` tuple in `bootstrap/services.py`; a use case that touches the
-    folder's files names the folder rule (`folder=True`); no store counts a recovery bundle as a record
+  `services/tender_folder.py`, creates it, writing its `.tender-folder` id file into `Tender/` whenever it creates it;
+  and every write into it is made ready through `TenderFolderService.do_prepare_for_write`, which refuses
+  `folder_unreachable` where the drive is gone, the folder cannot be written, or it is missing while something is
+  recorded under it** — test + prompt-only — `tests/services/test_tender_folder.py` (`TestTheState`,
+  `TestCreatingTheFolder`, `TestPreparingAWrite`, `TestTheFolderRule`),
+  `tests/domain/test_tender_folder.py::TestReachability`,
+  `tests/adapters/test_recovery_bundle.py::test_a_seal_never_creates_tenders_folder` and
+  `tests/services/prune/test_service.py::test_a_bundle_on_a_folder_that_cannot_be_reached_fails_its_group_with_the_reason`.
+  Prompt-only: a new store that writes into the folder calls `do_prepare_for_write` first, answers
+  `TenderFolderRecordReader` and joins the `records` tuple in `bootstrap/services.py`; a use case that touches the
+  folder's files names the folder rule (`folder=True`); no store counts a recovery bundle as a record
 - **No name in the code calls Tender a plugin; a third-party name that must keep the word is excepted by name, whole,
   with its reason** — check — `frontend/eslint.config.js` (`no-restricted-syntax` over every identifier in every file
   ESLint lints, tests and config files included; exceptions `NAMES_NOT_ABOUT_TENDER`), kept live by

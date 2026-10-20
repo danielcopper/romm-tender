@@ -32,14 +32,16 @@ the game library, the firmware store, saves and save states beside it.
 
 It lies in `~/Tender` unless you choose another place under **Settings › Tender folder**: the internal storage, the root
 of any writable drive mounted under `/run/media/<user>/` (an SD card, a USB drive), or a folder you type in. Tender
-always puts its folder `Tender/` inside the place you choose. A place inside or above an emulator source's ROM folder is
-refused, and so is one inside a system's folder, even where that folder is a link to another drive. Choosing a place
-switches where Tender keeps its files from then on; it does not move what is already in the old folder, and leaves that
-folder where it is unless it holds nothing but Tender's own `.tender-folder` file.
+always puts its folder `Tender/` inside the place you choose. A place is refused where `Tender/` would lie inside an
+emulator source's ROM folder, or inside the folder a source keeps a system's games in — even where that folder is a link
+to another drive — or would hold a ROM folder; and while Tender cannot read the emulator sources, or a source cannot
+name its folders, a place you choose is refused for that reason. Choosing a place switches where Tender keeps its files
+from then on; it does not move what is already in the old folder, and leaves that folder where it is unless it holds
+nothing but Tender's own `.tender-folder` file.
 
 Tender creates the folder when it starts, when it is missing and its drive is there, and whenever you choose a place. It
-writes a `.tender-folder` file into every folder it creates. It never removes a bundle, and uninstalling Tender leaves
-the folder where it is.
+writes a `.tender-folder` file into `Tender/` whenever it creates it. It never removes a bundle, and uninstalling Tender
+leaves the folder where it is.
 
 ### When the folder cannot be reached
 
@@ -56,7 +58,7 @@ recorded there**.
 
 ### Older recovery folders
 
-Bundles that versions up to 0.33 sealed sit in `~/romm-tender-recovery/`, and those of versions 0.30 to 0.32 in
+Bundles that version 0.33 sealed sit in `~/romm-tender-recovery/`, and those of versions 0.30 to 0.32 in
 `~/decky-romm-sync-recovery/`. Both stay where they are, are not counted on the Data Management page, and are yours to
 keep or delete — [Recovery bundles](troubleshooting.md#recovery-bundles) has the details.
 

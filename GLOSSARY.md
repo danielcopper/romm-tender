@@ -74,8 +74,9 @@ a toast's sender, the label on the Client API Token in their RomM account, the c
 under, the headline of a README they open by hand. The **identifier** is `romm-tender`: the one a machine spends —
 folder names, the outgoing `User-Agent`, the `localStorage` breadcrumb key. A new string picks by its reader, never by
 which one looks better in place. Folder names take the identifier where the folder is hidden — Tender's directories
-under `~/.config`, `~/.local` and the rest; the one folder a user is meant to open, **Tender's folder**, takes the
-display name (`Tender/`).
+under `~/.config`, `~/.local` and the rest; the one folder a user is meant to open, **Tender's folder**, is spelt like
+the display name (`Tender/`) but is a literal of its own, `FOLDER_NAME` (`domain/tender_folder.py`), never read from
+`DISPLAY_NAME` — a renamed program must not move every user's files.
 
 Both live in `backend/domain/identity.py`, beside `VERSION` — which is the release this is, not a name at all. Three
 constants in one module is not a fold: they are three different values, so no edit to one reproduces another by
@@ -1088,7 +1089,8 @@ sense — Tender lists them from the folder and keeps no record of them.
 `Tender/`, the one folder Tender keeps its own files in, inside a **place** the user chooses: no choice is the internal
 default, the home folder (`~/Tender`); a choice holds the place and the **mount point** it lay on, stored in
 `settings.json` under `tender_folder` (`domain/tender_folder.py`). Its subfolders belong to the stores that write them —
-`recovery/` today. Every folder Tender creates carries `.tender-folder`, holding the id Tender keeps in `kv_config`.
+`recovery/` today. Whenever Tender creates `Tender/`, it writes `.tender-folder` into it, holding the id Tender keeps in
+`kv_config`.
 
 Something **recorded under** a folder is what a store keeps a path of there — a download, a firmware file, a save; each
 store answers for itself which folders it holds records under, and forgets its records under one when the user asks

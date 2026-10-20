@@ -25,12 +25,12 @@ from domain.refusal import DomainRefused
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-# The folder's own name, inside every place: the visible library folder takes
-# the display name, unlike the hidden folders that take the identifier.
+# A literal of its own, never read from ``domain.identity.DISPLAY_NAME``, which
+# it happens to spell: renaming the program must not move every user's files.
 FOLDER_NAME = "Tender"
 
-# The file Tender writes into every folder it creates, holding the id it
-# records beside it, so a folder can be told apart as Tender's own.
+# The file Tender writes into ``Tender/`` whenever it creates it, holding the id
+# it records beside it, so the folder can be told apart as Tender's own.
 FOLDER_ID_FILENAME = ".tender-folder"
 
 # Where the place is stored in ``settings.json``.

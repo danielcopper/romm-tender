@@ -233,10 +233,10 @@ Format: **invariant** — tier — enforced by.
   on the internal drive under an empty mount folder, or fail half-way, so every write goes through
   `do_prepare_for_write`, which creates a missing folder only where nothing is recorded under it and refuses
   `folder_unreachable` where the drive is gone (told by the stored mount point) or the folder cannot be written.
-  Creating the folder is the owner's alone because the owner writes `.tender-folder` into every folder it creates,
-  holding the id it keeps in `kv_config`: the recovery bundle adapter opens the folder it is handed and never creates it
-  (`tests/adapters/test_recovery_bundle.py::test_a_seal_never_creates_tenders_folder`), and the cleanup asks the owner
-  before each seal
+  Creating the folder is the owner's alone because the owner writes `.tender-folder` into `Tender/` whenever it creates
+  it, holding the id it keeps in `kv_config`: the recovery bundle adapter opens the folder it is handed and never
+  creates it (`tests/adapters/test_recovery_bundle.py::test_a_seal_never_creates_tenders_folder`), and the cleanup asks
+  the owner before each seal
   (`tests/services/prune/test_service.py::test_a_bundle_on_a_folder_that_cannot_be_reached_fails_its_group_with_the_reason`).
   `tests/services/test_tender_folder.py` pins the rest: `TestTheState` (unreachable only with records, for each of the
   three conditions), `TestCreatingTheFolder` (start, id file, a drive that is gone, a recorded folder),

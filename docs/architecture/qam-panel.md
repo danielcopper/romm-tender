@@ -770,7 +770,10 @@ hide exactly that. What decides is what the reader has to see while typing, not 
 ### Notices and homes
 
 A notice on Main names a condition and jumps to its home; the action exists only there. A condition with no home in
-Tender stays a card without a jump, with Dismiss where the condition has a sensible end.
+Tender stays a card without a jump, with Dismiss where the condition has a sensible end. The two notices about Tender's
+folder are the exception: forgetting what is recorded there, and going back to the folder it is recorded under, are
+actions on the card itself — beside the unreachable notice's jump to Settings › Tender folder — since no section holds
+them; neither notice can be dismissed.
 
 | Condition                                                              | On Main                                                                                                                           | Home                                                                                                                              |
 | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |

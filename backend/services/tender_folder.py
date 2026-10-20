@@ -10,8 +10,8 @@ Conflict rules).
 What is recorded under a folder is each store's own answer
 (``TenderFolderRecordReader``); this service only asks. The place is stored
 in ``settings.json`` through its one writer, and the folder's id — the one
-written into every folder Tender creates — in ``kv_config``, so a reset of
-the settings does not lose it. Refusals are raised, never returned.
+written into ``Tender/`` whenever Tender creates it — in ``kv_config``, so a
+reset of the settings does not lose it. Refusals are raised, never returned.
 """
 
 from __future__ import annotations

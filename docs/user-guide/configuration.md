@@ -363,11 +363,12 @@ drive is not connected, the folder is missing, or it cannot be written to.
   path do not exist yet, it names them and asks before creating them. A path on a drive that is not connected is
   refused.
 
-A place inside or above an emulator source's ROM folder is refused, and so is one inside the folder a source keeps a
-system's games in — also where that folder is a link to another drive. So is a place Tender cannot write to, and any
-place while Tender cannot read the emulator sources. Choosing a place switches where Tender keeps its files from then
-on; what lies in the old folder stays there. [Where your data lives](where-your-data-lives.md#tenders-folder) has the
-rest, including what Main says when the folder cannot be reached.
+A place is refused where `Tender/` would lie inside an emulator source's ROM folder or inside the folder a source keeps
+a system's games in — also where that folder is a link to another drive — or would hold a ROM folder. So is a place
+Tender cannot write to, and a place you choose while Tender cannot read the emulator sources or a source cannot name its
+folders; the internal storage is never checked. Choosing a place switches where Tender keeps its files from then on;
+what lies in the old folder stays there. [Where your data lives](where-your-data-lives.md#tenders-folder) has the rest,
+including what Main says when the folder cannot be reached.
 
 ## Tender's place in the Quick Access Menu
 

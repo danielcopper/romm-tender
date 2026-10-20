@@ -60,7 +60,7 @@ export type TenderPlaceRefusal = EndpointFailure & {
     | "prune_active"
     | "invalid_value"
   >;
-  /** The source whose ROM folder the place lies in or above, by kind. */
+  /** The source whose ROM folder Tender's folder would lie in, or hold, by kind. */
   source?: string;
   /** That ROM folder, or the system's folder. */
   folder?: string;
