@@ -9,7 +9,7 @@
 --     is this minus the platform skip's margin, no longer completed_at.
 --   * collection_sync_state.listing_rom_id_checksum — sha256 hex of the sorted
 --     rom_ids the collection listing carried for that apply
---     (domain/platform_skip.py::rom_id_checksum), not of member_rom_ids.
+--     (domain/platform_skip.py::rom_id_checksum).
 --
 -- No backfill: neither value can be recovered from what a stamp already holds.
 -- A stamp without both never skips, so every collection is fetched in full once

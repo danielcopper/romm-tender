@@ -6064,7 +6064,7 @@ class TestOnlyAFreshCollectionStampRestoresTheSkip:
 
     @pytest.mark.asyncio
     async def test_an_empty_collection_and_one_without_updated_at_are_not_counted(self, library, fake_romm_api):
-        """The apply writes neither a stamp, so a re-stamp Apply would change nothing for them (#2477 D3)."""
+        """The apply writes neither of them a stamp, so a re-stamp Apply would change nothing for them (#2477 D3)."""
         self._seed_faves(library, fake_romm_api)
         fake_romm_api.collections += [
             {"id": 8, "name": "Empty", "rom_count": 0, "rom_ids": [], "updated_at": self._LISTED_AT},

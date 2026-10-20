@@ -422,7 +422,7 @@ class TestTryCollectionIncrementalSkip:
     async def test_a_probe_answer_that_is_not_a_json_object_is_fetched_in_full(
         self, library, fake_romm_api, caplog, answer
     ):
-        """It once read as total 0, which skipped the collection."""
+        """An answer that is not a JSON object establishes nothing."""
         _use_fake_romm(library, fake_romm_api)
         _seed_stamp(library.uow, member_rom_ids=(10, 11))
         fake_romm_api.list_collection_roms_updated_after_answer = answer

@@ -49,10 +49,7 @@ def parse_romm_timestamp(value: object) -> datetime | None:
 
 
 def skip_reference(stamp: PlatformSyncState | CollectionSyncState) -> datetime | None:
-    """The stamp's fetch start less the margin, or ``None`` without one: a ROM updated after it means a change.
-
-    A collection's stamp is read the same way (``domain/collection_skip.py``, #2477 D2).
-    """
+    """The stamp's fetch start less the margin, or ``None`` without one: a ROM updated after it means a change."""
     started = parse_romm_timestamp(stamp.fetch_started_at)
     return started - SKIP_REFERENCE_MARGIN if started is not None else None
 

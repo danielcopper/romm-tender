@@ -15,12 +15,7 @@ into the run's ``synced_rom_ids`` and Steam-collection membership map, resolving
 each id to its shortcut through the registry (the same sibling-group fallback the
 reporter uses at finalize).
 
-The skip compares RomM's answer with the stamp (``domain/collection_skip.py``):
-for a standard or smart collection the listing's ``updated_at``, for every kind
-a checksum of the listing's ``rom_ids`` (``listing_rom_id_checksum``), and a
-scoped ``updated_after`` probe keyed off ``fetch_started_at`` less the platform
-skip's margin. ``member_rom_ids`` is not what the checksum covers: it adds the
-ids a walk answered beyond the listing.
+What the skip compares the stamp with is ``domain/collection_skip.py``.
 
 All three kinds carry a stamp; the skip never reads a virtual collection's
 ``updated_at``, so it may be empty. A thin record built whole and upserted —
@@ -73,9 +68,8 @@ class CollectionSyncState:
         ``virtual``.
 
         ``fetch_started_at`` (ISO, Tender's clock) and ``listing_rom_id_checksum``
-        (``domain/platform_skip.rom_id_checksum`` over the listing's ``rom_ids``)
-        are what the skip compares RomM's answer with; a stamp without both never
-        skips.
+        are what the skip compares RomM's answer with
+        (``domain/collection_skip.py``); a stamp without both never skips.
         """
         if not collection_id:
             raise ValueError("collection_id is required")
