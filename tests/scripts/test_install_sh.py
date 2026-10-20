@@ -3063,10 +3063,12 @@ class TestUninstall:
         assert (machine.bin / "tender-rom-launcher").is_file()
         assert "your settings" in result.stdout
         assert "every Steam shortcut starts through it" in result.stdout
-        # The recovery root is the user's home, not one of RetroDECK's folders,
-        # so it gets a line of its own rather than riding along with them —
-        # and every path in the list is printed with `~` for the home.
-        assert "~/romm-tender-recovery" in result.stdout
+        # Tender's folder lies at a place the settings name, which the installer
+        # does not read, so its line names the default and the choice; every
+        # other path in the list is printed with `~` for the home.
+        assert "~/Tender, or the place you chose" in result.stdout
+        assert "Tender's folder: recovery bundles, if you made any" in result.stdout
+        assert "romm-tender-recovery" not in result.stdout
         assert str(machine.home) not in result.stdout
 
     def test_it_removes_the_marker_it_created_where_no_decky_loader_is_installed(self, machine):

@@ -2342,7 +2342,7 @@ do_uninstall() {
     printf '  %-34s %s\n' "$(tilde "$DATA")" "your library database"
     printf '  %-34s %s\n' "$(tilde "$CACHE")" "cached covers and artwork"
     printf '  %-34s %s\n' "$(tilde "$BIN/tender-rom-launcher")" "every Steam shortcut starts through it"
-    printf '  %-34s %s\n' "$(tilde "$HOME/romm-tender-recovery")" "recovery bundles, if you made any"
+    printf '  %-34s %s\n' "$(tilde "$HOME/Tender"), or the place you chose" "Tender's folder: recovery bundles, if you made any"
     printf '  %-34s %s' "RetroDECK's own folders" "your games, saves and BIOS files"
     reset_style
     printf '\n'
