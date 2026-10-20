@@ -7352,8 +7352,10 @@ class TestAnEarlierUnpackedCopyIsTheSameGame:
         (platform_dir / "Game").mkdir()
         (platform_dir / "Game" / "Game.cue").write_text("FILE")
 
+        confirmed = [str(platform_dir / "Game.zip")]
+
         with pytest.raises(TargetOccupied) as refused:
-            await downloads.service.start_download(77, True, None, None, False, [str(platform_dir / "Game.zip")])
+            await downloads.service.start_download(77, True, None, None, False, confirmed)
 
         assert refused.value.details["existing"]["path"] == str(platform_dir / "Game")
         assert (platform_dir / "Game" / "Game.cue").exists()

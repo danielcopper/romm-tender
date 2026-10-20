@@ -3392,11 +3392,10 @@ class TestASingleZipsUnpackedFolder:
 
     async def test_the_folder_at_the_extract_path_is_the_occupied_target_and_adoptable(self, h):
         h.store.files[f"{self._FOLDER}/Game.cue"] = b"FILE"
+        detail = _single_file_detail(name="Game.zip")
 
         with pytest.raises(TargetOccupied) as refused:
-            await h.service.check_download_target(
-                _single_file_detail(name="Game.zip"), self._ZIP, replace=False, folder_path=self._FOLDER
-            )
+            await h.service.check_download_target(detail, self._ZIP, replace=False, folder_path=self._FOLDER)
 
         assert refused.value.details["existing"]["path"] == self._FOLDER
         assert refused.value.details["adoptable"] is True
@@ -3404,10 +3403,11 @@ class TestASingleZipsUnpackedFolder:
     async def test_a_resumed_replace_does_not_clear_a_folder_that_appeared_since(self, h):
         h.store.files[self._ZIP] = b"the file the replace was answered for"
         h.store.files[f"{self._FOLDER}/Game.cue"] = b"new"
+        detail = _single_file_detail(name="Game.zip")
 
         with pytest.raises(TargetOccupied) as refused:
             await h.service.check_download_target(
-                _single_file_detail(name="Game.zip"),
+                detail,
                 self._ZIP,
                 replace=True,
                 resume=True,

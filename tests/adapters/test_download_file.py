@@ -998,9 +998,10 @@ class TestAMemberWithABadChecksum:
         archive.write_bytes(archive.read_bytes().replace(b"ABCDABCD", b"ABCEABCD", 1))
         dest = tmp_path / "out"
         dest.mkdir()
+        adapter, paths = DownloadFileAdapter(), (str(archive), str(dest), str(tmp_path))
 
         with pytest.raises(zipfile.BadZipFile, match="Bad CRC-32"):
-            DownloadFileAdapter().extract_zip(str(archive), str(dest), str(tmp_path))
+            adapter.extract_zip(*paths)
 
     def test_its_central_directory_still_lists_it(self, tmp_path):
         # Which is why the unpack decides on the listing and only the read finds the damage.
@@ -1042,9 +1043,10 @@ class TestExtractingWithoutTheWrapperFolder:
             zf.writestr("Game/../evil.txt", b"x")
         dest = tmp_path / "out"
         dest.mkdir()
+        adapter, paths = DownloadFileAdapter(), (str(archive), str(dest), str(tmp_path))
 
         with pytest.raises(ValueError, match="outside target directory"):
-            DownloadFileAdapter().extract_zip(str(archive), str(dest), str(tmp_path), strip_prefix="Game/")
+            adapter.extract_zip(*paths, strip_prefix="Game/")
 
         assert not (tmp_path / "evil.txt").exists()
         assert list(dest.iterdir()) == []
