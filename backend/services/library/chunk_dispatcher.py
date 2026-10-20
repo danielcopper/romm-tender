@@ -35,7 +35,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.collection_skip import recorded_updated_at
+from domain.collection_skip import apply_stamps, recorded_updated_at
 from domain.collection_sync_state import CollectionSyncState
 from domain.platform_skip import rom_id_checksum
 from domain.platform_sync_state import PlatformSyncState
@@ -445,7 +445,8 @@ class ChunkDispatcher:
         map. The checksum the next skip compares is over the listing's
         ``rom_ids`` (``unit.member_rom_ids``) instead, which leaves out the ids a
         walk answered beyond them (#2477 D4). Which collections are stamped at all
-        is ``domain/collection_skip.recorded_updated_at``. A cancel or heartbeat
+        is ``domain/collection_skip.apply_stamps``, the predicate the preview's
+        re-stamp count asks too. A cancel or heartbeat
         timeout mid-unit returns before the final chunk — an incomplete collection
         is never stamped (ADR-0023).
         """
@@ -453,13 +454,14 @@ class ChunkDispatcher:
             return None
         if member_rom_ids is None or chunk_index != chunk_count - 1:
             return None
-        updated_at = recorded_updated_at(unit.collection_kind, unit.collection_updated_at)
-        if updated_at is None:
+        if not apply_stamps(unit.collection_kind, unit.collection_updated_at, member_rom_ids):
             return None
         return CollectionSyncState.stamp(
             collection_id=str(unit.id),
             collection_kind=unit.collection_kind,
-            updated_at=updated_at,
+            # Not None once apply_stamps has answered; ``stamp`` refuses an empty
+            # one for a standard or smart collection should the two ever diverge.
+            updated_at=recorded_updated_at(unit.collection_kind, unit.collection_updated_at) or "",
             completed_at=self._clock.now().isoformat(),
             rom_count=unit.rom_count,
             member_rom_ids=tuple(member_rom_ids),

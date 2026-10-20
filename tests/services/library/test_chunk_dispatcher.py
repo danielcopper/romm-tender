@@ -728,6 +728,23 @@ class TestFinalChunkCollectionStamp:
         assert stamps == [None]
 
     @pytest.mark.asyncio
+    async def test_a_collection_handed_no_members_is_not_stamped(self, library):
+        """The writer decides by ``apply_stamps``, the predicate the preview's re-stamp count uses (#2477 D3)."""
+        unit = WorkUnit(
+            type="collection",
+            id="7",
+            name="Faves",
+            slug="",
+            rom_count=0,
+            collection_kind="standard",
+            collection_updated_at="2025-01-01T00:00:00",
+        )
+
+        stamps = await self._stamps_of(library, unit, emitted=[], collection_member_ids=[])
+
+        assert stamps == [None]
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("kind", ["standard", "smart", "virtual"])
     async def test_the_stamp_it_writes_matches_the_listing_it_was_written_from(self, library, kind):
         """What the next gate compares: a stamp an apply writes is one an unchanged listing matches (#2477 D3)."""
