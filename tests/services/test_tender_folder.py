@@ -48,6 +48,7 @@ class _Rig:
         *records: _Records,
         sources: tuple[SourceRomFolders, ...] | None = (),
         cleanup: bool = False,
+        folder_unreachable: Refused | None = None,
     ) -> None:
         self.home = tmp_path / "home"
         self.home.mkdir()
@@ -78,7 +79,7 @@ class _Rig:
                 settings_persister=self.persister,
                 uow_factory=self.uow_factory,
                 uuid_gen=FakeUuidGen(["the-folder-id"]),
-                conflict_rules=_make_conflict_rules(prune_conflicts=conflicts),
+                conflict_rules=_make_conflict_rules(prune_conflicts=conflicts, folder_unreachable=folder_unreachable),
                 loop=running_loop(),
                 log_debug=lambda msg: None,
             )
@@ -406,8 +407,37 @@ class TestChoosingAPlace:
 
         assert refused.value.reason == "place_in_rom_folder"
         assert refused.value.details["source"] == "emudeck"
+        assert refused.value.details["path"] == f"{roms / 'mine'}/Tender"
         assert not (roms / "mine").exists()
         assert "tender_folder" not in rig.settings
+
+    async def test_a_refusal_names_the_place_as_typed_and_the_rom_folder_resolved(self, tmp_path):
+        rig = _Rig(tmp_path)
+        roms = rig.home / "Emulation" / "roms"
+        roms.mkdir(parents=True)
+        (rig.home / "linked").symlink_to(roms)
+        rig.sources.answered_rom_folders = (SourceRomFolders(kind="emudeck", rom_root=str(roms), system_folders=()),)
+
+        with pytest.raises(DomainRefused) as refused:
+            await rig.service.check_tender_place("~/linked/")
+
+        assert (
+            refused.value.message
+            == f"~/linked/Tender lies inside emudeck's ROM folder ({roms}). Choose a place outside it."
+        )
+
+    async def test_a_typed_place_that_cannot_be_written_is_named_as_typed(self, tmp_path):
+        rig = _Rig(tmp_path)
+        locked = rig.home / "locked"
+        locked.mkdir()
+        locked.chmod(0o500)
+        try:
+            with pytest.raises(DomainRefused) as refused:
+                await rig.service.choose_tender_place("~/locked")
+        finally:
+            locked.chmod(0o700)
+
+        assert refused.value.message == "~/locked cannot be written to."
 
     async def test_a_place_above_a_rom_folder_is_refused(self, tmp_path):
         rig = _Rig(tmp_path)
@@ -523,7 +553,18 @@ class TestWhatIsRecordedElsewhere:
             await rig.service.use_recorded_tender_folder(str(tmp_path / "elsewhere" / "Tender"))
 
         assert refused.value.reason == "invalid_value"
+        assert refused.value.message == (
+            f"Tender has nothing recorded under {tmp_path / 'elsewhere' / 'Tender'} any more."
+        )
         assert "tender_folder" not in rig.settings
+
+    async def test_going_back_to_the_folder_that_is_already_the_setting_is_refused_saying_so(self, tmp_path):
+        rig = _Rig(tmp_path, _Records(str(tmp_path / "home" / "Tender")))
+
+        with pytest.raises(Refused) as refused:
+            await rig.service.use_recorded_tender_folder(str(tmp_path / "home" / "Tender"))
+
+        assert refused.value.message == f"{tmp_path / 'home' / 'Tender'} is already Tender's folder."
 
     async def test_forgetting_asks_every_store_and_touches_no_file(self, tmp_path):
         sd_folder = str(tmp_path / "media" / "SD" / "Tender")
@@ -556,3 +597,23 @@ class TestWhatIsRecordedElsewhere:
             await rig.service.forget_tender_folder_records("/nowhere/Tender")
 
         assert refused.value.reason == "invalid_value"
+        assert refused.value.message == "Tender has nothing recorded under /nowhere/Tender any more."
+
+    async def test_a_running_cleanup_refuses_forgetting(self, tmp_path):
+        rig = _Rig(tmp_path, _Records(str(tmp_path / "home" / "Tender")), cleanup=True)
+
+        with pytest.raises(Refused) as refused:
+            await rig.service.forget_tender_folder_records(str(tmp_path / "home" / "Tender"))
+
+        assert refused.value.reason == "prune_active"
+        assert rig.records.forgotten == []
+
+    async def test_forgetting_is_not_refused_by_the_folder_rule_it_is_the_way_out_of(self, tmp_path):
+        rig = _Rig(tmp_path, folder_unreachable=Refused("folder_unreachable", "unreachable"))
+        sd = rig.drive("SD", connected=False)
+        rig.on_drive(sd)
+        rig.records.folders.add(str(sd / "Tender"))
+
+        state = await rig.service.forget_tender_folder_records(str(sd / "Tender"))
+
+        assert state["unreachable"] is None

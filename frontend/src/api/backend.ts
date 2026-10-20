@@ -50,6 +50,7 @@ import type {
   MigrationStatus,
   MigrationResult,
   EmulatorSourcesListing,
+  TenderFolderForgetRefusal,
   TenderFolderRefusal,
   TenderFolderState,
   TenderPlaceAsks,
@@ -770,7 +771,7 @@ export const switchToRecordedTenderFolder = endpoint<[string], TenderFolderState
 );
 
 /** Have every store forget what it recorded under a folder; no file is touched. */
-export const forgetTenderFolderRecords = endpoint<[string], TenderFolderState | TenderFolderRefusal>(
+export const forgetTenderFolderRecords = endpoint<[string], TenderFolderState | TenderFolderForgetRefusal>(
   "forget_tender_folder_records",
 );
 

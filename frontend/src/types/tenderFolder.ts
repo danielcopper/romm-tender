@@ -66,11 +66,16 @@ export type TenderPlaceRefusal = EndpointFailure & {
   folder?: string;
   /** The system whose folder the place lies in; `null` for the source's ROM folder itself. */
   system?: string | null;
-  /** The folder the place would make. */
+  /** Tender's folder at the place, as the place was typed with `/Tender` after it. */
   path?: string;
 };
 
-/** Why going back to, or forgetting, a folder was refused. */
+/** Why going back to a folder was refused. */
 export type TenderFolderRefusal = EndpointFailure & {
   reason: WireReasonSubset<"invalid_value" | "prune_active">;
+};
+
+/** Why forgetting what is recorded under a folder was refused: the rules forgetting a download holds, or a stale view. */
+export type TenderFolderForgetRefusal = EndpointFailure & {
+  reason: WireReasonSubset<"invalid_value" | "blocked_by_update" | "blocked_by_migration" | "prune_active">;
 };

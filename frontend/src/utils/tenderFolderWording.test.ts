@@ -73,7 +73,7 @@ describe("Tender folder wording", () => {
 
     it("names the ROM folder a place would hold", () => {
       expect(placeRefusalSentence(refused({ ...where, reason: "place_above_rom_folder" }))).toBe(
-        "RetroDECK's ROM folder (/r/roms) lies inside /r/roms/x/Tender. Choose a place that holds no ROM folder.",
+        "RetroDECK's ROM folder (/r/roms) lies inside /r/roms/x/Tender. Choose another place.",
       );
     });
 

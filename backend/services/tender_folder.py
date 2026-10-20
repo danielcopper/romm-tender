@@ -32,6 +32,8 @@ from domain.tender_folder import (
     place_setting,
     recorded_elsewhere,
     rom_folder_refusal,
+    shown_folder,
+    shown_place,
     sources_unreadable,
     typed_place,
     unreachable_message,
@@ -138,8 +140,8 @@ class TenderFolderService:
     async def use_recorded_tender_folder(self, folder: object) -> dict[str, Any]:
         """Go back to *folder*, which something is recorded under, as the folder's place; copy nothing.
 
-        Refuses ``invalid_value`` for a folder nothing is recorded under
-        besides the current one. Holds off a removed-game cleanup, as a choice
+        Refuses ``invalid_value`` for the current folder and for one nothing is
+        recorded under any more. Holds off a removed-game cleanup, as a choice
         does.
         """
         text = _typed(folder)
@@ -150,10 +152,12 @@ class TenderFolderService:
         """Have every store forget what it recorded under *folder*, and answer the state as it now stands.
 
         No file is touched. Refuses ``invalid_value`` for a folder nothing is
-        recorded under.
+        recorded under. Holds the rules forgetting a download holds; never the
+        folder rule, which this is the way out of.
         """
         text = _typed(folder)
-        return await self._loop.run_in_executor(None, self._forget_io, text)
+        async with self._conflict_rules.hold("forget_tender_folder_records", update=True, migration=True, prune=True):
+            return await self._loop.run_in_executor(None, self._forget_io, text)
 
     def create_at_start(self) -> None:
         """Create the folder where it is missing, nothing is recorded under it and its drive is mounted."""
@@ -222,7 +226,7 @@ class TenderFolderService:
 
     def _check_io(self, text: str) -> dict[str, Any]:
         place = typed_place(text, self._store.home())
-        self._judge(place)
+        self._judge(place, text)
         asks = place_asks(place, self._store.deepest_existing(place))
         return {
             "place": asks.place,
@@ -236,15 +240,16 @@ class TenderFolderService:
         home = self._store.home()
         place = home if text is None else typed_place(text, home)
         if text is not None:
-            self._judge(place)
+            self._judge(place, text)
+        shown = place if text is None else shown_place(text)
         folder = os.path.join(place, FOLDER_NAME)
         try:
             self._store.create_folder(place, folder, self._folder_id_io())
         except OSError as exc:
             self._log_debug(f"[folder] could not create {folder}: {exc!r}")
-            raise not_writable(place) from exc
+            raise not_writable(shown) from exc
         if not self._store.writable(folder):
-            raise not_writable(place)
+            raise not_writable(shown)
         self._switch(place, self._store.mount_point_of(place))
         return self._state_io()
 
@@ -252,8 +257,10 @@ class TenderFolderService:
         recorded = self._recorded()
         current = self._store.resolved(self._store.place().folder)
         target = self._store.resolved(text)
+        if target == current:
+            raise Refused("invalid_value", f"{text} is already Tender's folder.")
         if target not in recorded_elsewhere(current, recorded):
-            raise Refused("invalid_value", f"Nothing is recorded under {text}.")
+            raise Refused("invalid_value", _nothing_recorded(text))
         place = os.path.dirname(os.path.normpath(text))
         drive = drive_below(place, self._store.drives_root())
         mount_point = (
@@ -264,21 +271,28 @@ class TenderFolderService:
 
     def _forget_io(self, text: str) -> dict[str, Any]:
         if self._store.resolved(text) not in self._recorded():
-            raise Refused("invalid_value", f"Nothing is recorded under {text}.")
+            raise Refused("invalid_value", _nothing_recorded(text))
         for records in self._records:
             records.forget_records_under(text)
         self._log_debug(f"[folder] forgot what is recorded under {text}")
         return self._state_io()
 
-    def _judge(self, place: str) -> None:
-        """Refuse *place* where its drive is not connected or it lies in or above a ROM folder."""
+    def _judge(self, place: str, text: str) -> None:
+        """Refuse *place*, typed as *text*, where its drive is not connected or a source's ROM folders rule it out.
+
+        Ruled out is a place where Tender's folder would lie inside a source's
+        ROM folder or a system's folder, or hold a ROM folder — and any place
+        while the sources, or one source's folders, could not be read.
+        """
         drive = drive_below(place, self._store.drives_root())
         if drive is not None and not self._store.is_mount(os.path.join(self._store.drives_root(), drive)):
             raise drive_not_mounted(drive)
         folders = self._sources.rom_folders()
         if folders is None:
             raise sources_unreadable()
-        refusal = rom_folder_refusal(self._store.resolved(os.path.join(place, FOLDER_NAME)), folders)
+        refusal = rom_folder_refusal(
+            self._store.resolved(os.path.join(place, FOLDER_NAME)), folders, shown_folder(text)
+        )
         if refusal is not None:
             raise refusal
 
@@ -319,6 +333,10 @@ def _typed(value: object) -> str:
     if not isinstance(value, str):
         raise Refused("invalid_value", f"A folder is a path, not {value!r}.")
     return value
+
+
+def _nothing_recorded(folder: str) -> str:
+    return f"Tender has nothing recorded under {folder} any more."
 
 
 def _unreachable(folder: str, state: str) -> Refused:

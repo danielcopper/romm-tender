@@ -5,7 +5,7 @@
  * refusal that names no source is worded by the backend and shown as it came.
  */
 
-import type { TenderFolderCondition, TenderFolderDrive, TenderPlaceRefusal } from "../types";
+import type { EndpointFailure, TenderFolderCondition, TenderFolderDrive, TenderPlaceRefusal } from "../types";
 import { sourceName } from "./emulatorSourceWording";
 import { formatBytes } from "./formatters";
 
@@ -72,13 +72,16 @@ export function driveFreeLine(drive: TenderFolderDrive): string {
   return `${formatBytes(drive.free_bytes)} free`;
 }
 
-/** The sentence a refused choice is shown with: the source named by Tender's name for it, else the backend's. */
-export function placeRefusalSentence(refusal: TenderPlaceRefusal): string {
+/** The sentence a refusal is shown with: a refused choice names its source by Tender's name for it, every other
+ *  refusal is shown as the backend worded it. */
+export function placeRefusalSentence(
+  refusal: EndpointFailure & Pick<TenderPlaceRefusal, "source" | "folder" | "system" | "path">,
+): string {
   const { source, folder, path } = refusal;
   if (source === undefined || folder === undefined || path === undefined) return refusal.message;
   const name = sourceName(source);
   if (refusal.reason === "place_above_rom_folder") {
-    return `${name}'s ROM folder (${folder}) lies inside ${path}. Choose a place that holds no ROM folder.`;
+    return `${name}'s ROM folder (${folder}) lies inside ${path}. Choose another place.`;
   }
   if (refusal.reason === "place_in_rom_folder") {
     const where = refusal.system ? `${name}'s folder for ${refusal.system}` : `${name}'s ROM folder`;

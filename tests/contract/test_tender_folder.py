@@ -80,9 +80,8 @@ async def test_a_place_inside_retrodecks_rom_folder_is_refused_naming_the_source
     assert result == {
         "success": False,
         "reason": "place_in_rom_folder",
-        "message": f"{os.path.join(roms, 'mine', 'Tender')} lies inside retrodeck's ROM folder ({roms}). "
-        "Choose a place outside it.",
-        "path": os.path.join(roms, "mine", "Tender"),
+        "message": f"{inside}/Tender lies inside retrodeck's ROM folder ({roms}). Choose a place outside it.",
+        "path": f"{inside}/Tender",
         "source": "retrodeck",
         "folder": roms,
         "system": None,
@@ -105,5 +104,8 @@ async def test_a_typed_place_is_asked_about_before_it_is_chosen(harness):
 async def test_forgetting_a_folder_nothing_is_recorded_under_is_refused(harness):
     result = await harness.endpoints.forget_tender_folder_records("/run/media/deck/SD/Tender")
 
-    assert result["success"] is False
-    assert result["reason"] == "invalid_value"
+    assert result == {
+        "success": False,
+        "reason": "invalid_value",
+        "message": "Tender has nothing recorded under /run/media/deck/SD/Tender any more.",
+    }

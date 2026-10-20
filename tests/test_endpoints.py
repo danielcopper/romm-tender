@@ -224,7 +224,6 @@ _MIGRATION_RULE_WHITELIST: set[str] = {
     "check_tender_place",
     "choose_tender_place",
     "use_recorded_tender_folder",
-    "forget_tender_folder_records",
     # Read-only disc-picker state query (the pin-write select_disc names the rule).
     "get_disc_selection",
     # Read-only version-picker state query (the binding-move switch_version names the rule).

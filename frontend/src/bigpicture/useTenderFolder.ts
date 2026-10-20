@@ -16,7 +16,7 @@ import {
   logError,
   switchToRecordedTenderFolder,
 } from "../api/backend";
-import type { TenderFolderRefusal, TenderFolderState, TenderPlaceRefusal } from "../types";
+import type { TenderFolderForgetRefusal, TenderFolderRefusal, TenderFolderState, TenderPlaceRefusal } from "../types";
 import { detach } from "../utils/detach";
 import { placeRefusalSentence } from "../utils/tenderFolderWording";
 import { showCreateMissingModal, showForgetRecordedModal, showTenderNamedModal } from "./settings/TenderFolderModals";
@@ -35,7 +35,7 @@ export interface TenderFolderView {
   forget: (folder: string) => void;
 }
 
-type Answer = TenderFolderState | TenderPlaceRefusal | TenderFolderRefusal;
+type Answer = TenderFolderState | TenderPlaceRefusal | TenderFolderRefusal | TenderFolderForgetRefusal;
 
 export function useTenderFolder(): TenderFolderView {
   const [state, setState] = useState<TenderFolderState | null | undefined>(undefined);
@@ -82,10 +82,12 @@ export function useTenderFolder(): TenderFolderView {
     );
   };
 
-  /** The questions a typed place is asked before it is chosen; `null` where the user chose nothing. */
+  /** The questions a typed place is asked before it is chosen; `null` where the user chose nothing.
+   *  The place is chosen as typed, so a refusal names it the way the user wrote it. */
   const chooseAfterAsking = async (text: string): Promise<Answer | null> => {
     const asks = await checkTenderPlace(text);
     if (isEndpointFailure(asks)) return asks;
+    let typed = text;
     let place = asks.place;
     let missing = asks;
     if (asks.tender_parent !== null) {
@@ -94,6 +96,7 @@ export function useTenderFolder(): TenderFolderView {
       if (answer === "parent") {
         const parent = await checkTenderPlace(asks.tender_parent);
         if (isEndpointFailure(parent)) return parent;
+        typed = asks.tender_parent;
         place = parent.place;
         missing = parent;
       }
@@ -101,7 +104,7 @@ export function useTenderFolder(): TenderFolderView {
     if (missing.missing !== null && !(await showCreateMissingModal(place, missing.existing, missing.missing))) {
       return null;
     }
-    return chooseTenderPlace(place);
+    return chooseTenderPlace(typed);
   };
 
   return {

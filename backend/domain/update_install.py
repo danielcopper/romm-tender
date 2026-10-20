@@ -116,6 +116,7 @@ _CLAIMS_NAMED_BY_A_REASON: Mapping[str, WaitReason] = MappingProxyType(
                 "uninstall_all_roms",
                 "remove_rom",
                 "forget_download",
+                "forget_tender_folder_records",
                 "remove_all_shortcuts",
                 "remove_platform_shortcuts",
                 "reconcile_shortcuts",

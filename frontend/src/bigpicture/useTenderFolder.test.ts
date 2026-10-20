@@ -83,7 +83,7 @@ describe("useTenderFolder", () => {
 
       act(() => hook.result.current.chooseTyped("~/Games"));
 
-      await waitFor(() => expect(backend.chooseTenderPlace).toHaveBeenCalledWith("/home/deck/Games"));
+      await waitFor(() => expect(backend.chooseTenderPlace).toHaveBeenCalledWith("~/Games"));
       expect(showTenderNamedModal).not.toHaveBeenCalled();
       expect(showCreateMissingModal).not.toHaveBeenCalled();
     });
@@ -103,7 +103,7 @@ describe("useTenderFolder", () => {
 
       vi.mocked(showCreateMissingModal).mockResolvedValue(true);
       act(() => hook.result.current.chooseTyped("~/Games"));
-      await waitFor(() => expect(backend.chooseTenderPlace).toHaveBeenCalledWith("/home/deck/Games"));
+      await waitFor(() => expect(backend.chooseTenderPlace).toHaveBeenCalledWith("~/Games"));
     });
 
     it("named Tender is replaced by its parent when asked to, which is checked again", async () => {

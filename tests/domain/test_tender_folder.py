@@ -17,6 +17,8 @@ from domain.tender_folder import (
     read_place,
     recorded_elsewhere,
     rom_folder_refusal,
+    shown_folder,
+    shown_place,
     tender_parent,
     typed_place,
     unreachable_message,
@@ -78,6 +80,14 @@ class TestATypedPlace:
     def test_tilde_lies_under_the_home_folder_and_any_other_path_starts_with_a_slash(self, text, place):
         assert typed_place(text, _HOME) == place
 
+    @pytest.mark.parametrize(
+        ("text", "place", "folder"),
+        [("~/Games", "~/Games", "~/Games/Tender"), (" /mnt/x/ ", "/mnt/x", "/mnt/x/Tender"), ("/", "/", "/Tender")],
+    )
+    def test_a_sentence_names_the_place_as_typed_and_tenders_folder_with_tender_after_it(self, text, place, folder):
+        assert shown_place(text) == place
+        assert shown_folder(text) == folder
+
     @pytest.mark.parametrize("text", ["", "   ", "Games", "~deck/Games", "./Games"])
     def test_anything_else_is_refused(self, text):
         with pytest.raises(DomainRefused) as refused:
@@ -122,20 +132,23 @@ _RETRODECK = SourceRomFolders(
 
 class TestTheRomFolderRule:
     def test_a_folder_inside_a_sources_rom_folder_is_refused_naming_it(self):
-        refusal = rom_folder_refusal("/run/media/deck/SD/retrodeck/roms/Tender", (_RETRODECK,))
+        refusal = rom_folder_refusal("/run/media/deck/SD/retrodeck/roms/Tender", (_RETRODECK,), "~/sd-roms/Tender")
 
         assert refusal is not None
         assert refusal.reason == "place_in_rom_folder"
         assert refusal.details == {
-            "path": "/run/media/deck/SD/retrodeck/roms/Tender",
+            "path": "~/sd-roms/Tender",
             "source": "retrodeck",
             "folder": "/run/media/deck/SD/retrodeck/roms",
             "system": None,
         }
-        assert refusal.message.endswith("Choose a place outside it.")
+        assert refusal.message == (
+            "~/sd-roms/Tender lies inside retrodeck's ROM folder (/run/media/deck/SD/retrodeck/roms). "
+            "Choose a place outside it."
+        )
 
     def test_a_folder_that_is_the_rom_folder_is_refused(self):
-        refusal = rom_folder_refusal("/run/media/deck/SD/retrodeck/roms", (_RETRODECK,))
+        refusal = rom_folder_refusal("/run/media/deck/SD/retrodeck/roms", (_RETRODECK,), "/x/Tender")
 
         assert refusal is not None
         assert refusal.reason == "place_in_rom_folder"
@@ -143,31 +156,35 @@ class TestTheRomFolderRule:
     def test_a_folder_above_a_sources_rom_folder_is_refused(self):
         source = SourceRomFolders(kind="emudeck", rom_root="/home/deck/Tender/roms", system_folders=())
 
-        refusal = rom_folder_refusal("/home/deck/Tender", (source,))
+        refusal = rom_folder_refusal("/home/deck/Tender", (source,), "~/Tender")
 
         assert refusal is not None
         assert refusal.reason == "place_above_rom_folder"
-        assert refusal.message.endswith("Choose a place that holds no ROM folder.")
+        assert (
+            refusal.message
+            == "emudeck's ROM folder (/home/deck/Tender/roms) lies inside ~/Tender. Choose another place."
+        )
         assert refusal.details["folder"] == "/home/deck/Tender/roms"
 
     def test_a_folder_inside_a_system_folder_linked_to_another_drive_is_refused_naming_the_system(self):
-        refusal = rom_folder_refusal("/run/media/deck/BIG/ps2/Tender", (_RETRODECK,))
+        refusal = rom_folder_refusal("/run/media/deck/BIG/ps2/Tender", (_RETRODECK,), "/big-link/Tender")
 
         assert refusal is not None
         assert refusal.reason == "place_in_rom_folder"
         assert refusal.details["system"] == "ps2"
         assert refusal.details["folder"] == "/run/media/deck/BIG/ps2"
+        assert refusal.details["path"] == "/big-link/Tender"
 
     def test_a_folder_at_the_root_of_the_drive_the_rom_folder_lies_on_is_neither(self):
-        assert rom_folder_refusal("/run/media/deck/SD/Tender", (_RETRODECK,)) is None
+        assert rom_folder_refusal("/run/media/deck/SD/Tender", (_RETRODECK,), "/run/media/deck/SD/Tender") is None
 
     def test_a_sibling_whose_name_only_starts_like_the_rom_folder_is_neither(self):
-        assert rom_folder_refusal("/run/media/deck/SD/retrodeck/roms2/Tender", (_RETRODECK,)) is None
+        assert rom_folder_refusal("/run/media/deck/SD/retrodeck/roms2/Tender", (_RETRODECK,), "/x/Tender") is None
 
     def test_a_source_with_no_rom_folder_judges_by_its_system_folders_alone(self):
         source = SourceRomFolders(kind="bare_retroarch_native", rom_root=None, system_folders=())
 
-        assert rom_folder_refusal("/anywhere/Tender", (source,)) is None
+        assert rom_folder_refusal("/anywhere/Tender", (source,), "/anywhere/Tender") is None
 
 
 class TestReachability:

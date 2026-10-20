@@ -194,22 +194,35 @@ def sources_unreadable() -> DomainRefused:
     )
 
 
-def rom_folder_refusal(folder: str, sources: Iterable[SourceRomFolders]) -> DomainRefused | None:
+def shown_place(text: str) -> str:
+    """The place as the user typed it, without a trailing slash, for a sentence."""
+    stripped = text.strip()
+    return stripped.rstrip("/") or "/"
+
+
+def shown_folder(text: str) -> str:
+    """Tender's folder at the place the user typed, as a sentence names it: the place as typed, then ``/Tender``."""
+    place = shown_place(text)
+    return f"{place.rstrip('/')}/{FOLDER_NAME}"
+
+
+def rom_folder_refusal(folder: str, sources: Iterable[SourceRomFolders], shown: str) -> DomainRefused | None:
     """Why *folder* may not be Tender's folder because of an emulator source's ROM folders, or ``None``.
 
-    *folder* and every source folder are symlink-resolved. A folder inside a
-    source's ROM folder or above it is refused, and so is one inside a folder
-    the source names for a system, which may be linked to another drive. The
-    message names the source by its kind; the panel words it with the
-    source's name.
+    *folder* and every source folder are symlink-resolved; *shown* is the
+    folder as the sentence names it, the place as typed with ``/Tender``. A
+    folder that would lie inside a source's ROM folder, or hold one, is
+    refused, and so is one inside a folder the source names for a system,
+    which may be linked to another drive. The message names the source by
+    its kind; the panel words it with the source's name.
     """
     for source in sources:
         root = source.rom_root
         if root is not None and inside(folder, root):
             return DomainRefused(
                 PLACE_IN_ROM_FOLDER,
-                f"{folder} lies inside {source.kind}'s ROM folder ({root}). Choose a place outside it.",
-                path=folder,
+                f"{shown} lies inside {source.kind}'s ROM folder ({root}). Choose a place outside it.",
+                path=shown,
                 source=source.kind,
                 folder=root,
                 system=None,
@@ -217,8 +230,8 @@ def rom_folder_refusal(folder: str, sources: Iterable[SourceRomFolders]) -> Doma
         if root is not None and inside(root, folder):
             return DomainRefused(
                 PLACE_ABOVE_ROM_FOLDER,
-                f"{source.kind}'s ROM folder ({root}) lies inside {folder}. Choose a place that holds no ROM folder.",
-                path=folder,
+                f"{source.kind}'s ROM folder ({root}) lies inside {shown}. Choose another place.",
+                path=shown,
                 source=source.kind,
                 folder=root,
             )
@@ -226,9 +239,9 @@ def rom_folder_refusal(folder: str, sources: Iterable[SourceRomFolders]) -> Doma
             if inside(folder, system_folder):
                 return DomainRefused(
                     PLACE_IN_ROM_FOLDER,
-                    f"{folder} lies inside {source.kind}'s folder for {system} ({system_folder}). "
+                    f"{shown} lies inside {source.kind}'s folder for {system} ({system_folder}). "
                     "Choose a place outside it.",
-                    path=folder,
+                    path=shown,
                     source=source.kind,
                     folder=system_folder,
                     system=system,
