@@ -112,7 +112,9 @@ def probe_verdict(answer: object, reference: datetime) -> CollectionVerdict:
     ``updated_after`` set to *reference* and ``limit=1``; its ``total`` counts
     the members updated after it. An answer that is not a JSON object, or whose
     ``total`` is not an integer, establishes nothing, so it does not match, and
-    a fresh stamp would not settle it.
+    a fresh stamp would not settle it. A fresh stamp settles a member updated
+    after *reference* only once the edit is older than the margin at the Apply's
+    fetch start; one inside it is counted again on the next preview.
     """
     if not isinstance(answer, dict):
         return _UNREADABLE

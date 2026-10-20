@@ -145,7 +145,9 @@ class LocalLibraryReader:
         preview fetched in full (*full_fetched*, slug → the ROMs that fetch
         returned) counts too when its stamp does not match that fetch
         (``domain/platform_skip.restamp_due``): no checksum or fetch start, other
-        ids, or a ROM updated after its reference. Either way
+        ids, or a ROM updated after its reference, which a fresh stamp settles
+        only once the edit is older than the margin at the Apply's fetch start.
+        Either way
         ``LibraryFetcher._try_unit_incremental_skip`` full-fetches it on every
         sync until an apply re-stamps it, so its apply runs even at a zero
         shortcut delta and the empty final chunk re-writes the stamp. Surfaced as

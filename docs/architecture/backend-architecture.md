@@ -618,10 +618,11 @@ zero, count > 0) as apply-able — "No shortcut changes — recording what RomM 
 confirm — mirroring the cover-only flow. One sentence serves every cause and both counts, because the apply does the
 same for each: its skip gate refuses the platform as the preview's did, so the apply fetches it in full, and the 0-delta
 empty final chunk writes a stamp of what that fetch returned and records a fresh completed `SyncRun` — so the platform
-skips again, and a run status left `interrupted` by a late-ack recovery heals. The stamp write stays pipeline-owned: the
-preview only counts, it never stamps (`check_sync_lifecycle_owner` / the final-chunk-only rule). Collections owed a
-fresh stamp ride a count of their own, `restamp_collection_count`, which the frontend reads the same way; what it counts
-is under "Incremental skip" below.
+skips again, unless a ROM's edit is still inside the margin at that fetch's start ("Incremental skip" below), and a run
+status left `interrupted` by a late-ack recovery heals. The stamp write stays pipeline-owned: the preview only counts,
+it never stamps (`check_sync_lifecycle_owner` / the final-chunk-only rule). Collections owed a fresh stamp ride a count
+of their own, `restamp_collection_count`, which the frontend reads the same way; what it counts is under "Incremental
+skip" below.
 
 **Per-unit apply is chunked, durable per chunk
 ([ADR-0023](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0023-chunked-per-unit-apply.md)).** The delta
@@ -1035,7 +1036,8 @@ and many of the changes that make the skip refuse a stamp change no shortcut —
 field a shortcut carries (a metadata match, a rescan that rewrites the row), a hidden ROM, an `updated_at` inside the
 margin — so a preview with nothing else to do would short-circuit on "no changes" and the platform would be fetched in
 full on every sync. The preview therefore counts such a platform in `restamp_platform_count` (below, "Unstamped-platform
-re-run"), and the gated apply's 0-delta final chunk writes the fresh stamp.
+re-run"), and the gated apply's 0-delta final chunk writes the fresh stamp, which settles an edit only once it is older
+than the margin at that apply's fetch start; one inside it is counted again on the next preview.
 
 **A bound row the stamp's fetch did not return no longer holds the skip
 ([#743](https://github.com/danielcopper/romm-tender/issues/743) D10).** Such a row is a version gone from RomM —
@@ -1146,10 +1148,11 @@ Steam.
 whose skip it refused for a reason a fresh stamp settles, and whose apply will stamp it, in `restamp_collection_count`,
 a summary field beside `restamp_platform_count` ("Unstamped-platform re-run" above). Two fields rather than one, so
 neither names what it does not hold; the Sync page reads them alike. A fresh stamp settles a missing stamp, one without
-a fetch start or checksum, a listing whose ids or `updated_at` differ, and a member updated after the reference: the
-apply fetches the collection, and its final chunk records what RomM serves, built from the same listing the next gate
-compares. It settles nothing where the probe raised or answered with something the gate could not read, so such a
-collection is fetched but not counted, and a probe that keeps failing does not offer the Apply on every sync
+a fetch start or checksum, a listing whose ids or `updated_at` differ, and a member updated after the reference once the
+edit is older than the margin at the Apply's fetch start, as for a platform: the apply fetches the collection, and its
+final chunk records what RomM serves, built from the same listing the next gate compares. It settles nothing where the
+probe raised or answered with something the gate could not read, so such a collection is fetched but not counted, and a
+probe that keeps failing does not offer the Apply on every sync
 ([#2477](https://github.com/danielcopper/romm-tender/issues/2477) D3). The gate states which it was
 (`domain/collection_skip.py::CollectionSkip`), and the preview counts from that answer rather than judging the stamp
 again, so the two cannot disagree. The apply stamps a collection with members and, for a standard or smart collection,

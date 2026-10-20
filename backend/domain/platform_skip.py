@@ -120,7 +120,9 @@ def restamp_due(stamp: PlatformSyncState | None, fetched_roms: Sequence[Mapping[
     True for no stamp (the caller passes ``stamp_for_skip``'s answer, so a
     revoked one too), a stamp with no checksum or no fetch start, a checksum
     other than the fetched ids', and a fetched ROM updated after the stamp's
-    reference — every way the skip refuses a stamp that a fresh one would cure.
+    reference — every way the skip refuses a stamp that a fresh one would cure,
+    an updated ROM only once its ``updated_at`` is older than the margin at the
+    Apply's fetch start; one inside it is counted again on the next preview.
     A fetched ROM without a readable ``updated_at`` cannot be cleared, so it
     counts as updated, and one without an int ``id`` cannot be checked against
     the checksum, so it counts as another id set.
