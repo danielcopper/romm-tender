@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.collection_skip import membership_verdict, probe_verdict, recorded_updated_at
+from domain.collection_skip import CollectionSkip, membership_verdict, probe_verdict, recorded_updated_at
 from domain.platform_skip import skip_reference
 from lib.romm_paging import LIST_PAGE_SIZE
 from services.library._fetch_pages import emit_fetch_page_progress, raise_if_cancelling
@@ -108,51 +108,42 @@ class CollectionFetcher:
                 )
             return reconstructed
 
-    async def _try_collection_incremental_skip(self, unit: WorkUnit) -> list[int] | None:
+    async def _try_collection_incremental_skip(self, unit: WorkUnit) -> CollectionSkip:
         """Per-unit incremental-skip pre-check for a collection unit.
 
-        Returns the stamped member rom-id list when the collection is unchanged —
+        Answers the stamped member rom-id list when the collection is unchanged —
         the caller replays it into ``synced_rom_ids`` + the Steam-collection
-        membership map without paginating. Returns ``None`` to fall through to a
-        fetch. The collection sibling of :meth:`_try_unit_incremental_skip`,
-        following the platform skip's rules (#2477 D1); both of these must agree
-        with the ``CollectionSyncState`` stamp (ADR-0023):
-
-        1. the listing (``domain/collection_skip.membership_verdict``): the
-           checksum of its ``rom_ids`` is the stamp's, and for a standard or
-           smart collection its ``updated_at`` is the stamp's; and
-        2. a scoped ``updated_after`` probe keyed off the stamp's fetch start
-           less the margin (``domain/platform_skip.skip_reference``) answers no
-           ROM (``domain/collection_skip.probe_verdict``) — catches a member
-           ROM's content change and a ROM entering a smart collection via its
-           own metadata.
+        membership map without paginating — and ``None`` to fall through to a
+        fetch, with whether a fresh stamp settles the refusal. The collection
+        sibling of :meth:`_try_unit_incremental_skip`, following the platform
+        skip's rules (#2477 D1): the listing must match the ``CollectionSyncState``
+        stamp (``domain/collection_skip.membership_verdict``), and then so must the
+        scoped ``updated_after`` probe (``domain/collection_skip.probe_verdict``).
 
         A probe that raises, or answers with something the verdict cannot read,
-        falls open to a fetch, mirroring the platform gate.
+        falls open to a fetch, mirroring the platform gate; a fresh stamp settles
+        neither.
         """
         kind = unit.collection_kind
         if kind is None:
-            return None
+            return CollectionSkip(None)
         if recorded_updated_at(kind, unit.collection_updated_at) is None:
             self._logger.info(f"Per-unit fetch {unit.name}: no collection updated_at — fetch")
-            return None
+            return CollectionSkip(None)
 
         stamp = await self._loop.run_in_executor(None, self._read_collection_stamp, str(unit.id), kind)
         if stamp is None:
             self._logger.info(f"Per-unit fetch {unit.name}: no completion stamp — fetch")
-            return None
+            return CollectionSkip(None, restamp_settles=True)
         listing = membership_verdict(
             stamp, listing_updated_at=unit.collection_updated_at, listing_rom_ids=unit.member_rom_ids
         )
         reference = skip_reference(stamp)
         if not listing.unchanged or reference is None:
             self._logger.info(f"Per-unit fetch {unit.name}: {listing.reason} — fetch")
-            return None
+            return CollectionSkip(None, restamp_settles=listing.restamp_settles)
 
         try:
-            # Typed ``object`` so the verdict's isinstance guard is genuine
-            # narrowing — the RomM API return type is a JSON-shape promise the
-            # server can break.
             delta_resp: object = await self._loop.run_in_executor(
                 None,
                 self._romm_api.list_collection_roms_updated_after,
@@ -166,17 +157,17 @@ class CollectionFetcher:
             self._logger.warning(
                 f"Per-unit collection incremental check failed for {unit.name}, falling back to a fetch: {e}"
             )
-            return None
+            return CollectionSkip(None)
 
         probe = probe_verdict(delta_resp, reference)
         if not probe.unchanged:
             self._logger.info(f"Per-unit fetch {unit.name}: {listing.reason}; {probe.reason} — fetch")
-            return None
+            return CollectionSkip(None, restamp_settles=probe.restamp_settles)
         self._logger.info(
             f"Per-unit skip: {unit.name} unchanged ({len(stamp.member_rom_ids)} members; "
             f"{listing.reason}; {probe.reason})"
         )
-        return list(stamp.member_rom_ids)
+        return CollectionSkip(list(stamp.member_rom_ids))
 
     async def _fetch_collection_page(
         self, unit: WorkUnit, limit: int, offset: int, platform_ids: tuple[int, ...] | None
@@ -205,7 +196,7 @@ class CollectionFetcher:
 
     async def fetch_collection_unit(
         self, unit: WorkUnit, synced_rom_ids: set[int], *, progress_step: int = 0, progress_total_steps: int = 0
-    ) -> tuple[list[dict[str, Any]], list[int], bool]:
+    ) -> tuple[list[dict[str, Any]], list[int], bool, bool]:
         """Fetch ROMs for a single collection unit.
 
         Tries the incremental-skip path first: when the collection is unchanged
@@ -227,7 +218,7 @@ class CollectionFetcher:
         reconstructed is added, so subsequent units (and the final stale
         cleanup) treat them as covered.
 
-        Returns ``(new_roms, all_collection_rom_ids, skipped)``:
+        Returns ``(new_roms, all_collection_rom_ids, skipped, restamp_settles)``:
           * ``new_roms`` — ROMs not already present in *synced_rom_ids*,
             decorated with platform_name/platform_slug for shortcut
             construction. On a skip these are reconstructed from the registry
@@ -241,6 +232,9 @@ class CollectionFetcher:
           * ``skipped`` — True when the incremental check succeeded. The caller
             short-circuits the per-unit apply + commit branch (like the platform
             skip), keeping the reconstructed rows and membership for accounting.
+          * ``restamp_settles`` — True when the skip refused the collection for
+            a reason a stamp the apply writes settles (``CollectionSkip``); False
+            on a skip.
 
         ``progress_step`` / ``progress_total_steps`` are the run's coarse unit
         index / total, threaded through to the throttled per-page ``fetching``
@@ -250,7 +244,8 @@ class CollectionFetcher:
         if unit.type != "collection":
             raise ValueError(f"fetch_collection_unit called with non-collection unit type={unit.type}")
 
-        skip_member_ids = await self._try_collection_incremental_skip(unit)
+        skip = await self._try_collection_incremental_skip(unit)
+        skip_member_ids = skip.member_rom_ids
         if skip_member_ids is not None:
             # Reconstruct the not-yet-covered members from the registry BEFORE
             # marking them synced, so the preview union stays complete, then add
@@ -260,17 +255,17 @@ class CollectionFetcher:
                 None, self._reconstruct_collection_members, skip_member_ids, set(synced_rom_ids)
             )
             synced_rom_ids.update(skip_member_ids)
-            return reconstructed, list(skip_member_ids), True
+            return reconstructed, list(skip_member_ids), True, False
 
         progress = (progress_step, progress_total_steps)
         if unit.collection_kind == "smart" and not unit.is_own:
             new_roms, walked_ids = await self._walk_collection(
                 unit, synced_rom_ids, platform_ids=None, expected_count=unit.rom_count, progress=progress
             )
-            return new_roms, walked_ids, False
+            return new_roms, walked_ids, False, skip.restamp_settles
 
         new_roms, member_ids = await self._fetch_collection_leftovers(unit, synced_rom_ids, progress=progress)
-        return new_roms, member_ids, False
+        return new_roms, member_ids, False, skip.restamp_settles
 
     async def _fetch_collection_leftovers(
         self, unit: WorkUnit, synced_rom_ids: set[int], *, progress: tuple[int, int]

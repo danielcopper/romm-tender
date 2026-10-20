@@ -12,9 +12,10 @@ RomM does with a hidden member is docs/architecture/backend-architecture.md,
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.platform_skip import ProbeVerdict, rom_id_checksum, skip_reference
+from domain.platform_skip import rom_id_checksum, skip_reference
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -22,7 +23,36 @@ if TYPE_CHECKING:
 
     from domain.collection_sync_state import CollectionSyncState
 
-_UNREADABLE = ProbeVerdict(unchanged=False, reason="RomM's answer could not be read")
+
+@dataclass(frozen=True)
+class CollectionVerdict:
+    """Whether RomM's answer matches a collection's stamp, what decided it, and whether a fresh stamp settles a refusal.
+
+    ``restamp_settles`` is false where nothing was refused, and where the
+    refusal is one a stamp the apply writes would not settle: an answer that
+    could not be read.
+    """
+
+    unchanged: bool
+    reason: str
+    restamp_settles: bool = False
+
+
+@dataclass(frozen=True)
+class CollectionSkip:
+    """The collection skip's answer for one unit (#2477 D3).
+
+    ``member_rom_ids`` are the stamp's members the skip replays, or ``None`` when
+    the collection is fetched. ``restamp_settles`` is whether a stamp the apply
+    writes settles the refusal; the preview counts a collection for re-stamping
+    from it, never by judging the stamp again.
+    """
+
+    member_rom_ids: list[int] | None
+    restamp_settles: bool = False
+
+
+_UNREADABLE = CollectionVerdict(unchanged=False, reason="RomM's answer could not be read")
 
 
 def recorded_updated_at(collection_kind: str, listing_updated_at: str | None) -> str | None:
@@ -39,36 +69,41 @@ def recorded_updated_at(collection_kind: str, listing_updated_at: str | None) ->
 
 def membership_verdict(
     stamp: CollectionSyncState, *, listing_updated_at: str | None, listing_rom_ids: Iterable[int]
-) -> ProbeVerdict:
+) -> CollectionVerdict:
     """Judge the collection listing against *stamp*: unchanged when it lists the stamp's ids and ``updated_at``.
 
     A stamp without a fetch start or a checksum — every stamp written before
     migration 032 — never matches. A virtual collection's ``updated_at`` is not
-    compared.
+    compared. A fresh stamp settles every refusal here.
     """
     if skip_reference(stamp) is None or not stamp.listing_rom_id_checksum:
-        return ProbeVerdict(unchanged=False, reason="the stamp records no fetch start or checksum")
+        return CollectionVerdict(
+            unchanged=False, reason="the stamp records no fetch start or checksum", restamp_settles=True
+        )
     if stamp.collection_kind != "virtual" and stamp.updated_at != listing_updated_at:
-        return ProbeVerdict(
+        return CollectionVerdict(
             unchanged=False,
             reason=f"collection updated_at changed ({stamp.updated_at!r} -> {listing_updated_at!r})",
+            restamp_settles=True,
         )
     distinct = set(listing_rom_ids)
     same_ids = rom_id_checksum(distinct) == stamp.listing_rom_id_checksum
     noun = "listed id" if len(distinct) == 1 else "listed ids"
-    return ProbeVerdict(
+    return CollectionVerdict(
         unchanged=same_ids,
         reason=f"{len(distinct)} {noun}, checksum {'matches' if same_ids else 'differs from'} the stamp's",
+        restamp_settles=not same_ids,
     )
 
 
-def probe_verdict(answer: object, reference: datetime) -> ProbeVerdict:
+def probe_verdict(answer: object, reference: datetime) -> CollectionVerdict:
     """Judge RomM's scoped ``updated_after`` probe answer: unchanged when it holds no ROM updated after *reference*.
 
     *answer* is RomM's ``/api/roms`` list answer for the collection with
     ``updated_after`` set to *reference* and ``limit=1``; its ``total`` counts
     the members updated after it. An answer that is not a JSON object, or whose
-    ``total`` is not an integer, establishes nothing, so it does not match.
+    ``total`` is not an integer, establishes nothing, so it does not match, and
+    a fresh stamp would not settle it.
     """
     if not isinstance(answer, dict):
         return _UNREADABLE
@@ -77,5 +112,5 @@ def probe_verdict(answer: object, reference: datetime) -> ProbeVerdict:
         return _UNREADABLE
     after = f"after the reference {reference.isoformat()}"
     if total:
-        return ProbeVerdict(unchanged=False, reason=f"{total} member(s) updated {after}")
-    return ProbeVerdict(unchanged=True, reason=f"no member updated {after}")
+        return CollectionVerdict(unchanged=False, reason=f"{total} member(s) updated {after}", restamp_settles=True)
+    return CollectionVerdict(unchanged=True, reason=f"no member updated {after}")

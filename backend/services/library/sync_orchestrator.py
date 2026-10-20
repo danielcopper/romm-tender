@@ -461,13 +461,12 @@ class SyncOrchestrator:
                     # ignore it.
                     "cover_refresh_count": cover_refresh_count,
                     # Enabled platforms whose skip only a fresh stamp can restore
-                    # (#1416, #743), and the collections the gate could not skip
-                    # whose apply will stamp them (#2477 D3). Each one's apply is a
-                    # 0-delta empty final chunk that re-writes the stamp and
-                    # records a fresh SyncRun, so a restamp-only preview must
-                    # still offer Apply instead of short-circuiting on "no
-                    # changes". Two fields rather than one, so neither count
-                    # names what it does not hold. Additive: old consumers
+                    # (#1416, #743), and the collections the gate refused for a
+                    # reason a fresh stamp settles whose apply will stamp them
+                    # (#2477 D3). Each one's apply is a 0-delta empty final chunk
+                    # that re-writes the stamp and records a fresh SyncRun, so a
+                    # restamp-only preview must still offer Apply instead of
+                    # short-circuiting on "no changes". Additive: old consumers
                     # ignore them.
                     "restamp_platform_count": restamp_platform_count,
                     "restamp_collection_count": len(restamp_collections),
@@ -558,9 +557,10 @@ class SyncOrchestrator:
         collection alike — the units the apply will skip. A platform unit the
         fetcher did not skip lands in ``full_fetched_platforms`` under its slug,
         so the restamp count can judge its stamp against what the fetch returned.
-        A collection unit the fetcher did not skip lands in
-        ``restamp_collections`` under its membership key when the apply will
-        stamp it: it has members and a recordable ``updated_at``, the conditions
+        A collection unit lands in ``restamp_collections`` under its membership
+        key when the fetcher reports its skip refused for a reason a fresh stamp
+        settles and the apply will stamp it: it has members and a recordable
+        ``updated_at``, the conditions
         ``ChunkDispatcher._build_final_collection_stamp`` stamps under (#2477
         D3). Mutates the passed-in accumulators in place. ``progress_step`` /
         ``progress_total_steps`` thread the unit's coarse position into the
@@ -577,7 +577,12 @@ class SyncOrchestrator:
             if not skipped and unit.slug:
                 full_fetched_platforms[unit.slug] = unit_roms
         else:
-            unit_roms, all_collection_rom_ids, skipped = await self._collection_fetcher.fetch_collection_unit(
+            (
+                unit_roms,
+                all_collection_rom_ids,
+                skipped,
+                restamp_settles,
+            ) = await self._collection_fetcher.fetch_collection_unit(
                 unit, synced_rom_ids, progress_step=progress_step, progress_total_steps=progress_total_steps
             )
             if all_collection_rom_ids:
@@ -588,7 +593,7 @@ class SyncOrchestrator:
                     virtual_type=unit.virtual_type,
                 )
             if (
-                not skipped
+                restamp_settles
                 and all_collection_rom_ids
                 and unit.collection_kind is not None
                 and recorded_updated_at(unit.collection_kind, unit.collection_updated_at) is not None
@@ -1208,7 +1213,7 @@ class SyncOrchestrator:
         # above with the old stamp intact, so an unstarted apply keeps it. A
         # skipped platform returned before this point and keeps its stamp. A
         # collection's stamp is not cleared here: its final chunk replaces it,
-        # and the flows that unbind one of its members delete it
+        # and the flows that unbind or delete one of its members delete it
         # (docs/architecture/backend-architecture.md, "Incremental skip").
         # A dedicated short write UoW (not folded into the first chunk's commit)
         # so the clear is unconditional at apply start — even a first-chunk
@@ -1289,7 +1294,12 @@ class SyncOrchestrator:
         ``synced_rom_ids``. ``progress_step`` / ``progress_total_steps`` thread
         the unit's coarse position into the fetcher's per-page ``fetching`` frames.
         """
-        unit_roms, all_collection_rom_ids, skipped = await self._collection_fetcher.fetch_collection_unit(
+        (
+            unit_roms,
+            all_collection_rom_ids,
+            skipped,
+            _restamp_settles,
+        ) = await self._collection_fetcher.fetch_collection_unit(
             unit, synced_rom_ids, progress_step=progress_step, progress_total_steps=progress_total_steps
         )
         if all_collection_rom_ids:

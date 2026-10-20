@@ -149,3 +149,37 @@ class TestProbeVerdict:
 
         assert verdict.unchanged is False
         assert verdict.reason == "RomM's answer could not be read"
+
+
+class TestWhetherAFreshStampSettlesTheRefusal:
+    """Every refusal of the listing, and a member updated after the reference, a fresh stamp settles (#2477 D3)."""
+
+    @pytest.mark.parametrize(
+        ("stamp", "listing_updated_at", "listing_ids"),
+        [
+            (_stamp(fetch_started_at=None), _UPDATED_AT, (10, 11)),
+            (_stamp(listing_ids=None), _UPDATED_AT, (10, 11)),
+            (_stamp(), "2026-10-18T09:00:00+00:00", (10, 11)),
+            (_stamp(), _UPDATED_AT, (10, 12)),
+        ],
+        ids=["no fetch start", "no checksum", "updated_at", "listed ids"],
+    )
+    def test_a_listing_refusal_is_settled_by_a_fresh_stamp(self, stamp, listing_updated_at, listing_ids):
+        verdict = membership_verdict(stamp, listing_updated_at=listing_updated_at, listing_rom_ids=listing_ids)
+
+        assert (verdict.unchanged, verdict.restamp_settles) == (False, True)
+
+    def test_a_matching_listing_asks_for_no_stamp(self):
+        verdict = membership_verdict(_stamp(), listing_updated_at=_UPDATED_AT, listing_rom_ids=(10, 11))
+
+        assert verdict.restamp_settles is False
+
+    def test_a_member_updated_after_the_reference_is_settled_by_a_fresh_stamp(self):
+        assert probe_verdict({"total": 1}, _REFERENCE).restamp_settles is True
+
+    @pytest.mark.parametrize("answer", [[], {"total": None}])
+    def test_an_answer_that_could_not_be_read_is_not(self, answer):
+        assert probe_verdict(answer, _REFERENCE).restamp_settles is False
+
+    def test_a_probe_with_nothing_updated_asks_for_no_stamp(self):
+        assert probe_verdict({"total": 0}, _REFERENCE).restamp_settles is False

@@ -1934,7 +1934,9 @@ class TestFetchCollectionUnit:
             unwalked_platform_ids=(1, 2, 3),
         )
         synced: set[int] = set()
-        new_roms, ids, _skipped = await library.sync._collection_fetcher.fetch_collection_unit(unit, synced)
+        new_roms, ids, _skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
+            unit, synced
+        )
         assert [r["id"] for r in new_roms] == [1, 2, 3]
         assert ids == [1, 2, 3]
         assert synced == {1, 2, 3}
@@ -1959,7 +1961,9 @@ class TestFetchCollectionUnit:
 
         # rom_id=1 was already fetched via a platform unit
         synced: set[int] = {1}
-        new_roms, ids, _skipped = await library.sync._collection_fetcher.fetch_collection_unit(unit, synced)
+        new_roms, ids, _skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
+            unit, synced
+        )
         assert [r["id"] for r in new_roms] == [2]
         # All collection rom_ids reported back even if not in new_roms
         assert ids == [1, 2]
@@ -4317,7 +4321,7 @@ class TestSyncOneUnitCollectionAndCancel:
     async def test_sync_collection_unit_threads_kind_and_virtual_type(self, library):
         """_sync_collection_unit stamps the unit's kind + virtual_type onto the membership (#1539)."""
         orch = library.sync._orchestrator
-        orch._collection_fetcher.fetch_collection_unit = AsyncMock(return_value=([{"id": 1}], [1, 2], False))  # type: ignore[method-assign]
+        orch._collection_fetcher.fetch_collection_unit = AsyncMock(return_value=([{"id": 1}], [1, 2], False, False))  # type: ignore[method-assign]
         unit = WorkUnit(
             type="collection",
             id="vc-1",
@@ -4341,7 +4345,7 @@ class TestSyncOneUnitCollectionAndCancel:
     async def test_sync_collection_unit_standard_has_no_virtual_type(self, library):
         """A standard collection membership carries kind='standard' and virtual_type=None (#1539)."""
         orch = library.sync._orchestrator
-        orch._collection_fetcher.fetch_collection_unit = AsyncMock(return_value=([{"id": 1}], [1], False))  # type: ignore[method-assign]
+        orch._collection_fetcher.fetch_collection_unit = AsyncMock(return_value=([{"id": 1}], [1], False, False))  # type: ignore[method-assign]
         unit = WorkUnit(
             type="collection",
             id="7",
@@ -6036,6 +6040,27 @@ class TestOnlyAFreshCollectionStampRestoresTheSkip:
 
         assert self._walked(fake_romm_api)
         assert preview["summary"]["restamp_collection_count"] == 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("failure", ["raised", "unreadable"])
+    async def test_a_collection_whose_probe_failed_is_fetched_in_full_and_not_counted(
+        self, library, fake_romm_api, failure
+    ):
+        """#2477 D3: a fresh stamp settles nothing there, and a failing probe would offer Apply on every sync."""
+        self._seed_faves(library, fake_romm_api)
+        await self._apply(library, "run-1")
+        assert self._stamp(library).listing_rom_id_checksum is not None
+        if failure == "raised":
+            fake_romm_api.list_collection_roms_updated_after_side_effect = RuntimeError("probe boom")
+        else:
+            fake_romm_api.list_collection_roms_updated_after_answer = ["not", "an", "object"]
+
+        fake_romm_api.call_log.clear()
+        preview = await library.sync.sync_preview()
+
+        assert len(self._probes(fake_romm_api)) == 1
+        assert self._walked(fake_romm_api)
+        assert preview["summary"]["restamp_collection_count"] == 0
 
     @pytest.mark.asyncio
     async def test_an_empty_collection_and_one_without_updated_at_are_not_counted(self, library, fake_romm_api):

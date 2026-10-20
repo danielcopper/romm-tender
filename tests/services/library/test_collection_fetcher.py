@@ -69,9 +69,12 @@ class TestFetchCollectionUnit:
             unwalked_platform_ids=(1,),
         )
         synced: set[int] = set()
-        new_roms, all_collection_rom_ids, skipped = await library.sync._collection_fetcher.fetch_collection_unit(
-            unit, synced
-        )
+        (
+            new_roms,
+            all_collection_rom_ids,
+            skipped,
+            _restamp_settles,
+        ) = await library.sync._collection_fetcher.fetch_collection_unit(unit, synced)
 
         assert skipped is False
         assert len(new_roms) == rom_count
@@ -98,7 +101,9 @@ class TestFetchCollectionUnit:
             unwalked_platform_ids=(1, 2),
         )
         synced: set[int] = set()
-        new_roms, ids, _skipped = await library.sync._collection_fetcher.fetch_collection_unit(unit, synced)
+        new_roms, ids, _skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
+            unit, synced
+        )
 
         assert [r["id"] for r in new_roms] == [1, 2]
         assert ids == [1, 2]
@@ -127,7 +132,9 @@ class TestFetchCollectionUnit:
             unwalked_platform_ids=(1,),
         )
         synced: set[int] = set()
-        new_roms, _ids, _skipped = await library.sync._collection_fetcher.fetch_collection_unit(unit, synced)
+        new_roms, _ids, _skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
+            unit, synced
+        )
 
         assert [r["id"] for r in new_roms] == [1]
         method_calls = [c[0] for c in fake_romm_api.call_log]
@@ -192,6 +199,11 @@ def _seed_virtual_stamp(uow, *, member_rom_ids, cid="fr-1"):
     _seed_stamp(uow, cid, "virtual", member_rom_ids=member_rom_ids)
 
 
+async def _skip_members(library, unit):
+    """The members the collection skip replays for *unit*, or ``None`` where it fetches."""
+    return (await library.sync._collection_fetcher._try_collection_incremental_skip(unit)).member_rom_ids
+
+
 def _collection_walks(fake_romm_api):
     """Every collection walk in the fake's call log, as ``(method, platform_ids)``."""
     walks = ("list_roms_by_collection", "list_roms_by_smart_collection", "list_roms_by_virtual_collection")
@@ -218,7 +230,7 @@ class TestTryCollectionIncrementalSkip:
         }
         unit = _user_collection_unit(rom_count=2, member_rom_ids=(11, 10))
 
-        result = await library.sync._collection_fetcher._try_collection_incremental_skip(unit)
+        result = await _skip_members(library, unit)
 
         assert result == [10, 11]
         assert _probes(fake_romm_api) == [(7, "standard", _REFERENCE)]
@@ -241,9 +253,7 @@ class TestTryCollectionIncrementalSkip:
         # Edited after the fetch started, before the run completed.
         fake_romm_api.roms = {10: {"id": 10, "collection_ids": [7], "updated_at": "2026-06-01T04:30:00+00:00"}}
 
-        result = await library.sync._collection_fetcher._try_collection_incremental_skip(
-            _user_collection_unit(rom_count=1, member_rom_ids=(10,))
-        )
+        result = await _skip_members(library, _user_collection_unit(rom_count=1, member_rom_ids=(10,)))
 
         assert result is None
         assert _probes(fake_romm_api) == [(7, "standard", "2026-06-01T03:50:00+00:00")]
@@ -252,7 +262,7 @@ class TestTryCollectionIncrementalSkip:
     async def test_no_skip_when_no_stamp(self, library, fake_romm_api):
         """First-ever sync: no stamp → fetch, no probe."""
         _use_fake_romm(library, fake_romm_api)
-        result = await library.sync._collection_fetcher._try_collection_incremental_skip(_user_collection_unit())
+        result = await _skip_members(library, _user_collection_unit())
         assert result is None
         assert not [c for c in fake_romm_api.call_log if c[0] == "list_collection_roms_updated_after"]
 
@@ -277,7 +287,7 @@ class TestTryCollectionIncrementalSkip:
         )
 
         with caplog.at_level(logging.INFO):
-            result = await library.sync._collection_fetcher._try_collection_incremental_skip(unit)
+            result = await _skip_members(library, unit)
 
         assert result is None
         assert _probes(fake_romm_api) == []
@@ -290,7 +300,7 @@ class TestTryCollectionIncrementalSkip:
         _seed_stamp(library.uow, member_rom_ids=(10, 11))
         unit = _user_collection_unit(rom_count=2, updated_at="2026-02-02T00:00:00", member_rom_ids=(10, 11))  # changed
 
-        result = await library.sync._collection_fetcher._try_collection_incremental_skip(unit)
+        result = await _skip_members(library, unit)
 
         assert result is None
         assert not [c for c in fake_romm_api.call_log if c[0] == "list_collection_roms_updated_after"]
@@ -304,9 +314,7 @@ class TestTryCollectionIncrementalSkip:
             10: {"id": 10, "collection_ids": [7], "updated_at": "2026-01-01T00:00:00"},
             11: {"id": 11, "collection_ids": [7], "updated_at": "2026-07-01T00:00:00"},  # after the reference
         }
-        result = await library.sync._collection_fetcher._try_collection_incremental_skip(
-            _user_collection_unit(rom_count=2, member_rom_ids=(10, 11))
-        )
+        result = await _skip_members(library, _user_collection_unit(rom_count=2, member_rom_ids=(10, 11)))
         assert result is None
 
     @pytest.mark.asyncio
@@ -317,7 +325,7 @@ class TestTryCollectionIncrementalSkip:
         _seed_stamp(library.uow, "7", kind, member_rom_ids=(10, 11))
         unit = replace(_user_collection_unit(rom_count=2, member_rom_ids=(10, 12)), collection_kind=kind)
 
-        result = await library.sync._collection_fetcher._try_collection_incremental_skip(unit)
+        result = await _skip_members(library, unit)
 
         assert result is None
         assert _probes(fake_romm_api) == []
@@ -328,9 +336,7 @@ class TestTryCollectionIncrementalSkip:
         _use_fake_romm(library, fake_romm_api)
         _seed_stamp(library.uow, member_rom_ids=(10, 11), rom_count=2)
 
-        result = await library.sync._collection_fetcher._try_collection_incremental_skip(
-            _user_collection_unit(rom_count=3, member_rom_ids=(10, 11))
-        )
+        result = await _skip_members(library, _user_collection_unit(rom_count=3, member_rom_ids=(10, 11)))
 
         assert result == [10, 11]
 
@@ -352,7 +358,7 @@ class TestTryCollectionIncrementalSkip:
             member_rom_ids=(20, 21),
         )
 
-        result = await library.sync._collection_fetcher._try_collection_incremental_skip(unit)
+        result = await _skip_members(library, unit)
 
         assert result == [20, 21, 22]
 
@@ -362,7 +368,7 @@ class TestTryCollectionIncrementalSkip:
         _use_fake_romm(library, fake_romm_api)
         _seed_stamp(library.uow, member_rom_ids=(10, 11))
         unit = _user_collection_unit(rom_count=2, updated_at=None, member_rom_ids=(10, 11))
-        result = await library.sync._collection_fetcher._try_collection_incremental_skip(unit)
+        result = await _skip_members(library, unit)
         assert result is None
 
     @pytest.mark.asyncio
@@ -375,9 +381,7 @@ class TestTryCollectionIncrementalSkip:
             11: {"id": 11, "virtual_collection_ids": ["fr-1"], "updated_at": "2026-01-01T00:00:00"},
         }
 
-        result = await library.sync._collection_fetcher._try_collection_incremental_skip(
-            _virtual_unit(member_rom_ids=(11, 10))
-        )
+        result = await _skip_members(library, _virtual_unit(member_rom_ids=(11, 10)))
 
         assert result == [10, 11]
         assert _probes(fake_romm_api) == [("fr-1", "virtual", _REFERENCE)]
@@ -388,9 +392,7 @@ class TestTryCollectionIncrementalSkip:
         _use_fake_romm(library, fake_romm_api)
         _seed_virtual_stamp(library.uow, member_rom_ids=(10, 11))
 
-        result = await library.sync._collection_fetcher._try_collection_incremental_skip(
-            _virtual_unit(member_rom_ids=(10, 12))
-        )
+        result = await _skip_members(library, _virtual_unit(member_rom_ids=(10, 12)))
 
         assert result is None
         assert not [c for c in fake_romm_api.call_log if c[0] == "list_collection_roms_updated_after"]
@@ -401,9 +403,7 @@ class TestTryCollectionIncrementalSkip:
         _seed_virtual_stamp(library.uow, member_rom_ids=(10,))
         fake_romm_api.roms = {10: {"id": 10, "virtual_collection_ids": ["fr-1"], "updated_at": "2026-07-01T00:00:00"}}
 
-        result = await library.sync._collection_fetcher._try_collection_incremental_skip(
-            _virtual_unit(member_rom_ids=(10,))
-        )
+        result = await _skip_members(library, _virtual_unit(member_rom_ids=(10,)))
 
         assert result is None
 
@@ -413,9 +413,7 @@ class TestTryCollectionIncrementalSkip:
         _use_fake_romm(library, fake_romm_api)
         _seed_stamp(library.uow, member_rom_ids=(10, 11))
         fake_romm_api.list_collection_roms_updated_after_side_effect = RuntimeError("probe boom")
-        result = await library.sync._collection_fetcher._try_collection_incremental_skip(
-            _user_collection_unit(rom_count=2, member_rom_ids=(10, 11))
-        )
+        result = await _skip_members(library, _user_collection_unit(rom_count=2, member_rom_ids=(10, 11)))
         assert result is None
         assert len(_probes(fake_romm_api)) == 1
 
@@ -430,9 +428,7 @@ class TestTryCollectionIncrementalSkip:
         fake_romm_api.list_collection_roms_updated_after_answer = answer
 
         with caplog.at_level(logging.INFO):
-            result = await library.sync._collection_fetcher._try_collection_incremental_skip(
-                _user_collection_unit(rom_count=2, member_rom_ids=(10, 11))
-            )
+            result = await _skip_members(library, _user_collection_unit(rom_count=2, member_rom_ids=(10, 11)))
 
         assert result is None
         assert len(_probes(fake_romm_api)) == 1
@@ -455,10 +451,110 @@ class TestTryCollectionIncrementalSkip:
             member_rom_ids=(20,),
         )
 
-        result = await library.sync._collection_fetcher._try_collection_incremental_skip(unit)
+        result = await _skip_members(library, unit)
 
         assert result == [20]
         assert _probes(fake_romm_api) == [(9, "smart", _REFERENCE)]
+
+
+class TestWhetherAFreshStampSettlesTheRefusal:
+    """The gate says whether a stamp the apply writes settles its refusal, which the preview counts by (#2477 D3)."""
+
+    @staticmethod
+    async def _skip(library, unit):
+        return await library.sync._collection_fetcher._try_collection_incremental_skip(unit)
+
+    @pytest.mark.asyncio
+    async def test_no_stamp_is_settled_by_one(self, library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+
+        skip = await self._skip(library, _user_collection_unit(member_rom_ids=(10, 11)))
+
+        assert (skip.member_rom_ids, skip.restamp_settles) == (None, True)
+
+    @pytest.mark.asyncio
+    async def test_a_stamp_without_a_fetch_start_is_settled_by_a_fresh_one(self, library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_collection_stamp(
+            library.uow,
+            "7",
+            "standard",
+            updated_at="2026-01-01T00:00:00",
+            completed_at="2026-06-01T00:00:00",
+            rom_count=2,
+            member_rom_ids=(10, 11),
+        )
+
+        skip = await self._skip(library, _user_collection_unit(member_rom_ids=(10, 11)))
+
+        assert (skip.member_rom_ids, skip.restamp_settles) == (None, True)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("updated_at", "listed"),
+        [("2026-02-02T00:00:00", (10, 11)), ("2026-01-01T00:00:00", (10, 12))],
+        ids=["updated_at", "listed ids"],
+    )
+    async def test_a_listing_unlike_the_stamp_is_settled_by_a_fresh_one(
+        self, library, fake_romm_api, updated_at, listed
+    ):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_stamp(library.uow, member_rom_ids=(10, 11))
+
+        skip = await self._skip(library, _user_collection_unit(updated_at=updated_at, member_rom_ids=listed))
+
+        assert (skip.member_rom_ids, skip.restamp_settles) == (None, True)
+
+    @pytest.mark.asyncio
+    async def test_a_member_updated_after_the_reference_is_settled_by_a_fresh_stamp(self, library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_stamp(library.uow, member_rom_ids=(10,))
+        fake_romm_api.roms = {10: {"id": 10, "collection_ids": [7], "updated_at": "2026-07-01T00:00:00"}}
+
+        skip = await self._skip(library, _user_collection_unit(member_rom_ids=(10,)))
+
+        assert (skip.member_rom_ids, skip.restamp_settles) == (None, True)
+
+    @pytest.mark.asyncio
+    async def test_a_probe_that_raised_is_not_settled_by_a_fresh_stamp(self, library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_stamp(library.uow, member_rom_ids=(10,))
+        fake_romm_api.list_collection_roms_updated_after_side_effect = RuntimeError("probe boom")
+
+        skip = await self._skip(library, _user_collection_unit(member_rom_ids=(10,)))
+
+        assert (skip.member_rom_ids, skip.restamp_settles) == (None, False)
+
+    @pytest.mark.asyncio
+    async def test_a_probe_answer_that_could_not_be_read_is_not_settled_by_a_fresh_stamp(self, library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_stamp(library.uow, member_rom_ids=(10,))
+        fake_romm_api.list_collection_roms_updated_after_answer = []
+
+        skip = await self._skip(library, _user_collection_unit(member_rom_ids=(10,)))
+
+        assert (skip.member_rom_ids, skip.restamp_settles) == (None, False)
+
+    @pytest.mark.asyncio
+    async def test_a_skip_asks_for_no_stamp(self, library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_stamp(library.uow, member_rom_ids=(10,))
+
+        skip = await self._skip(library, _user_collection_unit(member_rom_ids=(10,)))
+
+        assert (skip.member_rom_ids, skip.restamp_settles) == ([10], False)
+
+    @pytest.mark.asyncio
+    async def test_the_unit_fetch_hands_the_answer_on(self, library, fake_romm_api):
+        _use_fake_romm(library, fake_romm_api)
+        _seed_stamp(library.uow, member_rom_ids=(10,))
+        fake_romm_api.list_collection_roms_updated_after_side_effect = RuntimeError("probe boom")
+
+        *_rest, skipped, restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
+            _user_collection_unit(member_rom_ids=(10,)), {10}
+        )
+
+        assert (skipped, restamp_settles) == (False, False)
 
 
 class TestFetchCollectionUnitSkip:
@@ -482,7 +578,9 @@ class TestFetchCollectionUnitSkip:
         synced = {11}
         unit = _user_collection_unit(rom_count=2, member_rom_ids=(10, 11))
 
-        new_roms, all_ids, skipped = await library.sync._collection_fetcher.fetch_collection_unit(unit, synced)
+        new_roms, all_ids, skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
+            unit, synced
+        )
 
         assert skipped is True
         assert all_ids == [10, 11]
@@ -503,7 +601,9 @@ class TestFetchCollectionUnitSkip:
         fake_romm_api.roms = {10: {"id": 10, "collection_ids": [7], "updated_at": "2026-01-01T00:00:00"}}
         unit = _user_collection_unit(rom_count=1, member_rom_ids=(10,))
 
-        new_roms, _all_ids, skipped = await library.sync._collection_fetcher.fetch_collection_unit(unit, set())
+        new_roms, _all_ids, skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
+            unit, set()
+        )
 
         assert skipped is True
         assert [(r["id"], r["has_file_on_disk"]) for r in new_roms] == [(10, False)]
@@ -523,7 +623,7 @@ class TestFetchCollectionUnitSkip:
         }
         synced: set[int] = set()
 
-        new_roms, all_ids, skipped = await library.sync._collection_fetcher.fetch_collection_unit(
+        new_roms, all_ids, skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
             unit=_user_collection_unit(rom_count=2, member_rom_ids=(10, 12)), synced_rom_ids=synced
         )
 
@@ -548,7 +648,9 @@ class TestFetchCollectionUnitSkip:
         )
         synced: set[int] = set()
 
-        new_roms, all_ids, skipped = await library.sync._collection_fetcher.fetch_collection_unit(unit, synced)
+        new_roms, all_ids, skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
+            unit, synced
+        )
 
         assert skipped is False
         assert [r["id"] for r in new_roms] == [10, 11]  # the walk returns the live members
@@ -569,7 +671,7 @@ class TestFetchCollectionUnitVirtualSkip:
         }
         synced: set[int] = set()
 
-        _new_roms, all_ids, skipped = await library.sync._collection_fetcher.fetch_collection_unit(
+        _new_roms, all_ids, skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
             _virtual_unit(member_rom_ids=(10, 11), unwalked_platform_ids=(2,)), synced
         )
 
@@ -587,7 +689,7 @@ class TestFetchCollectionUnitVirtualSkip:
             11: {"id": 11, "platform_id": 2, "virtual_collection_ids": ["fr-1"]},
         }
 
-        new_roms, all_ids, skipped = await library.sync._collection_fetcher.fetch_collection_unit(
+        new_roms, all_ids, skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
             _virtual_unit(member_rom_ids=(10, 11), unwalked_platform_ids=(2,)), set()
         )
 
@@ -623,7 +725,7 @@ class TestCollectionMembersFromTheListing:
         fake_romm_api.roms = {1: _member(1, 1, collection_ids=[7]), 2: _member(2, 1, collection_ids=[7])}
         synced = {1, 2}
 
-        new_roms, all_ids, skipped = await library.sync._collection_fetcher.fetch_collection_unit(
+        new_roms, all_ids, skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
             _standard_unit(member_rom_ids=(1, 2), unwalked_platform_ids=(3,)), synced
         )
 
@@ -641,7 +743,7 @@ class TestCollectionMembersFromTheListing:
         }
         synced = {1}
 
-        new_roms, all_ids, _skipped = await library.sync._collection_fetcher.fetch_collection_unit(
+        new_roms, all_ids, _skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
             _standard_unit(member_rom_ids=(1, 2, 3), unwalked_platform_ids=(2, 3)), synced
         )
 
@@ -658,7 +760,12 @@ class TestCollectionMembersFromTheListing:
         synced: set[int] = set()
 
         with caplog.at_level(logging.INFO):
-            new_roms, all_ids, _skipped = await library.sync._collection_fetcher.fetch_collection_unit(
+            (
+                new_roms,
+                all_ids,
+                _skipped,
+                _restamp_settles,
+            ) = await library.sync._collection_fetcher.fetch_collection_unit(
                 _standard_unit(member_rom_ids=(2, 9), unwalked_platform_ids=(2,)), synced
             )
 
@@ -673,7 +780,12 @@ class TestCollectionMembersFromTheListing:
         fake_romm_api.roms = {2: _member(2, 1, collection_ids=[7])}
 
         with caplog.at_level(logging.INFO):
-            new_roms, all_ids, _skipped = await library.sync._collection_fetcher.fetch_collection_unit(
+            (
+                new_roms,
+                all_ids,
+                _skipped,
+                _restamp_settles,
+            ) = await library.sync._collection_fetcher.fetch_collection_unit(
                 _standard_unit(member_rom_ids=(1, 2), unwalked_platform_ids=()), {1}
             )
 
@@ -700,7 +812,9 @@ class TestCollectionMembersFromTheListing:
             unwalked_platform_ids=(2,),
         )
 
-        new_roms, all_ids, _skipped = await library.sync._collection_fetcher.fetch_collection_unit(unit, set())
+        new_roms, all_ids, _skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
+            unit, set()
+        )
 
         assert [r["id"] for r in new_roms] == [1, 2]
         assert all_ids == [1, 2]
@@ -735,7 +849,7 @@ class TestAnOwnSmartCollectionFollowsTheLiveView:
         }
         synced = {1}
 
-        new_roms, all_ids, _skipped = await library.sync._collection_fetcher.fetch_collection_unit(
+        new_roms, all_ids, _skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
             _own_smart_unit(member_rom_ids=(1,), unwalked_platform_ids=(2,)), synced
         )
 
@@ -749,7 +863,7 @@ class TestAnOwnSmartCollectionFollowsTheLiveView:
         _use_fake_romm(library, fake_romm_api)
         fake_romm_api.roms = {1: _member(1, 1, smart_collection_ids=[9])}
 
-        new_roms, all_ids, _skipped = await library.sync._collection_fetcher.fetch_collection_unit(
+        new_roms, all_ids, _skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
             _own_smart_unit(member_rom_ids=(1,), unwalked_platform_ids=()), {1}
         )
 
@@ -784,7 +898,9 @@ class TestSmartCollectionOwnership:
         units = await library.sync._fetcher.build_work_queue()
         [unit] = [u for u in units if u.type == "collection"]
         fake_romm_api.call_log.clear()
-        new_roms, _all_ids, _skipped = await library.sync._collection_fetcher.fetch_collection_unit(unit, {1})
+        new_roms, _all_ids, _skipped, _restamp_settles = await library.sync._collection_fetcher.fetch_collection_unit(
+            unit, {1}
+        )
         return new_roms
 
     @pytest.mark.asyncio
