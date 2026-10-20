@@ -340,8 +340,7 @@ export interface SyncPreviewSummary {
    * stamp that may skip — none at all, or one whose skip was revoked (#1416) —
    * or one the preview's full fetch of the platform does not match (#743: no
    * checksum or fetch start, other ROM ids, a ROM updated after the stamp's
-   * reference, which a fresh stamp settles only once the edit is older than the
-   * margin at the Apply's fetch start). For each, the apply's 0-delta empty final chunk re-writes the
+   * reference). For each, the apply's 0-delta empty final chunk re-writes the
    * stamp and records a fresh run. A restamp-only preview (all other diffs
    * zero, this > 0) must still offer Apply, or such a platform is fetched in
    * full on every sync — and, after a late-ack recovery, "Last sync:
@@ -352,8 +351,7 @@ export interface SyncPreviewSummary {
    * Enabled collections the preview could not skip for a reason a fresh stamp
    * settles, whose apply will stamp them (#2477): a stamp that is missing,
    * records no fetch start or checksum, or no longer matches the listing, or a
-   * member updated after its reference (settled only once the edit is older
-   * than the margin at the Apply's fetch start), on a collection with members and a
+   * member updated after its reference, on a collection with members and a
    * recordable `updated_at`. A probe that failed or could not be read is not
    * counted. Read exactly as `restamp_platform_count` is: a
    * restamp-only preview must still offer Apply, or such a collection is

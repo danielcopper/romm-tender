@@ -508,10 +508,11 @@ Format: **invariant** — tier — enforced by.
   stamp never skips. A count that judges the stamp a second time instead of reading the gate's answer can disagree with
   it: the preview offers an Apply that leaves the next sync fetching in full, or none to a collection the gate keeps
   refusing. A count of every refusal offers an Apply for a probe that raised or could not be read, which a fresh stamp
-  does not settle, so a probe that keeps failing offers it on every sync. A count, or a stamp writer, that leaves out
-  `apply_stamps` offers an Apply for an empty collection or one without an `updated_at`, which writes no stamp, so the
-  offer comes back on every sync. **What nothing checks**: the test clock does not move across the probe, so a clock
-  read after it passes every test above; and nothing but review keeps the count on the gate's own answer
+  does not settle, so a probe that keeps failing offers it on every sync. A count and a stamp writer that stop sharing
+  `apply_stamps` disagree in one of two directions: a writer looser than the count stamps a collection the count never
+  asked for, and a writer stricter than the count leaves the Apply offered with nothing written, so the offer comes back
+  on every sync. **What nothing checks**: the test clock does not move across the probe, so a clock read after it passes
+  every test above; and nothing but review keeps the count on the gate's own answer
 - **Where the library sync or the version picker's default resolves a representative, neither RomM's main-sibling leg
   nor the ranking picks a member RomM holds no file for (`has_file_on_disk` false) while one with a file remains; the
   sync's installed and existing-binding legs keep such a member; a bound member without a file that is not installed is

@@ -28,9 +28,10 @@ if TYPE_CHECKING:
 class CollectionVerdict:
     """Whether RomM's answer matches a collection's stamp, what decided it, and whether a fresh stamp settles a refusal.
 
-    ``restamp_settles`` is false where nothing was refused, and where the
-    refusal is one a stamp the apply writes would not settle: an answer that
-    could not be read.
+    ``restamp_settles`` is true where a stamp the apply writes settles the
+    refusal (an edit still inside the margin outlives that stamp:
+    docs/architecture/backend-architecture.md, "Incremental skip"), and false
+    where nothing was refused or the answer could not be read.
     """
 
     unchanged: bool
@@ -112,9 +113,7 @@ def probe_verdict(answer: object, reference: datetime) -> CollectionVerdict:
     ``updated_after`` set to *reference* and ``limit=1``; its ``total`` counts
     the members updated after it. An answer that is not a JSON object, or whose
     ``total`` is not an integer, establishes nothing, so it does not match, and
-    a fresh stamp would not settle it. A fresh stamp settles a member updated
-    after *reference* only once the edit is older than the margin at the Apply's
-    fetch start; one inside it is counted again on the next preview.
+    a fresh stamp would not settle it.
     """
     if not isinstance(answer, dict):
         return _UNREADABLE
