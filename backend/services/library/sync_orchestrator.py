@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.collection_label import steam_collection_key
-from domain.collection_skip import recorded_updated_at
+from domain.collection_skip import apply_stamps
 from domain.cover_refresh import count_cover_refreshes
 from domain.session_budget import post_run_advisory, session_memory_delta
 from domain.shortcut_data import build_shortcuts_data
@@ -559,10 +559,8 @@ class SyncOrchestrator:
         so the restamp count can judge its stamp against what the fetch returned.
         A collection unit lands in ``restamp_collections`` under its membership
         key when the fetcher reports its skip refused for a reason a fresh stamp
-        settles and the apply will stamp it: it has members and a recordable
-        ``updated_at``, the conditions
-        ``ChunkDispatcher._build_final_collection_stamp`` stamps under (#2477
-        D3). Mutates the passed-in accumulators in place. ``progress_step`` /
+        settles and the apply will stamp it (``domain/collection_skip.apply_stamps``,
+        #2477 D3). Mutates the passed-in accumulators in place. ``progress_step`` /
         ``progress_total_steps`` thread the unit's coarse position into the
         fetcher's per-page ``fetching`` frames (on top of the per-unit frame
         the preview loop already emits).
@@ -577,12 +575,7 @@ class SyncOrchestrator:
             if not skipped and unit.slug:
                 full_fetched_platforms[unit.slug] = unit_roms
         else:
-            (
-                unit_roms,
-                all_collection_rom_ids,
-                skipped,
-                restamp_settles,
-            ) = await self._collection_fetcher.fetch_collection_unit(
+            unit_roms, all_collection_rom_ids, skipped, settles = await self._collection_fetcher.fetch_collection_unit(
                 unit, synced_rom_ids, progress_step=progress_step, progress_total_steps=progress_total_steps
             )
             if all_collection_rom_ids:
@@ -592,12 +585,7 @@ class SyncOrchestrator:
                     kind=str(unit.collection_kind),
                     virtual_type=unit.virtual_type,
                 )
-            if (
-                restamp_settles
-                and all_collection_rom_ids
-                and unit.collection_kind is not None
-                and recorded_updated_at(unit.collection_kind, unit.collection_updated_at) is not None
-            ):
+            if settles and apply_stamps(unit.collection_kind, unit.collection_updated_at, all_collection_rom_ids):
                 restamp_collections.add(_collection_membership_key(unit))
         all_roms.extend(unit_roms)
         if skipped:
@@ -1294,12 +1282,7 @@ class SyncOrchestrator:
         ``synced_rom_ids``. ``progress_step`` / ``progress_total_steps`` thread
         the unit's coarse position into the fetcher's per-page ``fetching`` frames.
         """
-        (
-            unit_roms,
-            all_collection_rom_ids,
-            skipped,
-            _restamp_settles,
-        ) = await self._collection_fetcher.fetch_collection_unit(
+        unit_roms, all_collection_rom_ids, skipped, _ = await self._collection_fetcher.fetch_collection_unit(
             unit, synced_rom_ids, progress_step=progress_step, progress_total_steps=progress_total_steps
         )
         if all_collection_rom_ids:

@@ -621,8 +621,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   (`domain/platform_skip.py::skip_reference`); no `rom_count` is compared; and a collection is counted in
   `restamp_collection_count` exactly when the preview's gate refused it for a reason a fresh stamp settles
   (`domain/collection_skip.py::CollectionSkip.restamp_settles`, never for a probe that raised or could not be read) and
-  the apply will stamp it — it has members, and `domain/collection_skip.py::recorded_updated_at` answers, the predicate
-  the final chunk stamps by** — test + prompt-only —
+  the apply will stamp it (`domain/collection_skip.py::apply_stamps`) — it has members, and `recorded_updated_at`
+  answers, the predicate the final chunk stamps by** — test + prompt-only —
   `tests/services/library/test_sync_orchestrator.py::TestOnlyAFreshCollectionStampRestoresTheSkip`
   (`test_a_member_edited_while_the_run_applied_is_fetched_in_full_next_sync`: the stamp stores the fetch's start, not
   the run's end; `test_a_stamp_without_a_fetch_start_is_fetched_in_full_once_then_skipped`: counted, re-stamped, then

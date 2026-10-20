@@ -478,8 +478,8 @@ Format: **invariant** — tier — enforced by.
   (`domain/platform_skip.py::skip_reference`); no `rom_count` is compared; and a collection is counted in
   `restamp_collection_count` exactly when the preview's gate refused it for a reason a fresh stamp settles
   (`domain/collection_skip.py::CollectionSkip.restamp_settles`, never for a probe that raised or could not be read) and
-  the apply will stamp it — it has members, and `domain/collection_skip.py::recorded_updated_at` answers, the predicate
-  the final chunk stamps by** — test + prompt-only — the fetch start by
+  the apply will stamp it (`domain/collection_skip.py::apply_stamps`) — it has members, and `recorded_updated_at`
+  answers, the predicate the final chunk stamps by** — test + prompt-only — the fetch start by
   `tests/services/library/test_sync_orchestrator.py::TestOnlyAFreshCollectionStampRestoresTheSkip::test_a_member_edited_while_the_run_applied_is_fetched_in_full_next_sync`
   (an edit between the fetch's start and the run's end is seen next sync) and
   `tests/services/library/test_collection_fetcher.py::TestTryCollectionIncrementalSkip::test_the_probe_s_reference_is_the_fetch_start_less_the_margin`;

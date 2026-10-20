@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from domain.collection_skip import membership_verdict, probe_verdict, recorded_updated_at
+from domain.collection_skip import apply_stamps, membership_verdict, probe_verdict, recorded_updated_at
 from domain.collection_sync_state import CollectionSyncState
 from domain.platform_skip import SKIP_REFERENCE_MARGIN, rom_id_checksum, skip_reference
 
@@ -47,6 +47,25 @@ class TestRecordedUpdatedAt:
     @pytest.mark.parametrize("listed", [None, ""])
     def test_a_standard_or_smart_collection_whose_listing_has_none_is_never_stamped(self, kind, listed):
         assert recorded_updated_at(kind, listed) is None
+
+
+class TestApplyStamps:
+    @pytest.mark.parametrize("kind", ["standard", "smart", "virtual"])
+    def test_a_collection_with_members_and_a_recordable_updated_at_is_stamped(self, kind):
+        assert apply_stamps(kind, _UPDATED_AT, [10]) is True
+
+    def test_an_empty_collection_is_not(self):
+        assert apply_stamps("standard", _UPDATED_AT, []) is False
+
+    @pytest.mark.parametrize("listed", [None, ""])
+    def test_a_standard_collection_whose_listing_has_no_updated_at_is_not(self, listed):
+        assert apply_stamps("standard", listed, [10]) is False
+
+    def test_a_virtual_collection_needs_no_updated_at(self):
+        assert apply_stamps("virtual", None, [10]) is True
+
+    def test_a_unit_without_a_kind_is_not(self):
+        assert apply_stamps(None, _UPDATED_AT, [10]) is False
 
 
 class TestTheReference:

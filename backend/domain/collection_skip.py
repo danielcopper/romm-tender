@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 from domain.platform_skip import rom_id_checksum, skip_reference
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Collection, Iterable
     from datetime import datetime
 
     from domain.collection_sync_state import CollectionSyncState
@@ -65,6 +65,15 @@ def recorded_updated_at(collection_kind: str, listing_updated_at: str | None) ->
     if collection_kind == "virtual":
         return ""
     return listing_updated_at or None
+
+
+def apply_stamps(collection_kind: str | None, listing_updated_at: str | None, member_rom_ids: Collection[int]) -> bool:
+    """Whether an apply of the collection writes it a stamp: it has members and a recordable ``updated_at``."""
+    return (
+        bool(member_rom_ids)
+        and collection_kind is not None
+        and recorded_updated_at(collection_kind, listing_updated_at) is not None
+    )
 
 
 def membership_verdict(

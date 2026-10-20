@@ -1153,9 +1153,9 @@ collection is fetched but not counted, and a probe that keeps failing does not o
 ([#2477](https://github.com/danielcopper/romm-tender/issues/2477) D3). The gate states which it was
 (`domain/collection_skip.py::CollectionSkip`), and the preview counts from that answer rather than judging the stamp
 again, so the two cannot disagree. The apply stamps a collection with members and, for a standard or smart collection,
-an `updated_at` its listing carried (`domain/collection_skip.py::recorded_updated_at`, which decides what the final
-chunk stamps too); an empty collection and a standard or smart one whose listing carried no `updated_at` are never
-stamped, so they are not counted.
+an `updated_at` its listing carried (`domain/collection_skip.py::apply_stamps`, over the `recorded_updated_at` that
+decides what the final chunk stamps too); an empty collection and a standard or smart one whose listing carried no
+`updated_at` are never stamped, so they are not counted.
 
 **A collection stamp is deleted, not revoked, when a local removal, the stale removal or removed-game cleanup's row
 delete reaches one of its members.** A skipped collection replays its `CollectionSyncState`'s `member_rom_ids` and
