@@ -66,7 +66,8 @@ export type TenderPlaceRefusal = EndpointFailure & {
   folder?: string;
   /** The system whose folder the place lies in; `null` for the source's ROM folder itself. */
   system?: string | null;
-  /** Tender's folder at the place, as the place was typed with `/Tender` after it. */
+  /** The path the refusal names, as typed: Tender's folder at the place (`/Tender` after it) for a ROM-folder refusal,
+   *  the place itself for one that cannot be written. */
   path?: string;
 };
 
