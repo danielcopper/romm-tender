@@ -685,8 +685,8 @@ slots on automatic that are not set in Steam, and a game change asks `apply_sgdb
 not set in Steam. Both replace a cached file only with a download that succeeded, before `applyAutomaticArtwork` serves
 them; a game change then drops the previous game's file of each image it did not download. A SteamGridDB id RomM now
 provides therefore replaces an image a manual pick left in the cache, where SteamGridDB has such an image for that game.
-A 401 or 403 from SteamGridDB on either, or on the resolution's name search, refuses `auth_failed` with `_KEY_REFUSED`
-(`services/steamgrid/service.py`), and a 429 refuses `rate_limited`; the frontend shows that message. Only the key
+A 401 or 403 from SteamGridDB on either, or on the resolution's name search, refuses `auth_failed` with `KEY_REFUSED`
+(`services/steamgrid/_refusals.py`), and a 429 refuses `rate_limited`; the frontend shows that message. Only the key
 dialog's check (`verify_sgdb_api_key`) answers a 401 or 403 with "Invalid API key", as does every use case for a key no
 header can carry. On Refresh Artwork and after a game change, a refusal of an artwork endpoint is shown as its own
 message rather than read as "no image"; the first visit only logs it, and stops asking once a slot answers

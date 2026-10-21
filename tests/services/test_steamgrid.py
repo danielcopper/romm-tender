@@ -2735,6 +2735,7 @@ class TestTheJobsSlotFetchWithAKeyNoHeaderCanCarry:
                 conflict_rules=_make_conflict_rules(),
                 downscale_icon=lambda data: data,
                 clock=steamgrid.clock,
+                cover=FakeCoverSlotReader(),
             )
         )
 
