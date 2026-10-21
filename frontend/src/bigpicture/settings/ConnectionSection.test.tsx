@@ -60,14 +60,11 @@ vi.mock("@decky/ui", () => ({
 }));
 
 // Captured props off the modals opened via showModal. The URL Edit opens a
-// TextInputModal (field='url'); the Sign in button opens a ConnectModal
+// RommUrlModal (save callback); the Sign in button opens a ConnectModal
 // (onConnect callback).
 interface UrlModalProps {
-  label?: string;
   value?: string;
-  field?: string;
-  bIsPassword?: boolean;
-  onSubmit?: (value: string) => void;
+  save?: (value: string) => Promise<{ success: boolean; message: string }>;
 }
 interface ConnectModalProps {
   onConnect?: (username: string, password: string) => void;
@@ -99,8 +96,9 @@ function defaultProps(overrides: Partial<React.ComponentProps<typeof ConnectionS
     hasToken: false,
     allowInsecureSsl: false,
     status: "",
+    statusWarns: false,
     customHeaderNames: [] as string[],
-    onUrlChange: vi.fn(),
+    onSaveUrl: vi.fn(),
     onSaveCustomHeaders: vi.fn(),
     onConnect: vi.fn(),
     onConnectToken: vi.fn(),
@@ -150,18 +148,15 @@ describe("ConnectionSection", () => {
       expect(descs).toContain("http://romm.local");
     });
 
-    it("opens a TextInputModal with field='url' when Edit is clicked", () => {
-      const onUrlChange = vi.fn();
+    it("opens a RommUrlModal on the stored URL, saving through the handler, when Edit is clicked", () => {
+      const onSaveUrl = vi.fn();
       const { getAllByTestId } = render(
-        <ConnectionSection {...defaultProps({ url: "http://romm.local", onUrlChange })} />,
+        <ConnectionSection {...defaultProps({ url: "http://romm.local", onSaveUrl })} />,
       );
       fireEvent.click(within(fieldRow(getAllByTestId, "RomM URL")).getByText("Edit"));
       const props = lastShownModalProps<UrlModalProps>();
-      expect(props?.label).toBe("RomM URL");
       expect(props?.value).toBe("http://romm.local");
-      expect(props?.field).toBe("url");
-      expect(props?.bIsPassword).toBeUndefined();
-      expect(props?.onSubmit).toBe(onUrlChange);
+      expect(props?.save).toBe(onSaveUrl);
     });
   });
 
@@ -375,6 +370,23 @@ describe("ConnectionSection", () => {
       expect(labels).toContain("Connected ✓");
       // URL row + Custom headers row + RomM Account row + status row.
       expect(getAllByTestId("field")).toHaveLength(4);
+    });
+
+    it("shows a refusal or a failure in amber behind a warning sign", () => {
+      const { getAllByTestId } = render(
+        <ConnectionSection {...defaultProps({ status: "Failed to save settings", statusWarns: true })} />,
+      );
+      const label = getAllByTestId("field-label").find((el) => el.textContent === "Failed to save settings");
+      const tone = label?.querySelector("span");
+      expect(tone?.getAttribute("style")).toContain("color: #d4a72c");
+      expect(tone?.querySelector("svg")).not.toBeNull();
+    });
+
+    it("shows any other message plain, without a warning sign", () => {
+      const { getAllByTestId } = render(<ConnectionSection {...defaultProps({ status: "Signed in as deck" })} />);
+      const label = getAllByTestId("field-label").find((el) => el.textContent === "Signed in as deck");
+      expect(label?.querySelector("span")).toBeNull();
+      expect(label?.querySelector("svg")).toBeNull();
     });
 
     it("omits the status Field when empty", () => {

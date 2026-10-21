@@ -10,6 +10,7 @@
  */
 
 import { FC } from "react";
+import { FaExclamationTriangle } from "react-icons/fa";
 import {
   PanelSection,
   PanelSectionRow,
@@ -20,27 +21,33 @@ import {
   showModal,
   ToggleField,
 } from "@decky/ui";
-import { TextInputModal } from "./TextInputModal";
+import { RommUrlModal } from "./RommUrlModal";
 import { ConnectModal } from "./ConnectModal";
 import type { SignInResult } from "./ConnectModal";
 import { CustomHeadersModal } from "./CustomHeadersModal";
 import type { SaveHeadersResult } from "./CustomHeadersModal";
 import { isHttpsUrl } from "../../utils/serverUrl";
 import type { CustomHeaderEntry } from "../../types";
+import { AMBER } from "../layout/pane";
 
 // Sign-out only forgets the token on this device; it never revokes it in RomM.
 const SIGN_OUT_CONFIRM_DESCRIPTION =
   "This only forgets the RomM token on this device. The token itself stays valid in RomM — " +
   "revoke it there (Settings › API Tokens) if you no longer want it.";
 
+const warningStyle = { color: AMBER, display: "inline-flex", alignItems: "center", gap: "6px" } as const;
+const warningIconStyle = { flex: "0 0 auto" } as const;
+
 interface ConnectionSectionProps {
   url: string;
   hasToken: boolean;
   allowInsecureSsl: boolean;
   status: string;
+  /** Whether {@link status} reports a refusal or a failure, which the line shows in amber with a warning sign. */
+  statusWarns: boolean;
   /** Names of the configured proxy headers — values never reach the frontend. */
   customHeaderNames: string[];
-  onUrlChange: (value: string) => void;
+  onSaveUrl: (value: string) => Promise<{ success: boolean; message: string }>;
   onSaveCustomHeaders: (headers: CustomHeaderEntry[]) => Promise<SaveHeadersResult>;
   onConnect: (username: string, password: string) => Promise<SignInResult>;
   onConnectToken: (token: string) => Promise<SignInResult>;
@@ -54,8 +61,9 @@ export const ConnectionSection: FC<ConnectionSectionProps> = ({
   hasToken,
   allowInsecureSsl,
   status,
+  statusWarns,
   customHeaderNames,
-  onUrlChange,
+  onSaveUrl,
   onSaveCustomHeaders,
   onConnect,
   onConnectToken,
@@ -69,9 +77,7 @@ export const ConnectionSection: FC<ConnectionSectionProps> = ({
         <Field label="RomM URL" description={url || "(not set)"}>
           <DialogButton
             style={{ minWidth: "auto", width: "auto" }}
-            onClick={() =>
-              showModal(<TextInputModal label="RomM URL" value={url} field="url" onSubmit={onUrlChange} />)
-            }
+            onClick={() => showModal(<RommUrlModal value={url} save={onSaveUrl} />)}
           >
             Edit
           </DialogButton>
@@ -147,7 +153,19 @@ export const ConnectionSection: FC<ConnectionSectionProps> = ({
               is not the last thing on it — the SteamGridDB group follows, so a
               reader walking down would step straight over the answer to the
               sign-in they just made. */}
-          <Field label={status} focusable={true} />
+          <Field
+            label={
+              statusWarns ? (
+                <span style={warningStyle}>
+                  <FaExclamationTriangle style={warningIconStyle} />
+                  {status}
+                </span>
+              ) : (
+                status
+              )
+            }
+            focusable={true}
+          />
         </PanelSectionRow>
       )}
     </PanelSection>

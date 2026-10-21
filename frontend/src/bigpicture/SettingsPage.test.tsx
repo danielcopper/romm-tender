@@ -16,7 +16,6 @@ import { ENTRY_STOP_ATTR } from "../utils/entryFocus";
 import type { EmulatorSourcesListing, RegisteredDevice, SettingsSection } from "../types";
 import { showModal } from "@decky/ui";
 import { toaster } from "../api/host";
-import { pendingEdits } from "./settings/TextInputModal";
 import { DOT_FADE_MS, SEEN_AFTER_MS } from "../utils/updateDot";
 import {
   resetUpdateNoticeStoreForTests,
@@ -135,12 +134,6 @@ vi.mock("./settings/LibrarySection", async (importOriginal) => {
 // The Preferred-region change modal — mocked so tests control confirm/cancel.
 vi.mock("./settings/PreferredRegionModal", () => ({
   showPreferredRegionModal: vi.fn(() => Promise.resolve(true)),
-}));
-
-// pendingEdits is a mutable module-level object — tests may pre-populate it
-// before render to verify the mount-time override path.
-vi.mock("./settings/TextInputModal", () => ({
-  pendingEdits: {} as { url?: string; username?: string; password?: string },
 }));
 
 // Local @decky/ui re-mock — the page is a wide list-and-detail page, so the
@@ -269,9 +262,6 @@ describe("SettingsPage", () => {
     capturedSources.length = 0;
     capturedInterface.length = 0;
     setQamEntryPositionState("above_decky");
-    for (const k of Object.keys(pendingEdits) as Array<keyof typeof pendingEdits>) {
-      delete pendingEdits[k];
-    }
     // Defaults — many tests override per case.
     vi.mocked(backend.getSettings).mockResolvedValue(defaultSettings());
     vi.mocked(backend.getKnownRegions).mockResolvedValue([]);
@@ -350,15 +340,6 @@ describe("SettingsPage", () => {
       await flushAsync();
 
       expect(capturedAdvanced[capturedAdvanced.length - 1]?.logLevel).toBe("debug");
-    });
-
-    it("prefers a pendingEdits URL over the backend value", async () => {
-      pendingEdits.url = "https://pending.url";
-      renderPage();
-      await flushAsync();
-
-      const conn = capturedConnection[capturedConnection.length - 1];
-      expect(conn?.url).toBe("https://pending.url");
     });
 
     it("hydrates hasToken from getSettings", async () => {
@@ -549,37 +530,20 @@ describe("SettingsPage", () => {
   });
 
   describe("connection handlers fed to ConnectionSection", () => {
-    it("handleUrlChange persists URL + SSL via saveServerUrl and clears the pending URL edit", async () => {
+    it("onSaveUrl persists URL + SSL via saveServerUrl and shows the stored URL in the row", async () => {
       vi.mocked(backend.saveServerUrl).mockResolvedValue({ success: true, message: "" });
-      pendingEdits.url = "draft";
       renderPage();
       await flushAsync();
       const conn = capturedConnection[capturedConnection.length - 1];
 
+      let result: { success: boolean; message: string } | undefined;
       await act(async () => {
-        conn?.onUrlChange("https://new.url");
-        await Promise.resolve();
+        result = await conn?.onSaveUrl("https://new.url");
       });
 
       expect(vi.mocked(backend.saveServerUrl)).toHaveBeenCalledWith("https://new.url", false);
-      expect(pendingEdits.url).toBeUndefined();
-    });
-
-    it("rejects an invalid URL inline without calling saveServerUrl", async () => {
-      vi.mocked(backend.saveServerUrl).mockResolvedValue({ success: true, message: "" });
-      renderPage();
-      await flushAsync();
-      const conn = capturedConnection[capturedConnection.length - 1];
-
-      await act(async () => {
-        conn?.onUrlChange("romm.local"); // no scheme
-        await Promise.resolve();
-      });
-
-      expect(vi.mocked(backend.saveServerUrl)).not.toHaveBeenCalled();
-      expect(capturedConnection[capturedConnection.length - 1]?.status).toBe(
-        "Enter a valid http:// or https:// server URL",
-      );
+      expect(result).toMatchObject({ success: true });
+      expect(capturedConnection[capturedConnection.length - 1]?.url).toBe("https://new.url");
     });
 
     it("trims the URL before persisting", async () => {
@@ -589,55 +553,37 @@ describe("SettingsPage", () => {
       const conn = capturedConnection[capturedConnection.length - 1];
 
       await act(async () => {
-        conn?.onUrlChange("  https://new.url  ");
-        await Promise.resolve();
+        await conn?.onSaveUrl("  https://new.url  ");
       });
 
       expect(vi.mocked(backend.saveServerUrl)).toHaveBeenCalledWith("https://new.url", false);
     });
 
-    it("clears the pending URL edit when saveServerUrl rejects (status fallback wired)", async () => {
+    it("a URL save that fails in transport answers the modal with 'Failed to save settings'", async () => {
       vi.mocked(backend.saveServerUrl).mockRejectedValue(new Error("nope"));
-      pendingEdits.url = "draft";
       renderPage();
       await flushAsync();
       const conn = capturedConnection[capturedConnection.length - 1];
 
+      let result: { success: boolean; message: string } | undefined;
       await act(async () => {
-        conn?.onUrlChange("https://new.url");
-        await Promise.resolve();
+        result = await conn?.onSaveUrl("https://new.url");
       });
 
-      expect(pendingEdits.url).toBeUndefined();
-      expect(capturedConnection[capturedConnection.length - 1]?.status).toBe("Failed to save settings");
+      expect(result).toEqual({ success: false, message: "Failed to save settings" });
+      expect(capturedConnection[capturedConnection.length - 1]?.status).toBe("");
     });
 
-    it("clears the pending URL edit when the URL is refused as invalid", async () => {
-      pendingEdits.url = "draft";
-      renderPage();
-      await flushAsync();
-      const conn = capturedConnection[capturedConnection.length - 1];
-
-      await act(async () => {
-        conn?.onUrlChange("romm.local");
-        await Promise.resolve();
-      });
-
-      expect(pendingEdits.url).toBeUndefined();
-    });
-
-    it("shows the saved URL, not the rejected one, at the next open (#1020)", async () => {
+    it("shows the saved URL, not the rejected one, now and at the next open (#1020)", async () => {
       vi.mocked(backend.saveServerUrl).mockRejectedValue(new Error("nope"));
       const first = renderPage();
       await flushAsync();
 
       await act(async () => {
-        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://rejected.url");
-        await Promise.resolve();
+        await capturedConnection[capturedConnection.length - 1]?.onSaveUrl("https://rejected.url");
       });
-      // The attempt is still in the field it was typed into, under the reason
-      // it did not take.
-      expect(capturedConnection[capturedConnection.length - 1]?.url).toBe("https://rejected.url");
+      // The attempt stays in the modal it was typed into; the row keeps the stored URL.
+      expect(capturedConnection[capturedConnection.length - 1]?.url).toBe("https://romm.local");
       first.unmount();
 
       capturedConnection.length = 0;
@@ -646,71 +592,7 @@ describe("SettingsPage", () => {
       expect(capturedConnection[capturedConnection.length - 1]?.url).toBe("https://romm.local");
     });
 
-    it("a save the backend refuses shows its message and puts the stored URL back in the field", async () => {
-      const sentence =
-        "Remove the user name and password from the RomM URL — Tender cannot sign in through it. " +
-        "Sign in to RomM under RomM Account; a login for a proxy in front of RomM goes into Custom headers.";
-      vi.mocked(backend.saveServerUrl).mockResolvedValue({ success: false, reason: "config_error", message: sentence });
-      renderPage();
-      await flushAsync();
-
-      await act(async () => {
-        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://user:fake-pw@romm.local");
-        await Promise.resolve();
-      });
-
-      const conn = capturedConnection[capturedConnection.length - 1];
-      expect(conn?.status).toBe(sentence);
-      expect(conn?.url).toBe("https://romm.local");
-    });
-
-    it("a refused save puts back the URL the last accepted save stored", async () => {
-      vi.mocked(backend.saveServerUrl).mockResolvedValueOnce({ success: true, message: "" });
-      vi.mocked(backend.saveServerUrl).mockResolvedValueOnce({
-        success: false,
-        reason: "config_error",
-        message: "Enter a valid http(s):// server URL",
-      });
-      renderPage();
-      await flushAsync();
-
-      await act(async () => {
-        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://saved.url");
-        await Promise.resolve();
-      });
-      await act(async () => {
-        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://refused.url");
-        await Promise.resolve();
-      });
-
-      expect(capturedConnection[capturedConnection.length - 1]?.url).toBe("https://saved.url");
-    });
-
-    it("a save that is accepted clears what the status line said about an earlier attempt", async () => {
-      vi.mocked(backend.saveServerUrl).mockResolvedValueOnce({
-        success: false,
-        reason: "config_error",
-        message: "Enter a valid http(s):// server URL",
-      });
-      vi.mocked(backend.saveServerUrl).mockResolvedValueOnce({ success: true, message: "" });
-      renderPage();
-      await flushAsync();
-
-      await act(async () => {
-        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://refused.url");
-        await Promise.resolve();
-      });
-      expect(capturedConnection[capturedConnection.length - 1]?.status).toBe("Enter a valid http(s):// server URL");
-      await act(async () => {
-        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://saved.url");
-        await Promise.resolve();
-      });
-
-      expect(capturedConnection[capturedConnection.length - 1]?.status).toBe("");
-    });
-
-    it("a save refused before the settings have loaded leaves the attempt in the field, not an empty one", async () => {
-      vi.mocked(backend.getSettings).mockReturnValue(new Promise(() => {}));
+    it("a URL save the backend refuses is handed back to the modal, and the row and the status line stay", async () => {
       vi.mocked(backend.saveServerUrl).mockResolvedValue({
         success: false,
         reason: "config_error",
@@ -719,12 +601,40 @@ describe("SettingsPage", () => {
       renderPage();
       await flushAsync();
 
+      let result: { success: boolean; message: string } | undefined;
       await act(async () => {
-        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://refused.url");
-        await Promise.resolve();
+        result = await capturedConnection[capturedConnection.length - 1]?.onSaveUrl("romm.local");
       });
 
-      expect(capturedConnection[capturedConnection.length - 1]?.url).toBe("https://refused.url");
+      expect(vi.mocked(backend.saveServerUrl)).toHaveBeenCalledWith("romm.local", false);
+      expect(result).toMatchObject({ success: false, message: "Enter a valid http(s):// server URL" });
+      const conn = capturedConnection[capturedConnection.length - 1];
+      expect(conn?.url).toBe("https://romm.local");
+      expect(conn?.status).toBe("");
+    });
+
+    it("an accepted URL save clears what the status line said about a refused SSL change", async () => {
+      vi.mocked(backend.saveServerUrl).mockResolvedValueOnce({
+        success: false,
+        reason: "config_error",
+        message: "Enter a valid http(s):// server URL",
+      });
+      vi.mocked(backend.saveServerUrl).mockResolvedValueOnce({ success: true, message: "" });
+      renderPage();
+      await flushAsync();
+
+      await act(async () => {
+        capturedConnection[capturedConnection.length - 1]?.onAllowInsecureSslChange(true);
+        await Promise.resolve();
+      });
+      expect(capturedConnection[capturedConnection.length - 1]?.status).toBe("Enter a valid http(s):// server URL");
+      await act(async () => {
+        await capturedConnection[capturedConnection.length - 1]?.onSaveUrl("https://saved.url");
+      });
+
+      const conn = capturedConnection[capturedConnection.length - 1];
+      expect(conn?.status).toBe("");
+      expect(conn?.statusWarns).toBe(false);
     });
 
     it("an SSL change the backend refuses shows its message and puts the switch back", async () => {
@@ -743,6 +653,7 @@ describe("SettingsPage", () => {
 
       const conn = capturedConnection[capturedConnection.length - 1];
       expect(conn?.status).toBe("Enter a valid http(s):// server URL");
+      expect(conn?.statusWarns).toBe(true);
       expect(conn?.allowInsecureSsl).toBe(false);
     });
 
@@ -757,9 +668,10 @@ describe("SettingsPage", () => {
       await flushAsync();
 
       await act(async () => {
-        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://refused.url");
+        capturedConnection[capturedConnection.length - 1]?.onAllowInsecureSslChange(true);
         await Promise.resolve();
       });
+      expect(capturedConnection[capturedConnection.length - 1]?.status).toBe("Enter a valid http(s):// server URL");
       await act(async () => {
         capturedConnection[capturedConnection.length - 1]?.onAllowInsecureSslChange(true);
         await Promise.resolve();
@@ -776,7 +688,7 @@ describe("SettingsPage", () => {
       expect(capturedConnection[capturedConnection.length - 1]?.status).toBe("Failed to load settings");
 
       await act(async () => {
-        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://saved.url");
+        void capturedConnection[capturedConnection.length - 1]?.onSaveUrl("https://saved.url");
         await Promise.resolve();
       });
 
@@ -841,7 +753,7 @@ describe("SettingsPage", () => {
         await Promise.resolve();
       });
       await act(async () => {
-        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://saved.url");
+        void capturedConnection[capturedConnection.length - 1]?.onSaveUrl("https://saved.url");
         await Promise.resolve();
       });
       await act(async () => {
@@ -864,7 +776,7 @@ describe("SettingsPage", () => {
       await flushAsync();
 
       await act(async () => {
-        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://saved.url");
+        void capturedConnection[capturedConnection.length - 1]?.onSaveUrl("https://saved.url");
         await Promise.resolve();
       });
       await act(async () => {
@@ -897,7 +809,7 @@ describe("SettingsPage", () => {
       expect(capturedConnection[capturedConnection.length - 1]?.allowInsecureSsl).toBe(false);
     });
 
-    it("a sign-in's message after a refused save stays when a later save is accepted", async () => {
+    it("a sign-in's message after a refused SSL change stays when a later save is accepted", async () => {
       vi.mocked(backend.saveServerUrl).mockResolvedValueOnce({
         success: false,
         reason: "config_error",
@@ -909,14 +821,14 @@ describe("SettingsPage", () => {
       await flushAsync();
 
       await act(async () => {
-        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://refused.url");
+        capturedConnection[capturedConnection.length - 1]?.onAllowInsecureSslChange(true);
         await Promise.resolve();
       });
       await act(async () => {
         await capturedConnection[capturedConnection.length - 1]?.onConnect("daniel", "hunter2");
       });
       await act(async () => {
-        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://saved.url");
+        void capturedConnection[capturedConnection.length - 1]?.onSaveUrl("https://saved.url");
         await Promise.resolve();
       });
 
@@ -940,7 +852,7 @@ describe("SettingsPage", () => {
       await flushAsync();
 
       await act(async () => {
-        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://saved.url");
+        void capturedConnection[capturedConnection.length - 1]?.onSaveUrl("https://saved.url");
         await Promise.resolve();
       });
       await act(async () => {
